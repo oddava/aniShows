@@ -1,0 +1,25 @@
+<!-- Navigation -->
+<nav class="fixed w-full z-50 backdrop-blur-md border-b"
+     style="background: var(--bg-primary); border-color: var(--border); opacity: 0.95;">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <div class="flex items-center space-x-8">
+                <span class="text-2xl font-bold" style="color: var(--accent);"><a href="{% url 'home' %}">AniShows</a></span>
+                <div class="hidden md:flex space-x-6">
+                    <a href="#" class="nav-link text-sm font-medium">Browse</a>
+                    <a href="#" class="nav-link text-sm font-medium">Community</a>
+                    <a href="#" class="nav-link text-sm font-medium">Features</a>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button class="px-4 py-2 text-sm font-medium" style="color: var(--text-primary);"><a href="{% url 'login' %}">Sign In</a>
+                </button>
+                <button class="px-5 py-2 rounded-lg text-sm font-medium text-white gradient-accent"><a href="{% url 'register' %}">Get Started</a>
+                </button>
+                <div class="theme-toggle" onclick="toggleTheme()">
+                    <div class="theme-orb"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>

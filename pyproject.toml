@@ -1,0 +1,12 @@
+[project]
+name = "anishows"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "cookiecutter>=2.6.0",
+    "django>=5.2.7",
+    "django-tailwind>=4.2.0",
+    "psycopg2-binary>=2.9.11",
+    "python-dotenv>=1.1.1",
+]

@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% load tailwind_tags %}
+{% tailwind_css %}
+
+{% block title %}Sign Up - AniShows{% endblock %}
+
+{% block css %}
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fc;
+            --bg-card: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            --violet: #8b5cf6;
+            --error: #ef4444;
+            --success: #10b981;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --accent: #818cf8;
+            --accent-light: #a78bfa;
+            --accent-glow: rgba(129, 140, 248, 0.2);
+            --violet: #a78bfa;
+            --error: #f87171;
+            --success: #34d399;
+        }
+
+        body {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background 0.3s, color 0.3s;
+        }
+
+        .auth-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+        }
+
+        .form-input {
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            color: var(--text-primary);
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .form-label {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--violet));
+            color: white;
+            transition: all 0.3s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px var(--accent-glow);
+        }
+
+        .link-accent {
+            color: var(--accent);
+            transition: opacity 0.3s;
+        }
+
+        .link-accent:hover {
+            opacity: 0.7;
+        }
+
+        .theme-toggle {
+            position: relative;
+            width: 60px;
+            height: 32px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        .theme-orb {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, var(--accent), var(--violet));
+            border-radius: 50%;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px var(--accent-glow);
+        }
+
+        [data-theme="dark"] .theme-orb {
+            left: 30px;
+        }
+
+        .divider {
+            position: relative;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .divider::before {
+            left: 0;
+        }
+
+        .divider::after {
+            right: 0;
+        }
+
+        .error-message {
+            color: var(--error);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .password-strength {
+            height: 4px;
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            transition: all 0.3s;
+        }
+
+        .social-btn {
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            color: var(--text-primary);
+            transition: all 0.3s;
+        }
+
+        .social-btn:hover {
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {% include 'core/header.html' %}
+    <div class="min-h-screen flex items-center justify-center px-4 py-12" style="background: var(--bg-primary);">
+        <div class="w-full max-w-md">
+            <!-- Registration Card -->
+            <div class="auth-card rounded-2xl p-8 shadow-lg">
+                <div class="mb-6">
+                    <h1 class="text-2xl font-bold" style="color: var(--text-primary);">Create your account</h1>
+                    <p class="mt-2 text-sm" style="color: var(--text-secondary);">
+                        Start tracking your favorite anime today
+                    </p>
+                </div>
+
+                <!-- Social Registration -->
+                <div class="space-y-3 mb-6">
+                    <button class="social-btn w-full py-3 rounded-lg font-medium flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/>
+                        </svg>
+                        <span>Continue with Google</span>
+                    </button>
+                    <button class="social-btn w-full py-3 rounded-lg font-medium flex items-center justify-center space-x-2">
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z"/>
+                        </svg>
+                        <span>Continue with Facebook</span>
+                    </button>
+                </div>
+
+                <div class="divider my-6">or sign up with email</div>
+
+                <!-- Registration Form -->
+                <form method="post" onsubmit="return validateForm()">
+                    {% csrf_token %}
+
+                    <!-- Username Field -->
+                    <div class="mb-4">
+                        <label for="username" class="form-label block text-sm mb-2">Username</label>
+                        <input
+                                type="text"
+                                id="username"
+                                name="username"
+                                class="form-input w-full px-4 py-3 rounded-lg"
+                                placeholder="Choose a username"
+                                required
+                        >
+                        {% if form.username.errors %}
+                            <p class="error-message">{{ form.username.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Email Field -->
+                    <div class="mb-4">
+                        <label for="email" class="form-label block text-sm mb-2">Email address</label>
+                        <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                class="form-input w-full px-4 py-3 rounded-lg"
+                                placeholder="you@example.com"
+                                required
+                        >
+                        {% if form.email.errors %}
+                            <p class="error-message">{{ form.email.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="mb-4">
+                        <label for="password" class="form-label block text-sm mb-2">Password</label>
+                        <input
+                                type="password"
+                                id="password"
+                                name="password"
+                                class="form-input w-full px-4 py-3 rounded-lg"
+                                placeholder="Create a strong password"
+                                oninput="checkPasswordStrength()"
+                                required
+                        >
+                        <div id="password-strength" class="password-strength"></div>
+                        <p class="text-xs mt-2" style="color: var(--text-secondary);">
+                            Must be at least 8 characters with uppercase, lowercase, and numbers
+                        </p>
+                        {% if form.password.errors %}
+                            <p class="error-message">{{ form.password.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Confirm Password Field -->
+                    <div class="mb-4">
+                        <label for="password_confirm" class="form-label block text-sm mb-2">Confirm password</label>
+                        <input
+                                type="password"
+                                id="password_confirm"
+                                name="password_confirm"
+                                class="form-input w-full px-4 py-3 rounded-lg"
+                                placeholder="Re-enter your password"
+                                required
+                        >
+                        <p id="password-match" class="text-xs mt-2" style="display: none;"></p>
+                    </div>
+
+                    <!-- Terms & Conditions -->
+                    <div class="mb-6">
+                        <label class="flex items-start cursor-pointer">
+                            <input type="checkbox" name="terms" class="w-4 h-4 mt-1 rounded"
+                                   style="accent-color: var(--accent);" required>
+                            <span class="ml-2 text-sm" style="color: var(--text-secondary);">
+                            I agree to the <a href="#" class="link-accent">Terms of Service</a> and 
+                            <a href="#" class="link-accent">Privacy Policy</a>
+                        </span>
+                        </label>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn-primary w-full py-3 rounded-lg font-semibold">
+                        Create account
+                    </button>
+                </form>
+
+                <!-- Sign In Link -->
+                <p class="mt-6 text-center text-sm" style="color: var(--text-secondary);">
+                    Already have an account?
+                    <a href="{% url 'login' %}" class="link-accent font-semibold">Sign in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+        }
+
+        const saved = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', saved);
+
+        function checkPasswordStrength() {
+            const password = document.getElementById('password').value;
+            const strengthBar = document.getElementById('password-strength');
+
+            let strength = 0;
+            if (password.length >= 8) strength++;
+            if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
+            if (password.match(/[0-9]/)) strength++;
+            if (password.match(/[^a-zA-Z0-9]/)) strength++;
+
+            const colors = ['#ef4444', '#f97316', '#eab308', '#10b981'];
+            const widths = ['25%', '50%', '75%', '100%'];
+
+            if (password.length > 0) {
+                strengthBar.style.width = widths[strength - 1] || '25%';
+                strengthBar.style.background = colors[strength - 1] || '#ef4444';
+            } else {
+                strengthBar.style.width = '0%';
+            }
+        }
+
+        function validateForm() {
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('password_confirm').value;
+            const matchText = document.getElementById('password-match');
+
+            if (password !== confirm) {
+                matchText.textContent = 'Passwords do not match';
+                matchText.style.color = 'var(--error)';
+                matchText.style.display = 'block';
+                return false;
+            }
+            return true;
+        }
+
+        document.getElementById('password_confirm').addEventListener('input', function () {
+            const password = document.getElementById('password').value;
+            const confirm = this.value;
+            const matchText = document.getElementById('password-match');
+
+            if (confirm.length > 0) {
+                if (password === confirm) {
+                    matchText.textContent = '✓ Passwords match';
+                    matchText.style.color = 'var(--success)';
+                    matchText.style.display = 'block';
+                } else {
+                    matchText.textContent = '✗ Passwords do not match';
+                    matchText.style.color = 'var(--error)';
+                    matchText.style.display = 'block';
+                }
+            } else {
+                matchText.style.display = 'none';
+            }
+        });
+    </script>
+{% endblock %}

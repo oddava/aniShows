@@ -1,0 +1,12 @@
+anishows/
+├── anishows/            # project settings
+├── users/               # auth, profile
+├── anime/               # anime list, genres, episodes
+├── reviews/             # user reviews and comments
+├── core/                # utils, base models, mixins
+└── templates/ and static/
+
+Make database models +
+Create basic views/templates
+make simple ui
+

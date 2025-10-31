@@ -1,0 +1,130 @@
+.auth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+}
+
+.form-input {
+    background: var(--bg-primary);
+    border: 2px solid var(--border);
+    color: var(--text-primary);
+    transition: all 0.3s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.form-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.6;
+}
+
+.form-label {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.gradient-accent {
+    background: linear-gradient(135deg, var(--accent), var(--violet));
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--violet));
+    color: white;
+    transition: all 0.3s;
+}
+
+.btn-primary:hover {
+    cursor: pointer;
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.link-accent {
+    color: var(--accent);
+    transition: opacity 0.3s;
+}
+
+.link-accent:hover {
+    opacity: 0.7;
+}
+
+.theme-toggle {
+    position: relative;
+    width: 60px;
+    height: 32px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.theme-toggle:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.theme-orb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, var(--accent), var(--violet));
+    border-radius: 50%;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+[data-theme="dark"] .theme-orb {
+    left: 30px;
+}
+
+.divider {
+    position: relative;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 45%;
+    height: 1px;
+    background: var(--border);
+}
+
+.divider::before {
+    left: 0;
+}
+
+.divider::after {
+    right: 0;
+}
+
+.error-message {
+    color: var(--error);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+.social-btn {
+    background: var(--bg-primary);
+    border: 2px solid var(--border);
+    color: var(--text-primary);
+    transition: all 0.3s;
+}
+
+.social-btn:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px var(--accent-glow);
+}
