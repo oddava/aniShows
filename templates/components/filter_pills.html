@@ -1,0 +1,10 @@
+<div class="filters-container mb-6 flex flex-wrap gap-3 justify-center">
+  <button class="filter-pill {% if current_genre == 'all' %}active{% endif %}" data-filter="all">
+    All Anime
+  </button>
+  {% for genre in genres %}
+  <button class="filter-pill {% if current_genre == genre.slug %}active{% endif %}" data-filter="{{ genre.slug }}">
+    {{ genre.name }}
+  </button>
+  {% endfor %}
+</div>

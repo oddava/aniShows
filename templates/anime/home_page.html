@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-    {% include 'core/header.html' %}
+    {% include 'anime/header.html' %}
     <!-- Hero Section -->
     <section class="pt-32 pb-20 px-4">
         <div class="max-w-7xl mx-auto text-center">
@@ -27,7 +27,7 @@
                 </button>
                 <button class="px-8 py-4 rounded-lg font-semibold border-2"
                         style="background: var(--bg-card); color: var(--text-primary); border-color: var(--border);">
-                    Browse Anime
+                    <a href="{% url 'anime_list_page' %}">Browse Anime</a>
                 </button>
             </div>
 

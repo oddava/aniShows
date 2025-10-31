@@ -1,10 +1,689 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'base.html' %}
+{% load static %}
 
-</body>
-</html>
+{% block title %}Discover Anime - AniShows{% endblock %}
+
+{% block css %}
+    <link rel="stylesheet" href="{% static 'anime/css/home_page_style.css' %}">
+    <link rel="stylesheet" href="{% static 'anime/css/anime_list_style.css' %}">
+{% endblock %}
+
+{% block content %}
+    {% include 'anime/header.html' %}
+
+    <!-- Hero Banner -->
+    <section class="listing-hero">
+        <div class="hero-particles"></div>
+        <div class="hero-overlay"></div>
+        <div class="relative h-full flex items-center justify-center px-4">
+            <div class="text-center text-white max-w-4xl mx-auto">
+                <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight">
+                    Discover Your Next Adventure
+                </h1>
+                <p class="text-lg md:text-xl opacity-90 mb-8">
+                    Explore thousands of anime series from every genre
+                </p>
+
+                <!-- Search Bar -->
+                <div class="search-wrapper">
+                    <input
+                            type="text"
+                            class="search-input"
+                            placeholder="Search for anime..."
+                            id="searchInput"
+                            value="{{ search_query }}"
+                    >
+                    <svg class="search-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Filters Section -->
+    <section class="py-8 px-4" style="background: var(--bg-primary);">
+        <div class="max-w-7xl mx-auto">
+            <!-- Genre Filters -->
+            {% include 'components/filter_pills.html' %}
+
+            <!-- Controls Bar -->
+            <div class="controls-bar">
+                <!-- Results Count -->
+                <div class="results-count">
+                    <span>Showing</span>
+                    <span class="results-number">{{ total_count|default:248 }}</span>
+                    <span>results</span>
+                </div>
+
+                <!-- View & Sort Controls -->
+                <div class="flex items-center gap-3 flex-wrap">
+                    <!-- View Toggle -->
+                    <div class="view-toggle">
+                        <button class="view-btn active" data-view="grid" title="Grid View">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                            </svg>
+                        </button>
+                        <button class="view-btn" data-view="list" title="List View">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Sort Dropdown -->
+                    <div class="sort-dropdown">
+                        <button class="sort-button" onclick="toggleSort()">
+                            <span>Sort by: <strong>{{ current_sort_label|default:'Popular' }}</strong></span>
+                            <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor"
+                                 viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <div class="sort-menu">
+                            <div class="sort-option {% if current_sort == 'popular' %}active{% endif %}"
+                                 data-sort="popular">
+                                <svg class="sort-option-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                                </svg>
+                                <span>Most Popular</span>
+                            </div>
+                            <div class="sort-option {% if current_sort == 'rating' %}active{% endif %}"
+                                 data-sort="rating">
+                                <svg class="sort-option-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                                </svg>
+                                <span>Highest Rated</span>
+                            </div>
+                            <div class="sort-option {% if current_sort == 'newest' %}active{% endif %}"
+                                 data-sort="newest">
+                                <svg class="sort-option-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <span>Newest First</span>
+                            </div>
+                            <div class="sort-option {% if current_sort == 'title' %}active{% endif %}"
+                                 data-sort="title">
+                                <svg class="sort-option-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                                </svg>
+                                <span>A-Z</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Anime Grid Section -->
+    <section class="py-12 px-4" style="background: var(--bg-secondary);">
+        <div class="max-w-7xl mx-auto">
+            <div id="animeGrid" class="anime-grid">
+                {% for anime in anime_list %}
+                    {% include 'components/anime_card.html' %}
+                {% empty %}
+                    {% include 'components/empty_state.html' with show_empty=True %}
+                {% endfor %}
+            </div>
+
+            <!-- Load More Button -->
+            <div class="mt-16 text-center">
+                <button id="loadMoreBtn" class="load-more-btn">
+                    Load More
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Empty State (Hidden by default, shown when no results) -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <h3 class="empty-state-title">No anime found</h3>
+        <p class="empty-state-text">
+            We couldn't find any anime matching your criteria. Try adjusting your filters or search query.
+        </p>
+        <button class="load-more-btn" onclick="resetFilters()">
+            Reset Filters
+        </button>
+    </div>
+
+{% endblock %}
+
+{% block script %}
+    <script>
+        // =====================================
+        // THEME TOGGLE
+        // =====================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+        }
+
+        // =====================================
+        // FILTER FUNCTIONALITY
+        // =====================================
+        let currentFilter = 'all';
+        let currentSort = 'popular';
+
+        document.querySelectorAll('.filter-pill').forEach(pill => {
+            pill.addEventListener('click', function () {
+                const selectedGenre = this.dataset.filter;
+                const url = new URL(window.location.href);
+                const params = url.searchParams;
+                const currentGenre = params.get('genre') || 'all';
+
+                if (currentGenre === selectedGenre) return;
+
+                // Remove active class from all pills
+                document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+
+                // Add active class to clicked pill
+                this.classList.add('active');
+
+                // Update genre in query params
+                if (selectedGenre === 'all') {
+                    params.delete('genre');
+                } else {
+                    params.set('genre', selectedGenre);
+                }
+
+                // Store current filter
+                currentFilter = this.dataset.filter;
+
+                // Trigger filter action
+                filterAnime(currentFilter);
+
+                const searchValue = document.querySelector('#searchInput')?.value?.trim();
+                if (searchValue) params.set('q', searchValue);
+
+                // Push new URL & reload page
+                url.search = params.toString();
+                window.location.href = url.toString();
+            });
+        });
+
+        function filterAnime(filter) {
+            console.log('Filtering by:', filter);
+
+            // Show loading state
+            showLoadingState();
+
+            // In production, make AJAX request
+            // fetch(`/anime/?genre=${filter}&sort=${currentSort}`)
+            //     .then(response => response.json())
+            //     .then(data => updateGrid(data))
+
+            // Simulate loading
+            setTimeout(() => {
+                hideLoadingState();
+                // Update URL without reload
+                const url = new URL(window.location);
+                url.searchParams.set('genre', filter);
+                window.history.pushState({}, '', url);
+            }, 500);
+        }
+
+        // =====================================
+        // SORT FUNCTIONALITY
+        // =====================================
+        function toggleSort() {
+            document.querySelector('.sort-dropdown').classList.toggle('active');
+        }
+
+        document.querySelectorAll('.sort-option').forEach(option => {
+            option.addEventListener('click', function () {
+                // Remove active from all options
+                document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
+
+                // Add active to clicked option
+                this.classList.add('active');
+
+                // Store current sort
+                currentSort = this.dataset.sort;
+
+                // Update button text
+                const sortLabel = this.textContent.trim();
+                document.querySelector('.sort-button strong').textContent = sortLabel;
+
+                // Close dropdown
+                document.querySelector('.sort-dropdown').classList.remove('active');
+
+                // Trigger sort action
+                sortAnime(currentSort);
+            });
+        });
+
+        function sortAnime(sort) {
+            console.log('Sorting by:', sort);
+
+            // Show loading state
+            showLoadingState();
+
+            // In production, make AJAX request
+            setTimeout(() => {
+                hideLoadingState();
+                // Update URL
+                const url = new URL(window.location);
+                url.searchParams.set('sort', sort);
+                window.history.pushState({}, '', url);
+            }, 500);
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function (event) {
+            const dropdown = document.querySelector('.sort-dropdown');
+            if (dropdown && !dropdown.contains(event.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+
+        // =====================================
+        // VIEW TOGGLE
+        // =====================================
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                const view = this.dataset.view;
+                const grid = document.getElementById('animeGrid');
+
+                if (view === 'list') {
+                    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(400px, 1fr))';
+                    // Add list-specific styling here
+                } else {
+                    grid.style.gridTemplateColumns = '';
+                    grid.className = 'anime-grid';
+                }
+
+                localStorage.setItem('preferredView', view);
+            });
+        });
+
+        // Load preferred view
+        const savedView = localStorage.getItem('preferredView');
+        if (savedView) {
+            document.querySelector(`[data-view="${savedView}"]`)?.click();
+        }
+
+        // =====================================
+        // FAVORITE TOGGLE
+        // =====================================
+        document.querySelectorAll('.favorite-btn').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+
+                const animeId = this.dataset.animeId;
+                const isActive = this.classList.contains('active');
+
+                // Toggle active state
+                this.classList.toggle('active');
+
+                // Haptic feedback
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+
+                // In production, send to backend
+                // fetch('/anime/api/toggle-favorite/', {
+                //     method: 'POST',
+                //     headers: {
+                //         'Content-Type': 'application/json',
+                //         'X-CSRFToken': getCookie('csrftoken')
+                //     },
+                //     body: JSON.stringify({ anime_id: animeId })
+                // });
+
+                console.log(isActive ? 'Removed from favorites' : 'Added to favorites', animeId);
+            });
+        });
+
+        // =====================================
+        // SEARCH FUNCTIONALITY
+        // =====================================
+        let searchTimeout;
+        document.getElementById('searchInput').addEventListener('input', function (e) {
+            clearTimeout(searchTimeout);
+
+            const query = e.target.value.trim();
+
+            searchTimeout = setTimeout(() => {
+                if (query.length >= 2) {
+                    searchAnime(query);
+                } else if (query.length === 0) {
+                    // Reset to show all
+                    filterAnime(currentFilter);
+                }
+            }, 300);
+        });
+
+        function searchAnime(query) {
+            console.log('Searching for:', query);
+
+            showLoadingState();
+
+            // In production:
+            // fetch(`/anime/api/search/?q=${encodeURIComponent(query)}&genre=${currentFilter}&sort=${currentSort}`)
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         if (data.results.length === 0) {
+            //             showEmptyState();
+            //         } else {
+            //             updateGrid(data.results);
+            //         }
+            //     });
+
+            setTimeout(() => {
+                hideLoadingState();
+            }, 500);
+        }
+
+
+        document.getElementById("searchInput").addEventListener("keypress", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                const query = this.value.trim();
+                window.location.href = `?q=${encodeURIComponent(query)}`;
+            }
+        });
+
+
+        // =====================================
+        // CARD CLICK NAVIGATION
+        // =====================================
+        document.querySelectorAll('.anime-card').forEach(card => {
+            card.addEventListener('click', function (e) {
+                // Don't navigate if clicking favorite button
+                if (e.target.closest('.favorite-btn')) return;
+
+                // Navigate to detail page
+                console.log('Navigate to anime detail');
+                // window.location.href = '/anime/detail/';
+            });
+        });
+
+        // =====================================
+        // LOAD MORE FUNCTIONALITY
+        // =====================================
+        let currentPage = 1;
+        let isLoading = false;
+
+        document.getElementById('loadMoreBtn').addEventListener('click', function () {
+            if (isLoading) return;
+
+            isLoading = true;
+            const btn = this;
+
+            // Show loading state
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Loading...';
+            btn.disabled = true;
+
+            currentPage++;
+
+            // In production:
+            // fetch(`/anime/api/load-more/?page=${currentPage}&genre=${currentFilter}&sort=${currentSort}`)
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         appendCards(data.results);
+            //         if (!data.has_next) {
+            //             btn.style.display = 'none';
+            //         }
+            //     })
+            //     .finally(() => {
+            //         isLoading = false;
+            //         btn.innerHTML = 'Load More Anime';
+            //         btn.disabled = false;
+            //     });
+
+            // Simulate loading
+            setTimeout(() => {
+                console.log('Loading page', currentPage);
+                isLoading = false;
+                btn.innerHTML = 'Load More';
+                btn.disabled = false;
+            }, 1000);
+        });
+
+        // =====================================
+        // INFINITE SCROLL (Optional)
+        // =====================================
+        function enableInfiniteScroll() {
+            let scrollTimeout;
+
+            window.addEventListener('scroll', function () {
+                clearTimeout(scrollTimeout);
+
+                scrollTimeout = setTimeout(() => {
+                    const scrollPosition = window.innerHeight + window.scrollY;
+                    const threshold = document.documentElement.scrollHeight - 500;
+
+                    if (scrollPosition >= threshold && !isLoading) {
+                        document.getElementById('loadMoreBtn').click();
+                    }
+                }, 100);
+            });
+        }
+
+        // Uncomment to enable infinite scroll:
+        // enableInfiniteScroll();
+
+        // =====================================
+        // LOADING STATES
+        // =====================================
+        function showLoadingState() {
+            const grid = document.getElementById('animeGrid');
+            grid.style.opacity = '0.5';
+            grid.style.pointerEvents = 'none';
+        }
+
+        function hideLoadingState() {
+            const grid = document.getElementById('animeGrid');
+            grid.style.opacity = '1';
+            grid.style.pointerEvents = 'auto';
+        }
+
+        function showEmptyState() {
+            document.getElementById('animeGrid').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('loadMoreBtn').style.display = 'none';
+        }
+
+        function hideEmptyState() {
+            document.getElementById('animeGrid').style.display = 'grid';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('loadMoreBtn').style.display = 'block';
+        }
+
+        // =====================================
+        // RESET FILTERS
+        // =====================================
+        function resetFilters() {
+            // Reset filter pills
+            document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+            document.querySelector('[data-filter="all"]').classList.add('active');
+
+            // Reset search
+            document.getElementById('searchInput').value = '';
+
+            // Reset sort
+            document.querySelectorAll('.sort-option').forEach(o => o.classList.remove('active'));
+            document.querySelector('[data-sort="popular"]').classList.add('active');
+
+            // Reset state
+            currentFilter = 'all';
+            currentSort = 'popular';
+            currentPage = 1;
+
+            // Hide empty state
+            hideEmptyState();
+
+            // Reload data
+            filterAnime('all');
+            window.location.href = `${window.location.origin}/browse`;
+        }
+
+        // =====================================
+        // LAZY LOADING IMAGES
+        // =====================================
+        if ('IntersectionObserver' in window) {
+            const imageObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        img.src = img.dataset.src || img.src;
+                        img.classList.add('loaded');
+                        imageObserver.unobserve(img);
+                    }
+                });
+            }, {
+                rootMargin: '50px'
+            });
+
+            document.querySelectorAll('.cover-image').forEach(img => {
+                imageObserver.observe(img);
+            });
+        }
+
+        // =====================================
+        // TRACK RECENTLY VIEWED
+        // =====================================
+        function trackRecentlyViewed(animeId) {
+            let recent = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+
+            // Remove if already exists
+            recent = recent.filter(id => id !== animeId);
+
+            // Add to beginning
+            recent.unshift(animeId);
+
+            // Keep only last 10
+            recent = recent.slice(0, 10);
+
+            localStorage.setItem('recentlyViewed', JSON.stringify(recent));
+        }
+
+        // =====================================
+        // SMOOTH SCROLL TO TOP
+        // =====================================
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // =====================================
+        // KEYBOARD SHORTCUTS
+        // =====================================
+        document.addEventListener('keydown', function (e) {
+            // Focus search with "/"
+            if (e.key === '/' && !e.target.matches('input, textarea')) {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+
+            // Escape to clear search
+            if (e.key === 'Escape') {
+                document.getElementById('searchInput').blur();
+                document.querySelector('.sort-dropdown').classList.remove('active');
+            }
+        });
+
+        // =====================================
+        // CSRF TOKEN HELPER
+        // =====================================
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // =====================================
+        // ANALYTICS (Optional)
+        // =====================================
+        function trackEvent(category, action, label) {
+            console.log('Analytics:', category, action, label);
+            // In production: send to Google Analytics, Mixpanel, etc.
+        }
+
+        // Track filter changes
+        document.querySelectorAll('.filter-pill').forEach(pill => {
+            pill.addEventListener('click', function () {
+                trackEvent('Filter', 'Click', this.dataset.filter);
+            });
+        });
+
+        // Track card clicks
+        document.querySelectorAll('.anime-card').forEach(card => {
+            card.addEventListener('click', function () {
+                trackEvent('Card', 'Click', 'Anime Detail');
+            });
+        });
+
+        // =====================================
+        // INITIALIZE
+        // =====================================
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('Anime listing page initialized');
+
+            // Restore filters from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const genreParam = urlParams.get('genre');
+            const sortParam = urlParams.get('sort');
+
+            if (genreParam) {
+                document.querySelector(`[data-filter="${genreParam}"]`)?.click();
+            }
+
+            if (sortParam) {
+                document.querySelector(`[data-sort="${sortParam}"]`)?.click();
+            }
+        });
+
+        // =====================================
+        // SCROLL REVEAL ANIMATION
+        // =====================================
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.stagger-item').forEach(item => {
+            revealObserver.observe(item);
+        });
+    </script>
+{% endblock %}
