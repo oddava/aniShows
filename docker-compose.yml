@@ -1,0 +1,41 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env/.env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+    environment:
+      DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
+    volumes:
+      - ./media:/app/media
+
+  tailwind:
+    build: .
+    command: uv run python manage.py tailwind dev
+    volumes:
+      - ./media:/app/media
+
+  db:
+    image: postgres
+    restart: always
+    env_file:
+      - .env/.env.prod
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: anishows_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - db_data:/var/lib/postgresql
+
+volumes:
+  db_data:

@@ -49,7 +49,6 @@
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 4px var(--accent-glow), 0 10px 20px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
 }
 
 .search-input::placeholder {
@@ -111,7 +110,7 @@
 
 .filter-pill:hover:not(.active) {
     border-color: var(--accent);
-    transform: translateY(-2px);
+    /*transform: translateY(-2px);*/
     box-shadow: 0 4px 12px var(--accent-glow);
 }
 

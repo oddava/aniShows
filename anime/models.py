@@ -7,6 +7,8 @@ from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
 from django.utils import timezone
 
+from root import settings
+
 
 class Genre(Model):
     name = CharField(max_length=50, unique=True)
@@ -29,23 +31,21 @@ class Studio(Model):
         return self.name
 
 
-class AnimeType(TextChoices):
-    tv = 'TV'
-    movie = 'Movie'
-    ova = 'OVA'
-    special = 'Special'
-
-
-class AnimeStatus(TextChoices):
-    airing = 'Airing'
-    finished = 'Finished'
-    upcoming = 'Upcoming'
-
-
 class Anime(Model):
-    title = CharField(max_length=200, db_index=True)
-    title_english = CharField(max_length=200, blank=True)
-    title_japanese = CharField(max_length=200, blank=True)
+    class AnimeType(TextChoices):
+        tv = 'TV'
+        movie = 'Movie'
+        ova = 'OVA'
+        special = 'Special'
+
+    class AnimeStatus(TextChoices):
+        airing = 'Airing'
+        finished = 'Finished'
+        upcoming = 'Upcoming'
+
+
+    title = CharField(max_length=200, unique=True)
+    title_jp = CharField(max_length=200, blank=True)
     slug = SlugField(max_length=200, unique=True)
 
     synopsis = TextField()
@@ -57,8 +57,8 @@ class Anime(Model):
     release_date = DateField(null=True, blank=True)
     end_date = DateField(null=True, blank=True)
 
-    cover_image = ImageField(upload_to='anime/covers/', blank=True)
-    banner_image = ImageField(upload_to='anime/banners/', blank=True)
+    cover_image = ImageField(upload_to='anime/covers/', blank=True, null=True)
+    banner_image = ImageField(upload_to='anime/banners/', blank=True, null=True)
     trailer_url = URLField(blank=True)
 
     rating = DecimalField(
@@ -95,7 +95,7 @@ class Anime(Model):
 
 
 class UserFavorite(Model):
-    user = ForeignKey(User, on_delete=CASCADE, related_name='favorites')
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='favorites')
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name='favorites')
     added_at = DateTimeField(auto_now_add=True)
 
@@ -108,7 +108,7 @@ class UserFavorite(Model):
 
 
 class UserHistory(Model):
-    user = ForeignKey(User, on_delete=CASCADE, related_name='history')
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='history')
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name='history')
     viewed_at = DateTimeField(default=timezone.now)
 
@@ -122,7 +122,7 @@ class UserHistory(Model):
 
 
 class Review(Model):
-    user = ForeignKey(User, on_delete=CASCADE, related_name='reviews')
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='reviews')
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name='reviews')
     rating = IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(10)]

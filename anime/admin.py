@@ -19,14 +19,14 @@ class StudioAdmin(admin.ModelAdmin):
 class AnimeAdmin(admin.ModelAdmin):
     list_display = ('title', 'anime_type', 'status', 'rating', 'episode_count', 'release_date')
     list_filter = ('status', 'anime_type', 'genres')
-    search_fields = ('title', 'title_english', 'title_japanese')
+    search_fields = ('title', 'title_jp')
     prepopulated_fields = {'slug': ('title',)}
     filter_horizontal = ('genres',)
     date_hierarchy = 'release_date'
 
     fieldsets = (
         ('Basic Information', {
-            'fields': ('title', 'title_english', 'title_japanese', 'slug', 'synopsis')
+            'fields': ('title', 'title_jp', 'slug', 'synopsis')
         }),
         ('Classification', {
             'fields': ('anime_type', 'status', 'genres', 'studio')

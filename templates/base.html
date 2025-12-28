@@ -12,6 +12,9 @@
     <title>{% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/css/style.css' %}">
     {% block css %}{% endblock %}
+
+    {% include 'components/notification.html' %}
+
     <script>
         // Theme Toggle
         function toggleTheme() {

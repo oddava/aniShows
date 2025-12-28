@@ -88,7 +88,7 @@
 
         /* Gradient Accent */
         .gradient-accent {
-            background: linear-gradient(135deg, var(--accent), var(--violet));
+            background: var(--accent);
         }
 
         /* Feature Card */

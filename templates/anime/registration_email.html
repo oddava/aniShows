@@ -1,10 +1,177 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{{ email_subject|default:"Confirm Your Registration" }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #ffffff;
+            -webkit-font-smoothing: antialiased;
+        }
+        table {
+            border-collapse: collapse;
+        }
+        img {
+            border: 0;
+            display: block;
+            max-width: 100%;
+        }
+        a {
+            text-decoration: none;
+        }
+        @media only screen and (max-width: 600px) {
+            .container {
+                width: 100% !important;
+            }
+            .content-padding {
+                padding: 40px 24px !important;
+            }
+            .button {
+                padding: 16px 32px !important;
+                font-size: 15px !important;
+            }
+            h1 {
+                font-size: 24px !important;
+            }
+            h2 {
+                font-size: 20px !important;
+            }
+        }
+    </style>
 </head>
-<body>
-$END$
+<body style="margin: 0; padding: 0; background: #ffffff;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #fafafa;">
+        <tr>
+            <td align="center" style="padding: 60px 20px;">
+                <!-- Main Container -->
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="container"
+                       style="max-width: 600px; background: #ffffff; border: 1px solid #e8e8e8;">
+
+                    <!-- Minimal Header -->
+                    <tr>
+                        <td style="padding: 50px 50px 30px; text-align: center; border-bottom: 1px solid #f0f0f0;">
+                            <h1 style="margin: 0; color: #000000; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">
+                                {{ company_name|default:"COMPANY" }}
+                            </h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td class="content-padding" style="padding: 50px;">
+                            <h2 style="margin: 0 0 30px 0; color: #000000; font-size: 22px; font-weight: 500; letter-spacing: -0.3px;">
+                                Hello {{ username }},
+                            </h2>
+
+                            <p style="margin: 0 0 24px 0; color: #525252; font-size: 16px; line-height: 1.6;">
+                                {{ message|default:"Thank you for registering. To complete your account setup, please confirm your email address by clicking the button below." }}
+                            </p>
+
+                            {% if additional_text %}
+                            <p style="margin: 0 0 24px 0; color: #525252; font-size: 16px; line-height: 1.6;">
+                                {{ additional_text }}
+                            </p>
+                            {% endif %}
+
+                            <!-- Clean Button -->
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 40px 0;">
+                                <tr>
+                                    <td>
+                                        <a href="{{ confirm_link }}" class="button"
+                                           style="display: inline-block; background: #000000;
+                                                  color: #ffffff; padding: 18px 40px; font-size: 15px;
+                                                  font-weight: 500; letter-spacing: 0.3px; text-transform: uppercase;
+                                                  text-decoration: none;">
+                                            Confirm Email
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Alternative Link -->
+                            <div style="margin: 40px 0 0 0; padding: 24px; background: #fafafa; border-left: 2px solid #e0e0e0;">
+                                <p style="margin: 0 0 8px 0; color: #737373; font-size: 13px; line-height: 1.5; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500;">
+                                    Or use this link
+                                </p>
+                                <p style="margin: 0; color: #525252; font-size: 13px; word-break: break-all; line-height: 1.6;">
+                                    {{ confirm_link }}
+                                </p>
+                            </div>
+
+                            <!-- Signature -->
+                            <div style="margin-top: 50px;">
+                                <p style="margin: 0 0 4px 0; color: #525252; font-size: 15px;">
+                                    {{ first_name }}
+                                </p>
+                                <p style="margin: 0; color: #a3a3a3; font-size: 14px;">
+                                    {{ company_name|default:"Company" }} Team
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Minimal Footer -->
+                    <tr>
+                        <td style="background: #fafafa; padding: 40px 50px; text-align: center; border-top: 1px solid #e8e8e8;">
+                            <p style="margin: 0 0 8px 0; color: #737373; font-size: 13px; line-height: 1.6;">
+                                {{ address|default:"123 Business Street, City, Country" }}
+                            </p>
+                            <p style="margin: 0 0 20px 0; color: #737373; font-size: 13px; line-height: 1.6;">
+                                {{ email|default:"hello@company.com" }} · {{ phone|default:"+1 (555) 123-4567" }}
+                            </p>
+
+                            {% if show_social %}
+                            <!-- Social Links -->
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto 20px;">
+                                <tr>
+                                    <td style="padding: 0 10px;">
+                                        <a href="{{ telegram_link|default:'#' }}"
+                                           style="color: #000000; font-size: 13px; font-weight: 500; text-decoration: none;">
+                                            Telegram
+                                        </a>
+                                    </td>
+                                    <td style="padding: 0 10px; color: #d4d4d4;">|</td>
+                                    <td style="padding: 0 10px;">
+                                        <a href="{{ instagram_link|default:'#' }}"
+                                           style="color: #000000; font-size: 13px; font-weight: 500; text-decoration: none;">
+                                            Instagram
+                                        </a>
+                                    </td>
+                                    <td style="padding: 0 10px; color: #d4d4d4;">|</td>
+                                    <td style="padding: 0 10px;">
+                                        <a href="{{ facebook_link|default:'#' }}"
+                                           style="color: #000000; font-size: 13px; font-weight: 500; text-decoration: none;">
+                                            Facebook
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endif %}
+
+                            <p style="margin: 0 0 8px 0; color: #a3a3a3; font-size: 12px;">
+                                © {{ year|default:"2024" }} {{ company_name|default:"Company" }}. All rights reserved.
+                            </p>
+
+                            <p style="margin: 0; color: #a3a3a3; font-size: 11px;">
+                                <a href="{{ unsubscribe_link|default:'#' }}" style="color: #737373; text-decoration: none;">
+                                    Unsubscribe
+                                </a>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Footer Note -->
+                <p style="margin: 30px 0 0 0; color: #a3a3a3; font-size: 12px; text-align: center; max-width: 500px;">
+                    This email was sent because you registered an account.<br>If you didn't make this request, you can safely ignore this message.
+                </p>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

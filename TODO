@@ -7,7 +7,8 @@ anishows/
 └── templates/ and static/
 
 Make database models +
-Create basic views/templates
-make simple ui
-
-
+Create basic views/templates +
+make simple ui +
+set up the auth system +
+set up the admin page +
+make anime detail page
