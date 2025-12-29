@@ -1,3 +1,7 @@
+.PHONY: help build up down restart logs web-logs front-logs celery-logs \
+        mig migrate makemigrations shell superuser test collectstatic \
+        msg icomp import_anime clean prune backup backups restore
+
 # Docker Compose commands
 up:
 	docker compose up -d
@@ -67,7 +71,24 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 prune:
-	docker system prune -f
+	docker system prune -a --volumes -f
+
+# -----------------------------------------------------------------------------
+# Backups
+# -----------------------------------------------------------------------------
+
+backup:
+	docker compose exec backup /app/shell/backup.sh manual
+
+backups:
+	docker compose exec backup ls -lh /backups
+
+restore:
+	@if [ -z "$(TIMESTAMP)" ]; then \
+		echo "Error: TIMESTAMP is required. Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS"; \
+		exit 1; \
+	fi
+	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP)
 
 help:
 	@echo "Usage: make [target]"
@@ -101,4 +122,7 @@ help:
 	@echo "Misc:"
 	@echo "  import_anime   Import anime data"
 	@echo "  clean          Remove python cache files"
-	@echo "  prune          Remove unused Docker data"
+	@echo "  prune           Remove all stopped containers and unused images"
+	@echo "  backup          Trigger a manual backup"
+	@echo "  backups         List all available backups"
+	@echo "  restore         Restore from a backup (Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS)"

@@ -22,9 +22,9 @@ services:
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_STORAGE_BUCKET_NAME: anishows-media
       AWS_S3_REGION_NAME: us-east-1
+      MINIO_PUBLIC_DOMAIN: localhost:9000 # Change this to your domain in production
       ALLOWED_HOSTS: "web,localhost,127.0.0.1,0.0.0.0"
     volumes:
-      - ./media:/app/media
       - .:/app # Live reload (Note: Gunicorn doesn't reload by default, consider adding --reload for mixed mode or keep ./app bound)
 
   # React Frontend
@@ -80,7 +80,6 @@ services:
       - web
       - redis
     volumes:
-      - ./media:/app/media
       - .:/app
 
   # Celery Beat - Periodic Task Scheduler
@@ -113,6 +112,26 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+
+  # Backup Service
+  backup:
+    build: ./backups
+    container_name: anishows-backup
+    restart: always
+    env_file:
+      - .env/.env.prod
+      - .env/.env.local
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: anishows_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+    depends_on:
+      - db
+      - minio
+    volumes:
+      - ./backups-data:/backups
+      - minio_data:/minio_data
 
 volumes:
   db_data:

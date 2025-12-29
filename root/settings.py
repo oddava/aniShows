@@ -170,13 +170,16 @@ if USE_S3:
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
     
-    # Networking: Browser needs localhost, Backend needs minio
+    # Networking: Browser needs publicly accessible URL
+    # If MINIO_PUBLIC_DOMAIN is set (e.g. "mydomain.com" or "1.2.3.4:9000"), use it.
+    # Otherwise default to localhost:9000 for local dev.
+    MINIO_PUBLIC_DOMAIN = os.getenv('MINIO_PUBLIC_DOMAIN', 'localhost:9000')
+    
     if "minio" in (AWS_S3_ENDPOINT_URL or ""):
         # We are using local MinIO. 
-        # Generated URLs should use localhost for the browser.
-        AWS_S3_CUSTOM_DOMAIN = f"localhost:9000/{AWS_STORAGE_BUCKET_NAME}"
-        AWS_S3_USE_SSL = False
-        AWS_S3_URL_PROTOCOL = "http:"
+        AWS_S3_CUSTOM_DOMAIN = f"{MINIO_PUBLIC_DOMAIN}/{AWS_STORAGE_BUCKET_NAME}"
+        AWS_S3_USE_SSL = os.getenv('MINIO_USE_SSL', 'False') == 'True'
+        AWS_S3_URL_PROTOCOL = "https:" if AWS_S3_USE_SSL else "http:"
     else:
         AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     
