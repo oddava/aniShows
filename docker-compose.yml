@@ -1,25 +1,44 @@
 services:
+  # Django Backend API
   web:
     build: .
     ports:
       - "8000:8000"
     env_file:
       - .env/.env.prod
+      - .env/.env.local
     depends_on:
       db:
         condition: service_healthy
-    command: ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+    # command: [ "uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000" ]
+    # Production Command using Gunicorn
+    command: [ "uv", "run", "gunicorn", "root.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-" ]
     environment:
       DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
+      DEBUG: "True"
+      USE_S3: "True"
+      AWS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_STORAGE_BUCKET_NAME: anishows-media
+      AWS_S3_REGION_NAME: us-east-1
+      ALLOWED_HOSTS: "web,localhost,127.0.0.1,0.0.0.0"
     volumes:
       - ./media:/app/media
+      - .:/app # Live reload (Note: Gunicorn doesn't reload by default, consider adding --reload for mixed mode or keep ./app bound)
 
-  tailwind:
-    build: .
-    command: uv run python manage.py tailwind dev
+  # React Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - web
     volumes:
-      - ./media:/app/media
+      - ./frontend:/app
+      - /app/node_modules # Prevent overwriting node_modules
 
+  # PostgreSQL Database
   db:
     image: postgres
     restart: always
@@ -29,13 +48,73 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1
       POSTGRES_DB: anishows_db
+    # ports:
+    #   - "5432:5432" # Don't expose DB port in production
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 1s
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 5
     volumes:
       - db_data:/var/lib/postgresql
 
+  # Redis - Message Broker
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+
+  # Celery Worker
+  celery:
+    build: .
+    command: [ "uv", "run", "celery", "-A", "root", "worker", "--loglevel=info" ]
+    env_file:
+      - .env/.env.prod
+      - .env/.env.local
+    environment:
+      DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - web
+      - redis
+    volumes:
+      - ./media:/app/media
+      - .:/app
+
+  # Celery Beat - Periodic Task Scheduler
+  beat:
+    build: .
+    command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
+    env_file:
+      - .env/.env.prod
+      - .env/.env.local
+    environment:
+      DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - web
+      - redis
+    volumes:
+      - .:/app
+
+  # MinIO - Local S3 Compatible Storage
+  minio:
+    image: minio/minio
+    restart: always
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    env_file:
+      - .env/.env.prod
+      - .env/.env.local
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
 volumes:
   db_data:
+  redis_data:
+  minio_data:

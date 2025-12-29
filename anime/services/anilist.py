@@ -1,0 +1,387 @@
+
+import httpx
+import asyncio
+import logging
+from typing import Literal, Optional, List, Dict
+from enum import Enum
+from datetime import datetime
+from django.utils.text import slugify
+from django.core.files.base import ContentFile
+from asgiref.sync import sync_to_async
+
+# Import models
+from anime.models import Anime, Genre, Studio
+
+logger = logging.getLogger(__name__)
+
+class MediaSort(str, Enum):
+    ID_DESC = "ID_DESC"
+    SCORE = "SCORE_DESC"
+    POPULARITY = "POPULARITY_DESC"
+    TRENDING = "TRENDING_DESC"
+    START_DATE = "START_DATE_DESC"
+
+class MediaStatus(str, Enum):
+    FINISHED = "FINISHED"
+    RELEASING = "RELEASING"
+    NOT_YET_RELEASED = "NOT_YET_RELEASED"
+    CANCELLED = "CANCELLED"
+
+class MediaFormat(str, Enum):
+    TV = "TV"
+    TV_SHORT = "TV_SHORT"
+    MOVIE = "MOVIE"
+    SPECIAL = "SPECIAL"
+    OVA = "OVA"
+    ONA = "ONA"
+    MUSIC = "MUSIC"
+
+class AniListService:
+    BASE_URL = "https://graphql.anilist.co/"
+    MAX_PER_PAGE = 50
+    
+    def __init__(self):
+        self.client = httpx.AsyncClient(
+            headers={"Content-Type": "application/json"},
+            timeout=15.0
+        )
+
+    async def _query(self, query: str, variables: dict) -> dict:
+        try:
+            # Simple Rate Limiting: Sleep 0.67s between requests (approx 90 req/min)
+            # For a more robust solution, we should parse 'X-RateLimit-Remaining' headers.
+            await asyncio.sleep(0.7) 
+            
+            response = await self.client.post(
+                self.BASE_URL,
+                json={"query": query, "variables": variables}
+            )
+            
+            # Check for Rate Limit Headers if needed in future
+            # remaining = response.headers.get('X-RateLimit-Remaining')
+            
+            response.raise_for_status()
+            data = response.json()
+            if "errors" in data:
+                logger.error(f"GraphQL Error: {data['errors'][0]['message']}")
+                return {}
+            return data.get("data", {})
+        except httpx.HTTPError as e:
+            logger.error(f"Request error: {e}")
+            return {}
+
+    async def download_image(self, url: str) -> Optional[bytes]:
+        if not url:
+            return None
+        try:
+            await asyncio.sleep(0.2) # Polite delay for images too
+            response = await self.client.get(url)
+            response.raise_for_status()
+            return response.content
+        except httpx.HTTPError as e:
+            logger.error(f"Error downloading image {url}: {e}")
+            return None
+
+    @staticmethod
+    def anime_query(include_season: bool = False) -> str:
+        if include_season:
+            return """
+            query BySeason($season: MediaSeason, $year: Int, $page: Int, $perPage: Int, $sort: [MediaSort]) {
+                Page(page: $page, perPage: $perPage) {
+                    pageInfo { total currentPage lastPage hasNextPage }
+                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort, isAdult: false) {
+                        id
+                        title { romaji english native }
+                        format status episodes averageScore popularity duration
+                        startDate { year month day }
+                        endDate { year month day }
+                        season seasonYear
+                        genres
+                        studios(isMain: true) { nodes { name } }
+                        description
+                        coverImage { large extraLarge }
+                        bannerImage
+                        trailer { id site }
+                    }
+                }
+            }
+            """
+        else:
+            return """
+            query GetAnime($page: Int, $perPage: Int, $sort: [MediaSort]) {
+                Page(page: $page, perPage: $perPage) {
+                    pageInfo { total currentPage lastPage hasNextPage }
+                    media(type: ANIME, sort: $sort, isAdult: false) {
+                        id
+                        title { romaji english native }
+                        format status episodes averageScore popularity duration
+                        startDate { year month day }
+                        endDate { year month day }
+                        season seasonYear
+                        genres
+                        studios(isMain: true) { nodes { name } }
+                        description
+                        coverImage { large extraLarge }
+                        bannerImage
+                        trailer { id site }
+                    }
+                }
+            }
+            """
+
+    async def _fetch_paginated(
+        self,
+        variables: dict,
+        include_season: bool = False,
+        limit: int = 50
+    ) -> List[dict]:
+        results = []
+        page = variables.get("page", 1)
+        per_page = min(limit, self.MAX_PER_PAGE)
+        
+        # If limit is large (e.g. 1000), we loop pages until we hit limit or no more pages
+        fetched_count = 0
+        
+        query = self.anime_query(include_season)
+        
+        while fetched_count < limit:
+            variables.update({"page": page, "perPage": per_page})
+            data = await self._query(query, variables)
+            page_data = data.get("Page", {})
+            media = page_data.get("media", [])
+            
+            if not media:
+                break
+                
+            results.extend(media)
+            fetched_count += len(media)
+            
+            page_info = page_data.get("pageInfo", {})
+            if not page_info.get("hasNextPage"):
+                break
+            
+            page += 1
+            # Adjust per_page for the last request if near limit
+            remaining = limit - fetched_count
+            if remaining < per_page:
+                per_page = remaining
+
+        return results[:limit]
+
+    async def get_recent_updates(self, limit: int = 50) -> List[dict]:
+         return await self._fetch_paginated(
+            variables={"sort": [MediaSort.TRENDING.value]},
+            include_season=False,
+            limit=limit
+        )
+        
+    async def get_top_rated(self, limit: int = 50) -> List[dict]:
+         return await self._fetch_paginated(
+            variables={"sort": [MediaSort.SCORE.value]},
+            include_season=False,
+            limit=limit
+        )
+
+    async def get_by_season(
+        self,
+        season: Literal["WINTER", "SPRING", "SUMMER", "FALL"],
+        year: int,
+        limit: int = 50,
+        sort: MediaSort = MediaSort.POPULARITY
+    ) -> List[dict]:
+        return await self._fetch_paginated(
+            variables={"season": season, "year": year, "sort": [sort.value]},
+            include_season=True,
+            limit=limit
+        )
+
+    async def close(self):
+        try:
+             await self.client.aclose()
+        except Exception:
+            pass
+
+    # --- Processing Logic (Extracted from Command) ---
+    
+    async def process_media_list(self, media_list: List[dict]):
+        """
+        Process a list of media items and save/update them in the database.
+        Returns stats dict.
+        """
+        stats = {'created': 0, 'updated': 0, 'skipped': 0}
+        
+        for item in media_list:
+            try:
+                title_romaji = item.get("title", {}).get("romaji", "")
+                title_english = item.get("title", {}).get("english", "")
+                title_native = item.get("title", {}).get("native", "")
+                title = title_english or title_romaji
+                
+                if not title:
+                     continue
+                     
+                slug = slugify(title)
+                anime_data_dict = self._prepare_anime_data(item, title, title_native, slug)
+                
+                # Get or Create
+                anime, created = await self._get_or_create_anime(slug, anime_data_dict)
+                
+                if created:
+                    stats['created'] += 1
+                    logger.info(f"Created Anime: {title}")
+                else:
+                    # Always update for real-time freshness
+                    await self._update_anime(anime, anime_data_dict)
+                    stats['updated'] += 1
+                    logger.info(f"Updated Anime: {title}")
+                
+                # Handle Relationships & Media
+                await self._handle_relationships_async(anime, item)
+                
+                # Download images if missing
+                await self._download_and_save_images(anime, item)
+                
+            except Exception as e:
+                logger.error(f"Error processing anime {item.get('id')}: {e}")
+                stats['skipped'] += 1
+                
+        return stats
+
+    @sync_to_async
+    def _get_or_create_anime(self, slug, anime_data_dict):
+        return Anime.objects.get_or_create(
+            slug=slug,
+            defaults=anime_data_dict
+        )
+
+    @sync_to_async
+    def _update_anime(self, anime, anime_data_dict):
+        for key, value in anime_data_dict.items():
+            setattr(anime, key, value)
+        anime.save()
+
+    def _prepare_anime_data(self, item, title, title_native, slug):
+        format_map = {
+            'TV': Anime.AnimeType.tv,
+            'TV_SHORT': Anime.AnimeType.tv,
+            'MOVIE': Anime.AnimeType.movie,
+            'OVA': Anime.AnimeType.ova,
+            'ONA': Anime.AnimeType.special,
+            'SPECIAL': Anime.AnimeType.special,
+            'MUSIC': Anime.AnimeType.special,
+        }
+        anime_type = format_map.get(item.get("format", "TV"), Anime.AnimeType.tv)
+        
+        status_map = {
+            'RELEASING': Anime.AnimeStatus.airing,
+            'FINISHED': Anime.AnimeStatus.finished,
+            'NOT_YET_RELEASED': Anime.AnimeStatus.upcoming,
+            'CANCELLED': Anime.AnimeStatus.finished,
+        }
+        status = status_map.get(item.get("status", "FINISHED"), Anime.AnimeStatus.finished)
+        
+        start_date = self._parse_date(item.get("startDate", {}))
+        end_date = self._parse_date(item.get("endDate", {}))
+        
+        avg_score = item.get("averageScore", 0)
+        rating = round(avg_score / 10, 1) if avg_score else None
+        
+        description = item.get("description", "")
+        if description:
+            import re
+            description = re.sub(r'<[^>]+>', '', description)
+            description = description.strip()
+            
+        return {
+            'title': title,
+            'title_jp': title_native or "",
+            'slug': slug,
+            'synopsis': description or "No description available.",
+            'anime_type': anime_type,
+            'status': status,
+            'episode_count': item.get("episodes") or 0,
+            'duration_minutes': item.get("duration") or 24,
+            'release_date': start_date,
+            'end_date': end_date,
+            'rating': rating,
+            'meta_description': (description[:157] + '...') if description and len(description) > 160 else (description or ""),
+        }
+
+    def _parse_date(self, date_obj):
+        if not date_obj or not date_obj.get("year"):
+            return None
+        year = date_obj.get("year")
+        month = date_obj.get("month", 1)
+        day = date_obj.get("day", 1)
+        try:
+            return datetime(year, month, day).date()
+        except ValueError:
+            return None
+
+    @sync_to_async
+    def _handle_relationships_async(self, anime, item):
+        genres = item.get("genres", [])
+        for genre_name in genres:
+            genre, _ = Genre.objects.get_or_create(
+                name=genre_name,
+                defaults={'slug': slugify(genre_name)}
+            )
+            anime.genres.add(genre)
+            
+        studios = item.get("studios", {}).get("nodes", [])
+        if studios and len(studios) > 0:
+            studio_name = studios[0].get("name")
+            if studio_name:
+                studio, _ = Studio.objects.get_or_create(name=studio_name)
+                anime.studio = studio
+                anime.save()
+
+    async def _download_and_save_images(self, anime, item):
+        try:
+            cover_url = item.get("coverImage", {}).get("extraLarge") or item.get("coverImage", {}).get("large")
+            banner_url = item.get("bannerImage")
+            
+            # Using sync_to_async/lambda to check fields to avoid sync DB access in async
+            has_cover = await sync_to_async(lambda: bool(anime.cover_image))()
+            has_banner = await sync_to_async(lambda: bool(anime.banner_image))()
+            has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
+            
+            if cover_url and not has_cover:
+                cover_data = await self.download_image(cover_url)
+                if cover_data:
+                    filename = f"{anime.slug}_cover.jpg"
+                    await self._save_image(anime, 'cover_image', filename, cover_data)
+            
+            if banner_url and not has_banner:
+                banner_data = await self.download_image(banner_url)
+                if banner_data:
+                    filename = f"{anime.slug}_banner.jpg"
+                    await self._save_image(anime, 'banner_image', filename, banner_data)
+            
+            if not has_trailer:
+                trailer = item.get("trailer")
+                if trailer:
+                    trailer_id = trailer.get("id")
+                    trailer_site = trailer.get("site")
+                    if trailer_id and trailer_site:
+                        trailer_url = None
+                        if trailer_site.lower() == "youtube":
+                            trailer_url = f"https://www.youtube.com/watch?v={trailer_id}"
+                        elif trailer_site.lower() == "dailymotion":
+                            trailer_url = f"https://www.dailymotion.com/video/{trailer_id}"
+                        
+                        if trailer_url:
+                            await self._save_trailer_url(anime, trailer_url)
+
+        except Exception as e:
+            logger.error(f"Error downloading media for {anime.title}: {e}")
+
+    @sync_to_async
+    def _save_image(self, anime, field_name, filename, image_data):
+        field = getattr(anime, field_name)
+        field.save(filename, ContentFile(image_data), save=True)
+
+    @sync_to_async
+    def _save_trailer_url(self, anime, trailer_url):
+        anime.trailer_url = trailer_url
+        anime.save()

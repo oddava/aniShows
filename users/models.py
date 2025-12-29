@@ -1,7 +1,8 @@
 from django.contrib.auth.models import AbstractUser
-from django.db.models import OneToOneField, CASCADE, Model, ForeignKey, TextChoices, EmailField
+from django.db.models import OneToOneField, CASCADE, Model, ForeignKey, TextChoices, EmailField, ImageField
 from django.db.models.fields import TextField, URLField, CharField, IntegerField, DateTimeField
 from django.conf import settings
+from root.storage_backends import MediaStorage
 
 
 class CustomUser(AbstractUser):
@@ -10,8 +11,10 @@ class CustomUser(AbstractUser):
 
 class UserProfile(Model):
     user = OneToOneField(settings.AUTH_USER_MODEL, on_delete=CASCADE)
-    avatar = URLField(blank=True, null=True)
+    avatar = ImageField(upload_to='avatars/', blank=True, null=True, storage=MediaStorage())
+    banner = ImageField(upload_to='banners/', blank=True, null=True, storage=MediaStorage())
     bio = TextField(blank=True, null=True)
+    last_username_change = DateTimeField(null=True, blank=True)
     # preferred_genres = ArrayField(CharField(max_length=50), default=list)
     # telegram_id = BigIntegerField(null=True, blank=True)
 

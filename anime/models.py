@@ -8,6 +8,7 @@ from django.db.models.indexes import Index
 from django.utils import timezone
 
 from root import settings
+from root.storage_backends import MediaStorage
 
 
 class Genre(Model):
@@ -57,8 +58,8 @@ class Anime(Model):
     release_date = DateField(null=True, blank=True)
     end_date = DateField(null=True, blank=True)
 
-    cover_image = ImageField(upload_to='anime/covers/', blank=True, null=True)
-    banner_image = ImageField(upload_to='anime/banners/', blank=True, null=True)
+    cover_image = ImageField(upload_to='anime/covers/', blank=True, null=True, storage=MediaStorage())
+    banner_image = ImageField(upload_to='anime/banners/', blank=True, null=True, storage=MediaStorage())
     trailer_url = URLField(blank=True)
 
     rating = DecimalField(
@@ -137,3 +138,4 @@ class Review(Model):
 
     def __str__(self):
         return f"{self.user.username}'s review of {self.anime.title}"
+                                                                                                                                                                                                                                

@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --color-dark: #0f0f0f;
+  --color-dark-50: #262626;
+  --color-dark-100: #1a1a1a;
+  --color-dark-200: #171717;
+  --color-accent: #8b5cf6;
+  --color-accent-light: #a78bfa;
+  --color-accent-dark: #7c3aed;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-dark text-gray-100 antialiased;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.btn-primary {
+  @apply px-6 py-3 bg-accent hover:bg-accent-light text-white font-semibold rounded-xl transition-all duration-200 hover:scale-105 active:scale-95;
+}
+
+.btn-secondary {
+  @apply px-6 py-3 bg-dark-50 hover:bg-dark-100 text-white font-semibold rounded-xl border border-gray-700 hover:border-gray-600 transition-all duration-200;
+}
+
+.card {
+  @apply bg-dark-100 border border-gray-800 rounded-2xl overflow-hidden transition-all duration-300 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/5;
+}
+
+.input {
+  @apply w-full px-4 py-3 bg-dark-100 border border-gray-700/50 rounded-xl text-white placeholder:text-gray-500 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all duration-200;
+}
+
+label {
+  @apply block text-sm font-medium text-gray-400 mb-2;
+}
+
+.badge {
+  @apply inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-dark-50 text-gray-300;
+}
+
+.skeleton {
+  @apply bg-linear-to-r from-dark-100 via-dark-50 to-dark-100 animate-pulse;
+}
+
+.text-gradient {
+  @apply bg-linear-to-r from-accent to-purple-400 bg-clip-text text-transparent;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth fade-in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}

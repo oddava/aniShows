@@ -21,13 +21,21 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('', include('anime.urls')),
-    path('auth/', include('users.urls')),
+    path('api/v1/', include('api.urls')),
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
 ]
 
 # Only serve media files if DEBUG is True
+from django.views.static import serve
+from django.urls import re_path
+
+# Only serve media files if DEBUG is True
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + debug_toolbar_urls()
+else:
+    # Serve media files manually in production (since we are not using Nginx yet)
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    ]
