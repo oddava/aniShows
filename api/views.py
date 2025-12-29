@@ -83,6 +83,14 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = queryset.annotate(favorite_count=Count('favorites'))
         
         sort_field = sort_mapping.get(sort, '-favorite_count')
+        
+        # logical fixes for specific sorts:
+        # Exclude upcoming (0 episodes) from rating and newest sorts to prevent them from hitting top
+        if sort == 'rating':
+            queryset = queryset.filter(episode_count__gt=0, rating__isnull=False)
+        elif sort == 'newest':
+            queryset = queryset.filter(episode_count__gt=0)
+
         queryset = queryset.order_by(sort_field)
         
         return queryset.distinct()
