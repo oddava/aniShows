@@ -1,50 +1,69 @@
 import { useQuery } from '@tanstack/react-query';
-import { User, Heart, List, Star, Settings, Check, Clock, PlayCircle, PauseCircle, XCircle, AlertCircle } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { User, Heart, List, MessageSquare, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { favoriteApi, listApi, authApi } from '../api/client';
+import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
-
-// TABS constant removed as tabs are now hardcoded in the component structure for custom styling
+import ReviewCard from '../components/ReviewCard';
 
 export default function Profile() {
-    const { user, isAuthenticated, loading } = useAuth();
+    const { username } = useParams();
+    const { user: currentUser, isAuthenticated, loading } = useAuth();
     const [activeTab, setActiveTab] = useState('favorites');
-    const [bio, setBio] = useState('');
-    const [username, setUsername] = useState('');
-    const [avatarFile, setAvatarFile] = useState(null);
-    const [bannerFile, setBannerFile] = useState(null);
-    const [isSaving, setIsSaving] = useState(false);
-    const [updateError, setUpdateError] = useState('');
 
-    // Initialize bio and username from user data
-    useEffect(() => {
-        if (user) {
-            if (user.bio) setBio(user.bio);
-            if (user.username) setUsername(user.username);
-        }
-    }, [user]);
+    const isPublicView = !!username && username !== currentUser?.username;
+    const targetUsername = isPublicView ? username : currentUser?.username;
 
+    // Fetch Public Profile Data
+    const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
+        queryKey: ['profile', targetUsername],
+        queryFn: () => authApi.getByUsername(targetUsername).then(res => res.data),
+        enabled: isPublicView,
+        retry: false
+    });
+
+    const displayUser = isPublicView ? publicProfile : currentUser;
+    const isPrivate = isPublicView && displayUser?.is_private;
+
+    // Queries
     const { data: favorites, isLoading: favoritesLoading } = useQuery({
-        queryKey: ['favorites'],
-        queryFn: () => favoriteApi.getAll().then(res => res.data.results || res.data),
-        enabled: isAuthenticated && activeTab === 'favorites',
+        queryKey: ['favorites', targetUsername],
+        queryFn: () => favoriteApi.getAll({ username: targetUsername }).then(res => res.data.results || res.data),
+        enabled: !!displayUser && activeTab === 'favorites' && !isPrivate,
+        refetchOnMount: 'always',
     });
 
     const { data: allLists, isLoading: listsLoading } = useQuery({
-        queryKey: ['lists', 'all'],
+        queryKey: ['lists', targetUsername],
         queryFn: async () => {
-            // Parallel fetch for all statuses
             const statuses = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
             const results = await Promise.all(
                 statuses.map(status =>
-                    listApi.getAll({ status }).then(res => ({ status, items: res.data.results || res.data }))
+                    listApi.getAll({ status, username: targetUsername }).then(res => ({ status, items: res.data.results || res.data }))
                 )
             );
             return results;
         },
-        enabled: isAuthenticated && activeTab === 'anime_list',
+        enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
+    });
+
+    const { data: reviews, isLoading: reviewsLoading } = useQuery({
+        queryKey: ['reviews', targetUsername],
+        queryFn: () => reviewApi.getAll({ mine: !isPublicView, user: targetUsername }).then(res => res.data.results || res.data),
+        // Note: reviewApi doesn't support 'user' param yet in client? Backend supports 'min=true' or 'anime'.
+        // Wait, ReviewViewSet filter: 'mine=true', 'anime=slug'. 
+        // It DOES NOT support 'user=username'.
+        // ReviewViewSet.get_queryset (Step 537 line 441):
+        // if self.request.query_params.get('mine') == 'true' ... filter(user=self.request.user)
+        // I need to add user filtering support to ReviewViewSet!
+        // To view other's reviews.
+        // Plan update: fix backend ReviewViewSet again!
+        // For now I'll assume I pass 'mine=false' and filter by username?
+        // But ReviewViewSet doesn't filter by username generally.
+        // It returns ALL reviews if not filtered? No, `Review.objects...all()`.
+        // Pagination will return all?
+        // If I want reviews BY user, I must add filter `user__username`.
     });
 
     if (loading) {
@@ -55,36 +74,20 @@ export default function Profile() {
         );
     }
 
-    if (!isAuthenticated) {
+    // Auth check for own profile
+    if (!isPublicView && !isAuthenticated) {
         return <Navigate to="/login" replace />;
     }
 
-    const handleSaveSettings = async () => {
-        setIsSaving(true);
-        setUpdateError('');
-        try {
-            const formData = new FormData();
-            formData.append('bio', bio);
-            formData.append('username', username);
-            if (avatarFile) formData.append('avatar', avatarFile);
-            if (bannerFile) formData.append('banner', bannerFile);
-
-            await authApi.updateProfile(formData);
-            // Reload page to reflect changes properly (simple way to refresh user context)
-            window.location.reload();
-        } catch (err) {
-            console.error('Failed to update profile:', err);
-            // Handle both array and string error formats
-            const usernameError = err.response?.data?.username;
-            let msg = 'Failed to update profile';
-            if (usernameError) {
-                msg = Array.isArray(usernameError) ? usernameError[0] : usernameError;
-            }
-            setUpdateError(msg);
-        } finally {
-            setIsSaving(false);
-        }
-    };
+    if (isPublicView && (isError || (!profileLoading && !displayUser))) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center text-gray-400">
+                <User className="w-16 h-16 mb-4 opacity-50" />
+                <h2 className="text-xl font-semibold">User not found</h2>
+                <Link to="/" className="text-accent hover:underline mt-2">Go Home</Link>
+            </div>
+        );
+    }
 
     const renderAnimeList = () => {
         if (listsLoading) {
@@ -100,7 +103,7 @@ export default function Profile() {
         if (!hasAnyItems) {
             return (
                 <div className="text-center py-16 text-gray-400">
-                    <p>Your list is empty.</p>
+                    <p>{isPublicView ? "This user's list is empty." : "Your list is empty."}</p>
                 </div>
             );
         }
@@ -125,7 +128,45 @@ export default function Profile() {
         );
     };
 
+    const renderReviews = () => {
+        if (reviewsLoading) {
+            return (
+                <div className="flex justify-center py-12">
+                    <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                </div>
+            );
+        }
+
+        if (!reviews || reviews.length === 0) {
+            return (
+                <div className="text-center py-16 text-gray-400 bg-dark-100 rounded-xl border border-gray-800 border-dashed">
+                    <p className="mb-2">{isPublicView ? "No reviews yet." : "You haven't written any reviews yet."}</p>
+                </div>
+            );
+        }
+
+        return (
+            <div className="max-w-3xl mx-auto space-y-6">
+                {reviews.map((review) => (
+                    <div key={review.id} className="relative">
+                        <ReviewCard review={review} showAnime={true} />
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
     const renderContent = () => {
+        if (isPrivate) {
+            return (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                    <Lock className="w-16 h-16 mb-4 opacity-50" />
+                    <h3 className="text-xl font-semibold mb-2">This profile is private</h3>
+                    <p>Only the user can see their lists and reviews.</p>
+                </div>
+            );
+        }
+
         switch (activeTab) {
             case 'favorites':
                 return (
@@ -136,7 +177,7 @@ export default function Profile() {
                             favorites.map((fav) => <AnimeCard key={fav.id} anime={fav.anime} />)
                         ) : (
                             <p className="col-span-full text-center text-gray-400 py-12">
-                                No favorites yet. Start adding some!
+                                {isPublicView ? "No favorites yet." : "No favorites yet. Start adding some!"}
                             </p>
                         )}
                     </div>
@@ -145,96 +186,8 @@ export default function Profile() {
             case 'anime_list':
                 return renderAnimeList();
 
-            case 'settings':
-                return (
-                    <div className="max-w-xl mx-auto md:mx-0">
-                        <div className="space-y-8 bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                            {/* Username Input */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Nickname / Username</label>
-                                <input
-                                    type="text"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    className="input w-full"
-                                    placeholder="Enter your nickname"
-                                />
-                                <p className="text-xs text-gray-500 mt-2">
-                                    You can change your username once every 14 days.
-                                </p>
-                                {updateError && (
-                                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm mt-2">
-                                        <AlertCircle className="w-4 h-4 shrink-0" />
-                                        {updateError}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Avatar Upload */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-16 h-16 rounded-full bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center">
-                                        {avatarFile ? (
-                                            <img src={URL.createObjectURL(avatarFile)} alt="Preview" className="w-full h-full object-cover" />
-                                        ) : user?.avatar ? (
-                                            <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <User className="w-8 h-8 text-gray-500" />
-                                        )}
-                                    </div>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => setAvatarFile(e.target.files[0])}
-                                        className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Banner Upload */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                <div className="aspect-[3/1] rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-2">
-                                    {bannerFile ? (
-                                        <img src={URL.createObjectURL(bannerFile)} alt="Preview" className="w-full h-full object-cover" />
-                                    ) : user?.banner ? (
-                                        <img src={user.banner} alt="Current" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                            No Banner
-                                        </div>
-                                    )}
-                                </div>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setBannerFile(e.target.files[0])}
-                                    className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
-                                />
-                            </div>
-
-                            {/* Bio */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Bio</label>
-                                <textarea
-                                    value={bio}
-                                    onChange={(e) => setBio(e.target.value)}
-                                    placeholder="Tell us about yourself..."
-                                    className="input min-h-[120px] resize-none w-full"
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleSaveSettings}
-                                disabled={isSaving}
-                                className="btn-primary w-full md:w-auto"
-                            >
-                                {isSaving ? 'Saving...' : 'Save Changes'}
-                            </button>
-                        </div>
-                    </div>
-                );
+            case 'reviews':
+                return renderReviews();
 
             default:
                 return null;
@@ -245,8 +198,8 @@ export default function Profile() {
         <div className="min-h-screen pb-20">
             {/* Banner Section */}
             <div className="relative h-48 md:h-64 bg-dark-100">
-                {user?.banner ? (
-                    <img src={user.banner} alt="Banner" className="w-full h-full object-cover" />
+                {displayUser?.banner ? (
+                    <img src={displayUser.banner} alt="Banner" className="w-full h-full object-cover" />
                 ) : (
                     <div className="w-full h-full bg-gradient-to-r from-gray-900 to-gray-800" />
                 )}
@@ -254,12 +207,12 @@ export default function Profile() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 relative -mt-20">
-                {/* Profile Header Card - Mobile: Stack, Desktop: Row */}
+                {/* Profile Header Card */}
                 <div className="flex flex-col items-center md:flex-row md:items-end gap-4 md:gap-6 mb-8">
                     {/* Avatar */}
-                    <div className="w-28 h-28 md:w-40 md:h-40 rounded-full border-4 border-dark-200 bg-dark-100 overflow-hidden shadow-xl shrink-0 transition-transform duration-300 hover:scale-105">
-                        {user?.avatar ? (
-                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                    <div className="w-28 h-28 md:w-40 md:h-40 rounded-full border-4 border-dark-200 bg-dark-100 overflow-hidden shadow-xl shrink-0">
+                        {displayUser?.avatar ? (
+                            <img src={displayUser.avatar} alt={displayUser.username} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
                                 <User className="w-12 h-12 md:w-16 md:h-16 text-white" />
@@ -267,31 +220,37 @@ export default function Profile() {
                         )}
                     </div>
 
-                    {/* User Info - Center on mobile */}
+                    {/* User Info */}
                     <div className="flex-1 text-center md:text-left mb-2 md:mb-0">
-                        <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">{user?.username}</h1>
-                        <p className="text-gray-400 text-sm md:text-base mb-3">{user?.email}</p>
-                        {user?.bio && (
+                        <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">{displayUser?.username}</h1>
+                        {!isPublicView && <p className="text-gray-400 text-sm md:text-base mb-3">{displayUser?.email}</p>}
+                        {displayUser?.bio && (
                             <p className="text-gray-300 text-sm md:text-base max-w-2xl bg-dark-100/50 p-3 rounded-lg backdrop-blur-sm border border-white/5 mx-auto md:mx-0">
-                                {user.bio}
+                                {displayUser.bio}
                             </p>
+                        )}
+                        {/* Edit Profile Button - Owner Only */}
+                        {!isPublicView && (
+                            <Link to="/settings" className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-dark-100 hover:bg-dark-50 text-white rounded-lg transition-colors border border-gray-700 text-sm font-medium">
+                                Edit Profile
+                            </Link>
                         )}
                     </div>
 
-                    {/* Stats - Always visible */}
+                    {/* Stats */}
                     <div className="flex gap-8 md:gap-6 pb-2 md:pb-4">
-                        <div className="text-center transition-transform duration-200 hover:scale-110">
-                            <div className="text-xl md:text-2xl font-bold text-white">{user?.favorites_count || 0}</div>
+                        <div className="text-center">
+                            <div className="text-xl md:text-2xl font-bold text-white">{displayUser?.favorites_count || 0}</div>
                             <div className="text-xs md:text-sm text-gray-400">Favorites</div>
                         </div>
-                        <div className="text-center transition-transform duration-200 hover:scale-110">
-                            <div className="text-xl md:text-2xl font-bold text-white">{user?.reviews_count || 0}</div>
+                        <div className="text-center">
+                            <div className="text-xl md:text-2xl font-bold text-white">{displayUser?.reviews_count || 0}</div>
                             <div className="text-xs md:text-sm text-gray-400">Reviews</div>
                         </div>
                     </div>
                 </div>
 
-                {/* Tabs with smooth indicator transition */}
+                {/* Tabs */}
                 <div className="border-b border-gray-800 mb-8">
                     <div className="flex gap-4 md:gap-8 overflow-x-auto scrollbar-hide justify-center md:justify-start">
                         <button
@@ -311,17 +270,17 @@ export default function Profile() {
                             <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left ${activeTab === 'anime_list' ? 'scale-x-100' : 'scale-x-0'}`} />
                         </button>
                         <button
-                            onClick={() => setActiveTab('settings')}
+                            onClick={() => setActiveTab('reviews')}
                             className={`pb-4 px-2 font-medium transition-all duration-200 relative whitespace-nowrap
-                                ${activeTab === 'settings' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
+                                ${activeTab === 'reviews' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                         >
-                            Settings
-                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left ${activeTab === 'settings' ? 'scale-x-100' : 'scale-x-0'}`} />
+                            Reviews
+                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left ${activeTab === 'reviews' ? 'scale-x-100' : 'scale-x-0'}`} />
                         </button>
                     </div>
                 </div>
 
-                {/* Content with fade transition */}
+                {/* Content */}
                 <div className="min-h-[400px] animate-fade-in">
                     {renderContent()}
                 </div>

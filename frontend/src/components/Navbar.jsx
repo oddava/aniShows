@@ -1,17 +1,30 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Menu, X, User, Heart, LogOut } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Menu, X, User, LogOut, ChevronDown } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const { user, logout, isAuthenticated } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+    const profileRef = useRef(null);
 
     // Hide search on browse and anime detail pages (they have their own search/filters)
     const hideSearch = location.pathname.startsWith('/browse') || location.pathname.startsWith('/anime/');
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (profileRef.current && !profileRef.current.contains(event.target)) {
+                setIsProfileOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -40,8 +53,8 @@ export default function Navbar() {
                         <form
                             onSubmit={handleSearch}
                             className={`relative transition-all duration-300 ease-in-out ${hideSearch
-                                    ? 'w-0 opacity-0 overflow-hidden pointer-events-none'
-                                    : 'w-64 opacity-100'
+                                ? 'w-0 opacity-0 overflow-hidden pointer-events-none'
+                                : 'w-64 opacity-100'
                                 }`}
                         >
                             <input
@@ -59,19 +72,74 @@ export default function Navbar() {
                     {/* Auth Section */}
                     <div className="hidden md:flex items-center gap-4">
                         {isAuthenticated ? (
-                            <>
-                                <Link to="/profile" className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors">
-                                    <Heart className="w-5 h-5" />
-                                </Link>
-                                <Link to="/profile" className="flex items-center gap-2 px-4 py-2 bg-dark-100 rounded-xl
-                                                text-gray-300 hover:text-white transition-colors">
-                                    <User className="w-4 h-4" />
-                                    <span className="text-sm font-medium">{user?.username}</span>
-                                </Link>
-                                <button onClick={logout} className="text-gray-400 hover:text-white transition-colors">
-                                    <LogOut className="w-5 h-5" />
+                            <div className="relative" ref={profileRef}>
+                                {/* Profile Button */}
+                                <button
+                                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                    className="flex items-center gap-3 px-3 py-1.5 bg-dark-100 hover:bg-dark-50 rounded-full
+                                               border border-gray-700/50 hover:border-accent/50 transition-all duration-200 group"
+                                >
+                                    {/* Avatar */}
+                                    <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-transparent group-hover:border-accent/50 transition-colors">
+                                        {user?.avatar ? (
+                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                                                <User className="w-4 h-4 text-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
+                                        {user?.username}
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
                                 </button>
-                            </>
+
+                                {/* Dropdown Menu */}
+                                {isProfileOpen && (
+                                    <div className="absolute right-0 top-full mt-2 w-56 py-2 bg-dark-100/95 backdrop-blur-xl 
+                                                    rounded-xl border border-gray-700/50 shadow-xl shadow-black/20 animate-fade-in">
+                                        {/* User Info Header */}
+                                        <div className="px-4 py-3 border-b border-gray-700/50">
+                                            <p className="text-sm font-semibold text-white truncate">{user?.username}</p>
+                                            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                        </div>
+
+                                        {/* Menu Items */}
+                                        <div className="py-1">
+                                            <Link
+                                                to="/profile"
+                                                onClick={() => setIsProfileOpen(false)}
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
+                                                           hover:bg-accent/10 transition-colors"
+                                            >
+                                                <User className="w-4 h-4" />
+                                                <span className="text-sm font-medium">Profile</span>
+                                            </Link>
+                                            <Link
+                                                to="/settings"
+                                                onClick={() => setIsProfileOpen(false)}
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
+                                                           hover:bg-accent/10 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                                <span className="text-sm font-medium">Settings</span>
+                                            </Link>
+                                            <button
+                                                onClick={() => { logout(); setIsProfileOpen(false); }}
+                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-red-400 
+                                                           hover:bg-red-500/10 transition-colors"
+                                            >
+                                                <LogOut className="w-4 h-4" />
+                                                <span className="text-sm font-medium">Sign Out</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <>
                                 <Link to="/login" className="text-gray-300 hover:text-white transition-colors font-medium">
@@ -114,10 +182,29 @@ export default function Navbar() {
 
                         {isAuthenticated ? (
                             <>
+                                {/* Mobile Profile Header */}
+                                <div className="flex items-center gap-3 py-2 border-t border-gray-700/50 pt-4">
+                                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-accent/30">
+                                        {user?.avatar ? (
+                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                                                <User className="w-5 h-5 text-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-white">{user?.username}</p>
+                                        <p className="text-xs text-gray-400">{user?.email}</p>
+                                    </div>
+                                </div>
                                 <Link to="/profile" className="block py-2 text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>
                                     Profile
                                 </Link>
-                                <button onClick={() => { logout(); setIsMenuOpen(false); }} className="block py-2 text-gray-400 hover:text-white">
+                                <Link to="/settings" className="block py-2 text-gray-300 hover:text-white" onClick={() => setIsMenuOpen(false)}>
+                                    Settings
+                                </Link>
+                                <button onClick={() => { logout(); setIsMenuOpen(false); }} className="block py-2 text-gray-400 hover:text-red-400">
                                     Sign Out
                                 </button>
                             </>
@@ -137,3 +224,4 @@ export default function Navbar() {
         </nav>
     );
 }
+

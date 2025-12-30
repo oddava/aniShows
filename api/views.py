@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Avg, Q, Prefetch
 from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 
 from anime.models import Anime, Genre, Studio, UserFavorite, Review
 from users.models import UserProfile, UserAnimeList
@@ -12,7 +13,8 @@ from .serializers import (
     AnimeListSerializer, AnimeDetailSerializer,
     GenreSerializer, StudioSerializer,
     UserSerializer, UserProfileUpdateSerializer, RegisterSerializer,
-    FavoriteSerializer, UserAnimeListSerializer, ReviewSerializer
+    FavoriteSerializer, UserAnimeListSerializer, ReviewSerializer,
+    ChangePasswordSerializer, PublicUserSerializer
 )
 
 User = get_user_model()
@@ -29,7 +31,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         
         # Annotate with counts
         queryset = queryset.annotate(
-            review_count=Count('reviews'),
+            review_count=Count('reviews', distinct=True),
             avg_rating=Avg('reviews__rating')
         )
         
@@ -356,18 +358,57 @@ class UserProfileView(APIView):
                 profile.banner = serializer.validated_data['banner']
             if 'bio' in serializer.validated_data:
                 profile.bio = serializer.validated_data['bio']
+            if 'is_private' in request.data:
+                profile.is_private = request.data.get('is_private', False)
             profile.save()
             
             return Response(UserSerializer(request.user, context={'request': request}).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class FavoriteViewSet(viewsets.ModelViewSet):
-    serializer_class = FavoriteSerializer
+class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            request.user.set_password(serializer.validated_data['new_password'])
+            request.user.save()
+            return Response({'message': 'Password changed successfully'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
+    """Public profile view by username"""
+    serializer_class = PublicUserSerializer
+    permission_classes = [permissions.AllowAny]
+    lookup_field = 'username'
+    
     def get_queryset(self):
-        return UserFavorite.objects.filter(user=self.request.user).select_related('anime__studio').prefetch_related('anime__genres')
+        return User.objects.select_related('userprofile').all()
+
+
+class FavoriteViewSet(viewsets.ModelViewSet):
+    serializer_class = FavoriteSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def get_queryset(self):
+        username = self.request.query_params.get('username')
+        queryset = UserFavorite.objects.all()
+
+        if username:
+            target_user = get_object_or_404(User, username=username)
+            if target_user != self.request.user:
+                 profile = getattr(target_user, 'userprofile', None)
+                 if profile and profile.is_private:
+                     return UserFavorite.objects.none()
+            queryset = queryset.filter(user=target_user)
+        elif self.request.user.is_authenticated:
+            queryset = queryset.filter(user=self.request.user)
+        else:
+            return UserFavorite.objects.none()
+            
+        return queryset.select_related('anime__studio').prefetch_related('anime__genres')
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -395,10 +436,25 @@ class FavoriteViewSet(viewsets.ModelViewSet):
 
 class UserAnimeListViewSet(viewsets.ModelViewSet):
     serializer_class = UserAnimeListSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
     def get_queryset(self):
-        queryset = UserAnimeList.objects.filter(user=self.request.user).select_related('anime__studio').prefetch_related('anime__genres')
+        username = self.request.query_params.get('username')
+        queryset = UserAnimeList.objects.all()
+
+        if username:
+            target_user = get_object_or_404(User, username=username)
+            if target_user != self.request.user:
+                 profile = getattr(target_user, 'userprofile', None)
+                 if profile and profile.is_private:
+                     return UserAnimeList.objects.none()
+            queryset = queryset.filter(user=target_user)
+        elif self.request.user.is_authenticated:
+            queryset = queryset.filter(user=self.request.user)
+        else:
+            return UserAnimeList.objects.none()
+
+        queryset = queryset.select_related('anime__studio').prefetch_related('anime__genres')
         
         # Filter by status
         list_status = self.request.query_params.get('status')
@@ -416,18 +472,32 @@ class ReviewViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
     def get_queryset(self):
-        queryset = Review.objects.select_related('user', 'anime')
+        queryset = Review.objects.select_related('user', 'user__userprofile', 'anime')
         
         # Filter by anime
         anime_slug = self.request.query_params.get('anime')
         if anime_slug:
             queryset = queryset.filter(anime__slug=anime_slug)
+
+        # Filter by target user
+        target_username = self.request.query_params.get('user')
+        if target_username:
+            queryset = queryset.filter(user__username=target_username)
         
-        # Filter by user
+        # Filter by user (mine)
         if self.request.query_params.get('mine') == 'true' and self.request.user.is_authenticated:
             queryset = queryset.filter(user=self.request.user)
         
         return queryset.order_by('-created_at')
     
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        anime_slug = serializer.validated_data.get('anime').slug
+        
+        # Check if user has anime on their list
+        if not UserAnimeList.objects.filter(user=user, anime__slug=anime_slug).exists():
+            raise serializers.ValidationError(
+                "You must add this anime to your list before writing a review."
+            )
+            
+        serializer.save(user=user)

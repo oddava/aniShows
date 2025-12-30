@@ -84,10 +84,13 @@ export const authApi = {
             headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
         });
     },
+    googleLogin: (code) => api.post('/auth/google/', { code }),
+    changePassword: (data) => api.post('/auth/change-password/', data),
+    getByUsername: (username) => api.get(`/users/${username}/`),
 };
 
 export const favoriteApi = {
-    getAll: () => api.get('/favorites/'),
+    getAll: (params) => api.get('/favorites/', { params }),
     toggle: (animeId) => api.post('/favorites/toggle/', { anime_id: animeId }),
 };
 
@@ -99,6 +102,7 @@ export const listApi = {
 };
 
 export const reviewApi = {
+    getAll: (params) => api.get('/reviews/', { params }),
     create: (data) => api.post('/reviews/', data),
     update: (id, data) => api.patch(`/reviews/${id}/`, data),
     delete: (id) => api.delete(`/reviews/${id}/`),

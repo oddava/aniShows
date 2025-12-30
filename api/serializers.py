@@ -83,13 +83,14 @@ class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
     bio = serializers.SerializerMethodField()
+    is_private = serializers.SerializerMethodField()
     favorites_count = serializers.SerializerMethodField()
     reviews_count = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'date_joined', 'avatar', 'banner', 'bio', 
-                  'favorites_count', 'reviews_count']
+                  'is_private', 'favorites_count', 'reviews_count']
         read_only_fields = ['id', 'date_joined']
     
     def get_avatar(self, obj):
@@ -110,6 +111,46 @@ class UserSerializer(serializers.ModelSerializer):
     def get_reviews_count(self, obj):
         return obj.reviews.count()
 
+    def get_is_private(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.is_private if profile else False
+
+
+class PublicUserSerializer(serializers.ModelSerializer):
+    """Limited serializer for public profile view"""
+    avatar = serializers.SerializerMethodField()
+    banner = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    favorites_count = serializers.SerializerMethodField()
+    reviews_count = serializers.SerializerMethodField()
+    is_private = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'date_joined', 'avatar', 'banner', 'bio', 'favorites_count', 'reviews_count', 'is_private']
+        read_only_fields = fields
+    
+    def get_avatar(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.avatar.url if profile and profile.avatar else None
+
+    def get_banner(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.banner.url if profile and profile.banner else None
+    
+    def get_bio(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.bio if profile else None
+    
+    def get_favorites_count(self, obj):
+        return obj.favorites.count()
+    
+    def get_reviews_count(self, obj):
+        return obj.reviews.count()
+        
+    def get_is_private(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.is_private if profile else False
 
 class UserProfileUpdateSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150, required=False)
@@ -165,14 +206,27 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
 
 class ReviewSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    anime = AnimeListSerializer(read_only=True)
     anime_slug = serializers.SlugRelatedField(
         slug_field='slug',
         queryset=Anime.objects.all(),
         source='anime',
         write_only=True
     )
+    has_spoilers = serializers.BooleanField(default=False, required=False)
     
     class Meta:
         model = Review
-        fields = ['id', 'user', 'anime', 'anime_slug', 'rating', 'text', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'anime', 'anime_slug', 'rating', 'text', 'has_spoilers', 'created_at', 'updated_at']
         read_only_fields = ['id', 'user', 'anime', 'created_at', 'updated_at']
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True, min_length=8)
+    
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Current password is incorrect')
+        return value

@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import Model, TextField, CharField, URLField, IntegerField, DateField, DecimalField, \
-    DateTimeField, \
+    DateTimeField, BooleanField, \
     ManyToManyField, SET_NULL, ForeignKey, ImageField, SlugField, CASCADE
 from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
@@ -128,7 +128,8 @@ class Review(Model):
     rating = IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(10)]
     )
-    text = TextField()
+    text = TextField(blank=True)
+    has_spoilers = BooleanField(default=False)
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)
 

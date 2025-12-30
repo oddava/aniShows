@@ -1,5 +1,5 @@
 from django.contrib.auth.models import AbstractUser
-from django.db.models import OneToOneField, CASCADE, Model, ForeignKey, TextChoices, EmailField, ImageField
+from django.db.models import OneToOneField, CASCADE, Model, ForeignKey, TextChoices, EmailField, ImageField, BooleanField
 from django.db.models.fields import TextField, URLField, CharField, IntegerField, DateTimeField
 from django.conf import settings
 from root.storage_backends import MediaStorage
@@ -15,6 +15,7 @@ class UserProfile(Model):
     banner = ImageField(upload_to='banners/', blank=True, null=True, storage=MediaStorage())
     bio = TextField(blank=True, null=True)
     last_username_change = DateTimeField(null=True, blank=True)
+    is_private = BooleanField(default=False)
     # preferred_genres = ArrayField(CharField(max_length=50), default=list)
     # telegram_id = BigIntegerField(null=True, blank=True)
 

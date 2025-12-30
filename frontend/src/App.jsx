@@ -8,10 +8,12 @@ import Home from './pages/Home';
 import Browse from './pages/Browse';
 import AnimeDetail from './pages/AnimeDetail';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 import { Login, Register } from './pages/Auth';
 import VerifyEmail from './pages/VerifyEmail';
 import PasswordReset from './pages/PasswordReset';
 import PasswordResetConfirm from './pages/PasswordResetConfirm';
+import GoogleCallback from './pages/GoogleCallback';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
@@ -37,11 +39,14 @@ function App() {
               <Route path="browse" element={<Browse />} />
               <Route path="anime/:slug" element={<AnimeDetail />} />
               <Route path="profile" element={<Profile />} />
+              <Route path="profile/:username" element={<Profile />} />
+              <Route path="settings" element={<Settings />} />
               <Route path="login" element={<Login />} />
               <Route path="register" element={<Register />} />
               <Route path="verify-email/:uid/:token" element={<VerifyEmail />} />
               <Route path="forgot-password" element={<PasswordReset />} />
               <Route path="reset-password/:uid/:token" element={<PasswordResetConfirm />} />
+              <Route path="auth/google/callback" element={<GoogleCallback />} />
               <Route path="terms" element={<Terms />} />
               <Route path="privacy" element={<Privacy />} />
             </Route>
@@ -53,3 +58,4 @@ function App() {
 }
 
 export default App;
+

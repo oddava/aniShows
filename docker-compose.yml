@@ -5,8 +5,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env/.env.prod
-      - .env/.env.local
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -29,9 +28,14 @@ services:
 
   # React Frontend
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
     ports:
       - "5173:5173"
+    env_file:
+      - .env
     depends_on:
       - web
     volumes:
@@ -43,7 +47,7 @@ services:
     image: postgres
     restart: always
     env_file:
-      - .env/.env.prod
+      - .env
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1
@@ -70,8 +74,7 @@ services:
     build: .
     command: [ "uv", "run", "celery", "-A", "root", "worker", "--loglevel=info" ]
     env_file:
-      - .env/.env.prod
-      - .env/.env.local
+      - .env
     environment:
       DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -87,8 +90,7 @@ services:
     build: .
     command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
     env_file:
-      - .env/.env.prod
-      - .env/.env.local
+      - .env
     environment:
       DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -107,8 +109,7 @@ services:
       - "9000:9000" # API
       - "9001:9001" # Console
     env_file:
-      - .env/.env.prod
-      - .env/.env.local
+      - .env
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -119,8 +120,7 @@ services:
     container_name: anishows-backup
     restart: always
     env_file:
-      - .env/.env.prod
-      - .env/.env.local
+      - .env
     environment:
       POSTGRES_HOST: db
       POSTGRES_DB: anishows_db

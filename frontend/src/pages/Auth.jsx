@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 
 export function Login() {
     const [formData, setFormData] = useState({
@@ -14,9 +15,14 @@ export function Login() {
     const navigate = useNavigate();
 
     // Redirect if already authenticated
+    // Redirect if already authenticated
     if (isAuthenticated) {
         navigate('/browse');
-        return null; // Prevent rendering login form
+        return (
+            <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-accent" />
+            </div>
+        );
     }
 
     const handleSubmit = async (e) => {
@@ -51,6 +57,18 @@ export function Login() {
                             <p className="text-sm">{error}</p>
                         </div>
                     )}
+
+                    <div className="mb-6">
+                        <GoogleLoginButton />
+                        <div className="relative mt-6">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-gray-800" />
+                            </div>
+                            <div className="relative flex justify-center text-sm">
+                                <span className="px-2 bg-dark-100 text-gray-400">Or continue with</span>
+                            </div>
+                        </div>
+                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
@@ -134,9 +152,14 @@ export function Register() {
     const navigate = useNavigate();
 
     // Redirect if already authenticated
+    // Redirect if already authenticated
     if (isAuthenticated) {
         navigate('/browse');
-        return null;
+        return (
+            <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-accent" />
+            </div>
+        );
     }
 
     const handleSubmit = async (e) => {
@@ -185,6 +208,18 @@ export function Register() {
                             <p className="text-sm">{errors.general}</p>
                         </div>
                     )}
+
+                    <div className="mb-6">
+                        <GoogleLoginButton />
+                        <div className="relative mt-6">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-gray-800" />
+                            </div>
+                            <div className="relative flex justify-center text-sm">
+                                <span className="px-2 bg-dark-100 text-gray-400">Or register with email</span>
+                            </div>
+                        </div>
+                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>

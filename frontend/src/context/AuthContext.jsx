@@ -54,12 +54,23 @@ export function AuthProvider({ children }) {
         setUser(null);
     };
 
+    const setTokens = async (access, refresh) => {
+        localStorage.setItem('access_token', access);
+        localStorage.setItem('refresh_token', refresh);
+
+        const profileResponse = await authApi.getProfile();
+        setUser(profileResponse.data);
+
+        return profileResponse.data;
+    };
+
     const value = {
         user,
         loading,
         login,
         register,
         logout,
+        setTokens,
         isAuthenticated: !!user,
     };
 
