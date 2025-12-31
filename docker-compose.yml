@@ -2,8 +2,6 @@ services:
   # Django Backend API
   web:
     build: .
-    # ports:
-    #   - "8000:8000"
     expose:
       - "8000"
     env_file:
@@ -11,20 +9,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # command: [ "uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000" ]
-    # Production Command using Gunicorn
     command: [ "uv", "run", "gunicorn", "root.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-" ]
     environment:
-      DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
-      DEBUG: "True"
-      USE_S3: "True"
-      AWS_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      AWS_STORAGE_BUCKET_NAME: anishows-media
-      AWS_S3_REGION_NAME: us-east-1
-      MINIO_PUBLIC_DOMAIN: localhost:9000 # Change this to your domain in production
-      ALLOWED_HOSTS: "web,localhost,127.0.0.1,0.0.0.0"
+      DEBUG: "${DEBUG:-True}"
+      USE_S3: "${USE_S3:-True}"
+      AWS_S3_ENDPOINT_URL: "${AWS_S3_ENDPOINT_URL:-http://minio:9000}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-minioadmin}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
+      AWS_STORAGE_BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
+      AWS_S3_REGION_NAME: "${AWS_S3_REGION_NAME:-us-east-1}"
+      MINIO_PUBLIC_DOMAIN: "${MINIO_PUBLIC_DOMAIN:-localhost:9000}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,0.0.0.0}"
+      DB_NAME: "${DB_NAME:-anishows_db}"
+      DB_USER: "${DB_USER:-postgres}"
+      DB_PASSWORD: "${DB_PASSWORD:-1}"
+      DB_HOST: "${DB_HOST:-db}"
+      DB_PORT: "${DB_PORT:-5432}"
     volumes:
       - .:/app
       - /app/.venv # Isolate virtual environment
@@ -35,8 +35,6 @@ services:
       context: ./frontend
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
-    # ports:
-    #   - "5173:5173"
     expose:
       - "5173"
     env_file:
@@ -54,18 +52,16 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
-      POSTGRES_DB: anishows_db
-    # ports:
-    #   - "5432:5432" # Don't expose DB port in production
+      POSTGRES_USER: "${DB_USER:-postgres}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-1}"
+      POSTGRES_DB: "${DB_NAME:-anishows_db}"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-anishows_db}" ]
       interval: 5s
       timeout: 5s
       retries: 5
     volumes:
-      - db_data:/var/lib/postgresql
+      - db_data:/var/lib/postgresql/data
 
   # Redis - Message Broker
   redis:
@@ -81,9 +77,13 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DB_NAME: "${DB_NAME:-anishows_db}"
+      DB_USER: "${DB_USER:-postgres}"
+      DB_PASSWORD: "${DB_PASSWORD:-1}"
+      DB_HOST: "${DB_HOST:-db}"
+      DB_PORT: "${DB_PORT:-5432}"
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
     depends_on:
       - web
       - redis
@@ -98,9 +98,13 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://postgres:1@db:5432/anishows_db
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DB_NAME: "${DB_NAME:-anishows_db}"
+      DB_USER: "${DB_USER:-postgres}"
+      DB_PASSWORD: "${DB_PASSWORD:-1}"
+      DB_HOST: "${DB_HOST:-db}"
+      DB_PORT: "${DB_PORT:-5432}"
+      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
+      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
     depends_on:
       - web
       - redis
@@ -129,10 +133,10 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_HOST: db
-      POSTGRES_DB: anishows_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
+      POSTGRES_HOST: "${DB_HOST:-db}"
+      POSTGRES_DB: "${DB_NAME:-anishows_db}"
+      POSTGRES_USER: "${DB_USER:-postgres}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-1}"
     depends_on:
       - db
       - minio
