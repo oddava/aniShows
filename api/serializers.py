@@ -3,8 +3,10 @@ from django.contrib.auth import get_user_model
 from django.utils.html import escape
 from anime.models import Anime, Genre, Studio, UserFavorite, Review
 from users.models import UserProfile, UserAnimeList
+import logging
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 # File upload limits
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
@@ -96,12 +98,13 @@ class UserSerializer(serializers.ModelSerializer):
     reviews_count = serializers.SerializerMethodField()
     
     email_verified = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'date_joined', 'avatar', 'banner', 'bio', 
-                  'is_private', 'favorites_count', 'reviews_count', 'email_verified']
-        read_only_fields = ['id', 'date_joined', 'email_verified']
+                  'is_private', 'favorites_count', 'reviews_count', 'email_verified', 'has_password']
+        read_only_fields = ['id', 'date_joined', 'email_verified', 'has_password']
     
     def get_avatar(self, obj):
         profile = getattr(obj, 'userprofile', None)
@@ -128,6 +131,9 @@ class UserSerializer(serializers.ModelSerializer):
     def get_email_verified(self, obj):
         profile = getattr(obj, 'userprofile', None)
         return profile.email_verified if profile else False
+
+    def get_has_password(self, obj):
+        return obj.has_usable_password()
 
 
 class PublicUserSerializer(serializers.ModelSerializer):
@@ -226,8 +232,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password']
         )
-        # Create profile if it doesn't exist
-        UserProfile.objects.get_or_create(user=user)
         return user
 
 
@@ -287,11 +291,21 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 
 class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True, write_only=True)
+    old_password = serializers.CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
     new_password = serializers.CharField(required=True, write_only=True, min_length=8)
     
-    def validate_old_password(self, value):
+    def validate(self, attrs):
         user = self.context['request'].user
-        if not user.check_password(value):
-            raise serializers.ValidationError('Current password is incorrect')
-        return value
+        old_password = attrs.get('old_password')
+        
+        # Log for debugging
+        logger.info(f"Validating password change for {user.username}: has_usable_password={user.has_usable_password()}, old_password_provided={bool(old_password)}")
+        
+        # If user has a password, old_password is REQUIRED
+        if user.has_usable_password():
+            if not old_password:
+                raise serializers.ValidationError({'old_password': 'Current password is required to set a new one.'})
+            if not user.check_password(old_password):
+                raise serializers.ValidationError({'old_password': 'The current password you entered is incorrect.'})
+        
+        return attrs

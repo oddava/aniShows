@@ -34,8 +34,10 @@ class AnimeListTests(APITestCase):
             email='user2@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user1, email_verified=True)
-        UserProfile.objects.create(user=self.user2, email_verified=True)
+        UserProfile.objects.update_or_create(user=self.user1, defaults={'email_verified': True})
+        UserProfile.objects.update_or_create(user=self.user2, defaults={'email_verified': True})
+        self.user1.refresh_from_db()
+        self.user2.refresh_from_db()
         
         # Create test anime
         self.anime = Anime.objects.create(
@@ -169,8 +171,8 @@ class PrivacyTests(APITestCase):
             email='private@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user1, is_private=False)
-        UserProfile.objects.create(user=self.user2, is_private=True)
+        UserProfile.objects.update_or_create(user=self.user1, defaults={'is_private': False})
+        UserProfile.objects.update_or_create(user=self.user2, defaults={'is_private': True})
         
         self.anime = Anime.objects.create(
             title='Test Anime',
@@ -212,8 +214,8 @@ class DuplicateEntryTests(APITestCase):
             email='test@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user, email_verified=True)
-        
+        UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
+
         self.anime = Anime.objects.create(
             title='Test Anime',
             slug='test-anime',
@@ -224,8 +226,9 @@ class DuplicateEntryTests(APITestCase):
         
         self.list_url = reverse('lists-list')
         self.client = APIClient()
+        self.user.refresh_from_db()
         self.client.force_authenticate(user=self.user)
-    
+
     def test_cannot_add_duplicate_entry(self):
         """Test that adding the same anime twice fails."""
         # First add

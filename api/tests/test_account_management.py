@@ -14,7 +14,7 @@ class AccountManagementTests(APITestCase):
             email='test@example.com',
             password='testpassword123'
         )
-        self.profile = UserProfile.objects.create(user=self.user)
+        self.profile, _ = UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
         self.client.force_authenticate(user=self.user)
         
         # URLs

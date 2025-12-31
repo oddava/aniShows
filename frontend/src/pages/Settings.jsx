@@ -119,10 +119,17 @@ export default function Settings() {
             setConfirmPassword('');
         } catch (err) {
             console.error('Failed to change password:', err);
-            const oldPassError = err.response?.data?.old_password;
             let msg = 'Failed to change password';
-            if (oldPassError) {
-                msg = Array.isArray(oldPassError) ? oldPassError[0] : oldPassError;
+            if (err.response?.data) {
+                const data = err.response.data;
+                if (typeof data === 'object') {
+                    // Flatten all field errors into one string
+                    msg = Object.entries(data)
+                        .map(([key, val]) => `${key}: ${Array.isArray(val) ? val[0] : val}`)
+                        .join(' | ');
+                } else if (typeof data === 'string') {
+                    msg = data.substring(0, 100);
+                }
             }
             setAccountError(msg);
         } finally {
@@ -154,12 +161,19 @@ export default function Settings() {
     };
 
     const handleChangeEmail = async () => {
-        if (!changeEmail || !changeEmailPassword) return;
+        if (!changeEmail) return;
+        if (user.has_password && !changeEmailPassword) {
+            setAccountError('Current password is required to change email');
+            return;
+        }
         setIsChangingEmail(true);
         setAccountError('');
         setAccountSuccess('');
         try {
-            await authApi.changeEmail({ new_email: changeEmail, password: changeEmailPassword });
+            await authApi.changeEmail({
+                new_email: changeEmail,
+                password: user.has_password ? changeEmailPassword : null
+            });
             setAccountSuccess('Confirmation email sent to new address!');
             setChangeEmail('');
             setChangeEmailPassword('');
@@ -171,10 +185,15 @@ export default function Settings() {
     };
 
     const handleDeleteAccount = async () => {
-        if (!deleteAccountPassword) return;
+        if (user.has_password && !deleteAccountPassword) {
+            setAccountError('Current password is required to delete account');
+            return;
+        }
         setIsDeleting(true);
         try {
-            await authApi.deleteAccount({ password: deleteAccountPassword });
+            await authApi.deleteAccount({
+                password: user.has_password ? deleteAccountPassword : null
+            });
             // Manually clear storage to prevent AuthContext from attempting to restore session
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
@@ -369,17 +388,19 @@ export default function Settings() {
                                         placeholder="New Email Address"
                                         required
                                     />
-                                    <input
-                                        type="password"
-                                        value={changeEmailPassword}
-                                        onChange={(e) => setChangeEmailPassword(e.target.value)}
-                                        className="input w-full"
-                                        placeholder="Confirm with Password"
-                                        required
-                                    />
+                                    {user.has_password && (
+                                        <input
+                                            type="password"
+                                            value={changeEmailPassword}
+                                            onChange={(e) => setChangeEmailPassword(e.target.value)}
+                                            className="input w-full"
+                                            placeholder="Confirm with Password"
+                                            required
+                                        />
+                                    )}
                                     <button
                                         onClick={handleChangeEmail}
-                                        disabled={isChangingEmail || !changeEmail || !changeEmailPassword}
+                                        disabled={isChangingEmail || !changeEmail || (user.has_password && !changeEmailPassword)}
                                         className="btn-primary w-full sm:w-auto"
                                     >
                                         {isChangingEmail ? 'Sending Link...' : 'Update Email'}
@@ -398,29 +419,32 @@ export default function Settings() {
 
                             <div className="h-px bg-gray-700 my-6" />
 
-                            <h3 className="text-lg font-medium text-white mb-4">Change Password</h3>
+                            <h3 className="text-lg font-medium text-white mb-4">
+                                {user.has_password ? 'Change Password' : 'Set Password'}
+                            </h3>
 
                             <div className="space-y-4 max-w-md">
-                                {/* Current Password */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showOldPassword ? 'text' : 'password'}
-                                            value={oldPassword}
-                                            onChange={(e) => setOldPassword(e.target.value)}
-                                            className="input w-full pr-10"
-                                            placeholder="Enter current password"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowOldPassword(!showOldPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                        >
-                                            {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
+                                {user.has_password && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
+                                        <div className="relative">
+                                            <input
+                                                type={showOldPassword ? 'text' : 'password'}
+                                                value={oldPassword}
+                                                onChange={(e) => setOldPassword(e.target.value)}
+                                                className="input w-full pr-10"
+                                                placeholder="Enter current password"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowOldPassword(!showOldPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                            >
+                                                {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* New Password */}
                                 <div>
@@ -457,10 +481,10 @@ export default function Settings() {
 
                                 <button
                                     onClick={handleChangePassword}
-                                    disabled={isSavingAccount || !oldPassword || !newPassword || !confirmPassword}
+                                    disabled={isSavingAccount || (user.has_password && !oldPassword) || !newPassword || !confirmPassword}
                                     className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {isSavingAccount ? 'Changing...' : 'Change Password'}
+                                    {isSavingAccount ? 'Saving...' : (user.has_password ? 'Change Password' : 'Set Password')}
                                 </button>
                             </div>
                         </div>
@@ -504,32 +528,55 @@ export default function Settings() {
                                 </button>
                             ) : (
                                 <div className="max-w-md animate-fade-in">
-                                    <p className="text-sm text-gray-300 mb-3 block">Enter your password to confirm:</p>
-                                    <div className="flex gap-3">
-                                        <input
-                                            type="password"
-                                            value={deleteAccountPassword}
-                                            onChange={(e) => setDeleteAccountPassword(e.target.value)}
-                                            className="input flex-1 border-red-500/30 focus:border-red-500 focus:ring-red-500/20"
-                                            placeholder="Your Password"
-                                        />
-                                        <button
-                                            onClick={handleDeleteAccount}
-                                            disabled={isDeleting || !deleteAccountPassword}
-                                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setShowDeleteConfirm(false);
-                                                setDeleteAccountPassword('');
-                                            }}
-                                            className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
+                                    {user.has_password ? (
+                                        <>
+                                            <p className="text-sm text-gray-300 mb-3 block">Enter your password to confirm:</p>
+                                            <div className="flex gap-3">
+                                                <input
+                                                    type="password"
+                                                    value={deleteAccountPassword}
+                                                    onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                                                    className="input flex-1 border-red-500/30 focus:border-red-500 focus:ring-red-500/20"
+                                                    placeholder="Your Password"
+                                                />
+                                                <button
+                                                    onClick={handleDeleteAccount}
+                                                    disabled={isDeleting || !deleteAccountPassword}
+                                                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setShowDeleteConfirm(false);
+                                                        setDeleteAccountPassword('');
+                                                    }}
+                                                    className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col gap-3">
+                                            <p className="text-sm text-gray-300 mb-2">Are you sure you want to delete your account? This action cannot be undone.</p>
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={handleDeleteAccount}
+                                                    disabled={isDeleting}
+                                                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
+                                                >
+                                                    {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowDeleteConfirm(false)}
+                                                    className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

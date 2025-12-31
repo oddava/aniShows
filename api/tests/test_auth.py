@@ -114,7 +114,8 @@ class EmailVerificationTests(APITestCase):
             is_active=True
         )
         # Create profile with email_verified=False (default)
-        UserProfile.objects.create(user=self.user)
+        # Using get_or_create because signal might have already created it
+        UserProfile.objects.get_or_create(user=self.user)
         
         # Generate valid token and uid
         self.default_token_generator = default_token_generator
@@ -286,7 +287,7 @@ class ProfileTests(APITestCase):
             email='test@example.com',
             password='securepass123'
         )
-        UserProfile.objects.create(user=self.user)
+        UserProfile.objects.get_or_create(user=self.user)
         self.profile_url = reverse('user_profile')
         self.client = APIClient()
     

@@ -667,12 +667,14 @@ class DeleteAccountView(APIView):
         user = request.user
         password = request.data.get('password')
         
-        # Require password confirmation for security
-        if not password:
-            return Response({'error': 'Password is required to delete account'}, status=status.HTTP_400_BAD_REQUEST)
+        logger.info(f"Account deletion attempt for {user.username}: has_usable_password={user.has_usable_password()}, password_provided={bool(password)}")
         
-        if not user.check_password(password):
-            return Response({'error': 'Incorrect password'}, status=status.HTTP_400_BAD_REQUEST)
+        # Require password confirmation ONLY if user has a usable password
+        if user.has_usable_password():
+            if not password:
+                return Response({'error': 'Your current password is required to delete your account.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.check_password(password):
+                return Response({'error': 'The password you entered is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Delete user and all related data (cascades via ForeignKey)
         user.delete()
@@ -687,14 +689,14 @@ class ChangeEmailView(APIView):
     def post(self, request):
         new_email = request.data.get('new_email')
         password = request.data.get('password')
-        
-        if not new_email or not password:
-            return Response({'error': 'New email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
         user = request.user
         
-        if not user.check_password(password):
-            return Response({'error': 'Incorrect password'}, status=status.HTTP_400_BAD_REQUEST)
+        # Require password confirmation ONLY if user has a usable password
+        if user.has_usable_password():
+            if not password:
+                return Response({'error': 'Your current password is required to change your email.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.check_password(password):
+                return Response({'error': 'The password you entered is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Check if email already in use
         if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
