@@ -34,8 +34,8 @@ class AnimeListTests(APITestCase):
             email='user2@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user1)
-        UserProfile.objects.create(user=self.user2)
+        UserProfile.objects.create(user=self.user1, email_verified=True)
+        UserProfile.objects.create(user=self.user2, email_verified=True)
         
         # Create test anime
         self.anime = Anime.objects.create(
@@ -108,7 +108,7 @@ class AnimeListTests(APITestCase):
         detail_url = reverse('lists-detail', args=[entry.id])
         data = {'status': 'Dropped'}
         response = self.client.patch(detail_url, data)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
     
     def test_delete_own_list_entry(self):
         """Test deleting own anime list entry."""
@@ -136,7 +136,7 @@ class AnimeListTests(APITestCase):
         self.client.force_authenticate(user=self.user1)
         detail_url = reverse('lists-detail', args=[entry.id])
         response = self.client.delete(detail_url)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(UserAnimeList.objects.filter(id=entry.id).exists())
     
     def test_view_own_list(self):
@@ -212,7 +212,7 @@ class DuplicateEntryTests(APITestCase):
             email='test@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user)
+        UserProfile.objects.create(user=self.user, email_verified=True)
         
         self.anime = Anime.objects.create(
             title='Test Anime',

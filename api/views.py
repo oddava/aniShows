@@ -5,8 +5,17 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Avg, Q, Prefetch
+from django.db import IntegrityError
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -154,6 +163,7 @@ class StudioViewSet(viewsets.ReadOnlyModelViewSet):
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.tokens import RefreshToken
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
@@ -195,27 +205,49 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            # Email verification disabled for now
-            # user.is_active = False 
-            # user.save()
             
-            # Send Verification Email - Disabled
-            # token = default_token_generator.make_token(user)
-            # ...
+            # User is active but email not verified - they can login but with restrictions
+            # email_verified is set to False by default in UserProfile
+            
+            # Send Verification Email
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            # Link to frontend verification page
+            verify_link = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}/"
+            
+            subject = 'Verify your email - aniShows'
+            message = f'''Welcome to aniShows!
+
+Please verify your email address by clicking the link below:
+
+{verify_link}
+
+If you didn't create an account, you can ignore this email.
+
+Note: Unverified accounts are automatically deleted after 7 days.
+'''
+            
+            try:
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
+            except Exception as e:
+                logger.exception("Failed to send verification email")
             
             return Response({
-                'message': 'Registration successful. You can now log in.'
+                'message': 'Registration successful. Please check your email to verify your account.'
             }, status=status.HTTP_201_CREATED)
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         uidb64 = request.data.get('uid')
@@ -227,27 +259,95 @@ class VerifyEmailView(APIView):
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(pk=uid)
-            logger.debug(f"Verify email for user {user.username} (ID: {user.pk}), Active: {user.is_active}")
+            profile = getattr(user, 'userprofile', None)
             
             is_valid = default_token_generator.check_token(user, token)
-            logger.debug(f"Token valid: {is_valid}")
+            logger.debug(f"Verify email for user {user.username}, token valid: {is_valid}")
             
         except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
             logger.debug(f"UID decode error: {e}")
             return Response({'error': 'Invalid UID'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if user.is_active:
-             return Response({'message': 'Account already active'}, status=status.HTTP_200_OK)
+        if profile and profile.email_verified:
+             # Just return tokens if already verified so they get logged in
+             refresh = RefreshToken.for_user(user)
+             return Response({
+                 'message': 'Email already verified',
+                 'access': str(refresh.access_token),
+                 'refresh': str(refresh),
+                 'user': UserSerializer(user, context={'request': request}).data
+             }, status=status.HTTP_200_OK)
 
         if is_valid:
-            user.is_active = True
-            user.save()
-            return Response({'message': 'Email verified successfully. You can now login.'}, status=status.HTTP_200_OK)
+            if profile:
+                profile.email_verified = True
+                profile.save()
+            
+            # Generate tokens for auto-login
+            refresh = RefreshToken.for_user(user)
+            
+            return Response({
+                'message': 'Email verified successfully!',
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': UserSerializer(user, context={'request': request}).data
+            }, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Invalid or expired token'}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class ResendVerificationView(APIView):
+    """Resend verification email for users who didn't receive it or whose token expired."""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.select_related('userprofile').get(email=email)
+            profile = getattr(user, 'userprofile', None)
+            if profile and profile.email_verified:
+                # Already verified, don't reveal this for security
+                raise User.DoesNotExist
+        except User.DoesNotExist:
+            # Don't reveal user existence - return success anyway
+            return Response({
+                'message': 'If an account with this email exists and is pending verification, a new link has been sent.'
+            }, status=status.HTTP_200_OK)
+        
+        # Generate new token and send email
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        verify_link = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}/"
+        
+        subject = 'Verify your email - aniShows'
+        message = f'''Welcome to aniShows!
+
+Please verify your email address by clicking the link below:
+
+{verify_link}
+
+If you didn't create an account, you can ignore this email.
+
+Note: Unverified accounts are automatically deleted after 7 days.
+'''
+        
+        try:
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
+        except Exception as e:
+            logger.exception("Failed to send verification email")
+        
+        return Response({
+            'message': 'If an account with this email exists and is pending verification, a new link has been sent.'
+        }, status=status.HTTP_200_OK)
+
 class PasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         email = request.data.get('email')
@@ -279,6 +379,7 @@ class PasswordResetView(APIView):
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         uidb64 = request.data.get('uid')
@@ -413,6 +514,10 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         return queryset.select_related('anime__studio').prefetch_related('anime__genres')
     
     def perform_create(self, serializer):
+        # Check email verification
+        profile = getattr(self.request.user, 'userprofile', None)
+        if not profile or not profile.email_verified:
+            raise PermissionDenied("Please verify your email to add favorites.")
         serializer.save(user=self.request.user)
     
     def perform_destroy(self, instance):
@@ -432,6 +537,11 @@ class FavoriteViewSet(viewsets.ModelViewSet):
             anime = Anime.objects.get(id=anime_id)
         except Anime.DoesNotExist:
             return Response({'error': 'Anime not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check email verification
+        profile = getattr(request.user, 'userprofile', None)
+        if not profile or not profile.email_verified:
+            return Response({'error': 'Please verify your email to add favorites.'}, status=status.HTTP_403_FORBIDDEN)
         
         favorite, created = UserFavorite.objects.get_or_create(user=request.user, anime=anime)
         
@@ -472,7 +582,14 @@ class UserAnimeListViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-updated_at')
     
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        # Check email verification
+        profile = getattr(self.request.user, 'userprofile', None)
+        if not profile or not profile.email_verified:
+            raise PermissionDenied("Please verify your email to add anime to your list.")
+        try:
+            serializer.save(user=self.request.user)
+        except IntegrityError:
+            raise serializers.ValidationError({"detail": "This anime is already in your list."})
     
     def perform_update(self, serializer):
         """Ensure users can only update their own list entries."""
@@ -512,6 +629,12 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         user = self.request.user
+        
+        # Check email verification
+        profile = getattr(user, 'userprofile', None)
+        if not profile or not profile.email_verified:
+            raise PermissionDenied("Please verify your email to write reviews.")
+        
         anime_slug = serializer.validated_data.get('anime').slug
         
         # Check if user has anime on their list
@@ -533,3 +656,114 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if instance.user != self.request.user:
             raise PermissionDenied("You can only delete your own reviews.")
         instance.delete()
+
+
+class DeleteAccountView(APIView):
+    """Allow users to delete their own account."""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def delete(self, request):
+        user = request.user
+        password = request.data.get('password')
+        
+        # Require password confirmation for security
+        if not password:
+            return Response({'error': 'Password is required to delete account'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not user.check_password(password):
+            return Response({'error': 'Incorrect password'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Delete user and all related data (cascades via ForeignKey)
+        user.delete()
+        
+        return Response({'message': 'Account deleted successfully'}, status=status.HTTP_200_OK)
+
+
+class ChangeEmailView(APIView):
+    """Request email change - sends verification to new email."""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        new_email = request.data.get('new_email')
+        password = request.data.get('password')
+        
+        if not new_email or not password:
+            return Response({'error': 'New email and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = request.user
+        
+        if not user.check_password(password):
+            return Response({'error': 'Incorrect password'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if email already in use
+        if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+            return Response({'error': 'This email is already in use'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate token for email change confirmation
+        token = default_token_generator.make_token(user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # Store the new email temporarily (we'll use the token to validate)
+        # Since we can't add to the user model, we'll encode the new email in the URL
+        new_email_encoded = urlsafe_base64_encode(force_bytes(new_email))
+        
+        confirm_link = f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/{new_email_encoded}/"
+        
+        subject = 'Confirm your new email - aniShows'
+        message = f'''You requested to change your email address on aniShows.
+
+Click the link below to confirm your new email address:
+
+{confirm_link}
+
+If you didn't request this change, please ignore this email.
+'''
+        
+        try:
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [new_email])
+        except Exception as e:
+            logger.exception("Failed to send email change confirmation")
+            return Response({'error': 'Failed to send confirmation email'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({
+            'message': 'Confirmation email sent to your new email address. Please check your inbox.'
+        }, status=status.HTTP_200_OK)
+
+
+class ConfirmEmailChangeView(APIView):
+    """Confirm email change with token."""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    
+    def post(self, request):
+        uidb64 = request.data.get('uid')
+        token = request.data.get('token')
+        new_email_encoded = request.data.get('new_email')
+        
+        if not all([uidb64, token, new_email_encoded]):
+            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+            new_email = force_str(urlsafe_base64_decode(new_email_encoded))
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({'error': 'Invalid link'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not default_token_generator.check_token(user, token):
+            return Response({'error': 'Invalid or expired link'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check email not taken (again, in case of race condition)
+        if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+            return Response({'error': 'This email is already in use'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update email and mark as verified
+        user.email = new_email
+        user.save()
+        
+        profile = getattr(user, 'userprofile', None)
+        if profile:
+            profile.email_verified = True
+            profile.save()
+        
+        return Response({'message': 'Email changed successfully!'}, status=status.HTTP_200_OK)

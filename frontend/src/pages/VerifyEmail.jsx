@@ -1,17 +1,37 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 export default function VerifyEmail() {
     const { uid, token } = useParams();
+    const navigate = useNavigate();
+    const { setTokens } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('');
 
     useEffect(() => {
         const verify = async () => {
             try {
-                await authApi.verifyEmail({ uid, token });
+                const response = await authApi.verifyEmail({ uid, token });
+                console.log("VerifyEmail: API success", response.data);
+
+                // If backend returns tokens, auto-login
+                if (response.data.access && response.data.refresh) {
+                    console.log("VerifyEmail: Tokens received, calling setTokens");
+                    // Pass only tokens, let setTokens fetch profile to verify they work
+                    await setTokens(response.data.access, response.data.refresh);
+
+                    // Redirect after a short delay so they can see the success message
+                    setTimeout(() => {
+                        console.log("VerifyEmail: Redirecting to /browse");
+                        navigate('/browse');
+                    }, 2000);
+                } else {
+                    console.warn("VerifyEmail: No tokens in response", response.data);
+                }
+
                 setStatus('success');
             } catch (err) {
                 setStatus('error');
@@ -22,7 +42,7 @@ export default function VerifyEmail() {
         if (uid && token) {
             verify();
         }
-    }, [uid, token]);
+    }, [uid, token, setTokens, navigate]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
@@ -41,9 +61,9 @@ export default function VerifyEmail() {
                             <CheckCircle className="w-8 h-8 text-green-500" />
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">Email Verified!</h2>
-                        <p className="text-gray-400 mb-8">Your account has been successfully verified. You can now log in.</p>
-                        <Link to="/login" className="btn-primary w-full block">
-                            Go to Login
+                        <p className="text-gray-400 mb-8">Your account has been successfully verified. Redirecting you...</p>
+                        <Link to="/browse" className="btn-primary w-full block">
+                            Start Browsing
                         </Link>
                     </>
                 )}

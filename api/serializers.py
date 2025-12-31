@@ -95,11 +95,13 @@ class UserSerializer(serializers.ModelSerializer):
     favorites_count = serializers.SerializerMethodField()
     reviews_count = serializers.SerializerMethodField()
     
+    email_verified = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'date_joined', 'avatar', 'banner', 'bio', 
-                  'is_private', 'favorites_count', 'reviews_count']
-        read_only_fields = ['id', 'date_joined']
+                  'is_private', 'favorites_count', 'reviews_count', 'email_verified']
+        read_only_fields = ['id', 'date_joined', 'email_verified']
     
     def get_avatar(self, obj):
         profile = getattr(obj, 'userprofile', None)
@@ -122,6 +124,10 @@ class UserSerializer(serializers.ModelSerializer):
     def get_is_private(self, obj):
         profile = getattr(obj, 'userprofile', None)
         return profile.is_private if profile else False
+
+    def get_email_verified(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.email_verified if profile else False
 
 
 class PublicUserSerializer(serializers.ModelSerializer):
@@ -209,6 +215,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email', 'password']
     
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+        
     def create(self, validated_data):
         user = User.objects.create_user(
             username=validated_data['username'],

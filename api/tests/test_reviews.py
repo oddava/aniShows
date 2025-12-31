@@ -29,7 +29,7 @@ class ReviewCreationTests(APITestCase):
             email='test@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user)
+        UserProfile.objects.create(user=self.user, email_verified=True)
         
         self.anime = Anime.objects.create(
             title='Test Anime',
@@ -120,8 +120,8 @@ class ReviewPermissionTests(APITestCase):
             email='user2@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user1)
-        UserProfile.objects.create(user=self.user2)
+        UserProfile.objects.create(user=self.user1, email_verified=True)
+        UserProfile.objects.create(user=self.user2, email_verified=True)
         
         self.anime = Anime.objects.create(
             title='Test Anime',
@@ -196,7 +196,7 @@ class ReviewValidationTests(APITestCase):
             email='test@example.com',
             password='password123'
         )
-        UserProfile.objects.create(user=self.user)
+        UserProfile.objects.create(user=self.user, email_verified=True)
         
         self.anime = Anime.objects.create(
             title='Test Anime',

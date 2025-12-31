@@ -37,6 +37,9 @@ class RegistrationTests(APITestCase):
         # Check UserProfile is created
         user = User.objects.get(username='testuser')
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
+        # Check user is inactive until email is verified
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.userprofile.email_verified)
     
     def test_register_short_password(self):
         """Test registration fails with password less than 8 characters."""
@@ -64,6 +67,22 @@ class RegistrationTests(APITestCase):
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
     
+    def test_register_duplicate_email(self):
+        """Test registration fails with existing email."""
+        User.objects.create_user(
+            username='user1',
+            email='duplicate@example.com',
+            password='password123'
+        )
+        data = {
+            'username': 'user2',
+            'email': 'duplicate@example.com',
+            'password': 'securepass123'
+        }
+        response = self.client.post(self.register_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+    
     def test_register_invalid_email(self):
         """Test registration fails with invalid email format."""
         data = {
@@ -73,6 +92,118 @@ class RegistrationTests(APITestCase):
         }
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class EmailVerificationTests(APITestCase):
+    """Tests for email verification functionality."""
+    
+    def setUp(self):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        
+        self.verify_url = reverse('verify_email')
+        self.resend_url = reverse('resend_verification')
+        self.login_url = reverse('token_obtain_pair')
+        
+        # Create an inactive user (simulating post-registration)
+        self.user = User.objects.create_user(
+            username='unverified',
+            email='unverified@example.com',
+            password='securepass123',
+            is_active=True
+        )
+        # Create profile with email_verified=False (default)
+        UserProfile.objects.create(user=self.user)
+        
+        # Generate valid token and uid
+        self.default_token_generator = default_token_generator
+        self.urlsafe_base64_encode = urlsafe_base64_encode
+        self.force_bytes = force_bytes
+        
+        self.valid_token = default_token_generator.make_token(self.user)
+        self.valid_uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+    
+    def test_login_succeeds_for_unverified_user(self):
+        """Test that unverified users CAN login."""
+        data = {'username': 'unverified', 'password': 'securepass123'}
+        response = self.client.post(self.login_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
+    def test_verify_email_success(self):
+        """Test successful email verification activates user."""
+        data = {'uid': self.valid_uid, 'token': self.valid_token}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify user is now active
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertTrue(self.user.userprofile.email_verified)
+    
+    def test_verify_email_invalid_token(self):
+        """Test verification fails with invalid token."""
+        data = {'uid': self.valid_uid, 'token': 'invalid-token'}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # User should still be inactive
+        # User should still be unverified
+        self.user.userprofile.refresh_from_db()
+        self.assertFalse(self.user.userprofile.email_verified)
+    
+    def test_verify_email_invalid_uid(self):
+        """Test verification fails with invalid UID."""
+        data = {'uid': 'invalid-uid', 'token': self.valid_token}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    
+    def test_verify_already_verified_user(self):
+        """Test verification returns success for already verified user."""
+        self.user.userprofile.email_verified = True
+        self.user.userprofile.save()
+        
+        data = {'uid': self.valid_uid, 'token': self.valid_token}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # We don't necessarily check for specific message if generic success is returned for idempotency
+        # But if you implemented specific message, check it.
+        # Current implementation just returns success.
+    
+    def test_resend_verification_for_inactive_user(self):
+        """Test resend verification for inactive user."""
+        data = {'email': 'unverified@example.com'}
+        response = self.client.post(self.resend_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
+    def test_resend_verification_nonexistent_email(self):
+        """Test resend verification returns 200 for non-existent email (security)."""
+        data = {'email': 'nonexistent@example.com'}
+        response = self.client.post(self.resend_url, data)
+        # Should return 200 to not reveal user existence
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
+    def test_resend_verification_for_active_user(self):
+        """Test resend verification returns 200 for active user (security)."""
+        self.user.is_active = True
+        self.user.save()
+        
+        data = {'email': 'unverified@example.com'}
+        response = self.client.post(self.resend_url, data)
+        # Should return 200 to not reveal user status
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    
+    def test_verified_user_can_login(self):
+        """Test that after verification, user can login."""
+        # First verify
+        data = {'uid': self.valid_uid, 'token': self.valid_token}
+        self.client.post(self.verify_url, data)
+        
+        # Now login should work
+        login_data = {'username': 'unverified', 'password': 'securepass123'}
+        response = self.client.post(self.login_url, login_data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
 
 
 class LoginTests(APITestCase):

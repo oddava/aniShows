@@ -11,6 +11,8 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import { Login, Register } from './pages/Auth';
 import VerifyEmail from './pages/VerifyEmail';
+import VerificationPending from './pages/VerificationPending';
+import ConfirmEmailChange from './pages/ConfirmEmailChange';
 import PasswordReset from './pages/PasswordReset';
 import PasswordResetConfirm from './pages/PasswordResetConfirm';
 import GoogleCallback from './pages/GoogleCallback';
@@ -43,7 +45,9 @@ function App() {
               <Route path="settings" element={<Settings />} />
               <Route path="login" element={<Login />} />
               <Route path="register" element={<Register />} />
+              <Route path="verification-pending" element={<VerificationPending />} />
               <Route path="verify-email/:uid/:token" element={<VerifyEmail />} />
+              <Route path="confirm-email-change/:uid/:token/:new_email" element={<ConfirmEmailChange />} />
               <Route path="forgot-password" element={<PasswordReset />} />
               <Route path="reset-password/:uid/:token" element={<PasswordResetConfirm />} />
               <Route path="auth/google/callback" element={<GoogleCallback />} />

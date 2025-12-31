@@ -67,8 +67,11 @@ export default function AnimeDetail() {
     const createReviewMutation = useMutation({
         mutationFn: (data) => reviewApi.create({ ...data, anime_slug: slug }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews', slug] });
-            queryClient.invalidateQueries({ queryKey: ['anime', slug] }); // Update rating stats
+            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            if (user?.username) {
+                queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
+            }
             setIsWritingReview(false);
         },
     });
@@ -76,7 +79,7 @@ export default function AnimeDetail() {
     const updateReviewMutation = useMutation({
         mutationFn: ({ id, data }) => reviewApi.update(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews', slug] });
+            queryClient.invalidateQueries({ queryKey: ['reviews'] });
             queryClient.invalidateQueries({ queryKey: ['anime', slug] });
             setEditingReview(null);
         },
@@ -85,8 +88,11 @@ export default function AnimeDetail() {
     const deleteReviewMutation = useMutation({
         mutationFn: (id) => reviewApi.delete(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews', slug] });
+            queryClient.invalidateQueries({ queryKey: ['reviews'] });
             queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            if (user?.username) {
+                queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
+            }
         },
     });
 
@@ -95,6 +101,11 @@ export default function AnimeDetail() {
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
+            // Invalidate profile and favorites to update counts/lists
+            if (user?.username) {
+                queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
+                queryClient.invalidateQueries({ queryKey: ['favorites', user.username] });
+            }
         } catch (error) {
             console.error('Error toggling favorite:', error);
         }

@@ -75,6 +75,7 @@ export const authApi = {
     login: (credentials) => api.post('/auth/login/', credentials),
     register: (data) => api.post('/auth/register/', data),
     verifyEmail: (data) => api.post('/auth/verify-email/', data),
+    resendVerification: (data) => api.post('/auth/resend-verification/', data),
     resetPassword: (data) => api.post('/auth/password-reset/', data),
     resetPasswordConfirm: (data) => api.post('/auth/password-reset-confirm/', data),
     getProfile: () => api.get('/users/me/'),
@@ -86,6 +87,9 @@ export const authApi = {
     },
     googleLogin: (code) => api.post('/auth/google/', { code }),
     changePassword: (data) => api.post('/auth/change-password/', data),
+    deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),
+    changeEmail: (data) => api.post('/auth/change-email/', data),
+    confirmEmailChange: (data) => api.post('/auth/confirm-email-change/', data),
     getByUsername: (username) => api.get(`/users/${username}/`),
 };
 

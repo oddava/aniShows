@@ -6,8 +6,9 @@ from .views import (
     AnimeViewSet, GenreViewSet, StudioViewSet,
     CustomTokenObtainPairView, RegisterView, UserProfileView,
     FavoriteViewSet, UserAnimeListViewSet, ReviewViewSet,
-    VerifyEmailView, PasswordResetView, PasswordResetConfirmView,
-    ChangePasswordView, PublicUserProfileViewSet
+    VerifyEmailView, ResendVerificationView, PasswordResetView, PasswordResetConfirmView,
+    ChangePasswordView, PublicUserProfileViewSet,
+    DeleteAccountView, ChangeEmailView, ConfirmEmailChangeView
 )
 from users.views import GoogleLogin
 
@@ -27,8 +28,12 @@ urlpatterns = [
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('auth/verify-email/', VerifyEmailView.as_view(), name='verify_email'),
+    path('auth/resend-verification/', ResendVerificationView.as_view(), name='resend_verification'),
     path('auth/password-reset/', PasswordResetView.as_view(), name='password_reset'),
     path('auth/password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/change-password/', ChangePasswordView.as_view(), name='change_password'),
+    path('auth/delete-account/', DeleteAccountView.as_view(), name='delete_account'),
+    path('auth/change-email/', ChangeEmailView.as_view(), name='change_email'),
+    path('auth/confirm-email-change/', ConfirmEmailChangeView.as_view(), name='confirm_email_change'),
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),
 ]

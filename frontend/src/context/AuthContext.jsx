@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { authApi } from '../api/client';
 
 const AuthContext = createContext(null);
@@ -11,21 +11,24 @@ export function AuthProvider({ children }) {
         checkAuth();
     }, []);
 
-    const checkAuth = async () => {
+    const checkAuth = useCallback(async () => {
         const token = localStorage.getItem('access_token');
+        console.log("AuthContext: checkAuth running. Token present:", !!token);
         if (token) {
             try {
                 const response = await authApi.getProfile();
+                console.log("AuthContext: checkAuth success. User:", response.data.username);
                 setUser(response.data);
             } catch (error) {
+                console.error("AuthContext: checkAuth failed:", error);
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
             }
         }
         setLoading(false);
-    };
+    }, []);
 
-    const login = async (username, password) => {
+    const login = useCallback(async (username, password) => {
         const response = await authApi.login({ username, password });
         const { access, refresh } = response.data;
 
@@ -36,35 +39,42 @@ export function AuthProvider({ children }) {
         setUser(profileResponse.data);
 
         return profileResponse.data;
-    };
+    }, []);
 
-    const register = async (username, email, password) => {
-        await authApi.register({
+    const register = useCallback(async (username, email, password) => {
+        const response = await authApi.register({
             username,
             email,
             password,
             password_confirm: password
         });
-        return login(email, password); // Email works too since backend handles it in 'username' field
-    };
 
-    const logout = () => {
+        return response.data;
+    }, []);
+
+    const logout = useCallback(() => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         setUser(null);
-    };
+    }, []);
 
-    const setTokens = async (access, refresh) => {
+    const setTokens = useCallback(async (access, refresh, userData = null) => {
+        console.log("AuthContext: setTokens called. HasUserData:", !!userData);
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
+
+        if (userData) {
+            setUser(userData);
+            return userData;
+        }
 
         const profileResponse = await authApi.getProfile();
         setUser(profileResponse.data);
 
         return profileResponse.data;
-    };
+    }, []);
 
-    const value = {
+    const value = useMemo(() => ({
         user,
         loading,
         login,
@@ -72,7 +82,7 @@ export function AuthProvider({ children }) {
         logout,
         setTokens,
         isAuthenticated: !!user,
-    };
+    }), [user, loading, login, register, logout, setTokens]);
 
     return (
         <AuthContext.Provider value={value}>

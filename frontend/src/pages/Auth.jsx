@@ -34,8 +34,24 @@ export function Login() {
             await login(formData.username.trim(), formData.password.trim());
             navigate('/browse');
         } catch (err) {
-            // Check for specific error message from backend
-            const msg = err.response?.data?.detail || 'Invalid username or password';
+            console.error('Login error:', err);
+            let msg = 'Invalid username or password';
+            if (err.response?.data) {
+                const data = err.response.data;
+                if (data.detail) {
+                    msg = data.detail;
+                } else if (data.non_field_errors) {
+                    msg = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors;
+                } else {
+                    // Check if we have field specific errors that we can't show inline easily
+                    // Login form usually doesn't show inline field errors for username/password unless we add them
+                    // For now, let's grab the first error we find
+                    const firstKey = Object.keys(data)[0];
+                    if (firstKey && Array.isArray(data[firstKey])) {
+                        msg = `${firstKey}: ${data[firstKey][0]}`;
+                    }
+                }
+            }
             setError(msg);
         } finally {
             setLoading(false);
@@ -93,11 +109,6 @@ export function Login() {
                                 <label className="block text-sm font-medium text-gray-300">
                                     Password
                                 </label>
-                                {/* Forgot Password Disabled
-                                <Link to="/forgot-password" class="text-xs text-accent hover:text-accent-hover transition-colors">
-                                    Forgot Password?
-                                </Link>
-                                */}
                             </div>
                             <div className="relative group">
                                 <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
@@ -109,6 +120,11 @@ export function Login() {
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                 />
+                            </div>
+                            <div className="flex justify-end mt-2">
+                                <Link to="/forgot-password" className="text-xs text-accent hover:text-accent-hover transition-colors">
+                                    Forgot Password?
+                                </Link>
                             </div>
                         </div>
 
@@ -148,7 +164,7 @@ export function Register() {
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
-    const { register, login, isAuthenticated } = useAuth(); // Import login to auto-login
+    const { register, login, isAuthenticated } = useAuth();
     const navigate = useNavigate();
 
     // Redirect if already authenticated
@@ -177,14 +193,33 @@ export function Register() {
             // Register
             await register(formData.username, formData.email, formData.password);
 
-            // Auto Login
-            await login(formData.username, formData.password);
-            navigate('/browse');
+            // Redirect to verification pending page
+            navigate('/verification-pending', {
+                state: {
+                    email: formData.email,
+                    message: "Please check your email to verify your account. Unverified accounts are automatically deleted after 7 days."
+                }
+            });
 
         } catch (err) {
             // Handle field errors from DRF
             if (err.response?.data) {
-                setErrors(err.response.data);
+                const data = err.response.data;
+                const newErrors = { ...data };
+
+                // Map non_field_errors to general
+                if (data.non_field_errors) {
+                    newErrors.general = Array.isArray(data.non_field_errors)
+                        ? data.non_field_errors[0]
+                        : data.non_field_errors;
+                }
+
+                // Map detail to general
+                if (data.detail) {
+                    newErrors.general = data.detail;
+                }
+
+                setErrors(newErrors);
             } else {
                 setErrors({ general: 'Registration failed. Please try again.' });
             }

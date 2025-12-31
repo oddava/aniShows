@@ -28,6 +28,15 @@ export default function Settings() {
     const [accountError, setAccountError] = useState('');
     const [accountSuccess, setAccountSuccess] = useState('');
 
+    // Additional Account States
+    const [isResending, setIsResending] = useState(false);
+    const [changeEmail, setChangeEmail] = useState('');
+    const [changeEmailPassword, setChangeEmailPassword] = useState('');
+    const [isChangingEmail, setIsChangingEmail] = useState(false);
+    const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
     // Initialize state from user data
     useEffect(() => {
         if (user) {
@@ -56,20 +65,29 @@ export default function Settings() {
         try {
             const formData = new FormData();
             formData.append('bio', bio);
-            formData.append('username', username);
+            formData.append('username', username.trim());
             if (avatarFile) formData.append('avatar', avatarFile);
             if (bannerFile) formData.append('banner', bannerFile);
 
             await authApi.updateProfile(formData);
             setProfileSuccess('Profile updated successfully!');
-            // Reload page to reflect changes in header
+            // Reload page to reflect changes in header after a short delay
             setTimeout(() => window.location.reload(), 1500);
         } catch (err) {
             console.error('Failed to update profile:', err);
-            const usernameError = err.response?.data?.username;
             let msg = 'Failed to update profile';
-            if (usernameError) {
-                msg = Array.isArray(usernameError) ? usernameError[0] : usernameError;
+
+            if (err.response?.data) {
+                const data = err.response.data;
+                // If it's a validation error object, grab the first message we find
+                if (typeof data === 'object') {
+                    const firstKey = Object.keys(data)[0];
+                    const firstVal = data[firstKey];
+                    const errorDetails = Array.isArray(firstVal) ? firstVal[0] : firstVal;
+                    msg = `${firstKey}: ${errorDetails}`;
+                } else if (typeof data === 'string' && data.length < 100) {
+                    msg = data;
+                }
             }
             setProfileError(msg);
         } finally {
@@ -120,6 +138,53 @@ export default function Settings() {
         } catch (err) {
             console.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setIsResending(true);
+        try {
+            await authApi.resendVerification({ email: user.email });
+            setAccountSuccess('Verification email sent!');
+        } catch (err) {
+            setAccountError('Failed to send verification email');
+        } finally {
+            setIsResending(false);
+        }
+    };
+
+    const handleChangeEmail = async () => {
+        if (!changeEmail || !changeEmailPassword) return;
+        setIsChangingEmail(true);
+        setAccountError('');
+        setAccountSuccess('');
+        try {
+            await authApi.changeEmail({ new_email: changeEmail, password: changeEmailPassword });
+            setAccountSuccess('Confirmation email sent to new address!');
+            setChangeEmail('');
+            setChangeEmailPassword('');
+        } catch (err) {
+            setAccountError(err.response?.data?.error || 'Failed to change email');
+        } finally {
+            setIsChangingEmail(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!deleteAccountPassword) return;
+        setIsDeleting(true);
+        try {
+            await authApi.deleteAccount({ password: deleteAccountPassword });
+            // Manually clear storage to prevent AuthContext from attempting to restore session
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            // Force hard reload to reset application state
+            window.location.href = '/';
+        } catch (err) {
+            console.error("Delete failed:", err);
+            setAccountError(err.response?.data?.error || 'Failed to delete account');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -258,12 +323,82 @@ export default function Settings() {
                 {/* Account Tab */}
                 {activeTab === 'account' && (
                     <div className="space-y-6 animate-fade-in">
-                        {/* Change Password */}
+                        {/* Email & Security */}
                         <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
                             <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                <Lock className="w-5 h-5 text-accent" />
-                                Change Password
+                                <Shield className="w-5 h-5 text-accent" />
+                                Email & Security
                             </h2>
+
+                            {/* Email Verification Status */}
+                            <div className="mb-8 p-4 bg-dark-50 rounded-xl border border-gray-700">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-300">Email Status</span>
+                                    {user?.email_verified ? (
+                                        <span className="flex items-center gap-1.5 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-1 rounded-lg border border-green-400/20">
+                                            <Check className="w-3.5 h-3.5" /> Verified
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-1.5 text-yellow-400 text-sm font-medium bg-yellow-400/10 px-2 py-1 rounded-lg border border-yellow-400/20">
+                                            <AlertCircle className="w-3.5 h-3.5" /> Unverified
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-sm text-gray-400 mb-3">{user?.email}</p>
+
+                                {!user?.email_verified && (
+                                    <button
+                                        onClick={handleResendVerification}
+                                        disabled={isResending}
+                                        className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+                                    >
+                                        {isResending ? 'Sending...' : 'Resend Verification Email'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Change Email */}
+                            <div className="mb-8">
+                                <h3 className="text-lg font-medium text-white mb-4">Change Email</h3>
+                                <div className="space-y-4 max-w-md">
+                                    <input
+                                        type="email"
+                                        value={changeEmail}
+                                        onChange={(e) => setChangeEmail(e.target.value)}
+                                        className="input w-full"
+                                        placeholder="New Email Address"
+                                        required
+                                    />
+                                    <input
+                                        type="password"
+                                        value={changeEmailPassword}
+                                        onChange={(e) => setChangeEmailPassword(e.target.value)}
+                                        className="input w-full"
+                                        placeholder="Confirm with Password"
+                                        required
+                                    />
+                                    <button
+                                        onClick={handleChangeEmail}
+                                        disabled={isChangingEmail || !changeEmail || !changeEmailPassword}
+                                        className="btn-primary w-full sm:w-auto"
+                                    >
+                                        {isChangingEmail ? 'Sending Link...' : 'Update Email'}
+                                    </button>
+                                </div>
+                                {(accountError || accountSuccess) && (
+                                    <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 text-sm ${accountSuccess
+                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                        }`}>
+                                        {accountSuccess ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                                        {accountSuccess || accountError}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="h-px bg-gray-700 my-6" />
+
+                            <h3 className="text-lg font-medium text-white mb-4">Change Password</h3>
 
                             <div className="space-y-4 max-w-md">
                                 {/* Current Password */}
@@ -320,20 +455,6 @@ export default function Settings() {
                                     />
                                 </div>
 
-                                {/* Error/Success */}
-                                {accountError && (
-                                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm">
-                                        <AlertCircle className="w-4 h-4 shrink-0" />
-                                        {accountError}
-                                    </div>
-                                )}
-                                {accountSuccess && (
-                                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2 text-green-400 text-sm">
-                                        <Check className="w-4 h-4 shrink-0" />
-                                        {accountSuccess}
-                                    </div>
-                                )}
-
                                 <button
                                     onClick={handleChangePassword}
                                     disabled={isSavingAccount || !oldPassword || !newPassword || !confirmPassword}
@@ -359,12 +480,58 @@ export default function Settings() {
                                 <button
                                     onClick={handlePrivacyToggle}
                                     className={`relative w-14 h-7 rounded-full transition-colors duration-200 
-                                        ${isPrivate ? 'bg-accent' : 'bg-dark-50 border border-gray-700'}`}
+                                                ${isPrivate ? 'bg-accent' : 'bg-dark-50 border border-gray-700'}`}
                                 >
                                     <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                        ${isPrivate ? 'left-8' : 'left-1'}`} />
+                                                ${isPrivate ? 'left-8' : 'left-1'}`} />
                                 </button>
                             </div>
+                        </div>
+
+                        {/* Delete Account */}
+                        <div className="bg-red-500/5 p-6 rounded-2xl border border-red-500/20">
+                            <h2 className="text-xl font-semibold text-red-500 mb-2">Delete Account</h2>
+                            <p className="text-gray-400 text-sm mb-6">
+                                Once you delete your account, there is no going back. Please be certain.
+                            </p>
+
+                            {!showDeleteConfirm ? (
+                                <button
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 rounded-lg transition-colors font-medium text-sm"
+                                >
+                                    Delete Account
+                                </button>
+                            ) : (
+                                <div className="max-w-md animate-fade-in">
+                                    <p className="text-sm text-gray-300 mb-3 block">Enter your password to confirm:</p>
+                                    <div className="flex gap-3">
+                                        <input
+                                            type="password"
+                                            value={deleteAccountPassword}
+                                            onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                                            className="input flex-1 border-red-500/30 focus:border-red-500 focus:ring-red-500/20"
+                                            placeholder="Your Password"
+                                        />
+                                        <button
+                                            onClick={handleDeleteAccount}
+                                            disabled={isDeleting || !deleteAccountPassword}
+                                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowDeleteConfirm(false);
+                                                setDeleteAccountPassword('');
+                                            }}
+                                            className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
