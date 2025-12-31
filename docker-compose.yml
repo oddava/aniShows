@@ -2,8 +2,10 @@ services:
   # Django Backend API
   web:
     build: .
-    ports:
-      - "8000:8000"
+    # ports:
+    #   - "8000:8000"
+    expose:
+      - "8000"
     env_file:
       - .env
     depends_on:
@@ -32,8 +34,10 @@ services:
       context: ./frontend
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
-    ports:
-      - "5173:5173"
+    # ports:
+    #   - "5173:5173"
+    expose:
+      - "5173"
     env_file:
       - .env
     depends_on:
@@ -133,7 +137,26 @@ services:
       - ./backups-data:/backups
       - minio_data:/minio_data
 
+  # Caddy Reverse Proxy & SSL
+  caddy:
+    image: caddy:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - frontend
+
 volumes:
   db_data:
   redis_data:
   minio_data:
+  caddy_data:
+  caddy_config:

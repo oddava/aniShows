@@ -204,146 +204,45 @@ Access MinIO Console at `http://your-ip:9001`:
 
 ---
 
-## Nginx Configuration
+## Caddy Reverse Proxy & SSL Setup
 
-### 1. Install Nginx
+Caddy handles automatic SSL (via Let's Encrypt) and reverse proxying through the `caddy` container. This replaces the need for Nginx and Certbot.
+
+### 1. Configuration Check
+
+Ensure your `Caddyfile` is in the root directory and contains the correct routing logic.
+
+### 2. Domain Environment Variables
+
+Update your `.env` with your production domain and email:
+```ini
+DOMAIN_NAME=your-domain.com
+EMAIL_HOST_USER=your-email@gmail.com
+```
+
+### 3. Deployment
+
+Caddy is managed by Docker Compose. Starting the application also starts the proxy:
 
 ```bash
-sudo apt install -y nginx
+docker compose up -d
 ```
 
-### 2. Create Site Configuration
+### 4. Verify SSL
+
+Caddy will automatically attempt to provision a certificate once your domain DNS points to the server. You can monitor the logs for progress:
 
 ```bash
-sudo nano /etc/nginx/sites-available/anishows
+docker compose logs -f caddy
 ```
 
-```nginx
-# Rate limiting
-limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
-limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=5r/m;
+### 5. Final HTTPS Check
 
-upstream django_backend {
-    server 127.0.0.1:8000;
-}
-
-upstream react_frontend {
-    server 127.0.0.1:5173;
-}
-
-server {
-    listen 80;
-    server_name your-domain.com www.your-domain.com;
-    
-    # Redirect HTTP to HTTPS (enable after SSL setup)
-    # return 301 https://$server_name$request_uri;
-    
-    client_max_body_size 10M;
-    
-    # Frontend
-    location / {
-        proxy_pass http://react_frontend;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-    
-    # API
-    location /api/ {
-        limit_req zone=api_limit burst=20 nodelay;
-        
-        proxy_pass http://django_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # Auth endpoints - stricter rate limiting
-    location /api/v1/auth/ {
-        limit_req zone=auth_limit burst=5 nodelay;
-        
-        proxy_pass http://django_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # Admin
-    location /admin/ {
-        proxy_pass http://django_backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # Static files (if not using S3)
-    location /static/ {
-        alias /home/ubuntu/aniShows/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-    
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-}
-```
-
-### 3. Enable Site
-
-```bash
-sudo ln -s /etc/nginx/sites-available/anishows /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t  # Test configuration
-sudo systemctl restart nginx
-sudo systemctl enable nginx
-```
-
----
-
-## SSL/HTTPS Setup
-
-### Using Certbot (Let's Encrypt)
-
-```bash
-# Install Certbot
-sudo apt install -y certbot python3-certbot-nginx
-
-# Obtain certificate
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
-
-# Follow prompts to configure automatic HTTPS redirect
-```
-
-Certbot will:
-1. Obtain SSL certificates
-2. Configure Nginx for HTTPS
-3. Set up automatic renewal
-
-### Verify Renewal
-
-```bash
-sudo certbot renew --dry-run
-```
-
-### After SSL is Configured
-
-Update `.env`:
+Once verify SSL is successful, ensure your `.env` has:
 ```ini
 SECURE_SSL_REDIRECT=True
 ```
-
-Restart the application:
+Then restart the app:
 ```bash
 docker compose restart web
 ```

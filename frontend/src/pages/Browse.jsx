@@ -88,6 +88,13 @@ export default function Browse() {
         return () => clearTimeout(timeout);
     }, [searchInput]);
 
+    // Scroll to top on filter change to prevent infinite scroll race conditions
+    // and provide a clear state transition
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        document.title = 'Browse Anime - AniShows';
+    }, [currentGenre, currentSort, currentSearch]);
+
     const setGenre = (genre) => {
         // Reset to single genre or 'all'
         const newParams = new URLSearchParams(searchParams);
@@ -228,8 +235,11 @@ export default function Browse() {
                     </div>
                 </div>
 
-                {/* Anime Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                {/* Anime Grid - Key forced to filters to ensure clean reset on change */}
+                <div
+                    key={`${currentGenre}-${currentSort}-${currentSearch}`}
+                    className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
+                >
                     {isLoading ? (
                         Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
                     ) : isError ? (

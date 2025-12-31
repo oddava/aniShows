@@ -1,0 +1,55 @@
+{
+    # Global options
+    email {$EMAIL_HOST_USER}
+}
+
+{$DOMAIN_NAME:localhost} {
+    # API Backend
+    handle_path /api/* {
+        reverse_proxy web:8000
+    }
+
+    # Admin Interface
+    handle_path /admin/* {
+        reverse_proxy web:8000
+    }
+
+    # Static files for Admin (if served via Django/WhiteNoise)
+    # We'll proxy them to the web container as well
+    handle_path /static/* {
+        reverse_proxy web:8000
+    }
+
+    # Frontend
+    handle {
+        reverse_proxy frontend:5173
+    }
+
+    # Error handling
+    handle_errors {
+        rewrite * /{err.status_code}.html
+        file_server
+    }
+
+    # Compression
+    encode gzip zstd
+
+    # Security headers
+    header {
+        # disable FLoC tracking
+        Permissions-Policy "interest-cohort=()"
+        # enable HSTS
+        Strict-Transport-Security "max-age=31536000;"
+        # disable clients from sniffing the media type
+        X-Content-Type-Options nosniff
+        # clickjacking protection
+        X-Frame-Options DENY
+        # keep referrer information in the same origin
+        Referrer-Policy no-referrer-when-downgrade
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+    }
+}

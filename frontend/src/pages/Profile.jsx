@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { User, Heart, List, MessageSquare, Lock } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
@@ -27,12 +27,33 @@ export default function Profile() {
     const isPrivate = isPublicView && displayUser?.is_private;
 
     // Queries
-    const { data: favorites, isLoading: favoritesLoading } = useQuery({
+    const {
+        data: favoritesData,
+        fetchNextPage: fetchNextFavorites,
+        hasNextPage: hasNextFavorites,
+        isFetchingNextPage: isFetchingNextFavorites,
+        isLoading: favoritesLoading
+    } = useInfiniteQuery({
         queryKey: ['favorites', targetUsername],
-        queryFn: () => favoriteApi.getAll({ username: targetUsername }).then(res => res.data.results || res.data),
+        queryFn: ({ pageParam = 1 }) =>
+            favoriteApi.getAll({ username: targetUsername, page: pageParam }).then(res => res.data),
+        getNextPageParam: (lastPage) => {
+            if (lastPage.next) {
+                try {
+                    const url = new URL(lastPage.next);
+                    return url.searchParams.get('page');
+                } catch (e) { return undefined; }
+            }
+            return undefined;
+        },
         enabled: !!displayUser && activeTab === 'favorites' && !isPrivate,
         refetchOnMount: 'always',
     });
+
+    const favorites = favoritesData?.pages.flatMap(page => {
+        if (Array.isArray(page)) return page;
+        return page.results || [];
+    }) || [];
 
     const { data: allLists, isLoading: listsLoading } = useQuery({
         queryKey: ['lists', targetUsername],
@@ -48,23 +69,38 @@ export default function Profile() {
         enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
     });
 
-    const { data: reviews, isLoading: reviewsLoading } = useQuery({
+    const {
+        data: reviewsData,
+        fetchNextPage: fetchNextReviews,
+        hasNextPage: hasNextReviews,
+        isFetchingNextPage: isFetchingNextReviews,
+        isLoading: reviewsLoading
+    } = useInfiniteQuery({
         queryKey: ['reviews', targetUsername],
-        queryFn: () => reviewApi.getAll({ mine: !isPublicView, user: targetUsername }).then(res => res.data.results || res.data),
-        // Note: reviewApi doesn't support 'user' param yet in client? Backend supports 'min=true' or 'anime'.
-        // Wait, ReviewViewSet filter: 'mine=true', 'anime=slug'. 
-        // It DOES NOT support 'user=username'.
-        // ReviewViewSet.get_queryset (Step 537 line 441):
-        // if self.request.query_params.get('mine') == 'true' ... filter(user=self.request.user)
-        // I need to add user filtering support to ReviewViewSet!
-        // To view other's reviews.
-        // Plan update: fix backend ReviewViewSet again!
-        // For now I'll assume I pass 'mine=false' and filter by username?
-        // But ReviewViewSet doesn't filter by username generally.
-        // It returns ALL reviews if not filtered? No, `Review.objects...all()`.
-        // Pagination will return all?
-        // If I want reviews BY user, I must add filter `user__username`.
+        queryFn: ({ pageParam = 1 }) =>
+            reviewApi.getAll({ mine: !isPublicView, user: targetUsername, page: pageParam }).then(res => res.data),
+        getNextPageParam: (lastPage) => {
+            if (lastPage.next) {
+                try {
+                    const url = new URL(lastPage.next);
+                    return url.searchParams.get('page');
+                } catch (e) { return undefined; }
+            }
+            return undefined;
+        },
+        enabled: !!displayUser && activeTab === 'reviews' && !isPrivate,
     });
+
+    const reviews = reviewsData?.pages.flatMap(page => {
+        if (Array.isArray(page)) return page;
+        return page.results || [];
+    }) || [];
+
+    useEffect(() => {
+        if (displayUser?.username) {
+            document.title = `${displayUser.username}'s Profile - AniShows`;
+        }
+    }, [displayUser]);
 
     if (loading) {
         return (
@@ -147,11 +183,29 @@ export default function Profile() {
 
         return (
             <div className="max-w-3xl mx-auto space-y-6">
-                {reviews.map((review) => (
-                    <div key={review.id} className="relative">
-                        <ReviewCard review={review} showAnime={true} />
+                <div className="space-y-6">
+                    {reviews.map((review) => (
+                        <div key={review.id} className="relative">
+                            <ReviewCard review={review} showAnime={true} />
+                        </div>
+                    ))}
+                </div>
+
+                {hasNextReviews && (
+                    <div className="text-center mt-8">
+                        <button
+                            onClick={() => fetchNextReviews()}
+                            disabled={isFetchingNextReviews}
+                            className="btn-secondary text-sm px-6 py-2"
+                        >
+                            {isFetchingNextReviews ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                'Load More Reviews'
+                            )}
+                        </button>
                     </div>
-                ))}
+                )}
             </div>
         );
     };
@@ -170,15 +224,33 @@ export default function Profile() {
         switch (activeTab) {
             case 'favorites':
                 return (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                        {favoritesLoading ? (
-                            Array(6).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
-                        ) : favorites?.length > 0 ? (
-                            favorites.map((fav) => <AnimeCard key={fav.id} anime={fav.anime} />)
-                        ) : (
-                            <p className="col-span-full text-center text-gray-400 py-12">
-                                {isPublicView ? "No favorites yet." : "No favorites yet. Start adding some!"}
-                            </p>
+                    <div className="space-y-8">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                            {favoritesLoading ? (
+                                Array(6).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
+                            ) : favorites?.length > 0 ? (
+                                favorites.map((fav) => <AnimeCard key={fav.id} anime={fav.anime} />)
+                            ) : (
+                                <p className="col-span-full text-center text-gray-400 py-12">
+                                    {isPublicView ? "No favorites yet." : "No favorites yet. Start adding some!"}
+                                </p>
+                            )}
+                        </div>
+
+                        {hasNextFavorites && (
+                            <div className="text-center">
+                                <button
+                                    onClick={() => fetchNextFavorites()}
+                                    disabled={isFetchingNextFavorites}
+                                    className="btn-secondary text-sm px-6 py-2"
+                                >
+                                    {isFetchingNextFavorites ? (
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        'Load More Favorites'
+                                    )}
+                                </button>
+                            </div>
                         )}
                     </div>
                 );

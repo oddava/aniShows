@@ -94,8 +94,8 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             'title': 'title',
         }
         
-        # Add favorite count for sorting
-        queryset = queryset.annotate(favorite_count=Count('favorites'))
+        # Add favorite count for sorting with distinct=True to avoid join duplication
+        queryset = queryset.annotate(favorite_count=Count('favorites', distinct=True))
         
         sort_field = sort_mapping.get(sort, '-favorite_count')
         
@@ -106,7 +106,8 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         elif sort == 'newest':
             queryset = queryset.filter(episode_count__gt=0)
 
-        queryset = queryset.order_by(sort_field)
+        # Add ID as tie-breaker for stable pagination
+        queryset = queryset.order_by(sort_field, '-id')
         
         return queryset.distinct()
     

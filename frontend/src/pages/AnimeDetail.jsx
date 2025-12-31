@@ -55,6 +55,7 @@ export default function AnimeDetail() {
     useEffect(() => {
         if (anime) {
             setIsFavorite(anime.is_favorite || false);
+            document.title = `${anime.title} - AniShows`;
         }
     }, [anime]);
 
