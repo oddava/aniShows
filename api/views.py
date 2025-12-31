@@ -3,9 +3,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Avg, Q, Prefetch
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+import logging
+
+logger = logging.getLogger(__name__)
 
 from anime.models import Anime, Genre, Studio, UserFavorite, Review
 from users.models import UserProfile, UserAnimeList
@@ -223,15 +227,13 @@ class VerifyEmailView(APIView):
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(pk=uid)
-            print(f"DEBUG: Verify for user {user.username} (ID: {user.pk})")
-            print(f"DEBUG: Active? {user.is_active}")
-            print(f"DEBUG: Received Token: {token}")
+            logger.debug(f"Verify email for user {user.username} (ID: {user.pk}), Active: {user.is_active}")
             
             is_valid = default_token_generator.check_token(user, token)
-            print(f"DEBUG: Token Valid? {is_valid}")
+            logger.debug(f"Token valid: {is_valid}")
             
         except (TypeError, ValueError, OverflowError, User.DoesNotExist) as e:
-            print(f"DEBUG: UID Decode Error: {e}")
+            logger.debug(f"UID decode error: {e}")
             return Response({'error': 'Invalid UID'}, status=status.HTTP_400_BAD_REQUEST)
 
         if user.is_active:
@@ -270,7 +272,7 @@ class PasswordResetView(APIView):
         try:
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
         except Exception as e:
-             print(f"Error sending email: {e}")
+            logger.exception("Failed to send password reset email")
 
         return Response({'message': 'If an account exists with this email, a reset link has been sent.'}, status=status.HTTP_200_OK)
 
@@ -413,6 +415,12 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
     
+    def perform_destroy(self, instance):
+        """Ensure users can only delete their own favorites."""
+        if instance.user != self.request.user:
+            raise PermissionDenied("You can only remove your own favorites.")
+        instance.delete()
+    
     @action(detail=False, methods=['post'])
     def toggle(self, request):
         """Toggle favorite status for an anime"""
@@ -465,6 +473,18 @@ class UserAnimeListViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+    
+    def perform_update(self, serializer):
+        """Ensure users can only update their own list entries."""
+        if serializer.instance.user != self.request.user:
+            raise PermissionDenied("You can only modify your own anime list.")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        """Ensure users can only delete their own list entries."""
+        if instance.user != self.request.user:
+            raise PermissionDenied("You can only remove items from your own anime list.")
+        instance.delete()
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
@@ -501,3 +521,15 @@ class ReviewViewSet(viewsets.ModelViewSet):
             )
             
         serializer.save(user=user)
+    
+    def perform_update(self, serializer):
+        """Ensure users can only update their own reviews."""
+        if serializer.instance.user != self.request.user:
+            raise PermissionDenied("You can only edit your own reviews.")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        """Ensure users can only delete their own reviews."""
+        if instance.user != self.request.user:
+            raise PermissionDenied("You can only delete your own reviews.")
+        instance.delete()

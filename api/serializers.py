@@ -1,9 +1,17 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.utils.html import escape
 from anime.models import Anime, Genre, Studio, UserFavorite, Review
 from users.models import UserProfile, UserAnimeList
 
 User = get_user_model()
+
+# File upload limits
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
+MAX_BANNER_SIZE = 5 * 1024 * 1024  # 5MB
+ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+MAX_BIO_LENGTH = 1000
+MAX_REVIEW_LENGTH = 5000
 
 
 class GenreSerializer(serializers.ModelSerializer):
@@ -156,7 +164,42 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150, required=False)
     avatar = serializers.ImageField(required=False, allow_null=True)
     banner = serializers.ImageField(required=False, allow_null=True)
-    bio = serializers.CharField(required=False, allow_blank=True)
+    bio = serializers.CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
+    
+    def validate_avatar(self, value):
+        """Validate avatar file size and type."""
+        if value is None:
+            return value
+        if value.size > MAX_AVATAR_SIZE:
+            raise serializers.ValidationError(
+                f"Avatar file too large. Maximum size is {MAX_AVATAR_SIZE // (1024*1024)}MB."
+            )
+        if hasattr(value, 'content_type') and value.content_type not in ALLOWED_IMAGE_TYPES:
+            raise serializers.ValidationError(
+                "Invalid file type. Allowed types: JPEG, PNG, WebP, GIF."
+            )
+        return value
+    
+    def validate_banner(self, value):
+        """Validate banner file size and type."""
+        if value is None:
+            return value
+        if value.size > MAX_BANNER_SIZE:
+            raise serializers.ValidationError(
+                f"Banner file too large. Maximum size is {MAX_BANNER_SIZE // (1024*1024)}MB."
+            )
+        if hasattr(value, 'content_type') and value.content_type not in ALLOWED_IMAGE_TYPES:
+            raise serializers.ValidationError(
+                "Invalid file type. Allowed types: JPEG, PNG, WebP, GIF."
+            )
+        return value
+    
+    def validate_bio(self, value):
+        """Sanitize bio text to prevent XSS."""
+        if value:
+            # Basic HTML escape for XSS prevention
+            return escape(value.strip())
+        return value
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -214,11 +257,22 @@ class ReviewSerializer(serializers.ModelSerializer):
         write_only=True
     )
     has_spoilers = serializers.BooleanField(default=False, required=False)
+    text = serializers.CharField(
+        required=False, 
+        allow_blank=True, 
+        max_length=MAX_REVIEW_LENGTH
+    )
     
     class Meta:
         model = Review
         fields = ['id', 'user', 'anime', 'anime_slug', 'rating', 'text', 'has_spoilers', 'created_at', 'updated_at']
         read_only_fields = ['id', 'user', 'anime', 'created_at', 'updated_at']
+    
+    def validate_text(self, value):
+        """Sanitize review text to prevent XSS."""
+        if value:
+            return escape(value.strip())
+        return value
 
 
 class ChangePasswordSerializer(serializers.Serializer):

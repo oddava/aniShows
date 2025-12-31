@@ -1,13 +1,14 @@
-
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+import logging
 
 from anime.tokens import account_activation_token
 from root.settings import EMAIL_HOST_USER
 
+logger = logging.getLogger(__name__)
 
 
 def send_email(subject: str, body: str | None, emails: list[str], html_content=None):
@@ -16,14 +17,14 @@ def send_email(subject: str, body: str | None, emails: list[str], html_content=N
     try:
         email.send()
     except Exception as e:
-        print(e)
+        logger.exception("Failed to send email")
 
 def send_registration_link(user, host: str):
     subject = 'Successful Registration'
     token = account_activation_token.make_token(user)
     uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
     url = reverse_lazy('confirm_email_page', kwargs={'uidb64': uidb64, 'token': token})
-    print(host + url)
+    logger.debug(f"Registration link: {host}{url}")
     context = {
         'email': user.email,
         'username': user.username,

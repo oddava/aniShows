@@ -4,6 +4,9 @@ from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CustomOAuth2Client(OAuth2Client):
     def __init__(self, *args, **kwargs):
@@ -20,13 +23,9 @@ class GoogleLogin(SocialLoginView):
     authentication_classes = [] # Disable CSRF check by removing SessionAuthentication
 
     def post(self, request, *args, **kwargs):
-        print("DEBUG: GoogleLogin POST received")
-        print(f"DEBUG: Request Data: {request.data}")
-        print(f"DEBUG: Callback URL: {self.callback_url}")
+        logger.debug(f"GoogleLogin POST received with callback URL: {self.callback_url}")
         try:
             return super().post(request, *args, **kwargs)
         except Exception as e:
-            print(f"DEBUG: GoogleLogin Exception: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("GoogleLogin failed")
             raise e

@@ -136,7 +136,10 @@ class Review(Model):
     class Meta:
         unique_together = ('user', 'anime')
         ordering = ['-created_at']
+        indexes = [
+            Index(fields=['anime', '-created_at']),
+            Index(fields=['user', '-created_at']),
+        ]
 
     def __str__(self):
         return f"{self.user.username}'s review of {self.anime.title}"
-                                                                                                                                                                                                                                

@@ -1,110 +1,209 @@
-# AniShows
+<p align="center">
+  <h1 align="center">🎬 AniShows</h1>
+  <p align="center">
+    <strong>A modern, full-stack anime tracking platform</strong>
+  </p>
+  <p align="center">
+    Track your anime journey, share reviews, and connect with the community
+  </p>
+</p>
 
-**AniShows** is a modern, full-featured anime tracking and social platform. It allows users to track their anime watching progress, manage lists (Watching, Completed, Plan to Watch), favorite series, write reviews, and customize their profiles with avatars and banners.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Django-5.2-green?style=flat-square&logo=django" alt="Django">
+  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react" alt="React">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker" alt="Docker">
+</p>
 
-## 🚀 Key Features
+---
 
-*   **Modern UI**: Built with **React** and **TailwindCSS**, featuring dark mode, glassmorphism aesthetics, and smooth animations.
-*   **Anime Tracking**: Manage your anime list with statuses (Watching, Completed, On Hold, Dropped, Plan to Watch) and track episode progress.
-*   **Social & Profile**:
-    *   Customizable User Profiles (Avatar, Banner, Bio).
-    *   Rich statistics (Reviews, Favorites count).
-    *   **Google OAuth** integration for easy login/signup.
-*   **Discovery**:
-    *   Trending, Top Rated, and Newest anime lists.
-    *   Advanced filtering by Genre, Status, and Type.
-    *   Intelligent search.
-*   **Robust Backend**: Powered by **Django Rest Framework** with **PostgreSQL** for data and **Redis** for caching/queues.
-*   **Media Storage**: **MinIO** (S3-compatible) storage for handling user uploads and anime assets efficiently.
-*   **Backup System**: Automated daily and weekly backups for Database and Media.
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📺 **Anime Tracking** | Manage your watchlist with statuses: Watching, Completed, Plan to Watch, On Hold, Dropped |
+| ⭐ **Reviews & Ratings** | Write detailed reviews with spoiler warnings and 1-10 ratings |
+| 💜 **Favorites** | Build your collection of favorite anime |
+| 👤 **User Profiles** | Customizable profiles with avatars, banners, and bios |
+| 🔒 **Privacy Controls** | Set your profile to private to hide your lists |
+| 🔐 **Secure Auth** | JWT authentication with Google OAuth support |
+| 🔍 **Smart Discovery** | Filter by genre, status, type + trending and top-rated sections |
+| 🌙 **Dark Mode** | Beautiful dark theme with glassmorphism aesthetics |
+
+---
 
 ## 🛠️ Tech Stack
 
-*   **Frontend**: React (Vite), TailwindCSS, Lucide Icons, TanStack Query, Axios.
-*   **Backend**: Python, Django, Django Rest Framework (DRF).
-*   **Auth**: JWT (SimpleJWT), Django AllAuth (Google OAuth).
-*   **Database**: PostgreSQL 18.
-*   **Cache/Broker**: Redis 7.
-*   **Storage**: MinIO (S3 Compatible).
-*   **Task Queue**: Celery & Celery Beat.
-*   **Infrastructure**: Docker Compose, Alpine Linux.
+### Backend
+- **Framework**: Django 5.2 + Django REST Framework
+- **Database**: PostgreSQL 16
+- **Cache/Queue**: Redis 7 + Celery
+- **Storage**: MinIO (S3-compatible) for media files
+- **Auth**: JWT (SimpleJWT) + Django AllAuth
 
-## 📋 Prerequisites
+### Frontend
+- **Framework**: React 18 (Vite)
+- **Styling**: TailwindCSS
+- **State**: TanStack Query
+- **HTTP**: Axios
 
-*   [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
-*   [Make](https://www.gnu.org/software/make/) (Optional, but recommended for easy commands)
+### Infrastructure
+- **Containerization**: Docker Compose
+- **Reverse Proxy**: Nginx (production)
+- **CI/CD**: GitHub Actions (optional)
 
-## ⚡ Getting Started
+---
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/oddava/aniShows.git
-    cd aniShows
-    ```
+## 🚀 Quick Start
 
-2.  **Environment Setup**:
-    Copy the example environment file and configure it:
-    ```bash
-    cp .env.example .env/.env.prod
-    # Edit .env/.env.prod with your credentials (DB password, Secret Keys, etc.)
-    ```
-    *Note: For local development, `settings.py` is configured to use `localhost:9000` for MinIO unless `MINIO_PUBLIC_DOMAIN` is set.*
+### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
+- [Make](https://www.gnu.org/software/make/) (optional, for convenience commands)
 
-3.  **Build and Run**:
-    ```bash
-    make build
-    make up
-    ```
-    The application will be accessible at:
-    *   **Frontend**: `http://localhost:5173`
-    *   **Backend API**: `http://localhost:8000`
-    *   **MinIO Console**: `http://localhost:9001`
+### Local Development
 
-4.  **Initial Setup**:
-    ```bash
-    # Apply Migrations
-    make mig
-    
-    # Create Superuser
-    make superuser
-    ```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/oddava/aniShows.git
+   cd aniShows
+   ```
 
-## 🧰 Development Commands
+2. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings (database passwords, secret keys, etc.)
+   ```
 
-A `makefile` is provided to simplify common tasks:
+3. **Build and start services**
+   ```bash
+   make build
+   make up
+   ```
 
-| Command | Description |
-| :--- | :--- |
-| `make up` | Start all services in background |
-| `make down` | Stop all services |
-| `make logs` | Follow logs for all services |
-| `make web-logs` | Follow Backend logs only |
-| `make front-logs` | Follow Frontend logs only |
-| `make mig` | Run `makemigrations` and `migrate` |
-| `make shell` | Open Django shell |
-| `make test` | Run tests |
+4. **Initialize the database**
+   ```bash
+   make mig        # Run migrations
+   make superuser  # Create admin account
+   ```
 
-Run `make help` to see all available commands.
+5. **Access the application**
+   - 🌐 Frontend: http://localhost:5173
+   - 🔧 Backend API: http://localhost:8000
+   - 📊 Admin Panel: http://localhost:8000/admin
+   - 💾 MinIO Console: http://localhost:9001
 
-## 💾 Backup & Restore
+---
 
-The project includes a dedicated `backup` service using `pg_dump` and `tar`.
+## 📋 Available Commands
 
-*   **Automated Backups**: Runs Daily (3 AM) and Weekly (Sunday 4 AM).
-*   **Manual Backup**:
-    ```bash
-    make backup
-    ```
-*   **List Backups**:
-    ```bash
-    make backups
-    ```
-*   **Restore**:
-    ```bash
-    make restore TIMESTAMP=YYYYMMDD_HHMMSS
-    ```
-    *(Note: Restore will wipe the current database public schema before restoring to ensure a clean state.)*
+```bash
+make up              # Start all services
+make down            # Stop all services
+make logs            # Follow all logs
+make web-logs        # Follow Django logs
+make front-logs      # Follow React logs
 
-## 📝 License
+make mig             # Create and apply migrations
+make shell           # Django shell
+make test            # Run tests
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+make backup          # Create manual backup
+make backups         # List all backups
+make restore TIMESTAMP=YYYYMMDD_HHMMSS  # Restore from backup
+```
+
+Run `make help` for the full list of commands.
+
+---
+
+## 🏗️ Project Structure
+
+```
+aniShows/
+├── api/              # REST API views, serializers, URLs
+├── anime/            # Anime models, AniList sync service
+├── users/            # User models, authentication
+├── reviews/          # Review models (legacy, see anime.Review)
+├── core/             # Core utilities and management commands
+├── frontend/         # React application
+│   ├── src/
+│   │   ├── components/   # Reusable UI components
+│   │   ├── pages/        # Page components
+│   │   ├── context/      # React contexts
+│   │   └── api/          # API client
+├── docs/             # Documentation
+├── backups/          # Backup service configuration
+└── docker-compose.yml
+```
+
+---
+
+## 🔒 Security Features
+
+- ✅ JWT-based authentication with token refresh
+- ✅ Password hashing with Django's PBKDF2
+- ✅ XSS protection via HTML escaping
+- ✅ CSRF protection enabled
+- ✅ File upload validation (size & type limits)
+- ✅ Object-level permissions (users can only modify their own data)
+- ✅ Production security headers when DEBUG=False
+
+---
+
+## 🚢 Deployment
+
+For production deployment instructions, see the [Deployment Guide](docs/deployment.md).
+
+Key production considerations:
+- Set `DEBUG=False` and generate a secure `DJANGO_SECRET_KEY`
+- Configure SSL/HTTPS with Nginx + Certbot
+- Use environment variables for all secrets
+- Enable production security settings
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+make test
+
+# Run specific test file
+docker compose exec web uv run python manage.py test api.tests.test_auth
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Code Style
+- Python: Follow PEP 8
+- JavaScript: Use ESLint + Prettier defaults
+- Commit messages: Use conventional commits format
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👨‍💻 Author
+
+**oddava** - [GitHub](https://github.com/oddava)
+
+---
+
+<p align="center">
+  Made with ❤️ for anime fans everywhere
+</p>

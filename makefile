@@ -62,8 +62,11 @@ icomp:
 	docker compose exec web uv run python manage.py compilemessages -i .venv
 
 # App specific
-import_anime:
-	docker compose exec web uv run python manage.py import_anime
+sync_trending_anime:
+	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_trending_anime sync_trending_anime.delay(limit=50)"
+
+backfill_catalog:
+	docker compose exec web uv run python manage.py shell -c "from anime.tasks import backfill_catalog backfill_catalog.delay(start_page=1, pages=50)"
 
 # Cleanup
 clean:

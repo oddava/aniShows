@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
-from django.db.models import OneToOneField, CASCADE, Model, ForeignKey, TextChoices, EmailField, ImageField, BooleanField
+from django.db import models
+from django.db.models import OneToOneField, CASCADE, Model, ForeignKey, TextChoices, EmailField, ImageField, BooleanField, Index
 from django.db.models.fields import TextField, URLField, CharField, IntegerField, DateTimeField
 from django.conf import settings
 from root.storage_backends import MediaStorage
@@ -28,9 +29,20 @@ class UserAnimeList(Model):
         dropped = "Dropped",
         plan_to_watch = "Plan to Watch",
 
-    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE)
-    anime = ForeignKey("anime.Anime", on_delete=CASCADE)
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='anime_lists')
+    anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name='user_lists')
     status = CharField(max_length=20, choices=UserAnimeStatus.choices)
     score = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
     updated_at = DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('user', 'anime')
+        ordering = ['-updated_at']
+        indexes = [
+            Index(fields=['user', 'status']),
+            Index(fields=['-updated_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.anime.title} ({self.status})"

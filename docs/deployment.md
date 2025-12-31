@@ -1,122 +1,489 @@
-# Deployment Guide
+# AniShows Deployment Guide
 
-This guide covers how to deploy the **aniShows** project using Docker Compose. The current setup runs the Django backend with Gunicorn and the React frontend with Vite.
+This guide covers deploying AniShows to a production environment on AWS EC2 with Ubuntu, PostgreSQL, Nginx, and SSL.
+
+---
+
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [EC2 Instance Setup](#ec2-instance-setup)
+3. [Environment Configuration](#environment-configuration)
+4. [Database Setup](#database-setup)
+5. [Application Deployment](#application-deployment)
+6. [Nginx Configuration](#nginx-configuration)
+7. [SSL/HTTPS Setup](#sslhttps-setup)
+8. [Systemd Services](#systemd-services)
+9. [Monitoring & Maintenance](#monitoring--maintenance)
+
+---
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) installed.
-- [Docker Compose](https://docs.docker.com/compose/install/) installed (usually included with Docker Desktop/Engine).
-- [Make](https://www.gnu.org/software/make/) (optional, for using shortcut commands).
+- AWS Account with EC2 access
+- Domain name (optional but recommended for SSL)
+- SSH key pair for EC2 access
+- Basic familiarity with Linux command line
 
-## 1. Environment Configuration
+---
 
-The project relies on environment variables defined in `.env` files.
+## EC2 Instance Setup
 
-1.  Create a `.env` directory if it doesn't exist.
-2.  Create `.env/env.prod` for production variables.
-3.  Ensure the following variables are set:
+### 1. Launch EC2 Instance
+
+1. Go to AWS Console → EC2 → Launch Instance
+2. Choose **Ubuntu 22.04 LTS** (64-bit x86)
+3. Select instance type: **t3.small** minimum (2 vCPU, 2GB RAM)
+4. Configure Security Group:
+   - SSH (22) - Your IP only
+   - HTTP (80) - 0.0.0.0/0
+   - HTTPS (443) - 0.0.0.0/0
+5. Add storage: 20GB+ gp3 (SSD)
+6. Launch with your SSH key pair
+
+### 2. Connect to Instance
+
+```bash
+ssh -i your-key.pem ubuntu@your-ec2-public-ip
+```
+
+### 3. Update System
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git curl wget build-essential
+```
+
+### 4. Install Docker & Docker Compose
+
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Add user to docker group
+sudo usermod -aG docker ubuntu
+newgrp docker
+
+# Install Docker Compose plugin
+sudo apt install -y docker-compose-plugin
+
+# Verify installation
+docker --version
+docker compose version
+```
+
+---
+
+## Environment Configuration
+
+### 1. Clone Repository
+
+```bash
+cd /home/ubuntu
+git clone https://github.com/oddava/aniShows.git
+cd aniShows
+```
+
+### 2. Create Production Environment File
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+**Production `.env` Settings:**
 
 ```ini
-# .env/.env.prod
-
-# Django
+# Django - CRITICAL: Change these!
 DEBUG=False
-DJANGO_SECRET_KEY=your-super-secret-key-here
-ALLOWED_HOSTS=web,localhost,127.0.0.1,your-domain.com
+DJANGO_SECRET_KEY=your-very-long-random-secret-key-here
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com,your-ec2-ip
 
-# Database
+# Database - CRITICAL: Use strong passwords!
 DB_NAME=anishows_db
-DB_USER=postgres
-DB_PASSWORD=your-db-password
+DB_USER=anishows_user
+DB_PASSWORD=your-super-secure-db-password
 DB_HOST=db
 DB_PORT=5432
 
-# MinIO (S3 Compatible Storage)
+# Redis
+REDIS_URL=redis://redis:6379/0
+
+# MinIO/S3 Storage
 USE_S3=True
-AWS_ACCESS_KEY_ID=minioadmin
-AWS_SECRET_ACCESS_KEY=minioadmin
+AWS_ACCESS_KEY_ID=your-minio-access-key
+AWS_SECRET_ACCESS_KEY=your-minio-secret-key
 AWS_STORAGE_BUCKET_NAME=anishows-media
 AWS_S3_ENDPOINT_URL=http://minio:9000
 AWS_S3_REGION_NAME=us-east-1
+MINIO_PUBLIC_DOMAIN=your-domain.com:9000
 
-# Redis / Celery
-CELERY_BROKER_URL=redis://redis:6379/0
-CELERY_RESULT_BACKEND=redis://redis:6379/0
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+VITE_GOOGLE_CLIENT_ID=your-google-client-id
+
+# Frontend URL
+FRONTEND_URL=https://your-domain.com
+
+# CORS & CSRF
+CORS_ALLOWED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+CSRF_TRUSTED_ORIGINS=https://your-domain.com,https://www.your-domain.com
+
+# SSL Redirect (enable after SSL is configured)
+SECURE_SSL_REDIRECT=True
+
+# Email (optional)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
 ```
 
-## 2. Deployment
+> ⚠️ **Security Notes:**
+> - Generate a strong `DJANGO_SECRET_KEY`: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`
+> - Use unique, strong passwords for all services
+> - Never commit `.env` files to version control
 
-We use a `makefile` to simplify Docker lifecycle management.
+---
 
-### First Time Setup
+## Database Setup
 
-1.  **Build the containers**:
-    ```bash
-    make build
-    ```
+PostgreSQL is handled by Docker Compose via the `db` service. The database will be automatically created when containers start.
 
-2.  **Start the services**:
-    ```bash
-    make up
-    ```
+For external database (RDS), update these settings:
+```ini
+DB_HOST=your-rds-endpoint.amazonaws.com
+DB_PORT=5432
+```
 
-3.  **Run Migrations**:
-    Apply database schema changes.
-    ```bash
-    make mig
-    ```
+---
 
-4.  **Create Superuser**:
-    Create an admin account to access the Django Admin panel.
-    ```bash
-    make superuser
-    ```
+## Application Deployment
 
-5.  **Import Initial Data (Optional)**:
-    If you have a data import script configured:
-    ```bash
-    make import_anime
-    ```
+### 1. Update docker-compose.yml for Production
 
-### Routine Deployment
+Edit `docker-compose.yml` and update the web service:
 
-To restart services after code changes:
+```yaml
+services:
+  web:
+    # ... existing config ...
+    environment:
+      DEBUG: "False"  # Ensure this is False
+    # Remove: - .:/app volume mount (not needed in production)
+```
+
+### 2. Build and Start
 
 ```bash
-make restart
+# Build containers
+docker compose build
+
+# Start services in detached mode
+docker compose up -d
+
+# Run migrations
+docker compose exec web uv run python manage.py migrate
+
+# Create superuser
+docker compose exec web uv run python manage.py createsuperuser
+
+# Collect static files
+docker compose exec web uv run python manage.py collectstatic --noinput
 ```
 
-To stop all services:
+### 3. Initialize MinIO Bucket
+
+Access MinIO Console at `http://your-ip:9001`:
+1. Login with credentials from `.env`
+2. Create bucket named `anishows-media`
+3. Set bucket policy to public or configure proper access
+
+---
+
+## Nginx Configuration
+
+### 1. Install Nginx
 
 ```bash
-make down
+sudo apt install -y nginx
 ```
 
-## 3. Monitoring & Maintenance
+### 2. Create Site Configuration
 
-### Viewing Logs
-
-View logs for all services:
 ```bash
-make logs
+sudo nano /etc/nginx/sites-available/anishows
 ```
 
-View specific service logs:
+```nginx
+# Rate limiting
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=5r/m;
+
+upstream django_backend {
+    server 127.0.0.1:8000;
+}
+
+upstream react_frontend {
+    server 127.0.0.1:5173;
+}
+
+server {
+    listen 80;
+    server_name your-domain.com www.your-domain.com;
+    
+    # Redirect HTTP to HTTPS (enable after SSL setup)
+    # return 301 https://$server_name$request_uri;
+    
+    client_max_body_size 10M;
+    
+    # Frontend
+    location / {
+        proxy_pass http://react_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+    
+    # API
+    location /api/ {
+        limit_req zone=api_limit burst=20 nodelay;
+        
+        proxy_pass http://django_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Auth endpoints - stricter rate limiting
+    location /api/v1/auth/ {
+        limit_req zone=auth_limit burst=5 nodelay;
+        
+        proxy_pass http://django_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Admin
+    location /admin/ {
+        proxy_pass http://django_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Static files (if not using S3)
+    location /static/ {
+        alias /home/ubuntu/aniShows/static/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}
+```
+
+### 3. Enable Site
+
 ```bash
-make web-logs      # Django Backend
-make front-logs    # React Frontend
-make celery-logs   # Celery Worker/Beat
+sudo ln -s /etc/nginx/sites-available/anishows /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo nginx -t  # Test configuration
+sudo systemctl restart nginx
+sudo systemctl enable nginx
 ```
 
-### Database Backups
+---
 
-It is recommended to set up periodic backups for the PostgreSQL volume (`db_data`) and MinIO volume (`minio_data`).
+## SSL/HTTPS Setup
 
-## 4. Architecture Notes
+### Using Certbot (Let's Encrypt)
 
-- **Backend**: Django running via Gunicorn.
-- **Frontend**: React running via Vite (currently configured for development/preview mode on port `5173`).
-- **Database**: PostgreSQL 16.
-- **Cache/Broker**: Redis.
-- **Storage**: MinIO (S3 compatible) for media files.
-- **Reverse Proxy**: Currently handling direct port exposure. Ideally, put **Nginx** or **Caddy** in front of `web:8000` and `frontend:5173` for SSL termination and unified routing in a true production environment.
+```bash
+# Install Certbot
+sudo apt install -y certbot python3-certbot-nginx
+
+# Obtain certificate
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+
+# Follow prompts to configure automatic HTTPS redirect
+```
+
+Certbot will:
+1. Obtain SSL certificates
+2. Configure Nginx for HTTPS
+3. Set up automatic renewal
+
+### Verify Renewal
+
+```bash
+sudo certbot renew --dry-run
+```
+
+### After SSL is Configured
+
+Update `.env`:
+```ini
+SECURE_SSL_REDIRECT=True
+```
+
+Restart the application:
+```bash
+docker compose restart web
+```
+
+---
+
+## Systemd Services
+
+Create a systemd service for automatic startup:
+
+```bash
+sudo nano /etc/systemd/system/anishows.service
+```
+
+```ini
+[Unit]
+Description=AniShows Docker Compose Application
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/ubuntu/aniShows
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=ubuntu
+Group=docker
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable anishows
+```
+
+---
+
+## Monitoring & Maintenance
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f web
+docker compose logs -f frontend
+docker compose logs -f celery
+```
+
+### Backup
+
+```bash
+# Manual backup
+docker compose exec backup /app/shell/backup.sh manual
+
+# List backups
+docker compose exec backup ls -lh /backups
+
+# Restore
+docker compose exec backup /app/shell/restore.sh YYYYMMDD_HHMMSS
+```
+
+### Update Application
+
+```bash
+cd /home/ubuntu/aniShows
+git pull origin main
+docker compose build
+docker compose up -d
+docker compose exec web uv run python manage.py migrate
+docker compose exec web uv run python manage.py collectstatic --noinput
+```
+
+### Resource Monitoring
+
+```bash
+# Container stats
+docker stats
+
+# Disk usage
+df -h
+
+# Memory usage
+free -h
+```
+
+---
+
+## Firewall Configuration (UFW)
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow http
+sudo ufw allow https
+sudo ufw enable
+```
+
+---
+
+## Troubleshooting
+
+### Containers not starting
+```bash
+docker compose logs
+docker compose ps
+```
+
+### Database connection issues
+```bash
+docker compose exec web uv run python manage.py dbshell
+```
+
+### Permission issues
+```bash
+sudo chown -R ubuntu:ubuntu /home/ubuntu/aniShows
+```
+
+### Clear cache
+```bash
+docker compose exec redis redis-cli FLUSHALL
+```
+
+---
+
+## Production Checklist
+
+- [ ] `DEBUG=False` in `.env`
+- [ ] Strong, unique `DJANGO_SECRET_KEY`
+- [ ] Strong database passwords
+- [ ] SSL/HTTPS configured
+- [ ] `SECURE_SSL_REDIRECT=True`
+- [ ] Firewall enabled (UFW)
+- [ ] Automated backups configured
+- [ ] Log rotation configured
+- [ ] Monitoring set up (optional: Prometheus/Grafana)
