@@ -26,7 +26,8 @@ services:
       MINIO_PUBLIC_DOMAIN: localhost:9000 # Change this to your domain in production
       ALLOWED_HOSTS: "web,localhost,127.0.0.1,0.0.0.0"
     volumes:
-      - .:/app # Live reload (Note: Gunicorn doesn't reload by default, consider adding --reload for mixed mode or keep ./app bound)
+      - .:/app
+      - /app/.venv # Isolate virtual environment
 
   # React Frontend
   frontend:
@@ -88,6 +89,7 @@ services:
       - redis
     volumes:
       - .:/app
+      - /app/.venv # Isolate virtual environment
 
   # Celery Beat - Periodic Task Scheduler
   beat:
@@ -104,6 +106,7 @@ services:
       - redis
     volumes:
       - .:/app
+      - /app/.venv # Isolate virtual environment
 
   # MinIO - Local S3 Compatible Storage
   minio:
