@@ -60,8 +60,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql
 
   # Redis - Message Broker
   redis:
