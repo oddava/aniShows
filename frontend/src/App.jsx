@@ -18,6 +18,7 @@ import PasswordResetConfirm from './pages/PasswordResetConfirm';
 import GoogleCallback from './pages/GoogleCallback';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import GoogleAnalytics from './components/GoogleAnalytics';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
+          <GoogleAnalytics />
           <ScrollToTop />
           <Routes>
             <Route element={<Layout />}>
@@ -57,7 +59,7 @@ function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
-    </QueryClientProvider>
+    </QueryClientProvider >
   );
 }
 
