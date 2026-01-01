@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
 import ScrollToTop from './components/ScrollToTop';
+import GoogleAnalytics from './components/GoogleAnalytics';
 import Home from './pages/Home';
 import Browse from './pages/Browse';
 import AnimeDetail from './pages/AnimeDetail';
@@ -35,6 +36,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <ScrollToTop />
+          <GoogleAnalytics />
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Home />} />
