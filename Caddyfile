@@ -24,6 +24,7 @@
 
     # MinIO Media
     handle_path /media/* {
+        rewrite * /anishows-media{path}
         reverse_proxy minio:9000
     }
 

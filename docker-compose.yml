@@ -19,6 +19,7 @@ services:
       AWS_STORAGE_BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
       AWS_S3_REGION_NAME: "${AWS_S3_REGION_NAME:-us-east-1}"
       MINIO_PUBLIC_DOMAIN: "${MINIO_PUBLIC_DOMAIN:-localhost:9000}"
+      MINIO_USE_SSL: "${MINIO_USE_SSL:-False}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,0.0.0.0}"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
