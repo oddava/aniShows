@@ -22,12 +22,12 @@
         reverse_proxy web:8000
     }
 
-    # MinIO Media
+    # MinIO Media - proxy /media/* to MinIO bucket
     handle_path /media/* {
         rewrite * /anishows-media/media{path}
-        reverse_proxy minio:9000
-    }
-        reverse_proxy minio:9000
+        reverse_proxy minio:9000 {
+            header_up Host {upstream_hostport}
+        }
     }
 
     # Frontend (STATIC)

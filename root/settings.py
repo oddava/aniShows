@@ -209,9 +209,23 @@ if USE_S3:
     MINIO_PUBLIC_DOMAIN = os.getenv('MINIO_PUBLIC_DOMAIN', 'localhost:9000')
     
     if "minio" in (AWS_S3_ENDPOINT_URL or ""):
-        # We are using local MinIO.
-        # Set this to just the domain. Caddy will handle the prefixing.
-        AWS_S3_CUSTOM_DOMAIN = MINIO_PUBLIC_DOMAIN
+        # We are using MinIO for S3 storage.
+        # 
+        # For MinIO URL generation, we have two scenarios:
+        # 1. Direct MinIO access (local dev): URLs need full path with bucket name
+        #    e.g. http://localhost:9000/anishows-media/media/path/to/file
+        # 2. Reverse proxy (production): Caddy proxies /media/* to MinIO with rewrite
+        #    e.g. https://domain.com/media/path/to/file
+        #
+        MINIO_USES_PROXY = os.getenv('MINIO_USES_PROXY', 'False') == 'True'
+        
+        if MINIO_USES_PROXY:
+            # Caddy/nginx handles rewriting /media/* → /bucket/media/*
+            # So the public URL should NOT include bucket name
+            AWS_S3_CUSTOM_DOMAIN = MINIO_PUBLIC_DOMAIN
+        else:
+            # Direct MinIO access - include bucket name in path
+            AWS_S3_CUSTOM_DOMAIN = f'{MINIO_PUBLIC_DOMAIN}/{AWS_STORAGE_BUCKET_NAME}'
         
         # Auto-detect if we should use SSL
         is_local = "localhost" in MINIO_PUBLIC_DOMAIN or "127.0.0.1" in MINIO_PUBLIC_DOMAIN
