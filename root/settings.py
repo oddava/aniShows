@@ -220,11 +220,11 @@ if USE_S3:
     
     # s3 static settings
     STATIC_LOCATION = 'static'
-    STATIC_URL = f'http://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/' if "minio" in (AWS_S3_ENDPOINT_URL or "") else f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
+    STATIC_URL = f'{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
     
     # s3 public media settings
     PUBLIC_MEDIA_LOCATION = 'media'
-    MEDIA_URL = f'http://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/' if "minio" in (AWS_S3_ENDPOINT_URL or "") else f'https://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
+    MEDIA_URL = f'{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
     DEFAULT_FILE_STORAGE = 'root.storage_backends.MediaStorage' 
 else:
     STATIC_URL = '/static/'
