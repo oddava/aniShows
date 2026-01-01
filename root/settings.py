@@ -209,9 +209,18 @@ if USE_S3:
     MINIO_PUBLIC_DOMAIN = os.getenv('MINIO_PUBLIC_DOMAIN', 'localhost:9000')
     
     if "minio" in (AWS_S3_ENDPOINT_URL or ""):
-        # We are using local MinIO. 
-        AWS_S3_CUSTOM_DOMAIN = f"{MINIO_PUBLIC_DOMAIN}/{AWS_STORAGE_BUCKET_NAME}"
-        AWS_S3_USE_SSL = os.getenv('MINIO_USE_SSL', 'False') == 'True'
+        # We are using local MinIO.
+        # Set this to just the domain. Caddy will handle the prefixing.
+        AWS_S3_CUSTOM_DOMAIN = MINIO_PUBLIC_DOMAIN
+        
+        # Auto-detect if we should use SSL
+        is_local = "localhost" in MINIO_PUBLIC_DOMAIN or "127.0.0.1" in MINIO_PUBLIC_DOMAIN
+        
+        if is_local or DEBUG:
+             AWS_S3_USE_SSL = False
+        else:
+             AWS_S3_USE_SSL = os.getenv('MINIO_USE_SSL', 'False') == 'True'
+             
         AWS_S3_URL_PROTOCOL = "https:" if AWS_S3_USE_SSL else "http:"
     else:
         AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
@@ -345,6 +354,8 @@ CELERY_BEAT_SCHEDULE = {
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost",
+    "http://127.0.0.1",
 ] + [origin for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
 
 # Production Security Settings
