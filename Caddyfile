@@ -2,7 +2,6 @@
     email {$EMAIL_HOST_USER}
 }
 
-
 {$DOMAIN_NAME:localhost} {
 
     encode gzip zstd
@@ -20,6 +19,14 @@
     # Django static (optional)
     handle /static/* {
         reverse_proxy web:8000
+    }
+
+    # MinIO Media - proxy /media/* to MinIO bucket
+    handle_path /media/* {
+        rewrite * /anishows-media/media{path}
+        reverse_proxy minio:9000 {
+            header_up Host {upstream_hostport}
+        }
     }
 
     # Frontend (STATIC)

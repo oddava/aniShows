@@ -209,22 +209,23 @@ if USE_S3:
     MINIO_PUBLIC_DOMAIN = os.getenv('MINIO_PUBLIC_DOMAIN', 'localhost:9000')
     
     if "minio" in (AWS_S3_ENDPOINT_URL or ""):
-        # We are using local MinIO. 
-        AWS_S3_CUSTOM_DOMAIN = f"{MINIO_PUBLIC_DOMAIN}/{AWS_STORAGE_BUCKET_NAME}"
+        # We are using MinIO - Caddy proxies /media/* to MinIO
+        AWS_S3_CUSTOM_DOMAIN = MINIO_PUBLIC_DOMAIN
         AWS_S3_USE_SSL = os.getenv('MINIO_USE_SSL', 'False') == 'True'
         AWS_S3_URL_PROTOCOL = "https:" if AWS_S3_USE_SSL else "http:"
     else:
         AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+        AWS_S3_URL_PROTOCOL = "https:"
     
     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
     
     # s3 static settings
     STATIC_LOCATION = 'static'
-    STATIC_URL = f'http://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/' if "minio" in (AWS_S3_ENDPOINT_URL or "") else f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
+    STATIC_URL = f'{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
     
     # s3 public media settings
     PUBLIC_MEDIA_LOCATION = 'media'
-    MEDIA_URL = f'http://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/' if "minio" in (AWS_S3_ENDPOINT_URL or "") else f'https://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
+    MEDIA_URL = f'{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
     DEFAULT_FILE_STORAGE = 'root.storage_backends.MediaStorage' 
 else:
     STATIC_URL = '/static/'
