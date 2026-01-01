@@ -158,6 +158,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+      - ./frontend/dist:/srv/frontend
     depends_on:
       - web
       - frontend
