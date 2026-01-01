@@ -156,9 +156,9 @@ services:
       - .env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./frontend/dist:/srv/frontend
       - caddy_data:/data
       - caddy_config:/config
-      - ./frontend/dist:/srv/frontend
     depends_on:
       - web
       - frontend
