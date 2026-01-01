@@ -10,6 +10,10 @@ from .views import (
     ChangePasswordView, PublicUserProfileViewSet,
     DeleteAccountView, ChangeEmailView, ConfirmEmailChangeView
 )
+from .admin_views import (
+    AdminDashboardView, AdminUserViewSet, AdminAnimeViewSet,
+    AdminReviewViewSet, AdminStatsExportView
+)
 from users.views import GoogleLogin
 
 router = DefaultRouter()
@@ -20,6 +24,12 @@ router.register(r'favorites', FavoriteViewSet, basename='favorites')
 router.register(r'lists', UserAnimeListViewSet, basename='lists')
 router.register(r'reviews', ReviewViewSet, basename='reviews')
 router.register(r'users', PublicUserProfileViewSet, basename='users')
+
+# Admin router
+admin_router = DefaultRouter()
+admin_router.register(r'users', AdminUserViewSet, basename='admin-users')
+admin_router.register(r'anime', AdminAnimeViewSet, basename='admin-anime')
+admin_router.register(r'reviews', AdminReviewViewSet, basename='admin-reviews')
 
 urlpatterns = [
     path('users/me/', UserProfileView.as_view(), name='user_profile'),
@@ -36,4 +46,9 @@ urlpatterns = [
     path('auth/change-email/', ChangeEmailView.as_view(), name='change_email'),
     path('auth/confirm-email-change/', ConfirmEmailChangeView.as_view(), name='confirm_email_change'),
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),
+    # Admin endpoints
+    path('admin/', include(admin_router.urls)),
+    path('admin/dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
+    path('admin/stats/export/', AdminStatsExportView.as_view(), name='admin-stats-export'),
 ]
+

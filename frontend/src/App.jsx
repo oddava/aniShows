@@ -20,6 +20,11 @@ import GoogleCallback from './pages/GoogleCallback';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 
+// Admin imports
+import AdminLayout from './components/AdminLayout';
+import AdminRoute from './components/AdminRoute';
+import { AdminDashboard, AdminUsers, AdminAnime, AdminReviews } from './pages/admin';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -56,6 +61,18 @@ function App() {
               <Route path="terms" element={<Terms />} />
               <Route path="privacy" element={<Privacy />} />
             </Route>
+
+            {/* Admin Routes */}
+            <Route path="/admin" element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }>
+              <Route index element={<AdminDashboard />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="anime" element={<AdminAnime />} />
+              <Route path="reviews" element={<AdminReviews />} />
+            </Route>
           </Routes>
         </BrowserRouter>
       </AuthProvider>
@@ -64,4 +81,3 @@ function App() {
 }
 
 export default App;
-

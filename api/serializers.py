@@ -103,8 +103,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'date_joined', 'avatar', 'banner', 'bio', 
-                  'is_private', 'favorites_count', 'reviews_count', 'email_verified', 'has_password']
-        read_only_fields = ['id', 'date_joined', 'email_verified', 'has_password']
+                  'is_private', 'favorites_count', 'reviews_count', 'email_verified', 'has_password',
+                  'is_staff', 'is_superuser']
+        read_only_fields = ['id', 'date_joined', 'email_verified', 'has_password', 'is_staff', 'is_superuser']
     
     def get_avatar(self, obj):
         profile = getattr(obj, 'userprofile', None)
