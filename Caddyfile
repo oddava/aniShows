@@ -2,15 +2,6 @@
     email {$EMAIL_HOST_USER}
 }
 
-http://anishows.duckdns.org {
-    root * /srv/frontend
-    try_files {path} /index.html
-    file_server
-
-    reverse_proxy /api/* web:8000
-    reverse_proxy /admin/* web:8000
-}
-
 
 {$DOMAIN_NAME:localhost} {
 
