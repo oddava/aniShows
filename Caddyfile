@@ -2,7 +2,6 @@
     email {$EMAIL_HOST_USER}
 }
 
-
 {$DOMAIN_NAME:localhost} {
 
     encode gzip zstd
