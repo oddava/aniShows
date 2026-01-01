@@ -13,7 +13,7 @@
     }
 
     # Admin
-    handle /admin/* {2
+    handle /admin/* {
         reverse_proxy web:8000
     }
 
