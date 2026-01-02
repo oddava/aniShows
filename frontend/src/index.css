@@ -12,9 +12,7 @@
   --color-accent-dark: #7c3aed;
 }
 
-html {
-  scroll-behavior: smooth;
-}
+
 
 body {
   @apply bg-dark text-gray-100 antialiased;

@@ -16,6 +16,7 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from datetime import datetime
+from django.core.cache import cache
 import logging
 
 logger = logging.getLogger(__name__)
@@ -119,17 +120,33 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def trending(self, request):
         """Get trending anime (most favorited recently)"""
-        queryset = self.get_queryset()[:12]
-        serializer = AnimeListSerializer(queryset, many=True, context={'request': request})
-        return Response(serializer.data)
+        # Cache for 15 minutes
+        cache_key = 'anime_trending'
+        data = cache.get(cache_key)
+        
+        if not data:
+            queryset = self.get_queryset()[:12]
+            serializer = AnimeListSerializer(queryset, many=True, context={'request': request})
+            data = serializer.data
+            cache.set(cache_key, data, 60 * 15)
+            
+        return Response(data)
     
     @action(detail=False, methods=['get'])
     def top_rated(self, request):
         """Get top rated anime"""
-        queryset = Anime.objects.select_related('studio').prefetch_related('genres')
-        queryset = queryset.filter(rating__isnull=False).order_by('-rating')[:12]
-        serializer = AnimeListSerializer(queryset, many=True, context={'request': request})
-        return Response(serializer.data)
+        # Cache for 15 minutes
+        cache_key = 'anime_top_rated'
+        data = cache.get(cache_key)
+        
+        if not data:
+            queryset = Anime.objects.select_related('studio').prefetch_related('genres')
+            queryset = queryset.filter(rating__isnull=False).order_by('-rating')[:12]
+            serializer = AnimeListSerializer(queryset, many=True, context={'request': request})
+            data = serializer.data
+            cache.set(cache_key, data, 60 * 15)
+            
+        return Response(data)
     
     @action(detail=True, methods=['get'])
     def reviews(self, request, slug=None):

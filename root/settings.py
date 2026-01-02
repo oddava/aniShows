@@ -76,6 +76,8 @@ INSTALLED_APPS = [
     'storages',
 ]
 
+SOCIALACCOUNT_ADAPTER = 'users.adapters.MySocialAccountAdapter'
+
 # REST_AUTH Configuration
 REST_AUTH = {
     'USE_JWT': True,
@@ -300,6 +302,17 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
+}
+
+# Redis Cache
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/0"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
 }
 
 # JWT Settings
