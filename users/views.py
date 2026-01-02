@@ -22,8 +22,25 @@ class GoogleLogin(SocialLoginView):
     client_class = CustomOAuth2Client
     authentication_classes = [] # Disable CSRF check by removing SessionAuthentication
 
+    def get_callback_url(self, request=None, adapter=None):
+        """
+        Dynamically get callback URL from request, fallback to settings.
+        This fixes issues where frontend origin (http vs https, www vs non-www)
+        doesn't match the strictly hardcoded settings.FRONTEND_URL.
+        """
+        # Try to get from request body
+        if request and request.data.get('callback_url'):
+            url = request.data.get('callback_url')
+            logger.debug(f"Using callback_url from request: {url}")
+            return url
+            
+        # Fallback to standard logic (settings or adapter default)
+        url = super().get_callback_url(request, adapter)
+        logger.debug(f"Using default callback_url: {url}")
+        return url
+
     def post(self, request, *args, **kwargs):
-        logger.debug(f"GoogleLogin POST received with callback URL: {self.callback_url}")
+        logger.debug(f"GoogleLogin POST received")
         try:
             return super().post(request, *args, **kwargs)
         except Exception as e:

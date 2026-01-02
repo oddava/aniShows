@@ -85,7 +85,7 @@ export const authApi = {
             headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
         });
     },
-    googleLogin: (code) => api.post('/auth/google/', { code }),
+    googleLogin: (code, callback_url) => api.post('/auth/google/', { code, callback_url }),
     changePassword: (data) => api.post('/auth/change-password/', data),
     deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),
     changeEmail: (data) => api.post('/auth/change-email/', data),

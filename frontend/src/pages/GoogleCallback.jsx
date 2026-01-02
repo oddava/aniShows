@@ -33,7 +33,8 @@ export default function GoogleCallback() {
 
     const handleGoogleCallback = async (code) => {
         try {
-            const response = await authApi.googleLogin(code);
+            const callbackUrl = `${window.location.origin}/auth/google/callback`;
+            const response = await authApi.googleLogin(code, callbackUrl);
             const { access, refresh } = response.data;
 
             await setTokens(access, refresh);
