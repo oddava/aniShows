@@ -24,6 +24,7 @@ const PasswordResetConfirm = lazy(() => import('./pages/PasswordResetConfirm'));
 const GoogleCallback = lazy(() => import('./pages/GoogleCallback'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // Admin imports
 const AdminLayout = lazy(() => import('./components/AdminLayout'));
@@ -90,6 +91,7 @@ function App() {
                   <Route path="anime" element={<AdminAnime />} />
                   <Route path="reviews" element={<AdminReviews />} />
                 </Route>
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
           </BrowserRouter>

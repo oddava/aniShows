@@ -60,9 +60,9 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                     <label className="block text-sm font-medium text-gray-300 mb-3">
                         Your Rating
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <div
-                            className="flex items-center gap-1"
+                            className="flex flex-wrap items-center gap-1"
                             onMouseLeave={() => setHoverRating(0)}
                         >
                             {Array(10).fill(0).map((_, i) => (
@@ -75,17 +75,19 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                                 >
                                     <Star
                                         className={`w-6 h-6 md:w-8 md:h-8 transition-colors ${(hoverRating || rating) > i
-                                                ? 'fill-current text-yellow-500'
-                                                : 'text-gray-700'
+                                            ? 'fill-current text-yellow-500'
+                                            : 'text-gray-700'
                                             }`}
                                     />
                                 </button>
                             ))}
                         </div>
-                        <span className="text-xl font-bold text-yellow-500 ml-4 min-w-[3ch]">
-                            {hoverRating || rating || 0}
-                        </span>
-                        <span className="text-gray-500 text-sm">/ 10</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xl font-bold text-yellow-500 min-w-[3ch]">
+                                {hoverRating || rating || 0}
+                            </span>
+                            <span className="text-gray-500 text-sm">/ 10</span>
+                        </div>
                     </div>
                 </div>
 
@@ -103,8 +105,8 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 </div>
 
                 {/* Spoilers & Actions */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <label className="flex items-center gap-3 cursor-pointer group select-none">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors w-fit">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasSpoilers ? 'bg-red-500 border-red-500' : 'border-gray-600 bg-dark-50 group-hover:border-gray-500'
                             }`}>
                             {hasSpoilers && <AlertTriangle className="w-3 h-3 text-white" />}
