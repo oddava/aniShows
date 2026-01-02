@@ -1,7 +1,7 @@
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-import requests
+import httpx
 import uuid
 import logging
 
@@ -52,7 +52,7 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
                 # Check if we should download
                 if not profile.avatar:
                     logger.info(f"Downloading OAuth avatar for {user.username} from {picture_url}")
-                    response = requests.get(picture_url)
+                    response = httpx.get(picture_url)
                     if response.status_code == 200:
                         # Create file for the image field
                         # We guess extension or default to jpg
