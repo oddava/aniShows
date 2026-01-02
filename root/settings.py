@@ -377,9 +377,9 @@ if not DEBUG:
     X_FRAME_OPTIONS = 'DENY'
     
     # HSTS (be careful - this can lock you out if SSL isn't configured correctly)
-    # SECURE_HSTS_SECONDS = 31536000  # 1 year
-    # SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    # SECURE_HSTS_PRELOAD = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 # Conditionally add debug toolbar
 if DEBUG:
