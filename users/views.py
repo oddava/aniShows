@@ -40,9 +40,21 @@ class GoogleLogin(SocialLoginView):
         return url
 
     def post(self, request, *args, **kwargs):
-        logger.debug(f"GoogleLogin POST received")
+        # Force set callback_url from request if present
+        callback_url = request.data.get('callback_url')
+        if callback_url:
+            self.callback_url = callback_url
+            
+        print(f"DEBUG: GoogleLogin using callback_url: {self.callback_url}")
+        
         try:
             return super().post(request, *args, **kwargs)
         except Exception as e:
+            # Print detailed error to stdout for docker logs
+            import traceback
+            traceback.print_exc()
+            if hasattr(e, 'response') and hasattr(e.response, 'text'):
+                print(f"DEBUG: Upstream Error Response: {e.response.text}")
+                
             logger.exception("GoogleLogin failed")
             raise e
