@@ -1,3 +1,32 @@
-.venv
+
+# Version Control
 .git
+.gitignore
+
+# Python
+.venv
 __pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Dependencies
+node_modules
+frontend/node_modules
+
+# Build Output
+dist
+frontend/dist
+build
+
+# Environment Variables (Safety)
+.env
+.env.*
+
+# Data & Backups (CRITICAL: Do not include huge backups in build context)
+backups-data
+minio_data
+db_data
+redis_data
+media
+static
