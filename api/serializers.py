@@ -84,7 +84,8 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     'id': user_list.id,
                     'status': user_list.status,
                     'score': user_list.score,
-                    'episodes_watched': user_list.episodes_watched
+                    'episodes_watched': user_list.episodes_watched,
+                    'progress': (user_list.episodes_watched / obj.episode_count * 100) if obj.episode_count and obj.episode_count > 0 else 0
                 }
         return None
 
@@ -257,10 +258,41 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
         source='anime',
         write_only=True
     )
+    progress = serializers.SerializerMethodField()
     
     class Meta:
         model = UserAnimeList
-        fields = ['id', 'anime', 'anime_id', 'status', 'score', 'episodes_watched', 'updated_at']
+        fields = ['id', 'anime', 'anime_id', 'status', 'score', 'episodes_watched', 'progress', 'updated_at']
+    
+    def get_progress(self, obj):
+        if obj.anime.episode_count and obj.anime.episode_count > 0:
+             return int((obj.episodes_watched / obj.anime.episode_count) * 100)
+        return 0
+
+    def validate(self, attrs):
+        episodes_watched = attrs.get('episodes_watched')
+        anime = attrs.get('anime')
+        status = attrs.get('status')
+        
+        # If updating, anime might not be in attrs, get from instance
+        if not anime and self.instance:
+            anime = self.instance.anime
+            
+        if episodes_watched is not None and anime and anime.episode_count > 0:
+            if episodes_watched > anime.episode_count:
+                raise serializers.ValidationError(
+                    {'episodes_watched': f'Episodes watched cannot exceed total episodes ({anime.episode_count}).'}
+                )
+            
+            # Auto-complete logic
+            if episodes_watched == anime.episode_count:
+                 attrs['status'] = UserAnimeList.UserAnimeStatus.completed
+
+        # If status is set to Completed, ensure episodes_watched is set to max
+        if status == UserAnimeList.UserAnimeStatus.completed and anime and anime.episode_count > 0:
+            attrs['episodes_watched'] = anime.episode_count
+
+        return attrs
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -278,17 +310,27 @@ class ReviewSerializer(serializers.ModelSerializer):
         allow_blank=True, 
         max_length=MAX_REVIEW_LENGTH
     )
+    is_completed = serializers.SerializerMethodField()
     
     class Meta:
         model = Review
-        fields = ['id', 'user', 'anime', 'anime_slug', 'rating', 'text', 'has_spoilers', 'created_at', 'updated_at']
+        fields = [
+            'id', 'user', 'anime', 'anime_slug', 'rating', 
+            'rating_story', 'rating_animation', 'rating_music', 'rating_characters',
+            'text', 'has_spoilers', 'is_completed', 'created_at', 'updated_at'
+        ]
         read_only_fields = ['id', 'user', 'anime', 'created_at', 'updated_at']
     
-    def validate_text(self, value):
-        """Sanitize review text to prevent XSS."""
-        if value:
-            return escape(value.strip())
-        return value
+    def get_is_completed(self, obj):
+        try:
+            return UserAnimeList.objects.filter(
+                user=obj.user, 
+                anime=obj.anime, 
+                status=UserAnimeList.UserAnimeStatus.completed
+            ).exists()
+        except Exception:
+            return False
+
 
 
 class ChangePasswordSerializer(serializers.Serializer):

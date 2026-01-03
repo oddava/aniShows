@@ -67,6 +67,7 @@ function App() {
                   <Route path="anime/:slug" element={<AnimeDetail />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="profile/:username" element={<Profile />} />
+                  <Route path="kiyo" element={<Profile forcedUsername="kiyo" />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="login" element={<Login />} />
                   <Route path="register" element={<Register />} />

@@ -7,8 +7,9 @@ import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import ReviewCard from '../components/ReviewCard';
 
-export default function Profile() {
-    const { username } = useParams();
+export default function Profile({ forcedUsername }) {
+    const { username: paramsUsername } = useParams();
+    const username = forcedUsername || paramsUsername;
     const { user: currentUser, isAuthenticated, loading } = useAuth();
     const [activeTab, setActiveTab] = useState('favorites');
 
@@ -154,7 +155,7 @@ export default function Profile() {
                             </h3>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                                 {group.items.map((item) => (
-                                    <AnimeCard key={item.id} anime={item.anime} />
+                                    <AnimeCard key={item.id} anime={item.anime} userListEntry={item} />
                                 ))}
                             </div>
                         </div>

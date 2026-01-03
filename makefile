@@ -12,6 +12,9 @@ down:
 restart:
 	docker compose restart
 
+rebuild-front:
+	docker compose up -d frontend && docker compose exec frontend npm run build && docker compose restart caddy
+
 build:
 	docker compose build
 

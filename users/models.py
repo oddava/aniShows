@@ -24,11 +24,11 @@ class UserProfile(Model):
 
 class UserAnimeList(Model):
     class UserAnimeStatus(TextChoices):
-        watching = "Watching",
-        completed = "Completed",
-        on_hold = "On Hold",
-        dropped = "Dropped",
-        plan_to_watch = "Plan to Watch",
+        watching = "Watching"
+        completed = "Completed"
+        on_hold = "On Hold"
+        dropped = "Dropped"
+        plan_to_watch = "Plan to Watch"
 
     user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='anime_lists')
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name='user_lists')

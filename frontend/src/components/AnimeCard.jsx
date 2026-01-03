@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi } from '../api/client';
 
-export default function AnimeCard({ anime }) {
+export default function AnimeCard({ anime, userListEntry }) {
     const { isAuthenticated } = useAuth();
     const [isFavorite, setIsFavorite] = useState(anime.is_favorite || false);
     const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +56,7 @@ export default function AnimeCard({ anime }) {
     };
 
     const imageUrl = getImageUrl(anime.cover_image);
+    const progress = userListEntry?.progress || 0;
 
     return (
         <Link to={`/anime/${anime.slug}`} className={`group block h-full transition-all duration-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
@@ -71,6 +72,16 @@ export default function AnimeCard({ anime }) {
 
                     {/* Hover overlay - smooth fade */}
                     <div className="absolute inset-0 bg-gradient-to-t from-dark-100 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                    {/* Progress Bar (if user list entry exists) */}
+                    {userListEntry && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700 z-10">
+                            <div
+                                style={{ width: `${progress}%` }}
+                                className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-accent'}`}
+                            />
+                        </div>
+                    )}
 
                     {/* Favorite button - slides in from right on hover */}
                     {isAuthenticated && (
@@ -89,7 +100,7 @@ export default function AnimeCard({ anime }) {
 
                     {/* Rating badge */}
                     {anime.rating && (
-                        <div className="absolute bottom-3 left-3 flex items-center gap-1 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-lg">
+                        <div className="absolute bottom-3 left-3 flex items-center gap-1 px-2 py-1 bg-black/70 backdrop-blur-sm rounded-lg mb-1">
                             <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
                             <span className="text-xs font-semibold text-white">{anime.rating}</span>
                         </div>
@@ -108,8 +119,15 @@ export default function AnimeCard({ anime }) {
                         <span>{anime.episode_count} eps</span>
                     </div>
 
+                    {/* User Progress Text */}
+                    {userListEntry && (
+                        <div className="mt-2 text-xs text-accent font-medium">
+                            {userListEntry.episodes_watched} / {anime.episode_count || '?'} eps
+                        </div>
+                    )}
+
                     {/* Genres */}
-                    {anime.genres?.length > 0 && (
+                    {anime.genres?.length > 0 && !userListEntry && (
                         <div className="flex flex-wrap gap-1 mt-auto pt-2">
                             {anime.genres.slice(0, 2).map((genre) => (
                                 <span key={genre.id} className="badge text-xs">

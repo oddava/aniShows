@@ -251,6 +251,7 @@ export default function AnimeDetail() {
                                             animeId={anime.id}
                                             initialStatus={anime.user_list_status}
                                             onUpdate={handleListUpdate}
+                                            totalEpisodes={anime.episode_count}
                                         />
                                     </>
                                 ) : (

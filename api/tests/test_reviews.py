@@ -243,6 +243,7 @@ class ReviewValidationTests(APITestCase):
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
     
+    
     def test_spoiler_flag(self):
         """Test that spoiler flag works correctly."""
         data = {
@@ -256,3 +257,63 @@ class ReviewValidationTests(APITestCase):
         
         review = Review.objects.get(user=self.user, anime=self.anime)
         self.assertTrue(review.has_spoilers)
+
+
+class ReviewSubRatingTests(APITestCase):
+    """Tests for sub-ratings fields."""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='password123'
+        )
+        UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
+        
+        self.anime = Anime.objects.create(
+            title='Test Anime',
+            slug='test-anime',
+            synopsis='A test anime synopsis',
+            anime_type='TV',
+            status='Airing'
+        )
+        UserAnimeList.objects.create(user=self.user, anime=self.anime, status='Completed')
+        
+        self.reviews_url = reverse('reviews-list')
+        self.client = APIClient()
+        self.user.refresh_from_db()
+        self.client.force_authenticate(user=self.user)
+
+    def test_create_review_with_sub_ratings(self):
+        """Test creating review with sub ratings works."""
+        data = {
+            'anime_slug': 'test-anime',
+            'rating': 8,
+            'rating_story': 9,
+            'rating_animation': 10,
+            'rating_music': 7,
+            'rating_characters': 8,
+            'text': 'Detailed review'
+        }
+        response = self.client.post(self.reviews_url, data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        review = Review.objects.get(user=self.user, anime=self.anime)
+        self.assertEqual(review.rating, 8)
+        self.assertEqual(review.rating_story, 9)
+        self.assertEqual(review.rating_animation, 10)
+        self.assertEqual(review.rating_music, 7)
+        self.assertEqual(review.rating_characters, 8)
+
+    def test_sub_rating_bounds(self):
+        """Test sub ratings respect 1-10 bounds."""
+        data = {
+            'anime_slug': 'test-anime',
+            'rating': 8,
+            'rating_story': 11, # Invalid
+            'text': 'Invalid stats'
+        }
+        response = self.client.post(self.reviews_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('rating_story', response.data)
+

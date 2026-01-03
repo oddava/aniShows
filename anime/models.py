@@ -128,6 +128,22 @@ class Review(Model):
     rating = IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(10)]
     )
+    rating_story = IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        null=True, blank=True
+    )
+    rating_animation = IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        null=True, blank=True
+    )
+    rating_music = IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        null=True, blank=True
+    )
+    rating_characters = IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        null=True, blank=True
+    )
     text = TextField(blank=True)
     has_spoilers = BooleanField(default=False)
     created_at = DateTimeField(auto_now_add=True)
