@@ -50,7 +50,7 @@ export default function AnimeDetail() {
         return page.results || [];
     }) || [];
 
-    const reviewCount = anime?.review_count ?? (reviewsData?.pages[0]?.count ?? reviews.length);
+    const reviewCount = reviewsData?.pages[0]?.count ?? anime?.review_count ?? reviews.length;
 
     useEffect(() => {
         if (anime) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Star, AlertTriangle, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Helper component for 5-star input (handles 1-10 backend value)
@@ -17,27 +17,14 @@ const StarInput = ({ label, value, onChange, size = "md" }) => {
         }
         const x = clientX - rect.left;
         const isHalf = x < rect.width / 2;
-        const newValue = (index * 2) + (isHalf ? 1 : 2);
-        return newValue;
-    };
-
-    const handleMouseMove = (e, index) => {
-        setHoverValue(handleInteraction(e, index));
-    };
-
-    const handleClick = (e, index) => {
-        const newValue = handleInteraction(e, index);
-        onChange(newValue);
+        return (index * 2) + (isHalf ? 1 : 2);
     };
 
     return (
         <div className="flex flex-col gap-1">
             {label && <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">{label}</label>}
             <div className="flex items-center gap-4">
-                <div
-                    className="flex items-center"
-                    onMouseLeave={() => setHoverValue(0)}
-                >
+                <div className="flex items-center">
                     {[0, 1, 2, 3, 4].map((index) => {
                         const starValue = (index * 2) + 2;
                         const isFull = (hoverValue || value) >= starValue;
@@ -47,12 +34,20 @@ const StarInput = ({ label, value, onChange, size = "md" }) => {
                             <button
                                 key={index}
                                 type="button"
-                                onMouseMove={(e) => handleMouseMove(e, index)}
-                                onClick={(e) => handleClick(e, index)}
+                                onMouseMove={(e) => setHoverValue(handleInteraction(e, index))}
+                                onMouseLeave={() => setHoverValue(0)}
+                                onClick={(e) => {
+                                    const val = handleInteraction(e, index);
+                                    onChange(val);
+                                    setHoverValue(0);
+                                }}
                                 onTouchStart={(e) => {
-                                    // Set hover value on touch to give visual feedback
                                     const val = handleInteraction(e, index);
                                     setHoverValue(val);
+                                }}
+                                onTouchEnd={(e) => {
+                                    // Small delay allows the "tap" to be felt without sticking
+                                    setTimeout(() => setHoverValue(0), 100);
                                 }}
                                 className={`p-0.5 focus:outline-none transition-transform hover:scale-110 relative touch-manipulation`}
                             >
@@ -97,7 +92,11 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
     const MIN_LENGTH = 20;
     const MAX_LENGTH = 5000;
 
+    const hasLoaded = useRef(false);
+
     useEffect(() => {
+        if (hasLoaded.current) return;
+
         if (initialData) {
             console.log('[ReviewForm] Initializing with data:', initialData);
             setRating(initialData.rating || 0);
@@ -124,6 +123,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
 
             setText(loadedText);
             setHasSpoilers(initialData.has_spoilers || false);
+            hasLoaded.current = true;
         } else {
             // Check for drafts if not editing
             const draftKey = `review_draft_${animeTitle.replace(/\s+/g, '_').toLowerCase()}`;
@@ -139,6 +139,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                     console.error('Failed to load draft:', e);
                 }
             }
+            hasLoaded.current = true;
         }
     }, [initialData, animeTitle]);
 
@@ -197,8 +198,25 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 localStorage.removeItem(draftKey);
             }
         } catch (err) {
-            console.error(err);
-            setError(err.response?.data?.detail || 'Failed to submit review');
+            console.error('Submission error:', err);
+            const data = err.response?.data;
+            if (data) {
+                if (typeof data === 'string') {
+                    setError(data);
+                } else if (data.detail) {
+                    setError(data.detail);
+                } else if (data.non_field_errors) {
+                    setError(data.non_field_errors[0]);
+                } else {
+                    // Collect field errors
+                    const fieldErrors = Object.entries(data)
+                        .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs[0] : msgs}`)
+                        .join(', ');
+                    setError(fieldErrors || 'Failed to submit review');
+                }
+            } else {
+                setError('Failed to connect to server. Please try again.');
+            }
             setIsSubmitting(false);
         }
     };
