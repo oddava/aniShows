@@ -148,21 +148,21 @@ export default function Browse() {
                 </div>
 
                 {/* Search Bar */}
-                <div className="relative max-w-2xl mx-auto mb-8">
+                <div className="relative max-w-3xl mx-auto mb-10 group">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500 group-focus-within:text-accent transition-colors" />
                     <input
                         type="text"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
-                        placeholder="Search anime by title..."
-                        className="input !pl-12 pr-10 py-4 text-lg"
+                        placeholder="Search for anime, genres, studios..."
+                        className="w-full bg-dark-100 border-2 border-gray-800 rounded-2xl pl-14 pr-14 py-4.5 text-xl text-white placeholder:text-gray-600 focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all shadow-2xl"
                     />
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                     {searchInput && (
                         <button
                             onClick={() => setSearchInput('')}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                            className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="w-6 h-6" />
                         </button>
                     )}
                 </div>
