@@ -647,28 +647,37 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         user = self.request.user
+        logger.info(f"Attempting to create review for user: {user.username}")
         
         # Check email verification
         profile = getattr(user, 'userprofile', None)
         if not profile or not profile.email_verified:
+            logger.warning(f"Email not verified for user {user.username}")
             raise PermissionDenied("Please verify your email to write reviews.")
         
         anime = serializer.validated_data.get('anime')
         if not anime:
+             logger.error("Anime not found in validated_data")
              raise serializers.ValidationError({"non_field_errors": ["Anime not found."]})
              
         # Check if user has anime on their list
         if not UserAnimeList.objects.filter(user=user, anime=anime).exists():
+            logger.warning(f"User {user.username} hasn't added {anime.title} to their list")
             raise serializers.ValidationError(
                 {"non_field_errors": ["You must add this anime to your list before writing a review."]}
             )
             
         try:
             serializer.save(user=user)
-        except IntegrityError:
+            logger.info("Review saved successfully")
+        except IntegrityError as e:
+            logger.warning(f"Duplicate review attempt: {e}")
             raise serializers.ValidationError(
                 {"non_field_errors": ["You have already reviewed this anime."]}
             )
+        except Exception as e:
+            logger.exception("Unexpected error during review creation")
+            raise
     
     def perform_update(self, serializer):
         """Ensure users can only update their own reviews."""
