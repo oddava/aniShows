@@ -661,7 +661,12 @@ class ReviewViewSet(viewsets.ModelViewSet):
                 "You must add this anime to your list before writing a review."
             )
             
-        serializer.save(user=user)
+        try:
+            serializer.save(user=user)
+        except IntegrityError:
+            raise serializers.ValidationError(
+                {"non_field_errors": ["You have already reviewed this anime."]}
+            )
     
     def perform_update(self, serializer):
         """Ensure users can only update their own reviews."""
