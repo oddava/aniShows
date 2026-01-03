@@ -89,7 +89,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Limits
-    const MIN_LENGTH = 20;
+    const MIN_LENGTH = 0;
     const MAX_LENGTH = 5000;
 
     const hasLoaded = useRef(false);
