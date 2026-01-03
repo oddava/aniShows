@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader } from 'lucide-react';
+import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader, Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
