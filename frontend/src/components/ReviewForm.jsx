@@ -4,18 +4,30 @@ import { Star, AlertTriangle, X, ChevronDown, ChevronUp } from 'lucide-react';
 // Helper component for 5-star input (handles 1-10 backend value)
 const StarInput = ({ label, value, onChange, size = "md" }) => {
     const [hoverValue, setHoverValue] = useState(0);
-    const displayValue = (hoverValue || value) / 2;
 
-    // Handle split clicks (left half vs right half)
-    const handleMouseMove = (e, index) => {
+    const handleInteraction = (e, index) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
+        let clientX;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+            clientX = e.changedTouches[0].clientX;
+        } else {
+            clientX = e.clientX;
+        }
+        const x = clientX - rect.left;
         const isHalf = x < rect.width / 2;
-        setHoverValue((index * 2) + (isHalf ? 1 : 2));
+        const newValue = (index * 2) + (isHalf ? 1 : 2);
+        return newValue;
     };
 
-    const handleClick = () => {
-        onChange(hoverValue);
+    const handleMouseMove = (e, index) => {
+        setHoverValue(handleInteraction(e, index));
+    };
+
+    const handleClick = (e, index) => {
+        const newValue = handleInteraction(e, index);
+        onChange(newValue);
     };
 
     return (
@@ -36,8 +48,13 @@ const StarInput = ({ label, value, onChange, size = "md" }) => {
                                 key={index}
                                 type="button"
                                 onMouseMove={(e) => handleMouseMove(e, index)}
-                                onClick={handleClick}
-                                className={`p-0.5 focus:outline-none transition-transform hover:scale-110 relative`}
+                                onClick={(e) => handleClick(e, index)}
+                                onTouchStart={(e) => {
+                                    // Set hover value on touch to give visual feedback
+                                    const val = handleInteraction(e, index);
+                                    setHoverValue(val);
+                                }}
+                                className={`p-0.5 focus:outline-none transition-transform hover:scale-110 relative touch-manipulation`}
                             >
                                 <Star
                                     className={`${size === "lg" ? "w-8 h-8" : "w-5 h-5"} transition-colors
@@ -115,9 +132,9 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 try {
                     const parsed = JSON.parse(draft);
                     if (parsed.text) setText(parsed.text);
-                    if (parsed.rating) setRating(parsed.rating);
+                    if (parsed.rating !== undefined) setRating(parsed.rating);
                     if (parsed.subRatings) setSubRatings(parsed.subRatings);
-                    if (parsed.hasSpoilers) setHasSpoilers(parsed.hasSpoilers);
+                    if (parsed.hasSpoilers !== undefined) setHasSpoilers(parsed.hasSpoilers);
                 } catch (e) {
                     console.error('Failed to load draft:', e);
                 }
@@ -127,12 +144,17 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
 
     // Save draft on change (only for new reviews)
     useEffect(() => {
-        if (!initialData && (text || rating > 0)) {
+        const hasAnyContent = text.trim().length > 0 ||
+            rating > 0 ||
+            Object.values(subRatings).some(v => v > 0);
+
+        if (!initialData && hasAnyContent) {
             const draftKey = `review_draft_${animeTitle.replace(/\s+/g, '_').toLowerCase()}`;
             const draft = { text, rating, subRatings, hasSpoilers };
             localStorage.setItem(draftKey, JSON.stringify(draft));
         }
     }, [text, rating, subRatings, hasSpoilers, initialData, animeTitle]);
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
