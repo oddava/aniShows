@@ -200,8 +200,12 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
         } catch (err) {
             console.error('Submission error:', err);
             const data = err.response?.data;
+            const status = err.response?.status;
+
             if (data) {
-                if (typeof data === 'string') {
+                if (typeof data === 'string' && data.includes('<!doctype html>')) {
+                    setError(`Server Error (${status || 500}). Please check backend logs.`);
+                } else if (typeof data === 'string') {
                     setError(data);
                 } else if (data.detail) {
                     setError(data.detail);

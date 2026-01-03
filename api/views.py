@@ -653,12 +653,14 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if not profile or not profile.email_verified:
             raise PermissionDenied("Please verify your email to write reviews.")
         
-        anime_slug = serializer.validated_data.get('anime').slug
-        
+        anime = serializer.validated_data.get('anime')
+        if not anime:
+             raise serializers.ValidationError({"non_field_errors": ["Anime not found."]})
+             
         # Check if user has anime on their list
-        if not UserAnimeList.objects.filter(user=user, anime__slug=anime_slug).exists():
+        if not UserAnimeList.objects.filter(user=user, anime=anime).exists():
             raise serializers.ValidationError(
-                "You must add this anime to your list before writing a review."
+                {"non_field_errors": ["You must add this anime to your list before writing a review."]}
             )
             
         try:
