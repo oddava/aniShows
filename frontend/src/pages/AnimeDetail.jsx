@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader, Plus, Trophy, TrendingUp, ExternalLink, Users, Mic, Film } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader, Plus, Trophy, TrendingUp, ExternalLink, Users, Mic, Film, ChevronDown, Hash, Building2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
@@ -9,36 +9,53 @@ import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 
-const InformationBox = ({ anime, className }) => (
+const InformationBox = ({ anime, className, accentColor }) => (
     <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl ${className}`}>
-        <h3 className="text-white font-bold uppercase text-[10px] tracking-[0.2em] text-accent/80">Information</h3>
+        <h3
+            className="text-white font-bold uppercase text-[10px] tracking-[0.2em]"
+            style={{ color: accentColor ? `${accentColor}cc` : '#8b5cf6cc' }}
+        >
+            Information
+        </h3>
         <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-                <p className="text-gray-300 text-xs font-bold uppercase tracking-wider">Type</p>
+                <p className="text-gray-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <Tv className="w-3 h-3 text-gray-500" />
+                    Type
+                </p>
                 <div className="flex-1 border-b border-white/5 border-dotted mt-1" />
-                <p className="text-white font-semibold flex items-center gap-2 text-sm">
-                    <Tv className="w-3.5 h-3.5" /> {anime.anime_type}
+                <p className="text-white font-semibold text-sm">
+                    {anime.anime_type}
                 </p>
             </div>
             <div className="flex items-center justify-between gap-4">
-                <p className="text-gray-300 text-xs font-bold uppercase tracking-wider">Episodes</p>
+                <p className="text-gray-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <Hash className="w-3 h-3 text-gray-500" />
+                    Episodes
+                </p>
                 <div className="flex-1 border-b border-white/5 border-dotted mt-1" />
-                <p className="text-white font-semibold flex items-center gap-2 text-sm">
-                    <Clock className="w-3.5 h-3.5" /> {anime.episode_count || 'Unknown'}
+                <p className="text-white font-semibold text-sm">
+                    {anime.episode_count || 'Unknown'}
                 </p>
             </div>
             {anime.release_date && (
                 <div className="flex items-center justify-between gap-4">
-                    <p className="text-gray-300 text-xs font-bold uppercase tracking-wider">Aired</p>
+                    <p className="text-gray-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                        <Calendar className="w-3 h-3 text-gray-500" />
+                        Aired
+                    </p>
                     <div className="flex-1 border-b border-white/5 border-dotted mt-1" />
-                    <p className="text-white font-semibold flex items-center gap-2 text-sm">
-                        <Calendar className="w-3.5 h-3.5" /> {new Date(anime.release_date).getFullYear()}
+                    <p className="text-white font-semibold text-sm">
+                        {new Date(anime.release_date).getFullYear()}
                     </p>
                 </div>
             )}
             {anime.studio && (
                 <div className="flex items-center justify-between gap-4 mb-3">
-                    <p className="text-gray-300 text-xs font-bold uppercase tracking-wider">Studio</p>
+                    <p className="text-gray-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                        <Building2 className="w-3 h-3 text-gray-500" />
+                        Studio
+                    </p>
                     <div className="flex-1 border-b border-white/5 border-dotted mt-1" />
                     <p className="text-white font-semibold text-sm text-right">{anime.studio.name}</p>
                 </div>
@@ -54,9 +71,25 @@ const InformationBox = ({ anime, className }) => (
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 border ${['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site)
-                                    ? 'bg-accent hover:bg-accent-light text-white border-transparent'
+                                    ? 'bg-transparent hover:text-white'
                                     : 'bg-dark-200 hover:bg-white text-gray-300 hover:text-black border-gray-700/50 hover:border-white'
                                     }`}
+                                style={['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site) ? {
+                                    color: accentColor || '#8b5cf6',
+                                    borderColor: accentColor ? `${accentColor}80` : 'rgba(139,92,246,0.5)'
+                                } : {}}
+                                onMouseEnter={(e) => {
+                                    if (['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site)) {
+                                        e.currentTarget.style.backgroundColor = accentColor || '#8b5cf6';
+                                        e.currentTarget.style.color = 'white';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site)) {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                        e.currentTarget.style.color = accentColor || '#8b5cf6';
+                                    }
+                                }}
                             >
                                 {link.site} <ExternalLink className="w-3 h-3" />
                             </a>
@@ -75,6 +108,10 @@ export default function AnimeDetail() {
     const [isFavorite, setIsFavorite] = useState(false);
     const [isWritingReview, setIsWritingReview] = useState(false);
     const [editingReview, setEditingReview] = useState(null);
+    const [activeTab, setActiveTab] = useState('overview');
+    const [accentColor, setAccentColor] = useState(null);
+    const [synopsisExpanded, setSynopsisExpanded] = useState(false);
+    const containerRef = useRef(null);
 
     const { data: anime, isLoading, isError } = useQuery({
         queryKey: ['anime', slug],
@@ -116,6 +153,38 @@ export default function AnimeDetail() {
             document.title = `${anime.title} - AniShows`;
         }
     }, [anime]);
+
+    // Extract dominant color from cover image for dynamic theming
+    useEffect(() => {
+        if (!anime?.cover_image) return;
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = anime.cover_image;
+
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 1;
+                canvas.height = 1;
+                ctx.drawImage(img, 0, 0, 1, 1);
+                const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+
+                // Ensure the color is vibrant and usable
+                const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                if (luminance > 0.05 && luminance < 0.9) {
+                    const toHex = (c) => {
+                        const hex = c.toString(16);
+                        return hex.length === 1 ? '0' + hex : hex;
+                    };
+                    setAccentColor(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
+                }
+            } catch (e) {
+                console.warn('Color extraction failed:', e);
+            }
+        };
+    }, [anime?.cover_image]);
 
     const { data: related } = useQuery({
         queryKey: ['anime', slug, 'related'],
@@ -221,7 +290,11 @@ export default function AnimeDetail() {
     const coverUrl = getImageUrl(anime.cover_image) || `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
 
     return (
-        <div className="min-h-screen">
+        <div
+            ref={containerRef}
+            className="min-h-screen"
+            style={accentColor ? { '--anime-accent': accentColor } : {}}
+        >
             {/* Banner */}
             <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
                 <img
@@ -248,11 +321,11 @@ export default function AnimeDetail() {
                                 />
                             </div>
 
-                            <InformationBox anime={anime} className="hidden lg:flex" />
+                            <InformationBox anime={anime} accentColor={accentColor} className="hidden lg:flex" />
                         </div>
 
                         {/* Column 2: Main Content */}
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                             <div className="text-center lg:text-left mb-8">
                                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 lg:items-end lg:gap-4 mb-2">
                                     <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight leading-none">
@@ -265,9 +338,16 @@ export default function AnimeDetail() {
                                         </div>
                                     )}
                                     {anime.site_rank && (
-                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-accent/10 border border-accent/20 rounded-lg lg:mb-1.5">
-                                            <Trophy className="w-4 h-4 text-accent" />
-                                            <span className="text-sm font-bold text-accent">#{anime.site_rank} All Time</span>
+                                        <div
+                                            className="flex items-center gap-1.5 px-3 py-1 rounded-lg lg:mb-1.5"
+                                            style={{
+                                                backgroundColor: accentColor ? `${accentColor}15` : 'rgb(139 92 246 / 0.1)',
+                                                borderWidth: '1px',
+                                                borderColor: accentColor ? `${accentColor}30` : 'rgb(139 92 246 / 0.2)'
+                                            }}
+                                        >
+                                            <Trophy className="w-4 h-4" style={{ color: accentColor || '#8b5cf6' }} />
+                                            <span className="text-sm font-bold" style={{ color: accentColor || '#8b5cf6' }}>#{anime.site_rank} All Time</span>
                                         </div>
                                     )}
                                     {anime.popularity_rank && (
@@ -281,13 +361,23 @@ export default function AnimeDetail() {
                                     <p className="text-gray-400 text-lg mb-6 font-medium tracking-wide">{anime.title_jp}</p>
                                 )}
 
-                                {/* Genres */}
                                 <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-8">
                                     {anime.genres?.map((genre) => (
                                         <Link
                                             key={genre.id}
                                             to={`/browse?genre=${genre.slug}`}
-                                            className="px-4 py-1.5 bg-dark-100 text-gray-300 rounded-full text-xs font-bold border border-gray-700 hover:bg-accent hover:text-white hover:border-accent transition-all shadow-sm"
+                                            className="px-4 py-1.5 bg-dark-100 text-gray-300 rounded-full text-xs font-bold border border-gray-700 hover:text-white transition-all shadow-sm"
+                                            style={{
+                                                '--hover-bg': accentColor || '#8b5cf6',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = accentColor || '#8b5cf6';
+                                                e.currentTarget.style.borderColor = accentColor || '#8b5cf6';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = '';
+                                                e.currentTarget.style.borderColor = '';
+                                            }}
                                         >
                                             {genre.name}
                                         </Link>
@@ -358,256 +448,328 @@ export default function AnimeDetail() {
                                         </div>
                                     )}
                                 </div>
-                                <InformationBox anime={anime} className="flex lg:hidden mt-8 mb-12" />
+                                <InformationBox anime={anime} accentColor={accentColor} className="flex lg:hidden mt-8 mb-12" />
                             </div>
 
-                            {/* Relations Section */}
-                            {anime.relations && anime.relations.length > 0 && (
-                                <div className="mb-12">
-                                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                        <div className="w-1 h-6 bg-accent rounded-full" />
-                                        Related Anime
-                                    </h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                        {anime.relations.map((rel) => (
-                                            <div key={rel.id} className="relative group">
-                                                <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 border border-gray-800 bg-dark-200">
-                                                    {rel.cover ? (
-                                                        <img src={rel.cover} alt={rel.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
-                                                            <Film className="w-8 h-8" />
-                                                        </div>
-                                                    )}
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
-                                                        <span className="text-[10px] font-bold text-accent uppercase tracking-wider">{rel.type.replace('_', ' ')}</span>
-                                                    </div>
-                                                </div>
-                                                <h4 className="text-sm font-bold text-gray-200 line-clamp-2 leading-tight mb-1 group-hover:text-accent transition-colors">{rel.title}</h4>
-                                                <p className="text-xs text-gray-500">{rel.format} • {rel.status}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="mb-12">
-                                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                    <div className="w-1 h-6 bg-accent rounded-full" />
-                                    Synopsis
-                                </h2>
-                                <p className="text-gray-300 leading-loose text-lg font-normal max-w-4xl">
-                                    {anime.synopsis}
-                                </p>
+                            {/* Tab Navigation */}
+                            <div className="flex items-center gap-2 mb-10 p-1.5 bg-dark-100/60 backdrop-blur-md rounded-2xl border border-white/5 w-fit">
+                                {[
+                                    { id: 'overview', label: 'Overview', icon: Film },
+                                    { id: 'characters', label: 'Characters', icon: Users, count: anime.characters?.length },
+                                    { id: 'staff', label: 'Staff', icon: Mic, count: anime.staff?.length },
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300
+                                            ${activeTab === tab.id
+                                                ? 'text-white shadow-lg'
+                                                : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                        style={activeTab === tab.id ? {
+                                            backgroundColor: accentColor || '#8b5cf6',
+                                            boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+                                        } : {}}
+                                    >
+                                        <tab.icon className="w-4 h-4" />
+                                        {tab.label}
+                                        {tab.count > 0 && (
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-md ${activeTab === tab.id ? 'bg-white/20' : 'bg-white/5'}`}>
+                                                {tab.count}
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
                             </div>
 
-                            {/* Characters Section */}
-                            {anime.characters && anime.characters.length > 0 && (
-                                <div className="mb-16">
-                                    <h2 className="text-2xl font-black text-white mb-8 flex items-center gap-3">
-                                        <Users className="w-6 h-6 text-accent" />
-                                        Characters & Voice Actors
-                                    </h2>
+                            {/* Tab Content */}
+                            {activeTab === 'overview' && (
+                                <div key="overview" className="animate-tab-content">
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                        {anime.characters.slice(0, 8).map((role) => (
-                                            <div key={role.id} className="group relative h-64 overflow-hidden rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:border-accent/30 hover:shadow-2xl hover:shadow-accent/5">
-                                                {/* Background Image (Character) - Subtle Zoom on Hover */}
-                                                <div className="absolute inset-0">
-                                                    <img
-                                                        src={role.character.image || '/placeholder-avatar.png'}
-                                                        alt={role.character.name}
-                                                        className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-60 group-hover:opacity-40"
-                                                    />
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent" />
-                                                    <div className="absolute inset-0 bg-gradient-to-r from-dark/90 via-dark/40 to-transparent" />
-                                                </div>
-
-                                                {/* Content Overlay */}
-                                                <div className="relative h-full flex flex-col justify-end p-4 z-10">
-
-                                                    {/* Role Badge */}
-                                                    <div className="absolute top-3 right-3">
-                                                        <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border backdrop-blur-md transition-colors duration-300
-                                                            ${role.role === 'MAIN'
-                                                                ? 'bg-accent/20 border-accent/30 text-accent'
-                                                                : 'bg-white/5 border-white/10 text-gray-400 group-hover:border-white/20 group-hover:text-gray-300'}`}>
-                                                            {role.role}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Character Info */}
-                                                    <div className="transform transition-transform duration-300 group-hover:-translate-y-2">
-                                                        <h3 className="text-xl font-black text-white leading-tight mb-1 group-hover:text-accent transition-colors">
-                                                            {role.character.name}
-                                                        </h3>
-
-                                                        {/* VA Info */}
-                                                        {role.voice_actor && (
-                                                            <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/10 group-hover:border-accent/20 transition-colors">
-                                                                <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 group-hover:border-accent/40 lg:w-9 lg:h-9 shrink-0">
-                                                                    <img
-                                                                        src={role.voice_actor.image || '/placeholder-avatar.png'}
-                                                                        alt={role.voice_actor.name}
-                                                                        className="w-full h-full object-cover"
-                                                                    />
+                                    {/* Franchise Section (Sequels/Prequels) */}
+                                    {anime.relations && anime.relations.length > 0 && (
+                                        <div className="mb-12">
+                                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                                <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
+                                                Franchise
+                                            </h2>
+                                            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
+                                                {anime.relations.map((rel) => (
+                                                    <div key={rel.id} className="relative group flex-shrink-0 w-32 snap-start">
+                                                        <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 border border-gray-800 bg-dark-200">
+                                                            {rel.cover ? (
+                                                                <img src={rel.cover} alt={rel.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
+                                                                    <Film className="w-8 h-8" />
                                                                 </div>
-                                                                <div className="min-w-0 flex-1">
-                                                                    <p className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors leading-tight whitespace-normal">
-                                                                        {role.voice_actor.name}
-                                                                    </p>
-                                                                    <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest group-hover:text-accent/70 transition-colors mt-0.5">
-                                                                        Japanese
-                                                                    </p>
-                                                                </div>
+                                                            )}
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accentColor || '#8b5cf6' }}>{rel.type.replace('_', ' ')}</span>
                                                             </div>
-                                                        )}
+                                                        </div>
+                                                        <h4 className="text-sm font-bold text-gray-200 line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">{rel.title}</h4>
+                                                        <p className="text-xs text-gray-500">{rel.format} • {rel.status}</p>
                                                     </div>
-                                                </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-
-                                    {anime.characters.length > 8 && (
-                                        <button className="w-full mt-6 py-3 rounded-xl border border-white/5 bg-white/5 text-xs font-bold text-gray-400 uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all">
-                                            View All Characters
-                                        </button>
+                                        </div>
                                     )}
-                                </div>
-                            )}
 
-                            {/* Staff Section */}
-                            {anime.staff && anime.staff.length > 0 && (
-                                <div className="mb-12">
-                                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                        <div className="w-1 h-6 bg-accent rounded-full" />
-                                        Staff
-                                    </h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                        {anime.staff.slice(0, 5).map((staffRole) => (
-                                            <div key={staffRole.id} className="flex flex-col items-center text-center p-6 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors">
-                                                <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4 shadow-lg">
-                                                    <img src={staffRole.staff.image || '/placeholder-avatar.png'} alt={staffRole.staff.name} className="w-full h-full object-cover" />
-                                                </div>
-                                                <h4 className="font-bold text-white text-sm line-clamp-2 mb-1">{staffRole.staff.name}</h4>
-                                                <p className="text-xs text-gray-500 line-clamp-1">{staffRole.role}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {anime.trailer_url && (() => {
-                                const getYouTubeId = (url) => {
-                                    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
-                                    return match ? match[1] : null;
-                                };
-                                const videoId = getYouTubeId(anime.trailer_url);
-                                if (!videoId) return null;
-                                return (
+                                    {/* Synopsis Section with Read More */}
                                     <div className="mb-12">
                                         <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                            <div className="w-1 h-6 bg-accent rounded-full" />
-                                            Trailer
+                                            <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
+                                            Synopsis
                                         </h2>
-                                        <div className="relative rounded-2xl overflow-hidden border border-gray-800 aspect-video shadow-2xl">
-                                            <iframe
-                                                src={`https://www.youtube.com/embed/${videoId}`}
-                                                title="Trailer"
-                                                frameBorder="0"
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                allowFullScreen
-                                                className="absolute inset-0 w-full h-full"
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-
-                            <div className="mb-16">
-                                <div className="flex items-center justify-between mb-8">
-                                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                                        <MessageSquare className="w-6 h-6 text-accent" />
-                                        Reviews
-                                        <span className="text-sm font-normal text-gray-400 bg-dark-50 px-3 py-1 rounded-full border border-gray-800">
-                                            {reviewCount}
-                                        </span>
-                                    </h2>
-                                    {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
-                                        canReview ? (
-                                            <button
-                                                onClick={() => setIsWritingReview(true)}
-                                                className="btn-primary text-sm px-6 py-2.5 rounded-xl shadow-lg shadow-accent/20"
-                                            >
-                                                Write a Review
-                                            </button>
-                                        ) : (
-                                            <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 shadow-inner">
-                                                Add to list to write a review
-                                            </div>
-                                        )
-                                    )}
-                                </div>
-
-                                {(isWritingReview || editingReview) && (
-                                    <div className="mb-12 animate-fade-in">
-                                        <ReviewForm
-                                            initialData={editingReview}
-                                            onSubmit={handleReviewSubmit}
-                                            onCancel={() => {
-                                                setIsWritingReview(false);
-                                                setEditingReview(null);
-                                            }}
-                                            animeTitle={anime.title}
-                                        />
-                                    </div>
-                                )}
-
-                                <div className="space-y-6">
-                                    {reviewsLoading ? (
-                                        <div className="text-center py-12">
-                                            <Loader className="w-10 h-10 text-accent animate-spin mx-auto" />
-                                        </div>
-                                    ) : reviews.length > 0 ? (
-                                        <>
-                                            {reviews.map((review) => (
-                                                <ReviewCard
-                                                    key={review.id}
-                                                    review={review}
-                                                    onEdit={setEditingReview}
-                                                    onDelete={deleteReviewMutation.mutate}
-                                                />
-                                            ))}
-                                            {hasNextPage && (
-                                                <div className="text-center mt-12">
+                                        <div className="relative">
+                                            <p className={`text-gray-300 leading-loose text-lg font-normal max-w-4xl transition-all duration-300 ${!synopsisExpanded ? 'line-clamp-4' : ''}`}>
+                                                {anime.synopsis}
+                                            </p>
+                                            {anime.synopsis && anime.synopsis.length > 400 && (
+                                                <>
+                                                    {!synopsisExpanded && (
+                                                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-dark to-transparent pointer-events-none" />
+                                                    )}
                                                     <button
-                                                        onClick={() => fetchNextPage()}
-                                                        disabled={isFetchingNextPage}
-                                                        className="btn-secondary text-sm px-8 py-3 rounded-xl"
+                                                        onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                                                        className="mt-2 flex items-center gap-1 text-sm font-bold transition-colors"
+                                                        style={{ color: accentColor || '#8b5cf6' }}
                                                     >
-                                                        {isFetchingNextPage ? <Loader className="w-5 h-5 animate-spin" /> : 'Load More Reviews'}
+                                                        {synopsisExpanded ? 'Show Less' : 'Read More'}
+                                                        <ChevronDown className={`w-4 h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
                                                     </button>
-                                                </div>
+                                                </>
                                             )}
-                                        </>
-                                    ) : (
-                                        !isWritingReview && (
-                                            <div className="text-center py-16 bg-dark-100/50 rounded-2xl border border-gray-800 border-dashed">
-                                                <MessageSquare className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                                                <p className="text-gray-400 mb-2">No reviews for this anime yet.</p>
-                                                {canReview && (
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Characters Tab Content */}
+                            {activeTab === 'characters' && anime.characters && anime.characters.length > 0 && (
+                                <div key="characters" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-tab-content">
+                                    {anime.characters.map((role) => (
+                                        <div
+                                            key={role.id}
+                                            className="group relative h-64 overflow-hidden rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl"
+                                            style={{
+                                                '--card-accent': accentColor || '#8b5cf6'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.borderColor = accentColor ? `${accentColor}50` : 'rgba(139,92,246,0.3)';
+                                                e.currentTarget.style.boxShadow = `0 25px 50px -12px ${accentColor || '#8b5cf6'}15`;
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.borderColor = '';
+                                                e.currentTarget.style.boxShadow = '';
+                                            }}
+                                        >
+                                            <div className="absolute inset-0">
+                                                <img
+                                                    src={role.character.image || '/placeholder-avatar.png'}
+                                                    alt={role.character.name}
+                                                    className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-60 group-hover:opacity-40"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent" />
+                                                <div className="absolute inset-0 bg-gradient-to-r from-dark/90 via-dark/40 to-transparent" />
+                                            </div>
+                                            <div className="relative h-full flex flex-col justify-end p-4 z-10">
+                                                <div className="absolute top-3 right-3">
+                                                    <span
+                                                        className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border backdrop-blur-md transition-colors duration-300
+                                                            ${role.role === 'MAIN'
+                                                                ? ''
+                                                                : 'bg-white/5 border-white/10 text-gray-400 group-hover:border-white/20 group-hover:text-gray-300'}`}
+                                                        style={role.role === 'MAIN' ? {
+                                                            backgroundColor: accentColor ? `${accentColor}30` : 'rgba(139,92,246,0.2)',
+                                                            borderColor: accentColor ? `${accentColor}50` : 'rgba(139,92,246,0.3)',
+                                                            color: accentColor || '#8b5cf6'
+                                                        } : {}}
+                                                    >
+                                                        {role.role}
+                                                    </span>
+                                                </div>
+                                                <div className="transform transition-transform duration-300 group-hover:-translate-y-2">
+                                                    <h3
+                                                        className="text-xl font-black text-white leading-tight mb-1 transition-colors"
+                                                        style={{ '--hover-color': accentColor || '#8b5cf6' }}
+                                                    >
+                                                        {role.character.name}
+                                                    </h3>
+                                                    {role.voice_actor && (
+                                                        <div
+                                                            className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/10 transition-colors"
+                                                            style={{ '--accent-border': accentColor ? `${accentColor}30` : 'rgba(139,92,246,0.2)' }}
+                                                        >
+                                                            <div
+                                                                className="w-8 h-8 rounded-full overflow-hidden border border-white/10 lg:w-9 lg:h-9 shrink-0 transition-colors"
+                                                            >
+                                                                <img
+                                                                    src={role.voice_actor.image || '/placeholder-avatar.png'}
+                                                                    alt={role.voice_actor.name}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors leading-tight whitespace-normal">
+                                                                    {role.voice_actor.name}
+                                                                </p>
+                                                                <p
+                                                                    className="text-[10px] font-bold text-gray-600 uppercase tracking-widest transition-colors mt-0.5"
+                                                                    style={{ '--accent-text': accentColor ? `${accentColor}b3` : 'rgba(139,92,246,0.7)' }}
+                                                                >
+                                                                    Japanese
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Staff Tab Content */}
+                            {activeTab === 'staff' && anime.staff && anime.staff.length > 0 && (
+                                <div key="staff" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-tab-content">
+                                    {anime.staff.map((staffRole) => (
+                                        <div key={staffRole.id} className="flex flex-col items-center text-center p-6 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors">
+                                            <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4 shadow-lg">
+                                                <img src={staffRole.staff.image || '/placeholder-avatar.png'} alt={staffRole.staff.name} className="w-full h-full object-cover" />
+                                            </div>
+                                            <h4 className="font-bold text-white text-sm line-clamp-2 mb-1">{staffRole.staff.name}</h4>
+                                            <p className="text-xs text-gray-500 line-clamp-1">{staffRole.role}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+
+                            {/* Overview continues: Trailer and Reviews */}
+                            {activeTab === 'overview' && (
+                                <>
+                                    {anime.trailer_url && (() => {
+                                        const getYouTubeId = (url) => {
+                                            const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+                                            return match ? match[1] : null;
+                                        };
+                                        const videoId = getYouTubeId(anime.trailer_url);
+                                        if (!videoId) return null;
+                                        return (
+                                            <div className="mb-12">
+                                                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                                    <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
+                                                    Trailer
+                                                </h2>
+                                                <div className="relative rounded-2xl overflow-hidden border border-gray-800 aspect-video shadow-2xl">
+                                                    <iframe
+                                                        src={`https://www.youtube.com/embed/${videoId}`}
+                                                        title="Trailer"
+                                                        frameBorder="0"
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                        allowFullScreen
+                                                        className="absolute inset-0 w-full h-full"
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    <div className="mb-16">
+                                        <div className="flex items-center justify-between mb-8">
+                                            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                                <MessageSquare className="w-6 h-6" style={{ color: accentColor || '#8b5cf6' }} />
+                                                Reviews
+                                                <span className="text-sm font-normal text-gray-400 bg-dark-50 px-3 py-1 rounded-full border border-gray-800">
+                                                    {reviewCount}
+                                                </span>
+                                            </h2>
+                                            {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
+                                                canReview ? (
                                                     <button
                                                         onClick={() => setIsWritingReview(true)}
-                                                        className="text-accent hover:text-accent-light font-bold transition-colors"
+                                                        className="text-sm px-6 py-2.5 rounded-xl shadow-lg text-white font-bold"
+                                                        style={{
+                                                            backgroundColor: accentColor || '#8b5cf6',
+                                                            boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+                                                        }}
                                                     >
-                                                        Share your thoughts!
+                                                        Write a Review
                                                     </button>
-                                                )}
+                                                ) : (
+                                                    <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 shadow-inner">
+                                                        Add to list to write a review
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+
+                                        {(isWritingReview || editingReview) && (
+                                            <div className="mb-12 animate-fade-in">
+                                                <ReviewForm
+                                                    initialData={editingReview}
+                                                    onSubmit={handleReviewSubmit}
+                                                    onCancel={() => {
+                                                        setIsWritingReview(false);
+                                                        setEditingReview(null);
+                                                    }}
+                                                    animeTitle={anime.title}
+                                                />
                                             </div>
-                                        )
-                                    )}
-                                </div>
-                            </div>
+                                        )}
+
+                                        <div className="space-y-6">
+                                            {reviewsLoading ? (
+                                                <div className="text-center py-12">
+                                                    <Loader className="w-10 h-10 text-accent animate-spin mx-auto" />
+                                                </div>
+                                            ) : reviews.length > 0 ? (
+                                                <>
+                                                    {reviews.map((review) => (
+                                                        <ReviewCard
+                                                            key={review.id}
+                                                            review={review}
+                                                            onEdit={setEditingReview}
+                                                            onDelete={deleteReviewMutation.mutate}
+                                                        />
+                                                    ))}
+                                                    {hasNextPage && (
+                                                        <div className="text-center mt-12">
+                                                            <button
+                                                                onClick={() => fetchNextPage()}
+                                                                disabled={isFetchingNextPage}
+                                                                className="btn-secondary text-sm px-8 py-3 rounded-xl"
+                                                            >
+                                                                {isFetchingNextPage ? <Loader className="w-5 h-5 animate-spin" /> : 'Load More Reviews'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                !isWritingReview && (
+                                                    <div className="text-center py-16 bg-dark-100/50 rounded-2xl border border-gray-800 border-dashed">
+                                                        <MessageSquare className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                                        <p className="text-gray-400 mb-4">No reviews for this anime yet.</p>
+                                                        {isAuthenticated && canReview && (
+                                                            <button
+                                                                onClick={() => setIsWritingReview(true)}
+                                                                className="px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg"
+                                                                style={{
+                                                                    backgroundColor: accentColor || '#8b5cf6',
+                                                                    boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+                                                                }}
+                                                            >
+                                                                Be the first to write a review →
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Column 3: Sidebar */}
@@ -615,8 +777,8 @@ export default function AnimeDetail() {
                             {related && related.length > 0 && (
                                 <div>
                                     <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                        <div className="w-1 h-6 bg-accent rounded-full" />
-                                        You might like
+                                        <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
+                                        Recommendations
                                     </h2>
                                     <div className="grid grid-cols-1 gap-4">
                                         {related.slice(0, 5).map((anime) => (
@@ -633,7 +795,9 @@ export default function AnimeDetail() {
                                                     />
                                                 </div>
                                                 <div className="flex-1 py-1">
-                                                    <h3 className="text-gray-200 font-bold text-sm line-clamp-2 group-hover:text-accent transition-colors leading-tight mb-1">
+                                                    <h3
+                                                        className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white"
+                                                    >
                                                         {anime.title}
                                                     </h3>
                                                     <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -651,7 +815,12 @@ export default function AnimeDetail() {
                                     {related.length > 5 && (
                                         <Link
                                             to={`/browse?genre=${anime.genres?.[0]?.slug || ''}`}
-                                            className="block text-center mt-6 text-xs font-bold text-accent hover:text-white transition-colors bg-accent/5 py-2 rounded-lg border border-accent/10"
+                                            className="block text-center mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"
+                                            style={{
+                                                color: accentColor || '#8b5cf6',
+                                                backgroundColor: accentColor ? `${accentColor}10` : 'rgba(139,92,246,0.05)',
+                                                borderColor: accentColor ? `${accentColor}1a` : 'rgba(139,92,246,0.1)'
+                                            }}
                                         >
                                             FIND MORE TITLES LIKE THIS
                                         </Link>
@@ -662,6 +831,6 @@ export default function AnimeDetail() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
