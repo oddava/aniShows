@@ -13,7 +13,7 @@ export default function Profile({ forcedUsername }) {
     const { user: currentUser, isAuthenticated, loading } = useAuth();
     const [activeTab, setActiveTab] = useState('favorites');
 
-    const isPublicView = !!username && username !== currentUser?.username;
+    const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
     const targetUsername = isPublicView ? username : currentUser?.username;
 
     // Fetch Public Profile Data

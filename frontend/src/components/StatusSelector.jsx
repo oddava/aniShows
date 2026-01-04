@@ -239,7 +239,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
                     <div className="relative h-4 flex items-center group/track">
                         {/* Background Track */}
-                        <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-gray-800/80 rounded-full overflow-hidden shadow-inner">
+                        <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-2.5 bg-gray-800/80 rounded-full overflow-hidden shadow-inner">
                             <div
                                 style={{ width: `${Math.min(progressPercentage, 100)}%` }}
                                 className={`h-full transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${episodesWatched >= totalEpisodes ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'}`}

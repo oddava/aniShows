@@ -10,7 +10,7 @@ from django.core.files.base import ContentFile
 from asgiref.sync import sync_to_async
 
 # Import models
-from anime.models import Anime, Genre, Studio
+from anime.models import Anime, Genre, Studio, Character, Staff, AnimeCharacter, AnimeStaff
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +84,8 @@ class AniListService:
 
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
-        if include_season:
-            return """
-            query BySeason($season: MediaSeason, $year: Int, $page: Int, $perPage: Int, $sort: [MediaSort]) {
-                Page(page: $page, perPage: $perPage) {
-                    pageInfo { total currentPage lastPage hasNextPage }
-                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort, isAdult: false) {
+        # Common fields to avoid duplication
+        media_fields = """
                         id
                         title { romaji english native }
                         format status episodes averageScore popularity duration
@@ -102,38 +98,60 @@ class AniListService:
                         coverImage { large extraLarge }
                         bannerImage
                         trailer { id site }
-                    }
-                }
-            }
+                        rankings { rank type allTime context }
+                        externalLinks { site url icon }
+                        relations {
+                            edges {
+                                relationType
+                                node { id title { romaji english native } type format status coverImage { large } }
+                            }
+                        }
+                        characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
+                            edges {
+                                role
+                                node { id name { full native } image { large } description }
+                                voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
+                                    id name { full native } image { large } description
+                                }
+                            }
+                        }
+                        staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
+                            edges {
+                                role
+                                node { id name { full native } image { large } description }
+                            }
+                        }
+        """
+
+        if include_season:
+            return f"""
+            query BySeason($season: MediaSeason, $year: Int, $page: Int, $perPage: Int, $sort: [MediaSort]) {{
+                Page(page: $page, perPage: $perPage) {{
+                    pageInfo {{ total currentPage lastPage hasNextPage }}
+                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort, isAdult: false) {{
+                        {media_fields}
+                    }}
+                }}
+            }}
             """
         else:
-            return """
-            query GetAnime($page: Int, $perPage: Int, $sort: [MediaSort]) {
-                Page(page: $page, perPage: $perPage) {
-                    pageInfo { total currentPage lastPage hasNextPage }
-                    media(type: ANIME, sort: $sort, isAdult: false) {
-                        id
-                        title { romaji english native }
-                        format status episodes averageScore popularity duration
-                        startDate { year month day }
-                        endDate { year month day }
-                        season seasonYear
-                        genres
-                        studios(isMain: true) { nodes { name } }
-                        description
-                        coverImage { large extraLarge }
-                        bannerImage
-                        trailer { id site }
-                    }
-                }
-            }
+            return f"""
+            query GetAnime($page: Int, $perPage: Int, $sort: [MediaSort]) {{
+                Page(page: $page, perPage: $perPage) {{
+                    pageInfo {{ total currentPage lastPage hasNextPage }}
+                    media(type: ANIME, sort: $sort, isAdult: false) {{
+                        {media_fields}
+                    }}
+                }}
+            }}
             """
 
     async def _fetch_paginated(
         self,
         variables: dict,
         include_season: bool = False,
-        limit: int = 50
+        limit: int = 50,
+        custom_query: Optional[str] = None # Added custom_query parameter
     ) -> List[dict]:
         results = []
         page = variables.get("page", 1)
@@ -142,7 +160,7 @@ class AniListService:
         # If limit is large (e.g. 1000), we loop pages until we hit limit or no more pages
         fetched_count = 0
         
-        query = self.anime_query(include_season)
+        query = custom_query if custom_query else self.anime_query(include_season) # Use custom_query if provided
         
         while fetched_count < limit:
             variables.update({"page": page, "perPage": per_page})
@@ -195,6 +213,71 @@ class AniListService:
             limit=limit
         )
 
+    async def search_anime(self, query_string: str) -> List[dict]:
+        """Search for a single anime by title to get detailed info"""
+        # We construct a query that allows searching
+        media_fields = """
+                        id
+                        title { romaji english native }
+                        format status episodes averageScore popularity duration
+                        startDate { year month day }
+                        endDate { year month day }
+                        season seasonYear
+                        genres
+                        studios(isMain: true) { nodes { name } }
+                        description
+                        coverImage { large extraLarge }
+                        bannerImage
+                        trailer { id site }
+                        rankings { rank type allTime context }
+                        externalLinks { site url icon }
+                        relations {
+                            edges {
+                                relationType
+                                node { id title { romaji english native } type format status coverImage { large } }
+                            }
+                        }
+                        characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
+                            edges {
+                                role
+                                node { id name { full native } image { large } description }
+                                voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
+                                    id name { full native } image { large } description
+                                }
+                            }
+                        }
+                        staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
+                            edges {
+                                role
+                                node { id name { full native } image { large } description }
+                            }
+                        }
+        """
+        
+        query = f"""
+            query SearchAnime($search: String) {{
+                Page(page: 1, perPage: 1) {{
+                    media(type: ANIME, search: $search, isAdult: false) {{
+                        {media_fields}
+                    }}
+                }}
+            }}
+        """
+        
+        variables = {"search": query_string}
+        # Direct fetch since _fetch_paginated assumes standard structure
+        response = await self.client.post(
+            self.BASE_URL,
+            json={"query": query, "variables": variables},
+            timeout=10.0
+        )
+        data = response.json()
+        if "errors" in data:
+            logger.error(f"AniList API Error: {data['errors']}")
+            return []
+            
+        return data.get("data", {}).get("Page", {}).get("media", [])
+
     async def close(self):
         try:
              await self.client.aclose()
@@ -238,6 +321,9 @@ class AniListService:
                 # Handle Relationships & Media
                 await self._handle_relationships_async(anime, item)
                 
+                # Handle Extended Info (Chars, Staff, Links, Relations)
+                await self._handle_extended_info_async(anime, item)
+
                 # Download images if missing
                 await self._download_and_save_images(anime, item)
                 
@@ -305,14 +391,29 @@ class AniListService:
             'end_date': end_date,
             'rating': rating,
             'meta_description': (description[:157] + '...') if description and len(description) > 160 else (description or ""),
+            'site_rank': next((r['rank'] for r in item.get('rankings', []) if r['allTime'] and r['type'] == 'RATED'), None),
+            'popularity_rank': next((r['rank'] for r in item.get('rankings', []) if r['allTime'] and r['type'] == 'POPULAR'), None),
+            'external_links': item.get('externalLinks', []),
+            'relations': [
+                {
+                    'id': edge['node']['id'],
+                    'type': edge['relationType'],
+                    'title': edge['node']['title'].get('english') or edge['node']['title'].get('romaji'),
+                    'format': edge['node']['format'],
+                    'status': edge['node']['status'],
+                    'cover': edge['node']['coverImage'].get('large')
+                }
+                for edge in item.get('relations', {}).get('edges', [])
+                if edge['node']['type'] == 'ANIME'
+            ]
         }
 
     def _parse_date(self, date_obj):
         if not date_obj or not date_obj.get("year"):
             return None
         year = date_obj.get("year")
-        month = date_obj.get("month", 1)
-        day = date_obj.get("day", 1)
+        month = date_obj.get("month") or 1
+        day = date_obj.get("day") or 1
         try:
             return datetime(year, month, day).date()
         except ValueError:
@@ -335,6 +436,84 @@ class AniListService:
                 studio, _ = Studio.objects.get_or_create(name=studio_name)
                 anime.studio = studio
                 anime.save()
+
+    @sync_to_async
+    def _handle_extended_info_async(self, anime, item):
+        # Handle Characters
+        characters_data = item.get('characterPreview', {}).get('edges', [])
+        for edge in characters_data:
+            node = edge['node']
+            role = edge['role'] # MAIN, SUPPORTING, etc.
+            
+            # Create/Get Character
+            char_name = node['name'].get('full')
+            char_native = node['name'].get('native')
+            char_desc = node.get('description') or ""
+            char_img = node.get('image', {}).get('large')
+            
+            character, _ = Character.objects.update_or_create(
+                name=char_name,
+                defaults={
+                    'name_native': char_native or "", 
+                    'description': char_desc,
+                    'image_url': char_img # Save the remote URL
+                }
+            )
+            # We can download char image async later or just store URL if model allowed URL. 
+            # Current model has ImageField. For MVP speed, let's skip downloading char images for now or queue it.
+            # To avoid stalling the scrape, we won't download char images here unless critically needed.
+            
+            # Handle Voice Actor (Japanese)
+            voice_actors = edge.get('voiceActors', [])
+            voice_actor = None
+            if voice_actors:
+                va_node = voice_actors[0]
+                va_name = va_node['name'].get('full')
+                va_native = va_node['name'].get('native')
+                va_img = va_node.get('image', {}).get('large')
+                
+                voice_actor, _ = Staff.objects.update_or_create(
+                    name=va_name,
+                    defaults={
+                        'name_native': va_native or "",
+                        'image_url': va_img
+                    }
+                )
+
+            # Link Anime -> Character
+            # Map role
+            role_map = {'MAIN': AnimeCharacter.Role.MAIN, 'SUPPORTING': AnimeCharacter.Role.SUPPORTING, 'BACKGROUND': AnimeCharacter.Role.BACKGROUND}
+            
+            AnimeCharacter.objects.update_or_create(
+                anime=anime,
+                character=character,
+                voice_actor=voice_actor,
+                defaults={'role': role_map.get(role, AnimeCharacter.Role.SUPPORTING)}
+            )
+
+        # Handle Staff
+        staff_data = item.get('staffPreview', {}).get('edges', [])
+        for edge in staff_data:
+            node = edge['node']
+            role = edge['role']
+            
+            staff_name = node['name'].get('full')
+            staff_native = node['name'].get('native')
+            staff_img = node.get('image', {}).get('large')
+            
+            staff_member, _ = Staff.objects.update_or_create(
+                name=staff_name,
+                defaults={
+                    'name_native': staff_native or "",
+                    'image_url': staff_img
+                }
+            )
+            
+            AnimeStaff.objects.update_or_create(
+                anime=anime,
+                staff=staff_member,
+                role=role # Keep exact role string
+            )
 
     async def _download_and_save_images(self, anime, item):
         try:

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils.html import escape
-from anime.models import Anime, Genre, Studio, UserFavorite, Review
+from anime.models import Anime, Genre, Studio, UserFavorite, Review, Character, Staff, AnimeCharacter, AnimeStaff
 from users.models import UserProfile, UserAnimeList
 import logging
 
@@ -28,6 +28,51 @@ class StudioSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'website']
 
 
+class CharacterSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Character
+        fields = ['id', 'name', 'name_native', 'image', 'description']
+
+    def get_image(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return obj.image_url
+
+class StaffSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Staff
+        fields = ['id', 'name', 'name_native', 'image', 'description']
+
+    def get_image(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return obj.image_url
+
+class AnimeCharacterSerializer(serializers.ModelSerializer):
+    character = CharacterSerializer(read_only=True)
+    voice_actor = StaffSerializer(read_only=True)
+    
+    class Meta:
+        model = AnimeCharacter
+        fields = ['id', 'character', 'role', 'voice_actor']
+
+class AnimeStaffSerializer(serializers.ModelSerializer):
+    staff = StaffSerializer(read_only=True)
+    
+    class Meta:
+        model = AnimeStaff
+        fields = ['id', 'staff', 'role']
+
 class AnimeListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for lists"""
     genres = GenreSerializer(many=True, read_only=True)
@@ -53,6 +98,9 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
     """Full serializer for detail page"""
     genres = GenreSerializer(many=True, read_only=True)
     studio = StudioSerializer(read_only=True)
+    characters = AnimeCharacterSerializer(source='cast', many=True, read_only=True)
+    staff = AnimeStaffSerializer(source='production_staff', many=True, read_only=True)
+    
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
     review_count = serializers.IntegerField(read_only=True)
@@ -65,7 +113,9 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             'cover_image', 'banner_image', 'trailer_url',
             'rating', 'episode_count', 'duration_minutes',
             'anime_type', 'status', 'release_date', 'end_date',
-            'genres', 'studio', 'is_favorite', 'user_list_status',
+            'genres', 'studio', 'characters', 'staff',
+            'external_links', 'relations', 'site_rank', 'popularity_rank',
+            'is_favorite', 'user_list_status',
             'review_count', 'avg_rating', 'created_at'
         ]
     
