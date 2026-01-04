@@ -1,6 +1,6 @@
 .PHONY: help build up down restart logs web-logs front-logs celery-logs \
         mig migrate makemigrations shell superuser test collectstatic \
-        msg icomp import_anime clean prune backup backups restore
+        msg icomp import_anime backfill_metadata clean prune backup backups restore
 
 # Docker Compose commands
 up:
@@ -71,6 +71,12 @@ sync_trending_anime:
 backfill_catalog:
 	docker compose exec web uv run python manage.py shell -c "from anime.tasks import backfill_catalog backfill_catalog.delay(start_page=1, pages=50)"
 
+backfill_metadata:
+	docker compose exec web uv run python manage.py backfill_metadata
+
+import_anime:
+	docker compose exec web uv run python manage.py import_anime
+
 # Cleanup
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
@@ -127,6 +133,7 @@ help:
 	@echo ""
 	@echo "Misc:"
 	@echo "  import_anime   Import anime data"
+	@echo "  backfill_metadata Update existing anime metadata"
 	@echo "  clean          Remove python cache files"
 	@echo "  prune           Remove all stopped containers and unused images"
 	@echo "  backup          Trigger a manual backup"
