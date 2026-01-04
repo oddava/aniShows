@@ -30,6 +30,11 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             setScore(initialStatus.score);
             setEpisodesWatched(initialStatus.episodes_watched);
             setListId(initialStatus.id);
+        } else {
+            setCurrentStatus(null);
+            setScore(0);
+            setEpisodesWatched(0);
+            setListId(null);
         }
     }, [initialStatus]);
 
