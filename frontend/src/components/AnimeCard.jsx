@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi } from '../api/client';
 
-export default function AnimeCard({ anime, userListEntry }) {
+export default function AnimeCard({ anime, userListEntry, isOwnProfile = true }) {
     const { isAuthenticated } = useAuth();
     const [isFavorite, setIsFavorite] = useState(anime.is_favorite || false);
     const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function AnimeCard({ anime, userListEntry }) {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!isAuthenticated) return;
+        if (!isAuthenticated || !isOwnProfile) return;
 
         setIsLoading(true);
         try {
@@ -84,7 +84,7 @@ export default function AnimeCard({ anime, userListEntry }) {
                     )}
 
                     {/* Favorite button - slides in from right on hover */}
-                    {isAuthenticated && (
+                    {isAuthenticated && isOwnProfile && (
                         <button
                             onClick={handleFavorite}
                             disabled={isLoading}

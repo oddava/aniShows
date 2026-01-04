@@ -14,6 +14,7 @@ export default function Profile({ forcedUsername }) {
     const [activeTab, setActiveTab] = useState('favorites');
 
     const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
+    const isOwnProfile = !isPublicView;
     const targetUsername = isPublicView ? username : currentUser?.username;
 
     // Fetch Public Profile Data
@@ -155,7 +156,7 @@ export default function Profile({ forcedUsername }) {
                             </h3>
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                                 {group.items.map((item) => (
-                                    <AnimeCard key={item.id} anime={item.anime} userListEntry={item} />
+                                    <AnimeCard key={item.id} anime={item.anime} userListEntry={item} isOwnProfile={isOwnProfile} />
                                 ))}
                             </div>
                         </div>
@@ -230,7 +231,7 @@ export default function Profile({ forcedUsername }) {
                             {favoritesLoading ? (
                                 Array(6).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
                             ) : favorites?.length > 0 ? (
-                                favorites.map((fav) => <AnimeCard key={fav.id} anime={fav.anime} />)
+                                favorites.map((fav) => <AnimeCard key={fav.id} anime={fav.anime} isOwnProfile={isOwnProfile} />)
                             ) : (
                                 <p className="col-span-full text-center text-gray-400 py-12">
                                     {isPublicView ? "No favorites yet." : "No favorites yet. Start adding some!"}

@@ -12,7 +12,7 @@ const STATUS_OPTIONS = [
     { value: 'Plan to Watch', label: 'Plan to Watch', color: 'bg-gray-500', icon: Bookmark },
 ];
 
-export default function StatusSelector({ animeId, initialStatus, onUpdate, totalEpisodes }) {
+export default function StatusSelector({ animeId, initialStatus, onUpdate, totalEpisodes, isOwnProfile = true }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
@@ -33,7 +33,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
         }
     }, [initialStatus]);
 
-    if (!isAuthenticated) return null;
+    if (!isAuthenticated || !isOwnProfile) return null;
 
     const handleStatusChange = async (newStatus) => {
         setIsLoading(true);
