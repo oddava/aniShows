@@ -173,13 +173,25 @@ export default function AnimeDetail() {
 
                 // Ensure the color is vibrant and usable
                 const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-                if (luminance > 0.05 && luminance < 0.9) {
-                    const toHex = (c) => {
-                        const hex = c.toString(16);
-                        return hex.length === 1 ? '0' + hex : hex;
-                    };
-                    setAccentColor(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
+
+                // Skip if too bright (near white)
+                if (luminance > 0.85) return;
+
+                let finalR = r, finalG = g, finalB = b;
+
+                // If color is too dark, lighten it
+                if (luminance < 0.25) {
+                    const lightenFactor = 0.25 / Math.max(luminance, 0.01);
+                    finalR = Math.min(255, Math.round(r * lightenFactor));
+                    finalG = Math.min(255, Math.round(g * lightenFactor));
+                    finalB = Math.min(255, Math.round(b * lightenFactor));
                 }
+
+                const toHex = (c) => {
+                    const hex = c.toString(16);
+                    return hex.length === 1 ? '0' + hex : hex;
+                };
+                setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
             } catch (e) {
                 console.warn('Color extraction failed:', e);
             }
@@ -452,7 +464,7 @@ export default function AnimeDetail() {
                             </div>
 
                             {/* Tab Navigation */}
-                            <div className="flex items-center gap-2 mb-10 p-1.5 bg-dark-100/60 backdrop-blur-md rounded-2xl border border-white/5 w-fit">
+                            <div className="flex items-center gap-2 mb-10 p-1.5 bg-dark-100/60 backdrop-blur-md rounded-2xl border border-white/5 overflow-x-auto scrollbar-hide">
                                 {[
                                     { id: 'overview', label: 'Overview', icon: Film },
                                     { id: 'characters', label: 'Characters', icon: Users, count: anime.characters?.length },
@@ -547,11 +559,11 @@ export default function AnimeDetail() {
 
                             {/* Characters Tab Content */}
                             {activeTab === 'characters' && anime.characters && anime.characters.length > 0 && (
-                                <div key="characters" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-tab-content">
+                                <div key="characters" className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 animate-tab-content">
                                     {anime.characters.map((role) => (
                                         <div
                                             key={role.id}
-                                            className="group relative h-64 overflow-hidden rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl"
+                                            className="group relative h-48 sm:h-64 overflow-hidden rounded-xl sm:rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl"
                                             style={{
                                                 '--card-accent': accentColor || '#8b5cf6'
                                             }}
@@ -677,11 +689,11 @@ export default function AnimeDetail() {
                                     })()}
 
                                     <div className="mb-16">
-                                        <div className="flex items-center justify-between mb-8">
-                                            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                                                <MessageSquare className="w-6 h-6" style={{ color: accentColor || '#8b5cf6' }} />
+                                        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                                            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                                                <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: accentColor || '#8b5cf6' }} />
                                                 Reviews
-                                                <span className="text-sm font-normal text-gray-400 bg-dark-50 px-3 py-1 rounded-full border border-gray-800">
+                                                <span className="text-xs sm:text-sm font-normal text-gray-400 bg-dark-50 px-2 sm:px-3 py-1 rounded-full border border-gray-800">
                                                     {reviewCount}
                                                 </span>
                                             </h2>
@@ -689,7 +701,7 @@ export default function AnimeDetail() {
                                                 canReview ? (
                                                     <button
                                                         onClick={() => setIsWritingReview(true)}
-                                                        className="text-sm px-6 py-2.5 rounded-xl shadow-lg text-white font-bold"
+                                                        className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl shadow-lg text-white font-bold"
                                                         style={{
                                                             backgroundColor: accentColor || '#8b5cf6',
                                                             boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`

@@ -226,10 +226,10 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
     };
 
     return (
-        <div className="bg-dark-100 rounded-2xl border border-gray-800 p-6 md:p-8 animate-fade-in relative max-w-4xl mx-auto">
+        <div className="bg-dark-100 rounded-2xl border border-gray-800 p-4 sm:p-6 md:p-8 animate-fade-in relative max-w-4xl mx-auto">
             <button
                 onClick={onCancel}
-                className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 text-gray-400 hover:text-white transition-colors"
                 aria-label="Close"
             >
                 <X className="w-6 h-6" />
@@ -311,7 +311,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 </div>
 
                 {/* Spoilers & Actions */}
-                <div className="flex flex-row items-center justify-between gap-6 pt-4 border-t border-gray-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pt-4 border-t border-gray-800">
                     <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors w-fit">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasSpoilers ? 'bg-red-500 border-red-500' : 'border-gray-600 bg-dark-50 group-hover:border-gray-500'
                             }`}>
@@ -328,7 +328,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                         </span>
                     </label>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
                         <button
                             type="button"
                             onClick={onCancel}
