@@ -117,6 +117,7 @@ export default function AnimeDetail() {
         queryKey: ['anime', slug],
         queryFn: () => animeApi.getBySlug(slug).then(res => res.data),
         refetchOnMount: 'always',
+        staleTime: 0,  // Always consider data stale to ensure fresh user_list_status
     });
 
     const {
