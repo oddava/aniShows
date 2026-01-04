@@ -115,10 +115,15 @@ def backfill_metadata_task():
     async def _process():
         service = AniListService()
         try:
-            # Get all anime from DB
-            all_anime = await sync_to_async(list)(Anime.objects.all().order_by('-popularity_rank'))
+            # Get all anime from DB that donor't have characters AND staff
+            # This identifies anime that haven't been backfilled yet
+            all_anime = await sync_to_async(list)(
+                Anime.objects.filter(characters__isnull=True, staff__isnull=True)
+                .distinct()
+                .order_by('-popularity_rank')
+            )
             total = len(all_anime)
-            logger.info(f"Found {total} anime to update.")
+            logger.info(f"Found {total} newly imported anime to update.")
             
             updated_count = 0
             error_count = 0
