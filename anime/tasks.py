@@ -1,8 +1,10 @@
 
 from celery import shared_task
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from .services.anilist import AniListService, MediaSort
+from .models import Anime
+from asgiref.sync import sync_to_async
 import logging
 
 logger = logging.getLogger(__name__)
@@ -97,6 +99,53 @@ def backfill_catalog(start_page=1, pages=5):
             
             logger.info(f"Backfill Chunk Complete. Total Stats: {total_stats}")
             return total_stats
+        finally:
+            await service.close()
+
+    return run_async(_process())
+
+
+@shared_task
+def backfill_metadata_task():
+    """
+    Backfills metadata for existing anime using a background Celery task.
+    """
+    logger.info("Starting metadata backfill task...")
+    
+    async def _process():
+        service = AniListService()
+        try:
+            # Get all anime from DB
+            all_anime = await sync_to_async(list)(Anime.objects.all().order_by('-popularity_rank'))
+            total = len(all_anime)
+            logger.info(f"Found {total} anime to update.")
+            
+            updated_count = 0
+            error_count = 0
+
+            for i, anime in enumerate(all_anime):
+                retries = 3
+                while retries > 0:
+                    try:
+                        results = await service.search_anime(anime.title)
+                        if results:
+                            item = results[0]
+                            await service.process_media_list([item])
+                            updated_count += 1
+                            break
+                        else:
+                            break
+                    except Exception as e:
+                        logger.error(f"Error updating {anime.title}: {e}")
+                        retries -= 1
+                        if retries > 0:
+                            await asyncio.sleep(5.0)
+                        else:
+                            error_count += 1
+                
+                await asyncio.sleep(2.0)
+
+            logger.info(f"Backfill Complete. Updated: {updated_count}, Errors: {error_count}")
         finally:
             await service.close()
 

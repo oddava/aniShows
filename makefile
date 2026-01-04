@@ -1,6 +1,6 @@
 .PHONY: help build up down restart logs web-logs front-logs celery-logs \
         mig migrate makemigrations shell superuser test collectstatic \
-        msg icomp import_anime backfill_metadata clean prune backup backups restore
+        msg icomp import_anime backfill_metadata remove_duplicates clean prune backup backups restore
 
 # Docker Compose commands
 up:
@@ -77,6 +77,9 @@ backfill_metadata:
 import_anime:
 	docker compose exec web uv run python manage.py import_anime
 
+remove_duplicates:
+	docker compose exec web uv run python manage.py remove_duplicate_lists
+
 # Cleanup
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
@@ -134,6 +137,7 @@ help:
 	@echo "Misc:"
 	@echo "  import_anime   Import anime data"
 	@echo "  backfill_metadata Update existing anime metadata"
+	@echo "  remove_duplicates Remove duplicate user list entries"
 	@echo "  clean          Remove python cache files"
 	@echo "  prune           Remove all stopped containers and unused images"
 	@echo "  backup          Trigger a manual backup"
