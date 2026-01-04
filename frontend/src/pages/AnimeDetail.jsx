@@ -114,7 +114,7 @@ export default function AnimeDetail() {
     const containerRef = useRef(null);
 
     const { data: anime, isLoading, isError } = useQuery({
-        queryKey: ['anime', slug],
+        queryKey: ['anime', slug, user?.id],  // Include user ID to ensure user-specific data
         queryFn: () => animeApi.getBySlug(slug).then(res => res.data),
         refetchOnMount: 'always',
         staleTime: 0,  // Always consider data stale to ensure fresh user_list_status

@@ -124,28 +124,24 @@ def backfill_metadata_task():
             error_count = 0
 
             for i, anime in enumerate(all_anime):
-                retries = 3
-                while retries > 0:
-                    try:
-                        results = await service.search_anime(anime.title)
-                        if results:
-                            item = results[0]
-                            await service.process_media_list([item])
-                            updated_count += 1
-                            break
-                        else:
-                            break
-                    except Exception as e:
-                        logger.error(f"Error updating {anime.title}: {e}")
-                        retries -= 1
-                        if retries > 0:
-                            await asyncio.sleep(5.0)
-                        else:
-                            error_count += 1
+                try:
+                    results = await service.search_anime(anime.title)
+                    if results:
+                        item = results[0]
+                        await service.process_media_list([item])
+                        updated_count += 1
+                        if (i + 1) % 10 == 0 or (i + 1) == total:
+                            logger.info(f"Progress: {i + 1}/{total} anime updated.")
+                    else:
+                        logger.warning(f"No results found for {anime.title}")
+                except Exception as e:
+                    logger.error(f"Error updating {anime.title}: {e}")
+                    error_count += 1
                 
-                await asyncio.sleep(2.0)
+                # Small base delay between processed items (the service handles API rate limits)
+                await asyncio.sleep(0.5) 
 
-            logger.info(f"Backfill Complete. Updated: {updated_count}, Errors: {error_count}")
+            logger.info(f"Backfill Complete. Updated: {updated_count}, Total: {total}, Errors: {error_count}")
         finally:
             await service.close()
 

@@ -46,29 +46,56 @@ class AniListService:
             timeout=15.0
         )
 
-    async def _query(self, query: str, variables: dict) -> dict:
-        try:
-            # Simple Rate Limiting: Sleep 0.67s between requests (approx 90 req/min)
-            # For a more robust solution, we should parse 'X-RateLimit-Remaining' headers.
-            await asyncio.sleep(0.7) 
-            
-            response = await self.client.post(
-                self.BASE_URL,
-                json={"query": query, "variables": variables}
-            )
-            
-            # Check for Rate Limit Headers if needed in future
-            # remaining = response.headers.get('X-RateLimit-Remaining')
-            
-            response.raise_for_status()
-            data = response.json()
-            if "errors" in data:
-                logger.error(f"GraphQL Error: {data['errors'][0]['message']}")
-                return {}
-            return data.get("data", {})
-        except httpx.HTTPError as e:
-            logger.error(f"Request error: {e}")
-            return {}
+    async def _query(self, query: str, variables: dict, retry_count: int = 5) -> dict:
+        for attempt in range(retry_count):
+            try:
+                # Base polite delay to avoid hitting limits too hard initially
+                await asyncio.sleep(0.7) 
+                
+                response = await self.client.post(
+                    self.BASE_URL,
+                    json={"query": query, "variables": variables}
+                )
+                
+                # Check for rate limits
+                remaining = response.headers.get('X-RateLimit-Remaining')
+                reset_time = response.headers.get('X-RateLimit-Reset')
+                
+                if response.status_code == 429:
+                    retry_after = response.headers.get('Retry-After')
+                    wait_time = float(retry_after) if retry_after else 60.0
+                    
+                    if reset_time:
+                        # Wait until reset time plus a small buffer
+                        now = datetime.now().timestamp()
+                        wait_time = max(float(reset_time) - now + 1, wait_time)
+                    
+                    logger.warning(f"AniList Rate Limit Hit! Waiting {wait_time:.2f}s before retry (Attempt {attempt + 1}/{retry_count})")
+                    await asyncio.sleep(wait_time)
+                    continue
+                
+                response.raise_for_status()
+                data = response.json()
+                
+                if "errors" in data:
+                    error_msg = data['errors'][0]['message']
+                    if "Too Many Requests" in error_msg:
+                        logger.warning(f"AniList GraphQL Rate Limit Error. Sleeping 60s...")
+                        await asyncio.sleep(60)
+                        continue
+                    logger.error(f"GraphQL Error: {error_msg}")
+                    return {}
+                    
+                return data.get("data", {})
+                
+            except httpx.HTTPError as e:
+                logger.error(f"Request error (Attempt {attempt + 1}): {e}")
+                if attempt < retry_count - 1:
+                    wait = (attempt + 1) * 2
+                    await asyncio.sleep(wait)
+                else:
+                    return {}
+        return {}
 
     async def download_image(self, url: str) -> Optional[bytes]:
         if not url:
@@ -265,18 +292,11 @@ class AniListService:
         """
         
         variables = {"search": query_string}
-        # Direct fetch since _fetch_paginated assumes standard structure
-        response = await self.client.post(
-            self.BASE_URL,
-            json={"query": query, "variables": variables},
-            timeout=10.0
-        )
-        data = response.json()
-        if "errors" in data:
-            logger.error(f"AniList API Error: {data['errors']}")
+        data = await self._query(query, variables)
+        if not data:
             return []
             
-        return data.get("data", {}).get("Page", {}).get("media", [])
+        return data.get("Page", {}).get("media", [])
 
     async def close(self):
         try:
