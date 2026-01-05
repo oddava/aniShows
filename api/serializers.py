@@ -103,6 +103,7 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
     
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
+    user_review = serializers.SerializerMethodField()
     review_count = serializers.IntegerField(read_only=True)
     avg_rating = serializers.DecimalField(max_digits=3, decimal_places=1, read_only=True)
     
@@ -115,7 +116,7 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             'anime_type', 'status', 'release_date', 'end_date',
             'genres', 'studio', 'characters', 'staff',
             'external_links', 'relations', 'site_rank', 'popularity_rank',
-            'is_favorite', 'user_list_status',
+            'is_favorite', 'user_list_status', 'user_review',
             'review_count', 'avg_rating', 'created_at'
         ]
     
@@ -136,6 +137,20 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     'score': user_list.score,
                     'episodes_watched': user_list.episodes_watched,
                     'progress': (user_list.episodes_watched / obj.episode_count * 100) if obj.episode_count and obj.episode_count > 0 else 0
+                }
+        return None
+
+    def get_user_review(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            review = Review.objects.filter(user=request.user, anime=obj).first()
+            if review:
+                # Return minimal data needed for "Edit Review" functionality
+                return {
+                    'id': review.id,
+                    'rating': review.rating,
+                    'text': review.text,
+                    'has_spoilers': review.has_spoilers
                 }
         return None
 
@@ -361,13 +376,16 @@ class ReviewSerializer(serializers.ModelSerializer):
         max_length=MAX_REVIEW_LENGTH
     )
     is_completed = serializers.SerializerMethodField()
+    helpful_count = serializers.SerializerMethodField()
+    user_vote = serializers.SerializerMethodField()
     
     class Meta:
         model = Review
         fields = [
             'id', 'user', 'anime', 'anime_slug', 'rating', 
             'rating_story', 'rating_animation', 'rating_music', 'rating_characters',
-            'text', 'has_spoilers', 'is_completed', 'created_at', 'updated_at'
+            'text', 'has_spoilers', 'is_completed', 'helpful_count', 'user_vote',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'anime', 'created_at', 'updated_at']
     
@@ -380,6 +398,17 @@ class ReviewSerializer(serializers.ModelSerializer):
             ).exists()
         except Exception:
             return False
+    
+    def get_helpful_count(self, obj):
+        return obj.votes.filter(is_helpful=True).count()
+    
+    def get_user_vote(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            vote = obj.votes.filter(user=request.user).first()
+            if vote:
+                return vote.is_helpful
+        return None
 
 
 

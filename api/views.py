@@ -21,7 +21,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-from anime.models import Anime, Genre, Studio, UserFavorite, Review
+from anime.models import Anime, Genre, Studio, UserFavorite, Review, ReviewVote
 from users.models import UserProfile, UserAnimeList
 from .serializers import (
     AnimeListSerializer, AnimeDetailSerializer,
@@ -643,7 +643,89 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('mine') == 'true' and self.request.user.is_authenticated:
             queryset = queryset.filter(user=self.request.user)
         
-        return queryset.order_by('-created_at')
+        # Filter by rating (1-5 stars = 2-10 internal rating)
+        rating_filter = self.request.query_params.get('rating')
+        if rating_filter:
+            try:
+                stars = int(rating_filter)
+                # Convert 5-star to 10-point scale: 5 stars = 9-10, 4 stars = 7-8, etc.
+                min_rating = (stars - 1) * 2 + 1
+                max_rating = stars * 2
+                queryset = queryset.filter(rating__gte=min_rating, rating__lte=max_rating)
+            except ValueError:
+                pass
+        
+        # Sorting
+        sort = self.request.query_params.get('sort', 'helpful')
+        if sort == 'highest':
+            queryset = queryset.order_by('-rating', '-created_at')
+        elif sort == 'lowest':
+            queryset = queryset.order_by('rating', '-created_at')
+        elif sort == 'newest':
+            queryset = queryset.order_by('-created_at')
+        else:  # helpful (default)
+            queryset = queryset.annotate(
+                helpful_count=Count('votes', filter=Q(votes__is_helpful=True))
+            ).order_by('-helpful_count', '-created_at')
+        
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get review statistics for an anime"""
+        anime_slug = request.query_params.get('anime')
+        if not anime_slug:
+            return Response({'error': 'anime parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        reviews = Review.objects.filter(anime__slug=anime_slug)
+        total = reviews.count()
+        
+        if total == 0:
+            return Response({
+                'total_reviews': 0,
+                'distribution': {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
+                'averages': {
+                    'overall': 0,
+                    'story': None,
+                    'animation': None,
+                    'music': None,
+                    'characters': None
+                }
+            })
+        
+        # Rating distribution (convert 10-point to 5-star)
+        distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        for review in reviews.values('rating'):
+            rating = review['rating'] or 0
+            stars = min(5, max(1, (rating + 1) // 2))
+            distribution[stars] += 1
+        
+        # Average calculations
+        averages = reviews.aggregate(
+            overall=Avg('rating'),
+            story=Avg('rating_story'),
+            animation=Avg('rating_animation'),
+            music=Avg('rating_music'),
+            characters=Avg('rating_characters')
+        )
+        
+        # Convert to 5-point scale
+        if averages['overall']:
+            averages['overall'] = averages['overall'] / 2
+        if averages['story']:
+            averages['story'] = averages['story'] / 2
+        if averages['animation']:
+            averages['animation'] = averages['animation'] / 2
+        if averages['music']:
+            averages['music'] = averages['music'] / 2
+        if averages['characters']:
+            averages['characters'] = averages['characters'] / 2
+        
+        return Response({
+            'total_reviews': total,
+            'distribution': distribution,
+            'averages': averages
+        })
     
     def perform_create(self, serializer):
         user = self.request.user
@@ -681,6 +763,37 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if instance.user != self.request.user:
             raise PermissionDenied("You can only delete your own reviews.")
         instance.delete()
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def vote(self, request, pk=None):
+        """Toggle helpful vote on a review"""
+        review = self.get_object()
+        user = request.user
+        
+        # Can't vote on your own review
+        if review.user == user:
+            return Response({'error': 'Cannot vote on your own review'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        is_helpful = request.data.get('is_helpful', True)
+        
+        # Check if user already voted
+        existing_vote = ReviewVote.objects.filter(user=user, review=review).first()
+        
+        if existing_vote:
+            if existing_vote.is_helpful == is_helpful:
+                # Same vote type - remove the vote
+                existing_vote.delete()
+                return Response({'voted': False, 'is_helpful': None})
+            else:
+                # Different vote type - update the vote
+                existing_vote.is_helpful = is_helpful
+                existing_vote.save()
+                return Response({'voted': True, 'is_helpful': is_helpful})
+        else:
+            # Create new vote
+            ReviewVote.objects.create(user=user, review=review, is_helpful=is_helpful)
+            return Response({'voted': True, 'is_helpful': is_helpful})
+
 
 
 class DeleteAccountView(APIView):

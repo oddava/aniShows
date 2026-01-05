@@ -8,6 +8,7 @@ import AnimeCard from '../components/AnimeCard';
 import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
+import ReviewSummary from '../components/ReviewSummary';
 
 const InformationBox = ({ anime, className, accentColor }) => (
     <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl ${className}`}>
@@ -111,6 +112,9 @@ export default function AnimeDetail() {
     const [activeTab, setActiveTab] = useState('overview');
     const [accentColor, setAccentColor] = useState(null);
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
+    const [reviewSort, setReviewSort] = useState('helpful');
+    const [ratingFilter, setRatingFilter] = useState(null);
+    const [hideSpoilersGlobal, setHideSpoilersGlobal] = useState(false);
     const containerRef = useRef(null);
 
     const { data: anime, isLoading, isError } = useQuery({
@@ -125,10 +129,16 @@ export default function AnimeDetail() {
         fetchNextPage,
         hasNextPage,
         isFetchingNextPage,
-        isLoading: reviewsLoading
+        isLoading: reviewsLoading,
+        refetch: refetchReviews
     } = useInfiniteQuery({
-        queryKey: ['reviews', slug],
-        queryFn: ({ pageParam = 1 }) => reviewApi.getAll({ anime: slug, page: pageParam }).then(res => res.data),
+        queryKey: ['reviews', slug, reviewSort, ratingFilter],
+        queryFn: ({ pageParam = 1 }) => reviewApi.getAll({
+            anime: slug,
+            page: pageParam,
+            sort: reviewSort,
+            rating: ratingFilter
+        }).then(res => res.data),
         getNextPageParam: (lastPage) => {
             if (lastPage.next) {
                 try {
@@ -141,12 +151,23 @@ export default function AnimeDetail() {
         enabled: !!slug
     });
 
-    const reviews = reviewsData?.pages.flatMap(page => {
+    // Fetch review stats
+    const { data: reviewStats } = useQuery({
+        queryKey: ['reviewStats', slug],
+        queryFn: () => reviewApi.getStats(slug).then(res => res.data),
+        enabled: !!slug
+    });
+
+    const allReviews = reviewsData?.pages.flatMap(page => {
         if (Array.isArray(page)) return page;
         return page.results || [];
     }) || [];
 
-    const reviewCount = reviewsData?.pages[0]?.count ?? anime?.review_count ?? reviews.length;
+    // Separate text reviews from rating-only reviews
+    const textReviews = allReviews.filter(r => r.text && r.text.trim().length > 0);
+    const ratingOnlyReviews = allReviews.filter(r => !r.text || r.text.trim().length === 0);
+
+    const reviewCount = reviewsData?.pages[0]?.count ?? anime?.review_count ?? allReviews.length;
 
     useEffect(() => {
         if (anime) {
@@ -263,7 +284,7 @@ export default function AnimeDetail() {
         }
     };
 
-    const userReview = reviews.find(r => r.user?.username === user?.username);
+    const userReview = anime?.user_review || allReviews.find(r => r.user?.username === user?.username);
     const canReview = isAuthenticated && anime?.user_list_status != null;
 
     if (isLoading) {
@@ -690,7 +711,7 @@ export default function AnimeDetail() {
                                     })()}
 
                                     <div className="mb-16">
-                                        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                                        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                                             <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
                                                 <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: accentColor || '#8b5cf6' }} />
                                                 Reviews
@@ -698,25 +719,51 @@ export default function AnimeDetail() {
                                                     {reviewCount}
                                                 </span>
                                             </h2>
-                                            {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
-                                                canReview ? (
-                                                    <button
-                                                        onClick={() => setIsWritingReview(true)}
-                                                        className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl shadow-lg text-white font-bold"
-                                                        style={{
-                                                            backgroundColor: accentColor || '#8b5cf6',
-                                                            boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
-                                                        }}
-                                                    >
-                                                        Write a Review
-                                                    </button>
-                                                ) : (
-                                                    <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 shadow-inner">
-                                                        Add to list to write a review
-                                                    </div>
-                                                )
-                                            )}
+                                            <div className="flex items-center gap-3">
+                                                {/* Sorting Dropdown */}
+                                                <select
+                                                    value={reviewSort}
+                                                    onChange={(e) => setReviewSort(e.target.value)}
+                                                    className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent cursor-pointer"
+                                                >
+                                                    <option value="helpful">Most Helpful</option>
+                                                    <option value="newest">Newest</option>
+                                                    <option value="highest">Highest Rated</option>
+                                                    <option value="lowest">Lowest Rated</option>
+                                                </select>
+
+                                                {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
+                                                    canReview ? (
+                                                        <button
+                                                            onClick={() => setIsWritingReview(true)}
+                                                            className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl shadow-lg text-white font-bold"
+                                                            style={{
+                                                                backgroundColor: accentColor || '#8b5cf6',
+                                                                boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+                                                            }}
+                                                        >
+                                                            Write a Review
+                                                        </button>
+                                                    ) : (
+                                                        <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 shadow-inner">
+                                                            Add to list to write a review
+                                                        </div>
+                                                    )
+                                                )}
+                                            </div>
                                         </div>
+
+                                        {/* Review Summary */}
+                                        {reviewStats && reviewStats.total_reviews > 0 && (
+                                            <ReviewSummary
+                                                stats={reviewStats}
+                                                onFilterByRating={(rating) => setRatingFilter(rating === ratingFilter ? null : rating)}
+                                                activeRatingFilter={ratingFilter}
+                                                hideSpoilers={hideSpoilersGlobal}
+                                                onToggleHideSpoilers={() => setHideSpoilersGlobal(!hideSpoilersGlobal)}
+                                                accentColor={accentColor}
+                                            />
+                                        )}
 
                                         {(isWritingReview || editingReview) && (
                                             <div className="mb-12 animate-fade-in">
@@ -732,21 +779,46 @@ export default function AnimeDetail() {
                                             </div>
                                         )}
 
-                                        <div className="space-y-6">
+                                        <div className="space-y-4">
                                             {reviewsLoading ? (
                                                 <div className="text-center py-12">
                                                     <Loader className="w-10 h-10 text-accent animate-spin mx-auto" />
                                                 </div>
-                                            ) : reviews.length > 0 ? (
+                                            ) : allReviews.length > 0 ? (
                                                 <>
-                                                    {reviews.map((review) => (
+                                                    {/* Text Reviews */}
+                                                    {textReviews.map((review) => (
                                                         <ReviewCard
                                                             key={review.id}
                                                             review={review}
                                                             onEdit={setEditingReview}
                                                             onDelete={deleteReviewMutation.mutate}
+                                                            forceHideSpoilers={hideSpoilersGlobal}
+                                                            accentColor={accentColor}
                                                         />
                                                     ))}
+
+                                                    {/* Rating-Only Reviews (Compact) */}
+                                                    {ratingOnlyReviews.length > 0 && (
+                                                        <div className="mt-8">
+                                                            <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">
+                                                                Rating-only reviews ({ratingOnlyReviews.length})
+                                                            </p>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                {ratingOnlyReviews.map((review) => (
+                                                                    <ReviewCard
+                                                                        key={review.id}
+                                                                        review={review}
+                                                                        onEdit={setEditingReview}
+                                                                        onDelete={deleteReviewMutation.mutate}
+                                                                        compact
+                                                                        accentColor={accentColor}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {hasNextPage && (
                                                         <div className="text-center mt-12">
                                                             <button

@@ -107,7 +107,9 @@ export const listApi = {
 
 export const reviewApi = {
     getAll: (params) => api.get('/reviews/', { params }),
+    getStats: (animeSlug) => api.get(`/reviews/stats/`, { params: { anime: animeSlug } }),
     create: (data) => api.post('/reviews/', data),
     update: (id, data) => api.patch(`/reviews/${id}/`, data),
     delete: (id) => api.delete(`/reviews/${id}/`),
+    vote: (id, isHelpful = true) => api.post(`/reviews/${id}/vote/`, { is_helpful: isHelpful }),
 };

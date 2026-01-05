@@ -233,3 +233,18 @@ class Review(Model):
 
     def __str__(self):
         return f"{self.user.username}'s review of {self.anime.title}"
+
+
+class ReviewVote(Model):
+    """Track helpful votes on reviews"""
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='review_votes')
+    review = ForeignKey(Review, on_delete=CASCADE, related_name='votes')
+    is_helpful = BooleanField(default=True)  # True = helpful, False = not helpful
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'review')
+        
+    def __str__(self):
+        vote_type = "helpful" if self.is_helpful else "not helpful"
+        return f"{self.user.username} voted {vote_type} on review {self.review.id}"
