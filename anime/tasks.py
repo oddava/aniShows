@@ -42,12 +42,11 @@ def fetch_deep_metadata(self, anime_id):
             
             results = await service.search_anime(anime.title)
             if results:
-                # Filter strictly for matching title/slug to be safe? 
-                # signal is post_save, so it exists. 
-                # process_media_list iterates and updates.
-                stats = await service.process_media_list(results[:1]) 
-                logger.info(f"Metadata fetch complete for {anime.title}: {stats}")
-                return stats
+                # Use manual update to ensure we populate THIS specific instance
+                # regardless of slug differences (prevents duplicate creation or ignoring)
+                await service.update_anime_manual(anime, results[0])
+                logger.info(f"Metadata fetch complete for {anime.title} (ID: {anime.id})")
+                return {'updated': 1}
             else:
                 logger.warning(f"No results found for {anime.title} during deep metadata fetch")
                 

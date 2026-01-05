@@ -353,6 +353,38 @@ class AniListService:
                 
         return stats
 
+    async def update_anime_manual(self, anime: Anime, item: dict):
+        """
+        Manually update a specific Anime instance with AniList data.
+        Updates fields but PRESERVES the existing slug to avoid integrity errors/identity shifts.
+        """
+        try:
+            title_romaji = item.get("title", {}).get("romaji", "")
+            title_english = item.get("title", {}).get("english", "")
+            title_native = item.get("title", {}).get("native", "")
+            title = title_english or title_romaji
+
+            # Use the EXISTING slug to ensure we don't collide with other records
+            anime_data_dict = self._prepare_anime_data(item, title, title_native, anime.slug)
+            
+            # Explicitly ensure slug is NOT in the update dict to be safe (though passing it above helps)
+            # If prepare_anime_data just puts it in the dict, passing anime.slug ensures the dict matches current state.
+            # But let's be doubly sure we don't error out if title changed enough to generate different slug in prepare logic?
+            # actually _prepare uses the slug arg. So passing anime.slug is correct.
+
+            await self._update_anime(anime, anime_data_dict)
+            logger.info(f"Manually Updated Anime ID {anime.id}: {anime.title}")
+
+            # Handle extended info
+            await self._handle_relationships_async(anime, item)
+            await self._handle_extended_info_async(anime, item)
+            await self._download_and_save_images(anime, item)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error manual update anime {anime.id}: {e}")
+            raise e
+
     @sync_to_async
     def _get_or_create_anime(self, slug, anime_data_dict):
         return Anime.objects.get_or_create(
