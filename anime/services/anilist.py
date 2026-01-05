@@ -407,6 +407,7 @@ class AniListService:
             'status': status,
             'episode_count': item.get("episodes") or 0,
             'duration_minutes': item.get("duration") or 24,
+            'member_count': item.get("popularity") or 0,
             'release_date': start_date,
             'end_date': end_date,
             'rating': rating,

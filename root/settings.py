@@ -354,6 +354,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=4, minute=0), # 4 AM UTC
         'args': (100,),
     },
+    'sync-next-season-weekly': {
+        'task': 'anime.tasks.sync_next_season_anime',
+        'schedule': crontab(hour=5, minute=0, day_of_week=0), # Sunday 5 AM UTC
+        'args': (100,),
+    },
 }
 
 CSRF_TRUSTED_ORIGINS = [

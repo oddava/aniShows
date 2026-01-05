@@ -151,3 +151,47 @@ def backfill_metadata_task():
             await service.close()
 
     return run_async(_process())
+
+
+@shared_task
+def sync_next_season_anime(limit=100):
+    """
+    Fetches anime for the NEXT season (not yet airing).
+    Run this weekly to catch newly announced anime.
+    """
+    current_date = datetime.now()
+    year = current_date.year
+    month = current_date.month
+    
+    # Determine NEXT season (one season ahead of current)
+    if month in [12, 1, 2]:
+        # Currently Winter -> Next is Spring
+        next_season = "SPRING"
+        next_year = year if month != 12 else year + 1
+    elif month in [3, 4, 5]:
+        # Currently Spring -> Next is Summer
+        next_season = "SUMMER"
+        next_year = year
+    elif month in [6, 7, 8]:
+        # Currently Summer -> Next is Fall
+        next_season = "FALL"
+        next_year = year
+    else:
+        # Currently Fall -> Next is Winter
+        next_season = "WINTER"
+        next_year = year + 1
+        
+    logger.info(f"Starting next season sync for {next_season} {next_year}")
+
+    async def _process():
+        service = AniListService()
+        try:
+            data = await service.get_by_season(next_season, next_year, limit=limit, sort=MediaSort.POPULARITY)
+            stats = await service.process_media_list(data)
+            logger.info(f"Next Season Sync Complete. Stats: {stats}")
+            return stats
+        finally:
+            await service.close()
+            
+    return run_async(_process())
+

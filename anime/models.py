@@ -83,6 +83,7 @@ class Anime(Model):
     status = CharField(max_length=20, choices=AnimeStatus.choices, default=AnimeStatus.airing)
     episode_count = IntegerField(default=0)
     duration_minutes = IntegerField(default=24)
+    member_count = IntegerField(default=0)  # AniList popularity/planning count
 
     release_date = DateField(null=True, blank=True)
     end_date = DateField(null=True, blank=True)

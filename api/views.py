@@ -46,9 +46,13 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         # Annotate with counts
         queryset = queryset.annotate(
             review_count=Count('reviews', distinct=True),
-            avg_rating=Avg('reviews__rating')
+            avg_rating=Avg('reviews__rating'),
+            favorite_count=Count('favorites', distinct=True)
         )
         
+        if self.action != 'list':
+            return queryset.order_by('-id') # Ensure stable ordering if needed, or default
+
         # Search
         search = self.request.query_params.get('q')
         if search:
@@ -89,16 +93,14 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         # Sorting
         sort = self.request.query_params.get('sort', 'popular')
         sort_mapping = {
-            'popular': '-favorite_count',
+            'popular': 'popularity_rank',  # Use AniList popularity ranking (lower = more popular)
             'rating': '-rating',
             'newest': '-release_date',
             'title': 'title',
+            'upcoming': '-member_count',  # Most anticipated (by member count)
         }
         
-        # Add favorite count for sorting with distinct=True to avoid join duplication
-        queryset = queryset.annotate(favorite_count=Count('favorites', distinct=True))
-        
-        sort_field = sort_mapping.get(sort, '-favorite_count')
+        sort_field = sort_mapping.get(sort, 'popularity_rank')
         
         # logical fixes for specific sorts:
         # Exclude upcoming (0 episodes) from rating and newest sorts to prevent them from hitting top
@@ -106,6 +108,12 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(episode_count__gt=0, rating__isnull=False)
         elif sort == 'newest':
             queryset = queryset.filter(episode_count__gt=0)
+        elif sort == 'upcoming':
+            # Show only upcoming anime, sorted by nearest release date
+            queryset = queryset.filter(status='Upcoming')
+        elif sort == 'popular':
+            # For popular sort, filter out anime without popularity_rank so they don't clutter results
+            queryset = queryset.filter(popularity_rank__isnull=False)
 
         # Add ID as tie-breaker for stable pagination
         queryset = queryset.order_by(sort_field, '-id')

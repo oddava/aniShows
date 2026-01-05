@@ -2,7 +2,7 @@
         mig migrate makemigrations shell superuser test collectstatic \
         msg icomp import_anime backfill_metadata remove_duplicates clean prune backup backups restore
 
-# Docker Compose commands
+# Service Management
 up:
 	docker compose up -d
 
@@ -12,29 +12,13 @@ down:
 restart:
 	docker compose restart
 
-rebuild-front:
-	docker compose up -d frontend && docker compose exec frontend npm run build && docker compose restart caddy
-
 build:
 	docker compose build
 
 ps:
 	docker compose ps
 
-logs:
-	docker compose logs -f
-
-# Specific Service Logs
-web-logs:
-	docker compose logs -f web
-
-front-logs:
-	docker compose logs -f frontend
-
-celery-logs:
-	docker compose logs -f celery beat
-
-# Django commands
+# Django Commands
 mig:
 	docker compose exec web uv run python manage.py makemigrations
 	docker compose exec web uv run python manage.py migrate
@@ -57,30 +41,36 @@ test:
 collectstatic:
 	docker compose exec web uv run python manage.py collectstatic --noinput
 
-# Translation commands
+# Translations
 msg:
 	docker compose exec web uv run python manage.py makemessages -l en -l uz
 
 icomp:
 	docker compose exec web uv run python manage.py compilemessages -i .venv
 
-# App specific
-sync_trending_anime:
-	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_trending_anime sync_trending_anime.delay(limit=50)"
-
-backfill_catalog:
-	docker compose exec web uv run python manage.py shell -c "from anime.tasks import backfill_catalog backfill_catalog.delay(start_page=1, pages=50)"
+# Data Management
+import_anime:
+	docker compose exec web uv run python manage.py import_anime
 
 backfill_metadata:
 	docker compose exec web uv run python manage.py backfill_metadata
 
-import_anime:
-	docker compose exec web uv run python manage.py import_anime
-
 remove_duplicates:
 	docker compose exec web uv run python manage.py remove_duplicate_lists
 
-# Cleanup
+sync_trending:
+	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_trending_anime; sync_trending_anime.delay(limit=50)"
+
+sync_seasonal:
+	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_seasonal_anime; sync_seasonal_anime.delay(limit=100)"
+
+sync_upcoming:
+	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_next_season_anime; sync_next_season_anime.delay(limit=100)"
+
+backfill_catalog:
+	docker compose exec web uv run python manage.py shell -c "from anime.tasks import backfill_catalog; backfill_catalog.delay(start_page=1, pages=50)"
+
+# Maintenance
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
@@ -88,10 +78,7 @@ clean:
 prune:
 	docker system prune -a --volumes -f
 
-# -----------------------------------------------------------------------------
 # Backups
-# -----------------------------------------------------------------------------
-
 backup:
 	docker compose exec backup /app/shell/backup.sh manual
 
@@ -108,38 +95,32 @@ restore:
 help:
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Docker Lifecycle:"
-	@echo "  up             Start services in background"
+	@echo "Service Management:"
+	@echo "  up             Start services (detached)"
 	@echo "  down           Stop services"
 	@echo "  restart        Restart all services"
-	@echo "  build          Build or rebuild services"
-	@echo "  ps             List containers"
-	@echo "  logs           Follow all logs"
+	@echo "  build          Build services"
+	@echo "  ps             List running services"
 	@echo ""
-	@echo "Service Logs:"
-	@echo "  web-logs       Follow Django logs"
-	@echo "  front-logs     Follow Frontend logs"
-	@echo "  celery-logs    Follow Celery/Beat logs"
-	@echo ""
-	@echo "Django Shortcuts:"
-	@echo "  mig            Make and apply migrations"
-	@echo "  migrate        Apply migrations"
-	@echo "  makemigrations Create new migrations"
+	@echo "Django Commands:"
+	@echo "  mig            Run makemigrations + migrate"
 	@echo "  shell          Open Django shell"
-	@echo "  superuser      Create a superuser"
+	@echo "  superuser      Create superuser"
 	@echo "  test           Run tests"
 	@echo "  collectstatic  Collect static files"
 	@echo ""
-	@echo "Translations:"
-	@echo "  msg            Extract messages (en, uz)"
-	@echo "  icomp          Compile messages"
+	@echo "Data Management:"
+	@echo "  sync_trending  Sync currently airing anime"
+	@echo "  sync_seasonal  Sync current season"
+	@echo "  sync_upcoming  Sync next season (upcoming)"
+	@echo "  import_anime   Run full import command"
+	@echo "  backfill_metadata Backfill characters/staff"
 	@echo ""
-	@echo "Misc:"
-	@echo "  import_anime   Import anime data"
-	@echo "  backfill_metadata Update existing anime metadata"
-	@echo "  remove_duplicates Remove duplicate user list entries"
-	@echo "  clean          Remove python cache files"
-	@echo "  prune           Remove all stopped containers and unused images"
-	@echo "  backup          Trigger a manual backup"
-	@echo "  backups         List all available backups"
-	@echo "  restore         Restore from a backup (Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS)"
+	@echo "Maintenance:"
+	@echo "  clean          Remove pyc/pycache files"
+	@echo "  prune          Clean up unused Docker volumes/images"
+	@echo ""
+	@echo "Backups:"
+	@echo "  backup         Trigger manual backup"
+	@echo "  backups        List available backups"
+	@echo "  restore        Restore backup (Usage: make restore TIMESTAMP=...)"

@@ -20,6 +20,7 @@ The scraper runs automatically via Celery Beat. **No manual intervention require
 |------|----------|---------|
 | `sync-trending-every-hour` | Every Hour | Catches new episodes, score updates, currently airing shows |
 | `sync-seasonal-daily` | Daily @ 4:00 AM UTC | Full list of anime for current season |
+| `sync-next-season-weekly` | Weekly (Sunday @ 5:00 AM UTC) | Upcoming anime for next season |
 
 ### Verify Beat is Running
 ```bash
