@@ -133,7 +133,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         data = cache.get(cache_key)
         
         if not data:
-            queryset = self.get_queryset()[:12]
+            queryset = self.get_queryset().filter(trending_rank__isnull=False).order_by('trending_rank')[:12]
             serializer = AnimeListSerializer(queryset, many=True, context={'request': request})
             data = serializer.data
             cache.set(cache_key, data, 60 * 15)

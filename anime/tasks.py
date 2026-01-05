@@ -5,6 +5,7 @@ from datetime import datetime
 from .services.anilist import AniListService, MediaSort
 from .models import Anime
 from asgiref.sync import sync_to_async
+from django.utils.text import slugify
 import logging
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,29 @@ def sync_trending_anime(limit=50):
         try:
             data = await service.get_recent_updates(limit=limit)
             stats = await service.process_media_list(data)
-            logger.info(f"Trending Sync Complete. Created: {stats['created']}, Updated: {stats['updated']}")
+            
+            # Update trending ranks
+            # Reset all trending ranks first to ensure fresh list
+            await sync_to_async(Anime.objects.filter(trending_rank__isnull=False).update)(trending_rank=None)
+            
+            # Set new ranks
+            trending_ids = []
+            for i, item in enumerate(data):
+                # We need to find the anime object again to update rank
+                # process_media_list handles creation/update but doesn't return objects directly easily
+                # So we lookup by slug or title match logic used in service
+                title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
+                if title:
+                   slug = slugify(title)
+                   try:
+                       anime = await sync_to_async(Anime.objects.get)(slug=slug)
+                       anime.trending_rank = i + 1
+                       await sync_to_async(anime.save)()
+                       trending_ids.append(anime.id)
+                   except Anime.DoesNotExist:
+                       continue
+
+            logger.info(f"Trending Sync Complete. Created: {stats['created']}, Updated: {stats['updated']}, Ranked: {len(trending_ids)}")
             return stats
         finally:
             await service.close()

@@ -124,6 +124,7 @@ class Anime(Model):
     # Ranks
     site_rank = IntegerField(null=True, blank=True)       # e.g #115 highest rated
     popularity_rank = IntegerField(null=True, blank=True) # e.g #50 most popular
+    trending_rank = IntegerField(null=True, blank=True)   # Current trending rank (1 = most trending)
 
     # Timestamps
     created_at = DateTimeField(auto_now_add=True)
