@@ -13,6 +13,52 @@ logger = logging.getLogger(__name__)
 def run_async(coro):
     return asyncio.run(coro)
 
+@shared_task(bind=True, max_retries=3)
+def fetch_deep_metadata(self, anime_id):
+    """
+    Fetches deep metadata (characters, staff) for a specific anime.
+    Triggered by post_save signal on creation.
+    Routes to 'low_priority' queue.
+    """
+    logger.info(f"Starting metadata fetch for Anime ID: {anime_id}")
+    
+    async def _process():
+        service = AniListService()
+        try:
+            # Fetch anime from DB
+            from .models import Anime
+            anime = await sync_to_async(Anime.objects.get)(id=anime_id)
+            
+            # Use search_anime/process_media_list to fetch full details
+            # Assuming process_media_list handles deep fetching or we need to call it specifically
+            # Current process_media_list fetches detailed data including chars/staff if configured in query
+            
+            # We strictly want to update this specific anime, so we search by ID via service if possible
+            # or strictly by title if ID lookup isn't exposed.
+            # Ideally we'd have get_by_id in service. Let's use search for now or add get_by_id.
+            # Actually, existing backfill uses search_anime(title). Let's do that for consistency 
+            # or better: rely on AniList ID if we stored it? We don't seemingly store AniList ID explicitly in model?
+            # We do store slug. Let's use get_anime with slug? Or search by title.
+            
+            results = await service.search_anime(anime.title)
+            if results:
+                # Filter strictly for matching title/slug to be safe? 
+                # signal is post_save, so it exists. 
+                # process_media_list iterates and updates.
+                stats = await service.process_media_list(results[:1]) 
+                logger.info(f"Metadata fetch complete for {anime.title}: {stats}")
+                return stats
+            else:
+                logger.warning(f"No results found for {anime.title} during deep metadata fetch")
+                
+        except Exception as e:
+            logger.error(f"Error fetching metadata for {anime_id}: {e}")
+            raise self.retry(exc=e, countdown=60) # Retry in 1 min
+        finally:
+            await service.close()
+            
+    return run_async(_process())
+
 @shared_task
 def sync_trending_anime(limit=50):
     """

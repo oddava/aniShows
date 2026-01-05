@@ -18,6 +18,19 @@ build:
 ps:
 	docker compose ps
 
+logs:
+	docker compose logs -f
+
+# Specific Service Logs
+web-logs:
+	docker compose logs -f web
+
+front-logs:
+	docker compose logs -f frontend
+
+celery-logs:
+	docker compose logs -f celery beat
+
 # Django Commands
 mig:
 	docker compose exec web uv run python manage.py makemigrations
@@ -101,6 +114,9 @@ help:
 	@echo "  restart        Restart all services"
 	@echo "  build          Build services"
 	@echo "  ps             List running services"
+	@echo "  logs           View global logs"
+	@echo "  web-logs       View backend logs"
+	@echo "  celery-logs    View worker/scheduler logs"
 	@echo ""
 	@echo "Django Commands:"
 	@echo "  mig            Run makemigrations + migrate"

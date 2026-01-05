@@ -21,3 +21,18 @@ if os.getenv('DEBUG', 'False') == 'True':
     @app.task(bind=True, ignore_result=True)
     def debug_task(self):
         print(f'Request: {self.request!r}')
+
+# Queue Configuration
+app.conf.task_routes = {
+    'anime.tasks.fetch_deep_metadata': {'queue': 'low_priority'},
+    'anime.tasks.import_anime_task': {'queue': 'low_priority'},
+    'anime.tasks.sync_trending_anime': {'queue': 'default'},
+    'anime.tasks.sync_seasonal_anime': {'queue': 'default'},
+}
+
+# Optional: Ensure queues are defined (Celery does this auto-magically usually, but explicit is good)
+from kombu import Queue
+app.conf.task_queues = (
+    Queue('default', routing_key='default'),
+    Queue('low_priority', routing_key='low_priority'),
+)

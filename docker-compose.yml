@@ -72,9 +72,10 @@ services:
       - redis_data:/data
 
   # Celery Worker
+  # Celery Worker
   celery:
     build: .
-    command: [ "uv", "run", "celery", "-A", "root", "worker", "--loglevel=info" ]
+    command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "INFO", "-Q", "default,low_priority" ]
     env_file:
       - .env
     environment:
@@ -85,9 +86,6 @@ services:
       DB_PORT: "${DB_PORT}"
       CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
       CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
-    depends_on:
-      - web
-      - redis
     volumes:
       - .:/app
       - /app/.venv # Isolate virtual environment
