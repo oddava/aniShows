@@ -163,14 +163,16 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             if not season and not year:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             else:
-                # For seasonal views, sort with nulls last so popular anime appear first
+                # For seasonal views, sort by member_count (descending) which is a better
+                # indicator of popularity - more members = more popular
+                # This ensures popular anime like Frieren appear first even if they
+                # don't have a popularity_rank set yet
                 from django.db.models import F
                 from django.db.models.functions import Coalesce
-                # Use Coalesce to give NULL popularity_rank a very high number (999999)
                 queryset = queryset.annotate(
-                    popularity_sort=Coalesce(F('popularity_rank'), 999999)
+                    member_sort=Coalesce(F('member_count'), 0)
                 )
-                sort_field = 'popularity_sort'  # Override sort field
+                sort_field = '-member_sort'  # Descending - higher member count first
         elif sort == 'trending':
             queryset = queryset.filter(trending_rank__isnull=False)
 
