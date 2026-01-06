@@ -68,6 +68,20 @@ input[type=number] {
   animation: fade-in 0.3s ease-out forwards;
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-custom {
+  animation: spin 0.8s linear infinite;
+}
+
 /* Tab content animation */
 @keyframes tab-slide-up {
   from {
@@ -101,4 +115,24 @@ input[type=number] {
   -webkit-box-orient: vertical;
   line-clamp: 2;
   overflow: hidden;
+}
+
+/* Custom Scrollbar for dark theme */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #374151;
+  /* gray-700 */
+  border-radius: 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #4b5563;
+  /* gray-600 */
 }

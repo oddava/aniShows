@@ -15,12 +15,12 @@ export default function Footer() {
                             Discover, track, and share your favorite anime series.
                             Join our community of passionate fans.
                         </p>
-                        <div className="flex gap-4">
+                        <div className="flex gap-3">
                             <a
                                 href="https://github.com/oddava"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-10 h-10 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-200 transition-all border border-gray-700"
+                                className="w-11 h-11 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 hover:border-gray-600 transition-all border-2 border-gray-700 hover:scale-110"
                                 aria-label="Github"
                             >
                                 <Github className="w-5 h-5" />
@@ -29,7 +29,7 @@ export default function Footer() {
                                 href="https://twitter.com/oddava"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-10 h-10 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-[#1DA1F2] hover:bg-dark-200 transition-all border border-gray-700"
+                                className="w-11 h-11 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-[#1DA1F2] hover:bg-[#1DA1F2]/10 hover:border-[#1DA1F2]/50 transition-all border-2 border-gray-700 hover:scale-110"
                                 aria-label="Twitter"
                             >
                                 <Twitter className="w-5 h-5" />
@@ -38,14 +38,14 @@ export default function Footer() {
                                 href="https://buymeacoffee.com/oddava"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-10 h-10 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-[#FFDD00] hover:bg-dark-200 transition-all border border-gray-700"
+                                className="w-11 h-11 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-[#FFDD00] hover:bg-[#FFDD00]/10 hover:border-[#FFDD00]/50 transition-all border-2 border-gray-700 hover:scale-110"
                                 aria-label="Buy Me A Coffee"
                             >
                                 <Coffee className="w-5 h-5" />
                             </a>
                             <a
                                 href="mailto:oddava@proton.me"
-                                className="w-10 h-10 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-accent hover:bg-dark-200 transition-all border border-gray-700"
+                                className="w-11 h-11 rounded-full bg-dark-50 flex items-center justify-center text-gray-400 hover:text-accent hover:bg-accent/10 hover:border-accent/50 transition-all border-2 border-gray-700 hover:scale-110"
                                 aria-label="Email"
                             >
                                 <Mail className="w-5 h-5" />

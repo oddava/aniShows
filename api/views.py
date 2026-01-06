@@ -83,12 +83,57 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         # Filter by status
         anime_status = self.request.query_params.get('status')
         if anime_status:
-            queryset = queryset.filter(status=anime_status)
+            if ',' in anime_status:
+                queryset = queryset.filter(status__in=anime_status.split(','))
+            else:
+                queryset = queryset.filter(status=anime_status)
         
         # Filter by type
         anime_type = self.request.query_params.get('type')
         if anime_type:
-            queryset = queryset.filter(anime_type=anime_type)
+            if ',' in anime_type:
+                queryset = queryset.filter(anime_type__in=anime_type.split(','))
+            else:
+                queryset = queryset.filter(anime_type=anime_type)
+        
+        # Filter by studio
+        studio = self.request.query_params.get('studio')
+        if studio:
+            queryset = queryset.filter(studio__id=studio)
+        
+        # Filter by rating range
+        min_rating = self.request.query_params.get('min_rating')
+        max_rating = self.request.query_params.get('max_rating')
+        if min_rating:
+            queryset = queryset.filter(rating__gte=float(min_rating))
+        if max_rating:
+            queryset = queryset.filter(rating__lte=float(max_rating))
+        
+        # Filter by season and year
+        season = self.request.query_params.get('season')
+        year = self.request.query_params.get('year')
+        if year:
+            try:
+                year_int = int(year)
+                # Season date ranges
+                season_ranges = {
+                    'winter': [(year_int, 1, 1), (year_int, 3, 31)],
+                    'spring': [(year_int, 4, 1), (year_int, 6, 30)],
+                    'summer': [(year_int, 7, 1), (year_int, 9, 30)],
+                    'fall': [(year_int, 10, 1), (year_int, 12, 31)],
+                }
+                if season and season.lower() in season_ranges:
+                    start, end = season_ranges[season.lower()]
+                    from datetime import date
+                    queryset = queryset.filter(
+                        release_date__gte=date(*start),
+                        release_date__lte=date(*end)
+                    )
+                else:
+                    # Just filter by year
+                    queryset = queryset.filter(release_date__year=year_int)
+            except ValueError:
+                pass
         
         # Sorting
         sort = self.request.query_params.get('sort', 'popular')
@@ -98,6 +143,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             'newest': '-release_date',
             'title': 'title',
             'upcoming': '-member_count',  # Most anticipated (by member count)
+            'trending': 'trending_rank',
         }
         
         sort_field = sort_mapping.get(sort, 'popularity_rank')
@@ -114,6 +160,8 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         elif sort == 'popular':
             # For popular sort, filter out anime without popularity_rank so they don't clutter results
             queryset = queryset.filter(popularity_rank__isnull=False)
+        elif sort == 'trending':
+            queryset = queryset.filter(trending_rank__isnull=False)
 
         # Add ID as tie-breaker for stable pagination
         queryset = queryset.order_by(sort_field, '-id')

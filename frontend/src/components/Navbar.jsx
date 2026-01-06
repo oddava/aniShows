@@ -1,38 +1,77 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react';
+import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, CheckCircle, Star, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { authApi } from '../api/client';
+import { authApi, animeApi } from '../api/client';
 
 export default function Navbar() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchSuggestions, setSearchSuggestions] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
     const { user, logout, isAuthenticated } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const profileRef = useRef(null);
+    const searchRef = useRef(null);
 
     // Hide search on browse and anime detail pages (they have their own search/filters)
     const hideSearch = location.pathname.startsWith('/browse') || location.pathname.startsWith('/anime/');
 
-    // Close dropdown when clicking outside
+    // Close dropdowns when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (profileRef.current && !profileRef.current.contains(event.target)) {
                 setIsProfileOpen(false);
+            }
+            if (searchRef.current && !searchRef.current.contains(event.target)) {
+                setShowSuggestions(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Debounced search suggestions
+    useEffect(() => {
+        if (searchQuery.trim().length < 2) {
+            setSearchSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        const timeout = setTimeout(async () => {
+            setIsSearching(true);
+            try {
+                const response = await animeApi.getAll({ q: searchQuery.trim(), page_size: 5 });
+                setSearchSuggestions(response.data.results || []);
+                setShowSuggestions(true);
+            } catch (error) {
+                console.error('Search error:', error);
+                setSearchSuggestions([]);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timeout);
+    }, [searchQuery]);
+
     const handleSearch = (e) => {
         e.preventDefault();
         if (searchQuery.trim()) {
             navigate(`/browse?q=${encodeURIComponent(searchQuery.trim())}`);
             setSearchQuery('');
+            setShowSuggestions(false);
         }
+    };
+
+    const handleSuggestionClick = (slug) => {
+        navigate(`/anime/${slug}`);
+        setSearchQuery('');
+        setShowSuggestions(false);
     };
 
     const [isResending, setIsResending] = useState(false);
@@ -97,29 +136,83 @@ export default function Navbar() {
                         </Link>
 
                         {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-8">
-                            <Link to="/browse" className="text-gray-300 hover:text-white transition-colors font-medium">
+                        <div className="hidden md:flex items-center gap-8 flex-1 ml-8">
+                            <Link to="/browse" className="text-gray-300 hover:text-white transition-colors font-medium shrink-0">
                                 Browse
                             </Link>
+                            <Link to="/seasonal" className="text-gray-300 hover:text-white transition-colors font-medium shrink-0">
+                                Seasonal
+                            </Link>
 
-                            {/* Search - animated visibility */}
-                            <form
-                                onSubmit={handleSearch}
-                                className={`relative transition-all duration-300 ease-in-out ${hideSearch
-                                    ? 'w-0 opacity-0 overflow-hidden pointer-events-none'
-                                    : 'w-64 opacity-100'
-                                    }`}
-                            >
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search anime..."
-                                    className="w-full pl-10 pr-4 py-2 bg-dark-100 border border-gray-700 rounded-xl text-sm
-                         placeholder:text-gray-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20"
-                                />
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                            </form>
+                            {/* Search - prominent and centered */}
+                            <div className="flex-1 flex justify-center max-w-2xl mx-auto" ref={searchRef}>
+                                <div
+                                    className={`relative transition-all duration-300 ease-in-out w-full max-w-lg ${hideSearch
+                                        ? 'opacity-0 overflow-hidden pointer-events-none'
+                                        : 'opacity-100'
+                                        }`}
+                                >
+                                    <form onSubmit={handleSearch}>
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            onFocus={() => searchSuggestions.length > 0 && setShowSuggestions(true)}
+                                            placeholder="Search anime..."
+                                            className="w-full pl-11 pr-4 py-2.5 bg-dark-100 border border-gray-700/50 rounded-xl text-sm text-white
+                                         placeholder:text-gray-400 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all shadow-sm"
+                                        />
+                                        {isSearching ? (
+                                            <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-accent animate-spin" />
+                                        ) : (
+                                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        )}
+                                    </form>
+
+                                    {/* Search Suggestions Dropdown */}
+                                    {showSuggestions && searchSuggestions.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                                            {searchSuggestions.map((anime) => (
+                                                <button
+                                                    key={anime.id}
+                                                    onClick={() => handleSuggestionClick(anime.slug)}
+                                                    className="w-full flex items-center gap-3 p-3 hover:bg-dark-50 transition-colors text-left"
+                                                >
+                                                    <img
+                                                        src={anime.cover_image}
+                                                        alt={anime.title}
+                                                        className="w-10 h-14 object-cover rounded-lg flex-shrink-0"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="text-sm font-semibold text-white line-clamp-1">{anime.title}</h4>
+                                                        <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                                                            <span>{anime.anime_type}</span>
+                                                            {anime.episode_count && (
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span>{anime.episode_count} eps</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {anime.rating && (
+                                                        <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-lg flex-shrink-0">
+                                                            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                                            <span className="text-xs font-bold text-yellow-500">{anime.rating}</span>
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            ))}
+                                            <button
+                                                onClick={handleSearch}
+                                                className="w-full py-3 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors border-t border-gray-700"
+                                            >
+                                                View all results for "{searchQuery}"
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Auth Section */}

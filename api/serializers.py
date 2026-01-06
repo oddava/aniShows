@@ -78,13 +78,14 @@ class AnimeListSerializer(serializers.ModelSerializer):
     genres = GenreSerializer(many=True, read_only=True)
     studio_name = serializers.CharField(source='studio.name', read_only=True, default=None)
     is_favorite = serializers.SerializerMethodField()
+    user_list_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Anime
         fields = [
-            'id', 'title', 'slug', 'cover_image', 'rating', 
+            'id', 'title', 'title_jp', 'slug', 'cover_image', 'banner_image', 'rating', 
             'episode_count', 'anime_type', 'status', 'genres',
-            'studio_name', 'is_favorite'
+            'studio_name', 'is_favorite', 'user_list_status', 'synopsis', 'release_date'
         ]
     
     def get_is_favorite(self, obj):
@@ -92,6 +93,20 @@ class AnimeListSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
         return False
+
+    def get_user_list_status(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user_list = UserAnimeList.objects.filter(user=request.user, anime=obj).first()
+            if user_list:
+                return {
+                    'id': user_list.id,
+                    'status': user_list.status,
+                    'score': user_list.score,
+                    'episodes_watched': user_list.episodes_watched,
+                    'progress': (user_list.episodes_watched / obj.episode_count * 100) if obj.episode_count and obj.episode_count > 0 else 0
+                }
+        return None
 
 
 class AnimeDetailSerializer(serializers.ModelSerializer):
@@ -321,8 +336,10 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
     anime_id = serializers.PrimaryKeyRelatedField(
         queryset=Anime.objects.all(),
         source='anime',
-        write_only=True
+        write_only=True,
+        required=False  # Not required for updates
     )
+    status = serializers.ChoiceField(choices=UserAnimeList.UserAnimeStatus.choices, required=False)
     progress = serializers.SerializerMethodField()
     
     class Meta:
@@ -335,6 +352,10 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
         return 0
 
     def validate(self, attrs):
+        # For creation, anime_id is required
+        if not self.instance and 'anime' not in attrs:
+            raise serializers.ValidationError({'anime_id': 'This field is required.'})
+        
         episodes_watched = attrs.get('episodes_watched')
         anime = attrs.get('anime')
         status = attrs.get('status')

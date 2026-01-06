@@ -71,6 +71,10 @@ export const genreApi = {
     getAll: () => api.get('/genres/'),
 };
 
+export const studioApi = {
+    getAll: () => api.get('/studios/'),
+};
+
 export const authApi = {
     login: (credentials) => api.post('/auth/login/', credentials),
     register: (data) => api.post('/auth/register/', data),

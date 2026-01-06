@@ -25,6 +25,7 @@ const GoogleCallback = lazy(() => import('./pages/GoogleCallback'));
 const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+const Seasonal = lazy(() => import('./pages/Seasonal'));
 
 // Admin imports
 const AdminLayout = lazy(() => import('./components/AdminLayout'));
@@ -64,6 +65,7 @@ function App() {
                 <Route element={<Layout />}>
                   <Route index element={<Home />} />
                   <Route path="browse" element={<Browse />} />
+                  <Route path="seasonal" element={<Seasonal />} />
                   <Route path="anime/:slug" element={<AnimeDetail />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="profile/:username" element={<Profile />} />
