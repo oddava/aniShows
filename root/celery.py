@@ -28,6 +28,7 @@ app.conf.task_routes = {
     'anime.tasks.import_anime_task': {'queue': 'low_priority'},
     'anime.tasks.sync_trending_anime': {'queue': 'default'},
     'anime.tasks.sync_seasonal_anime': {'queue': 'default'},
+    'anime.tasks.sync_next_season_anime': {'queue': 'default'},
 }
 
 # Optional: Ensure queues are defined (Celery does this auto-magically usually, but explicit is good)
