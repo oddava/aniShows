@@ -81,31 +81,25 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
     };
 
     const handleStatusChange = async (e, newStatus) => {
-        console.log('handleStatusChange called with:', newStatus);
         e.preventDefault();
         e.stopPropagation();
 
-        console.log('isAuthenticated:', isAuthenticated, 'isLoading:', isLoading);
         if (!isAuthenticated || isLoading) {
-            console.log('Early return - not authenticated or loading');
             return;
         }
 
         setIsLoading(true);
         try {
-            console.log('Making API call...', { listId, animeId: anime.id, newStatus });
             if (listId) {
                 // Update existing entry
                 await listApi.update(listId, { status: newStatus });
             } else {
                 // Create new entry
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
-                console.log('API response:', response.data);
                 setListId(response.data.id);
             }
             setListStatus(newStatus);
             setShowStatusMenu(false);
-            console.log('Status updated successfully to:', newStatus);
         } catch (error) {
             console.error('Error updating list:', error);
         } finally {
@@ -194,8 +188,8 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >
-            {/* Main Card Area - NO overflow-hidden here so dropdown can overflow */}
-            <div className="bg-dark-100 rounded-xl border border-gray-800 transition-all duration-300 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10 h-full flex flex-col relative">
+            {/* Main Card Area - with lift effect on hover */}
+            <div className="bg-dark-100 rounded-xl border border-gray-800 transition-all duration-300 hover:border-accent/50 hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent/10 h-full flex flex-col relative">
 
                 {/* Image Container - overflow-hidden ONLY here for image zoom */}
                 <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
@@ -203,7 +197,7 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                         <img
                             src={imageUrl}
                             alt={anime.title}
-                            className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-110 group-hover:contrast-105"
+                            className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.02] group-hover:brightness-110"
                             loading="lazy"
                         />
 
@@ -254,8 +248,8 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                     )}
                 </div>
 
-                {/* Action Buttons - OUTSIDE overflow-hidden image container */}
-                <div className="absolute top-2 right-2 flex flex-col gap-2 z-[100] translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
+                {/* Action Buttons - with staggered animation */}
+                <div className="absolute top-2 right-2 flex flex-col gap-2 z-[100]">
                     {isAuthenticated && (
                         <>
                             {/* Quick Add Button */}
@@ -264,13 +258,12 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                                     ref={buttonRef}
                                     type="button"
                                     onClick={(e) => {
-                                        console.log('Add button clicked, current showStatusMenu:', showStatusMenu);
                                         e.preventDefault();
                                         e.stopPropagation();
                                         if (!isLoading) setShowStatusMenu(!showStatusMenu);
                                     }}
                                     disabled={isLoading}
-                                    className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md shadow-lg border border-white/10 transition-all duration-200 hover:scale-110 active:scale-95
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md shadow-lg border border-white/10 transition-all duration-300 hover:scale-110 active:scale-95 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 focus:ring-2 focus:ring-accent focus:outline-none
                                         ${listStatus ? 'bg-accent text-white border-accent shadow-accent/30' : 'bg-black/50 text-white hover:bg-accent hover:border-accent'}`}
                                     title={listStatus ? 'Change status' : 'Add to Library'}
                                 >
@@ -293,7 +286,6 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                                                     key={option.value}
                                                     type="button"
                                                     onClick={(e) => {
-                                                        console.log('Dropdown option clicked:', option.value);
                                                         handleStatusChange(e, option.value);
                                                     }}
                                                     className={`w-full px-3 py-2.5 text-left flex items-center gap-3 text-sm rounded-lg transition-all duration-150 active:scale-95
@@ -322,11 +314,10 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                                 )}
                             </div>
 
-                            {/* Favorite Button */}
                             <button
                                 onClick={handleFavorite}
                                 disabled={isLoading}
-                                className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md shadow-lg border border-white/10 transition-all duration-200 hover:scale-110 active:scale-95
+                                className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md shadow-lg border border-white/10 transition-all duration-300 delay-75 hover:scale-110 active:scale-95 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 focus:ring-2 focus:ring-red-400 focus:outline-none
                                     ${isFavorite ? 'bg-red-500 text-white border-red-500 shadow-red-500/30' : 'bg-black/50 text-white hover:bg-red-500 hover:border-red-500'}`}
                                 title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                             >
@@ -342,7 +333,7 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
 
                 {/* Content */}
                 <Link to={`/anime/${anime.slug}`} className="p-3 md:p-4 flex-grow flex flex-col relative z-20 bg-dark-100 rounded-b-xl">
-                    <h3 className="font-bold text-white text-sm md:text-base line-clamp-2 mb-1.5 leading-snug group-hover:text-accent transition-colors">
+                    <h3 className="font-bold text-white text-sm md:text-base line-clamp-2 mb-1.5 leading-snug group-hover:text-accent transition-colors group-hover:underline decoration-accent/50 underline-offset-2">
                         {displayTitle}
                     </h3>
 
