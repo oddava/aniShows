@@ -139,7 +139,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         sort = self.request.query_params.get('sort', 'popular')
         sort_mapping = {
             'popular': 'popularity_rank',  # Use AniList popularity ranking (lower = more popular)
-            'rating': '-rating',
+            'rating': 'site_rank',
             'newest': '-release_date',
             'title': 'title',
             'upcoming': '-member_count',  # Most anticipated (by member count)
@@ -151,7 +151,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         # logical fixes for specific sorts:
         # Exclude upcoming (0 episodes) from rating and newest sorts to prevent them from hitting top
         if sort == 'rating':
-            queryset = queryset.filter(episode_count__gt=0, rating__isnull=False)
+            queryset = queryset.filter(site_rank__isnull=False, member_count__gt=200000)
         elif sort == 'newest':
             queryset = queryset.filter(episode_count__gt=0)
         elif sort == 'upcoming':
