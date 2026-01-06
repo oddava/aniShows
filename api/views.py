@@ -159,7 +159,18 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(status='Upcoming')
         elif sort == 'popular':
             # For popular sort, filter out anime without popularity_rank so they don't clutter results
-            queryset = queryset.filter(popularity_rank__isnull=False)
+            # BUT: when filtering by season/year, include all anime so seasonal views work correctly
+            if not season and not year:
+                queryset = queryset.filter(popularity_rank__isnull=False)
+            else:
+                # For seasonal views, sort with nulls last so popular anime appear first
+                from django.db.models import F
+                from django.db.models.functions import Coalesce
+                # Use Coalesce to give NULL popularity_rank a very high number (999999)
+                queryset = queryset.annotate(
+                    popularity_sort=Coalesce(F('popularity_rank'), 999999)
+                )
+                sort_field = 'popularity_sort'  # Override sort field
         elif sort == 'trending':
             queryset = queryset.filter(trending_rank__isnull=False)
 
