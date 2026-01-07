@@ -85,16 +85,32 @@ class AnimeListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'title_jp', 'slug', 'cover_image', 'banner_image', 'rating', 
             'episode_count', 'anime_type', 'status', 'genres',
-            'studio_name', 'is_favorite', 'user_list_status', 'synopsis', 'release_date'
+            'studio_name', 'is_favorite', 'user_list_status', 'synopsis', 'release_date',
+            'next_airing_episode', 'next_airing_date'
         ]
     
     def get_is_favorite(self, obj):
+        # Use prefetched annotation if available (avoids N+1)
+        if hasattr(obj, '_is_favorite'):
+            return obj._is_favorite
+        # Fallback for non-prefetched contexts
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
         return False
 
     def get_user_list_status(self, obj):
+        # Use prefetched list entries if available (avoids N+1)
+        if hasattr(obj, '_user_list_entries') and obj._user_list_entries:
+            entry = obj._user_list_entries[0]
+            return {
+                'id': entry.id,
+                'status': entry.status,
+                'score': entry.score,
+                'episodes_watched': entry.episodes_watched,
+                'progress': (entry.episodes_watched / obj.episode_count * 100) if obj.episode_count and obj.episode_count > 0 else 0
+            }
+        # Fallback for non-prefetched contexts
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             user_list = UserAnimeList.objects.filter(user=request.user, anime=obj).first()
@@ -136,12 +152,25 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
         ]
     
     def get_is_favorite(self, obj):
+        # Use prefetched annotation if available
+        if hasattr(obj, '_is_favorite'):
+            return obj._is_favorite
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
         return False
     
     def get_user_list_status(self, obj):
+        # Use prefetched list entries if available
+        if hasattr(obj, '_user_list_entries') and obj._user_list_entries:
+            entry = obj._user_list_entries[0]
+            return {
+                'id': entry.id,
+                'status': entry.status,
+                'score': entry.score,
+                'episodes_watched': entry.episodes_watched,
+                'progress': (entry.episodes_watched / obj.episode_count * 100) if obj.episode_count and obj.episode_count > 0 else 0
+            }
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             user_list = UserAnimeList.objects.filter(user=request.user, anime=obj).first()

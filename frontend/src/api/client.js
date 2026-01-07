@@ -100,6 +100,7 @@ export const authApi = {
 export const favoriteApi = {
     getAll: (params) => api.get('/favorites/', { params }),
     toggle: (animeId) => api.post('/favorites/toggle/', { anime_id: animeId }),
+    reorder: (orderedItems) => api.post('/favorites/reorder/', { items: orderedItems }),
 };
 
 export const listApi = {

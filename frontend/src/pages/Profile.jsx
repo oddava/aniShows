@@ -1,12 +1,15 @@
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { User, Heart, List, MessageSquare, Lock, BarChart3, Search, LayoutGrid, LayoutList, Clock, Star, Tv, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { User, Heart, List, MessageSquare, Lock, BarChart3, Search, LayoutGrid, LayoutList, Clock, Star, Tv, Link as LinkIcon, ExternalLink, Award, Trophy, Zap } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
+import ProfileAnimeCard, { ProfileAnimeCardSkeleton } from '../components/ProfileAnimeCard';
 import ReviewCard from '../components/ReviewCard';
 import ProfileInsights from '../components/ProfileInsights';
+import DraggableFavoritesGrid from '../components/DraggableFavoritesGrid';
+import useColorExtraction from '../hooks/useColorExtraction';
 
 // Social link icons as SVG components
 const TwitterIcon = () => (
@@ -47,6 +50,34 @@ const PlatformIcon = ({ platform }) => {
     return <LinkIcon className="w-4 h-4" />;
 };
 
+// Decode HTML entities in text
+const decodeHtmlEntities = (text) => {
+    if (!text) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+};
+
+// Generate user badges based on stats
+const getUserBadges = (user) => {
+    const badges = [];
+
+    if (user?.reviews_count >= 10) {
+        badges.push({ icon: Star, label: 'Top Reviewer', color: 'text-yellow-400', bg: 'bg-yellow-500/20' });
+    }
+    if (user?.anime_count >= 100) {
+        badges.push({ icon: Zap, label: 'Power User', color: 'text-purple-400', bg: 'bg-purple-500/20' });
+    }
+    if (user?.anime_count >= 50) {
+        badges.push({ icon: Trophy, label: 'Completionist', color: 'text-emerald-400', bg: 'bg-emerald-500/20' });
+    }
+    if (user?.is_early_adopter) {
+        badges.push({ icon: Award, label: 'Early Adopter', color: 'text-blue-400', bg: 'bg-blue-500/20' });
+    }
+
+    return badges.slice(0, 3); // Max 3 badges
+};
+
 export default function Profile({ forcedUsername }) {
     const { username: paramsUsername } = useParams();
     const username = forcedUsername || paramsUsername;
@@ -54,6 +85,8 @@ export default function Profile({ forcedUsername }) {
     const [activeTab, setActiveTab] = useState('favorites');
     const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
     const [searchQuery, setSearchQuery] = useState('');
+    const [dynamicColors, setDynamicColors] = useState(null);
+    const [listStatusFilter, setListStatusFilter] = useState('Watching'); // Current status tab
 
     const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
     const isOwnProfile = !isPublicView;
@@ -101,17 +134,19 @@ export default function Profile({ forcedUsername }) {
 
 
 
-    const { data: allLists, isLoading: listsLoading } = useQuery({
-        queryKey: ['lists', targetUsername],
-        queryFn: async () => {
-            const statuses = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
-            const results = await Promise.all(
-                statuses.map(status =>
-                    listApi.getAll({ status, username: targetUsername }).then(res => ({ status, items: res.data.results || res.data }))
-                )
-            );
-            return results;
-        },
+    // Status tabs for anime list
+    const STATUS_TABS = [
+        { value: 'Watching', label: 'Watching', icon: '👀' },
+        { value: 'Completed', label: 'Completed', icon: '✓' },
+        { value: 'Plan to Watch', label: 'Planning', icon: '📋' },
+        { value: 'On Hold', label: 'On Hold', icon: '⏸' },
+        { value: 'Dropped', label: 'Dropped', icon: '✗' },
+    ];
+
+    // Fetch only the currently selected status for better performance
+    const { data: currentListData, isLoading: listsLoading } = useQuery({
+        queryKey: ['lists', targetUsername, listStatusFilter],
+        queryFn: () => listApi.getAll({ status: listStatusFilter, username: targetUsername }).then(res => res.data.results || res.data || []),
         enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
     });
 
@@ -142,24 +177,43 @@ export default function Profile({ forcedUsername }) {
         return page.results || [];
     }) || [];
 
-    // Filter lists by search query
-    const filteredLists = useMemo(() => {
-        if (!allLists || !searchQuery.trim()) return allLists;
+    // Filter current list by search query
+    const filteredListItems = useMemo(() => {
+        if (!currentListData || !searchQuery.trim()) return currentListData || [];
         const query = searchQuery.toLowerCase();
-        return allLists.map(group => ({
-            ...group,
-            items: group.items.filter(item =>
-                item.anime?.title?.toLowerCase().includes(query) ||
-                item.anime?.title_jp?.toLowerCase().includes(query)
-            )
-        }));
-    }, [allLists, searchQuery]);
+        return currentListData.filter(item =>
+            item.anime?.title?.toLowerCase().includes(query) ||
+            item.anime?.title_jp?.toLowerCase().includes(query)
+        );
+    }, [currentListData, searchQuery]);
 
     useEffect(() => {
         if (displayUser?.username) {
             document.title = `${displayUser.username}'s Profile - AniShows`;
         }
     }, [displayUser]);
+
+    // Dynamic color extraction from banner
+    const { colors: extractedColors } = useColorExtraction(displayUser?.banner);
+
+    useEffect(() => {
+        if (extractedColors) {
+            setDynamicColors(extractedColors);
+            // Apply to CSS custom properties for this profile page
+            const root = document.documentElement;
+            root.style.setProperty('--profile-accent', extractedColors.primary);
+            root.style.setProperty('--profile-accent-light', extractedColors.accent);
+            root.style.setProperty('--profile-secondary', extractedColors.secondary);
+        }
+
+        return () => {
+            // Clean up on unmount
+            const root = document.documentElement;
+            root.style.removeProperty('--profile-accent');
+            root.style.removeProperty('--profile-accent-light');
+            root.style.removeProperty('--profile-secondary');
+        };
+    }, [extractedColors]);
 
     if (loading) {
         return (
@@ -187,97 +241,82 @@ export default function Profile({ forcedUsername }) {
     const renderAnimeList = () => {
         if (listsLoading) {
             return (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                    {Array(10).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                    {Array(12).fill(0).map((_, i) => <ProfileAnimeCardSkeleton key={i} />)}
                 </div>
             );
         }
 
-        const listsToRender = filteredLists || allLists;
-        const hasAnyItems = listsToRender?.some(group => group.items.length > 0);
-
-        if (!hasAnyItems) {
+        if (!filteredListItems || filteredListItems.length === 0) {
             return (
-                <div className="text-center py-16 text-gray-400">
-                    <p>{searchQuery ? "No anime found matching your search." : (isPublicView ? "This user's list is empty." : "Your list is empty.")}</p>
+                <div className="text-center py-16 text-gray-400 bg-dark-100/50 rounded-xl border border-gray-800 border-dashed">
+                    <p>{searchQuery ? "No anime found matching your search." : `No anime in ${listStatusFilter}.`}</p>
+                    {!searchQuery && !isPublicView && (
+                        <Link to="/browse" className="text-accent hover:underline mt-2 inline-block">Browse anime to add some!</Link>
+                    )}
                 </div>
             );
         }
 
-        return (
-            <div className="space-y-12">
-                {listsToRender.map((group) => (
-                    group.items.length > 0 && (
-                        <div key={group.status}>
-                            <h3 className="text-xl font-bold text-white mb-4 pl-2 border-l-4 border-accent">
-                                {group.status} <span className="text-gray-500 text-sm ml-2">({group.items.length})</span>
-                            </h3>
-                            {viewMode === 'grid' ? (
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                                    {group.items.map((item) => (
-                                        <AnimeCard
-                                            key={item.id}
-                                            anime={item.anime}
-                                            userListEntry={item}
-                                            isOwnProfile={isOwnProfile}
-                                            showProgress={group.status === 'Watching'}
-                                            disableEffects={true}
-                                            lite={true}
-                                        />
-                                    ))}
-                                </div>
-                            ) : (
-                                // List View
-                                <div className="space-y-2">
-                                    {group.items.map((item) => (
-                                        <Link
-                                            key={item.id}
-                                            to={`/anime/${item.anime?.slug}`}
-                                            className="flex items-center gap-4 bg-dark-100 hover:bg-dark-50 rounded-lg p-3 border border-gray-800 hover:border-accent/30 transition-all group"
-                                        >
-                                            <img
-                                                src={item.anime?.cover_image}
-                                                alt={item.anime?.title}
-                                                className="w-12 h-16 rounded object-cover shrink-0"
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="font-medium text-white group-hover:text-accent transition-colors truncate">
-                                                    {item.anime?.title}
-                                                </h4>
-                                                <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                                                    <span>{item.anime?.anime_type || 'TV'}</span>
-                                                    <span>•</span>
-                                                    <span>{item.anime?.episode_count || '?'} eps</span>
-                                                    {item.score > 0 && (
-                                                        <>
-                                                            <span>•</span>
-                                                            <span className="flex items-center gap-1 text-yellow-500">
-                                                                <Star className="w-3 h-3 fill-current" />
-                                                                {item.score}
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {group.status === 'Watching' && item.anime?.episode_count > 0 && (
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-accent rounded-full"
-                                                            style={{ width: `${((item.episodes_watched || 0) / item.anime.episode_count) * 100}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="text-xs text-gray-400 tabular-nums">
-                                                        {item.episodes_watched || 0}/{item.anime.episode_count}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </Link>
-                                    ))}
-                                </div>
-                            )}
+        return viewMode === 'grid' ? (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                {filteredListItems.map((item) => (
+                    <ProfileAnimeCard
+                        key={item.id}
+                        anime={item.anime}
+                        episodesWatched={item.episodes_watched}
+                        showProgress={listStatusFilter === 'Watching'}
+                        listEntryId={item.id}
+                    />
+                ))}
+            </div>
+        ) : (
+            // List View
+            <div className="space-y-2">
+                {filteredListItems.map((item) => (
+                    <Link
+                        key={item.id}
+                        to={`/anime/${item.anime?.slug}`}
+                        className="flex items-center gap-4 bg-dark-100 hover:bg-dark-50 rounded-lg p-3 border border-gray-800 hover:border-accent/30 transition-all group"
+                    >
+                        <img
+                            src={item.anime?.cover_image}
+                            alt={item.anime?.title}
+                            className="w-12 h-16 rounded object-cover shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-white group-hover:text-accent transition-colors truncate">
+                                {item.anime?.title}
+                            </h4>
+                            <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                <span>{item.anime?.anime_type || 'TV'}</span>
+                                <span>•</span>
+                                <span>{item.anime?.episode_count || '?'} eps</span>
+                                {item.score > 0 && (
+                                    <>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1 text-yellow-500">
+                                            <Star className="w-3 h-3 fill-current" />
+                                            {item.score}
+                                        </span>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    )
+                        {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
+                            <div className="flex items-center gap-2 shrink-0">
+                                <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-accent rounded-full"
+                                        style={{ width: `${((item.episodes_watched || 0) / item.anime.episode_count) * 100}%` }}
+                                    />
+                                </div>
+                                <span className="text-xs text-gray-400 tabular-nums">
+                                    {item.episodes_watched || 0}/{item.anime.episode_count}
+                                </span>
+                            </div>
+                        )}
+                    </Link>
                 ))}
             </div>
         );
@@ -344,17 +383,21 @@ export default function Profile({ forcedUsername }) {
             case 'favorites':
                 return (
                     <div className="space-y-8">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                            {favoritesLoading ? (
-                                Array(6).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
-                            ) : favorites?.length > 0 ? (
-                                favorites.map((fav) => <AnimeCard key={fav.id} anime={fav.anime} isOwnProfile={isOwnProfile} lite={true} />)
-                            ) : (
-                                <p className="col-span-full text-center text-gray-400 py-12">
-                                    {isPublicView ? "No favorites yet." : "No favorites yet. Start adding some!"}
-                                </p>
-                            )}
-                        </div>
+                        {favoritesLoading ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                                {Array(6).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
+                            </div>
+                        ) : favorites?.length > 0 ? (
+                            <DraggableFavoritesGrid
+                                favorites={favorites}
+                                isOwnProfile={isOwnProfile}
+                                username={targetUsername}
+                            />
+                        ) : (
+                            <p className="text-center text-gray-400 py-12">
+                                {isPublicView ? "No favorites yet." : "No favorites yet. Start adding some!"}
+                            </p>
+                        )}
 
                         {hasNextFavorites && (
                             <div className="text-center">
@@ -377,6 +420,22 @@ export default function Profile({ forcedUsername }) {
             case 'anime_list':
                 return (
                     <div className="space-y-6">
+                        {/* Status Tabs */}
+                        <div className="flex flex-wrap gap-2 border-b border-gray-800 pb-4">
+                            {STATUS_TABS.map((tab) => (
+                                <button
+                                    key={tab.value}
+                                    onClick={() => setListStatusFilter(tab.value)}
+                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${listStatusFilter === tab.value
+                                        ? 'bg-accent text-white shadow-lg shadow-accent/20'
+                                        : 'bg-dark-100 text-gray-400 hover:text-white hover:bg-dark-50 border border-gray-800'
+                                        }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
                         {/* List Controls */}
                         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                             {/* Search */}
@@ -384,7 +443,7 @@ export default function Profile({ forcedUsername }) {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                 <input
                                     type="text"
-                                    placeholder="Search your list..."
+                                    placeholder={`Search in ${listStatusFilter}...`}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="input w-full pl-10 py-2 text-sm"
@@ -409,6 +468,13 @@ export default function Profile({ forcedUsername }) {
                                 </button>
                             </div>
                         </div>
+
+                        {/* Count indicator */}
+                        {filteredListItems && filteredListItems.length > 0 && (
+                            <div className="text-sm text-gray-500">
+                                Showing {filteredListItems.length} anime in {listStatusFilter}
+                            </div>
+                        )}
 
                         {renderAnimeList()}
                     </div>
@@ -443,26 +509,41 @@ export default function Profile({ forcedUsername }) {
             <div className="max-w-7xl mx-auto px-4 relative -mt-20">
                 {/* Profile Header Card */}
                 <div className="flex flex-col items-center md:flex-row md:items-end gap-4 md:gap-6 mb-8">
-                    {/* Avatar */}
-                    <div className="w-28 h-28 md:w-40 md:h-40 rounded-full border-4 border-dark-200 bg-dark-100 overflow-hidden shadow-xl shrink-0">
-                        {displayUser?.avatar ? (
-                            <img src={displayUser.avatar} alt={displayUser.username} className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
-                                <User className="w-12 h-12 md:w-16 md:h-16 text-white" />
-                            </div>
-                        )}
+                    {/* Avatar with Glassmorphism */}
+                    <div className="w-28 h-28 md:w-40 md:h-40 rounded-full bg-dark-100 overflow-hidden shadow-xl shrink-0 avatar-glow">
+                        <div className="w-full h-full rounded-full border-4 border-white/10 overflow-hidden glass-border">
+                            {displayUser?.avatar ? (
+                                <img src={displayUser.avatar} alt={displayUser.username} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                                    <User className="w-12 h-12 md:w-16 md:h-16 text-white" />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* User Info */}
                     <div className="flex-1 text-center md:text-left mb-2 md:mb-0">
-                        <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">{displayUser?.username}</h1>
+                        {/* Username + Badges */}
+                        <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start mb-1">
+                            <h1 className="text-2xl md:text-3xl font-bold text-white">{displayUser?.username}</h1>
+                            {getUserBadges(displayUser).map((badge, index) => (
+                                <span
+                                    key={index}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.color} border border-white/10`}
+                                    title={badge.label}
+                                >
+                                    <badge.icon className="w-3 h-3" />
+                                    <span className="hidden sm:inline">{badge.label}</span>
+                                </span>
+                            ))}
+                        </div>
                         {!isPublicView && <p className="text-gray-400 text-sm md:text-base mb-2">{displayUser?.email}</p>}
 
-                        {/* Bio */}
+                        {/* Bio with HTML entity decoding */}
                         {displayUser?.bio && (
-                            <p className="text-gray-300 text-sm md:text-base max-w-2xl bg-dark-100/50 p-3 rounded-lg backdrop-blur-sm border border-white/5 mx-auto md:mx-0 mb-3">
-                                {displayUser.bio}
+                            <p className="text-gray-300 text-sm md:text-base max-w-2xl glass p-3 rounded-lg glass-border mx-auto md:mx-0 mb-3">
+                                {decodeHtmlEntities(displayUser.bio)}
                             </p>
                         )}
 

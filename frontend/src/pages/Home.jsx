@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Play, TrendingUp, Star, ChevronRight, Sparkles } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
-import { animeApi } from '../api/client';
+import { animeApi, listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
 
@@ -95,8 +95,14 @@ export default function Home() {
             </section>
 
             <div className="space-y-4 md:space-y-8 pb-16 -mt-10 relative z-20">
+
+                {/* Currently Watching Section - Added Utility */}
+                {isAuthenticated && (
+                    <CurrentlyWatchingSection />
+                )}
+
                 {/* Trending Section */}
-                <section className="px-4 md:px-6">
+                <section className="px-4 md:px-6 pt-8 md:pt-12">
                     <div className="max-w-7xl mx-auto">
                         <div className="flex items-center justify-between mb-4 md:mb-6">
                             <div className="flex items-center gap-2 md:gap-3">
@@ -203,5 +209,44 @@ export default function Home() {
                 </section>
             )}
         </div>
+    );
+}
+
+function CurrentlyWatchingSection() {
+    const { data: watching, isLoading } = useQuery({
+        queryKey: ['user', 'list', 'watching'],
+        queryFn: () => listApi.getAll({ status: 'Watching', sort: '-updated_at', limit: 6 }).then(res => res.data.results || res.data),
+        retry: false
+    });
+
+    if (isLoading || !watching || watching.length === 0) return null;
+
+    return (
+        <section className="px-4 md:px-6">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <Play className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
+                        <h2 className="text-xl md:text-2xl font-bold text-white">Currently Watching</h2>
+                    </div>
+                    <Link to="/profile?tab=animelist&status=Watching" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+                        View All <ChevronRight className="w-4 h-4" />
+                    </Link>
+                </div>
+
+                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                    {watching.map((entry) => (
+                        <div key={entry.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
+                            {/* Pass userListEntry explicitly to ensure progress tracking works */}
+                            <AnimeCard
+                                anime={entry.anime}
+                                userListEntry={entry}
+                                showProgress={true}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
     );
 }

@@ -133,6 +133,10 @@ class Anime(Model):
     # SEO
     meta_description = CharField(max_length=160, blank=True)
 
+    # Airing Schedule
+    next_airing_episode = IntegerField(null=True, blank=True)
+    next_airing_date = DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ['-release_date', '-created_at']
         indexes = [
@@ -175,10 +179,11 @@ class UserFavorite(Model):
     user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name='favorites')
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name='favorites')
     added_at = DateTimeField(auto_now_add=True)
+    order = IntegerField(default=0)  # User-defined order for display
 
     class Meta:
         unique_together = ('user', 'anime')
-        ordering = ['-added_at']
+        ordering = ['order', '-added_at']
 
     def __str__(self):
         return f"{self.user.username} - {self.anime.title}"

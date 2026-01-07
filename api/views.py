@@ -43,6 +43,25 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = Anime.objects.select_related('studio').prefetch_related('genres')
         
+        # Prefetch user-specific data to avoid N+1 queries in serializers
+        user = self.request.user
+        if user.is_authenticated:
+            from django.db.models import Exists, OuterRef
+            # Annotate is_favorite as boolean (avoids query per anime)
+            queryset = queryset.annotate(
+                _is_favorite=Exists(
+                    UserFavorite.objects.filter(user=user, anime=OuterRef('pk'))
+                )
+            )
+            # Prefetch user's list entries for these anime
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    'user_lists',
+                    queryset=UserAnimeList.objects.filter(user=user),
+                    to_attr='_user_list_entries'
+                )
+            )
+        
         # Annotate with counts
         queryset = queryset.annotate(
             review_count=Count('reviews', distinct=True),
@@ -642,6 +661,24 @@ class FavoriteViewSet(viewsets.ModelViewSet):
             return Response({'is_favorite': False, 'message': 'Removed from favorites'})
         
         return Response({'is_favorite': True, 'message': 'Added to favorites'})
+    
+    @action(detail=False, methods=['post'])
+    def reorder(self, request):
+        """Reorder user's favorites"""
+        items = request.data.get('items', [])
+        if not items:
+            return Response({'error': 'items required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update the order for each favorite
+        for item in items:
+            try:
+                favorite = UserFavorite.objects.get(id=item['id'], user=request.user)
+                favorite.order = item.get('order', 0)
+                favorite.save(update_fields=['order'])
+            except UserFavorite.DoesNotExist:
+                continue
+        
+        return Response({'message': 'Order saved successfully'})
 
 
 class UserAnimeListViewSet(viewsets.ModelViewSet):

@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { listApi, reviewApi } from '../api/client';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { TrendingUp, Star, Tv, Clock, BarChart3 } from 'lucide-react';
+import ActivityHeatmap from './ActivityHeatmap';
 
 // Color palette for charts
 const GENRE_COLORS = [
@@ -144,43 +145,72 @@ export default function ProfileInsights({ username, isPrivate }) {
 
             {/* Charts Grid */}
             <div className="grid md:grid-cols-2 gap-6">
-                {/* Genre Distribution */}
+                {/* Anime DNA - Radar Chart */}
                 <div className="bg-dark-100 rounded-xl border border-gray-800 p-6">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <BarChart3 className="w-5 h-5 text-accent" />
-                        Genre Distribution
+                        Anime DNA
+                        <span className="text-xs text-gray-500 font-normal ml-2">Your taste profile</span>
                     </h3>
                     {genreData.length > 0 ? (
-                        <div className="flex flex-col md:flex-row items-center gap-6">
-                            <div className="w-48 h-48">
+                        <div className="flex flex-col items-center">
+                            <div className="w-full h-64">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={genreData}
+                                    <RadarChart data={genreData} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+                                        <PolarGrid
+                                            stroke="rgba(139, 92, 246, 0.15)"
+                                            strokeDasharray="3 3"
+                                        />
+                                        <PolarAngleAxis
+                                            dataKey="name"
+                                            tick={{
+                                                fill: '#9ca3af',
+                                                fontSize: 11,
+                                                fontWeight: 500
+                                            }}
+                                            tickLine={false}
+                                        />
+                                        <PolarRadiusAxis
+                                            angle={90}
+                                            domain={[0, 'auto']}
+                                            tick={{ fill: '#6b7280', fontSize: 10 }}
+                                            tickCount={4}
+                                            axisLine={false}
+                                        />
+                                        <Radar
+                                            name="Anime Count"
                                             dataKey="value"
-                                            nameKey="name"
-                                            cx="50%"
-                                            cy="50%"
-                                            outerRadius={80}
-                                            innerRadius={40}
-                                        >
-                                            {genreData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
-                                            ))}
-                                        </Pie>
+                                            stroke="#8b5cf6"
+                                            strokeWidth={2}
+                                            fill="url(#radarGradient)"
+                                            fillOpacity={0.6}
+                                            dot={{
+                                                r: 4,
+                                                fill: '#8b5cf6',
+                                                stroke: '#fff',
+                                                strokeWidth: 1
+                                            }}
+                                        />
                                         <Tooltip content={<CustomTooltip />} />
-                                    </PieChart>
+                                        <defs>
+                                            <linearGradient id="radarGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.8} />
+                                                <stop offset="100%" stopColor="#ec4899" stopOpacity={0.3} />
+                                            </linearGradient>
+                                        </defs>
+                                    </RadarChart>
                                 </ResponsiveContainer>
                             </div>
-                            <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-1.5">
-                                {genreData.map((genre) => (
-                                    <div key={genre.name} className="flex items-center gap-2 text-sm">
+                            {/* Genre Legend */}
+                            <div className="flex flex-wrap justify-center gap-3 mt-4 pt-4 border-t border-gray-800">
+                                {genreData.slice(0, 6).map((genre) => (
+                                    <div key={genre.name} className="flex items-center gap-1.5 text-xs text-gray-400">
                                         <div
-                                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                                            className="w-2 h-2 rounded-full"
                                             style={{ backgroundColor: genre.color }}
                                         />
-                                        <span className="text-gray-300 truncate text-xs">{genre.name}</span>
-                                        <span className="text-gray-500 ml-auto text-xs">{genre.value}</span>
+                                        <span>{genre.name}</span>
+                                        <span className="text-gray-600">({genre.value})</span>
                                     </div>
                                 ))}
                             </div>
@@ -188,6 +218,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                     ) : (
                         <div className="text-center py-8 text-gray-500">
                             <p>No genre data available yet.</p>
+                            <p className="text-xs mt-1">Add anime to your list to see your taste profile!</p>
                         </div>
                     )}
                 </div>
@@ -236,6 +267,9 @@ export default function ProfileInsights({ username, isPrivate }) {
                 </div>
             </div>
 
+            {/* Activity Heatmap */}
+            <ActivityHeatmap username={username} activityData={generateMockActivityData(listsData)} />
+
             {/* Watching Progress */}
             {watchingCount > 0 && (
                 <div className="bg-dark-100 rounded-xl border border-gray-800 p-6">
@@ -276,3 +310,12 @@ export default function ProfileInsights({ username, isPrivate }) {
         </div>
     );
 }
+
+// Activity data placeholder - requires backend tracking for real data
+// Returns empty array to show the heatmap in empty state
+function generateMockActivityData(listsData) {
+    // This feature requires backend to track when episodes were watched
+    // For now, return empty to show the heatmap structure without fake data
+    return [];
+}
+
