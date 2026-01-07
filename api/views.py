@@ -451,7 +451,7 @@ class PasswordResetView(APIView):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         
         # Link to frontend reset page
-        reset_link = f"http://localhost:5173/reset-password/{uid}/{token}/"
+        reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
         
         subject = 'Reset your password - aniShows'
         message = f'Click the link below to reset your password:\n\n{reset_link}'
