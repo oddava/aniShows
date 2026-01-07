@@ -178,14 +178,24 @@ class UserSerializer(serializers.ModelSerializer):
     favorites_count = serializers.SerializerMethodField()
     reviews_count = serializers.SerializerMethodField()
     
+    # Computed stats
+    days_watched = serializers.SerializerMethodField()
+    mean_score = serializers.SerializerMethodField()
+    anime_count = serializers.SerializerMethodField()
+    
+    # Social links
+    social_links = serializers.SerializerMethodField()
+    
     email_verified = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'date_joined', 'avatar', 'banner', 'bio', 
-                  'is_private', 'favorites_count', 'reviews_count', 'email_verified', 'has_password',
-                  'is_staff', 'is_superuser']
+                  'is_private', 'favorites_count', 'reviews_count', 
+                  'days_watched', 'mean_score', 'anime_count',
+                  'social_links',
+                  'email_verified', 'has_password', 'is_staff', 'is_superuser']
         read_only_fields = ['id', 'date_joined', 'email_verified', 'has_password', 'is_staff', 'is_superuser']
     
     def get_avatar(self, obj):
@@ -217,6 +227,28 @@ class UserSerializer(serializers.ModelSerializer):
     def get_has_password(self, obj):
         return obj.has_usable_password()
 
+    def get_days_watched(self, obj):
+        """Calculate total days watched from user's anime list"""
+        from django.db.models import Sum, F
+        total_minutes = obj.anime_lists.annotate(
+            watch_time=F('episodes_watched') * F('anime__duration_minutes')
+        ).aggregate(total=Sum('watch_time'))['total'] or 0
+        return round(total_minutes / 1440, 1)  # Convert minutes to days
+    
+    def get_mean_score(self, obj):
+        """Calculate average score from user's anime list"""
+        from django.db.models import Avg
+        avg = obj.anime_lists.filter(score__gt=0).aggregate(avg=Avg('score'))['avg']
+        return round(avg, 1) if avg else None
+    
+    def get_anime_count(self, obj):
+        """Count total anime in user's list"""
+        return obj.anime_lists.count()
+    
+    def get_social_links(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.social_links if profile else []
+
 
 class PublicUserSerializer(serializers.ModelSerializer):
     """Limited serializer for public profile view"""
@@ -227,9 +259,20 @@ class PublicUserSerializer(serializers.ModelSerializer):
     reviews_count = serializers.SerializerMethodField()
     is_private = serializers.SerializerMethodField()
     
+    # Computed stats
+    days_watched = serializers.SerializerMethodField()
+    mean_score = serializers.SerializerMethodField()
+    anime_count = serializers.SerializerMethodField()
+    
+    # Dynamic Social links
+    social_links = serializers.SerializerMethodField()
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'date_joined', 'avatar', 'banner', 'bio', 'favorites_count', 'reviews_count', 'is_private']
+        fields = ['id', 'username', 'date_joined', 'avatar', 'banner', 'bio', 
+                  'favorites_count', 'reviews_count', 'is_private',
+                  'days_watched', 'mean_score', 'anime_count',
+                  'social_links']
         read_only_fields = fields
     
     def get_avatar(self, obj):
@@ -254,11 +297,71 @@ class PublicUserSerializer(serializers.ModelSerializer):
         profile = getattr(obj, 'userprofile', None)
         return profile.is_private if profile else False
 
+    def get_days_watched(self, obj):
+        """Calculate total days watched from user's anime list"""
+        from django.db.models import Sum, F
+        total_minutes = obj.anime_lists.annotate(
+            watch_time=F('episodes_watched') * F('anime__duration_minutes')
+        ).aggregate(total=Sum('watch_time'))['total'] or 0
+        return round(total_minutes / 1440, 1)
+    
+    def get_mean_score(self, obj):
+        """Calculate average score from user's anime list"""
+        from django.db.models import Avg
+        avg = obj.anime_lists.filter(score__gt=0).aggregate(avg=Avg('score'))['avg']
+        return round(avg, 1) if avg else None
+    
+    def get_anime_count(self, obj):
+        """Count total anime in user's list"""
+        return obj.anime_lists.count()
+    
+    def get_social_links(self, obj):
+        profile = getattr(obj, 'userprofile', None)
+        return profile.social_links if profile else []
+
 class UserProfileUpdateSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150, required=False)
     avatar = serializers.ImageField(required=False, allow_null=True)
     banner = serializers.ImageField(required=False, allow_null=True)
     bio = serializers.CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
+    
+    # Dynamic social links
+    social_links = serializers.JSONField(required=False)
+    
+    def validate_social_links(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Social links must be a list.")
+        
+        if len(value) > 5:
+            raise serializers.ValidationError("Maximum 5 social links allowed.")
+        
+        normalized_links = []
+        for link in value:
+            if not isinstance(link, dict) or 'platform' not in link or 'value' not in link:
+                continue
+            
+            platform = link['platform'].strip()
+            val = link['value'].strip()
+            
+            if not platform or not val:
+                continue
+                
+            # Normalize common platforms
+            normalized_val = val
+            if not val.startswith(('http://', 'https://', 'www.')):
+                if platform.lower() in ['twitter', 'x']:
+                    normalized_val = f"https://x.com/{val.lstrip('@')}"
+                elif platform.lower() == 'youtube':
+                    normalized_val = f"https://youtube.com/@{val.lstrip('@')}"
+                elif platform.lower() == 'instagram':
+                    normalized_val = f"https://instagram.com/{val.lstrip('@')}"
+            
+            normalized_links.append({
+                'platform': platform,
+                'value': normalized_val
+            })
+            
+        return normalized_links
     
     def validate_avatar(self, value):
         """Validate avatar file size and type."""

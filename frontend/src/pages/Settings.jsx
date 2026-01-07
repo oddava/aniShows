@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Lock, Shield, Eye, EyeOff, AlertCircle, Check } from 'lucide-react';
+import { User, Lock, Shield, Eye, EyeOff, AlertCircle, Check, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
 
@@ -13,6 +13,8 @@ export default function Settings() {
     const [username, setUsername] = useState('');
     const [avatarFile, setAvatarFile] = useState(null);
     const [bannerFile, setBannerFile] = useState(null);
+    const [socialLinks, setSocialLinks] = useState([]);
+    const [isPrivate, setIsPrivate] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileSuccess, setProfileSuccess] = useState('');
@@ -23,7 +25,6 @@ export default function Settings() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showOldPassword, setShowOldPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
-    const [isPrivate, setIsPrivate] = useState(false);
     const [isSavingAccount, setIsSavingAccount] = useState(false);
     const [accountError, setAccountError] = useState('');
     const [accountSuccess, setAccountSuccess] = useState('');
@@ -40,8 +41,9 @@ export default function Settings() {
     // Initialize state from user data
     useEffect(() => {
         if (user) {
-            if (user.bio) setBio(user.bio);
-            if (user.username) setUsername(user.username);
+            setBio(user.bio || '');
+            setUsername(user.username || '');
+            setSocialLinks(user.social_links || []);
             setIsPrivate(user.is_private || false);
         }
     }, [user]);
@@ -64,8 +66,10 @@ export default function Settings() {
         setProfileSuccess('');
         try {
             const formData = new FormData();
-            formData.append('bio', bio);
+            if (bio !== user.bio) formData.append('bio', bio);
             formData.append('username', username.trim());
+            formData.append('social_links', JSON.stringify(socialLinks));
+            if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
             if (avatarFile) formData.append('avatar', avatarFile);
             if (bannerFile) formData.append('banner', bannerFile);
 
@@ -312,6 +316,77 @@ export default function Settings() {
                                     placeholder="Tell us about yourself..."
                                     className="input min-h-[120px] resize-none w-full max-w-xl"
                                 />
+                            </div>
+
+                            {/* Social Links */}
+                            <div className="pt-4 border-t border-gray-800">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-medium text-white">Social Links</h3>
+                                    {socialLinks.length < 5 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
+                                            className="text-xs font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                            Add Link
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-3 max-w-xl">
+                                    {socialLinks.length === 0 ? (
+                                        <p className="text-sm text-gray-500 italic">No social links added yet.</p>
+                                    ) : (
+                                        socialLinks.map((link, index) => (
+                                            <div key={index} className="flex items-start gap-3 bg-dark-200/50 p-3 rounded-lg border border-white/5 group">
+                                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div>
+                                                        <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Platform</label>
+                                                        <input
+                                                            type="text"
+                                                            value={link.platform}
+                                                            onChange={(e) => {
+                                                                const newLinks = [...socialLinks];
+                                                                newLinks[index].platform = e.target.value;
+                                                                setSocialLinks(newLinks);
+                                                            }}
+                                                            className="input py-1.5 text-sm w-full"
+                                                            placeholder="e.g. Twitter, Discord"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Username/URL</label>
+                                                        <input
+                                                            type="text"
+                                                            value={link.value}
+                                                            onChange={(e) => {
+                                                                const newLinks = [...socialLinks];
+                                                                newLinks[index].value = e.target.value;
+                                                                setSocialLinks(newLinks);
+                                                            }}
+                                                            className="input py-1.5 text-sm w-full"
+                                                            placeholder="Enter username or link"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSocialLinks(socialLinks.filter((_, i) => i !== index))}
+                                                    className="p-2 text-gray-500 hover:text-red-400 transition-colors mt-4 sm:mt-5 opacity-0 group-hover:opacity-100"
+                                                    title="Remove link"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                    {socialLinks.length > 0 && (
+                                        <p className="text-[10px] text-gray-500 mt-2">
+                                            Tip: Twitter/Instagram/YouTube links normalize automatically from usernames!
+                                        </p>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Error/Success */}

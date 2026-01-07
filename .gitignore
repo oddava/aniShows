@@ -180,3 +180,4 @@ cython_debug/
 .env
 .env
 backups-data/
+.vscode

@@ -12,11 +12,11 @@ const STATUS_OPTIONS = [
     { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
 ];
 
-export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLanguage = 'en' }) {
+function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLanguage = 'en', showProgress = false, disableEffects = false, lite = false }) {
     const { isAuthenticated } = useAuth();
     const [isFavorite, setIsFavorite] = useState(anime.is_favorite || false);
     const [isLoading, setIsLoading] = useState(false);
-    const [isVisible, setIsVisible] = useState(false);
+    const [isVisible, setIsVisible] = useState(disableEffects); // Skip fade-in if effects disabled
     const [showStatusMenu, setShowStatusMenu] = useState(false);
     const [showTooltip, setShowTooltip] = useState(false);
     const [listStatus, setListStatus] = useState(userListEntry?.status || anime.user_list_status?.status || null);
@@ -28,9 +28,10 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
     const [tooltipPosition, setTooltipPosition] = useState('right');
 
     useEffect(() => {
+        if (disableEffects) return;
         const timer = setTimeout(() => setIsVisible(true), 50);
         return () => clearTimeout(timer);
-    }, []);
+    }, [disableEffects]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -146,8 +147,9 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
     const displayTitle = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
     const currentStatusOption = STATUS_OPTIONS.find(s => s.value === listStatus);
 
-    // Hover handlers with delay for tooltip
+    // Hover handlers with delay for tooltip - skip if effects disabled or in lite mode
     const handleMouseEnter = () => {
+        if (disableEffects || lite) return;
         // Check if card is near the right edge of the viewport
         if (cardRef.current) {
             const rect = cardRef.current.getBoundingClientRect();
@@ -165,6 +167,7 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
     };
 
     const handleMouseLeave = () => {
+        if (disableEffects || lite) return;
         if (hoverTimeoutRef.current) {
             clearTimeout(hoverTimeoutRef.current);
         }
@@ -184,12 +187,15 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
     return (
         <div
             ref={cardRef}
-            className={`group relative block h-full select-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} transition-all duration-500 hover:z-50`}
+            className={`group relative block h-full select-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'} transition-all duration-500 ${!lite ? 'hover:z-50' : ''}`}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
         >
-            {/* Main Card Area - with lift effect on hover */}
-            <div className="bg-dark-100 rounded-xl border border-gray-800 transition-all duration-300 hover:border-accent/50 hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent/10 h-full flex flex-col relative">
+            {/* Main Card Area - with lift effect on hover (simpler in lite mode) */}
+            <div className={`bg-dark-100 rounded-xl border border-gray-800 transition-all duration-300 h-full flex flex-col relative
+                ${lite
+                    ? 'hover:border-accent/40 hover:bg-dark-50'
+                    : 'hover:border-accent/50 hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent/10'}`}>
 
                 {/* Image Container - overflow-hidden ONLY here for image zoom */}
                 <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
@@ -202,7 +208,7 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                         />
 
                         {/* Hover Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-dark-100 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className={`absolute inset-0 bg-gradient-to-t from-dark-100 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 ${lite ? 'via-black/20' : ''}`} />
                     </Link>
 
                     {/* Ghosty Rank Badge */}
@@ -221,9 +227,9 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                         </div>
                     )}
 
-                    {/* List Status Badge */}
+                    {/* List Status Badge - Simplified for Lite */}
                     {listStatus && currentStatusOption && (
-                        <div className={`absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1.5 backdrop-blur-md rounded-lg z-20 ${currentStatusOption.color} ${currentStatusOption.bgColor} border pointer-events-none shadow-lg animate-fade-in`}>
+                        <div className={`absolute top-2 left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-20 ${currentStatusOption.color} ${currentStatusOption.bgColor} border pointer-events-none shadow-lg animate-fade-in ${!lite && 'backdrop-blur-md'}`}>
                             <currentStatusOption.icon className="w-3.5 h-3.5" />
                             <span className="text-[11px] font-bold uppercase tracking-wide">{currentStatusOption.label}</span>
                         </div>
@@ -231,17 +237,35 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
 
                     {/* Progress Bar */}
                     {userListEntry && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700 z-10 pointer-events-none">
-                            <div
-                                style={{ width: `${progress}%` }}
-                                className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-accent'}`}
-                            />
+                        <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none">
+                            {/* Enhanced progress display when showProgress is true */}
+                            {showProgress && anime.episode_count > 0 ? (
+                                <div className={`bg-dark-100/95 px-2 py-1.5 flex items-center justify-between gap-2 ${!lite && 'backdrop-blur-sm'}`}>
+                                    <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                        <div
+                                            style={{ width: `${progress}%` }}
+                                            className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-green-500' : 'bg-accent'}`}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-accent whitespace-nowrap">
+                                        {userListEntry.episodes_watched || 0}/{anime.episode_count}
+                                    </span>
+                                </div>
+                            ) : (
+                                /* Simple thin progress bar for non-watching entries */
+                                <div className="h-1 bg-gray-700">
+                                    <div
+                                        style={{ width: `${progress}%` }}
+                                        className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-accent'}`}
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
 
                     {/* Rating badge */}
                     {anime.rating && (
-                        <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg z-10 pointer-events-none">
+                        <div className={`absolute left-2 flex items-center gap-1 px-2 py-1 bg-black/60 rounded-lg z-10 pointer-events-none ${showProgress && userListEntry ? 'bottom-10' : 'bottom-2'} ${!lite && 'backdrop-blur-md'}`}>
                             <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
                             <span className="text-xs font-bold text-white">{anime.rating}</span>
                         </div>
@@ -249,7 +273,7 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                 </div>
 
                 {/* Action Buttons - with staggered animation */}
-                <div className="absolute top-2 right-2 flex flex-col gap-2 z-[100]">
+                <div className={`absolute top-2 right-2 flex flex-col gap-2 z-[100] ${lite ? 'opacity-0 group-hover:opacity-100 transition-opacity duration-200' : ''}`}>
                     {isAuthenticated && (
                         <>
                             {/* Quick Add Button */}
@@ -263,7 +287,8 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                                         if (!isLoading) setShowStatusMenu(!showStatusMenu);
                                     }}
                                     disabled={isLoading}
-                                    className={`w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md shadow-lg border border-white/10 transition-all duration-300 hover:scale-110 active:scale-95 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 focus:ring-2 focus:ring-accent focus:outline-none
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl shadow-lg border border-white/10 transition-all duration-300 focus:ring-2 focus:ring-accent focus:outline-none
+                                        ${!lite && 'backdrop-blur-md hover:scale-110 active:scale-95 translate-x-4 opacity-0 group-hover:translate-x-0 group-hover:opacity-100'}
                                         ${listStatus ? 'bg-accent text-white border-accent shadow-accent/30' : 'bg-black/50 text-white hover:bg-accent hover:border-accent'}`}
                                     title={listStatus ? 'Change status' : 'Add to Library'}
                                 >
@@ -361,8 +386,8 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
                 </Link>
             </div>
 
-            {/* Hover Tooltip / Card - Desktop Only with delayed appearance */}
-            {showTooltip && (
+            {/* Hover Tooltip / Card - Desktop Only with delayed appearance - DISABLED IN LITE MODE */}
+            {showTooltip && !disableEffects && !lite && (
                 <div className={`hidden md:block absolute top-0 w-64 bg-dark-100 rounded-xl shadow-2xl border border-gray-700 p-4 z-50 pointer-events-none animate-fade-in
                     ${tooltipPosition === 'right' ? 'left-full ml-3' : 'right-full mr-3'}`}
                 >
@@ -398,6 +423,42 @@ export default function AnimeCard({ anime, userListEntry, isOwnProfile = true, r
         </div>
     );
 }
+
+const arePropsEqual = (prevProps, nextProps) => {
+    // Custom comparison for performance optimization
+    // We only care about props that actually affect rendering
+    if (prevProps.anime.id !== nextProps.anime.id) return false;
+    if (prevProps.isOwnProfile !== nextProps.isOwnProfile) return false;
+    if (prevProps.rank !== nextProps.rank) return false;
+    if (prevProps.titleLanguage !== nextProps.titleLanguage) return false;
+    if (prevProps.showProgress !== nextProps.showProgress) return false;
+    if (prevProps.titleLanguage !== nextProps.titleLanguage) return false;
+    if (prevProps.showProgress !== nextProps.showProgress) return false;
+    if (prevProps.disableEffects !== nextProps.disableEffects) return false;
+    if (prevProps.lite !== nextProps.lite) return false;
+
+    // Deep compare userListEntry and anime.user_list_status only if they exist
+    const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
+    const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;
+
+    // If availability changes
+    if (!!prevEntry !== !!nextEntry) return false;
+
+    // If both exist, check key fields
+    if (prevEntry && nextEntry) {
+        if (prevEntry.status !== nextEntry.status) return false;
+        if (prevEntry.score !== nextEntry.score) return false;
+        if (prevEntry.episodes_watched !== nextEntry.episodes_watched) return false;
+        if (prevEntry.progress !== nextEntry.progress) return false;
+    }
+
+    // Check favorite status change
+    if (prevProps.anime.is_favorite !== nextProps.anime.is_favorite) return false;
+
+    return true;
+};
+
+export default React.memo(AnimeCard, arePropsEqual);
 
 // Skeleton loader
 export function AnimeCardSkeleton() {

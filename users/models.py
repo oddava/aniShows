@@ -18,6 +18,9 @@ class UserProfile(Model):
     last_username_change = DateTimeField(null=True, blank=True)
     is_private = BooleanField(default=False)
     email_verified = BooleanField(default=False)
+    
+    # Dynamic social links
+    social_links = models.JSONField(default=list, blank=True)
     # preferred_genres = ArrayField(CharField(max_length=50), default=list)
     # telegram_id = BigIntegerField(null=True, blank=True)
 

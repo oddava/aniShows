@@ -550,6 +550,11 @@ class UserProfileView(APIView):
                 profile.bio = serializer.validated_data['bio']
             if 'is_private' in request.data:
                 profile.is_private = request.data.get('is_private', False)
+            
+            # Social links
+            if 'social_links' in serializer.validated_data:
+                profile.social_links = serializer.validated_data['social_links']
+            
             profile.save()
             
             return Response(UserSerializer(request.user, context={'request': request}).data)
