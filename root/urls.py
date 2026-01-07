@@ -14,7 +14,6 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from debug_toolbar.toolbar import debug_toolbar_urls
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -33,6 +32,7 @@ from django.urls import re_path
 
 # Only serve media files if DEBUG is True
 if settings.DEBUG:
+    from debug_toolbar.toolbar import debug_toolbar_urls
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + debug_toolbar_urls()
 else:
     # Serve media files manually in production (since we are not using Nginx yet)
