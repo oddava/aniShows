@@ -264,19 +264,6 @@ EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
 DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER', 'webmaster@localhost')
 
-# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-
-# EMAIL_HOST = "email-smtp.us-east-1.amazonaws.com"
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-
-# EMAIL_HOST_USER = os.getenv("SES_SMTP_USER")
-# EMAIL_HOST_PASSWORD = os.getenv("SES_SMTP_PASSWORD")
-
-# DEFAULT_FROM_EMAIL = "noreply@anishows.com"
-
-# Note: SOCIALACCOUNT_PROVIDERS is configured above with APP credentials
-
 # Django allauth config
 ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
 ACCOUNT_EMAIL_REQUIRED = True
