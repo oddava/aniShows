@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">🎬 AniShows</h1>
+  <h1 align="center">AniShows</h1>
   <p align="center">
     <strong>A modern, full-stack anime tracking platform</strong>
   </p>
@@ -19,24 +19,24 @@
 
 ---
 
-## ✨ Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
-| 📺 **Anime Tracking** | Manage your watchlist with statuses: Watching, Completed, Plan to Watch, On Hold, Dropped |
-| ⭐ **Reviews & Ratings** | Write detailed reviews with spoiler warnings and sub-ratings (story, animation, music, etc.) |
-| 💜 **Favorites** | Build your collection of favorite anime |
-| 👤 **User Profiles** | Customizable profiles with avatars, banners, and bios |
-| 🔒 **Privacy Controls** | Set your profile to private to hide your lists |
-| 🔐 **Secure Auth** | JWT authentication with Google OAuth support |
-| 🔍 **Smart Discovery** | Browse trending, seasonal, upcoming anime with advanced filters |
-| 🌙 **Dark Mode** | Beautiful dark theme with glassmorphism aesthetics |
-| 🔄 **Auto Sync** | Automated data sync from AniList via Celery Beat |
-| 👑 **Admin Dashboard** | Comprehensive admin panel with site statistics |
+| **Anime Tracking** | Manage your watchlist with statuses: Watching, Completed, Plan to Watch, On Hold, Dropped |
+| **Reviews & Ratings** | Write detailed reviews with spoiler warnings and sub-ratings (story, animation, music, etc.) |
+| **Favorites** | Build your collection of favorite anime |
+| **User Profiles** | Customizable profiles with avatars, banners, and bios |
+| **Privacy Controls** | Set your profile to private to hide your lists |
+| **Secure Auth** | JWT authentication with Google OAuth support |
+| **Smart Discovery** | Browse trending, seasonal, upcoming anime with advanced filters |
+| **Dark Mode** | Beautiful dark theme with glassmorphism aesthetics |
+| **Auto Sync** | Automated data sync from AniList via Celery Beat |
+| **Admin Dashboard** | Comprehensive admin panel with site statistics |
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Backend
 - **Framework**: Django 5.2 + Django REST Framework
@@ -59,7 +59,7 @@
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
@@ -104,14 +104,14 @@
    ```
 
 6. **Access the application**
-   - 🌐 Frontend: http://localhost:5173
-   - 🔧 Backend API: http://localhost:8000
-   - 📊 Admin Panel: http://localhost:8000/admin
-   - 💾 MinIO Console: http://localhost:9001
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8000
+   - Admin Panel: http://localhost:8000/admin
+   - MinIO Console: http://localhost:9001
 
 ---
 
-## 📋 Available Commands
+## Available Commands
 
 ```bash
 # Service Management
@@ -152,7 +152,7 @@ Run `make help` for the full list of commands.
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 aniShows/
@@ -231,7 +231,7 @@ aniShows/
 
 ---
 
-## 🐳 Docker Services
+## Docker Services
 
 | Service | Description | Port |
 |---------|-------------|------|
@@ -247,7 +247,7 @@ aniShows/
 
 ---
 
-## 🔄 Background Tasks
+## Background Tasks
 
 AniShows uses Celery Beat for automated data synchronization:
 
@@ -260,20 +260,20 @@ AniShows uses Celery Beat for automated data synchronization:
 
 ---
 
-## 🔒 Security Features
+## Security Features
 
-- ✅ JWT-based authentication with token refresh
-- ✅ Password hashing with Django's PBKDF2
-- ✅ XSS protection via HTML escaping
-- ✅ CSRF protection enabled
-- ✅ File upload validation (size & type limits)
-- ✅ Object-level permissions (users can only modify their own data)
-- ✅ Production security headers when DEBUG=False
-- ✅ Automatic HTTPS via Caddy
+- JWT-based authentication with token refresh
+- Password hashing with Django's PBKDF2
+- XSS protection via HTML escaping
+- CSRF protection enabled
+- File upload validation (size & type limits)
+- Object-level permissions (users can only modify their own data)
+- Production security headers when DEBUG=False
+- Automatic HTTPS via Caddy
 
 ---
 
-## 📖 Documentation
+## Documentation
 
 - [Deployment Guide](docs/deployment.md) - Production deployment on AWS EC2
 - [Scraper & Storage Guide](docs/scraper.md) - Data sync and MinIO setup
@@ -281,7 +281,7 @@ AniShows uses Celery Beat for automated data synchronization:
 
 ---
 
-## 🚢 Deployment
+## Deployment
 
 For production deployment instructions, see the [Deployment Guide](docs/deployment.md).
 
@@ -293,7 +293,7 @@ Key production considerations:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -305,7 +305,7 @@ docker compose exec web uv run python manage.py test api.tests.test_auth
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please follow these guidelines:
 
@@ -322,13 +322,13 @@ Contributions are welcome! Please follow these guidelines:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 **oddava** - [GitHub](https://github.com/oddava)
 
