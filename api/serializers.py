@@ -396,6 +396,12 @@ class ReviewSerializer(serializers.ModelSerializer):
         allow_blank=True, 
         max_length=MAX_REVIEW_LENGTH
     )
+
+    def validate_text(self, value):
+        """Sanitize review text to prevent XSS."""
+        if value:
+            return escape(value)
+        return value
     is_completed = serializers.SerializerMethodField()
     helpful_count = serializers.SerializerMethodField()
     user_vote = serializers.SerializerMethodField()
