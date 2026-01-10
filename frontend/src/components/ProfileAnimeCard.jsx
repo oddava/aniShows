@@ -3,6 +3,7 @@ import { Star, Plus, Loader2 } from 'lucide-react';
 import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { listApi } from '../api/client';
+import { getImageUrl } from '../utils/imageUtils';
 
 /**
  * ProfileAnimeCard - Lightweight card for profile anime lists
@@ -39,7 +40,7 @@ function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, li
                 {/* Image */}
                 <div className="relative aspect-[2/3] bg-dark-50">
                     <img
-                        src={anime.cover_image}
+                        src={getImageUrl(anime.cover_image, anime.title)}
                         alt={anime.title}
                         className="w-full h-full object-cover"
                         loading="lazy"

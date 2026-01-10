@@ -36,6 +36,7 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
         showTooltip: false,
         listStatus: userListEntry?.status || anime.user_list_status?.status || null,
         listId: userListEntry?.id || anime.user_list_status?.id || null,
+        localEpisodesWatched: userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0,
     });
 
     const menuRef = useRef(null);
@@ -48,19 +49,21 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
     const displayTitle = useMemo(() => titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title, [titleLanguage, anime.title_jp, anime.title]);
     const currentStatusOption = useMemo(() => STATUS_OPTIONS.find(s => s.value === state.listStatus), [state.listStatus]);
     const progress = userListEntry?.progress || anime.user_list_status?.progress || 0;
-    const episodesWatched = userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0;
+    // Use local state for immediate updates, fall back to props
+    const episodesWatched = state.localEpisodesWatched;
 
     // Tooltip position - computed once per hover
     const [tooltipPosition, setTooltipPosition] = useState('right');
 
-    // Sync list entry state
+    // Sync list entry state (including episodes watched)
     useEffect(() => {
         const newStatus = userListEntry?.status || anime.user_list_status?.status || null;
         const newId = userListEntry?.id || anime.user_list_status?.id || null;
-        if (newStatus !== state.listStatus || newId !== state.listId) {
-            setState(s => ({ ...s, listStatus: newStatus, listId: newId }));
+        const newEpisodes = userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0;
+        if (newStatus !== state.listStatus || newId !== state.listId || newEpisodes !== state.localEpisodesWatched) {
+            setState(s => ({ ...s, listStatus: newStatus, listId: newId, localEpisodesWatched: newEpisodes }));
         }
-    }, [userListEntry?.status, userListEntry?.id, anime.user_list_status?.status, anime.user_list_status?.id]);
+    }, [userListEntry?.status, userListEntry?.id, userListEntry?.episodes_watched, anime.user_list_status?.status, anime.user_list_status?.id, anime.user_list_status?.episodes_watched]);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -134,19 +137,23 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
         e.stopPropagation();
         if (state.isLoading) return;
 
-        setState(s => ({ ...s, isLoading: true }));
+        const newEpisodes = state.localEpisodesWatched + 1;
+        // Optimistically update local state immediately
+        setState(s => ({ ...s, isLoading: true, localEpisodesWatched: newEpisodes }));
+
         try {
-            const currentWatched = userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0;
             const entryId = userListEntry?.id || state.listId;
-            await listApi.update(entryId, { episodes_watched: currentWatched + 1 });
+            await listApi.update(entryId, { episodes_watched: newEpisodes });
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             queryClient.invalidateQueries({ queryKey: ['anime'] });
         } catch (error) {
             console.error("Failed to update progress", error);
+            // Rollback on error
+            setState(s => ({ ...s, localEpisodesWatched: s.localEpisodesWatched - 1 }));
         } finally {
             setState(s => ({ ...s, isLoading: false }));
         }
-    }, [anime.user_list_status?.episodes_watched, userListEntry?.episodes_watched, userListEntry?.id, state.listId, state.isLoading, queryClient]);
+    }, [state.localEpisodesWatched, userListEntry?.id, state.listId, state.isLoading, queryClient]);
 
     // Debounced hover - reduces state changes
     const handleMouseEnter = useCallback(() => {
@@ -179,11 +186,12 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
             ref={cardRef}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            className={`group relative block h-full select-none opacity-100 overflow-visible hover:z-[100]`}
+            className={`group relative block h-full select-none opacity-100 overflow-visible hover:z-[150]`}
         >
             {/* Main Card */}
+            {/* Main Card - no hover lifting/scaling */}
             <div className={`bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative
-                ${lite ? 'hover:border-accent/40' : 'transition-transform duration-200 hover:border-accent/50 hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5'}`}>
+                ${lite ? '' : 'transition-colors duration-200 hover:border-accent/50'}`}>
 
                 {/* Image Container */}
                 <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
@@ -191,7 +199,7 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         <img
                             src={imageUrl}
                             alt={anime.title}
-                            className={`w-full h-full object-cover ${!lite && 'transition-transform duration-300 group-hover:scale-[1.02]'}`}
+                            className="w-full h-full object-cover"
                             loading="lazy"
                         />
                     </Link>
@@ -207,19 +215,60 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         </div>
                     )}
 
-                    {/* Status Corner Ribbon */}
-                    {state.listStatus && currentStatusOption && (
-                        <div className="corner-ribbon" title={currentStatusOption.label}>
-                            <div className={`corner-ribbon-inner ${currentStatusOption.bgColor} ${currentStatusOption.color} border`}>
-                                <currentStatusOption.icon className="w-3 h-3" />
+                    {/* Status Icon - consolidated: visible when in list, appears on hover when not */}
+                    {isAuthenticated && !lite && (
+                        <div className="absolute top-2 left-2 z-[100]">
+                            <div className="relative">
+                                <button
+                                    ref={buttonRef}
+                                    onClick={toggleStatusMenu}
+                                    disabled={state.isLoading}
+                                    className={`w-7 h-7 flex items-center justify-center rounded-lg shadow border transition-all duration-200
+                                        ${state.listStatus && currentStatusOption
+                                            ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
+                                            : 'bg-black/70 text-white border-white/20 hover:bg-accent opacity-0 group-hover:opacity-100'}`}
+                                    title={state.listStatus ? currentStatusOption?.label : 'Add to List'}
+                                >
+                                    {state.isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+                                        state.listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                                </button>
+
+                                {/* Dropdown */}
+                                {state.showStatusMenu && (
+                                    <div ref={menuRef} className="absolute left-0 top-full mt-1 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-xl z-[110]">
+                                        <div className="p-1">
+                                            {STATUS_OPTIONS.map((option) => (
+                                                <button
+                                                    key={option.value}
+                                                    onClick={(e) => handleStatusChange(e, option.value)}
+                                                    className={`w-full px-2 py-1.5 flex items-center gap-2 text-xs rounded transition-colors
+                                                        ${state.listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
+                                                >
+                                                    <option.icon className="w-3 h-3" />
+                                                    {option.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {state.listStatus && (
+                                            <div className="p-1 border-t border-gray-800">
+                                                <button onClick={handleRemoveFromList} className="w-full px-2 py-1 flex items-center gap-2 text-xs text-red-400 hover:bg-red-400/10 rounded">
+                                                    <X className="w-3 h-3" /> Remove
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
 
-                    {/* Progress Bar */}
-                    {userListEntry && progress > 0 && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
-                            <div style={{ width: `${progress}%` }} className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-purple-500'}`} />
+                    {/* Progress Bar - show for watching status */}
+                    {state.listStatus === 'Watching' && anime.episode_count && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60 z-20">
+                            <div
+                                style={{ width: `${Math.min((episodesWatched / anime.episode_count) * 100, 100)}%` }}
+                                className={`h-full ${episodesWatched >= anime.episode_count ? 'bg-green-500' : 'bg-purple-500'}`}
+                            />
                         </div>
                     )}
 
@@ -251,52 +300,9 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                     )}
                 </div>
 
-                {/* Action Buttons - Hover Only */}
+                {/* Favorite Button - Hover Only, top-right */}
                 {isAuthenticated && !lite && (
-                    <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-[100] opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Status Button */}
-                        <div className="relative">
-                            <button
-                                ref={buttonRef}
-                                onClick={toggleStatusMenu}
-                                disabled={state.isLoading}
-                                className={`w-7 h-7 flex items-center justify-center rounded-lg shadow border transition-colors
-                                    ${state.listStatus && currentStatusOption
-                                        ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                        : 'bg-black/70 text-white border-white/20 hover:bg-accent'}`}
-                            >
-                                {state.isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
-                                    state.listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                            </button>
-
-                            {/* Dropdown */}
-                            {state.showStatusMenu && (
-                                <div ref={menuRef} className="absolute right-0 top-full mt-1 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-xl z-[110]">
-                                    <div className="p-1">
-                                        {STATUS_OPTIONS.map((option) => (
-                                            <button
-                                                key={option.value}
-                                                onClick={(e) => handleStatusChange(e, option.value)}
-                                                className={`w-full px-2 py-1.5 flex items-center gap-2 text-xs rounded transition-colors
-                                                    ${state.listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
-                                            >
-                                                <option.icon className="w-3 h-3" />
-                                                {option.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {state.listStatus && (
-                                        <div className="p-1 border-t border-gray-800">
-                                            <button onClick={handleRemoveFromList} className="w-full px-2 py-1 flex items-center gap-2 text-xs text-red-400 hover:bg-red-400/10 rounded">
-                                                <X className="w-3 h-3" /> Remove
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Favorite Button */}
+                    <div className="absolute top-2 right-2 z-[100] opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                             onClick={handleFavorite}
                             className={`w-7 h-7 flex items-center justify-center rounded-lg shadow border transition-colors
@@ -309,11 +315,11 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
 
                 {/* Title/Info Footer */}
                 <Link to={`/anime/${anime.slug}`} className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl cursor-default">
-                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent transition-colors">
+                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug">
                         {displayTitle}
                     </h3>
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                        <span>{anime.anime_type || 'TV'}</span>
+                        <span className="font-bold text-accent">{anime.anime_type || 'TV'}</span>
                         <span>•</span>
                         <span>{anime.episode_count ? (episodesWatched > 0 ? `${episodesWatched}/${anime.episode_count}` : anime.episode_count) : '?'} eps</span>
                     </div>
@@ -332,7 +338,7 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
 
             {/* Tooltip - Lazy rendered with delay */}
             {state.showTooltip && !lite && (
-                <div className={`absolute top-4 w-60 z-[110] bg-dark-100/95 p-3 border border-gray-700 rounded-lg shadow-xl pointer-events-none
+                <div className={`absolute top-4 w-60 z-[200] bg-dark-100/95 p-3 border border-gray-700 rounded-lg shadow-xl pointer-events-none
                     ${tooltipPosition === 'right' ? 'left-full ml-3' : 'right-full mr-3'}`}>
                     <div className="flex items-center gap-2 mb-2">
                         <span className="text-[10px] font-bold text-accent">

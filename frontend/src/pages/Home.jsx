@@ -5,6 +5,7 @@ import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
+import { getImageUrl } from '../utils/imageUtils';
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
@@ -30,17 +31,6 @@ export default function Home() {
     }, [trending]);
 
     const heroAnime = trending && trending.length > 0 ? trending[currentHeroIndex] : null;
-
-    // Helper for image URLs (same as in AnimeCard, could be a util)
-    const getImageUrl = (url) => {
-        if (!url) return '';
-        let cleanUrl = url;
-        if (cleanUrl.includes('localhost:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/localhost:8000/, '');
-        if (cleanUrl.includes('web:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/web:8000/, '');
-        if (cleanUrl.startsWith('http')) return cleanUrl;
-        if (!cleanUrl.startsWith('/')) cleanUrl = `/${cleanUrl}`;
-        return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
-    };
 
     return (
         <div className="min-h-screen">
