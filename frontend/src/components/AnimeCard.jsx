@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
+import { formatRelativeTime, isWithin24Hours } from '../utils/dateUtils';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40' },
@@ -282,9 +283,9 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
 
                     {/* Airing Badge - only in non-lite mode */}
                     {!lite && anime.next_airing_episode && anime.next_airing_date && (
-                        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-500/90 text-white text-[10px] font-bold z-20">
+                        <div className={`absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg text-white text-[10px] font-bold z-20 ${isWithin24Hours(anime.next_airing_date) ? 'bg-green-500/90' : 'bg-purple-500/90'}`}>
                             <Clock className="w-3 h-3" />
-                            Ep {anime.next_airing_episode}
+                            Ep {anime.next_airing_episode} · {formatRelativeTime(anime.next_airing_date)}
                         </div>
                     )}
 

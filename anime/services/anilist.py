@@ -127,6 +127,7 @@ class AniListService:
                         trailer { id site }
                         rankings { rank type allTime context }
                         externalLinks { site url icon }
+                        nextAiringEpisode { episode airingAt }
                         relations {
                             edges {
                                 relationType
@@ -258,6 +259,7 @@ class AniListService:
                         trailer { id site }
                         rankings { rank type allTime context }
                         externalLinks { site url icon }
+                        nextAiringEpisode { episode airingAt }
                         relations {
                             edges {
                                 relationType
@@ -458,7 +460,9 @@ class AniListService:
                 }
                 for edge in item.get('relations', {}).get('edges', [])
                 if edge['node']['type'] == 'ANIME'
-            ]
+            ],
+            'next_airing_episode': item.get('nextAiringEpisode', {}).get('episode') if item.get('nextAiringEpisode') else None,
+            'next_airing_date': datetime.fromtimestamp(item['nextAiringEpisode']['airingAt']) if item.get('nextAiringEpisode') and item['nextAiringEpisode'].get('airingAt') else None,
         }
 
     def _parse_date(self, date_obj):

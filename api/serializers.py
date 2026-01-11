@@ -148,7 +148,8 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             'genres', 'studio', 'characters', 'staff',
             'external_links', 'relations', 'site_rank', 'popularity_rank',
             'is_favorite', 'user_list_status', 'user_review',
-            'review_count', 'avg_rating', 'created_at'
+            'review_count', 'avg_rating', 'created_at',
+            'next_airing_episode', 'next_airing_date'
         ]
     
     def get_is_favorite(self, obj):

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader, Plus, Trophy, TrendingUp, ExternalLink, Users, Mic, Film, ChevronDown, Hash, Building2 } from 'lucide-react';
+import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader, Plus, Trophy, TrendingUp, ExternalLink, Users, Mic, Film, ChevronDown, Hash, Building2, Bell } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 import ReviewSummary from '../components/ReviewSummary';
+import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 
 const InformationBox = ({ anime, className, accentColor }) => (
     <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl ${className}`}>
@@ -52,13 +53,68 @@ const InformationBox = ({ anime, className, accentColor }) => (
                 </div>
             )}
             {anime.studio && (
-                <div className="flex items-center justify-between gap-4 mb-3">
+                <div className="flex items-center justify-between gap-4">
                     <p className="text-gray-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
                         <Building2 className="w-3 h-3 text-gray-500" />
                         Studio
                     </p>
                     <div className="flex-1 border-b border-white/5 border-dotted mt-1" />
                     <p className="text-white font-semibold text-sm text-right">{anime.studio.name}</p>
+                </div>
+            )}
+            {/* Next Episode Section - for airing anime */}
+            {anime.status === 'Airing' && anime.next_airing_episode && anime.next_airing_date && (
+                <div className="pt-4 mt-4 border-t border-white/10">
+                    <div
+                        className="p-4 rounded-xl border"
+                        style={{
+                            backgroundColor: isWithin24Hours(anime.next_airing_date)
+                                ? 'rgba(34, 197, 94, 0.1)'
+                                : (accentColor ? `${accentColor}15` : 'rgba(139, 92, 246, 0.1)'),
+                            borderColor: isWithin24Hours(anime.next_airing_date)
+                                ? 'rgba(34, 197, 94, 0.3)'
+                                : (accentColor ? `${accentColor}30` : 'rgba(139, 92, 246, 0.2)')
+                        }}
+                    >
+                        <div className="flex items-center gap-2 mb-3">
+                            <Bell
+                                className="w-4 h-4"
+                                style={{
+                                    color: isWithin24Hours(anime.next_airing_date)
+                                        ? '#22c55e'
+                                        : (accentColor || '#8b5cf6')
+                                }}
+                            />
+                            <span
+                                className="text-[10px] font-black uppercase tracking-widest"
+                                style={{
+                                    color: isWithin24Hours(anime.next_airing_date)
+                                        ? '#22c55e'
+                                        : (accentColor || '#8b5cf6')
+                                }}
+                            >
+                                Next Episode
+                            </span>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-white font-bold text-lg">
+                                Episode {anime.next_airing_episode}
+                            </p>
+                            <p
+                                className="text-sm font-semibold"
+                                style={{
+                                    color: isWithin24Hours(anime.next_airing_date)
+                                        ? '#22c55e'
+                                        : (accentColor || '#8b5cf6')
+                                }}
+                            >
+                                {formatRelativeTime(anime.next_airing_date)}
+                            </p>
+                            <p className="text-gray-400 text-xs">
+                                {formatAiringTime(anime.next_airing_date)}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
             {anime.external_links && anime.external_links.length > 0 && (

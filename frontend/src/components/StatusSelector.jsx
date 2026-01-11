@@ -237,34 +237,34 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                         </div>
                     </div>
 
-                    <div className="relative h-4 flex items-center group/track">
-                        {/* Background Track */}
-                        <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-2.5 bg-gray-800/80 rounded-full overflow-hidden shadow-inner">
-                            <div
-                                style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                                className={`h-full transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${episodesWatched >= totalEpisodes ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'}`}
-                            />
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => handleEpisodeChange(episodesWatched - 1)}
+                            disabled={isLoading || episodesWatched <= 0}
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-gray-800/50 hover:bg-gray-700 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed group/btn"
+                            title="Decrement Progress"
+                        >
+                            <Minus className="w-5 h-5 transition-transform group-hover/btn:scale-110" />
+                        </button>
+
+                        <div className="relative flex-1 h-3 flex items-center group/track">
+                            {/* Background Track */}
+                            <div className="absolute inset-0 h-full bg-gray-800/80 rounded-full overflow-hidden shadow-inner">
+                                <div
+                                    style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+                                    className={`h-full transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${totalEpisodes > 0 && episodesWatched >= totalEpisodes ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'}`}
+                                />
+                            </div>
                         </div>
 
-                        {/* Interactive Input */}
-                        <input
-                            type="range"
-                            min="0"
-                            max={totalEpisodes || 100}
-                            value={episodesWatched}
-                            onChange={(e) => handleEpisodeChange(parseInt(e.target.value))}
-                            disabled={!totalEpisodes}
-                            className={`absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 ${totalEpisodes > 100 ? 'hover:opacity-5' : ''}`}
-                        />
-
-                        {/* Thumb (Visual Only) */}
-                        {totalEpisodes > 0 && (
-                            <div
-                                className={`absolute w-3 h-3 bg-white rounded-full shadow-2xl border-2 border-accent top-1/2 -translate-y-1/2 pointer-events-none transition-all duration-300 
-                                    ${totalEpisodes > 100 ? 'scale-75 group-hover/track:scale-100 opacity-0 group-hover/track:opacity-100' : 'scale-100 group-hover/track:scale-125'}`}
-                                style={{ left: `${Math.min(progressPercentage, 100)}%`, transform: `translate(-50%, -50%)` }}
-                            />
-                        )}
+                        <button
+                            onClick={() => handleEpisodeChange(episodesWatched + 1)}
+                            disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
+                            className="w-10 h-10 flex items-center justify-center rounded-xl bg-accent/10 hover:bg-accent text-accent hover:text-white transition-all shadow-lg active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed group/btn"
+                            title="Increment Progress"
+                        >
+                            <Plus className="w-5 h-5 transition-transform group-hover/btn:scale-110" />
+                        </button>
                     </div>
                 </div>
             )}
