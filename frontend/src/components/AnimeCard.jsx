@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
-import { formatRelativeTime, isWithin24Hours } from '../utils/dateUtils';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40' },
@@ -278,24 +277,6 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         <div className="absolute left-2 bottom-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 rounded text-xs z-10">
                             <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
                             <span className="text-white font-medium">{anime.rating}</span>
-                        </div>
-                    )}
-
-                    {/* Airing Badge - only in non-lite mode */}
-                    {!lite && anime.next_airing_episode && anime.next_airing_date && (
-                        <div className={`absolute top-2.5 right-2.5 flex items-center gap-2 px-2.5 py-1.5 rounded-full text-white text-[10px] font-bold z-20 shadow-2xl backdrop-blur-md border border-white/20 ${isWithin24Hours(anime.next_airing_date)
-                                ? 'bg-green-500/40 border-green-400/30'
-                                : 'bg-purple-600/40 border-purple-400/30'
-                            }`}>
-                            <div className="flex items-center gap-1.5">
-                                <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.5)] ${isWithin24Hours(anime.next_airing_date)
-                                        ? 'bg-green-400 animate-pulse'
-                                        : 'bg-purple-400'
-                                    }`} />
-                                <span className="tracking-wide">EP {anime.next_airing_episode}</span>
-                            </div>
-                            <div className="w-[1px] h-3 bg-white/20" />
-                            <span className="text-white/90 font-medium">{formatRelativeTime(anime.next_airing_date)}</span>
                         </div>
                     )}
 
