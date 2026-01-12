@@ -126,6 +126,7 @@ class AniListService:
                         bannerImage
                         trailer { id site }
                         rankings { rank type allTime context }
+                        stats { statusDistribution { status amount } }
                         externalLinks { site url icon }
                         nextAiringEpisode { episode airingAt }
                         relations {
@@ -448,6 +449,10 @@ class AniListService:
             'meta_description': (description[:157] + '...') if description and len(description) > 160 else (description or ""),
             'site_rank': next((r['rank'] for r in item.get('rankings', []) if r['allTime'] and r['type'] == 'RATED'), None),
             'popularity_rank': next((r['rank'] for r in item.get('rankings', []) if r['allTime'] and r['type'] == 'POPULAR'), None),
+            'status_distribution': {
+                s['status']: s['amount'] 
+                for s in item.get('stats', {}).get('statusDistribution', [])
+            },
             'external_links': item.get('externalLinks', []),
             'relations': [
                 {

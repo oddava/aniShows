@@ -137,6 +137,7 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
     user_review = serializers.SerializerMethodField()
     review_count = serializers.IntegerField(read_only=True)
     avg_rating = serializers.DecimalField(max_digits=3, decimal_places=1, read_only=True)
+    status_distribution = serializers.SerializerMethodField()
     
     class Meta:
         model = Anime
@@ -149,8 +150,15 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             'external_links', 'relations', 'site_rank', 'popularity_rank',
             'is_favorite', 'user_list_status', 'user_review',
             'review_count', 'avg_rating', 'created_at',
-            'next_airing_episode', 'next_airing_date'
+            'next_airing_episode', 'next_airing_date',
+            'status_distribution'
         ]
+    
+    def get_status_distribution(self, obj):
+        """Aggregate user list statuses from the platform's own data"""
+        from django.db.models import Count
+        distribution = obj.user_lists.values('status').annotate(count=Count('id'))
+        return {item['status']: item['count'] for item in distribution}
     
     def get_is_favorite(self, obj):
         # Use prefetched annotation if available

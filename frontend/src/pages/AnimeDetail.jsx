@@ -9,6 +9,7 @@ import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 import ReviewSummary from '../components/ReviewSummary';
+import StatusDistribution from '../components/StatusDistribution';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 
 const InformationBox = ({ anime, className, accentColor }) => (
@@ -412,6 +413,9 @@ export default function AnimeDetail() {
                             </div>
 
                             <InformationBox anime={anime} accentColor={accentColor} className="hidden lg:flex" />
+                            <div className="hidden lg:block">
+                                <StatusDistribution distribution={anime.status_distribution} accentColor={accentColor} />
+                            </div>
                         </div>
 
                         {/* Column 2: Main Content */}
@@ -538,7 +542,10 @@ export default function AnimeDetail() {
                                         </div>
                                     )}
                                 </div>
-                                <InformationBox anime={anime} accentColor={accentColor} className="flex lg:hidden mt-8 mb-12" />
+                                <div className="lg:hidden mt-8 mb-12 space-y-6">
+                                    <StatusDistribution distribution={anime.status_distribution} accentColor={accentColor} />
+                                    <InformationBox anime={anime} accentColor={accentColor} />
+                                </div>
                             </div>
 
                             {/* Tab Navigation */}

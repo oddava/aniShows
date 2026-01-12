@@ -120,6 +120,7 @@ class Anime(Model):
     # Extended Info
     external_links = JSONField(default=list, blank=True)  # List of {site: str, url: str, icon: str}
     relations = JSONField(default=list, blank=True)       # List of related media {id: int, type: str, title: str}
+    status_distribution = JSONField(default=dict, blank=True) # { "CURRENT": 100, "PLANNING": 200... }
     
     # Ranks
     site_rank = IntegerField(null=True, blank=True)       # e.g #115 highest rated
