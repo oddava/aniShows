@@ -4,6 +4,7 @@ Import services for MyAnimeList and AniList
 
 import xml.etree.ElementTree as ET
 import requests
+import asyncio
 from typing import List, Dict, Optional, Tuple
 from django.db import transaction
 from anime.models import Anime
@@ -56,17 +57,20 @@ class BaseImporter:
         self.imported_count = 0
         self.skipped_count = 0
         self.failed_count = 0
+        self.fetched_count = 0  # New: track fetched anime
 
-    def get_or_fetch_anime(
+    def get_or_fetch_anime_sync(
         self,
         mal_id: Optional[int] = None,
         anilist_id: Optional[int] = None,
         title: Optional[str] = None,
     ) -> Optional[Anime]:
         """
-        Try to find anime by external ID, if not found trigger fetch task.
-        Returns None if anime cannot be found or fetched.
+        Try to find anime by external ID, if not found fetch it synchronously.
+        Returns the anime object or None if cannot be found/fetched.
         """
+        from anime.services.anilist import AniListService
+        
         # Try to find by MAL ID
         if mal_id:
             try:
@@ -88,18 +92,49 @@ class BaseImporter:
             except Anime.DoesNotExist:
                 pass
 
-        # If we have an ID, trigger a fetch task
-        if mal_id or anilist_id:
-            from users.tasks import fetch_anime_by_external_id
+        # Anime not found - fetch it synchronously
+        service = AniListService()
+        
+        try:
+            # Try to fetch by AniList ID first (most reliable)
+            if anilist_id:
+                logger.info(f"Fetching anime by AniList ID: {anilist_id}")
+                anime_data = asyncio.run(service.get_anime_by_id(anilist_id))
+                if anime_data:
+                    anime = asyncio.run(service._save_anime_to_db_async(anime_data))
+                    logger.info(f"Fetched and saved: {anime.title}")
+                    self.fetched_count += 1
+                    return anime
 
-            fetch_anime_by_external_id.delay(
-                mal_id=mal_id, anilist_id=anilist_id, title=title
-            )
-            logger.info(
-                f"Triggered fetch for anime: MAL={mal_id}, AniList={anilist_id}, Title={title}"
-            )
+            # Try to fetch by MAL ID
+            if mal_id:
+                logger.info(f"Fetching anime by MAL ID: {mal_id}")
+                anime_data = asyncio.run(service.search_by_mal_id(mal_id))
+                if anime_data:
+                    anime = asyncio.run(service._save_anime_to_db_async(anime_data))
+                    logger.info(f"Fetched and saved: {anime.title}")
+                    self.fetched_count += 1
+                    return anime
 
-        return None
+            # Try to search by title as last resort
+            if title:
+                logger.info(f"Searching anime by title: {title}")
+                results = asyncio.run(service.search_anime(query=title, limit=1))
+                if results:
+                    anime_data = results[0]
+                    anime = asyncio.run(service._save_anime_to_db_async(anime_data))
+                    logger.info(f"Fetched and saved: {anime.title}")
+                    self.fetched_count += 1
+                    return anime
+
+            logger.warning(
+                f"Could not find anime: MAL={mal_id}, AniList={anilist_id}, Title={title}"
+            )
+            return None
+
+        except Exception as e:
+            logger.error(f"Error fetching anime: {e}")
+            return None
 
     def import_entry(self, entry_data: Dict) -> Tuple[bool, str]:
         """
@@ -120,8 +155,12 @@ class BaseImporter:
             existing = UserAnimeList.objects.filter(user=self.user, anime=anime).first()
 
             if existing:
-                # Skip if already exists (user's preference)
-                return False, f"Skipped: Already in list"
+                # Update existing entry
+                existing.status = status
+                existing.score = score
+                existing.episodes_watched = episodes_watched
+                existing.save()
+                return True, "Updated existing entry"
 
             # Create new entry
             UserAnimeList.objects.create(
@@ -244,11 +283,11 @@ class MyAnimeListAPIImporter(BaseImporter):
         score = entry_data.get("score", 0)
         episodes_watched = entry_data.get("episodes_watched", 0)
 
-        # Try to get or fetch anime
-        anime = self.get_or_fetch_anime(mal_id=mal_id, title=title)
+        # Try to get or fetch anime (SYNCHRONOUS)
+        anime = self.get_or_fetch_anime_sync(mal_id=mal_id, title=title)
 
         if not anime:
-            return False, f"Anime not found in database (MAL ID: {mal_id})"
+            return False, f"Anime not found or could not be fetched (MAL ID: {mal_id})"
 
         return self.save_entry(anime, status, score, episodes_watched)
 
@@ -263,6 +302,8 @@ class MyAnimeListAPIImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
+            logger.info(f"Starting import of {len(entries)} entries for user {self.user.username}")
+
             # Import each entry
             for entry in entries:
                 try:
@@ -270,6 +311,10 @@ class MyAnimeListAPIImporter(BaseImporter):
 
                     if success:
                         self.imported_count += 1
+                        logger.debug(f"Imported: {entry.get('title')} - {message}")
+                    elif "Updated" in message:
+                        self.imported_count += 1  # Count updates as imports
+                        logger.debug(f"Updated: {entry.get('title')}")
                     elif "Skipped" in message:
                         self.skipped_count += 1
                     else:
@@ -281,7 +326,7 @@ class MyAnimeListAPIImporter(BaseImporter):
                 except Exception as e:
                     self.failed_count += 1
                     self.errors.append(f"{entry.get('title', 'Unknown')}: {str(e)}")
-                    logger.error(f"Error importing entry: {e}")
+                    logger.error(f"Error importing entry {entry.get('title')}: {e}")
 
                 self.update_job_progress()
 
@@ -289,6 +334,12 @@ class MyAnimeListAPIImporter(BaseImporter):
             self.job.status = UserImportJob.ImportStatus.completed
             self.job.completed_at = timezone.now()
             self.job.save(update_fields=["status", "completed_at"])
+            
+            logger.info(
+                f"Import completed for {self.user.username}: "
+                f"{self.imported_count} imported, {self.fetched_count} fetched, "
+                f"{self.skipped_count} skipped, {self.failed_count} failed"
+            )
 
         except Exception as e:
             logger.error(f"Import failed: {e}")
@@ -357,11 +408,11 @@ class MyAnimeListXMLImporter(BaseImporter):
         score = entry_data.get("score", 0)
         episodes_watched = entry_data.get("episodes_watched", 0)
 
-        # Try to get or fetch anime
-        anime = self.get_or_fetch_anime(mal_id=mal_id, title=title)
+        # Try to get or fetch anime (SYNCHRONOUS)
+        anime = self.get_or_fetch_anime_sync(mal_id=mal_id, title=title)
 
         if not anime:
-            return False, f"Anime not found in database (MAL ID: {mal_id})"
+            return False, f"Anime not found or could not be fetched (MAL ID: {mal_id})"
 
         return self.save_entry(anime, status, score, episodes_watched)
 
@@ -376,12 +427,16 @@ class MyAnimeListXMLImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
+            logger.info(f"Starting XML import of {len(entries)} entries for user {self.user.username}")
+
             # Import each entry
             for entry in entries:
                 try:
                     success, message = self.import_entry(entry)
 
                     if success:
+                        self.imported_count += 1
+                    elif "Updated" in message:
                         self.imported_count += 1
                     elif "Skipped" in message:
                         self.skipped_count += 1
@@ -402,6 +457,12 @@ class MyAnimeListXMLImporter(BaseImporter):
             self.job.status = UserImportJob.ImportStatus.completed
             self.job.completed_at = timezone.now()
             self.job.save(update_fields=["status", "completed_at"])
+            
+            logger.info(
+                f"XML Import completed for {self.user.username}: "
+                f"{self.imported_count} imported, {self.fetched_count} fetched, "
+                f"{self.skipped_count} skipped, {self.failed_count} failed"
+            )
 
         except Exception as e:
             logger.error(f"Import failed: {e}")
@@ -531,13 +592,13 @@ class AniListImporter(BaseImporter):
 
         episodes_watched = entry_data.get("episodes_watched", 0)
 
-        # Try to get or fetch anime
-        anime = self.get_or_fetch_anime(
+        # Try to get or fetch anime (SYNCHRONOUS)
+        anime = self.get_or_fetch_anime_sync(
             mal_id=mal_id, anilist_id=anilist_id, title=title
         )
 
         if not anime:
-            return False, f"Anime not found in database (AniList ID: {anilist_id})"
+            return False, f"Anime not found or could not be fetched (AniList ID: {anilist_id})"
 
         return self.save_entry(anime, status, score, episodes_watched)
 
@@ -552,12 +613,16 @@ class AniListImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
+            logger.info(f"Starting AniList import of {len(entries)} entries for user {self.user.username}")
+
             # Import each entry
             for entry in entries:
                 try:
                     success, message = self.import_entry(entry)
 
                     if success:
+                        self.imported_count += 1
+                    elif "Updated" in message:
                         self.imported_count += 1
                     elif "Skipped" in message:
                         self.skipped_count += 1
@@ -578,6 +643,12 @@ class AniListImporter(BaseImporter):
             self.job.status = UserImportJob.ImportStatus.completed
             self.job.completed_at = timezone.now()
             self.job.save(update_fields=["status", "completed_at"])
+            
+            logger.info(
+                f"AniList Import completed for {self.user.username}: "
+                f"{self.imported_count} imported, {self.fetched_count} fetched, "
+                f"{self.skipped_count} skipped, {self.failed_count} failed"
+            )
 
         except Exception as e:
             logger.error(f"Import failed: {e}")
