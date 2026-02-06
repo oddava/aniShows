@@ -1,0 +1,28 @@
+# Production Docker Compose Configuration
+#
+# Usage:
+#   1. Deploy: ./deploy-prod.sh
+#
+# Or manual steps:
+#   1. Build frontend: docker compose build frontend
+#   2. Generate static files: docker compose run --rm frontend npm run build
+#   3. Deploy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # In production, frontend is served by Caddy as static files
+  # This container is only used for building, not running
+  frontend:
+    profiles: ["build"]
+    build:
+      context: ./frontend
+    command: ["npm", "run", "build"]
+    volumes:
+      - ./frontend/dist:/app/dist
+
+  caddy:
+    # Use production Caddyfile with security headers and caching
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile
+      - ./frontend/dist:/srv/frontend
+      - caddy_data:/data
+      - caddy_config:/config
