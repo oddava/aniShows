@@ -15,6 +15,15 @@ services:
     profiles: ["build"]
     build:
       context: ./frontend
+    # Increase memory for build process
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=4096
     command: ["npm", "run", "build"]
     volumes:
       - ./frontend/dist:/app/dist

@@ -9,10 +9,19 @@ set -e
 echo "🚀 Starting production deployment..."
 echo ""
 
+# Increase Node.js memory limit for build
+export NODE_OPTIONS="--max-old-space-size=4096"
+
+echo "📋 Build Configuration:"
+echo "   - Node.js memory limit: 4GB"
+echo ""
+
 # Step 1: Build frontend static files
 echo "📦 Step 1/4: Building frontend static files..."
 docker compose build frontend
-docker compose run --rm frontend npm run build
+
+# Build with increased memory
+docker compose run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build
 
 echo ""
 echo "✅ Frontend built successfully!"
