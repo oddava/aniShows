@@ -5,6 +5,7 @@ services:
       context: .
       args:
         - BUILDKIT_INLINE_CACHE=1
+    image: anishows_web:latest
     expose:
       - "8000"
     env_file:
@@ -101,7 +102,7 @@ services:
 
   # Celery Worker - Reuses web image to avoid redundant builds
   celery:
-    image: ${COMPOSE_PROJECT_NAME:-anishows}_web:latest
+    image: anishows_web:latest
     command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "INFO", "-Q", "default,low_priority" ]
     env_file:
       - .env
@@ -128,7 +129,7 @@ services:
 
   # Celery Beat - Reuses web image
   beat:
-    image: ${COMPOSE_PROJECT_NAME:-anishows}_web:latest
+    image: anishows_web:latest
     command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
     env_file:
       - .env

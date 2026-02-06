@@ -11,7 +11,6 @@ echo ""
 
 # Export BuildKit settings for better memory management
 export DOCKER_BUILDKIT=1
-export COMPOSE_BAKE=true
 export BUILDKIT_PROGRESS=plain
 
 # Memory limit for builds (adjust based on your system)
@@ -22,7 +21,7 @@ echo "   - BuildKit enabled: $DOCKER_BUILDKIT"
 echo "   - Memory limit per build: $BUILD_MEMORY_LIMIT"
 echo ""
 
-# Build each service sequentially to avoid parallel build memory spikes
+# Build web first (this creates the anishows_web:latest image)
 echo "🔨 Step 1/4: Building web (Django backend)..."
 docker compose build --memory="$BUILD_MEMORY_LIMIT" web
 
@@ -34,6 +33,8 @@ echo ""
 echo "🔨 Step 3/4: Building backup service..."
 docker compose build --memory="$BUILD_MEMORY_LIMIT" backup
 
+echo ""
+echo "✅ All images built successfully!"
 echo ""
 echo "🚀 Starting services..."
 docker compose up -d
