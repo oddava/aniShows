@@ -20,11 +20,21 @@ echo ""
 echo "📦 Step 1/4: Building frontend static files..."
 docker compose build frontend
 
-# Build with increased memory
+# Build with increased memory - output to local dist folder
 docker compose run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build
 
 echo ""
 echo "✅ Frontend built successfully!"
+echo ""
+
+# Check if dist folder was created
+if [ ! -d "./frontend/dist" ]; then
+    echo "❌ Error: dist folder not found!"
+    exit 1
+fi
+
+echo "📁 dist folder contents:"
+ls -la ./frontend/dist/
 echo ""
 
 # Step 2: Pull latest backend changes (optional)
