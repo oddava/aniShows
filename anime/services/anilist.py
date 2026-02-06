@@ -796,6 +796,33 @@ class AniListService:
         # Run the async save method synchronously
         return asyncio.run(self._save_anime_to_db_async(item))
 
+    async def _generate_unique_slug(self, base_slug: str, anilist_id: int = None) -> str:
+        """Generate a unique slug, handling collisions by appending anilist_id or counter"""
+        slug = base_slug
+        
+        # If anilist_id is available, append it to make slug unique
+        if anilist_id:
+            slug = f"{base_slug}-{anilist_id}"
+            # Check if this slug exists
+            try:
+                await sync_to_async(Anime.objects.get)(slug=slug)
+                # If exists, fall through to counter method
+                slug = base_slug
+            except Anime.DoesNotExist:
+                return slug
+        
+        # Fallback: append counter until unique
+        counter = 1
+        original_slug = slug
+        while True:
+            try:
+                await sync_to_async(Anime.objects.get)(slug=slug)
+                # Slug exists, try next
+                slug = f"{original_slug}-{counter}"
+                counter += 1
+            except Anime.DoesNotExist:
+                return slug
+
     async def _save_anime_to_db_async(self, item: dict) -> Anime:
         """Async implementation of save_anime_to_db"""
         anilist_id = item.get("id")
@@ -808,7 +835,7 @@ class AniListService:
         if not title:
             raise ValueError("Anime must have a title")
 
-        slug = slugify(title)
+        base_slug = slugify(title)
 
         # Check if anime already exists
         try:
@@ -817,19 +844,29 @@ class AniListService:
             elif mal_id:
                 anime = await sync_to_async(Anime.objects.get)(mal_id=mal_id)
             else:
-                anime = await sync_to_async(Anime.objects.get)(slug=slug)
+                anime = await sync_to_async(Anime.objects.get)(slug=base_slug)
 
             # Update existing anime
-            await self._update_anime_async(anime, item, title, title_native, slug)
+            await self._update_anime_async(anime, item, title, title_native, base_slug)
             return anime
 
         except Anime.DoesNotExist:
+            # Generate unique slug to avoid integrity errors
+            unique_slug = await self._generate_unique_slug(base_slug, anilist_id)
+            
             # Create new anime
-            anime_data = self._prepare_anime_data(item, title, title_native, slug)
+            anime_data = self._prepare_anime_data(item, title, title_native, unique_slug)
             anime_data["anilist_id"] = anilist_id
             anime_data["mal_id"] = mal_id
 
-            anime = await sync_to_async(Anime.objects.create)(**anime_data)
+            try:
+                anime = await sync_to_async(Anime.objects.create)(**anime_data)
+            except Exception as e:
+                # Log the error but don't crash
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to create anime '{title}' with slug '{unique_slug}': {e}")
+                raise
 
             # Handle relationships
             await self._handle_relationships_async(anime, item)
