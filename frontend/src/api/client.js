@@ -124,3 +124,29 @@ export const recommendationsApi = {
     refresh: () => api.post('/recommendations/refresh/'),
     dismiss: (animeId) => api.post(`/recommendations/${animeId}/dismiss/`),
 };
+
+export const importExportApi = {
+    // Import
+    importMAL: (username) => api.post('/import/mal/', { username }),
+    importMALXML: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post('/import/mal/xml/', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    },
+    importAniList: (username, accessToken = null) => api.post('/import/anilist/', { 
+        username, 
+        access_token: accessToken 
+    }),
+    getImportJobs: () => api.get('/import/jobs/'),
+    getImportJobStatus: (jobId) => api.get(`/import/jobs/${jobId}/`),
+    cancelImportJob: (jobId) => api.post(`/import/jobs/${jobId}/cancel/`),
+    
+    // Export
+    exportData: (format = 'json') => api.get('/export/', { 
+        params: { type: format },
+        responseType: 'blob'
+    }),
+    exportDataJSON: () => api.get('/export/json/'),
+};

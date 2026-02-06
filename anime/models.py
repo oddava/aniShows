@@ -170,6 +170,10 @@ class Anime(Model):
     next_airing_episode = IntegerField(null=True, blank=True)
     next_airing_date = DateTimeField(null=True, blank=True)
 
+    # External IDs for import/export
+    mal_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
+    anilist_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
+
     class Meta:
         ordering = ["-release_date", "-created_at"]
         indexes = [

@@ -37,12 +37,21 @@ app.conf.task_routes = {
     "anime.tasks.generate_recommendations_for_user": {
         "queue": "default"
     },  # User-initiated needs faster response
+    # Import/Export tasks
+    "users.tasks.process_import_job": {"queue": "default"},
+    "users.tasks.fetch_anime_by_external_id": {"queue": "low_priority"},
+    "users.tasks.cleanup_old_import_jobs": {"queue": "low_priority"},
 }
 
-# Optional: Ensure queues are defined (Celery does this auto-magically usually, but explicit is good)
+# Ensure queues are defined
 from kombu import Queue
 
 app.conf.task_queues = (
     Queue("default", routing_key="default"),
     Queue("low_priority", routing_key="low_priority"),
 )
+
+# Set default queue for tasks without explicit routing
+app.conf.task_default_queue = "default"
+app.conf.task_default_exchange = "default"
+app.conf.task_default_routing_key = "default"

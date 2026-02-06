@@ -26,6 +26,8 @@ const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Seasonal = lazy(() => import('./pages/Seasonal'));
+const ImportPage = lazy(() => import('./pages/ImportPage'));
+const ExportPage = lazy(() => import('./pages/ExportPage'));
 
 // Admin imports
 const AdminLayout = lazy(() => import('./components/AdminLayout'));
@@ -82,6 +84,8 @@ function App() {
                   <Route path="auth/google/callback" element={<GoogleCallback />} />
                   <Route path="terms" element={<Terms />} />
                   <Route path="privacy" element={<Privacy />} />
+                  <Route path="import" element={<ImportPage />} />
+                  <Route path="export" element={<ExportPage />} />
                 </Route>
 
                 {/* Admin Routes */}

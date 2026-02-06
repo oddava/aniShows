@@ -31,6 +31,16 @@ from .admin_views import (
     AdminStatsExportView,
 )
 from users.views import GoogleLogin
+from .import_export_views import (
+    ImportJobCancelView,
+    ImportMALView,
+    ImportMALXMLView,
+    ImportAniListView,
+    ImportJobStatusView,
+    ImportJobListView,
+    ExportUserDataView,
+    ExportUserDataJSONView,
+)
 
 router = DefaultRouter()
 router.register(r"anime", AnimeViewSet, basename="anime")
@@ -75,6 +85,25 @@ urlpatterns = [
         name="confirm_email_change",
     ),
     path("auth/google/", GoogleLogin.as_view(), name="google_login"),
+    # Import/Export endpoints
+    path("import/mal/", ImportMALView.as_view(), name="import_mal"),
+    path("import/mal/xml/", ImportMALXMLView.as_view(), name="import_mal_xml"),
+    path("import/anilist/", ImportAniListView.as_view(), name="import_anilist"),
+    path("import/jobs/", ImportJobListView.as_view(), name="import_jobs"),
+    path(
+        "import/jobs/<int:job_id>/",
+        ImportJobStatusView.as_view(),
+        name="import_job_status",
+    ),
+    path(
+        "import/jobs/<int:job_id>/cancel/",
+        ImportJobCancelView.as_view(),
+        name="import_job_cancel",
+    ),
+    path("export/", ExportUserDataView.as_view(), name="export_user_data"),
+    path(
+        "export/json/", ExportUserDataJSONView.as_view(), name="export_user_data_json"
+    ),
     # Admin endpoints
     path("admin/", include(admin_router.urls)),
     path("admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),

@@ -3,6 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { User, Lock, Shield, Eye, EyeOff, AlertCircle, Check, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
+import { Link } from 'react-router-dom';
+import { Download, Upload } from 'lucide-react';
 
 export default function Settings() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -584,6 +586,38 @@ export default function Settings() {
                                     <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
                                                 ${isPrivate ? 'left-8' : 'left-1'}`} />
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* Data Import/Export */}
+                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+                                <Download className="w-5 h-5 text-accent" />
+                                Data Import/Export
+                            </h2>
+
+                            <div className="space-y-4 max-w-md">
+                                <Link
+                                    to="/import"
+                                    className="flex items-center justify-between p-4 bg-dark-50 hover:bg-dark-200 rounded-xl border border-gray-800 transition-colors group"
+                                >
+                                    <div>
+                                        <p className="text-white font-medium">Import Data</p>
+                                        <p className="text-gray-400 text-sm">Import from MyAnimeList or AniList</p>
+                                    </div>
+                                    <Upload className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
+                                </Link>
+
+                                <Link
+                                    to="/export"
+                                    className="flex items-center justify-between p-4 bg-dark-50 hover:bg-dark-200 rounded-xl border border-gray-800 transition-colors group"
+                                >
+                                    <div>
+                                        <p className="text-white font-medium">Export Data</p>
+                                        <p className="text-gray-400 text-sm">Download your anime list and reviews</p>
+                                    </div>
+                                    <Download className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
+                                </Link>
                             </div>
                         </div>
 
