@@ -1,4 +1,3 @@
-
 # Version Control
 .git
 .gitignore
@@ -9,6 +8,11 @@ __pycache__
 *.pyc
 *.pyo
 *.pyd
+.Python
+*.so
+.pytest_cache
+.mypy_cache
+.ruff_cache
 
 # Dependencies
 node_modules
@@ -18,10 +22,12 @@ frontend/node_modules
 dist
 frontend/dist
 build
+*.egg-info
 
 # Environment Variables (Safety)
 .env
 .env.*
+!.env.example
 
 # Data & Backups (CRITICAL: Do not include huge backups in build context)
 backups-data
@@ -29,4 +35,39 @@ minio_data
 db_data
 redis_data
 media
+
+# Static files (collected separately)
 static
+
+# IDE and Editor
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Celery
+ celerybeat-schedule
+celerybeat-schedule.db
+
+# Docker files (not needed in image)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation (not needed in production image)
+docs
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Testing
+tests
+test
+.coverage
+htmlcov
+
+# Logs
+*.log
+logs
