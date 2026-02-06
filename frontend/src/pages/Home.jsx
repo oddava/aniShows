@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Play, TrendingUp, Star, ChevronRight, Sparkles } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
-import { animeApi, listApi } from '../api/client';
+import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
 import { getImageUrl } from '../utils/imageUtils';
@@ -158,27 +158,8 @@ export default function Home() {
                     </div>
                 </section>
 
-                {/* Recommended For You Section (Placeholder Logic) */}
-                {isAuthenticated && trending && trending.length > 5 && (
-                    <section className="px-4 md:px-6">
-                        <div className="max-w-7xl mx-auto">
-                            <div className="flex items-center justify-between mb-4 md:mb-6">
-                                <div className="flex items-center gap-2 md:gap-3">
-                                    <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
-                                    <h2 className="text-xl md:text-2xl font-bold text-white">Recommended for You</h2>
-                                </div>
-                            </div>
-
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                                {trending.slice(0, 6).reverse().map((anime) => (
-                                    <div key={anime.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
-                                        <AnimeCard anime={anime} />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-                )}
+                {/* Recommended For You Section */}
+                <RecommendedForYouSection />
             </div>
 
             {/* CTA Section */}
@@ -233,6 +214,62 @@ function CurrentlyWatchingSection() {
                                 userListEntry={entry}
                                 showProgress={true}
                             />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function RecommendedForYouSection() {
+    const { isAuthenticated } = useAuth();
+    
+    const { data: recommendations, isLoading } = useQuery({
+        queryKey: ['recommendations'],
+        queryFn: () => recommendationsApi.getAll(12).then(res => res.data),
+        enabled: isAuthenticated,
+        retry: false,
+        staleTime: 1000 * 60 * 60, // 1 hour
+    });
+
+    if (!isAuthenticated || isLoading || !recommendations || recommendations.length === 0) {
+        return null;
+    }
+
+    // Generate subtitle based on most common genres in recommendations
+    const genreCounts = {};
+    recommendations.forEach(rec => {
+        const genres = rec.reason_metadata?.matched_genres || [];
+        genres.forEach(g => {
+            genreCounts[g] = (genreCounts[g] || 0) + 1;
+        });
+    });
+    
+    const topGenres = Object.entries(genreCounts)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 3)
+        .map(([genre]) => genre);
+    
+    const subtitle = topGenres.length > 0 
+        ? `Based on your love for ${topGenres.join(', ')}` 
+        : 'Curated just for you';
+
+    return (
+        <section className="px-4 md:px-6">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex flex-col gap-1 mb-4 md:mb-6">
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
+                        <h2 className="text-xl md:text-2xl font-bold text-white">Recommended for You</h2>
+                    </div>
+                    <p className="text-sm text-gray-400 pl-1">{subtitle}</p>
+                </div>
+
+                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-4 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                    {recommendations.map((rec) => (
+                        <div key={rec.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
+                            <AnimeCard anime={rec.anime} />
                         </div>
                     ))}
                 </div>

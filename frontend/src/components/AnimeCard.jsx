@@ -316,7 +316,7 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         <span>{anime.episode_count ? (episodesWatched > 0 ? `${episodesWatched}/${anime.episode_count}` : anime.episode_count) : '?'} eps</span>
                     </div>
                     {/* Genres - only if not user list entry */}
-                    {anime.genres?.length > 0 && !userListEntry && (
+                    {anime.genres?.length > 0 && !userListEntry  && (
                         <div className="flex flex-wrap gap-1 mt-auto pt-1.5">
                             {anime.genres.slice(0, 2).map((genre) => (
                                 <span key={genre.id} className="px-1.5 py-0.5 bg-dark-50/80 text-[9px] text-gray-400 rounded border border-gray-700/50">
@@ -325,6 +325,8 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                             ))}
                         </div>
                     )}
+                    
+
                 </Link>
             </div>
 

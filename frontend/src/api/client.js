@@ -118,3 +118,9 @@ export const reviewApi = {
     delete: (id) => api.delete(`/reviews/${id}/`),
     vote: (id, isHelpful = true) => api.post(`/reviews/${id}/vote/`, { is_helpful: isHelpful }),
 };
+
+export const recommendationsApi = {
+    getAll: (limit = 12) => api.get('/recommendations/', { params: { limit } }),
+    refresh: () => api.post('/recommendations/refresh/'),
+    dismiss: (animeId) => api.post(`/recommendations/${animeId}/dismiss/`),
+};
