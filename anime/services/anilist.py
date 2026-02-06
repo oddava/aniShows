@@ -798,6 +798,9 @@ class AniListService:
 
     async def _save_anime_to_db_async(self, item: dict) -> Anime:
         """Async implementation of save_anime_to_db"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         anilist_id = item.get("id")
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get(
@@ -808,36 +811,73 @@ class AniListService:
         if not title:
             raise ValueError("Anime must have a title")
 
-        slug = slugify(title)
+        base_slug = slugify(title)
 
-        # Check if anime already exists
-        try:
-            if anilist_id:
+        # Try to find existing anime by AniList ID
+        if anilist_id:
+            try:
                 anime = await sync_to_async(Anime.objects.get)(anilist_id=anilist_id)
-            elif mal_id:
+                logger.debug(f"Found anime by AniList ID {anilist_id}: {anime.title}")
+                await self._update_anime_async(anime, item, title, title_native, anime.slug)
+                return anime
+            except Anime.DoesNotExist:
+                pass
+        
+        # Try to find by MAL ID
+        if mal_id:
+            try:
                 anime = await sync_to_async(Anime.objects.get)(mal_id=mal_id)
-            else:
-                anime = await sync_to_async(Anime.objects.get)(slug=slug)
+                logger.debug(f"Found anime by MAL ID {mal_id}: {anime.title}")
+                await self._update_anime_async(anime, item, title, title_native, anime.slug)
+                return anime
+            except Anime.DoesNotExist:
+                pass
 
-            # Update existing anime
-            await self._update_anime_async(anime, item, title, title_native, slug)
+        # Try to find by slug - anime might exist without these IDs
+        try:
+            anime = await sync_to_async(Anime.objects.get)(slug=base_slug)
+            logger.info(f"Found anime by slug '{base_slug}': {anime.title}. Adding AniList ID {anilist_id} and MAL ID {mal_id}")
+            await self._update_anime_async(anime, item, title, title_native, anime.slug)
             return anime
-
         except Anime.DoesNotExist:
-            # Create new anime
-            anime_data = self._prepare_anime_data(item, title, title_native, slug)
-            anime_data["anilist_id"] = anilist_id
-            anime_data["mal_id"] = mal_id
+            pass
 
+        # Check if slug is taken by a DIFFERENT anime (different title)
+        # If so, generate a unique slug
+        final_slug = base_slug
+        counter = 0
+        while True:
+            try:
+                existing = await sync_to_async(Anime.objects.get)(slug=final_slug)
+                # Found anime with this slug - if it's the same title, we would have found it above
+                # So this must be a different anime with same slug
+                counter += 1
+                final_slug = f"{base_slug}-{counter}"
+                if counter > 100:  # Safety limit
+                    raise ValueError(f"Could not generate unique slug for '{title}' after 100 attempts")
+            except Anime.DoesNotExist:
+                # This slug is available
+                break
+
+        # Create new anime with unique slug
+        anime_data = self._prepare_anime_data(item, title, title_native, final_slug)
+        anime_data["anilist_id"] = anilist_id
+        anime_data["mal_id"] = mal_id
+
+        try:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
+            logger.info(f"Created new anime: {title} with slug {final_slug}")
+        except Exception as e:
+            logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
+            raise
 
-            # Handle relationships
-            await self._handle_relationships_async(anime, item)
+        # Handle relationships
+        await self._handle_relationships_async(anime, item)
 
-            # Download images
-            await self._download_and_save_images(anime, item)
+        # Download images
+        await self._download_and_save_images(anime, item)
 
-            return anime
+        return anime
 
     async def _update_anime_async(
         self, anime: Anime, item: dict, title: str, title_native: str, slug: str
