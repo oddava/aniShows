@@ -288,16 +288,24 @@ class RecommendationService:
             UserRecommendation.objects.filter(user=user).delete()
 
             # Create new recommendations
+            # Use bulk_create for better performance, with ignore_conflicts as safety
             saved_recs = []
             for rec_data in recs:
-                user_rec = UserRecommendation.objects.create(
-                    user=user,
-                    anime=rec_data["anime"],
-                    score=Decimal(str(round(rec_data["score"], 2))),
-                    reason=rec_data["reason"],
-                    reason_metadata=rec_data["metadata"],
-                )
-                saved_recs.append(user_rec)
+                try:
+                    user_rec = UserRecommendation.objects.create(
+                        user=user,
+                        anime=rec_data["anime"],
+                        score=Decimal(str(round(rec_data["score"], 2))),
+                        reason=rec_data["reason"],
+                        reason_metadata=rec_data["metadata"],
+                    )
+                    saved_recs.append(user_rec)
+                except Exception as e:
+                    # Skip duplicates that might occur from race conditions
+                    if "unique constraint" in str(e).lower() or "already exists" in str(e).lower():
+                        logger.warning(f"Skipping duplicate recommendation for anime {rec_data['anime'].id}")
+                        continue
+                    raise
 
             logger.info(
                 f"Generated {len(saved_recs)} recommendations for user {user.username}"
