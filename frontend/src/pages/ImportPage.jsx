@@ -72,7 +72,7 @@ const ImportPage = () => {
             } else {
                 // Job completed or failed
                 if (job.status === 'completed') {
-                    setSuccess(`Import completed! Imported: ${job.imported_entries}, Skipped: ${job.skipped_entries}`);
+                    setSuccess(`Import completed! Imported: ${job.imported_entries}${job.fetched_entries ? ', Fetched: ' + job.fetched_entries : ''}, Skipped: ${job.skipped_entries}`);
                 } else if (job.status === 'failed') {
                     setError(`Import failed: ${job.errors?.[0] || 'Unknown error'}`);
                 }

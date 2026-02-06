@@ -102,6 +102,7 @@ class UserImportJob(models.Model):
     imported_entries = IntegerField(default=0)
     skipped_entries = IntegerField(default=0)
     failed_entries = IntegerField(default=0)
+    fetched_entries = IntegerField(default=0)  # Anime fetched from external API
 
     # Error tracking
     errors = models.JSONField(default=list, blank=True)

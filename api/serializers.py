@@ -858,6 +858,7 @@ class UserImportJobSerializer(serializers.ModelSerializer):
             "imported_entries",
             "skipped_entries",
             "failed_entries",
+            "fetched_entries",
             "progress_percentage",
             "errors",
             "source_identifier",

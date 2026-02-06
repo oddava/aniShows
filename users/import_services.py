@@ -183,6 +183,7 @@ class BaseImporter:
         self.job.imported_entries = self.imported_count
         self.job.skipped_entries = self.skipped_count
         self.job.failed_entries = self.failed_count
+        self.job.fetched_entries = self.fetched_count
         self.job.errors = self.errors[-10:]  # Keep last 10 errors
         self.job.save(
             update_fields=[
@@ -190,6 +191,8 @@ class BaseImporter:
                 "imported_entries",
                 "skipped_entries",
                 "failed_entries",
+            "fetched_entries",
+                "fetched_entries",
                 "errors",
             ]
         )
