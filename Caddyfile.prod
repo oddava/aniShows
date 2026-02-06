@@ -1,11 +1,5 @@
 {
     email {$EMAIL_HOST_USER}
-    # Enable HTTP/3 and performance optimizations
-    servers {
-        protocol {
-            experimental_http3
-        }
-    }
 }
 
 {$DOMAIN_NAME:localhost} {
