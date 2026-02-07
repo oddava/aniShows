@@ -24,6 +24,7 @@ services:
       AWS_S3_REGION_NAME: "${AWS_S3_REGION_NAME:-us-east-1}"
       MINIO_PUBLIC_DOMAIN: "${MINIO_PUBLIC_DOMAIN:-localhost:9000}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,0.0.0.0}"
+      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -54,7 +55,7 @@ services:
       - web
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Prevent overwriting node_modules
+      - /app/node_modules
     deploy:
       resources:
         limits:
@@ -103,7 +104,7 @@ services:
   # Celery Worker - Reuses web image to avoid redundant builds
   celery:
     image: anishows_web:latest
-    command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "INFO", "-Q", "default,low_priority" ]
+    command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "INFO", "-Q", "default,low_priority", "--concurrency=2", "--pool=prefork" ]
     env_file:
       - .env
     environment:
@@ -114,6 +115,8 @@ services:
       DB_PORT: "${DB_PORT}"
       CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
       CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
+
+      DJANGO_SETTINGS_MODULE: "root.settings"
     volumes:
       - .:/app
       - /app/.venv # Isolate virtual environment
@@ -141,12 +144,14 @@ services:
       DB_PORT: "${DB_PORT}"
       CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
       CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
+
+      DJANGO_SETTINGS_MODULE: "root.settings"
     depends_on:
       - web
       - redis
     volumes:
       - .:/app
-      - /app/.venv # Isolate virtual environment
+      - /app/.venv
     deploy:
       resources:
         limits:

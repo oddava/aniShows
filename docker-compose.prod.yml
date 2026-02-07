@@ -9,14 +9,10 @@
 #   3. Deploy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 services:
-  # In production, frontend container is not needed (static files served by Caddy)
-  # We override it to just stay alive without running dev server
   frontend:
     build:
       context: ./frontend
-    # Don't run dev server, just keep container alive for dependency
     command: ["sh", "-c", "echo 'Production mode: Frontend served by Caddy' && tail -f /dev/null"]
-    # No ports exposed in production (Caddy serves static files)
     ports: []
     deploy:
       resources:
@@ -26,12 +22,10 @@ services:
           memory: 64M
 
   caddy:
-    # Use production Caddyfile with security headers and caching
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile
       - ./frontend/dist:/srv/frontend
       - caddy_data:/data
       - caddy_config:/config
-    # Remove dependency on frontend (it just needs dist folder)
     depends_on:
       - web
