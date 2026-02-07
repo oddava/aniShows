@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Play, TrendingUp, Star, ChevronRight, Sparkles, Compass, Calendar, Flame, Plus } from 'lucide-react';
+import { Play, TrendingUp, Star, ChevronRight, Sparkles, Compass, Calendar, Flame, Plus, Check, Loader2 } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getImageUrl } from '../utils/imageUtils';
 
 export default function Home() {

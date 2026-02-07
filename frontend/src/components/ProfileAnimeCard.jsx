@@ -35,59 +35,77 @@ function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, li
     }, [listEntryId, episodesWatched, isUpdating, queryClient, onProgressUpdate]);
 
     return (
-        <div className="group relative bg-dark-100 rounded-lg border border-gray-800 overflow-hidden hover:border-accent/40 transition-colors">
+        <div className="group relative bg-dark-100 rounded-xl border border-gray-800/60 overflow-hidden hover:border-accent/50 transition-all duration-300 card-hover-glow">
             <Link to={`/anime/${anime.slug}`} className="block cursor-default">
                 {/* Image */}
-                <div className="relative aspect-[2/3] bg-dark-50">
+                <div className="relative aspect-[2/3] bg-dark-50 overflow-hidden">
                     <img
                         src={getImageUrl(anime.cover_image, anime.title)}
                         alt={anime.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                         loading="lazy"
                     />
 
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60" />
+
                     {/* Rating badge */}
                     {anime.rating && (
-                        <div className="absolute bottom-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 rounded text-xs">
+                        <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[10px] border border-white/10">
                             <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                            <span className="text-white font-medium">{anime.rating}</span>
+                            <span className="text-white font-bold">{anime.rating}</span>
                         </div>
                     )}
 
-                    {/* Progress bar */}
+                    {/* Premium Progress bar on image */}
                     {showProgress && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
+                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/40 backdrop-blur-sm overflow-hidden">
                             <div
-                                className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-accent'}`}
+                                className={`h-full transition-all duration-700 ease-out ${progress >= 100 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.6)]'
+                                    }`}
                                 style={{ width: `${Math.min(progress, 100)}%` }}
                             />
                         </div>
                     )}
                 </div>
 
-                {/* Title */}
-                <div className="p-2">
-                    <h3 className="text-xs font-medium text-white line-clamp-2 leading-tight">
+                {/* Title and Info */}
+                <div className="p-2.5">
+                    <h3 className="text-xs font-semibold text-white line-clamp-2 leading-tight group-hover:text-accent transition-colors">
                         {anime.title}
                     </h3>
-                    <div className="text-[10px] text-gray-500 mt-1">
-                        {anime.anime_type || 'TV'} • {episodesWatched > 0 ? `${episodesWatched}/` : ''}{anime.episode_count || '?'} eps
+                    <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">
+                            {anime.anime_type || 'TV'}
+                        </span>
+                        {showProgress ? (
+                            <span className="text-xs font-bold text-white flex items-center gap-1">
+                                <span className="text-accent">{episodesWatched}</span>
+                                <span className="text-gray-500">/</span>
+                                <span>{anime.episode_count || '?'}</span>
+                                <span className="text-[10px] text-gray-500 ml-0.5">eps</span>
+                            </span>
+                        ) : (
+                            <span className="text-[10px] text-gray-500">
+                                {anime.episode_count || '?'} eps
+                            </span>
+                        )}
                     </div>
                 </div>
             </Link>
 
-            {/* Quick progress button - only show in Watching mode with valid entry */}
+            {/* Quick progress button - Refined Design */}
             {showProgress && listEntryId && (
                 <button
                     onClick={handleQuickProgress}
                     disabled={isUpdating}
-                    className="absolute bottom-[52px] right-2 w-7 h-7 flex items-center justify-center rounded-lg bg-black/80 text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-accent hover:border-accent z-10"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-accent/90 text-white shadow-xl shadow-accent/40 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100 hover:bg-accent hover:scale-110 cursor-pointer z-20 border-2 border-white/20 backdrop-blur-sm"
                     title={`Mark episode ${episodesWatched + 1} as watched`}
                 >
                     {isUpdating ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-6 h-6 stroke-[3]" />
                     )}
                 </button>
             )}

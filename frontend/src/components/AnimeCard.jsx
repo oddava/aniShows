@@ -215,44 +215,44 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         </div>
                     )}
 
-                    {/* Status Icon - consolidated: visible when in list, appears on hover when not */}
+                    {/* Status Icon - enlarged for better interaction */}
                     {isAuthenticated && !lite && (
-                        <div className="absolute top-2 left-2 z-[100]">
+                        <div className="absolute top-3 left-3 z-[100]">
                             <div className="relative">
                                 <button
                                     ref={buttonRef}
                                     onClick={toggleStatusMenu}
                                     disabled={state.isLoading}
-                                    className={`w-7 h-7 flex items-center justify-center rounded-lg shadow border transition-all duration-200
+                                    className={`w-9 h-9 flex items-center justify-center rounded-xl shadow-lg backdrop-blur-md border transition-all duration-300
                                         ${state.listStatus && currentStatusOption
                                             ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                            : 'bg-black/70 text-white border-white/20 hover:bg-accent opacity-0 group-hover:opacity-100'}`}
+                                            : 'bg-black/60 text-white border-white/20 hover:bg-accent hover:border-accent opacity-0 group-hover:opacity-100 translate-y-[-10px] group-hover:translate-y-0'}`}
                                     title={state.listStatus ? currentStatusOption?.label : 'Add to List'}
                                 >
-                                    {state.isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
-                                        state.listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                                    {state.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> :
+                                        state.listStatus && currentStatusOption ? <currentStatusOption.icon className="w-4 h-4 stroke-[2.5]" /> : <Plus className="w-5 h-5 stroke-[2.5]" />}
                                 </button>
 
-                                {/* Dropdown */}
+                                {/* Dropdown - slightly larger for the bigger button */}
                                 {state.showStatusMenu && (
-                                    <div ref={menuRef} className="absolute left-0 top-full mt-1 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-xl z-[110]">
-                                        <div className="p-1">
+                                    <div ref={menuRef} className="absolute left-0 top-full mt-2 w-40 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[110] animate-fade-in overflow-hidden">
+                                        <div className="p-1.5">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
-                                                    className={`w-full px-2 py-1.5 flex items-center gap-2 text-xs rounded transition-colors
+                                                    className={`w-full px-3 py-2 flex items-center gap-3 text-xs font-semibold rounded-lg transition-colors
                                                         ${state.listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
                                                 >
-                                                    <option.icon className="w-3 h-3" />
+                                                    <option.icon className="w-3.5 h-3.5" />
                                                     {option.label}
                                                 </button>
                                             ))}
                                         </div>
                                         {state.listStatus && (
-                                            <div className="p-1 border-t border-gray-800">
-                                                <button onClick={handleRemoveFromList} className="w-full px-2 py-1 flex items-center gap-2 text-xs text-red-400 hover:bg-red-400/10 rounded">
-                                                    <X className="w-3 h-3" /> Remove
+                                            <div className="p-1.5 border-t border-gray-800 bg-black/20">
+                                                <button onClick={handleRemoveFromList} className="w-full px-3 py-2 flex items-center gap-3 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-lg">
+                                                    <X className="w-3.5 h-3.5" /> Remove
                                                 </button>
                                             </div>
                                         )}
@@ -264,69 +264,73 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
 
                     {/* Progress Bar - show for watching status */}
                     {state.listStatus === 'Watching' && anime.episode_count && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60 z-20">
+                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/40 backdrop-blur-sm z-20 overflow-hidden">
                             <div
                                 style={{ width: `${Math.min((episodesWatched / anime.episode_count) * 100, 100)}%` }}
-                                className={`h-full ${episodesWatched >= anime.episode_count ? 'bg-green-500' : 'bg-purple-500'}`}
+                                className={`h-full transition-all duration-700 ease-out ${episodesWatched >= anime.episode_count
+                                    ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
+                                    : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.6)]'}`}
                             />
                         </div>
                     )}
 
                     {/* Rating badge - more prominent */}
                     {anime.rating && (
-                        <div className="absolute left-2 bottom-2 flex items-center gap-1.5 px-2 py-1 bg-black/80 backdrop-blur-md rounded-lg text-xs z-10 border border-yellow-500/30">
-                            <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                        <div className="absolute left-2 bottom-3 flex items-center gap-1.5 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-xs z-10 border border-white/10">
+                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
                             <span className="text-white font-bold tracking-wide">{anime.rating}</span>
                         </div>
                     )}
 
-                    {/* Quick progress button - hover only */}
+                    {/* Quick progress button - Refined Design */}
                     {isAuthenticated && state.listStatus === 'Watching' && !lite && (
                         <button
                             onClick={handleQuickProgress}
-                            className="absolute bottom-2 right-2 w-7 h-7 flex items-center justify-center rounded bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity z-30"
-                            title="Mark next episode"
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-accent/90 text-white shadow-2xl shadow-accent/40 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100 hover:bg-accent hover:scale-110 cursor-pointer z-40 border-2 border-white/20 backdrop-blur-sm"
+                            title={`Mark episode ${episodesWatched + 1} as watched`}
                         >
-                            {state.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                            {state.isLoading ? (
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                            ) : (
+                                <Plus className="w-7 h-7 stroke-[3]" />
+                            )}
                         </button>
                     )}
                 </div>
 
-                {/* Favorite Button - Hover Only, top-right */}
+                {/* Favorite Button - enlarged and refined */}
                 {isAuthenticated && !lite && (
-                    <div className="absolute top-2 right-2 z-[100] opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-3 right-3 z-[100] opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-[-10px] group-hover:translate-y-0">
                         <button
                             onClick={handleFavorite}
-                            className={`w-7 h-7 flex items-center justify-center rounded-lg shadow border transition-colors
-                                ${state.isFavorite ? 'bg-red-500 text-white border-red-500' : 'bg-black/70 text-white border-white/20 hover:bg-red-500'}`}
+                            className={`w-9 h-9 flex items-center justify-center rounded-xl shadow-lg backdrop-blur-md border transition-all duration-300 hover:scale-110
+                                ${state.isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-black/60 text-white border-white/20 hover:bg-red-500 hover:border-red-400'}`}
                         >
-                            <Heart className={`w-3.5 h-3.5 ${state.isFavorite ? 'fill-current' : ''}`} />
+                            <Heart className={`w-4 h-4 ${state.isFavorite ? 'fill-current' : ''}`} />
                         </button>
                     </div>
                 )}
 
-                {/* Title/Info Footer */}
+                {/* Title/Info Footer - reverted fonts and layout */}
                 <Link to={`/anime/${anime.slug}`} className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl cursor-default">
-                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug">
+                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent transition-colors">
                         {displayTitle}
                     </h3>
-                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                        <span className="font-bold text-accent">{anime.anime_type || 'TV'}</span>
-                        <span>•</span>
-                        <span>{anime.episode_count ? (episodesWatched > 0 ? `${episodesWatched}/${anime.episode_count}` : anime.episode_count) : '?'} eps</span>
-                    </div>
-                    {/* Genres - shown only on group-hover to reduce noise */}
-                    {anime.genres?.length > 0 && !userListEntry && (
-                        <div className="flex flex-wrap gap-1 mt-auto pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
-                            {anime.genres.slice(0, 2).map((genre) => (
-                                <span key={genre.id} className="px-2 py-0.5 bg-dark-200 text-[10px] font-bold text-gray-400 rounded-md border border-gray-700/50">
-                                    {genre.name}
-                                </span>
-                            ))}
+                    <div className="flex items-center justify-between text-[11px] text-gray-400">
+                        <span className="font-medium text-accent">{anime.anime_type || 'TV'}</span>
+                        <div className="flex items-center gap-1 text-gray-400">
+                            {state.listStatus === 'Watching' ? (
+                                <>
+                                    <span className="text-accent font-bold">{episodesWatched}</span>
+                                    <span className="text-gray-500">/</span>
+                                    <span>{anime.episode_count || '?'}</span>
+                                    <span className="text-[10px] text-gray-500 ml-0.5">eps</span>
+                                </>
+                            ) : (
+                                <span>{anime.episode_count || '?'} eps</span>
+                            )}
                         </div>
-                    )}
-
-
+                    </div>
                 </Link>
             </div>
 

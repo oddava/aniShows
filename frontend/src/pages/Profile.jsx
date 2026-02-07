@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { User, Heart, List, MessageSquare, Lock, BarChart3, Search, LayoutGrid, LayoutList, Clock, Star, Tv, Link as LinkIcon, ExternalLink, Award, Trophy, Zap } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { Navigate, Link, useParams } from 'react-router-dom';
@@ -87,6 +87,7 @@ export default function Profile({ forcedUsername }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [dynamicColors, setDynamicColors] = useState(null);
     const [listStatusFilter, setListStatusFilter] = useState('Watching'); // Current status tab
+    const queryClient = useQueryClient();
 
     const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
     const isOwnProfile = !isPublicView;
@@ -304,16 +305,40 @@ export default function Profile({ forcedUsername }) {
                             </div>
                         </div>
                         {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
-                            <div className="flex items-center gap-2 shrink-0">
-                                <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-accent rounded-full"
-                                        style={{ width: `${((item.episodes_watched || 0) / item.anime.episode_count) * 100}%` }}
-                                    />
+                            <div className="flex items-center gap-4 shrink-0 px-2" onClick={(e) => e.preventDefault()}>
+                                <div className="hidden sm:flex flex-col items-end gap-1">
+                                    <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden border border-white/5">
+                                        <div
+                                            className={`h-full transition-all duration-700 ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1
+                                                ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]'
+                                                : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'}`}
+                                            style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[11px] font-bold text-white tabular-nums">
+                                        <span className="text-accent">{item.episodes_watched || 0}</span>
+                                        <span className="mx-0.5 text-gray-500">/</span>
+                                        <span>{item.anime.episode_count}</span>
+                                        <span className="ml-1 text-gray-500 font-normal uppercase text-[9px]">eps</span>
+                                    </span>
                                 </div>
-                                <span className="text-xs text-gray-400 tabular-nums">
-                                    {item.episodes_watched || 0}/{item.anime.episode_count}
-                                </span>
+
+                                {isOwnProfile && (
+                                    <button
+                                        onClick={async (e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            try {
+                                                await listApi.update(item.id, { episodes_watched: (item.episodes_watched || 0) + 1 });
+                                                queryClient.invalidateQueries({ queryKey: ['lists', targetUsername] });
+                                            } catch (err) { console.error(err); }
+                                        }}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-accent/20 text-accent hover:bg-accent hover:text-white transition-all border border-accent/30"
+                                        title="Mark next episode"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
                         )}
                     </Link>
