@@ -191,7 +191,7 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
             {/* Main Card */}
             {/* Main Card - no hover lifting/scaling */}
             <div className={`bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative
-                ${lite ? '' : 'transition-colors duration-200 hover:border-accent/50'}`}>
+                ${lite ? '' : 'transition-all duration-300 hover:border-accent/40 card-hover-glow'}`}>
 
                 {/* Image Container */}
                 <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
@@ -207,8 +207,8 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                     {/* Rank Badge */}
                     {rank && (
                         <div className="absolute bottom-0 right-0 z-20 pointer-events-none">
-                            <div className="px-3 py-1.5 rounded-tl-xl bg-black/60 border-t border-l border-white/10">
-                                <span className={`font-black text-base ${rank === 1 ? 'text-yellow-400' : rank === 2 ? 'text-gray-300' : rank === 3 ? 'text-amber-500' : 'text-white/80'}`}>
+                            <div className="px-3 py-1.5 rounded-tl-xl bg-black/60 border-t border-l border-white/10 backdrop-blur-md">
+                                <span className={`font-black text-lg ${rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'text-white/80'}`}>
                                     #{rank}
                                 </span>
                             </div>
@@ -272,11 +272,11 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         </div>
                     )}
 
-                    {/* Rating badge */}
+                    {/* Rating badge - more prominent */}
                     {anime.rating && (
-                        <div className="absolute left-2 bottom-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 rounded text-xs z-10">
-                            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                            <span className="text-white font-medium">{anime.rating}</span>
+                        <div className="absolute left-2 bottom-2 flex items-center gap-1.5 px-2 py-1 bg-black/80 backdrop-blur-md rounded-lg text-xs z-10 border border-yellow-500/30">
+                            <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                            <span className="text-white font-bold tracking-wide">{anime.rating}</span>
                         </div>
                     )}
 
@@ -315,17 +315,17 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         <span>•</span>
                         <span>{anime.episode_count ? (episodesWatched > 0 ? `${episodesWatched}/${anime.episode_count}` : anime.episode_count) : '?'} eps</span>
                     </div>
-                    {/* Genres - only if not user list entry */}
-                    {anime.genres?.length > 0 && !userListEntry  && (
-                        <div className="flex flex-wrap gap-1 mt-auto pt-1.5">
+                    {/* Genres - shown only on group-hover to reduce noise */}
+                    {anime.genres?.length > 0 && !userListEntry && (
+                        <div className="flex flex-wrap gap-1 mt-auto pt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
                             {anime.genres.slice(0, 2).map((genre) => (
-                                <span key={genre.id} className="px-1.5 py-0.5 bg-dark-50/80 text-[9px] text-gray-400 rounded border border-gray-700/50">
+                                <span key={genre.id} className="px-2 py-0.5 bg-dark-200 text-[10px] font-bold text-gray-400 rounded-md border border-gray-700/50">
                                     {genre.name}
                                 </span>
                             ))}
                         </div>
                     )}
-                    
+
 
                 </Link>
             </div>
