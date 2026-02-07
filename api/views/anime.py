@@ -192,8 +192,9 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def trending(self, request):
         """Get trending anime (most favorited recently)"""
-        # Cache for 15 minutes
-        cache_key = "anime_trending"
+        # Cache key is user-specific for authenticated users to include user_list_status
+        user_id = request.user.id if request.user.is_authenticated else "anon"
+        cache_key = f"anime_trending_{user_id}"
         data = cache.get(cache_key)
 
         if not data:
@@ -206,25 +207,30 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 queryset, many=True, context={"request": request}
             )
             data = serializer.data
-            cache.set(cache_key, data, 60 * 15)
+            # Shorter cache for authenticated users (5 min) vs anonymous (15 min)
+            cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
+            cache.set(cache_key, data, cache_time)
 
         return Response(data)
 
     @action(detail=False, methods=["get"])
     def top_rated(self, request):
         """Get top rated anime"""
-        # Cache for 15 minutes
-        cache_key = "anime_top_rated"
+        # Cache key is user-specific for authenticated users to include user_list_status
+        user_id = request.user.id if request.user.is_authenticated else "anon"
+        cache_key = f"anime_top_rated_{user_id}"
         data = cache.get(cache_key)
 
         if not data:
-            queryset = Anime.objects.select_related("studio").prefetch_related("genres")
-            queryset = queryset.filter(rating__isnull=False).order_by("-rating")[:12]
+            # Use self.get_queryset() to include user-specific prefetching
+            queryset = self.get_queryset().filter(rating__isnull=False).order_by("-rating")[:12]
             serializer = AnimeListSerializer(
                 queryset, many=True, context={"request": request}
             )
             data = serializer.data
-            cache.set(cache_key, data, 60 * 15)
+            # Shorter cache for authenticated users (5 min) vs anonymous (15 min)
+            cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
+            cache.set(cache_key, data, cache_time)
 
         return Response(data)
 

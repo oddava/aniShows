@@ -9,7 +9,11 @@ import { getImageUrl } from '../utils/imageUtils';
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
+    const queryClient = useQueryClient();
     const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
+    const [heroListLoading, setHeroListLoading] = useState(false);
+    // Track anime IDs that user has added locally (persists across carousel/refetch)
+    const [locallyAddedIds, setLocallyAddedIds] = useState(new Set());
 
     const { data: trending, isLoading: trendingLoading } = useQuery({
         queryKey: ['anime', 'trending'],
@@ -31,6 +35,33 @@ export default function Home() {
     }, [trending]);
 
     const heroAnime = trending && trending.length > 0 ? trending[currentHeroIndex] : null;
+
+    // Check if current hero anime is already in list (from API or locally added)
+    const isHeroInList = heroAnime && (
+        !!heroAnime.user_list_status?.status ||
+        locallyAddedIds.has(heroAnime.id)
+    );
+
+    const handleAddToList = useCallback(async () => {
+        if (!isAuthenticated || !heroAnime || heroListLoading || isHeroInList) return;
+
+        setHeroListLoading(true);
+        try {
+            await listApi.add({ anime_id: heroAnime.id, status: 'Plan to Watch' });
+            // Track this anime ID as locally added
+            setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
+            queryClient.invalidateQueries({ queryKey: ['anime'] });
+            queryClient.invalidateQueries({ queryKey: ['lists'] });
+        } catch (error) {
+            // If error indicates anime is already in list (duplicate), treat as success
+            if (error.response?.status === 400 || error.response?.status === 409) {
+                setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
+            }
+            console.error('Error adding to list:', error);
+        } finally {
+            setHeroListLoading(false);
+        }
+    }, [heroAnime, isAuthenticated, heroListLoading, isHeroInList, queryClient]);
 
     // Intersection Observer for Scroll Reveal
     useEffect(() => {
@@ -122,10 +153,25 @@ export default function Home() {
                                     <Play className="w-4 h-4 fill-current" />
                                     View Series
                                 </Link>
-                                <button className="flex items-center gap-2 px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl font-bold text-white transition-colors">
-                                    <Plus className="w-4 h-4" />
-                                    Add to List
-                                </button>
+                                {isAuthenticated && (
+                                    <button
+                                        onClick={handleAddToList}
+                                        disabled={heroListLoading || isHeroInList}
+                                        className={`flex items-center gap-2 px-6 py-2.5 border rounded-xl font-bold transition-colors ${isHeroInList
+                                            ? 'bg-green-500/20 border-green-500/40 text-green-400 cursor-default'
+                                            : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
+                                            }`}
+                                    >
+                                        {heroListLoading ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : isHeroInList ? (
+                                            <Check className="w-4 h-4" />
+                                        ) : (
+                                            <Plus className="w-4 h-4" />
+                                        )}
+                                        {isHeroInList ? 'In Your List' : 'Add to List'}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}

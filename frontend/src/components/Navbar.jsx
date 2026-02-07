@@ -133,15 +133,6 @@ export default function Navbar() {
                         {/* Logo */}
 
                         <Link to="/" className="flex items-center gap-3 group">
-                            <div className="relative w-10 h-10 flex items-center justify-center">
-                                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="transform transition-transform group-hover:scale-105">
-                                    <path d="M8 8C8 5.79086 9.79086 4 12 4H28C30.2091 4 32 5.79086 32 8V32C32 34.2091 30.2091 36 28 36H12C9.79086 36 8 34.2091 8 32V8Z" className="opacity-0" />
-                                    {/* Play Button Shape with soft rounded corners */}
-                                    <path d="M12 8L32 20L12 32V8Z" fill="#8b5cf6" stroke="white" strokeOpacity="0.1" strokeWidth="1" strokeLinejoin="round" />
-                                    {/* Star Sparkle */}
-                                    <path d="M34 8L35.5 11.5L39 13L35.5 14.5L34 18L32.5 14.5L29 13L32.5 11.5L34 8Z" fill="#22d3ee" className="drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
-                                </svg>
-                            </div>
                             <span className="text-2xl font-bold text-white hidden sm:block">
                                 AniShows
                             </span>
