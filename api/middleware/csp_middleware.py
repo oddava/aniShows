@@ -21,13 +21,19 @@ class CSPMiddleware(MiddlewareMixin):
         # Base CSP directives
         csp_directives = {
             "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'"],  # React needs inline scripts
+            "script-src": [
+                "'self'",
+                "'unsafe-inline'",
+                "https://www.googletagmanager.com",
+                "https://www.google-analytics.com",
+            ],
             "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             "font-src": ["'self'", "https://fonts.gstatic.com"],
-            "img-src": ["'self'", "data:", "https:", "http:"],  # Allow S3/MinIO
-            "connect-src": ["'self'"],
+            "img-src": ["'self'", "data:", "https:", "http:"],
+            "connect-src": ["'self'", "https://www.google-analytics.com"],
             "media-src": ["'self'", "https:", "http:"],
-            "frame-ancestors": ["'none'"],  # Prevent clickjacking
+            "frame-src": ["'self'", "https://www.youtube.com", "https://youtube.com"],
+            "frame-ancestors": ["'none'"],
             "base-uri": ["'self'"],
             "form-action": ["'self'"],
         }
