@@ -1,9 +1,9 @@
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, SlidersHorizontal, ChevronDown, ChevronUp, X, Grid3X3, List, LayoutGrid, Filter, ChevronRight, Star, Building2, Calendar, Tv, Plus, TrendingUp, Play, Trophy, Clock, Sparkles, ArrowDownAZ, Users, Eye } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
-import { animeApi, genreApi, studioApi, listApi } from '../api/client';
+import { animeApi, genreApi, studioApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
 // Browse Tabs for quick context switching
@@ -15,10 +15,6 @@ const BROWSE_TABS = [
     { key: 'newest', label: 'Newest', icon: Sparkles },
     { key: 'title', label: 'A-Z', icon: ArrowDownAZ },
 ];
-
-// Days for calendar strip
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 
 const SORT_OPTIONS = [
     { value: 'trending', label: 'Trending Now' },
@@ -59,49 +55,46 @@ const VIEW_MODES = [
 const currentYear = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: currentYear - 1960 + 2 }, (_, i) => currentYear + 1 - i);
 
+
+
 export default function Browse() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
-    const [showSortMenu, setShowSortMenu] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [viewMode, setViewMode] = useState(() => localStorage.getItem('browse_view_mode') || 'grid');
     const [titleLanguage, setTitleLanguage] = useState(() => localStorage.getItem('title_language') || 'en');
+    const [activeTab, setActiveTab] = useState('popular');
     const { isAuthenticated } = useAuth();
-
     // Collapsible filter sections state
     const [collapsedSections, setCollapsedSections] = useState(() => {
         const saved = localStorage.getItem('browse_collapsed_sections');
-        return saved ? JSON.parse(saved) : { genres: true }; // Genres collapsed by default
+        return saved ? JSON.parse(saved) : { genres: true };
     });
     const [genreSearch, setGenreSearch] = useState('');
     const [showAllGenres, setShowAllGenres] = useState(false);
 
     // Quick filter genres (popular ones)
-    const QUICK_FILTER_GENRES = ['action', 'romance', 'comedy', 'fantasy', 'drama', 'sci-fi'];
-
-    const toggleSection = (section) => {
-        const newCollapsed = { ...collapsedSections, [section]: !collapsedSections[section] };
-        setCollapsedSections(newCollapsed);
-        localStorage.setItem('browse_collapsed_sections', JSON.stringify(newCollapsed));
-    };
+    const QUICK_FILTER_GENRES = useMemo(() => ['action', 'romance', 'comedy', 'fantasy', 'drama', 'sci-fi'], []);
 
     // Parse URL params
-    const currentGenres = searchParams.get('genre')?.split(',').filter(Boolean) || [];
+    const currentGenres = useMemo(() => 
+        searchParams.get('genre')?.split(',').filter(Boolean) || [],
+        [searchParams]
+    );
     const currentSort = searchParams.get('sort') || 'popular';
     const currentSearch = searchParams.get('q') || '';
     const currentTypes = searchParams.get('type') || '';
     const currentStatuses = searchParams.get('status') || '';
     const currentStudio = searchParams.get('studio') || '';
     const currentSeason = searchParams.get('season') || '';
-    const currentYear = searchParams.get('year') || '';
-
-    // Determine active tab
-    const [activeTab, setActiveTab] = useState('popular');
+    const currentYearParam = searchParams.get('year') || '';
+    const currentMinRating = searchParams.get('min_rating') || '';
+    const currentMaxRating = searchParams.get('max_rating') || '';
 
     // Update active tab based on params
     useEffect(() => {
         if (currentSort === 'trending') setActiveTab('trending');
-        else if (currentSeason && currentYear) {
+        else if (currentSeason && currentYearParam) {
             const d = new Date();
             const m = d.getMonth();
             const y = d.getFullYear();
@@ -110,7 +103,7 @@ export default function Browse() {
             else if (m >= 6 && m <= 8) thisSeason = 'summer';
             else if (m >= 9 && m <= 11) thisSeason = 'fall';
 
-            if (currentSeason === thisSeason && parseInt(currentYear) === y) {
+            if (currentSeason === thisSeason && parseInt(currentYearParam) === y) {
                 setActiveTab('current');
             } else {
                 setActiveTab('upcoming');
@@ -121,9 +114,9 @@ export default function Browse() {
         else if (currentSort === 'title') setActiveTab('title');
         else if (currentSort === 'popular') setActiveTab('popular');
         else setActiveTab(null);
-    }, [currentSort, currentSeason, currentStatuses, currentYear]);
+    }, [currentSort, currentSeason, currentYearParam]);
 
-    const handleTabChange = (key) => {
+    const handleTabChange = useCallback((key) => {
         const newParams = new URLSearchParams(searchParams);
 
         // Reset base filters
@@ -132,15 +125,15 @@ export default function Browse() {
         newParams.delete('season');
         newParams.delete('year');
 
+        const d = new Date();
+        const month = d.getMonth();
+        const year = d.getFullYear();
+
         switch (key) {
             case 'trending':
                 newParams.set('sort', 'trending');
                 break;
             case 'current': {
-                // Logic to determine current season
-                const d = new Date();
-                const month = d.getMonth();
-                const year = d.getFullYear();
                 let season = 'winter';
                 if (month >= 3 && month <= 5) season = 'spring';
                 else if (month >= 6 && month <= 8) season = 'summer';
@@ -152,17 +145,13 @@ export default function Browse() {
                 break;
             }
             case 'upcoming': {
-                // Set to Next Season
-                const d = new Date();
-                const m = d.getMonth();
-                const y = d.getFullYear();
                 let nextSeason = 'winter';
-                let nextYear = y;
+                let nextYear = year;
 
-                if (m >= 0 && m <= 2) { nextSeason = 'spring'; } // Winter -> Spring
-                else if (m >= 3 && m <= 5) { nextSeason = 'summer'; } // Spring -> Summer
-                else if (m >= 6 && m <= 8) { nextSeason = 'fall'; } // Summer -> Fall
-                else { nextSeason = 'winter'; nextYear = y + 1; } // Fall -> Winter (Next Year)
+                if (month >= 0 && month <= 2) { nextSeason = 'spring'; }
+                else if (month >= 3 && month <= 5) { nextSeason = 'summer'; }
+                else if (month >= 6 && month <= 8) { nextSeason = 'fall'; }
+                else { nextSeason = 'winter'; nextYear = year + 1; }
 
                 newParams.set('season', nextSeason);
                 newParams.set('year', nextYear.toString());
@@ -185,9 +174,7 @@ export default function Browse() {
 
         setActiveTab(key);
         setSearchParams(newParams);
-    };
-    const currentMinRating = searchParams.get('min_rating') || '';
-    const currentMaxRating = searchParams.get('max_rating') || '';
+    }, [searchParams, setSearchParams]);
 
     // Fetch genres
     const { data: genres } = useQuery({
@@ -212,7 +199,7 @@ export default function Browse() {
         isLoading,
         isError,
     } = useInfiniteQuery({
-        queryKey: ['anime', 'list', currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYear, currentMinRating, currentMaxRating],
+        queryKey: ['anime', 'list', currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYearParam, currentMinRating, currentMaxRating],
         queryFn: ({ pageParam = 1 }) =>
             animeApi.getAll({
                 page: pageParam,
@@ -223,7 +210,7 @@ export default function Browse() {
                 status: currentStatuses || undefined,
                 studio: currentStudio || undefined,
                 season: currentSeason || undefined,
-                year: currentYear || undefined,
+                year: currentYearParam || undefined,
                 min_rating: currentMinRating || undefined,
                 max_rating: currentMaxRating || undefined,
             }).then(res => res.data),
@@ -250,27 +237,39 @@ export default function Browse() {
     const { data: trendingHero } = useQuery({
         queryKey: ['anime', 'hero-trending'],
         queryFn: () => animeApi.getTrending().then(res => res.data),
-        staleTime: 1000 * 60 * 30, // 30 mins
+        staleTime: 1000 * 60 * 30,
     });
 
-    // Determine if we should show hero section (only on 'trending' tab or default view)
+    // Determine if we should show hero section
     const showHero = activeTab === 'popular' && !currentSearch && !currentGenres.length;
 
-    // Infinite scroll
-    const handleScroll = useCallback(() => {
-        if (
-            window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500 &&
-            hasNextPage &&
-            !isFetchingNextPage
-        ) {
-            fetchNextPage();
-        }
-    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+    // Flatten all anime data
+    const allAnime = useMemo(() => 
+        data?.pages.flatMap(page => page.results) || [],
+        [data]
+    );
+    const totalCount = data?.pages[0]?.count || 0;
 
+
+
+    // Infinite scroll with IntersectionObserver
+    const loadMoreRef = useRef(null);
     useEffect(() => {
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [handleScroll]);
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+                    fetchNextPage();
+                }
+            },
+            { threshold: 0.1, rootMargin: '200px' }
+        );
+
+        if (loadMoreRef.current) {
+            observer.observe(loadMoreRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     // Search debounce
     useEffect(() => {
@@ -286,7 +285,7 @@ export default function Browse() {
             }
         }, 300);
         return () => clearTimeout(timeout);
-    }, [searchInput]);
+    }, [searchInput, currentSearch, searchParams, setSearchParams]);
 
     useEffect(() => {
         window.scrollTo({ top: 0 });
@@ -294,7 +293,7 @@ export default function Browse() {
     }, [currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses]);
 
     // Filter update helpers
-    const updateParam = (key, value) => {
+    const updateParam = useCallback((key, value) => {
         const newParams = new URLSearchParams(searchParams);
         if (value) {
             newParams.set(key, value);
@@ -302,9 +301,9 @@ export default function Browse() {
             newParams.delete(key);
         }
         setSearchParams(newParams);
-    };
+    }, [searchParams, setSearchParams]);
 
-    const toggleArrayParam = (key, value) => {
+    const toggleArrayParam = useCallback((key, value) => {
         const newParams = new URLSearchParams(searchParams);
         const current = newParams.get(key)?.split(',').filter(Boolean) || [];
         const updated = current.includes(value)
@@ -316,27 +315,28 @@ export default function Browse() {
             newParams.delete(key);
         }
         setSearchParams(newParams);
-    };
+    }, [searchParams, setSearchParams]);
 
-    const clearAllFilters = () => {
+    const clearAllFilters = useCallback(() => {
         setSearchParams({});
         setSearchInput('');
-    };
+    }, [setSearchParams]);
 
-    const hasActiveFilters = currentGenres.length > 0 || currentTypes || currentStatuses || currentStudio || currentSeason || currentYear || currentMinRating || currentMaxRating;
+    const toggleSection = useCallback((section) => {
+        const newCollapsed = { ...collapsedSections, [section]: !collapsedSections[section] };
+        setCollapsedSections(newCollapsed);
+        localStorage.setItem('browse_collapsed_sections', JSON.stringify(newCollapsed));
+    }, [collapsedSections]);
 
-    const allAnime = data?.pages.flatMap(page => page.results) || [];
-    const totalCount = data?.pages[0]?.count || 0;
+    const hasActiveFilters = currentGenres.length > 0 || currentTypes || currentStatuses || currentStudio || currentSeason || currentYearParam || currentMinRating || currentMaxRating;
 
     // Filter Sidebar Component
-    const FilterSidebar = ({ className = '', isMobile = false }) => {
-        // Filter genres based on search and limit
+    const FilterSidebar = useCallback(({ className = '', isMobile = false }) => {
         const filteredGenres = genres?.filter(g =>
             g.name.toLowerCase().includes(genreSearch.toLowerCase())
         ) || [];
         const displayedGenres = showAllGenres ? filteredGenres : filteredGenres.slice(0, 10);
 
-        // Collapsible Section Header Component
         const SectionHeader = ({ icon: Icon, title, section, count }) => (
             <button
                 onClick={() => toggleSection(section)}
@@ -431,7 +431,7 @@ export default function Browse() {
 
                 {/* Season & Year */}
                 <div>
-                    <SectionHeader icon={Calendar} title="Season" section="season" count={(currentSeason || currentYear) ? 1 : 0} />
+                    <SectionHeader icon={Calendar} title="Season" section="season" count={(currentSeason || currentYearParam) ? 1 : 0} />
                     {!collapsedSections.season && (
                         <div className="grid grid-cols-2 gap-2 animate-fade-in">
                             <select
@@ -445,7 +445,7 @@ export default function Browse() {
                                 ))}
                             </select>
                             <select
-                                value={currentYear}
+                                value={currentYearParam}
                                 onChange={(e) => updateParam('year', e.target.value)}
                                 className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent"
                             >
@@ -510,7 +510,6 @@ export default function Browse() {
                     <SectionHeader icon={Filter} title="Genres" section="genres" count={currentGenres.length} />
                     {!collapsedSections.genres && (
                         <div className="space-y-3 animate-fade-in">
-                            {/* Genre Search - sticky at top */}
                             {genres?.length > 10 && (
                                 <div className="sticky top-0 bg-dark-100/95 backdrop-blur-sm py-1 -mx-1 px-1 z-10">
                                     <input
@@ -539,7 +538,6 @@ export default function Browse() {
                                     );
                                 })}
                             </div>
-                            {/* Show All Toggle */}
                             {filteredGenres.length > 10 && !genreSearch && (
                                 <button
                                     onClick={() => setShowAllGenres(!showAllGenres)}
@@ -563,10 +561,10 @@ export default function Browse() {
                 )}
             </div>
         );
-    };
+    }, [genres, studios, collapsedSections, currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio, genreSearch, showAllGenres, hasActiveFilters, toggleSection, updateParam, toggleArrayParam, clearAllFilters]);
 
-    // List View Row Component - Enhanced with more data for desktop users
-    const AnimeListRow = ({ anime }) => (
+    // List View Row Component
+    const AnimeListRow = useCallback(({ anime }) => (
         <Link
             to={`/anime/${anime.slug}`}
             className="flex items-center gap-4 p-4 bg-dark-100/50 hover:bg-dark-100 rounded-xl border border-gray-800 hover:border-accent/30 hover:shadow-lg hover:shadow-accent/5 transition-all group"
@@ -574,6 +572,7 @@ export default function Browse() {
             <img
                 src={anime.cover_image}
                 alt={anime.title}
+                loading="lazy"
                 className="w-16 h-24 object-cover rounded-lg flex-shrink-0"
             />
             <div className="flex-1 min-w-0">
@@ -624,10 +623,10 @@ export default function Browse() {
                 )}
             </div>
         </Link>
-    );
+    ), [titleLanguage]);
 
     // Minimal Card Component
-    const AnimeMinimalCard = ({ anime, titleLanguage }) => (
+    const AnimeMinimalCard = useCallback(({ anime }) => (
         <Link
             to={`/anime/${anime.slug}`}
             className="block aspect-[2/3] rounded-lg overflow-hidden relative group"
@@ -635,6 +634,7 @@ export default function Browse() {
             <img
                 src={anime.cover_image}
                 alt={anime.title}
+                loading="lazy"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
@@ -645,7 +645,9 @@ export default function Browse() {
                 </div>
             </div>
         </Link>
-    );
+    ), [titleLanguage]);
+
+
 
     return (
         <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4">
@@ -704,7 +706,7 @@ export default function Browse() {
                     </div>
                 </div>
 
-                {/* Browse Tabs - Horizontally scrollable on mobile */}
+                {/* Browse Tabs */}
                 <div className="mb-4 sm:mb-6 -mx-3 sm:-mx-4 px-3 sm:px-4 overflow-x-auto scrollbar-hide">
                     <div className="flex gap-2 animate-fade-in min-w-max sm:justify-center">
                         {BROWSE_TABS.map((tab) => {
@@ -742,8 +744,7 @@ export default function Browse() {
 
                     {/* Main Content */}
                     <main className="flex-1 min-w-0">
-
-                        {/* Hero Section - Only on Popular/Default */}
+                        {/* Hero Section */}
                         {showHero && trendingHero && (
                             <div className="mb-10 animate-fade-in">
                                 <div className="flex items-center justify-between mb-4">
@@ -765,9 +766,9 @@ export default function Browse() {
                                             <img
                                                 src={anime.cover_image}
                                                 alt={anime.title}
+                                                loading="lazy"
                                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                                             />
-                                            {/* Progress Bar for Watching */}
                                             {anime.user_list_status?.status === 'Watching' && anime.episode_count > 0 && (
                                                 <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60 z-20">
                                                     <div
@@ -817,8 +818,6 @@ export default function Browse() {
                                     <span className="text-accent font-bold text-base">{totalCount}</span>
                                     <span>results</span>
                                 </p>
-
-
 
                                 {/* Mobile Filter Toggle */}
                                 <button
@@ -888,7 +887,7 @@ export default function Browse() {
                                         onClick={() => updateParam('season', '')}
                                         className="flex items-center gap-1 px-3 py-1.5 bg-accent/20 text-accent rounded-full text-sm border border-accent/30"
                                     >
-                                        {SEASON_OPTIONS.find(s => s.value === currentSeason)?.label.split(' ')[0]} {currentYear}
+                                        {SEASON_OPTIONS.find(s => s.value === currentSeason)?.label.split(' ')[0]} {currentYearParam}
                                         <X className="w-3 h-3" />
                                     </button>
                                 )}
@@ -923,38 +922,51 @@ export default function Browse() {
                             </div>
                         )}
 
-                        {/* Anime Grid/List */}
+                        {/* Anime Grid */}
                         {viewMode === 'grid' && (
-                            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
+                            <div>
                                 {isLoading ? (
-                                    Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
+                                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
+                                        {Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
+                                    </div>
                                 ) : isError ? (
-                                    <div className="col-span-full text-center py-16">
+                                    <div className="text-center py-16">
                                         <p className="text-red-400 mb-4">Failed to load anime</p>
                                         <button onClick={() => window.location.reload()} className="btn-primary">
                                             Reload
                                         </button>
                                     </div>
                                 ) : allAnime.length === 0 ? (
-                                    <div className="col-span-full text-center py-16">
+                                    <div className="text-center py-16">
                                         <p className="text-gray-400 mb-4">No anime found matching your criteria</p>
                                         <button onClick={clearAllFilters} className="btn-secondary">
                                             Clear Filters
                                         </button>
                                     </div>
                                 ) : (
-                                    allAnime.map((anime, index) => (
-                                        <AnimeCard
-                                            key={anime.id}
-                                            anime={anime}
-                                            titleLanguage={titleLanguage}
-                                            rank={currentSort === 'rating' ? (index + 1) : null}
-                                        />
-                                    ))
+                                    <>
+                                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
+                                            {allAnime.map((anime, index) => (
+                                                <AnimeCard
+                                                    key={anime.id}
+                                                    anime={anime}
+                                                    titleLanguage={titleLanguage}
+                                                    rank={currentSort === 'rating' ? (index + 1) : null}
+                                                />
+                                            ))}
+                                        </div>
+                                        {/* Load more trigger */}
+                                        <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">
+                                            {isFetchingNextPage && (
+                                                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                                            )}
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}
 
+                        {/* List View */}
                         {viewMode === 'list' && (
                             <div className="space-y-3">
                                 {isLoading ? (
@@ -969,13 +981,21 @@ export default function Browse() {
                                         </button>
                                     </div>
                                 ) : (
-                                    allAnime.map((anime) => (
-                                        <AnimeListRow key={anime.id} anime={anime} />
-                                    ))
+                                    <>
+                                        {allAnime.map((anime) => (
+                                            <AnimeListRow key={anime.id} anime={anime} />
+                                        ))}
+                                        <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">
+                                            {isFetchingNextPage && (
+                                                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                                            )}
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}
 
+                        {/* Minimal View */}
                         {viewMode === 'minimal' && (
                             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
                                 {isLoading ? (
@@ -987,45 +1007,43 @@ export default function Browse() {
                                         <p className="text-gray-400 mb-4">No anime found</p>
                                     </div>
                                 ) : (
-                                    allAnime.map((anime) => (
-                                        <AnimeMinimalCard key={anime.id} anime={anime} titleLanguage={titleLanguage} />
-                                    ))
+                                    <>
+                                        {allAnime.map((anime) => (
+                                            <AnimeMinimalCard key={anime.id} anime={anime} />
+                                        ))}
+                                        <div ref={loadMoreRef} className="col-span-full h-10 flex justify-center items-center py-8">
+                                            {isFetchingNextPage && (
+                                                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                                            )}
+                                        </div>
+                                    </>
                                 )}
-                            </div>
-                        )}
-
-                        {/* Loading more */}
-                        {isFetchingNextPage && (
-                            <div className="flex justify-center py-8">
-                                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                             </div>
                         )}
                     </main>
                 </div>
-            </div >
+            </div>
 
             {/* Mobile Filter Drawer */}
-            {
-                showFilters && (
-                    <div className="fixed inset-0 z-50 lg:hidden">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowFilters(false)} />
-                        <div className="absolute right-0 top-0 bottom-0 w-full max-w-[320px] bg-dark-100 border-l border-gray-800 overflow-y-auto">
-                            <div className="sticky top-0 bg-dark-100 border-b border-gray-800 p-4 flex items-center justify-between">
-                                <h2 className="text-lg font-bold text-white">Filters</h2>
-                                <button
-                                    onClick={() => setShowFilters(false)}
-                                    className="p-2 text-gray-400 hover:text-white transition-colors"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-                            <div className="p-4 sm:p-6">
-                                <FilterSidebar isMobile />
-                            </div>
+            {showFilters && (
+                <div className="fixed inset-0 z-50 lg:hidden">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowFilters(false)} />
+                    <div className="absolute right-0 top-0 bottom-0 w-full max-w-[320px] bg-dark-100 border-l border-gray-800 overflow-y-auto">
+                        <div className="sticky top-0 bg-dark-100 border-b border-gray-800 p-4 flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-white">Filters</h2>
+                            <button
+                                onClick={() => setShowFilters(false)}
+                                className="p-2 text-gray-400 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 sm:p-6">
+                            <FilterSidebar isMobile />
                         </div>
                     </div>
-                )
-            }
-        </div >
+                </div>
+            )}
+        </div>
     );
 }

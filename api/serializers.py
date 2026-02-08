@@ -87,8 +87,73 @@ class AnimeStaffSerializer(serializers.ModelSerializer):
         fields = ["id", "staff", "role"]
 
 
+class AnimeMinimalSerializer(serializers.ModelSerializer):
+    """Minimal serializer for list views - excludes synopsis for smaller payload"""
+
+    genres = GenreSerializer(many=True, read_only=True)
+    studio_name = serializers.CharField(
+        source="studio.name", read_only=True, default=None
+    )
+    is_favorite = serializers.SerializerMethodField()
+    user_list_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Anime
+        fields = [
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "cover_image",
+            "rating",
+            "episode_count",
+            "anime_type",
+            "status",
+            "genres",
+            "studio_name",
+            "is_favorite",
+            "user_list_status",
+            "release_date",
+        ]
+
+    def get_is_favorite(self, obj):
+        if hasattr(obj, "_is_favorite"):
+            return obj._is_favorite
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
+        return False
+
+    def get_user_list_status(self, obj):
+        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
+            entry = obj._user_list_entries[0]
+            return {
+                "id": entry.id,
+                "status": entry.status,
+                "episodes_watched": entry.episodes_watched,
+                "progress": (entry.episodes_watched / obj.episode_count * 100)
+                if obj.episode_count and obj.episode_count > 0
+                else 0,
+            }
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            user_list = UserAnimeList.objects.filter(
+                user=request.user, anime=obj
+            ).first()
+            if user_list:
+                return {
+                    "id": user_list.id,
+                    "status": user_list.status,
+                    "episodes_watched": user_list.episodes_watched,
+                    "progress": (user_list.episodes_watched / obj.episode_count * 100)
+                    if obj.episode_count and obj.episode_count > 0
+                    else 0,
+                }
+        return None
+
+
 class AnimeListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for lists"""
+    """Lightweight serializer for lists with synopsis"""
 
     genres = GenreSerializer(many=True, read_only=True)
     studio_name = serializers.CharField(

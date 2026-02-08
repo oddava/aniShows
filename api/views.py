@@ -27,6 +27,7 @@ from users.models import UserProfile, UserAnimeList
 from . import throttling
 from .serializers import (
     AnimeListSerializer,
+    AnimeMinimalSerializer,
     AnimeDetailSerializer,
     GenreSerializer,
     StudioSerializer,
@@ -216,6 +217,9 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         if self.action == "retrieve":
             return AnimeDetailSerializer
+        # Use minimal serializer for list to reduce payload size
+        if self.action == "list":
+            return AnimeMinimalSerializer
         return AnimeListSerializer
 
     @action(detail=False, methods=["get"])

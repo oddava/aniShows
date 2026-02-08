@@ -179,6 +179,14 @@ class Anime(Model):
         indexes = [
             Index(fields=["status", "-release_date"]),
             Index(fields=["anime_type", "-rating"]),
+            Index(fields=["-popularity_rank"]),
+            Index(fields=["-trending_rank"]),
+            Index(fields=["-site_rank"]),
+            Index(fields=["studio", "-rating"]),
+            Index(fields=["slug"]),
+            Index(fields=["title"]),
+            Index(fields=["release_date"]),
+            Index(fields=["-member_count"]),
         ]
 
     def __str__(self):

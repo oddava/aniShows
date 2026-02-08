@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Play, TrendingUp, Star, ChevronRight, Sparkles, Compass, Calendar, Flame, Plus, Check, Loader2 } from 'lucide-react';
+import { Play, TrendingUp, Star, ChevronRight, Sparkles, Plus, Check, Loader2 } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getImageUrl } from '../utils/imageUtils';
 
 export default function Home() {
@@ -12,20 +12,25 @@ export default function Home() {
     const queryClient = useQueryClient();
     const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
     const [heroListLoading, setHeroListLoading] = useState(false);
-    // Track anime IDs that user has added locally (persists across carousel/refetch)
     const [locallyAddedIds, setLocallyAddedIds] = useState(new Set());
+    const revealRefs = useRef([]);
 
+    // Use useQueries for parallel fetching with proper stale times
     const { data: trending, isLoading: trendingLoading } = useQuery({
         queryKey: ['anime', 'trending'],
         queryFn: () => animeApi.getTrending().then(res => res.data),
+        staleTime: 1000 * 60 * 15, // 15 minutes
+        gcTime: 1000 * 60 * 30,
     });
 
     const { data: topRated, isLoading: topRatedLoading } = useQuery({
         queryKey: ['anime', 'top_rated'],
         queryFn: () => animeApi.getTopRated().then(res => res.data),
+        staleTime: 1000 * 60 * 15,
+        gcTime: 1000 * 60 * 30,
     });
 
-    // Hero Carousel Logic
+    // Hero Carousel Logic - optimized with useCallback
     useEffect(() => {
         if (!trending || trending.length === 0) return;
         const interval = setInterval(() => {
@@ -36,7 +41,6 @@ export default function Home() {
 
     const heroAnime = trending && trending.length > 0 ? trending[currentHeroIndex] : null;
 
-    // Check if current hero anime is already in list (from API or locally added)
     const isHeroInList = heroAnime && (
         !!heroAnime.user_list_status?.status ||
         locallyAddedIds.has(heroAnime.id)
@@ -48,12 +52,10 @@ export default function Home() {
         setHeroListLoading(true);
         try {
             await listApi.add({ anime_id: heroAnime.id, status: 'Plan to Watch' });
-            // Track this anime ID as locally added
             setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
             queryClient.invalidateQueries({ queryKey: ['anime'] });
             queryClient.invalidateQueries({ queryKey: ['lists'] });
         } catch (error) {
-            // If error indicates anime is already in list (duplicate), treat as success
             if (error.response?.status === 400 || error.response?.status === 409) {
                 setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
             }
@@ -63,60 +65,65 @@ export default function Home() {
         }
     }, [heroAnime, isAuthenticated, heroListLoading, isHeroInList, queryClient]);
 
-    // Intersection Observer for Scroll Reveal
+    // Optimized IntersectionObserver with refs
     useEffect(() => {
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('active');
+                    observer.unobserve(entry.target);
                 }
             });
-        }, { threshold: 0.1 });
+        }, { threshold: 0.1, rootMargin: '50px' });
 
-        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+        revealRefs.current.forEach(el => {
+            if (el) observer.observe(el);
+        });
+
         return () => observer.disconnect();
-    }, [trending, topRated]);
+    }, []);
+
+    // Ref callback for reveal sections
+    const setRevealRef = useCallback((el) => {
+        if (el && !revealRefs.current.includes(el)) {
+            revealRefs.current.push(el);
+        }
+    }, []);
 
     return (
         <div className="min-h-screen">
-            {/* Hero Section - Full-Bleed & Impactful */}
+            {/* Hero Section */}
             <section className="relative h-[50vh] sm:h-[60vh] min-h-[400px] sm:min-h-[480px] flex items-center overflow-hidden">
-                {/* Dynamic Full-Bleed Background */}
                 <div className="absolute inset-0 bg-dark">
                     {trending?.slice(0, 5).map((anime, index) => (
                         <div
                             key={anime.id}
-                            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-70' : 'opacity-0'
-                                }`}
+                            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-70' : 'opacity-0'}`}
                         >
                             <img
                                 src={getImageUrl(anime.banner_image || anime.cover_image)}
                                 alt=""
+                                loading={index === 0 ? 'eager' : 'lazy'}
                                 className="w-full h-full object-cover scale-[1.02]"
                             />
                         </div>
                     ))}
-                    {/* Smooth Transition Fades */}
                     <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/40 to-transparent" />
                     <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/60 to-transparent h-full" />
                 </div>
 
-                {/* Content - Focused on the Featured Show */}
                 <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6">
                     {heroAnime && (
                         <div className="max-w-2xl animate-fade-in">
-                            {/* Accent Label */}
                             <div className="mb-3 sm:mb-6 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/20 border border-accent/40 backdrop-blur-md">
                                 <span className="flex h-1.5 w-1.5 rounded-full bg-accent animate-pulse"></span>
                                 <span className="text-[10px] font-bold text-accent-light uppercase tracking-widest">Featured Series</span>
                             </div>
 
-                            {/* Main Title Hook - Scaled down for better rhythm */}
                             <h1 className="text-2xl sm:text-3xl md:text-5xl font-black mb-3 sm:mb-4 leading-tight text-white drop-shadow-lg max-w-3xl">
                                 {heroAnime.title}
                             </h1>
 
-                            {/* Metadata & Genre Pills */}
                             <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-4 sm:mb-6">
                                 {heroAnime.rating && (
                                     <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
@@ -139,12 +146,10 @@ export default function Home() {
                                 ))}
                             </div>
 
-                            {/* Synopsis (High Contrast) */}
                             <p className="text-sm sm:text-base md:text-lg text-gray-200 mb-6 sm:mb-8 max-w-lg line-clamp-2 sm:line-clamp-3 drop-shadow-md font-medium leading-relaxed">
                                 {heroAnime.synopsis}
                             </p>
 
-                            {/* Action-Oriented CTAs - Clean & Standardized */}
                             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                 <Link
                                     to={`/anime/${heroAnime.slug}`}
@@ -178,21 +183,18 @@ export default function Home() {
                 </div>
             </section>
 
-            {/* Main Content Area - Unified Dynamic Background */}
+            {/* Main Content Area */}
             <div className="relative">
-                {/* Neutral Mesh Depth (Darker feel) */}
                 <div className="absolute inset-0 pointer-events-none">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.02)_0%,transparent_50%)]" />
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(255,255,255,0.01)_0%,transparent_50%)]" />
                 </div>
 
                 <div className="relative space-y-8 md:space-y-16 py-8 md:py-12 mt-8 md:mt-12 z-20">
-                    {isAuthenticated && (
-                        <CurrentlyWatchingSection />
-                    )}
+                    {isAuthenticated && <CurrentlyWatchingSection />}
 
                     {/* Trending Section */}
-                    <section className="px-4 md:px-6 reveal pb-2">
+                    <section ref={setRevealRef} className="px-4 md:px-6 reveal pb-2">
                         <div className="max-w-7xl mx-auto">
                             <div className="flex items-center justify-between mb-6 md:mb-8">
                                 <div className="flex items-center gap-3 md:gap-4">
@@ -230,7 +232,7 @@ export default function Home() {
                     </section>
 
                     {/* Top Rated Section */}
-                    <section className="px-4 md:px-6 reveal pb-2">
+                    <section ref={setRevealRef} className="px-4 md:px-6 reveal pb-2">
                         <div className="max-w-7xl mx-auto">
                             <div className="flex items-center justify-between mb-6 md:mb-8">
                                 <div className="flex items-center gap-3 md:gap-4">
@@ -268,14 +270,14 @@ export default function Home() {
                     </section>
 
                     {/* Recommended For You Section */}
-                    <RecommendedForYouSection />
+                    <RecommendedForYouSection revealRef={setRevealRef} />
                 </div>
 
                 {/* CTA Section */}
                 {!isAuthenticated && (
-                    <section className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800">
+                    <section ref={setRevealRef} className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800 reveal">
                         <div className="absolute inset-0 bg-accent/5 blur-[100px] pointer-events-none" />
-                        <div className="max-w-4xl mx-auto text-center relative z-10 glass border-white/5 py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl reveal">
+                        <div className="max-w-4xl mx-auto text-center relative z-10 glass border-white/5 py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl">
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white mb-4 sm:mb-6 tracking-tight">
                                 Start Tracking Your Journey
                             </h2>
@@ -301,7 +303,9 @@ function CurrentlyWatchingSection() {
     const { data: watching, isLoading } = useQuery({
         queryKey: ['user', 'list', 'watching'],
         queryFn: () => listApi.getAll({ status: 'Watching', sort: '-updated_at', limit: 6 }).then(res => res.data.results || res.data),
-        retry: false
+        staleTime: 1000 * 60 * 2,
+        retry: false,
+        enabled: typeof window !== 'undefined',
     });
 
     if (isLoading || !watching || watching.length === 0) return null;
@@ -335,18 +339,49 @@ function CurrentlyWatchingSection() {
     );
 }
 
-function RecommendedForYouSection() {
+function RecommendedForYouSection({ revealRef }) {
     const { isAuthenticated } = useAuth();
 
-    const { data: recommendations, isLoading } = useQuery({
+    const { data: recommendations, isLoading, error } = useQuery({
         queryKey: ['recommendations'],
-        queryFn: () => recommendationsApi.getAll(12).then(res => res.data),
+        queryFn: () => recommendationsApi.getAll(12).then(res => res.data.results || res.data),
         enabled: isAuthenticated,
-        retry: false,
-        staleTime: 1000 * 60 * 60, // 1 hour
+        staleTime: 1000 * 60 * 60,
+        retry: 1,
     });
 
-    if (!isAuthenticated || isLoading || !recommendations || recommendations.length === 0) {
+    if (!isAuthenticated) {
+        return null;
+    }
+
+    if (isLoading) {
+        return (
+            <section ref={revealRef} className="px-4 md:px-6 reveal">
+                <div className="max-w-7xl mx-auto">
+                    <div className="flex flex-col gap-1 mb-4 md:mb-6">
+                        <div className="flex items-center gap-2 md:gap-3">
+                            <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
+                            <h2 className="text-xl md:text-2xl font-bold text-white">Recommended for You</h2>
+                        </div>
+                        <p className="text-sm text-gray-400 pl-1">Loading recommendations...</p>
+                    </div>
+                    <div className="flex overflow-x-auto pb-4 gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                        {Array(6).fill(0).map((_, i) => (
+                            <div key={i} className="min-w-[160px] md:min-w-0">
+                                <AnimeCardSkeleton />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
+    if (error) {
+        console.error('Recommendations error:', error);
+    }
+
+    if (!recommendations || recommendations.length === 0) {
         return null;
     }
 
@@ -368,7 +403,7 @@ function RecommendedForYouSection() {
         : 'Curated just for you';
 
     return (
-        <section className="px-4 md:px-6">
+        <section ref={revealRef} className="px-4 md:px-6 reveal">
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col gap-1 mb-4 md:mb-6">
                     <div className="flex items-center gap-2 md:gap-3">
