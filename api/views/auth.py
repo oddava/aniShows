@@ -41,13 +41,25 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             username = None
 
         if email and not username:
-            # Try to find user by email
+            # Try to find user by email with constant-time behavior
+            # Always perform both lookups to prevent timing attacks
+            user_by_email = None
+            user_by_username = None
+
             try:
-                user = User.objects.get(email=email)
-                attrs["username"] = user.username
+                user_by_email = User.objects.get(email=email)
             except User.DoesNotExist:
-                # Let the super call handle the failure
                 pass
+
+            # Perform a dummy query to maintain constant time
+            try:
+                user_by_username = User.objects.get(username="__nonexistent_user_")
+            except User.DoesNotExist:
+                pass
+
+            if user_by_email:
+                attrs["username"] = user_by_email.username
+            # If not found, continue and let parent handle failure
 
         return super().validate(attrs)
 
@@ -92,6 +104,7 @@ class RegisterView(APIView):
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [throttling.StrictUserRateThrottle]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -149,6 +162,7 @@ class ResendVerificationView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [throttling.PasswordResetRateThrottle]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -228,6 +242,7 @@ class PasswordResetView(APIView):
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [throttling.StrictUserRateThrottle]
 
     def post(self, request):
         uidb64 = request.data.get("uid")

@@ -61,7 +61,7 @@ class UserProfileView(APIView):
                 profile.last_username_change = timezone.now()
                 profile.save()
 
-            # Update profile fields
+            # Update profile fields - only from validated_data (mass assignment protection)
             profile, created = UserProfile.objects.get_or_create(user=request.user)
             if "avatar" in serializer.validated_data:
                 profile.avatar = serializer.validated_data["avatar"]
@@ -69,8 +69,8 @@ class UserProfileView(APIView):
                 profile.banner = serializer.validated_data["banner"]
             if "bio" in serializer.validated_data:
                 profile.bio = serializer.validated_data["bio"]
-            if "is_private" in request.data:
-                profile.is_private = request.data.get("is_private", False)
+            if "is_private" in serializer.validated_data:
+                profile.is_private = serializer.validated_data["is_private"]
 
             # Social links
             if "social_links" in serializer.validated_data:

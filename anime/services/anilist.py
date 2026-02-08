@@ -111,12 +111,50 @@ class AniListService:
         return {}
 
     async def download_image(self, url: str) -> Optional[bytes]:
+        """
+        Download image from URL with SSRF protection.
+        Only allows HTTPS URLs from trusted domains.
+        """
         if not url:
             return None
+
+        # SSRF Protection: Validate URL
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+
+        # Only allow HTTPS URLs
+        if parsed.scheme != "https":
+            logger.warning(f"Blocked non-HTTPS image URL: {url}")
+            return None
+
+        # Only allow URLs from trusted domains (AniList/CDN domains)
+        trusted_domains = [
+            "s4.anilist.co",
+            "anilist.co",
+            "img.anilist.co",
+            "cdn.myanimelist.net",
+            "api-cdn.myanimelist.net",
+        ]
+
+        domain = parsed.netloc.lower()
+        if not any(
+            domain.endswith(trusted) or domain == trusted for trusted in trusted_domains
+        ):
+            logger.warning(f"Blocked untrusted image domain: {domain}")
+            return None
+
         try:
             await asyncio.sleep(0.2)  # Polite delay for images too
-            response = await self.client.get(url)
+            response = await self.client.get(url, timeout=10)
             response.raise_for_status()
+
+            # Validate content type is an image
+            content_type = response.headers.get("content-type", "")
+            if not content_type.startswith("image/"):
+                logger.warning(f"Non-image content type blocked: {content_type}")
+                return None
+
             return response.content
         except httpx.HTTPError as e:
             logger.error(f"Error downloading image {url}: {e}")
@@ -799,8 +837,9 @@ class AniListService:
     async def _save_anime_to_db_async(self, item: dict) -> Anime:
         """Async implementation of save_anime_to_db"""
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
         anilist_id = item.get("id")
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get(
@@ -818,17 +857,21 @@ class AniListService:
             try:
                 anime = await sync_to_async(Anime.objects.get)(anilist_id=anilist_id)
                 logger.debug(f"Found anime by AniList ID {anilist_id}: {anime.title}")
-                await self._update_anime_async(anime, item, title, title_native, anime.slug)
+                await self._update_anime_async(
+                    anime, item, title, title_native, anime.slug
+                )
                 return anime
             except Anime.DoesNotExist:
                 pass
-        
+
         # Try to find by MAL ID
         if mal_id:
             try:
                 anime = await sync_to_async(Anime.objects.get)(mal_id=mal_id)
                 logger.debug(f"Found anime by MAL ID {mal_id}: {anime.title}")
-                await self._update_anime_async(anime, item, title, title_native, anime.slug)
+                await self._update_anime_async(
+                    anime, item, title, title_native, anime.slug
+                )
                 return anime
             except Anime.DoesNotExist:
                 pass
@@ -836,7 +879,9 @@ class AniListService:
         # Try to find by slug - anime might exist without these IDs
         try:
             anime = await sync_to_async(Anime.objects.get)(slug=base_slug)
-            logger.info(f"Found anime by slug '{base_slug}': {anime.title}. Adding AniList ID {anilist_id} and MAL ID {mal_id}")
+            logger.info(
+                f"Found anime by slug '{base_slug}': {anime.title}. Adding AniList ID {anilist_id} and MAL ID {mal_id}"
+            )
             await self._update_anime_async(anime, item, title, title_native, anime.slug)
             return anime
         except Anime.DoesNotExist:
@@ -854,7 +899,9 @@ class AniListService:
                 counter += 1
                 final_slug = f"{base_slug}-{counter}"
                 if counter > 100:  # Safety limit
-                    raise ValueError(f"Could not generate unique slug for '{title}' after 100 attempts")
+                    raise ValueError(
+                        f"Could not generate unique slug for '{title}' after 100 attempts"
+                    )
             except Anime.DoesNotExist:
                 # This slug is available
                 break
@@ -868,7 +915,9 @@ class AniListService:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
         except Exception as e:
-            logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
+            logger.error(
+                f"Failed to create anime '{title}' with slug '{final_slug}': {e}"
+            )
             raise
 
         # Handle relationships

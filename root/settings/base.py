@@ -258,6 +258,15 @@ else:
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # =============================================================================
+# REQUEST SIZE LIMITS (DoS Prevention)
+# =============================================================================
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2MB max request body
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2MB max in-memory file
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # Max number of form fields
+DATA_UPLOAD_MAX_NUMBER_FILES = 10  # Max number of file uploads
+
+# =============================================================================
 # EMAIL SETTINGS (base configuration)
 # =============================================================================
 
@@ -316,16 +325,33 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "ISSUER": os.getenv("JWT_ISSUER", "anishows.com"),
+    "AUDIENCE": os.getenv("JWT_AUDIENCE", "anishows-api"),
+    "ALGORITHM": "HS256",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
 }
 
 # =============================================================================
-# REDIS CACHE
+# REDIS CACHE (with authentication support)
 # =============================================================================
+
+# Build Redis URL with password if provided
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = os.getenv("REDIS_PORT", "6379")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+REDIS_DB = os.getenv("REDIS_DB", "0")
+
+if REDIS_PASSWORD:
+    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+else:
+    # Fallback to REDIS_URL env var for backward compatibility
+    REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/0"),
+        "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         },
@@ -333,11 +359,11 @@ CACHES = {
 }
 
 # =============================================================================
-# CELERY CONFIGURATION
+# CELERY CONFIGURATION (uses authenticated REDIS_URL)
 # =============================================================================
 
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

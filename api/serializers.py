@@ -26,6 +26,44 @@ MAX_BIO_LENGTH = 1000
 MAX_REVIEW_LENGTH = 5000
 
 
+def validate_image_content(file, max_size, field_name):
+    """
+    Validate image file content for security.
+    Checks file size, magic bytes, and image integrity.
+    """
+    import magic
+    from PIL import Image
+
+    # Check file size
+    if file.size > max_size:
+        raise serializers.ValidationError(
+            f"{field_name} file too large. Maximum size is {max_size // (1024 * 1024)}MB."
+        )
+
+    # Check magic bytes for actual content type
+    file.seek(0)
+    magic_bytes = file.read(2048)
+    file.seek(0)
+
+    mime = magic.from_buffer(magic_bytes, mime=True)
+    if mime not in ALLOWED_IMAGE_TYPES:
+        raise serializers.ValidationError(
+            f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
+        )
+
+    # Verify image can be opened and is not corrupted
+    try:
+        img = Image.open(file)
+        img.verify()  # Verify it's a valid image
+        file.seek(0)
+    except Exception:
+        raise serializers.ValidationError(
+            f"Invalid or corrupted image file for {field_name}."
+        )
+
+    return file
+
+
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
         model = Genre
@@ -610,6 +648,7 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     bio = serializers.CharField(
         required=False, allow_blank=True, max_length=MAX_BIO_LENGTH
     )
+    is_private = serializers.BooleanField(required=False, default=False)
 
     # Dynamic social links
     social_links = serializers.JSONField(required=False)
@@ -715,38 +754,16 @@ class UserProfileUpdateSerializer(serializers.Serializer):
         return normalized_links
 
     def validate_avatar(self, value):
-        """Validate avatar file size and type."""
+        """Validate avatar file size, type, and content."""
         if value is None:
             return value
-        if value.size > MAX_AVATAR_SIZE:
-            raise serializers.ValidationError(
-                f"Avatar file too large. Maximum size is {MAX_AVATAR_SIZE // (1024 * 1024)}MB."
-            )
-        if (
-            hasattr(value, "content_type")
-            and value.content_type not in ALLOWED_IMAGE_TYPES
-        ):
-            raise serializers.ValidationError(
-                "Invalid file type. Allowed types: JPEG, PNG, WebP, GIF."
-            )
-        return value
+        return validate_image_content(value, MAX_AVATAR_SIZE, "Avatar")
 
     def validate_banner(self, value):
-        """Validate banner file size and type."""
+        """Validate banner file size, type, and content."""
         if value is None:
             return value
-        if value.size > MAX_BANNER_SIZE:
-            raise serializers.ValidationError(
-                f"Banner file too large. Maximum size is {MAX_BANNER_SIZE // (1024 * 1024)}MB."
-            )
-        if (
-            hasattr(value, "content_type")
-            and value.content_type not in ALLOWED_IMAGE_TYPES
-        ):
-            raise serializers.ValidationError(
-                "Invalid file type. Allowed types: JPEG, PNG, WebP, GIF."
-            )
-        return value
+        return validate_image_content(value, MAX_BANNER_SIZE, "Banner")
 
     def validate_bio(self, value):
         """Sanitize bio text to prevent XSS."""
@@ -764,17 +781,37 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ["username", "email", "password"]
 
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return value
+        # Normalize email to prevent case-based enumeration
+        normalized_email = value.lower().strip()
+
+        # Check for existing email to prevent duplicates
+        # This provides defense in depth even if DB doesn't enforce uniqueness
+        if User.objects.filter(email=normalized_email).exists():
+            raise serializers.ValidationError(
+                "Unable to create account. The email or username may already be in use."
+            )
+
+        return normalized_email
 
     def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data["username"],
-            email=validated_data["email"],
-            password=validated_data["password"],
-        )
-        return user
+        from django.db import IntegrityError
+
+        try:
+            user = User.objects.create_user(
+                username=validated_data["username"],
+                email=validated_data["email"],
+                password=validated_data["password"],
+            )
+            return user
+        except IntegrityError:
+            # Don't reveal if email/username exists - return generic error
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Unable to create account. The email or username may already be in use."
+                    ]
+                }
+            )
 
 
 class FavoriteSerializer(serializers.ModelSerializer):
@@ -925,10 +962,8 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context["request"].user
         old_password = attrs.get("old_password")
 
-        # Log for debugging
-        logger.info(
-            f"Validating password change for {user.username}: has_usable_password={user.has_usable_password()}, old_password_provided={bool(old_password)}"
-        )
+        # Log password change attempt without sensitive details
+        logger.debug("Password change validation attempted")
 
         # If user has a password, old_password is REQUIRED
         if user.has_usable_password():

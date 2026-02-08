@@ -20,6 +20,7 @@ from django.db.models.fields import (
 )
 from django.conf import settings
 from root.storage_backends import MediaStorage
+from api.utils.file_security import user_avatar_path, user_banner_path
 
 
 class CustomUser(AbstractUser):
@@ -29,10 +30,10 @@ class CustomUser(AbstractUser):
 class UserProfile(Model):
     user = OneToOneField(settings.AUTH_USER_MODEL, on_delete=CASCADE)
     avatar = ImageField(
-        upload_to="avatars/", blank=True, null=True, storage=MediaStorage()
+        upload_to=user_avatar_path, blank=True, null=True, storage=MediaStorage()
     )
     banner = ImageField(
-        upload_to="banners/", blank=True, null=True, storage=MediaStorage()
+        upload_to=user_banner_path, blank=True, null=True, storage=MediaStorage()
     )
     bio = TextField(blank=True, null=True)
     last_username_change = DateTimeField(null=True, blank=True)

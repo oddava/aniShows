@@ -42,9 +42,8 @@ class DeleteAccountView(APIView):
         user = request.user
         password = request.data.get("password")
 
-        logger.info(
-            f"Account deletion attempt for {user.username}: has_usable_password={user.has_usable_password()}, password_provided={bool(password)}"
-        )
+        # Log account deletion attempt without sensitive details
+        logger.info("Account deletion attempt initiated")
 
         # Require password confirmation ONLY if user has a usable password
         if user.has_usable_password():
@@ -122,6 +121,7 @@ class ConfirmEmailChangeView(APIView):
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [throttling.StrictUserRateThrottle]
 
     def post(self, request):
         uidb64 = request.data.get("uid")

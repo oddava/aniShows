@@ -1,6 +1,7 @@
 """
 API views for import/export functionality
 """
+
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,7 +9,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
+from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -17,6 +21,12 @@ from users.models import UserImportJob
 from users.export_service import ExportService
 from users.tasks import process_import_job
 from api.serializers import UserImportJobSerializer
+
+# Validation for usernames - alphanumeric, underscores, hyphens only
+USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
+
+# Max XML file size (10MB)
+MAX_XML_SIZE = 10 * 1024 * 1024
 
 
 class ImportMALView(APIView):
@@ -33,6 +43,15 @@ class ImportMALView(APIView):
                 {"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Validate username format to prevent injection
+        if not USERNAME_PATTERN.match(username):
+            return Response(
+                {
+                    "error": "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Create import job
         job = UserImportJob.objects.create(
             user=request.user,
@@ -40,7 +59,7 @@ class ImportMALView(APIView):
             source_identifier=username,
         )
 
-        # Start async import
+        # Start async import with validated username
         process_import_job.delay(job_id=job.id, username=username)
 
         return Response(
@@ -71,8 +90,8 @@ class ImportMALXMLView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validate file size (max 10MB)
-        if file.size > 10 * 1024 * 1024:
+        # Validate file size (max 10MB) - prevent DoS via large files
+        if file.size > MAX_XML_SIZE:
             return Response(
                 {"error": "File size must be less than 10MB"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -117,6 +136,22 @@ class ImportAniListView(APIView):
                 {"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Validate username format to prevent injection
+        if not USERNAME_PATTERN.match(username):
+            return Response(
+                {
+                    "error": "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Sanitize access_token if provided (basic length check)
+        if access_token and len(str(access_token)) > 1000:
+            return Response(
+                {"error": "Access token is too long"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Create import job
         job = UserImportJob.objects.create(
             user=request.user,
@@ -124,7 +159,7 @@ class ImportAniListView(APIView):
             source_identifier=username,
         )
 
-        # Start async import
+        # Start async import with validated username
         process_import_job.delay(
             job_id=job.id, username=username, access_token=access_token
         )
@@ -229,7 +264,14 @@ class ImportJobCancelView(APIView):
 
     def post(self, request, job_id):
         """Cancel an import job"""
-        job = get_object_or_404(UserImportJob, id=job_id, user=request.user)
+        try:
+            job = UserImportJob.objects.get(id=job_id, user=request.user)
+        except UserImportJob.DoesNotExist:
+            # Generic error message to prevent IDOR information leakage
+            return Response(
+                {"error": "Job not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Only allow cancelling pending or processing jobs
         if job.status not in [
@@ -250,4 +292,3 @@ class ImportJobCancelView(APIView):
             {"message": "Import job cancelled", "job_id": job.id},
             status=status.HTTP_200_OK,
         )
-

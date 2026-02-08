@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef
 from django.core.cache import cache
+from django.core.validators import ValidationError
 import logging
 
 from anime.models import Anime, Genre, Studio, UserFavorite
@@ -13,6 +14,15 @@ from api.serializers import (
     GenreSerializer,
     StudioSerializer,
 )
+
+
+# Valid filter values for security
+VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
+VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
+VALID_SEASONS = {"winter", "spring", "summer", "fall"}
+VALID_SORT_FIELDS = {"popular", "rating", "newest", "title", "upcoming", "trending"}
+MAX_RATING = 10.0
+MIN_RATING = 0.0
 
 logger = logging.getLogger(__name__)
 
@@ -84,71 +94,108 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             for genre in genres:
                 queryset = queryset.filter(genres__slug=genre)
 
-        # Filter by status
+        # Filter by status - validate against whitelist
         anime_status = self.request.query_params.get("status")
         if anime_status:
             if "," in anime_status:
-                queryset = queryset.filter(status__in=anime_status.split(","))
+                statuses = [s.strip().lower() for s in anime_status.split(",")]
+                # Only allow valid statuses
+                valid_statuses = [s for s in statuses if s in VALID_STATUSES]
+                if valid_statuses:
+                    queryset = queryset.filter(status__in=valid_statuses)
             else:
-                queryset = queryset.filter(status=anime_status)
+                status_clean = anime_status.strip().lower()
+                if status_clean in VALID_STATUSES:
+                    queryset = queryset.filter(status=status_clean)
 
-        # Filter by type
+        # Filter by type - validate against whitelist
         anime_type = self.request.query_params.get("type")
         if anime_type:
             if "," in anime_type:
-                queryset = queryset.filter(anime_type__in=anime_type.split(","))
+                types_list = [t.strip().lower() for t in anime_type.split(",")]
+                # Only allow valid types
+                valid_types = [t for t in types_list if t in VALID_TYPES]
+                if valid_types:
+                    queryset = queryset.filter(anime_type__in=valid_types)
             else:
-                queryset = queryset.filter(anime_type=anime_type)
+                type_clean = anime_type.strip().lower()
+                if type_clean in VALID_TYPES:
+                    queryset = queryset.filter(anime_type=type_clean)
 
-        # Filter by studio
+        # Filter by studio - validate as positive integer
         studio = self.request.query_params.get("studio")
         if studio:
-            queryset = queryset.filter(studio__id=studio)
+            try:
+                studio_id = int(studio)
+                if studio_id > 0:
+                    queryset = queryset.filter(studio__id=studio_id)
+            except (ValueError, TypeError):
+                # Invalid studio ID, ignore filter
+                pass
 
-        # Filter by rating range
+        # Filter by rating range - validate numeric range
         min_rating = self.request.query_params.get("min_rating")
         max_rating = self.request.query_params.get("max_rating")
         if min_rating:
-            queryset = queryset.filter(rating__gte=float(min_rating))
+            try:
+                min_rating_val = float(min_rating)
+                if MIN_RATING <= min_rating_val <= MAX_RATING:
+                    queryset = queryset.filter(rating__gte=min_rating_val)
+            except (ValueError, TypeError):
+                # Invalid rating, ignore filter
+                pass
         if max_rating:
-            queryset = queryset.filter(rating__lte=float(max_rating))
+            try:
+                max_rating_val = float(max_rating)
+                if MIN_RATING <= max_rating_val <= MAX_RATING:
+                    queryset = queryset.filter(rating__lte=max_rating_val)
+            except (ValueError, TypeError):
+                # Invalid rating, ignore filter
+                pass
 
-        # Filter by season and year
+        # Filter by season and year - validate inputs
         season = self.request.query_params.get("season")
         year = self.request.query_params.get("year")
         if year:
             try:
                 year_int = int(year)
-                # Season date ranges
-                season_ranges = {
-                    "winter": [(year_int, 1, 1), (year_int, 3, 31)],
-                    "spring": [(year_int, 4, 1), (year_int, 6, 30)],
-                    "summer": [(year_int, 7, 1), (year_int, 9, 30)],
-                    "fall": [(year_int, 10, 1), (year_int, 12, 31)],
-                }
-                if season and season.lower() in season_ranges:
-                    start, end = season_ranges[season.lower()]
-                    from datetime import date
+                # Validate year is reasonable (1980-2050)
+                if 1980 <= year_int <= 2050:
+                    # Season date ranges
+                    season_ranges = {
+                        "winter": [(year_int, 1, 1), (year_int, 3, 31)],
+                        "spring": [(year_int, 4, 1), (year_int, 6, 30)],
+                        "summer": [(year_int, 7, 1), (year_int, 9, 30)],
+                        "fall": [(year_int, 10, 1), (year_int, 12, 31)],
+                    }
+                    season_clean = season.strip().lower() if season else None
+                    if season_clean and season_clean in VALID_SEASONS:
+                        start, end = season_ranges[season_clean]
+                        from datetime import date
 
-                    queryset = queryset.filter(
-                        release_date__gte=date(*start), release_date__lte=date(*end)
-                    )
-                else:
-                    # Just filter by year
-                    queryset = queryset.filter(release_date__year=year_int)
-            except ValueError:
+                        queryset = queryset.filter(
+                            release_date__gte=date(*start), release_date__lte=date(*end)
+                        )
+                    else:
+                        # Just filter by year
+                        queryset = queryset.filter(release_date__year=year_int)
+            except (ValueError, TypeError):
+                # Invalid year, ignore filter
                 pass
 
-        # Sorting
+        # Sorting - validate against whitelist
         sort = self.request.query_params.get("sort", "popular")
+        sort_clean = sort.strip().lower()
         sort_mapping = {
-            "popular": "popularity_rank",  # Use AniList popularity ranking (lower = more popular)
+            "popular": "popularity_rank",
             "rating": "site_rank",
             "newest": "-release_date",
             "title": "title",
-            "upcoming": "-member_count",  # Most anticipated (by member count)
+            "upcoming": "-member_count",
             "trending": "trending_rank",
         }
+        # Only use valid sort fields, default to popular if invalid
+        sort_field = sort_mapping.get(sort_clean, "popularity_rank")
 
         sort_field = sort_mapping.get(sort, "popularity_rank")
 
@@ -223,7 +270,11 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
 
         if not data:
             # Use self.get_queryset() to include user-specific prefetching
-            queryset = self.get_queryset().filter(rating__isnull=False).order_by("-rating")[:12]
+            queryset = (
+                self.get_queryset()
+                .filter(rating__isnull=False)
+                .order_by("-rating")[:12]
+            )
             serializer = AnimeListSerializer(
                 queryset, many=True, context={"request": request}
             )

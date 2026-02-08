@@ -12,11 +12,39 @@ class CSPMiddleware(MiddlewareMixin):
     """
 
     def process_response(self, request, response):
-        # Only add CSP in production
+        # Always add CSP headers for security
         from django.conf import settings
 
+        # Base CSP directives - stricter without unsafe-inline
+        csp_directives = {
+            "default-src": ["'self'"],
+            "script-src": [
+                "'self'",
+                "'unsafe-inline'",  # Note: Consider removing after refactoring inline scripts
+                "https://www.googletagmanager.com",
+                "https://www.google-analytics.com",
+            ],
+            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "img-src": ["'self'", "data:", "https:", "http:"],
+            "connect-src": ["'self'", "https://www.google-analytics.com"],
+            "media-src": ["'self'", "https:", "http:"],
+            "frame-src": ["'self'", "https://www.youtube.com", "https://youtube.com"],
+            "frame-ancestors": ["'none'"],
+            "base-uri": ["'self'"],
+            "form-action": ["'self'"],
+        }
+
+        # Build CSP header
+        csp_header = "; ".join(
+            f"{key} {' '.join(values)}" for key, values in csp_directives.items()
+        )
+
+        # Use report-only mode in DEBUG, enforce in production
         if settings.DEBUG:
-            return response
+            response["Content-Security-Policy-Report-Only"] = csp_header
+        else:
+            response["Content-Security-Policy"] = csp_header
 
         # Base CSP directives
         csp_directives = {

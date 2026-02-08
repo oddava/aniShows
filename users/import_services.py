@@ -2,7 +2,8 @@
 Import services for MyAnimeList and AniList
 """
 
-import xml.etree.ElementTree as ET
+import os
+import defusedxml.ElementTree as ET
 import requests
 import asyncio
 from typing import List, Dict, Optional, Tuple
@@ -70,7 +71,7 @@ class BaseImporter:
         Returns the anime object or None if cannot be found/fetched.
         """
         from anime.services.anilist import AniListService
-        
+
         # Try to find by MAL ID
         if mal_id:
             try:
@@ -94,7 +95,7 @@ class BaseImporter:
 
         # Anime not found - fetch it synchronously
         service = AniListService()
-        
+
         try:
             # Try to fetch by AniList ID first (most reliable)
             if anilist_id:
@@ -191,7 +192,7 @@ class BaseImporter:
                 "imported_entries",
                 "skipped_entries",
                 "failed_entries",
-            "fetched_entries",
+                "fetched_entries",
                 "fetched_entries",
                 "errors",
             ]
@@ -208,9 +209,13 @@ class MyAnimeListAPIImporter(BaseImporter):
     ):
         super().__init__(job)
         self.username = username
-        self.client_id = (
-            client_id or "6114d00ca681b7701d1e15fe11a4987e"
-        )  # Public demo client
+        # Get client_id from parameter, env var, or raise error - no hardcoded fallback
+        self.client_id = client_id or os.getenv("MAL_CLIENT_ID")
+        if not self.client_id:
+            raise ValueError(
+                "MAL_CLIENT_ID environment variable is required for MyAnimeList API imports. "
+                "Please set it in your .env file or environment."
+            )
 
     def fetch_user_list(self) -> List[Dict]:
         """Fetch user's anime list from MAL API"""
@@ -305,7 +310,9 @@ class MyAnimeListAPIImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
-            logger.info(f"Starting import of {len(entries)} entries for user {self.user.username}")
+            logger.info(
+                f"Starting import of {len(entries)} entries for user {self.user.username}"
+            )
 
             # Import each entry
             for entry in entries:
@@ -337,7 +344,7 @@ class MyAnimeListAPIImporter(BaseImporter):
             self.job.status = UserImportJob.ImportStatus.completed
             self.job.completed_at = timezone.now()
             self.job.save(update_fields=["status", "completed_at"])
-            
+
             logger.info(
                 f"Import completed for {self.user.username}: "
                 f"{self.imported_count} imported, {self.fetched_count} fetched, "
@@ -430,7 +437,9 @@ class MyAnimeListXMLImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
-            logger.info(f"Starting XML import of {len(entries)} entries for user {self.user.username}")
+            logger.info(
+                f"Starting XML import of {len(entries)} entries for user {self.user.username}"
+            )
 
             # Import each entry
             for entry in entries:
@@ -460,7 +469,7 @@ class MyAnimeListXMLImporter(BaseImporter):
             self.job.status = UserImportJob.ImportStatus.completed
             self.job.completed_at = timezone.now()
             self.job.save(update_fields=["status", "completed_at"])
-            
+
             logger.info(
                 f"XML Import completed for {self.user.username}: "
                 f"{self.imported_count} imported, {self.fetched_count} fetched, "
@@ -601,7 +610,10 @@ class AniListImporter(BaseImporter):
         )
 
         if not anime:
-            return False, f"Anime not found or could not be fetched (AniList ID: {anilist_id})"
+            return (
+                False,
+                f"Anime not found or could not be fetched (AniList ID: {anilist_id})",
+            )
 
         return self.save_entry(anime, status, score, episodes_watched)
 
@@ -616,7 +628,9 @@ class AniListImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
-            logger.info(f"Starting AniList import of {len(entries)} entries for user {self.user.username}")
+            logger.info(
+                f"Starting AniList import of {len(entries)} entries for user {self.user.username}"
+            )
 
             # Import each entry
             for entry in entries:
@@ -646,7 +660,7 @@ class AniListImporter(BaseImporter):
             self.job.status = UserImportJob.ImportStatus.completed
             self.job.completed_at = timezone.now()
             self.job.save(update_fields=["status", "completed_at"])
-            
+
             logger.info(
                 f"AniList Import completed for {self.user.username}: "
                 f"{self.imported_count} imported, {self.fetched_count} fetched, "
