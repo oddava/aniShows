@@ -8,7 +8,11 @@ from django.utils import timezone
 from datetime import timedelta
 import logging
 
-from api.serializers import UserSerializer, UserProfileUpdateSerializer
+from api.serializers import (
+    UserSerializer,
+    PublicUserSerializer,
+    UserProfileUpdateSerializer,
+)
 from users.models import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -83,10 +87,15 @@ class UserProfileView(APIView):
 class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     """Public profile view by username"""
 
-    serializer_class = UserSerializer
+    serializer_class = PublicUserSerializer
     permission_classes = [permissions.AllowAny]
     throttle_classes = []
     lookup_field = "username"
 
     def get_queryset(self):
         return User.objects.select_related("userprofile").all()
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context

@@ -135,18 +135,25 @@ export const importExportApi = {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
     },
-    importAniList: (username, accessToken = null) => api.post('/import/anilist/', { 
-        username, 
-        access_token: accessToken 
+    importAniList: (username, accessToken = null) => api.post('/import/anilist/', {
+        username,
+        access_token: accessToken
     }),
     getImportJobs: () => api.get('/import/jobs/'),
     getImportJobStatus: (jobId) => api.get(`/import/jobs/${jobId}/`),
     cancelImportJob: (jobId) => api.post(`/import/jobs/${jobId}/cancel/`),
-    
+
     // Export
-    exportData: (format = 'json') => api.get('/export/', { 
+    exportData: (format = 'json') => api.get('/export/', {
         params: { type: format },
         responseType: 'blob'
     }),
     exportDataJSON: () => api.get('/export/json/'),
+};
+
+export const followApi = {
+    toggle: (username) => api.post('/follows/toggle/', { username }),
+    getFollowers: (username, params) => api.get(`/follows/followers/${username}/`, { params }),
+    getFollowing: (username, params) => api.get(`/follows/following/${username}/`, { params }),
+    check: (username) => api.get(`/follows/check/${username}/`),
 };

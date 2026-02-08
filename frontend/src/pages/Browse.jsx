@@ -289,7 +289,7 @@ export default function Browse() {
     }, [searchInput]);
 
     useEffect(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0 });
         document.title = 'Browse Anime - AniShows';
     }, [currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses]);
 
@@ -648,42 +648,42 @@ export default function Browse() {
     );
 
     return (
-        <div className="min-h-screen py-8 px-4">
+        <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4">
             <div className="max-w-[1600px] mx-auto">
                 {/* Header */}
-                <div className="text-center mb-8">
-                    <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+                <div className="text-center mb-6 sm:mb-8">
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4">
                         Discover Anime
                     </h1>
-                    <p className="text-gray-400 max-w-xl mx-auto">
+                    <p className="text-gray-400 max-w-xl mx-auto text-sm sm:text-base px-4">
                         Explore our collection of anime series and find your next favorite.
                     </p>
                 </div>
 
                 {/* Search Bar */}
-                <div className="relative max-w-3xl mx-auto mb-4 group">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500 group-focus-within:text-accent transition-colors" />
+                <div className="relative max-w-3xl mx-auto mb-3 sm:mb-4 group">
+                    <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 w-5 h-5 sm:w-6 sm:h-6 text-gray-500 group-focus-within:text-accent transition-colors" />
                     <input
                         type="text"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         placeholder="Search for anime, genres, studios..."
-                        className="w-full bg-dark-100 border-2 border-gray-800 rounded-2xl pl-14 pr-14 py-4 text-xl text-white placeholder:text-gray-600 focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all shadow-2xl"
+                        className="w-full bg-dark-100 border-2 border-gray-800 rounded-xl sm:rounded-2xl pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 text-base sm:text-xl text-white placeholder:text-gray-600 focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all shadow-2xl"
                     />
                     {searchInput && (
                         <button
                             onClick={() => setSearchInput('')}
-                            className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                            className="absolute right-4 sm:right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
                         >
-                            <X className="w-6 h-6" />
+                            <X className="w-5 h-5 sm:w-6 sm:h-6" />
                         </button>
                     )}
                 </div>
 
                 {/* Quick Filters */}
-                <div className="max-w-3xl mx-auto mb-6">
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                        <span className="text-xs text-gray-500 mr-1">Quick filters:</span>
+                <div className="max-w-3xl mx-auto mb-4 sm:mb-6">
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                        <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Quick filters:</span>
                         {QUICK_FILTER_GENRES.map((genreSlug) => {
                             const genre = genres?.find(g => g.slug === genreSlug);
                             if (!genre) return null;
@@ -692,7 +692,7 @@ export default function Browse() {
                                 <button
                                     key={genreSlug}
                                     onClick={() => toggleArrayParam('genre', genreSlug)}
-                                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${isActive
+                                    className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium transition-all ${isActive
                                         ? 'bg-accent text-white'
                                         : 'bg-dark-100/80 text-gray-400 hover:text-white hover:bg-dark-50 border border-gray-700/50'
                                         }`}
@@ -705,21 +705,21 @@ export default function Browse() {
                 </div>
 
                 {/* Browse Tabs - Horizontally scrollable on mobile */}
-                <div className="mb-6 -mx-4 px-4 overflow-x-auto scrollbar-hide">
-                    <div className="flex gap-2 justify-center animate-fade-in min-w-max">
+                <div className="mb-4 sm:mb-6 -mx-3 sm:-mx-4 px-3 sm:px-4 overflow-x-auto scrollbar-hide">
+                    <div className="flex gap-2 animate-fade-in min-w-max sm:justify-center">
                         {BROWSE_TABS.map((tab) => {
                             const isActive = activeTab === tab.key;
                             return (
                                 <button
                                     key={tab.key}
                                     onClick={() => handleTabChange(tab.key)}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all
+                                    className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all whitespace-nowrap
                                         ${isActive
                                             ? 'bg-accent text-white shadow-lg shadow-accent/20 scale-105'
                                             : 'bg-dark-100 text-gray-400 border border-gray-800 hover:text-white hover:border-gray-600'
                                         }`}
                                 >
-                                    <tab.icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-gray-500'}`} />
+                                    <tab.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                                     {tab.label}
                                 </button>
                             );
@@ -925,7 +925,7 @@ export default function Browse() {
 
                         {/* Anime Grid/List */}
                         {viewMode === 'grid' && (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+                            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
                                 {isLoading ? (
                                     Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)
                                 ) : isError ? (
@@ -1009,7 +1009,7 @@ export default function Browse() {
                 showFilters && (
                     <div className="fixed inset-0 z-50 lg:hidden">
                         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowFilters(false)} />
-                        <div className="absolute right-0 top-0 bottom-0 w-80 max-w-full bg-dark-100 border-l border-gray-800 overflow-y-auto">
+                        <div className="absolute right-0 top-0 bottom-0 w-full max-w-[320px] bg-dark-100 border-l border-gray-800 overflow-y-auto">
                             <div className="sticky top-0 bg-dark-100 border-b border-gray-800 p-4 flex items-center justify-between">
                                 <h2 className="text-lg font-bold text-white">Filters</h2>
                                 <button
@@ -1019,7 +1019,7 @@ export default function Browse() {
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6">
                                 <FilterSidebar isMobile />
                             </div>
                         </div>

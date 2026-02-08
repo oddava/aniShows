@@ -39,8 +39,14 @@ class UserProfile(Model):
     is_private = BooleanField(default=False)
     email_verified = BooleanField(default=False)
 
+    # Reputation points from helpful review votes
+    points = IntegerField(default=0)
+
     # Dynamic social links
     social_links = models.JSONField(default=list, blank=True)
+
+    # Track last activity for online status
+    last_activity = DateTimeField(null=True, blank=True)
     # preferred_genres = ArrayField(CharField(max_length=50), default=list)
     # telegram_id = BigIntegerField(null=True, blank=True)
 
@@ -130,3 +136,26 @@ class UserImportJob(models.Model):
         if self.total_entries == 0:
             return 0
         return int((self.processed_entries / self.total_entries) * 100)
+
+
+class UserFollow(Model):
+    """Track user following relationships"""
+
+    follower = ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="following"
+    )
+    following = ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="followers"
+    )
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("follower", "following")
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["follower", "-created_at"]),
+            Index(fields=["following", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.follower.username} follows {self.following.username}"

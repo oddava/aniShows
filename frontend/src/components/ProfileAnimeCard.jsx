@@ -123,12 +123,12 @@ const arePropsEqual = (prevProps, nextProps) => {
 
 export default React.memo(ProfileAnimeCard, arePropsEqual);
 
-// Skeleton for loading state
+// Skeleton for loading state - matches compact favorites grid
 export function ProfileAnimeCardSkeleton() {
     return (
         <div className="bg-dark-100 rounded-lg border border-gray-800 overflow-hidden">
             <div className="aspect-[2/3] bg-dark-50 animate-pulse" />
-            <div className="p-2 space-y-2">
+            <div className="p-2 space-y-1.5">
                 <div className="h-3 bg-dark-50 rounded animate-pulse" />
                 <div className="h-2 bg-dark-50 rounded w-2/3 animate-pulse" />
             </div>

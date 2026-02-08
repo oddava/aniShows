@@ -10,9 +10,9 @@ Current "Recommended for You" just reverses trending. Implement:
 - Collaborative filtering based on user ratings
 - Content-based similarity using genres/studios ✅
 - Hybrid ML approach
-2. Import/Export (User Acquisition Blocker)
-- MyAnimeList/AniList import for easy migration
-- User data export for privacy
+2. Import/Export (User Acquisition Blocker) ✅
+- MyAnimeList/AniList import for easy migration ✅
+- User data export for privacy ✅
 3. Social Features (Engagement)
 - User following/followers
 - Comments on reviews

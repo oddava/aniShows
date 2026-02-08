@@ -296,6 +296,11 @@ class UserSerializer(serializers.ModelSerializer):
     email_verified = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
 
+    # Social features
+    points = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -317,6 +322,9 @@ class UserSerializer(serializers.ModelSerializer):
             "has_password",
             "is_staff",
             "is_superuser",
+            "points",
+            "followers_count",
+            "following_count",
         ]
         read_only_fields = [
             "id",
@@ -383,6 +391,16 @@ class UserSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "userprofile", None)
         return profile.social_links if profile else []
 
+    def get_points(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.points if profile else 0
+
+    def get_followers_count(self, obj):
+        return obj.followers.count()
+
+    def get_following_count(self, obj):
+        return obj.following.count()
+
 
 class PublicUserSerializer(serializers.ModelSerializer):
     """Limited serializer for public profile view"""
@@ -402,6 +420,13 @@ class PublicUserSerializer(serializers.ModelSerializer):
     # Dynamic Social links
     social_links = serializers.SerializerMethodField()
 
+    # Social features
+    points = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -418,6 +443,11 @@ class PublicUserSerializer(serializers.ModelSerializer):
             "mean_score",
             "anime_count",
             "social_links",
+            "points",
+            "followers_count",
+            "following_count",
+            "is_following",
+            "is_online",
         ]
         read_only_fields = fields
 
@@ -469,6 +499,43 @@ class PublicUserSerializer(serializers.ModelSerializer):
     def get_social_links(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.social_links if profile else []
+
+    def get_points(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.points if profile else 0
+
+    def get_followers_count(self, obj):
+        return obj.followers.count()
+
+    def get_following_count(self, obj):
+        return obj.following.count()
+
+    def get_is_following(self, obj):
+        """Check if the current user is following this user"""
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return obj.followers.filter(follower=request.user).exists()
+        return False
+
+    def get_is_online(self, obj):
+        """Check if user is currently online based on recent activity"""
+        from django.core.cache import cache
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Check Redis cache first (fast)
+        cache_key = f"user_online:{obj.id}"
+        if cache.get(cache_key) is not None:
+            return True
+
+        # Fallback: Check last_activity field if within 5 minutes
+        profile = getattr(obj, "userprofile", None)
+        if profile and profile.last_activity:
+            time_since_activity = timezone.now() - profile.last_activity
+            if time_since_activity < timedelta(minutes=5):
+                return True
+
+        return False
 
 
 class UserProfileUpdateSerializer(serializers.Serializer):
@@ -867,3 +934,32 @@ class UserImportJobSerializer(serializers.ModelSerializer):
             "completed_at",
         ]
         read_only_fields = fields
+
+
+class FollowSerializer(serializers.Serializer):
+    """Serializer for follow/unfollow actions"""
+
+    username = serializers.CharField()
+
+
+class UserFollowListSerializer(serializers.ModelSerializer):
+    """Serializer for displaying followers/following lists"""
+
+    user = serializers.SerializerMethodField()
+
+    class Meta:
+        from users.models import UserFollow
+
+        model = UserFollow
+        fields = ["id", "user", "created_at"]
+
+    def get_user(self, obj):
+        # Use the _display_user attribute set by the view
+        user_obj = getattr(obj, "_display_user", obj.follower)
+        profile = getattr(user_obj, "userprofile", None)
+        return {
+            "id": user_obj.id,
+            "username": user_obj.username,
+            "avatar": profile.avatar.url if profile and profile.avatar else None,
+            "points": profile.points if profile else 0,
+        }

@@ -117,6 +117,43 @@ input[type=number] {
   animation: tab-slide-up 0.35s ease-out forwards;
 }
 
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes avatar-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 15px rgba(139, 92, 246, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+}
+
+.avatar-glow:hover {
+  animation: avatar-pulse 2s infinite;
+}
+
 /* Hide scrollbar utility */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -239,4 +276,169 @@ input[type=number] {
 .reveal.active {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Circular Progress Ring */
+.progress-ring {
+  transform: rotate(-90deg);
+}
+
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.5s ease-out;
+}
+
+/* Bento Grid Featured Card */
+.bento-featured {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+@media (max-width: 768px) {
+  .bento-featured {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
+}
+
+/* Glassmorphism Card Variants */
+.glass-card {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(26, 26, 26, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-hover {
+  transition: all 0.3s ease;
+}
+
+.glass-card-hover:hover {
+  backdrop-filter: blur(20px);
+  background: rgba(26, 26, 26, 0.8);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
+}
+
+/* Sticky Navigation Glow */
+.sticky-glow {
+  box-shadow: 0 -10px 40px rgba(139, 92, 246, 0.1);
+}
+
+/* Tab Active Glow */
+.tab-glow {
+  position: relative;
+}
+
+.tab-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(167, 139, 250, 0.2));
+  border-radius: inherit;
+  z-index: -1;
+  filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.tab-glow:hover::after,
+.tab-glow.active::after {
+  opacity: 1;
+}
+
+/* Avatar overlap effect */
+.avatar-overlap {
+  transform: translateY(25%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Stats card gradients */
+.stat-card-gradient-yellow {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, rgba(180, 83, 9, 0.05) 100%);
+}
+
+.stat-card-gradient-green {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 78, 59, 0.05) 100%);
+}
+
+.stat-card-gradient-blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(30, 64, 175, 0.05) 100%);
+}
+
+/* Hover reveal animation */
+.hover-reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.group:hover .hover-reveal,
+.hover-trigger:hover .hover-reveal {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Featured card quote styling */
+.featured-quote {
+  position: relative;
+  padding-left: 1rem;
+  border-left: 2px solid rgba(139, 92, 246, 0.5);
+}
+
+.featured-quote::before {
+  content: '"';
+  position: absolute;
+  left: -0.5rem;
+  top: -0.5rem;
+  font-size: 2rem;
+  color: rgba(139, 92, 246, 0.3);
+  font-family: Georgia, serif;
+  line-height: 1;
+}
+
+/* Standard scroll behavior */
+html {
+  scroll-behavior: auto;
+}
+
+/* Touch manipulation utility */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Enhanced focus states */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* Loading shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Badge glow effects */
+.badge-glow {
+  box-shadow: 0 0 15px currentColor;
+}
+
+/* Text gradient utility */
+.text-gradient {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

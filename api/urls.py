@@ -22,6 +22,7 @@ from .views import (
     ChangeEmailView,
     ConfirmEmailChangeView,
     RecommendationsViewSet,
+    FollowViewSet,
 )
 from .admin_views import (
     AdminDashboardView,
@@ -51,6 +52,7 @@ router.register(r"lists", UserAnimeListViewSet, basename="lists")
 router.register(r"reviews", ReviewViewSet, basename="reviews")
 router.register(r"users", PublicUserProfileViewSet, basename="users")
 router.register(r"recommendations", RecommendationsViewSet, basename="recommendations")
+router.register(r"follows", FollowViewSet, basename="follows")
 
 # Admin router
 admin_router = DefaultRouter()

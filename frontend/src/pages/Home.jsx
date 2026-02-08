@@ -80,7 +80,7 @@ export default function Home() {
     return (
         <div className="min-h-screen">
             {/* Hero Section - Full-Bleed & Impactful */}
-            <section className="relative h-[60vh] min-h-[480px] flex items-center overflow-hidden">
+            <section className="relative h-[50vh] sm:h-[60vh] min-h-[400px] sm:min-h-[480px] flex items-center overflow-hidden">
                 {/* Dynamic Full-Bleed Background */}
                 <div className="absolute inset-0 bg-dark">
                     {trending?.slice(0, 5).map((anime, index) => (
@@ -106,18 +106,18 @@ export default function Home() {
                     {heroAnime && (
                         <div className="max-w-2xl animate-fade-in">
                             {/* Accent Label */}
-                            <div className="mb-6 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/20 border border-accent/40 backdrop-blur-md">
+                            <div className="mb-3 sm:mb-6 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/20 border border-accent/40 backdrop-blur-md">
                                 <span className="flex h-1.5 w-1.5 rounded-full bg-accent animate-pulse"></span>
                                 <span className="text-[10px] font-bold text-accent-light uppercase tracking-widest">Featured Series</span>
                             </div>
 
                             {/* Main Title Hook - Scaled down for better rhythm */}
-                            <h1 className="text-3xl md:text-5xl font-black mb-4 leading-tight text-white drop-shadow-lg max-w-3xl">
+                            <h1 className="text-2xl sm:text-3xl md:text-5xl font-black mb-3 sm:mb-4 leading-tight text-white drop-shadow-lg max-w-3xl">
                                 {heroAnime.title}
                             </h1>
 
                             {/* Metadata & Genre Pills */}
-                            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-6">
+                            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-4 sm:mb-6">
                                 {heroAnime.rating && (
                                     <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full">
                                         <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
@@ -140,15 +140,15 @@ export default function Home() {
                             </div>
 
                             {/* Synopsis (High Contrast) */}
-                            <p className="text-base md:text-lg text-gray-200 mb-8 max-w-lg line-clamp-3 drop-shadow-md font-medium leading-relaxed">
+                            <p className="text-sm sm:text-base md:text-lg text-gray-200 mb-6 sm:mb-8 max-w-lg line-clamp-2 sm:line-clamp-3 drop-shadow-md font-medium leading-relaxed">
                                 {heroAnime.synopsis}
                             </p>
 
                             {/* Action-Oriented CTAs - Clean & Standardized */}
-                            <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                                 <Link
                                     to={`/anime/${heroAnime.slug}`}
-                                    className="btn-primary flex items-center gap-2 py-2.5 px-6 font-bold text-base"
+                                    className="btn-primary flex items-center gap-2 py-2 px-4 sm:py-2.5 sm:px-6 font-bold text-sm sm:text-base"
                                 >
                                     <Play className="w-4 h-4 fill-current" />
                                     View Series
@@ -273,21 +273,21 @@ export default function Home() {
 
                 {/* CTA Section */}
                 {!isAuthenticated && (
-                    <section className="py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800">
+                    <section className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800">
                         <div className="absolute inset-0 bg-accent/5 blur-[100px] pointer-events-none" />
-                        <div className="max-w-4xl mx-auto text-center relative z-10 glass border-white/5 py-16 px-8 rounded-3xl reveal">
-                            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 tracking-tight">
+                        <div className="max-w-4xl mx-auto text-center relative z-10 glass border-white/5 py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl reveal">
+                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white mb-4 sm:mb-6 tracking-tight">
                                 Start Tracking Your Journey
                             </h2>
-                            <p className="text-gray-400 mb-10 text-lg max-w-2xl mx-auto">
+                            <p className="text-gray-400 mb-6 sm:mb-10 text-base sm:text-lg max-w-2xl mx-auto px-2">
                                 Join over <span className="text-white font-semibold">10,000+</span> anime fans listing, rating, and reviewing their favorite series.
                             </p>
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                                <Link to="/register" className="btn-primary flex items-center gap-2 group text-lg px-8 py-4">
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                                <Link to="/register" className="btn-primary flex items-center gap-2 group text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto justify-center">
                                     Create Free Account
-                                    <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
                                 </Link>
-                                <span className="text-gray-500 text-sm">No credit card required</span>
+                                <span className="text-gray-500 text-xs sm:text-sm">No credit card required</span>
                             </div>
                         </div>
                     </section>

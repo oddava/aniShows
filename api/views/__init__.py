@@ -12,6 +12,7 @@ from .favorites import FavoriteViewSet
 from .lists import UserAnimeListViewSet
 from .reviews import ReviewViewSet
 from .recommendations import RecommendationsViewSet
+from .follows import FollowViewSet
 from .account_management import (
     DeleteAccountView,
     ChangeEmailView,

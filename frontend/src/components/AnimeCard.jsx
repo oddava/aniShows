@@ -217,31 +217,31 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
 
                     {/* Status Icon - enlarged for better interaction */}
                     {isAuthenticated && !lite && (
-                        <div className="absolute top-3 left-3 z-[100]">
+                        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-[100]">
                             <div className="relative">
                                 <button
                                     ref={buttonRef}
                                     onClick={toggleStatusMenu}
                                     disabled={state.isLoading}
-                                    className={`w-9 h-9 flex items-center justify-center rounded-xl shadow-lg backdrop-blur-md border transition-all duration-300
+                                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-lg backdrop-blur-md border transition-all duration-300 touch-manipulation
                                         ${state.listStatus && currentStatusOption
                                             ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                            : 'bg-black/60 text-white border-white/20 hover:bg-accent hover:border-accent opacity-0 group-hover:opacity-100 translate-y-[-10px] group-hover:translate-y-0'}`}
+                                            : 'bg-black/60 text-white border-white/20 hover:bg-accent hover:border-accent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 translate-y-0 sm:translate-y-[-10px] sm:group-hover:translate-y-0'}`}
                                     title={state.listStatus ? currentStatusOption?.label : 'Add to List'}
                                 >
-                                    {state.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> :
-                                        state.listStatus && currentStatusOption ? <currentStatusOption.icon className="w-4 h-4 stroke-[2.5]" /> : <Plus className="w-5 h-5 stroke-[2.5]" />}
+                                    {state.isLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> :
+                                        state.listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" /> : <Plus className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />}
                                 </button>
 
-                                {/* Dropdown - slightly larger for the bigger button */}
+                                {/* Dropdown - adjusted for mobile touch */}
                                 {state.showStatusMenu && (
-                                    <div ref={menuRef} className="absolute left-0 top-full mt-2 w-40 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[110] animate-fade-in overflow-hidden">
+                                    <div ref={menuRef} className="absolute left-0 top-full mt-2 w-44 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[110] animate-fade-in overflow-hidden">
                                         <div className="p-1.5">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
-                                                    className={`w-full px-3 py-2 flex items-center gap-3 text-xs font-semibold rounded-lg transition-colors
+                                                    className={`w-full px-3 py-2.5 flex items-center gap-3 text-xs font-semibold rounded-lg transition-colors touch-manipulation
                                                         ${state.listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
                                                 >
                                                     <option.icon className="w-3.5 h-3.5" />
@@ -251,7 +251,7 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                                         </div>
                                         {state.listStatus && (
                                             <div className="p-1.5 border-t border-gray-800 bg-black/20">
-                                                <button onClick={handleRemoveFromList} className="w-full px-3 py-2 flex items-center gap-3 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-lg">
+                                                <button onClick={handleRemoveFromList} className="w-full px-3 py-2.5 flex items-center gap-3 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-lg touch-manipulation">
                                                     <X className="w-3.5 h-3.5" /> Remove
                                                 </button>
                                             </div>
@@ -282,11 +282,11 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                         </div>
                     )}
 
-                    {/* Quick progress button - Refined Design */}
+                    {/* Quick progress button - Mobile friendly */}
                     {isAuthenticated && state.listStatus === 'Watching' && !lite && (
                         <button
                             onClick={handleQuickProgress}
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-accent/90 text-white shadow-2xl shadow-accent/40 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100 hover:bg-accent hover:scale-110 cursor-pointer z-40 border-2 border-white/20 backdrop-blur-sm"
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-accent/90 text-white shadow-2xl shadow-accent/40 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-75 group-hover:scale-100 hover:bg-accent hover:scale-110 cursor-pointer z-40 border-2 border-white/20 backdrop-blur-sm touch-manipulation"
                             title={`Mark episode ${episodesWatched + 1} as watched`}
                         >
                             {state.isLoading ? (
@@ -298,15 +298,15 @@ function AnimeCard({ anime, userListEntry, isOwnProfile = true, rank, titleLangu
                     )}
                 </div>
 
-                {/* Favorite Button - enlarged and refined */}
+                {/* Favorite Button - adjusted for mobile */}
                 {isAuthenticated && !lite && (
-                    <div className="absolute top-3 right-3 z-[100] opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-[-10px] group-hover:translate-y-0">
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 z-[100] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 translate-y-0 sm:translate-y-[-10px] sm:group-hover:translate-y-0">
                         <button
                             onClick={handleFavorite}
-                            className={`w-9 h-9 flex items-center justify-center rounded-xl shadow-lg backdrop-blur-md border transition-all duration-300 hover:scale-110
+                            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-lg backdrop-blur-md border transition-all duration-300 hover:scale-110 touch-manipulation
                                 ${state.isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-black/60 text-white border-white/20 hover:bg-red-500 hover:border-red-400'}`}
                         >
-                            <Heart className={`w-4 h-4 ${state.isFavorite ? 'fill-current' : ''}`} />
+                            <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${state.isFavorite ? 'fill-current' : ''}`} />
                         </button>
                     </div>
                 )}
@@ -382,14 +382,14 @@ const arePropsEqual = (prevProps, nextProps) => {
 
 export default React.memo(AnimeCard, arePropsEqual);
 
-// Skeleton loader
+// Skeleton loader - matches the compact favorites grid layout
 export function AnimeCardSkeleton() {
     return (
-        <div className="bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col">
-            <div className="aspect-[2/3] bg-dark-50 rounded-t-xl animate-pulse" />
-            <div className="p-2.5 space-y-2">
-                <div className="h-4 bg-dark-50 rounded animate-pulse" />
-                <div className="h-3 bg-dark-50 rounded w-2/3 animate-pulse" />
+        <div className="bg-dark-100 rounded-lg border border-gray-800 overflow-hidden">
+            <div className="aspect-[2/3] bg-dark-50 animate-pulse" />
+            <div className="p-2 space-y-1.5">
+                <div className="h-3 bg-dark-50 rounded animate-pulse" />
+                <div className="h-2 bg-dark-50 rounded w-2/3 animate-pulse" />
             </div>
         </div>
     );
