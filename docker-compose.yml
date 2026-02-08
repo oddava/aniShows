@@ -50,11 +50,14 @@ services:
       context: ./frontend
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+        - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
         - BUILDKIT_INLINE_CACHE=1
     ports:
       - "5173:5173"
     env_file:
       - .env
+    environment:
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
     depends_on:
       - web
     volumes:

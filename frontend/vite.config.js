@@ -1,6 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Parse ALLOWED_HOSTS from environment variable
+const allowedHosts = process.env.ALLOWED_HOSTS 
+  ? process.env.ALLOWED_HOSTS.split(',').map(h => h.trim()).filter(Boolean)
+  : ['localhost', '127.0.0.1']
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [
@@ -46,6 +51,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    allowedHosts: allowedHosts,
     proxy: {
       '/api': {
         target: 'http://web:8000',
