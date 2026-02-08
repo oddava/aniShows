@@ -199,9 +199,11 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                             )}
                         </div>
 
-                        {/* Rating Badge */}
+                        {/* Rating Badge - hidden on hover */}
                         {fav.anime?.rating && (
-                            <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[10px] border border-white/10">
+                            <div className={`absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[10px] border border-white/10 transition-opacity duration-300 ${
+                                hoveredIndex === index ? 'opacity-0' : 'opacity-100'
+                            }`}>
                                 <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
                                 <span className="text-white font-bold">{fav.anime.rating}</span>
                             </div>

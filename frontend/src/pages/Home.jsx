@@ -198,9 +198,7 @@ export default function Home() {
                         <div className="max-w-7xl mx-auto">
                             <div className="flex items-center justify-between mb-6 md:mb-8">
                                 <div className="flex items-center gap-3 md:gap-4">
-                                    <div className="p-2.5 rounded-xl bg-accent/10 border border-accent/20">
-                                        <TrendingUp className="w-5 h-5 md:w-6 md:h-6 text-accent icon-glow-accent" />
-                                    </div>
+                                    <TrendingUp className="w-6 h-6 md:w-7 md:h-7 text-accent icon-glow-accent" />
                                     <div>
                                         <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Trending Now</h2>
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Most discussed this week</p>
@@ -236,9 +234,7 @@ export default function Home() {
                         <div className="max-w-7xl mx-auto">
                             <div className="flex items-center justify-between mb-6 md:mb-8">
                                 <div className="flex items-center gap-3 md:gap-4">
-                                    <div className="p-2.5 rounded-xl bg-yellow-400/10 border border-yellow-400/20">
-                                        <Star className="w-5 h-5 md:w-6 md:h-6 text-yellow-400 icon-glow-gold" />
-                                    </div>
+                                    <Star className="w-6 h-6 md:w-7 md:h-7 text-yellow-400 icon-glow-gold" />
                                     <div>
                                         <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Top Rated</h2>
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Highest rated by community</p>
