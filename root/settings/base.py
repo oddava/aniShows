@@ -121,6 +121,7 @@ REST_AUTH = {
 # =============================================================================
 
 MIDDLEWARE = [
+    "api.middleware.csp_middleware.CSPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
