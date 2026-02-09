@@ -31,6 +31,9 @@ app.conf.task_routes = {
     "anime.tasks.sync_trending_anime": {"queue": "default"},
     "anime.tasks.sync_seasonal_anime": {"queue": "default"},
     "anime.tasks.sync_next_season_anime": {"queue": "default"},
+    "anime.tasks.sync_airing_anime": {"queue": "default"},  # Critical for schedule
+    "anime.tasks.cleanup_finished_airing_dates": {"queue": "low_priority"},
+    "anime.tasks.backfill_airing_dates": {"queue": "low_priority"},
     "anime.tasks.generate_user_recommendations": {
         "queue": "low_priority"
     },  # Can run on low priority queue

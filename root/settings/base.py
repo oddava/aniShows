@@ -387,6 +387,16 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=5, minute=0),
         "args": (100,),
     },
+    "sync-airing-anime-hourly": {
+        "task": "anime.tasks.sync_airing_anime",
+        "schedule": crontab(minute=30),  # Run at :30 past each hour
+        "args": (),
+    },
+    "cleanup-finished-airing-dates-daily": {
+        "task": "anime.tasks.cleanup_finished_airing_dates",
+        "schedule": crontab(hour=6, minute=0),
+        "args": (),
+    },
     "generate-recommendations-daily": {
         "task": "anime.tasks.generate_user_recommendations",
         "schedule": crontab(hour=3, minute=0),

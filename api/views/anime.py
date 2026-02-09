@@ -67,14 +67,26 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 "-id"
             )  # Ensure stable ordering if needed, or default
 
-        # Search
+        # Search - split query into words for better matching
+        # This allows "Frieren beyond" to match "Frieren: Beyond Journey's End"
         search = self.request.query_params.get("q")
         if search:
-            queryset = queryset.filter(
-                Q(title__icontains=search)
-                | Q(title_jp__icontains=search)
-                | Q(synopsis__icontains=search)
-            )
+            search_words = search.strip().split()
+            if len(search_words) == 1:
+                # Single word search - match anywhere in title, title_jp, or synopsis
+                queryset = queryset.filter(
+                    Q(title__icontains=search)
+                    | Q(title_jp__icontains=search)
+                    | Q(synopsis__icontains=search)
+                )
+            else:
+                # Multi-word search - each word must appear in title OR title_jp
+                # This allows "Frieren beyond" to match "Frieren: Beyond Journey's End"
+                for word in search_words:
+                    if len(word) >= 2:  # Skip very short words
+                        queryset = queryset.filter(
+                            Q(title__icontains=word) | Q(title_jp__icontains=word)
+                        )
 
         # Filter by genre
         genres = []
@@ -94,7 +106,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             for genre in genres:
                 queryset = queryset.filter(genres__slug=genre)
 
-        # Filter by status - validate against whitelist
+        # Filter by status - validate against whitelist (case-insensitive)
         anime_status = self.request.query_params.get("status")
         if anime_status:
             if "," in anime_status:
@@ -102,11 +114,16 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 # Only allow valid statuses
                 valid_statuses = [s for s in statuses if s in VALID_STATUSES]
                 if valid_statuses:
-                    queryset = queryset.filter(status__in=valid_statuses)
+                    # Use iexact for case-insensitive matching with title-case DB values
+                    from django.db.models import Q
+                    status_q = Q()
+                    for s in valid_statuses:
+                        status_q |= Q(status__iexact=s)
+                    queryset = queryset.filter(status_q)
             else:
                 status_clean = anime_status.strip().lower()
                 if status_clean in VALID_STATUSES:
-                    queryset = queryset.filter(status=status_clean)
+                    queryset = queryset.filter(status__iexact=status_clean)
 
         # Filter by type - validate against whitelist
         anime_type = self.request.query_params.get("type")

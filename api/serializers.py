@@ -152,6 +152,8 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
             "is_favorite",
             "user_list_status",
             "release_date",
+            "next_airing_episode",
+            "next_airing_date",
         ]
 
     def get_is_favorite(self, obj):
@@ -392,6 +394,7 @@ class UserSerializer(serializers.ModelSerializer):
     days_watched = serializers.SerializerMethodField()
     mean_score = serializers.SerializerMethodField()
     anime_count = serializers.SerializerMethodField()
+    episodes_watched = serializers.SerializerMethodField()
 
     # Social links
     social_links = serializers.SerializerMethodField()
@@ -420,6 +423,7 @@ class UserSerializer(serializers.ModelSerializer):
             "days_watched",
             "mean_score",
             "anime_count",
+            "episodes_watched",
             "social_links",
             "email_verified",
             "has_password",
@@ -490,6 +494,12 @@ class UserSerializer(serializers.ModelSerializer):
         """Count total anime in user's list"""
         return obj.anime_lists.count()
 
+    def get_episodes_watched(self, obj):
+        """Count total episodes watched across all anime"""
+        from django.db.models import Sum
+
+        return obj.anime_lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
+
     def get_social_links(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.social_links if profile else []
@@ -519,6 +529,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
     days_watched = serializers.SerializerMethodField()
     mean_score = serializers.SerializerMethodField()
     anime_count = serializers.SerializerMethodField()
+    episodes_watched = serializers.SerializerMethodField()
 
     # Dynamic Social links
     social_links = serializers.SerializerMethodField()
@@ -545,6 +556,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
             "days_watched",
             "mean_score",
             "anime_count",
+            "episodes_watched",
             "social_links",
             "points",
             "followers_count",
@@ -598,6 +610,12 @@ class PublicUserSerializer(serializers.ModelSerializer):
     def get_anime_count(self, obj):
         """Count total anime in user's list"""
         return obj.anime_lists.count()
+
+    def get_episodes_watched(self, obj):
+        """Count total episodes watched across all anime"""
+        from django.db.models import Sum
+
+        return obj.anime_lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
 
     def get_social_links(self, obj):
         profile = getattr(obj, "userprofile", None)

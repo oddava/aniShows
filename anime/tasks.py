@@ -341,3 +341,240 @@ def generate_recommendations_for_user(user_id: int):
     except Exception as e:
         logger.exception(f"Error generating recommendations for user {user_id}")
         raise
+
+
+@shared_task
+def sync_airing_anime():
+    """
+    Fetches and updates ALL currently airing anime to ensure next_airing_date is populated.
+    This is critical for the schedule feature to work correctly.
+    Run this hourly to catch all airing shows, not just trending ones.
+    """
+    logger.info("Starting sync for all airing anime...")
+
+    async def _process():
+        service = AniListService()
+        try:
+            # Get all airing anime from our database
+            airing_anime = await sync_to_async(list)(
+                Anime.objects.filter(status=Anime.AnimeStatus.airing)
+            )
+            total = len(airing_anime)
+            logger.info(f"Found {total} airing anime to update")
+
+            updated_count = 0
+            missing_date_count = 0
+            error_count = 0
+
+            for i, anime in enumerate(airing_anime):
+                try:
+                    # Search by AniList ID if available, otherwise by title
+                    if anime.anilist_id:
+                        result = await service.get_anime_by_id(anime.anilist_id)
+                    else:
+                        results = await service.search_anime(anime.title)
+                        result = results[0] if results else None
+
+                    if result:
+                        # Update the anime with fresh data
+                        await service.update_anime_manual(anime, result)
+
+                        # Check if we got the airing date
+                        next_airing = result.get("nextAiringEpisode")
+                        if not next_airing or not next_airing.get("airingAt"):
+                            missing_date_count += 1
+                            logger.warning(
+                                f"No nextAiringEpisode data for: {anime.title} "
+                                f"(AniList ID: {anime.anilist_id})"
+                            )
+
+                        updated_count += 1
+                    else:
+                        logger.warning(
+                            f"No results found for airing anime: {anime.title}"
+                        )
+
+                    if (i + 1) % 10 == 0 or (i + 1) == total:
+                        logger.info(f"Progress: {i + 1}/{total} airing anime processed")
+
+                except Exception as e:
+                    logger.error(f"Error updating airing anime {anime.title}: {e}")
+                    error_count += 1
+
+                # Polite delay to avoid rate limits
+                await asyncio.sleep(0.7)
+
+            logger.info(
+                f"Airing sync complete. Updated: {updated_count}, "
+                f"Missing dates: {missing_date_count}, Errors: {error_count}, Total: {total}"
+            )
+            return {
+                "updated": updated_count,
+                "missing_dates": missing_date_count,
+                "errors": error_count,
+                "total": total,
+            }
+        finally:
+            await service.close()
+
+    return run_async(_process())
+
+
+@shared_task
+def cleanup_finished_airing_dates():
+    """
+    Clears next_airing_date for anime that have finished airing.
+    Also updates status from 'Airing' to 'Finished' if detected.
+    Run this daily to keep schedule clean.
+    """
+    logger.info("Starting cleanup of finished airing dates...")
+
+    async def _process():
+        service = AniListService()
+        try:
+            # Find anime with next_airing_date in the past
+            from django.utils import timezone
+
+            past_airing = await sync_to_async(list)(
+                Anime.objects.filter(
+                    next_airing_date__isnull=False,
+                    next_airing_date__lt=timezone.now(),
+                )
+            )
+
+            cleared_count = 0
+            status_changed_count = 0
+
+            for anime in past_airing:
+                try:
+                    # Check current status from AniList
+                    if anime.anilist_id:
+                        result = await service.get_anime_by_id(anime.anilist_id)
+                        if result:
+                            anilist_status = result.get("status", "")
+                            if anilist_status == "FINISHED":
+                                # Clear the airing date and update status
+                                anime.next_airing_date = None
+                                anime.next_airing_episode = None
+                                anime.status = Anime.AnimeStatus.finished
+                                await sync_to_async(anime.save)()
+                                cleared_count += 1
+                                status_changed_count += 1
+                                logger.info(f"Updated {anime.title} to Finished status")
+                            elif anilist_status == "RELEASING":
+                                # Still airing, just episode aired - will be updated by sync_airing_anime
+                                logger.debug(
+                                    f"{anime.title} still releasing, next episode pending"
+                                )
+                    else:
+                        # No AniList ID, just clear old dates
+                        anime.next_airing_date = None
+                        anime.next_airing_episode = None
+                        await sync_to_async(anime.save)()
+                        cleared_count += 1
+
+                except Exception as e:
+                    logger.error(f"Error cleaning up {anime.title}: {e}")
+
+                await asyncio.sleep(0.5)
+
+            # Also clear dates for explicitly finished anime
+            finished_with_dates = await sync_to_async(
+                Anime.objects.filter(
+                    status=Anime.AnimeStatus.finished,
+                    next_airing_date__isnull=False,
+                ).update
+            )(
+                next_airing_date=None,
+                next_airing_episode=None,
+            )
+
+            logger.info(
+                f"Cleanup complete. Cleared past dates: {cleared_count}, "
+                f"Status changed to Finished: {status_changed_count}, "
+                f"Finished anime cleaned: {finished_with_dates}"
+            )
+            return {
+                "cleared_past_dates": cleared_count,
+                "status_changed": status_changed_count,
+                "finished_cleaned": finished_with_dates,
+            }
+        finally:
+            await service.close()
+
+    return run_async(_process())
+
+
+@shared_task
+def backfill_airing_dates():
+    """
+    One-time backfill task for airing anime missing next_airing_date.
+    Can be run manually when needed.
+    """
+    logger.info("Starting backfill of missing airing dates...")
+
+    async def _process():
+        service = AniListService()
+        try:
+            # Get airing anime without next_airing_date
+            missing_dates = await sync_to_async(list)(
+                Anime.objects.filter(
+                    status=Anime.AnimeStatus.airing,
+                    next_airing_date__isnull=True,
+                )
+            )
+            total = len(missing_dates)
+            logger.info(f"Found {total} airing anime missing next_airing_date")
+
+            updated_count = 0
+            still_missing_count = 0
+            error_count = 0
+
+            for i, anime in enumerate(missing_dates):
+                try:
+                    if anime.anilist_id:
+                        result = await service.get_anime_by_id(anime.anilist_id)
+                    else:
+                        results = await service.search_anime(anime.title)
+                        result = results[0] if results else None
+
+                    if result:
+                        await service.update_anime_manual(anime, result)
+
+                        # Check if date was populated
+                        next_airing = result.get("nextAiringEpisode")
+                        if next_airing and next_airing.get("airingAt"):
+                            updated_count += 1
+                            logger.info(f"Populated date for: {anime.title}")
+                        else:
+                            still_missing_count += 1
+                            logger.warning(
+                                f"Still no date available for: {anime.title} "
+                                f"(AniList may not have schedule yet)"
+                            )
+                    else:
+                        logger.warning(f"No AniList data for: {anime.title}")
+
+                    if (i + 1) % 10 == 0 or (i + 1) == total:
+                        logger.info(f"Backfill progress: {i + 1}/{total}")
+
+                except Exception as e:
+                    logger.error(f"Error backfilling {anime.title}: {e}")
+                    error_count += 1
+
+                await asyncio.sleep(0.7)
+
+            logger.info(
+                f"Backfill complete. Populated: {updated_count}, "
+                f"Still missing: {still_missing_count}, Errors: {error_count}"
+            )
+            return {
+                "populated": updated_count,
+                "still_missing": still_missing_count,
+                "errors": error_count,
+                "total": total,
+            }
+        finally:
+            await service.close()
+
+    return run_async(_process())

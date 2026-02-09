@@ -26,6 +26,7 @@ const Terms = lazy(() => import('./pages/Terms'));
 const Privacy = lazy(() => import('./pages/Privacy'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Seasonal = lazy(() => import('./pages/Seasonal'));
+const Schedule = lazy(() => import('./pages/Schedule'));
 const ImportPage = lazy(() => import('./pages/ImportPage'));
 const ExportPage = lazy(() => import('./pages/ExportPage'));
 
@@ -69,6 +70,7 @@ function App() {
                   <Route index element={<Home />} />
                   <Route path="browse" element={<Browse />} />
                   <Route path="seasonal" element={<Seasonal />} />
+                  <Route path="schedule" element={<Schedule />} />
                   <Route path="anime/:slug" element={<AnimeDetail />} />
                   <Route path="profile" element={<Profile />} />
                   <Route path="profile/:username" element={<Profile />} />

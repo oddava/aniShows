@@ -123,8 +123,10 @@ services:
       DB_PASSWORD: "${DB_PASSWORD}"
       DB_HOST: "${DB_HOST}"
       DB_PORT: "${DB_PORT}"
-      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
-      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_DB: "${REDIS_DB:-0}"
 
       DJANGO_SETTINGS_MODULE: "root.settings"
     volumes:
@@ -152,8 +154,10 @@ services:
       DB_PASSWORD: "${DB_PASSWORD}"
       DB_HOST: "${DB_HOST}"
       DB_PORT: "${DB_PORT}"
-      CELERY_BROKER_URL: "${CELERY_BROKER_URL:-redis://redis:6379/0}"
-      CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_DB: "${REDIS_DB:-0}"
 
       DJANGO_SETTINGS_MODULE: "root.settings"
     depends_on:

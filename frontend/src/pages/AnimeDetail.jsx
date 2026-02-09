@@ -421,41 +421,43 @@ export default function AnimeDetail() {
                         {/* Column 2: Main Content */}
                         <div className="flex-1 min-w-0">
                             <div className="text-center lg:text-left mb-8">
-                                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 lg:items-end lg:gap-4 mb-2">
-                                    <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight leading-none">
+                                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2">
+                                    <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto">
                                         {anime.title}
                                     </h1>
-                                    {anime.rating && (
-                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-lg lg:mb-1.5">
-                                            <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                            <span className="text-lg font-black text-yellow-500">{anime.rating}</span>
-                                        </div>
-                                    )}
-                                    {anime.site_rank && (
-                                        <div
-                                            className="flex items-center gap-1.5 px-3 py-1 rounded-lg lg:mb-1.5"
-                                            style={{
-                                                backgroundColor: accentColor ? `${accentColor}15` : 'rgb(139 92 246 / 0.1)',
-                                                borderWidth: '1px',
-                                                borderColor: accentColor ? `${accentColor}30` : 'rgb(139 92 246 / 0.2)'
-                                            }}
-                                        >
-                                            <Trophy className="w-4 h-4" style={{ color: accentColor || '#8b5cf6' }} />
-                                            <span className="text-sm font-bold" style={{ color: accentColor || '#8b5cf6' }}>#{anime.site_rank} All Time</span>
-                                        </div>
-                                    )}
-                                    {anime.popularity_rank && (
-                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg lg:mb-1.5">
-                                            <TrendingUp className="w-4 h-4 text-blue-500" />
-                                            <span className="text-sm font-bold text-blue-500">#{anime.popularity_rank} Popular</span>
-                                        </div>
-                                    )}
+                                    <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 mt-2 lg:mt-0">
+                                        {anime.rating && (
+                                            <div className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                                <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-500 fill-current" />
+                                                <span className="text-sm sm:text-lg font-black text-yellow-500">{anime.rating}</span>
+                                            </div>
+                                        )}
+                                        {anime.site_rank && (
+                                            <div
+                                                className="flex items-center gap-1 px-2 sm:px-3 py-1 rounded-lg"
+                                                style={{
+                                                    backgroundColor: accentColor ? `${accentColor}15` : 'rgb(139 92 246 / 0.1)',
+                                                    borderWidth: '1px',
+                                                    borderColor: accentColor ? `${accentColor}30` : 'rgb(139 92 246 / 0.2)'
+                                                }}
+                                            >
+                                                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4" style={{ color: accentColor || '#8b5cf6' }} />
+                                                <span className="text-xs sm:text-sm font-bold" style={{ color: accentColor || '#8b5cf6' }}>#{anime.site_rank}</span>
+                                            </div>
+                                        )}
+                                        {anime.popularity_rank && (
+                                            <div className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
+                                                <span className="text-xs sm:text-sm font-bold text-blue-500">#{anime.popularity_rank}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 {anime.title_jp && (
                                     <p className="text-gray-400 text-lg mb-6 font-medium tracking-wide">{anime.title_jp}</p>
                                 )}
 
-                                <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-8">
+                                <div className="flex flex-wrap justify-center lg:justify-start gap-1.5 sm:gap-2 mb-6 sm:mb-8">
                                     {anime.genres?.map((genre) => (
                                         <Link
                                             key={genre.id}
@@ -479,21 +481,21 @@ export default function AnimeDetail() {
                                 </div>
 
                                 {/* Main Actions */}
-                                <div className="flex flex-col lg:flex-row lg:items-center gap-6 bg-dark-100/40 p-6 rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 bg-dark-100/40 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
                                     {isAuthenticated ? (
                                         <>
                                             {/* Primary Actions & Meta */}
-                                            <div className="flex items-center gap-5 pr-6 lg:border-r border-gray-800/50">
+                                            <div className="flex items-center justify-between sm:justify-start gap-4 sm:gap-5 sm:pr-6 sm:border-r border-gray-800/50">
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={handleFavorite}
                                                         title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                                                        className={`p-3.5 rounded-2xl border transition-all duration-300 group
+                                                        className={`p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all duration-300 group
                                                             ${isFavorite
                                                                 ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20'
                                                                 : 'bg-dark-200 border-gray-700 text-gray-400 hover:border-red-500/50 hover:text-red-500'}`}
                                                     >
-                                                        <Heart className={`w-6 h-6 transition-transform group-hover:scale-110 ${isFavorite ? 'fill-current' : ''}`} />
+                                                        <Heart className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110 ${isFavorite ? 'fill-current' : ''}`} />
                                                     </button>
 
                                                     <button
@@ -502,9 +504,9 @@ export default function AnimeDetail() {
                                                             alert('Link copied to clipboard!');
                                                         }}
                                                         title="Share Anime"
-                                                        className="p-3.5 rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300 active:scale-95"
+                                                        className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300 active:scale-95"
                                                     >
-                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                                         </svg>
                                                     </button>
@@ -512,7 +514,7 @@ export default function AnimeDetail() {
 
                                                 <div className="flex flex-col">
                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Watch Time</span>
-                                                    <span className="text-base font-black text-white whitespace-nowrap">
+                                                    <span className="text-sm sm:text-base font-black text-white whitespace-nowrap">
                                                         {anime.episode_count ? (() => {
                                                             const duration = anime.duration_minutes || 24;
                                                             const totalMinutes = anime.episode_count * duration;
@@ -525,7 +527,7 @@ export default function AnimeDetail() {
                                             </div>
 
                                             {/* Status & Progress Selector */}
-                                            <div className="flex-1">
+                                            <div className="flex-1 min-w-0">
                                                 <StatusSelector
                                                     animeId={anime.id}
                                                     initialStatus={anime.user_list_status}
@@ -536,20 +538,20 @@ export default function AnimeDetail() {
                                         </>
                                     ) : (
                                         <div className="flex-1 w-full">
-                                            <Link to="/login" className="btn-primary w-full py-4 text-center rounded-2xl flex items-center justify-center gap-3">
-                                                <Plus className="w-5 h-5" /> Sign In to Track Progress
+                                            <Link to="/login" className="btn-primary w-full py-3 sm:py-4 text-center rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base">
+                                                <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> Sign In to Track Progress
                                             </Link>
                                         </div>
                                     )}
                                 </div>
-                                <div className="lg:hidden mt-8 mb-12 space-y-6">
+                                <div className="lg:hidden mt-6 sm:mt-8 mb-8 sm:mb-12 space-y-4 sm:space-y-6">
                                     <StatusDistribution distribution={anime.status_distribution} accentColor={accentColor} />
                                     <InformationBox anime={anime} accentColor={accentColor} />
                                 </div>
                             </div>
 
                             {/* Tab Navigation */}
-                            <div className="flex items-center gap-2 mb-10 p-1.5 bg-dark-100/60 backdrop-blur-md rounded-2xl border border-white/5 overflow-x-auto scrollbar-hide">
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 bg-dark-100/60 backdrop-blur-md rounded-xl sm:rounded-2xl border border-white/5 overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5">
                                 {[
                                     { id: 'overview', label: 'Overview', icon: Film },
                                     { id: 'characters', label: 'Characters', icon: Users, count: anime.characters?.length },
@@ -558,7 +560,7 @@ export default function AnimeDetail() {
                                     <button
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
-                                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300
+                                        className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
                                             ${activeTab === tab.id
                                                 ? 'text-white shadow-lg'
                                                 : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
@@ -567,10 +569,10 @@ export default function AnimeDetail() {
                                             boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
                                         } : {}}
                                     >
-                                        <tab.icon className="w-4 h-4" />
+                                        <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         {tab.label}
                                         {tab.count > 0 && (
-                                            <span className={`text-xs px-1.5 py-0.5 rounded-md ${activeTab === tab.id ? 'bg-white/20' : 'bg-white/5'}`}>
+                                            <span className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md ${activeTab === tab.id ? 'bg-white/20' : 'bg-white/5'}`}>
                                                 {tab.count}
                                             </span>
                                         )}
@@ -648,7 +650,7 @@ export default function AnimeDetail() {
                                     {anime.characters.map((role) => (
                                         <div
                                             key={role.id}
-                                            className="group relative h-48 sm:h-64 overflow-hidden rounded-xl sm:rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl"
+                                            className="group relative h-40 sm:h-48 md:h-56 lg:h-64 overflow-hidden rounded-lg sm:rounded-xl lg:rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl"
                                             style={{
                                                 '--card-accent': accentColor || '#8b5cf6'
                                             }}
@@ -920,15 +922,16 @@ export default function AnimeDetail() {
                             )}
                         </div>
 
-                        {/* Column 3: Sidebar */}
-                        <div className="space-y-8 lg:pt-40">
+                        {/* Column 3: Sidebar - Recommendations */}
+                        <div className="space-y-6 lg:space-y-8 lg:pt-40">
                             {related && related.length > 0 && (
                                 <div>
-                                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                        <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
+                                    <h2 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6 flex items-center gap-2">
+                                        <div className="w-1 h-5 sm:h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
                                         Recommendations
                                     </h2>
-                                    <div className="grid grid-cols-1 gap-4">
+                                    {/* Desktop: Vertical list */}
+                                    <div className="hidden lg:grid grid-cols-1 gap-4">
                                         {related.slice(0, 5).map((anime) => (
                                             <Link
                                                 key={anime.id}
@@ -942,7 +945,7 @@ export default function AnimeDetail() {
                                                         className="w-full h-full object-cover transition-transform group-hover:scale-110"
                                                     />
                                                 </div>
-                                                <div className="flex-1 py-1">
+                                                <div className="flex-1 py-1 min-w-0">
                                                     <h3
                                                         className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white"
                                                     >
@@ -960,10 +963,39 @@ export default function AnimeDetail() {
                                             </Link>
                                         ))}
                                     </div>
+                                    {/* Mobile/Tablet: Horizontal scroll */}
+                                    <div className="lg:hidden flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+                                        {related.slice(0, 6).map((anime) => (
+                                            <Link
+                                                key={anime.id}
+                                                to={`/anime/${anime.slug}`}
+                                                className="flex-shrink-0 w-28 sm:w-32 snap-start group"
+                                            >
+                                                <div className="aspect-[2/3] rounded-lg overflow-hidden mb-2 border border-gray-800 bg-dark-200">
+                                                    <img
+                                                        src={getImageUrl(anime.cover_image)}
+                                                        alt={anime.title}
+                                                        className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                                                    />
+                                                </div>
+                                                <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
+                                                    {anime.title}
+                                                </h3>
+                                                <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                                                    <span>{anime.anime_type}</span>
+                                                    <span>•</span>
+                                                    <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1 py-0.5 rounded text-yellow-500 font-bold">
+                                                        <Star className="w-2.5 h-2.5 fill-current" />
+                                                        <span>{anime.rating || 'N/A'}</span>
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </div>
                                     {related.length > 5 && (
                                         <Link
                                             to={`/browse?genre=${anime.genres?.[0]?.slug || ''}`}
-                                            className="block text-center mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"
+                                            className="block text-center mt-4 sm:mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"
                                             style={{
                                                 color: accentColor || '#8b5cf6',
                                                 backgroundColor: accentColor ? `${accentColor}10` : 'rgba(139,92,246,0.05)',
