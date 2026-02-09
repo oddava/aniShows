@@ -3,8 +3,10 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/png" href="/favicon.png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
+  <link rel="shortcut icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
@@ -78,7 +80,10 @@
   <meta property="og:title" content="AniShows - Anime Discovery Platform" />
   <meta property="og:description"
     content="Discover your next anime adventure. Track your favorites, write reviews, and join the community." />
-  <meta property="og:image" content="/og-image.png" />
+  <meta property="og:image" content="https://anishows.com/logo.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:type" content="image/png" />
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image" />
@@ -86,9 +91,21 @@
   <meta property="twitter:title" content="AniShows - Anime Discovery Platform" />
   <meta property="twitter:description"
     content="Discover your next anime adventure. Track your favorites, write reviews, and join the community." />
-  <meta property="twitter:image" content="/og-image.png" />
+  <meta property="twitter:image" content="https://anishows.com/logo.png" />
 
   <title>AniShows - Anime Discovery Platform</title>
+
+  <!-- Structured Data for Logo -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "AniShows",
+    "url": "https://anishows.com",
+    "logo": "https://anishows.com/logo.png",
+    "sameAs": []
+  }
+  </script>
 </head>
 
 <body>
