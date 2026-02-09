@@ -19,6 +19,14 @@ from anime.models import (
     AnimeStaff,
 )
 
+# Import rate limiting utilities
+from .rate_limiting import (
+    AniListRateLimiter,
+    APICallCache,
+    CircuitBreaker,
+    circuit_breaker_protected,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,16 +59,79 @@ class AniListService:
     BASE_URL = "https://graphql.anilist.co/"
     MAX_PER_PAGE = 50
 
-    def __init__(self):
+    def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
         self.client = httpx.AsyncClient(
             headers={"Content-Type": "application/json"}, timeout=15.0
         )
+        self.rate_limiter = AniListRateLimiter() if enable_rate_limiting else None
+        self.call_cache = APICallCache(ttl=1800) if enable_caching else None
+        self.circuit_breaker = CircuitBreaker(
+            "anilist_api", failure_threshold=5, recovery_timeout=300
+        )
 
-    async def _query(self, query: str, variables: dict, retry_count: int = 5) -> dict:
+    async def _acquire_rate_limit(self):
+        """Acquire rate limit permission if enabled."""
+        if self.rate_limiter:
+            await self.rate_limiter.acquire()
+
+    def _get_cached_result(self, endpoint: str, params: str) -> Optional[dict]:
+        """Get cached API result if available."""
+        if self.call_cache:
+            return self.call_cache.get(endpoint, params)
+        return None
+
+    def _cache_result(self, endpoint: str, params: str, result: dict):
+        """Cache API result if caching enabled."""
+        if self.call_cache:
+            self.call_cache.set(endpoint, params, result)
+
+    def _check_circuit_breaker(self) -> bool:
+        """Check if circuit breaker allows the request."""
+        return not self.circuit_breaker.is_open()
+
+    def _record_success(self):
+        """Record successful API call."""
+        self.circuit_breaker.record_success()
+
+    def _record_failure(self):
+        """Record failed API call."""
+        self.circuit_breaker.record_failure()
+
+    async def _query(
+        self, query: str, variables: dict, retry_count: int = 5, use_cache: bool = True
+    ) -> dict:
+        """
+        Execute GraphQL query with rate limiting, caching, and circuit breaker.
+
+        Args:
+            query: GraphQL query string
+            variables: Query variables
+            retry_count: Number of retries on failure
+            use_cache: Whether to use response caching
+
+        Returns:
+            API response data or empty dict on failure
+        """
+        # Generate cache key from query and variables
+        cache_key = f"{hash(query) & 0xFFFFFFFF}:{hash(str(sorted(variables.items()))) & 0xFFFFFFFF}"
+        endpoint = "graphql"
+
+        # Check cache first
+        if use_cache:
+            cached = self._get_cached_result(endpoint, cache_key)
+            if cached is not None:
+                logger.debug(f"Cache hit for query with vars: {variables}")
+                return cached
+
+        # Check circuit breaker
+        if not self._check_circuit_breaker():
+            logger.error("Circuit breaker is OPEN - refusing API call")
+            return {}
+
         for attempt in range(retry_count):
             try:
-                # Base polite delay to avoid hitting limits too hard initially
-                await asyncio.sleep(0.7)
+                # Acquire rate limit permission
+                await self._acquire_rate_limit()
 
                 response = await self.client.post(
                     self.BASE_URL, json={"query": query, "variables": variables}
@@ -97,9 +168,18 @@ class AniListService:
                         await asyncio.sleep(60)
                         continue
                     logger.error(f"GraphQL Error: {error_msg}")
+                    self._record_failure()
                     return {}
 
-                return data.get("data", {})
+                # Success - record it
+                self._record_success()
+                result = data.get("data", {})
+
+                # Cache successful response
+                if use_cache and result:
+                    self._cache_result(endpoint, cache_key, result)
+
+                return result
 
             except httpx.HTTPError as e:
                 logger.error(f"Request error (Attempt {attempt + 1}): {e}")
@@ -107,7 +187,11 @@ class AniListService:
                     wait = (attempt + 1) * 2
                     await asyncio.sleep(wait)
                 else:
+                    self._record_failure()
                     return {}
+
+        # All retries exhausted
+        self._record_failure()
         return {}
 
     async def download_image(self, url: str) -> Optional[bytes]:

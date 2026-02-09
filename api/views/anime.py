@@ -1,9 +1,11 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef
+from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef, F
+from django.db.models.functions import Coalesce
 from django.core.cache import cache
 from django.core.validators import ValidationError
+from datetime import date
 import logging
 
 from anime.models import Anime, Genre, Studio, UserFavorite
@@ -115,7 +117,6 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 valid_statuses = [s for s in statuses if s in VALID_STATUSES]
                 if valid_statuses:
                     # Use iexact for case-insensitive matching with title-case DB values
-                    from django.db.models import Q
                     status_q = Q()
                     for s in valid_statuses:
                         status_q |= Q(status__iexact=s)
@@ -188,8 +189,6 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                     season_clean = season.strip().lower() if season else None
                     if season_clean and season_clean in VALID_SEASONS:
                         start, end = season_ranges[season_clean]
-                        from datetime import date
-
                         queryset = queryset.filter(
                             release_date__gte=date(*start), release_date__lte=date(*end)
                         )
@@ -235,9 +234,6 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 # indicator of popularity - more members = more popular
                 # This ensures popular anime like Frieren appear first even if they
                 # don't have a popularity_rank set yet
-                from django.db.models import F
-                from django.db.models.functions import Coalesce
-
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))
                 sort_field = "-member_sort"  # Descending - higher member count first
         elif sort == "trending":

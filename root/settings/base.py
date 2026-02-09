@@ -292,6 +292,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "PAGE_SIZE_QUERY_PARAM": "page_size",
+    "MAX_PAGE_SIZE": 200,
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
@@ -372,35 +374,43 @@ CELERY_TIMEZONE = TIME_ZONE
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
+    # Hourly tasks - staggered to avoid API spikes
     "sync-trending-every-hour": {
         "task": "anime.tasks.sync_trending_anime",
-        "schedule": crontab(minute=0),
+        "schedule": crontab(minute=5),  # 5 min past hour
         "args": (50,),
-    },
-    "sync-seasonal-daily": {
-        "task": "anime.tasks.sync_seasonal_anime",
-        "schedule": crontab(hour="4,16", minute=0),
-        "args": (100,),
-    },
-    "sync-upcoming-daily": {
-        "task": "anime.tasks.sync_next_season_anime",
-        "schedule": crontab(hour=5, minute=0),
-        "args": (100,),
+        "options": {"queue": "default"},
     },
     "sync-airing-anime-hourly": {
         "task": "anime.tasks.sync_airing_anime",
-        "schedule": crontab(minute=30),  # Run at :30 past each hour
+        "schedule": crontab(minute=35),  # 35 min past hour - after trending
         "args": (),
+        "options": {"queue": "default"},
+    },
+    # Daily tasks - spread out during low-traffic hours
+    "sync-seasonal-daily": {
+        "task": "anime.tasks.sync_seasonal_anime",
+        "schedule": crontab(hour=2, minute=0),  # 2 AM
+        "args": (100,),
+        "options": {"queue": "default"},
+    },
+    "sync-upcoming-weekly": {
+        "task": "anime.tasks.sync_next_season_anime",
+        "schedule": crontab(day_of_week=0, hour=3, minute=0),  # Weekly Sunday 3 AM
+        "args": (100,),
+        "options": {"queue": "default"},
     },
     "cleanup-finished-airing-dates-daily": {
         "task": "anime.tasks.cleanup_finished_airing_dates",
-        "schedule": crontab(hour=6, minute=0),
+        "schedule": crontab(hour=4, minute=0),  # After seasonal
         "args": (),
+        "options": {"queue": "low_priority"},
     },
     "generate-recommendations-daily": {
         "task": "anime.tasks.generate_user_recommendations",
-        "schedule": crontab(hour=3, minute=0),
+        "schedule": crontab(hour=5, minute=0),  # After cleanup
         "args": (),
+        "options": {"queue": "low_priority"},
     },
 }
 
