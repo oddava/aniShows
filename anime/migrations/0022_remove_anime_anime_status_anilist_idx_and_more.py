@@ -4,26 +4,21 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('anime', '0021_add_airing_sync_indexes'),
+        ("anime", "0021_add_airing_sync_indexes"),
     ]
 
     operations = [
         migrations.RemoveIndex(
-            model_name='anime',
-            name='anime_status_anilist_idx',
+            model_name="anime",
+            name="anime_status_anilist_idx",
         ),
         migrations.RemoveIndex(
-            model_name='anime',
-            name='anime_airing_date_idx',
+            model_name="anime",
+            name="anime_airing_date_idx",
         ),
         migrations.RemoveIndex(
-            model_name='anime',
-            name='anime_slug_trending_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='anime',
-            name='anime_popularity_null_chars_idx',
+            model_name="anime",
+            name="anime_slug_trending_idx",
         ),
     ]
