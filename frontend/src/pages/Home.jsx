@@ -14,6 +14,7 @@ export default function Home() {
     const [heroListLoading, setHeroListLoading] = useState(false);
     const [locallyAddedIds, setLocallyAddedIds] = useState(new Set());
     const revealRefs = useRef([]);
+    const observer = useRef(null);
 
     // Use useQueries for parallel fetching with proper stale times
     const { data: trending, isLoading: trendingLoading } = useQuery({
@@ -67,26 +68,40 @@ export default function Home() {
 
     // Optimized IntersectionObserver with refs
     useEffect(() => {
-        const observer = new IntersectionObserver((entries) => {
+        observer.current = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     entry.target.classList.add('active');
-                    observer.unobserve(entry.target);
+                    observer.current?.unobserve(entry.target);
                 }
             });
         }, { threshold: 0.1, rootMargin: '50px' });
 
+        // Observe elements that were registered before the observer was ready
         revealRefs.current.forEach(el => {
-            if (el) observer.observe(el);
+            if (el) observer.current.observe(el);
         });
+        revealRefs.current = []; // Clear the buffer
 
-        return () => observer.disconnect();
+        return () => {
+            if (observer.current) {
+                observer.current.disconnect();
+                observer.current = null;
+            }
+        };
     }, []);
 
-    // Ref callback for reveal sections
+    // Ref callback for reveal sections - handles both initial and dynamic elements
     const setRevealRef = useCallback((el) => {
-        if (el && !revealRefs.current.includes(el)) {
-            revealRefs.current.push(el);
+        if (!el) return;
+
+        if (observer.current) {
+            observer.current.observe(el);
+        } else {
+            // Buffer the element if the observer isn't ready yet
+            if (!revealRefs.current.includes(el)) {
+                revealRefs.current.push(el);
+            }
         }
     }, []);
 
@@ -346,57 +361,30 @@ function RecommendedForYouSection({ revealRef }) {
         retry: 1,
     });
 
-    if (!isAuthenticated) {
-        return null;
-    }
-
-    if (isLoading) {
-        return (
-            <section ref={revealRef} className="px-4 md:px-6 reveal">
-                <div className="max-w-7xl mx-auto">
-                    <div className="flex flex-col gap-1 mb-4 md:mb-6">
-                        <div className="flex items-center gap-2 md:gap-3">
-                            <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-pink-500" />
-                            <h2 className="text-xl md:text-2xl font-bold text-white">Recommended for You</h2>
-                        </div>
-                        <p className="text-sm text-gray-400 pl-1">Loading recommendations...</p>
-                    </div>
-                    <div className="flex overflow-x-auto pb-4 gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                        {Array(6).fill(0).map((_, i) => (
-                            <div key={i} className="min-w-[160px] md:min-w-0">
-                                <AnimeCardSkeleton />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-        );
-    }
-
-    if (error) {
-        console.error('Recommendations error:', error);
-    }
-
-    if (!recommendations || recommendations.length === 0) {
+    if (!isAuthenticated || (error && !isLoading) || (!isLoading && (!recommendations || recommendations.length === 0))) {
         return null;
     }
 
     const genreCounts = {};
-    recommendations.forEach(rec => {
-        const genres = rec.reason_metadata?.matched_genres || [];
-        genres.forEach(g => {
-            genreCounts[g] = (genreCounts[g] || 0) + 1;
+    if (recommendations) {
+        recommendations.forEach(rec => {
+            const genres = rec.reason_metadata?.matched_genres || [];
+            genres.forEach(g => {
+                genreCounts[g] = (genreCounts[g] || 0) + 1;
+            });
         });
-    });
+    }
 
     const topGenres = Object.entries(genreCounts)
         .sort(([, a], [, b]) => b - a)
         .slice(0, 3)
         .map(([genre]) => genre);
 
-    const subtitle = topGenres.length > 0
-        ? `Based on your love for ${topGenres.join(', ')}`
-        : 'Curated just for you';
+    const subtitle = isLoading
+        ? 'Loading recommendations...'
+        : (topGenres.length > 0
+            ? `Based on your love for ${topGenres.join(', ')}`
+            : 'Curated just for you');
 
     return (
         <section ref={revealRef} className="px-4 md:px-6 reveal">
@@ -410,11 +398,19 @@ function RecommendedForYouSection({ revealRef }) {
                 </div>
 
                 <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                    {recommendations.map((rec) => (
-                        <div key={rec.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
-                            <AnimeCard anime={rec.anime} />
-                        </div>
-                    ))}
+                    {isLoading ? (
+                        Array(6).fill(0).map((_, i) => (
+                            <div key={i} className="min-w-[160px] md:min-w-0">
+                                <AnimeCardSkeleton />
+                            </div>
+                        ))
+                    ) : (
+                        recommendations?.map((rec) => (
+                            <div key={rec.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
+                                <AnimeCard anime={rec.anime} />
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
         </section>
