@@ -89,7 +89,7 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
               key={day}
               onClick={() => onSelect(index)}
               className={`
-                flex-shrink-0 px-4 py-3 rounded-xl border transition-all duration-200 min-w-[80px]
+                flex-shrink-0 px-3 py-2 rounded-lg border transition-all duration-200 min-w-[60px]
                 ${isSelected
                   ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
                   : 'bg-dark-100 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-white'
@@ -97,18 +97,15 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
                 ${isToday && !isSelected ? 'border-accent/30' : ''}
               `}
             >
-              <div className="text-xs font-medium uppercase tracking-wider mb-1">
+              <div className="text-[11px] font-medium uppercase tracking-wider">
                 {DAY_SHORT[index]}
               </div>
-              <div className="flex items-center justify-center gap-1.5">
-                <span className="text-lg font-bold">{count}</span>
+              <div className="flex items-center justify-center gap-1 mt-0.5">
+                <span className="text-base font-bold">{count}</span>
                 {count > 0 && (
                   <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-accent'}`} />
                 )}
               </div>
-              {isToday && (
-                <div className="text-[10px] mt-1 opacity-80">Today</div>
-              )}
             </button>
           );
         })}
