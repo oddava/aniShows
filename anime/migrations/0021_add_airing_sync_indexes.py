@@ -46,8 +46,8 @@ class Migration(migrations.Migration):
                 fields=["popularity_rank"],
                 name="anime_popularity_null_chars_idx",
                 condition=models.Q(
-                    animecharacter__isnull=True,
-                    animestaff__isnull=True,
+                    characters__isnull=True,
+                    staff__isnull=True,
                 ),
             ),
         ),
