@@ -631,6 +631,7 @@ export default function Navbar() {
 
                         {/* Right Section: Notifications + Auth */}
                         <div className="hidden md:flex items-center gap-2">
+                            {/* Notifications - Hidden until system is implemented
                             {isAuthenticated && (
                                 <div className="relative" ref={notificationsRef}>
                                     <button
@@ -645,7 +646,6 @@ export default function Navbar() {
                                         )}
                                     </button>
 
-                                    {/* Notifications Dropdown */}
                                     {isNotificationsOpen && (
                                         <div className="absolute right-0 top-full mt-2 w-80 py-2 bg-dark-100/95 backdrop-blur-xl 
                                                     rounded-xl border border-gray-700/50 shadow-xl shadow-black/20 animate-fade-in">
@@ -690,6 +690,7 @@ export default function Navbar() {
                                     )}
                                 </div>
                             )}
+                            */}
 
                             {isAuthenticated ? (
                                 <div className="relative" ref={profileRef}>
