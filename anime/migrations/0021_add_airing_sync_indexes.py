@@ -39,16 +39,4 @@ class Migration(migrations.Migration):
                 name="anime_slug_trending_idx",
             ),
         ),
-        # Partial index for metadata backfill (anime without characters/staff)
-        migrations.AddIndex(
-            model_name="anime",
-            index=models.Index(
-                fields=["popularity_rank"],
-                name="anime_popularity_null_chars_idx",
-                condition=models.Q(
-                    characters__isnull=True,
-                    staff__isnull=True,
-                ),
-            ),
-        ),
     ]
