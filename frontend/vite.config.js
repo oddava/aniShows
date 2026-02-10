@@ -52,6 +52,9 @@ export default defineConfig(({ mode }) => ({
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: allowedHosts,
+    hmr: {
+      overlay: false, // Disable error overlay in production
+    },
     proxy: {
       '/api': {
         target: 'http://web:8000',
