@@ -1,16 +1,20 @@
 from celery import shared_task
 import asyncio
+import time
+import random
 from datetime import datetime
 from typing import List, Dict
 from django.db import transaction
 from .services.anilist import AniListService, MediaSort
 from .services.rate_limiting import APICallCache
-from .models import Anime
+from .models import Anime, ThemeSong
 from asgiref.sync import sync_to_async
 from django.utils.text import slugify
 import logging
 
 logger = logging.getLogger(__name__)
+
+JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 
 
 # Helper to run async code in sync celery task
@@ -680,5 +684,399 @@ def backfill_airing_dates(self):
             raise self.retry(exc=e)
         finally:
             await service.close()
+
+    return run_async(_process())
+
+
+# ============================================================================
+# JIKAN API THEME SYNC TASKS
+# ============================================================================
+
+
+class JikanRateLimiter:
+    """
+    Adaptive rate limiter for Jikan API.
+    Jikan limit: ~3 requests per second (60 req/min).
+    Uses adaptive delays and exponential backoff for 429 errors.
+    """
+
+    def __init__(
+        self, base_delay: float = 0.35, min_delay: float = 0.25, max_delay: float = 5.0
+    ):
+        self.base_delay = base_delay
+        self.min_delay = min_delay
+        self.max_delay = max_delay
+        self.current_delay = base_delay
+        self.consecutive_429s = 0
+        self.last_request_time = 0
+        self.success_streak = 0
+
+    async def acquire(self) -> None:
+        """Acquire permission to make a request with adaptive rate limiting."""
+        now = time.time()
+        elapsed = now - self.last_request_time
+
+        # Ensure minimum time between requests
+        if elapsed < self.current_delay:
+            wait_time = self.current_delay - elapsed
+            await asyncio.sleep(wait_time)
+
+        self.last_request_time = time.time()
+
+    def record_success(self) -> None:
+        """Record successful request - gradually reduce delay."""
+        self.consecutive_429s = 0
+        self.success_streak += 1
+
+        # Gradually reduce delay after streak of successes
+        if self.success_streak >= 10 and self.current_delay > self.min_delay:
+            self.current_delay = max(self.min_delay, self.current_delay * 0.95)
+
+    def record_429(self) -> None:
+        """Record 429 error - exponential backoff with jitter."""
+        self.consecutive_429s += 1
+        self.success_streak = 0
+
+        # Exponential backoff: 2^failures + random jitter
+        backoff = min(2**self.consecutive_429s, 60)  # Cap at 60 seconds
+        jitter = random.uniform(0, backoff * 0.3)  # 0-30% jitter
+        self.current_delay = min(self.max_delay, self.base_delay + backoff + jitter)
+
+        logger.warning(
+            f"Jikan 429 hit (consecutive: {self.consecutive_429s}). "
+            f"Backing off for {self.current_delay:.2f}s"
+        )
+
+    def record_error(self) -> None:
+        """Record general error - slight increase in delay."""
+        self.success_streak = 0
+        self.current_delay = min(self.max_delay, self.current_delay * 1.1)
+
+
+async def fetch_themes_from_jikan(
+    http_client, mal_id: int, rate_limiter: JikanRateLimiter, max_retries: int = 3
+):
+    """Fetch theme songs from Jikan API with smart retry logic."""
+    import httpx
+
+    url = f"{JIKAN_BASE_URL}/anime/{mal_id}/themes"
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = await http_client.get(url)
+
+            # Handle rate limiting with exponential backoff
+            if response.status_code == 429:
+                rate_limiter.record_429()
+
+                # Try to get retry-after header
+                retry_after = response.headers.get("Retry-After")
+                if retry_after:
+                    wait_time = float(retry_after)
+                else:
+                    # Exponential backoff with jitter
+                    wait_time = min(2**attempt + random.uniform(0, 2), 60)
+
+                if attempt < max_retries:
+                    logger.warning(
+                        f"Jikan 429 for MAL ID {mal_id}, waiting {wait_time:.1f}s "
+                        f"(attempt {attempt + 1}/{max_retries})"
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Jikan 429 max retries exceeded for MAL ID {mal_id}")
+                    return None
+
+            # Handle other HTTP errors
+            if response.status_code >= 500:
+                if attempt < max_retries:
+                    wait_time = min(2**attempt, 10)
+                    logger.warning(
+                        f"Jikan server error {response.status_code}, "
+                        f"retrying in {wait_time:.1f}s"
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+
+            response.raise_for_status()
+            data = response.json().get("data", {})
+            return data
+
+        except httpx.HTTPError as e:
+            logger.error(f"Jikan HTTP error for MAL ID {mal_id}: {e}")
+            if attempt < max_retries:
+                wait_time = min(2**attempt, 10)
+                await asyncio.sleep(wait_time)
+                continue
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching themes for MAL ID {mal_id}: {e}")
+            return None
+
+    return None
+
+
+@sync_to_async
+def _get_anime_without_themes(limit: int = 100):
+    """Get anime that don't have theme songs yet."""
+    return list(
+        Anime.objects.filter(theme_songs__isnull=True)
+        .exclude(mal_id__isnull=True)
+        .distinct()[:limit]
+    )
+
+
+@sync_to_async
+def _save_theme_songs(anime: Anime, themes_data: dict, source: str = "jikan"):
+    """Save theme songs to database. Returns count of saved themes."""
+    import re
+
+    count = 0
+
+    # Clear existing themes from this source
+    ThemeSong.objects.filter(anime=anime).delete()
+
+    openings = themes_data.get("openings", [])
+    for idx, opening_text in enumerate(openings, 1):
+        if opening_text:
+            # Strip leading number prefix like "1: " from Jikan format
+            clean_text = re.sub(r"^\d+:\s*", "", opening_text)
+            parsed = _parse_theme_song(clean_text)
+
+            ThemeSong.objects.create(
+                anime=anime,
+                song_type=ThemeSong.SongType.OPENING,
+                track_number=idx,
+                title=parsed["title"],
+                artist=parsed["artist"],
+                episodes=parsed["episodes"],
+                anilist_raw=opening_text,
+                sync_source=source,
+                last_synced=datetime.now(),
+            )
+            count += 1
+
+    endings = themes_data.get("endings", [])
+    for idx, ending_text in enumerate(endings, 1):
+        if ending_text:
+            clean_text = re.sub(r"^\d+:\s*", "", ending_text)
+            parsed = _parse_theme_song(clean_text)
+
+            ThemeSong.objects.create(
+                anime=anime,
+                song_type=ThemeSong.SongType.ENDING,
+                track_number=idx,
+                title=parsed["title"],
+                artist=parsed["artist"],
+                episodes=parsed["episodes"],
+                anilist_raw=ending_text,
+                sync_source=source,
+                last_synced=datetime.now(),
+            )
+            count += 1
+
+    return count
+
+
+def _parse_theme_song(text: str):
+    """Parse theme song format: 'Song Title' by Artist (eps X-Y)"""
+    import re
+
+    result = {"title": text, "artist": "", "episodes": ""}
+
+    if not text:
+        return result
+
+    # Extract episode range (eps X-Y)
+    episode_match = re.search(r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE)
+    if episode_match:
+        result["episodes"] = episode_match.group(1).strip()
+        text = text[: episode_match.start()].strip()
+
+    # Extract artist: look for ' by ' pattern
+    if text.startswith('"') and '" by ' in text:
+        parts = text.split('" by ', 1)
+        if len(parts) == 2:
+            result["title"] = parts[0][1:].strip()
+            result["artist"] = parts[1].strip()
+    elif text.startswith("'") and "' by " in text:
+        parts = text.split("' by ", 1)
+        if len(parts) == 2:
+            result["title"] = parts[0][1:].strip()
+            result["artist"] = parts[1].strip()
+    elif " by " in text:
+        parts = text.rsplit(" by ", 1)
+        if len(parts) == 2:
+            result["title"] = parts[0].strip().strip('"').strip("'")
+            result["artist"] = parts[1].strip()
+    else:
+        result["title"] = text.strip()
+
+    return result
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=300,
+    retry_backoff=True,
+    retry_backoff_max=1800,
+    retry_jitter=True,
+    time_limit=3600,  # 1 hour max for large batches
+    soft_time_limit=3300,
+)
+def sync_themes_for_new_anime(self, limit: int = 100):
+    """
+    Fetches theme songs for anime that don't have themes yet.
+    Uses Jikan API (MyAnimeList) to get openings and endings.
+    Run this daily to enrich new anime with theme data.
+
+    Args:
+        limit: Maximum number of anime to process in one run
+    """
+    import httpx
+
+    logger.info(f"Starting theme sync for up to {limit} anime without themes")
+
+    async def _process():
+        rate_limiter = JikanRateLimiter(base_delay=0.35)
+
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            # Get anime without themes that have MAL IDs
+            anime_list = await _get_anime_without_themes(limit)
+            total = len(anime_list)
+
+            if total == 0:
+                logger.info("No anime without themes found")
+                return {"processed": 0, "successful": 0, "failed": 0}
+
+            logger.info(f"Found {total} anime without themes")
+
+            successful = 0
+            failed = 0
+            themes_loaded = 0
+
+            for i, anime in enumerate(anime_list):
+                try:
+                    # Acquire rate limit permission
+                    await rate_limiter.acquire()
+
+                    if not anime.mal_id:
+                        logger.debug(f"Skipping {anime.title} - no MAL ID")
+                        continue
+
+                    # Fetch themes from Jikan
+                    themes = await fetch_themes_from_jikan(
+                        http_client, anime.mal_id, rate_limiter, max_retries=3
+                    )
+
+                    if themes:
+                        # Save themes to database
+                        count = await _save_theme_songs(anime, themes, source="jikan")
+                        themes_loaded += count
+                        successful += 1
+                        rate_limiter.record_success()
+
+                        logger.info(
+                            f"✓ ({i + 1}/{total}) {anime.title}: "
+                            f"{count} themes loaded (OP: {len(themes.get('openings', []))}, "
+                            f"ED: {len(themes.get('endings', []))})"
+                        )
+                    else:
+                        # No themes found - mark with empty themes to avoid re-processing
+                        await sync_to_async(ThemeSong.objects.get_or_create)(
+                            anime=anime,
+                            song_type=ThemeSong.SongType.OPENING,
+                            track_number=1,
+                            defaults={
+                                "title": "No themes available",
+                                "sync_source": "jikan",
+                                "last_synced": datetime.now(),
+                            },
+                        )
+                        successful += 1
+                        rate_limiter.record_success()
+                        logger.info(
+                            f"⚠ ({i + 1}/{total}) {anime.title}: No themes found"
+                        )
+
+                    # Progress indicator
+                    if (i + 1) % 10 == 0:
+                        logger.info(
+                            f"--- Progress: {i + 1}/{total} "
+                            f"(Success: {successful}, Failed: {failed}, "
+                            f"Current delay: {rate_limiter.current_delay:.2f}s) ---"
+                        )
+
+                except Exception as e:
+                    failed += 1
+                    rate_limiter.record_error()
+                    logger.error(f"✗ Error processing {anime.title}: {e}")
+                    continue
+
+            logger.info(
+                f"Theme sync complete. Processed: {total}, "
+                f"Successful: {successful}, Failed: {failed}, "
+                f"Total themes loaded: {themes_loaded}"
+            )
+
+            return {
+                "processed": total,
+                "successful": successful,
+                "failed": failed,
+                "themes_loaded": themes_loaded,
+            }
+
+    return run_async(_process())
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    time_limit=300,  # 5 minutes max
+)
+def fetch_themes_for_anime(self, anime_id: int):
+    """
+    Fetch theme songs for a specific anime by ID.
+    Used for on-demand theme loading when a new anime is added.
+    """
+    import httpx
+
+    logger.info(f"Fetching themes for anime ID: {anime_id}")
+
+    async def _process():
+        rate_limiter = JikanRateLimiter(base_delay=0.35)
+
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            try:
+                anime = await sync_to_async(Anime.objects.get)(id=anime_id)
+
+                if not anime.mal_id:
+                    logger.warning(f"Anime {anime.title} has no MAL ID")
+                    return {"status": "error", "reason": "no_mal_id"}
+
+                await rate_limiter.acquire()
+
+                themes = await fetch_themes_from_jikan(
+                    http_client, anime.mal_id, rate_limiter, max_retries=3
+                )
+
+                if themes:
+                    count = await _save_theme_songs(anime, themes, source="jikan")
+                    logger.info(f"Loaded {count} themes for {anime.title}")
+                    return {"status": "success", "themes_loaded": count}
+                else:
+                    logger.warning(f"No themes found for {anime.title}")
+                    return {"status": "success", "themes_loaded": 0}
+
+            except Anime.DoesNotExist:
+                logger.error(f"Anime with ID {anime_id} not found")
+                return {"status": "error", "reason": "anime_not_found"}
+            except Exception as e:
+                logger.error(f"Error fetching themes for anime {anime_id}: {e}")
+                raise self.retry(exc=e)
 
     return run_async(_process())

@@ -91,6 +91,20 @@ class Anime(Model):
         finished = "Finished"
         upcoming = "Upcoming"
 
+    class SourceMaterial(TextChoices):
+        original = "Original", "Original"
+        manga = "Manga", "Manga"
+        light_novel = "Light Novel", "Light Novel"
+        visual_novel = "Visual Novel", "Visual Novel"
+        game = "Game", "Game"
+        web_manga = "Web Manga", "Web Manga"
+        novel = "Novel", "Novel"
+        music = "Music", "Music"
+        mixed_media = "Mixed Media", "Mixed Media"
+        picture_book = "Picture Book", "Picture Book"
+        card_game = "Card Game", "Card Game"
+        other = "Other", "Other"
+
     title = CharField(max_length=200, unique=True)
     title_jp = CharField(max_length=200, blank=True)
     slug = SlugField(max_length=200, unique=True)
@@ -169,6 +183,22 @@ class Anime(Model):
     # Airing Schedule
     next_airing_episode = IntegerField(null=True, blank=True)
     next_airing_date = DateTimeField(null=True, blank=True)
+
+    # Source Material
+    source_material = CharField(
+        max_length=50,
+        choices=SourceMaterial.choices,
+        blank=True,
+        help_text="Original source material of the anime",
+    )
+
+    # Season Information
+    season = CharField(
+        max_length=20,
+        blank=True,
+        help_text="Anime season (WINTER, SPRING, SUMMER, FALL)",
+    )
+    season_year = IntegerField(null=True, blank=True)
 
     # External IDs for import/export
     mal_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
@@ -392,3 +422,51 @@ class UserRecommendation(Model):
         elif self.reason == self.RecommendationReason.TOP_RATED:
             return "Highly rated by the community"
         return "Recommended for you"
+
+
+class ThemeSong(Model):
+    """Anime theme songs (openings and endings)"""
+
+    class SongType(TextChoices):
+        OPENING = "opening", "Opening"
+        ENDING = "ending", "Ending"
+
+    anime = ForeignKey(Anime, on_delete=CASCADE, related_name="theme_songs")
+    song_type = CharField(max_length=10, choices=SongType.choices)
+    track_number = IntegerField(default=1)  # OP1, OP2, ED1, ED2, etc.
+    title = CharField(max_length=300)
+    artist = CharField(max_length=300, blank=True)
+    episodes = CharField(max_length=100, blank=True)  # e.g., "1-13", "14-26"
+    anilist_raw = CharField(max_length=500, blank=True)  # Original text from AniList
+
+    # Extended fields from Jikan API
+    mal_id = IntegerField(null=True, blank=True)  # MAL theme ID if available
+    composer = CharField(max_length=300, blank=True)  # Music composer
+    arranger = CharField(max_length=300, blank=True)  # Arranger
+    year = IntegerField(null=True, blank=True)  # Release year
+
+    # External links (populated via enrichment)
+    spotify_url = URLField(blank=True)
+    youtube_url = URLField(blank=True)
+    apple_music_url = URLField(blank=True)
+    anisong_db_url = URLField(blank=True)  # Anime song database link
+
+    # Metadata
+    last_synced = DateTimeField(null=True, blank=True)  # Last Jikan sync time
+    sync_source = CharField(
+        max_length=20, blank=True, default=""
+    )  # 'jikan', 'anilist', etc.
+
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["song_type", "track_number"]
+        indexes = [
+            Index(fields=["anime", "song_type"]),
+            Index(fields=["anime", "track_number"]),
+        ]
+        unique_together = ("anime", "song_type", "track_number")
+
+    def __str__(self):
+        return f"{self.anime.title} - {self.song_type.upper()} {self.track_number}: {self.title}"

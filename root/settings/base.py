@@ -129,6 +129,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.middleware.LoggingMiddleware",
+    "core.middleware.AdminAuditMiddleware",
+    "core.middleware.ExceptionLoggingMiddleware",
     "api.middleware.activity_middleware.UserActivityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -409,6 +412,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=5, minute=0),  # After cleanup
         "args": (),
         "options": {"queue": "low_priority"},
+    },
+    "sync-themes-for-new-anime-daily": {
+        "task": "anime.tasks.sync_themes_for_new_anime",
+        "schedule": crontab(hour=6, minute=0),  # After recommendations
+        "args": (100,),  # Process up to 100 anime per day
+        "options": {"queue": "default"},
     },
 }
 
