@@ -2,6 +2,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
 import ScrollToTop from './components/ScrollToTop';
@@ -37,6 +38,17 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminAnime = lazy(() => import('./pages/admin/AdminAnime'));
 const AdminReviews = lazy(() => import('./pages/admin/AdminReviews'));
+const AdminGenres = lazy(() => import('./pages/admin/AdminGenres'));
+const AdminStudios = lazy(() => import('./pages/admin/AdminStudios'));
+const AdminUserLists = lazy(() => import('./pages/admin/AdminUserLists'));
+const AdminFavorites = lazy(() => import('./pages/admin/AdminFavorites'));
+const AdminImportJobs = lazy(() => import('./pages/admin/AdminImportJobs'));
+const AdminReports = lazy(() => import('./pages/admin/AdminReports'));
+const AdminCharacters = lazy(() => import('./pages/admin/AdminCharacters'));
+const AdminStaff = lazy(() => import('./pages/admin/AdminStaff'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const AdminLogs = lazy(() => import('./pages/admin/AdminLogs'));
+const AdminReviewReports = lazy(() => import('./pages/admin/AdminReviewReports'));
 
 // Loading Fallback Component
 const PageLoader = () => (
@@ -100,10 +112,43 @@ function App() {
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="anime" element={<AdminAnime />} />
                   <Route path="reviews" element={<AdminReviews />} />
+                  <Route path="genres" element={<AdminGenres />} />
+                  <Route path="studios" element={<AdminStudios />} />
+                  <Route path="user-lists" element={<AdminUserLists />} />
+                  <Route path="favorites" element={<AdminFavorites />} />
+                  <Route path="import-jobs" element={<AdminImportJobs />} />
+                  <Route path="reports" element={<AdminReports />} />
+                  <Route path="characters" element={<AdminCharacters />} />
+                  <Route path="staff" element={<AdminStaff />} />
+                  <Route path="settings" element={<AdminSettings />} />
+                  <Route path="logs" element={<AdminLogs />} />
+                  <Route path="review-reports" element={<AdminReviewReports />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                style: {
+                  background: '#1a1a1a',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                },
+                success: {
+                  iconTheme: {
+                    primary: '#10b981',
+                    secondary: '#fff',
+                  },
+                },
+                error: {
+                  iconTheme: {
+                    primary: '#ef4444',
+                    secondary: '#fff',
+                  },
+                },
+              }}
+            />
           </BrowserRouter>
         </AuthProvider>
       </ErrorBoundary>

@@ -13,11 +13,47 @@ const AdminLayout = () => {
         navigate('/');
     };
 
-    const navItems = [
-        { path: '/admin', icon: '📊', label: 'Dashboard', exact: true },
-        { path: '/admin/users', icon: '👥', label: 'Users' },
-        { path: '/admin/anime', icon: '🎬', label: 'Anime' },
-        { path: '/admin/reviews', icon: '⭐', label: 'Reviews' },
+    const navSections = [
+        {
+            title: 'Overview',
+            items: [
+                { path: '/admin', icon: '📊', label: 'Dashboard', exact: true },
+                { path: '/admin/reports', icon: '📈', label: 'Reports & Analytics' },
+            ]
+        },
+        {
+            title: 'Content',
+            items: [
+                { path: '/admin/anime', icon: '🎬', label: 'Anime' },
+                { path: '/admin/genres', icon: '🏷️', label: 'Genres' },
+                { path: '/admin/studios', icon: '🏢', label: 'Studios' },
+                { path: '/admin/characters', icon: '👤', label: 'Characters' },
+                { path: '/admin/staff', icon: '🎙️', label: 'Staff' },
+            ]
+        },
+        {
+            title: 'Users',
+            items: [
+                { path: '/admin/users', icon: '👥', label: 'All Users' },
+                { path: '/admin/user-lists', icon: '📋', label: 'List Entries' },
+                { path: '/admin/favorites', icon: '❤️', label: 'Favorites' },
+                { path: '/admin/import-jobs', icon: '📥', label: 'Import Jobs' },
+            ]
+        },
+        {
+            title: 'Moderation',
+            items: [
+                { path: '/admin/reviews', icon: '⭐', label: 'Reviews' },
+                { path: '/admin/review-reports', icon: '🚨', label: 'Review Reports' },
+            ]
+        },
+        {
+            title: 'System',
+            items: [
+                { path: '/admin/settings', icon: '⚙️', label: 'Settings' },
+                { path: '/admin/logs', icon: '📜', label: 'Logs' },
+            ]
+        },
     ];
 
     return (
@@ -32,23 +68,25 @@ const AdminLayout = () => {
                 </div>
 
                 <nav className="admin-nav">
-                    <div className="admin-nav-section">
-                        <div className="admin-nav-title">Main Menu</div>
-                        {navItems.map((item) => (
-                            <NavLink
-                                key={item.path}
-                                to={item.path}
-                                end={item.exact}
-                                className={({ isActive }) =>
-                                    `admin-nav-link ${isActive ? 'active' : ''}`
-                                }
-                                onClick={() => setSidebarOpen(false)}
-                            >
-                                <span className="admin-nav-icon">{item.icon}</span>
-                                <span>{item.label}</span>
-                            </NavLink>
-                        ))}
-                    </div>
+                    {navSections.map((section) => (
+                        <div key={section.title} className="admin-nav-section">
+                            <div className="admin-nav-title">{section.title}</div>
+                            {section.items.map((item) => (
+                                <NavLink
+                                    key={item.path}
+                                    to={item.path}
+                                    end={item.exact}
+                                    className={({ isActive }) =>
+                                        `admin-nav-link ${isActive ? 'active' : ''}`
+                                    }
+                                    onClick={() => setSidebarOpen(false)}
+                                >
+                                    <span className="admin-nav-icon">{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </NavLink>
+                            ))}
+                        </div>
+                    ))}
 
                     <div className="admin-nav-section">
                         <div className="admin-nav-title">Quick Links</div>
