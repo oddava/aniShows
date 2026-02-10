@@ -37,6 +37,15 @@ from api.admin_views import (
     AdminAnimeViewSet,
     AdminReviewViewSet,
     AdminStatsExportView,
+    AdminGenreViewSet,
+    AdminStudioViewSet,
+    AdminUserListViewSet,
+    AdminFavoritesViewSet,
+    AdminImportJobViewSet,
+    AdminBulkOperationsView,
+    AdminReportsView,
+    AdminSystemLogViewSet,
+    AdminAuditLogViewSet,
 )
 from users.views import GoogleLogin
 from api.import_export_views import (
@@ -67,6 +76,15 @@ admin_router = DefaultRouter()
 admin_router.register(r"users", AdminUserViewSet, basename="admin-users")
 admin_router.register(r"anime", AdminAnimeViewSet, basename="admin-anime")
 admin_router.register(r"reviews", AdminReviewViewSet, basename="admin-reviews")
+admin_router.register(r"genres", AdminGenreViewSet, basename="admin-genres")
+admin_router.register(r"studios", AdminStudioViewSet, basename="admin-studios")
+admin_router.register(r"user-lists", AdminUserListViewSet, basename="admin-user-lists")
+admin_router.register(r"favorites", AdminFavoritesViewSet, basename="admin-favorites")
+admin_router.register(
+    r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs"
+)
+admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
+admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
 
 urlpatterns = [
     # User profile
@@ -123,4 +141,6 @@ urlpatterns = [
     path(
         "admin/stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"
     ),
+    path("admin/bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
+    path("admin/reports/", AdminReportsView.as_view(), name="admin-reports"),
 ]

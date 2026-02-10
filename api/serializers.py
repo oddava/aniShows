@@ -11,6 +11,7 @@ from anime.models import (
     Staff,
     AnimeCharacter,
     AnimeStaff,
+    ThemeSong,
 )
 from users.models import UserProfile, UserAnimeList
 import logging
@@ -123,6 +124,23 @@ class AnimeStaffSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnimeStaff
         fields = ["id", "staff", "role"]
+
+
+class ThemeSongSerializer(serializers.ModelSerializer):
+    """Serializer for anime theme songs (openings and endings)"""
+
+    class Meta:
+        model = ThemeSong
+        fields = [
+            "id",
+            "song_type",
+            "track_number",
+            "title",
+            "artist",
+            "episodes",
+            "spotify_url",
+            "youtube_url",
+        ]
 
 
 class AnimeMinimalSerializer(serializers.ModelSerializer):
@@ -274,6 +292,7 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
     studio = StudioSerializer(read_only=True)
     characters = AnimeCharacterSerializer(source="cast", many=True, read_only=True)
     staff = AnimeStaffSerializer(source="production_staff", many=True, read_only=True)
+    theme_songs = ThemeSongSerializer(many=True, read_only=True)
 
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
@@ -319,6 +338,12 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             "next_airing_episode",
             "next_airing_date",
             "status_distribution",
+            "member_count",
+            "end_date",
+            "source_material",
+            "season",
+            "season_year",
+            "theme_songs",
         ]
 
     def get_status_distribution(self, obj):

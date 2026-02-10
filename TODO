@@ -14,7 +14,7 @@ Current "Recommended for You" just reverses trending. Implement:
 - MyAnimeList/AniList import for easy migration ✅
 - User data export for privacy ✅
 3. Social Features (Engagement)
-- User following/followers
+- User following/followers ✅
 - Comments on reviews
 - Activity feed ("What friends are watching")
 - Discussion forums

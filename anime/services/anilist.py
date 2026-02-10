@@ -249,11 +249,13 @@ class AniListService:
         # Common fields to avoid duplication
         media_fields = """
                         id
+                        idMal
                         title { romaji english native }
                         format status episodes averageScore popularity duration
                         startDate { year month day }
                         endDate { year month day }
                         season seasonYear
+                        source
                         genres
                         studios(isMain: true) { nodes { name } }
                         description
@@ -382,13 +384,15 @@ class AniListService:
     async def search_anime(self, query_string: str) -> List[dict]:
         """Search for a single anime by title to get detailed info"""
         # We construct a query that allows searching
-        media_fields = """
+        media_fields_search = """
                         id
+                        idMal
                         title { romaji english native }
                         format status episodes averageScore popularity duration
                         startDate { year month day }
                         endDate { year month day }
                         season seasonYear
+                        source
                         genres
                         studios(isMain: true) { nodes { name } }
                         description
@@ -425,7 +429,7 @@ class AniListService:
             query SearchAnime($search: String) {{
                 Page(page: 1, perPage: 1) {{
                     media(type: ANIME, search: $search, isAdult: false) {{
-                        {media_fields}
+                        {media_fields_search}
                     }}
                 }}
             }}
@@ -633,6 +637,14 @@ class AniListService:
             if item.get("nextAiringEpisode")
             and item["nextAiringEpisode"].get("airingAt")
             else None,
+            # Source Material
+            "source_material": self._map_source_material(item.get("source")),
+            # Season Information
+            "season": item.get("season", ""),
+            "season_year": item.get("seasonYear"),
+            # External IDs
+            "anilist_id": item.get("id"),
+            "mal_id": item.get("idMal"),
         }
 
     def _parse_date(self, date_obj):
@@ -645,6 +657,30 @@ class AniListService:
             return datetime(year, month, day).date()
         except ValueError:
             return None
+
+    def _map_source_material(self, source):
+        """Map AniList source to our SourceMaterial choices"""
+        source_map = {
+            "ORIGINAL": "Original",
+            "MANGA": "Manga",
+            "LIGHT_NOVEL": "Light Novel",
+            "VISUAL_NOVEL": "Visual Novel",
+            "VIDEO_GAME": "Game",
+            "WEB_NOVEL": "Novel",
+            "NOVEL": "Novel",
+            "DOUJINSHI": "Other",
+            "ANIME": "Original",
+            "MUSIC": "Music",
+            "MIXED_MEDIA": "Mixed Media",
+            "PICTURE_BOOK": "Picture Book",
+            "CARD_GAME": "Card Game",
+            "WEB_MANGA": "Web Manga",
+            "COMIC": "Manga",
+            "LIVE_ACTION": "Other",
+            "MULTIMEDIA_PROJECT": "Mixed Media",
+            "OTHER": "Other",
+        }
+        return source_map.get(source, "") if source else ""
 
     @sync_to_async
     def _handle_relationships_async(self, anime, item):
@@ -738,6 +774,86 @@ class AniListService:
                 staff=staff_member,
                 role=role,  # Keep exact role string
             )
+
+        # Handle Theme Songs
+        self._process_theme_songs(anime, item)
+
+    def _process_theme_songs(self, anime, item):
+        """Process openings and endings from AniList data"""
+        from anime.models import ThemeSong
+
+        # Clear existing theme songs to avoid duplicates
+        ThemeSong.objects.filter(anime=anime).delete()
+
+        # Process openings
+        openings = item.get("openings", [])
+        for idx, opening_text in enumerate(openings, 1):
+            if opening_text:
+                parsed = self._parse_theme_song(opening_text)
+                ThemeSong.objects.create(
+                    anime=anime,
+                    song_type=ThemeSong.SongType.OPENING,
+                    track_number=idx,
+                    title=parsed["title"],
+                    artist=parsed["artist"],
+                    episodes=parsed["episodes"],
+                    anilist_raw=opening_text,
+                )
+
+        # Process endings
+        endings = item.get("endings", [])
+        for idx, ending_text in enumerate(endings, 1):
+            if ending_text:
+                parsed = self._parse_theme_song(ending_text)
+                ThemeSong.objects.create(
+                    anime=anime,
+                    song_type=ThemeSong.SongType.ENDING,
+                    track_number=idx,
+                    title=parsed["title"],
+                    artist=parsed["artist"],
+                    episodes=parsed["episodes"],
+                    anilist_raw=ending_text,
+                )
+
+    def _parse_theme_song(self, text: str) -> dict:
+        """Parse AniList theme song format: 'Song Title' by Artist (eps X-Y)"""
+        result = {"title": text, "artist": "", "episodes": ""}
+
+        if not text:
+            return result
+
+        # Try to extract episode range (eps X-Y)
+        import re
+
+        episode_match = re.search(
+            r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE
+        )
+        if episode_match:
+            result["episodes"] = episode_match.group(1).strip()
+            text = text[: episode_match.start()].strip()
+
+        # Try to extract artist: look for ' by ' pattern
+        # Handle quoted titles: "Song Title" by Artist
+        if text.startswith('"') and '" by ' in text:
+            parts = text.split('" by ', 1)
+            if len(parts) == 2:
+                result["title"] = parts[0][1:].strip()  # Remove opening quote
+                result["artist"] = parts[1].strip()
+        elif text.startswith("'") and "' by " in text:
+            parts = text.split("' by ", 1)
+            if len(parts) == 2:
+                result["title"] = parts[0][1:].strip()  # Remove opening quote
+                result["artist"] = parts[1].strip()
+        elif " by " in text:
+            # Simple format: Song Title by Artist
+            parts = text.rsplit(" by ", 1)
+            if len(parts) == 2:
+                result["title"] = parts[0].strip()
+                result["artist"] = parts[1].strip()
+        else:
+            result["title"] = text.strip()
+
+        return result
 
     async def _download_and_save_images(self, anime, item):
         try:
@@ -836,6 +952,8 @@ class AniListService:
                     node { id name { full native } image { large } description }
                 }
             }
+            openings
+            endings
         """
 
         query = f"""
@@ -894,6 +1012,8 @@ class AniListService:
                     node { id name { full native } image { large } description }
                 }
             }
+            openings
+            endings
         """
 
         query = f"""

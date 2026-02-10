@@ -35,5 +35,5 @@ class EmailVerificationMixin:
     def perform_destroy(self, instance):
         self.check_email_verified(self.request.user)
         if instance.user != self.request.user:
-            raisee  PermissionDenied("You can only delete your own data.")
+            raise PermissionDenied("You can only delete your own data.")
         instance.delete()
