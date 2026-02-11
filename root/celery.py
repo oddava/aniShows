@@ -44,6 +44,8 @@ app.conf.task_routes = {
     "users.tasks.process_import_job": {"queue": "default"},
     "users.tasks.fetch_anime_by_external_id": {"queue": "low_priority"},
     "users.tasks.cleanup_old_import_jobs": {"queue": "low_priority"},
+    # Image processing tasks
+    "anime.tasks.generate_image_thumbnails": {"queue": "low_priority"},
 }
 
 # Ensure queues are defined

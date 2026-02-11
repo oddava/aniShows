@@ -906,23 +906,11 @@ class AniListService:
         field = getattr(anime, field_name)
         field.save(filename, ContentFile(image_data), save=True)
 
-        # Pre-generate optimized thumbnails for better performance
-        # This ensures images are processed immediately rather than on first request
-        if field_name == "cover_image":
-            # Access spec fields to trigger generation
-            try:
-                _ = anime.cover_image_small.url
-                _ = anime.cover_image_medium.url
-                _ = anime.cover_image_large.url
-            except Exception:
-                pass  # Thumbnails will be generated on-demand if pre-generation fails
-        elif field_name == "banner_image":
-            try:
-                _ = anime.banner_image_small.url
-                _ = anime.banner_image_medium.url
-                _ = anime.banner_image_large.url
-            except Exception:
-                pass
+        # Queue thumbnail generation asynchronously to avoid blocking import
+        # This runs in the background via Celery
+        from anime.tasks import generate_image_thumbnails
+
+        generate_image_thumbnails.delay(anime.id)
 
     @sync_to_async
     def _save_trailer_url(self, anime, trailer_url):
