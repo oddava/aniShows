@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 from django.conf import settings
 import logging
 
@@ -95,8 +96,11 @@ class Command(BaseCommand):
                 with open(file_path, "rb") as f:
                     content = f.read()
 
+                # Wrap bytes in ContentFile - Django storage expects file-like object
+                content_file = ContentFile(content)
+
                 # Save to default storage (MinIO/S3)
-                saved_path = default_storage.save(storage_path, content)
+                saved_path = default_storage.save(storage_path, content_file)
 
                 self.stdout.write(self.style.SUCCESS(f"  Uploaded: {storage_path}"))
                 uploaded += 1
