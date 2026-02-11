@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { Pencil, Trash2, MoreVertical } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const CommentItem = ({ 
-  comment, 
-  onEdit, 
+const CommentItem = ({
+  comment,
+  onEdit,
   onDelete,
   isEditing,
   editText,
@@ -19,26 +20,31 @@ const CommentItem = ({
   // Don't render deleted comments
   if (comment.is_deleted) return null;
 
-  const avatarUrl = comment.user?.avatar || 
+  const avatarUrl = comment.user?.avatar ||
     `https://api.dicebear.com/7.x/avataaars/svg?seed=${comment.user?.username}`;
 
   return (
     <div className="flex gap-3 py-3">
       {/* Avatar */}
       <div className="flex-shrink-0">
-        <img
-          src={avatarUrl}
-          alt={comment.user?.username}
-          className="w-8 h-8 rounded-full object-cover border border-gray-700"
-        />
+        <Link to={`/profile/${comment.user?.username}`}>
+          <img
+            src={avatarUrl}
+            alt={comment.user?.username}
+            className="w-8 h-8 rounded-full object-cover border border-gray-700 hover:border-accent transition-colors"
+          />
+        </Link>
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm text-gray-300">
+          <Link
+            to={`/profile/${comment.user?.username}`}
+            className="font-medium text-sm text-gray-300 hover:text-accent transition-colors"
+          >
             {comment.user?.username}
-          </span>
+          </Link>
           <span className="text-xs text-gray-500">
             {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
           </span>
@@ -103,7 +109,7 @@ const CommentItem = ({
                 onClick={() => setShowMenu(false)}
               />
               <div className="absolute right-0 bottom-full mb-1 bg-dark-100 border border-gray-700 rounded-lg shadow-xl py-1 z-50 min-w-[120px]"
-                style={{ 
+                style={{
                   right: '0',
                   transform: 'translateX(0)',
                 }}>
