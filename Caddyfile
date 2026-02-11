@@ -21,6 +21,13 @@
         reverse_proxy web:8000
     }
 
+    # ImageKit CACHE - serve locally generated thumbnails
+    handle_path /media/CACHE/* {
+        root * /app/CACHE
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
     # MinIO Media - proxy /media/* to MinIO bucket
     handle_path /media/* {
         rewrite * /anishows-media/media{path}
