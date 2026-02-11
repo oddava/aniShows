@@ -21,6 +21,8 @@ from django.db.models import (
 from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
 from django.utils import timezone
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFit, ResizeToFill
 
 from root import settings
 from root.storage_backends import MediaStorage
@@ -53,6 +55,18 @@ class Character(Model):
     image = ImageField(
         upload_to="characters/", blank=True, null=True, storage=MediaStorage()
     )
+    image_small = ImageSpecField(
+        source="image",
+        processors=[ResizeToFit(60, 90)],
+        format="WEBP",
+        options={"quality": 80},
+    )
+    image_medium = ImageSpecField(
+        source="image",
+        processors=[ResizeToFit(150, 225)],
+        format="WEBP",
+        options={"quality": 85},
+    )
     image_url = URLField(blank=True, null=True)
     description = TextField(blank=True)
 
@@ -68,6 +82,18 @@ class Staff(Model):
     name_native = CharField(max_length=200, blank=True)
     image = ImageField(
         upload_to="staff/", blank=True, null=True, storage=MediaStorage()
+    )
+    image_small = ImageSpecField(
+        source="image",
+        processors=[ResizeToFit(60, 90)],
+        format="WEBP",
+        options={"quality": 80},
+    )
+    image_medium = ImageSpecField(
+        source="image",
+        processors=[ResizeToFit(150, 225)],
+        format="WEBP",
+        options={"quality": 85},
     )
     image_url = URLField(blank=True, null=True)
     description = TextField(blank=True)
@@ -126,8 +152,44 @@ class Anime(Model):
     cover_image = ImageField(
         upload_to="anime/covers/", blank=True, null=True, storage=MediaStorage()
     )
+    cover_image_small = ImageSpecField(
+        source="cover_image",
+        processors=[ResizeToFit(150, 225)],
+        format="WEBP",
+        options={"quality": 85},
+    )
+    cover_image_medium = ImageSpecField(
+        source="cover_image",
+        processors=[ResizeToFit(230, 345)],
+        format="WEBP",
+        options={"quality": 85},
+    )
+    cover_image_large = ImageSpecField(
+        source="cover_image",
+        processors=[ResizeToFit(300, 450)],
+        format="WEBP",
+        options={"quality": 90},
+    )
     banner_image = ImageField(
         upload_to="anime/banners/", blank=True, null=True, storage=MediaStorage()
+    )
+    banner_image_small = ImageSpecField(
+        source="banner_image",
+        processors=[ResizeToFit(400, 225)],
+        format="WEBP",
+        options={"quality": 80},
+    )
+    banner_image_medium = ImageSpecField(
+        source="banner_image",
+        processors=[ResizeToFit(800, 450)],
+        format="WEBP",
+        options={"quality": 85},
+    )
+    banner_image_large = ImageSpecField(
+        source="banner_image",
+        processors=[ResizeToFit(1200, 675)],
+        format="WEBP",
+        options={"quality": 90},
     )
     trailer_url = URLField(blank=True)
 

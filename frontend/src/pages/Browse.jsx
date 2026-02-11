@@ -190,7 +190,7 @@ export default function Browse() {
         staleTime: 1000 * 60 * 30,
     });
 
-    // Fetch anime with infinite query
+    // Fetch anime with infinite query - Reduced page size for better performance
     const {
         data,
         fetchNextPage,
@@ -203,6 +203,7 @@ export default function Browse() {
         queryFn: ({ pageParam = 1 }) =>
             animeApi.getAll({
                 page: pageParam,
+                page_size: 12, // Reduced from default to minimize initial load
                 genre: currentGenres.length > 0 ? currentGenres.join(',') : undefined,
                 sort: currentSort,
                 q: currentSearch || undefined,

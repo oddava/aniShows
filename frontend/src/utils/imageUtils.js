@@ -27,3 +27,68 @@ export const getImageUrl = (url, title = 'Anime') => {
     // Prepend API URL
     return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
 };
+
+/**
+ * Get optimized image URL for anime with multiple sizes
+ * @param {Object} anime - Anime object with image URLs
+ * @param {string} type - 'cover' or 'banner'
+ * @param {string} size - 'small' | 'medium' | 'large' | 'original'
+ * @returns {string} Optimized image URL
+ */
+export const getOptimizedImageUrl = (anime, type = 'cover', size = 'medium') => {
+    if (!anime) return null;
+
+    const sizeMap = {
+        cover: {
+            small: anime.cover_image_small,
+            medium: anime.cover_image_medium,
+            large: anime.cover_image_large,
+            original: anime.cover_image,
+        },
+        banner: {
+            small: anime.banner_image_small,
+            medium: anime.banner_image_medium,
+            large: anime.banner_image_large,
+            original: anime.banner_image,
+        },
+    };
+
+    const images = sizeMap[type] || sizeMap.cover;
+    const imageUrl = images[size] || images.original;
+    
+    return getImageUrl(imageUrl, anime.title);
+};
+
+/**
+ * Get srcset string for responsive images
+ * @param {Object} anime - Anime object with image URLs
+ * @param {string} type - 'cover' or 'banner'
+ * @returns {string} srcset attribute value
+ */
+export const getImageSrcSet = (anime, type = 'cover') => {
+    if (!anime) return '';
+
+    const urls = [];
+    const sizeMap = {
+        cover: {
+            small: { url: anime.cover_image_small, width: 150 },
+            medium: { url: anime.cover_image_medium, width: 230 },
+            large: { url: anime.cover_image_large, width: 300 },
+        },
+        banner: {
+            small: { url: anime.banner_image_small, width: 400 },
+            medium: { url: anime.banner_image_medium, width: 800 },
+            large: { url: anime.banner_image_large, width: 1200 },
+        },
+    };
+
+    const images = sizeMap[type] || sizeMap.cover;
+    
+    Object.values(images).forEach(({ url, width }) => {
+        if (url) {
+            urls.push(`${getImageUrl(url)} ${width}w`);
+        }
+    });
+
+    return urls.join(', ');
+};

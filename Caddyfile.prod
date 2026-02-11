@@ -47,6 +47,18 @@
         reverse_proxy minio:9000 {
             header_up Host {upstream_hostport}
         }
+        # Add aggressive caching headers for media files
+        header Cache-Control "public, max-age=31536000, immutable"
+        header Vary "Accept"
+        # Add cross-origin headers for images
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    }
+
+    # Image optimization endpoint - proxy to Django for on-demand resizing
+    handle_path /media/resize/* {
+        rewrite * /api/v1/media/resize/{path}
+        reverse_proxy web:8000
     }
 
     # Static assets with aggressive caching

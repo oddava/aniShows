@@ -17,6 +17,7 @@ import FriendsWatching from '../components/FriendsWatching';
 import MusicSection from '../components/MusicSection';
 import SEOHelmet from '../components/SEOHelmet';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
+import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
 
 const InformationBox = ({ anime, className, accentColor }) => {
     const formatDateRange = () => {
@@ -420,8 +421,10 @@ export default function AnimeDetail() {
         return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
     };
 
-    const bannerUrl = getImageUrl(anime.banner_image) || getImageUrl(anime.cover_image) || `https://placehold.co/1920x600/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
-    const coverUrl = getImageUrl(anime.cover_image) || `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+    const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') || getOptimizedImageUrl(anime, 'cover', 'large') || `https://placehold.co/1920x600/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+    const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') || `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+    const bannerSrcSet = getImageSrcSet(anime, 'banner');
+    const coverSrcSet = getImageSrcSet(anime, 'cover');
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: Film },
@@ -460,6 +463,8 @@ export default function AnimeDetail() {
             <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
                 <img
                     src={bannerUrl}
+                    srcSet={bannerSrcSet}
+                    sizes="100vw"
                     alt={anime.title}
                     className="w-full h-full object-cover"
                 />
@@ -476,6 +481,8 @@ export default function AnimeDetail() {
                             <div className="flex-shrink-0 mx-auto lg:mx-0">
                                 <img
                                     src={coverUrl}
+                                    srcSet={coverSrcSet}
+                                    sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
                                     alt={anime.title}
                                     className="w-48 md:w-64 lg:w-full rounded-2xl shadow-2xl border border-gray-800"
                                 />

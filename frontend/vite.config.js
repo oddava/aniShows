@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // Parse ALLOWED_HOSTS from environment variable
 const allowedHosts = process.env.ALLOWED_HOSTS 
@@ -10,6 +11,37 @@ const allowedHosts = process.env.ALLOWED_HOSTS
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    // PWA support with service worker for caching
+    VitePWA({
+      registerType: 'autoUpdate',
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|gif|webp|svg)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/.*\/api\/v1\/.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 24 * 60 * 60, // 24 hours
+              },
+            },
+          },
+        ],
+      },
+    }),
     // Bundle analyzer - only loaded when needed
     mode === 'analyze' && (async () => {
       const { visualizer } = await import('rollup-plugin-visualizer')
@@ -47,6 +79,10 @@ export default defineConfig(({ mode }) => ({
     sourcemap: false,
     // CSS optimization
     cssMinify: true,
+    // Report bundle size
+    reportCompressedSize: true,
+    // Enable chunk size warnings
+    chunkSizeWarningLimit: 500,
   },
   server: {
     host: '0.0.0.0',
@@ -76,5 +112,14 @@ export default defineConfig(({ mode }) => ({
       '@tanstack/react-virtual',
     ],
     exclude: ['lucide-react'], // Lucide icons are tree-shaken better when excluded
+  },
+  // Preload critical assets
+  experimental: {
+    renderBuiltUrl(filename, { hostType }) {
+      if (hostType === 'js') {
+        return { relative: true }
+      }
+      return { relative: true }
+    },
   },
 }))

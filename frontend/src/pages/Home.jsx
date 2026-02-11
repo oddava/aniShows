@@ -5,7 +5,7 @@ import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getImageUrl } from '../utils/imageUtils';
+import { getImageUrl, getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
@@ -116,7 +116,9 @@ export default function Home() {
                             className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-70' : 'opacity-0'}`}
                         >
                             <img
-                                src={getImageUrl(anime.banner_image || anime.cover_image)}
+                                src={getOptimizedImageUrl(anime, 'banner', 'large')}
+                                srcSet={getImageSrcSet(anime, 'banner')}
+                                sizes="100vw"
                                 alt=""
                                 loading={index === 0 ? 'eager' : 'lazy'}
                                 className="w-full h-full object-cover scale-[1.02]"

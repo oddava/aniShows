@@ -372,13 +372,24 @@ class Command(BaseCommand):
     @sync_to_async
     def save_relations(self, anime, data):
         """Save relations metadata to the anime's JSON field"""
+        from anime.models import Anime
+
         relations = []
 
         for edge in data.get("relations", {}).get("edges", []):
             if edge["node"]["type"] == "ANIME":
+                anilist_id = edge["node"]["id"]
+                # Try to find the local anime to get its slug
+                try:
+                    related_anime = Anime.objects.get(anilist_id=anilist_id)
+                    slug = related_anime.slug
+                except Anime.DoesNotExist:
+                    slug = None
+
                 relations.append(
                     {
-                        "id": edge["node"]["id"],
+                        "id": anilist_id,
+                        "slug": slug,
                         "type": edge["relationType"],
                         "title": edge["node"]["title"].get("english")
                         or edge["node"]["title"].get("romaji"),

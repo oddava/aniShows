@@ -58,6 +58,7 @@ from api.import_export_views import (
     ExportUserDataView,
     ExportUserDataJSONView,
 )
+from api.views.image_views import ImageResizeView
 
 # Main router for v1
 router = DefaultRouter()
@@ -143,4 +144,8 @@ urlpatterns = [
     ),
     path("admin/bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
     path("admin/reports/", AdminReportsView.as_view(), name="admin-reports"),
+    # Image optimization endpoints
+    path(
+        "media/resize/<path:filepath>", ImageResizeView.as_view(), name="image_resize"
+    ),
 ]

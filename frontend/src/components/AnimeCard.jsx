@@ -4,6 +4,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
+import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40' },
@@ -12,17 +13,6 @@ const STATUS_OPTIONS = [
     { value: 'On Hold', label: 'On Hold', icon: Pause, color: 'text-orange-400', bgColor: 'bg-orange-500/20 border-orange-500/40' },
     { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
 ];
-
-// Memoized helper - runs once per URL
-const getImageUrl = (url, title) => {
-    if (!url) return `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(title || 'Anime')}`;
-    let cleanUrl = url;
-    if (cleanUrl.includes('localhost:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/localhost:8000/, '');
-    if (cleanUrl.includes('web:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/web:8000/, '');
-    if (cleanUrl.startsWith('http')) return cleanUrl;
-    if (!cleanUrl.startsWith('/')) cleanUrl = `/${cleanUrl}`;
-    return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
-};
 
 function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', showProgress = false, lite = false }) {
     const { isAuthenticated } = useAuth();
@@ -38,8 +28,9 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', showProgr
         userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0
     );
 
-    // Memoized computed values
-    const imageUrl = useMemo(() => getImageUrl(anime.cover_image, anime.title), [anime.cover_image, anime.title]);
+    // Memoized computed values - use optimized images with srcset
+    const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
+    const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const displayTitle = useMemo(() => 
         titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
         [titleLanguage, anime.title_jp, anime.title]
@@ -144,6 +135,8 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', showProgr
             >
                 <img
                     src={imageUrl}
+                    srcSet={imageSrcSet}
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
                     alt={anime.title}
                     loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -166,6 +159,8 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', showProgr
                     <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
                         <img
                             src={imageUrl}
+                            srcSet={imageSrcSet}
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
                             alt={anime.title}
                             loading="lazy"
                             className="w-full h-full object-cover"

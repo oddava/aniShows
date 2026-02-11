@@ -81,10 +81,20 @@ class StudioSerializer(serializers.ModelSerializer):
 
 class CharacterSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    image_small = serializers.SerializerMethodField()
+    image_medium = serializers.SerializerMethodField()
 
     class Meta:
         model = Character
-        fields = ["id", "name", "name_native", "image", "description"]
+        fields = [
+            "id",
+            "name",
+            "name_native",
+            "image",
+            "image_small",
+            "image_medium",
+            "description",
+        ]
 
     def get_image(self, obj):
         if obj.image:
@@ -94,13 +104,39 @@ class CharacterSerializer(serializers.ModelSerializer):
             return obj.image.url
         return obj.image_url
 
+    def get_image_small(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image_small.url)
+            return obj.image_small.url
+        return obj.image_url
+
+    def get_image_medium(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image_medium.url)
+            return obj.image_medium.url
+        return obj.image_url
+
 
 class StaffSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
+    image_small = serializers.SerializerMethodField()
+    image_medium = serializers.SerializerMethodField()
 
     class Meta:
         model = Staff
-        fields = ["id", "name", "name_native", "image", "description"]
+        fields = [
+            "id",
+            "name",
+            "name_native",
+            "image",
+            "image_small",
+            "image_medium",
+            "description",
+        ]
 
     def get_image(self, obj):
         if obj.image:
@@ -108,6 +144,22 @@ class StaffSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.image.url)
             return obj.image.url
+        return obj.image_url
+
+    def get_image_small(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image_small.url)
+            return obj.image_small.url
+        return obj.image_url
+
+    def get_image_medium(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image_medium.url)
+            return obj.image_medium.url
         return obj.image_url
 
 
@@ -154,6 +206,8 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
     )
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    cover_image_medium = serializers.SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -163,6 +217,8 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
             "title_jp",
             "slug",
             "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
             "rating",
             "episode_count",
             "anime_type",
@@ -175,6 +231,22 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
             "next_airing_episode",
             "next_airing_date",
         ]
+
+    def get_cover_image_small(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_small.url)
+            return obj.cover_image_small.url
+        return None
+
+    def get_cover_image_medium(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_medium.url)
+            return obj.cover_image_medium.url
+        return None
 
     def get_is_favorite(self, obj):
         if hasattr(obj, "_is_favorite"):
@@ -221,6 +293,10 @@ class AnimeListSerializer(serializers.ModelSerializer):
     )
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    cover_image_medium = serializers.SerializerMethodField()
+    banner_image_small = serializers.SerializerMethodField()
+    banner_image_medium = serializers.SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -230,7 +306,11 @@ class AnimeListSerializer(serializers.ModelSerializer):
             "title_jp",
             "slug",
             "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
             "banner_image",
+            "banner_image_small",
+            "banner_image_medium",
             "rating",
             "episode_count",
             "anime_type",
@@ -244,6 +324,38 @@ class AnimeListSerializer(serializers.ModelSerializer):
             "next_airing_episode",
             "next_airing_date",
         ]
+
+    def get_cover_image_small(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_small.url)
+            return obj.cover_image_small.url
+        return None
+
+    def get_cover_image_medium(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_medium.url)
+            return obj.cover_image_medium.url
+        return None
+
+    def get_banner_image_small(self, obj):
+        if obj.banner_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.banner_image_small.url)
+            return obj.banner_image_small.url
+        return None
+
+    def get_banner_image_medium(self, obj):
+        if obj.banner_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.banner_image_medium.url)
+            return obj.banner_image_medium.url
+        return None
 
     def get_is_favorite(self, obj):
         # Use prefetched annotation if available (avoids N+1)
@@ -304,6 +416,12 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
         max_digits=3, decimal_places=1, read_only=True
     )
     status_distribution = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    cover_image_medium = serializers.SerializerMethodField()
+    cover_image_large = serializers.SerializerMethodField()
+    banner_image_small = serializers.SerializerMethodField()
+    banner_image_medium = serializers.SerializerMethodField()
+    banner_image_large = serializers.SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -314,7 +432,13 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             "slug",
             "synopsis",
             "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
+            "cover_image_large",
             "banner_image",
+            "banner_image_small",
+            "banner_image_medium",
+            "banner_image_large",
             "trailer_url",
             "rating",
             "episode_count",
@@ -341,12 +465,59 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             "next_airing_date",
             "status_distribution",
             "member_count",
-            "end_date",
             "source_material",
             "season",
             "season_year",
             "theme_songs",
         ]
+
+    def get_cover_image_small(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_small.url)
+            return obj.cover_image_small.url
+        return None
+
+    def get_cover_image_medium(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_medium.url)
+            return obj.cover_image_medium.url
+        return None
+
+    def get_cover_image_large(self, obj):
+        if obj.cover_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.cover_image_large.url)
+            return obj.cover_image_large.url
+        return None
+
+    def get_banner_image_small(self, obj):
+        if obj.banner_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.banner_image_small.url)
+            return obj.banner_image_small.url
+        return None
+
+    def get_banner_image_medium(self, obj):
+        if obj.banner_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.banner_image_medium.url)
+            return obj.banner_image_medium.url
+        return None
+
+    def get_banner_image_large(self, obj):
+        if obj.banner_image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.banner_image_large.url)
+            return obj.banner_image_large.url
+        return None
 
     def get_status_distribution(self, obj):
         """Aggregate user list statuses from the platform's own data"""

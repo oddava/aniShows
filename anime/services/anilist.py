@@ -1115,6 +1115,22 @@ class AniListService:
         anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
 
+        # Add slugs to relations by looking up related anime in database
+        relations = anime_data.get("relations", [])
+        if relations:
+            from anime.models import Anime
+
+            for rel in relations:
+                rel_anilist_id = rel.get("id")
+                if rel_anilist_id:
+                    try:
+                        related_anime = await sync_to_async(Anime.objects.get)(
+                            anilist_id=rel_anilist_id
+                        )
+                        rel["slug"] = related_anime.slug
+                    except Anime.DoesNotExist:
+                        rel["slug"] = None
+
         try:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
@@ -1139,6 +1155,22 @@ class AniListService:
         anime_data = self._prepare_anime_data(item, title, title_native, slug)
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
+
+        # Add slugs to relations by looking up related anime in database
+        relations = anime_data.get("relations", [])
+        if relations:
+            from anime.models import Anime
+
+            for rel in relations:
+                anilist_id = rel.get("id")
+                if anilist_id:
+                    try:
+                        related_anime = await sync_to_async(Anime.objects.get)(
+                            anilist_id=anilist_id
+                        )
+                        rel["slug"] = related_anime.slug
+                    except Anime.DoesNotExist:
+                        rel["slug"] = None
 
         for key, value in anime_data.items():
             setattr(anime, key, value)
