@@ -3,7 +3,7 @@
     "short_name": "AniShows",
     "icons": [
         {
-            "src": "/icon.svg",
+            "src": "/icon.svg?v=2",
             "sizes": "any",
             "type": "image/svg+xml"
         },

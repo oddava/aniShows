@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   
-  <!-- Background with rounded corners -->
+  <!-- Purple rounded square background -->
   <rect x="0" y="0" width="512" height="512" rx="96" ry="96" fill="url(#purpleGradient)"/>
   
   <!-- White play button triangle -->
