@@ -238,6 +238,12 @@ if USE_S3:
 
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
 
+    # ImageKit configuration - store generated thumbnails in MinIO
+    IMAGEKIT_DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
+    IMAGEKIT_CACHE_BACKEND = "default"
+    IMAGEKIT_CACHE_PREFIX = "CACHE/images"
+    IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
+
     STATIC_LOCATION = "static"
     STATIC_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/"
 
@@ -254,6 +260,12 @@ else:
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
     DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+
+    # ImageKit configuration for local development
+    IMAGEKIT_DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    IMAGEKIT_CACHE_BACKEND = "default"
+    IMAGEKIT_CACHE_PREFIX = "CACHE/images"
+    IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
 # =============================================================================
 # DEFAULT PRIMARY KEY
