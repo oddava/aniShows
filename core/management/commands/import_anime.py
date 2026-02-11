@@ -11,6 +11,7 @@ from enum import Enum
 from datetime import datetime
 import os
 import logging
+
 AnimeType, AnimeStatus = Anime.AnimeType, Anime.AnimeStatus
 
 
@@ -20,11 +21,15 @@ class MediaSort(str, Enum):
     POPULARITY = "POPULARITY_DESC"
     TRENDING = "TRENDING_DESC"
     START_DATE = "START_DATE_DESC"
+
+
 class MediaStatus(str, Enum):
     FINISHED = "FINISHED"
     RELEASING = "RELEASING"
     NOT_YET_RELEASED = "NOT_YET_RELEASED"
     CANCELLED = "CANCELLED"
+
+
 class MediaFormat(str, Enum):
     TV = "TV"
     TV_SHORT = "TV_SHORT"
@@ -33,19 +38,21 @@ class MediaFormat(str, Enum):
     OVA = "OVA"
     ONA = "ONA"
     MUSIC = "MUSIC"
+
+
 class AniListScraper:
     BASE_URL = "https://graphql.anilist.co/"
     MAX_PER_PAGE = 50
+
     def __init__(self):
         self.client = httpx.AsyncClient(
-            headers={"Content-Type": "application/json"},
-            timeout=15.0
+            headers={"Content-Type": "application/json"}, timeout=15.0
         )
+
     async def _query(self, query: str, variables: dict) -> dict:
         try:
             response = await self.client.post(
-                self.BASE_URL,
-                json={"query": query, "variables": variables}
+                self.BASE_URL, json={"query": query, "variables": variables}
             )
             response.raise_for_status()
             data = response.json()
@@ -56,6 +63,7 @@ class AniListScraper:
         except httpx.HTTPError as e:
             logging.error(f"Request error: {e}")
             return {}
+
     async def download_image(self, url: str) -> Optional[bytes]:
         if not url:
             return None
@@ -67,6 +75,7 @@ class AniListScraper:
         except httpx.HTTPError as e:
             logging.error(f"Error downloading image {url}: {e}")
             return None
+
     # --- Shared GraphQL query for DRYness ---
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
@@ -114,12 +123,10 @@ class AniListScraper:
                 }
             }
             """
+
     # --- Pagination-aware fetch ---
     async def _fetch_paginated(
-        self,
-        variables: dict,
-        include_season: bool = False,
-        limit: int = 50
+        self, variables: dict, include_season: bool = False, limit: int = 50
     ) -> List[dict]:
         results = []
         page = 1
@@ -136,79 +143,106 @@ class AniListScraper:
                 break
             page += 1
         return results[:limit]
+
     async def get_anime(
-        self,
-        limit: int = 50,
-        sort: MediaSort = MediaSort.POPULARITY
+        self, limit: int = 50, sort: MediaSort = MediaSort.POPULARITY
     ) -> List[dict]:
         return await self._fetch_paginated(
-            variables={"sort": [sort.value]},
-            include_season=False,
-            limit=limit
+            variables={"sort": [sort.value]}, include_season=False, limit=limit
         )
+
     async def get_by_season(
         self,
         season: Literal["WINTER", "SPRING", "SUMMER", "FALL"],
         year: int,
         limit: int = 50,
-        sort: MediaSort = MediaSort.POPULARITY
+        sort: MediaSort = MediaSort.POPULARITY,
     ) -> List[dict]:
         return await self._fetch_paginated(
             variables={"season": season, "year": year, "sort": [sort.value]},
             include_season=True,
-            limit=limit
+            limit=limit,
         )
+
     async def close(self):
         try:
             await self.client.aclose()
         except RuntimeError as e:
             if "Event loop is closed" not in str(e):
                 raise
+
+
 class Command(BaseCommand):
-    help = 'Import anime data from AniList API'
+    help = "Import anime data from AniList API"
+
     def add_arguments(self, parser):
-        parser.add_argument('--limit', type=int, default=50, help='Number of anime to import')
-        parser.add_argument('--season', type=str, choices=['WINTER', 'SPRING', 'SUMMER', 'FALL'], help='Import specific season')
-        parser.add_argument('--year', type=int, help='Year for seasonal import')
-        parser.add_argument('--sort', type=str, default='POPULARITY', choices=['POPULARITY', 'SCORE', 'TRENDING', 'START_DATE'], help='Sort method')
-        parser.add_argument('--create-fixtures', action='store_true', help='Create JSON fixtures instead of importing to database')
-        parser.add_argument('--update', action='store_true', help='Update existing anime if found')
-        parser.add_argument('--skip-images', action='store_true', help='Skip downloading images')
+        parser.add_argument(
+            "--limit", type=int, default=50, help="Number of anime to import"
+        )
+        parser.add_argument(
+            "--season",
+            type=str,
+            choices=["WINTER", "SPRING", "SUMMER", "FALL"],
+            help="Import specific season",
+        )
+        parser.add_argument("--year", type=int, help="Year for seasonal import")
+        parser.add_argument(
+            "--sort",
+            type=str,
+            default="POPULARITY",
+            choices=["POPULARITY", "SCORE", "TRENDING", "START_DATE"],
+            help="Sort method",
+        )
+        parser.add_argument(
+            "--create-fixtures",
+            action="store_true",
+            help="Create JSON fixtures instead of importing to database",
+        )
+        parser.add_argument(
+            "--update", action="store_true", help="Update existing anime if found"
+        )
+        parser.add_argument(
+            "--skip-images", action="store_true", help="Skip downloading images"
+        )
+
     def handle(self, *args, **options):
-        limit = options['limit']
-        sort = MediaSort[options['sort']]
-        create_fixtures = options['create_fixtures']
-        update_existing = options['update']
-        self.skip_images = options['skip_images']
-        self.stdout.write(self.style.NOTICE(f'Starting anime import (limit: {limit})...'))
+        limit = options["limit"]
+        sort = MediaSort[options["sort"]]
+        create_fixtures = options["create_fixtures"]
+        update_existing = options["update"]
+        self.skip_images = options["skip_images"]
+        self.stdout.write(
+            self.style.NOTICE(f"Starting anime import (limit: {limit})...")
+        )
         anime_data = asyncio.run(self._scrape_data(options, limit, sort))
         if not anime_data:
-            self.stdout.write(self.style.ERROR('No data retrieved'))
+            self.stdout.write(self.style.ERROR("No data retrieved"))
             return
         if create_fixtures:
             self._create_fixtures(anime_data)
         else:
             asyncio.run(self._import_to_database_async(anime_data, update_existing))
+
     async def _scrape_data(self, options, limit, sort):
         scraper = AniListScraper()
         self.scraper = scraper
         try:
-            if options['season'] and options['year']:
-                self.stdout.write(f"Fetching {options['season']} {options['year']} anime...")
+            if options["season"] and options["year"]:
+                self.stdout.write(
+                    f"Fetching {options['season']} {options['year']} anime..."
+                )
                 data = await scraper.get_by_season(
-                    options['season'],
-                    options['year'],
-                    limit,
-                    sort
+                    options["season"], options["year"], limit, sort
                 )
             else:
                 self.stdout.write("Fetching top anime...")
                 data = await scraper.get_anime(limit, sort)
             return data
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'Scraping error: {e}'))
+            self.stdout.write(self.style.ERROR(f"Scraping error: {e}"))
             await scraper.close()
             return []
+
     async def _import_to_database_async(self, anime_data, update_existing):
         created_count = 0
         updated_count = 0
@@ -220,15 +254,17 @@ class Command(BaseCommand):
                 title_native = item.get("title", {}).get("native", "")
                 title = title_english or title_romaji
                 slug = slugify(title)
-                anime_data_dict = self._prepare_anime_data(item, title, title_native, slug)
+                anime_data_dict = self._prepare_anime_data(
+                    item, title, title_native, slug
+                )
                 anime, created = await self._get_or_create_anime(slug, anime_data_dict)
                 if not created and update_existing:
                     await self._update_anime(anime, anime_data_dict)
                     updated_count += 1
-                    self.stdout.write(self.style.WARNING(f'Updated: {title}'))
+                    self.stdout.write(self.style.WARNING(f"Updated: {title}"))
                 elif created:
                     created_count += 1
-                    self.stdout.write(self.style.SUCCESS(f'Created: {title}'))
+                    self.stdout.write(self.style.SUCCESS(f"Created: {title}"))
                 else:
                     skipped_count += 1
                     continue
@@ -237,44 +273,50 @@ class Command(BaseCommand):
                     if not self.skip_images:
                         await self._download_and_save_images(anime, item)
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f'Error importing {item.get("title", {})}: {str(e)}'))
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"Error importing {item.get('title', {})}: {str(e)}"
+                    )
+                )
         await self.scraper.close()
-        self.stdout.write(self.style.SUCCESS(f'\n=== Import Summary ==='))
-        self.stdout.write(f'Created: {created_count}')
-        self.stdout.write(f'Updated: {updated_count}')
-        self.stdout.write(f'Skipped: {skipped_count}')
+        self.stdout.write(self.style.SUCCESS(f"\n=== Import Summary ==="))
+        self.stdout.write(f"Created: {created_count}")
+        self.stdout.write(f"Updated: {updated_count}")
+        self.stdout.write(f"Skipped: {skipped_count}")
+
     @sync_to_async
     def _get_or_create_anime(self, slug, anime_data_dict):
-        return Anime.objects.get_or_create(
-            slug=slug,
-            defaults=anime_data_dict
-        )
+        return Anime.objects.get_or_create(slug=slug, defaults=anime_data_dict)
+
     @sync_to_async
     def _update_anime(self, anime, anime_data_dict):
         for key, value in anime_data_dict.items():
             setattr(anime, key, value)
         anime.save()
+
     async def _download_and_save_images(self, anime, item):
         try:
-            cover_url = item.get("coverImage", {}).get("extraLarge") or item.get("coverImage", {}).get("large")
+            cover_url = item.get("coverImage", {}).get("extraLarge") or item.get(
+                "coverImage", {}
+            ).get("large")
             banner_url = item.get("bannerImage")
             has_cover = await sync_to_async(lambda: bool(anime.cover_image))()
             has_banner = await sync_to_async(lambda: bool(anime.banner_image))()
             has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
             if cover_url and not has_cover:
-                self.stdout.write(f'  Downloading cover for {anime.title}...')
+                self.stdout.write(f"  Downloading cover for {anime.title}...")
                 cover_data = await self.scraper.download_image(cover_url)
                 if cover_data:
                     filename = f"{anime.slug}_cover.jpg"
-                    await self._save_image(anime, 'cover_image', filename, cover_data)
-                    self.stdout.write(self.style.SUCCESS(f'  ✓ Cover downloaded'))
+                    await self._save_image(anime, "cover_image", filename, cover_data)
+                    self.stdout.write(self.style.SUCCESS(f"  ✓ Cover downloaded"))
             if banner_url and not has_banner:
-                self.stdout.write(f'  Downloading banner for {anime.title}...')
+                self.stdout.write(f"  Downloading banner for {anime.title}...")
                 banner_data = await self.scraper.download_image(banner_url)
                 if banner_data:
                     filename = f"{anime.slug}_banner.jpg"
-                    await self._save_image(anime, 'banner_image', filename, banner_data)
-                    self.stdout.write(self.style.SUCCESS(f'  ✓ Banner downloaded'))
+                    await self._save_image(anime, "banner_image", filename, banner_data)
+                    self.stdout.write(self.style.SUCCESS(f"  ✓ Banner downloaded"))
             if not has_trailer:
                 trailer = item.get("trailer")
                 if trailer:
@@ -283,29 +325,55 @@ class Command(BaseCommand):
                     if trailer_id and trailer_site:
                         trailer_url = None
                         if trailer_site.lower() == "youtube":
-                            trailer_url = f"https://www.youtube.com/watch?v={trailer_id}"
+                            trailer_url = (
+                                f"https://www.youtube.com/watch?v={trailer_id}"
+                            )
                         elif trailer_site.lower() == "dailymotion":
-                            trailer_url = f"https://www.dailymotion.com/video/{trailer_id}"
+                            trailer_url = (
+                                f"https://www.dailymotion.com/video/{trailer_id}"
+                            )
                         if trailer_url:
                             await self._save_trailer_url(anime, trailer_url)
-                            self.stdout.write(self.style.SUCCESS(f'  ✓ Trailer URL saved'))
+                            self.stdout.write(
+                                self.style.SUCCESS(f"  ✓ Trailer URL saved")
+                            )
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'  Error downloading media: {str(e)}'))
+            self.stdout.write(self.style.ERROR(f"  Error downloading media: {str(e)}"))
+
     @sync_to_async
     def _save_image(self, anime, field_name, filename, image_data):
         field = getattr(anime, field_name)
         field.save(filename, ContentFile(image_data), save=True)
+
+        # Pre-generate optimized thumbnails for better performance
+        # This ensures images are processed immediately rather than on first request
+        if field_name == "cover_image":
+            # Access spec fields to trigger generation
+            try:
+                _ = anime.cover_image_small.url
+                _ = anime.cover_image_medium.url
+                _ = anime.cover_image_large.url
+            except Exception:
+                pass  # Thumbnails will be generated on-demand if pre-generation fails
+        elif field_name == "banner_image":
+            try:
+                _ = anime.banner_image_small.url
+                _ = anime.banner_image_medium.url
+                _ = anime.banner_image_large.url
+            except Exception:
+                pass
+
     @sync_to_async
     def _save_trailer_url(self, anime, trailer_url):
         anime.trailer_url = trailer_url
         anime.save()
+
     @sync_to_async
     def _handle_relationships_async(self, anime, item):
         genres = item.get("genres", [])
         for genre_name in genres:
             genre, _ = Genre.objects.get_or_create(
-                name=genre_name,
-                defaults={'slug': slugify(genre_name)}
+                name=genre_name, defaults={"slug": slugify(genre_name)}
             )
             anime.genres.add(genre)
         studios = item.get("studios", {}).get("nodes", [])
@@ -315,22 +383,23 @@ class Command(BaseCommand):
                 studio, _ = Studio.objects.get_or_create(name=studio_name)
                 anime.studio = studio
                 anime.save()
+
     def _prepare_anime_data(self, item, title, title_native, slug):
         format_map = {
-            'TV': AnimeType.tv,
-            'TV_SHORT': AnimeType.tv,
-            'MOVIE': AnimeType.movie,
-            'OVA': AnimeType.ova,
-            'ONA': AnimeType.special,
-            'SPECIAL': AnimeType.special,
-            'MUSIC': AnimeType.special,
+            "TV": AnimeType.tv,
+            "TV_SHORT": AnimeType.tv,
+            "MOVIE": AnimeType.movie,
+            "OVA": AnimeType.ova,
+            "ONA": AnimeType.special,
+            "SPECIAL": AnimeType.special,
+            "MUSIC": AnimeType.special,
         }
         anime_type = format_map.get(item.get("format", "TV"), AnimeType.tv)
         status_map = {
-            'RELEASING': AnimeStatus.airing,
-            'FINISHED': AnimeStatus.finished,
-            'NOT_YET_RELEASED': AnimeStatus.upcoming,
-            'CANCELLED': AnimeStatus.finished,
+            "RELEASING": AnimeStatus.airing,
+            "FINISHED": AnimeStatus.finished,
+            "NOT_YET_RELEASED": AnimeStatus.upcoming,
+            "CANCELLED": AnimeStatus.finished,
         }
         status = status_map.get(item.get("status", "FINISHED"), AnimeStatus.finished)
         start_date = self._parse_date(item.get("startDate", {}))
@@ -340,22 +409,26 @@ class Command(BaseCommand):
         description = item.get("description", "")
         if description:
             import re
-            description = re.sub(r'<[^>]+>', '', description)
+
+            description = re.sub(r"<[^>]+>", "", description)
             description = description.strip()
         return {
-            'title': title,
-            'title_jp': title_native or "",
-            'slug': slug,
-            'synopsis': description or "No description available.",
-            'anime_type': anime_type,
-            'status': status,
-            'episode_count': item.get("episodes", 0) or 0,
-            'duration_minutes': item.get("duration", 24) or 24,
-            'release_date': start_date,
-            'end_date': end_date,
-            'rating': rating,
-            'meta_description': (description[:157] + '...') if description and len(description) > 160 else description,
+            "title": title,
+            "title_jp": title_native or "",
+            "slug": slug,
+            "synopsis": description or "No description available.",
+            "anime_type": anime_type,
+            "status": status,
+            "episode_count": item.get("episodes", 0) or 0,
+            "duration_minutes": item.get("duration", 24) or 24,
+            "release_date": start_date,
+            "end_date": end_date,
+            "rating": rating,
+            "meta_description": (description[:157] + "...")
+            if description and len(description) > 160
+            else description,
         }
+
     def _parse_date(self, date_obj):
         if not date_obj or not date_obj.get("year"):
             return None
@@ -366,6 +439,7 @@ class Command(BaseCommand):
             return datetime(year, month, day).date()
         except ValueError:
             return None
+
     def _create_fixtures(self, anime_data):
         fixtures = []
         anime_id = 1
@@ -383,15 +457,17 @@ class Command(BaseCommand):
                 for genre_name in item.get("genres", []):
                     if genre_name not in genres_map:
                         genres_map[genre_name] = genre_id
-                        fixtures.append({
-                            "model": "anime.genre",
-                            "pk": genre_id,
-                            "fields": {
-                                "name": genre_name,
-                                "slug": slugify(genre_name),
-                                "description": ""
+                        fixtures.append(
+                            {
+                                "model": "anime.genre",
+                                "pk": genre_id,
+                                "fields": {
+                                    "name": genre_name,
+                                    "slug": slugify(genre_name),
+                                    "description": "",
+                                },
                             }
-                        })
+                        )
                         genre_id += 1
                     genre_ids.append(genres_map[genre_name])
                 studio_pk = None
@@ -400,15 +476,17 @@ class Command(BaseCommand):
                     studio_name = studios[0].get("name")
                     if studio_name and studio_name not in studios_map:
                         studios_map[studio_name] = studio_id
-                        fixtures.append({
-                            "model": "anime.studio",
-                            "pk": studio_id,
-                            "fields": {
-                                "name": studio_name,
-                                "founded_date": None,
-                                "website": ""
+                        fixtures.append(
+                            {
+                                "model": "anime.studio",
+                                "pk": studio_id,
+                                "fields": {
+                                    "name": studio_name,
+                                    "founded_date": None,
+                                    "website": "",
+                                },
                             }
-                        })
+                        )
                         studio_pk = studio_id
                         studio_id += 1
                     elif studio_name:
@@ -416,10 +494,12 @@ class Command(BaseCommand):
                 anime_data_dict = self._prepare_anime_data(
                     item, title, title_native, slugify(title)
                 )
-                if anime_data_dict.get('release_date'):
-                    anime_data_dict['release_date'] = str(anime_data_dict['release_date'])
-                if anime_data_dict.get('end_date'):
-                    anime_data_dict['end_date'] = str(anime_data_dict['end_date'])
+                if anime_data_dict.get("release_date"):
+                    anime_data_dict["release_date"] = str(
+                        anime_data_dict["release_date"]
+                    )
+                if anime_data_dict.get("end_date"):
+                    anime_data_dict["end_date"] = str(anime_data_dict["end_date"])
                 trailer_url = ""
                 trailer = item.get("trailer")
                 if trailer:
@@ -427,9 +507,13 @@ class Command(BaseCommand):
                     trailer_site = trailer.get("site")
                     if trailer_id and trailer_site:
                         if trailer_site.lower() == "youtube":
-                            trailer_url = f"https://www.youtube.com/watch?v={trailer_id}"
+                            trailer_url = (
+                                f"https://www.youtube.com/watch?v={trailer_id}"
+                            )
                         elif trailer_site.lower() == "dailymotion":
-                            trailer_url = f"https://www.dailymotion.com/video/{trailer_id}"
+                            trailer_url = (
+                                f"https://www.dailymotion.com/video/{trailer_id}"
+                            )
                 anime_fixture = {
                     "model": "anime.anime",
                     "pk": anime_id,
@@ -440,18 +524,18 @@ class Command(BaseCommand):
                         "trailer_url": trailer_url,
                         "studio": studio_pk,
                         "genres": genre_ids,
-                    }
+                    },
                 }
                 fixtures.append(anime_fixture)
                 anime_id += 1
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f'Error creating fixture: {str(e)}'))
-        output_path = 'anime/fixtures/anime_data.json'
-        os.makedirs('anime/fixtures', exist_ok=True)
-        with open(output_path, 'w', encoding='utf-8') as f:
+                self.stdout.write(self.style.ERROR(f"Error creating fixture: {str(e)}"))
+        output_path = "anime/fixtures/anime_data.json"
+        os.makedirs("anime/fixtures", exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(fixtures, f, indent=2, ensure_ascii=False)
-        self.stdout.write(self.style.SUCCESS(f'\n✓ Fixtures created: {output_path}'))
-        self.stdout.write(f'Total anime: {anime_id - 1}')
-        self.stdout.write(f'Total genres: {genre_id - 1}')
-        self.stdout.write(f'Total studios: {studio_id - 1}')
-        self.stdout.write(f'\nLoad with: python manage.py loaddata anime_data.json')
+        self.stdout.write(self.style.SUCCESS(f"\n✓ Fixtures created: {output_path}"))
+        self.stdout.write(f"Total anime: {anime_id - 1}")
+        self.stdout.write(f"Total genres: {genre_id - 1}")
+        self.stdout.write(f"Total studios: {studio_id - 1}")
+        self.stdout.write(f"\nLoad with: python manage.py loaddata anime_data.json")
