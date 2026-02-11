@@ -182,7 +182,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
 
     return (
         <div className="bg-dark-100 rounded-xl border border-gray-800 animate-fade-in mb-3 overflow-hidden">
-            <div className="flex">
+            <div className="flex items-start">
                 {/* Left Column: Main Content */}
                 <div className="flex-1 p-4 min-w-0">
                     {/* Header */}
@@ -360,15 +360,15 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                     </div>
 
                     {/* Comments Section */}
-                    <ReviewComments 
-                        reviewId={review.id} 
-                        commentCount={review.comment_count} 
+                    <ReviewComments
+                        reviewId={review.id}
+                        commentCount={review.comment_count}
                     />
                 </div>
 
                 {/* Right Column: Scorecard (desktop only) */}
                 {hasSubRatings && (
-                    <div className="hidden lg:flex w-44 shrink-0 bg-dark-50/50 border-l border-gray-800/50 p-3 flex-col justify-center gap-2">
+                    <div className="hidden lg:flex w-44 shrink-0 bg-dark-50/50 border-l border-gray-800/50 p-4 flex-col gap-4">
                         <ScoreRow icon={Book} label="Story" value={review.rating_story} accentColor={accentColor} />
                         <ScoreRow icon={Film} label="Animation" value={review.rating_animation} accentColor={accentColor} />
                         <ScoreRow icon={Music} label="Music" value={review.rating_music} accentColor={accentColor} />
