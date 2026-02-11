@@ -36,7 +36,7 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
     volumes:
       - .:/app
-      - /app/.venv # Isolate virtual environment
+      - /app/.venv
     deploy:
       resources:
         limits:
@@ -131,7 +131,7 @@ services:
       DJANGO_SETTINGS_MODULE: "root.settings"
     volumes:
       - .:/app
-      - /app/.venv # Isolate virtual environment
+      - /app/.venv
     depends_on:
       - web
       - redis

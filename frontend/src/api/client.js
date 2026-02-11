@@ -156,4 +156,5 @@ export const followApi = {
     getFollowers: (username, params) => api.get(`/follows/followers/${username}/`, { params }),
     getFollowing: (username, params) => api.get(`/follows/following/${username}/`, { params }),
     check: (username) => api.get(`/follows/check/${username}/`),
+    getFriendsWatching: (animeId) => api.get('/follows/friends/watching/', { params: { anime_id: animeId } }),
 };

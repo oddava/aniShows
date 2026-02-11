@@ -141,19 +141,46 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     // Compact inline design
     if (!currentStatus) {
         return (
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-dark-100 text-gray-300 border border-gray-700 hover:border-accent hover:text-white"
-            >
-                {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                    <Plus className="w-5 h-5" />
+            <div className="relative w-full">
+                <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    disabled={isLoading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-dark-100 text-gray-300 border border-gray-700 hover:border-accent hover:text-white"
+                >
+                    {isLoading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                        <Plus className="w-5 h-5" />
+                    )}
+                    Add to List
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isOpen && (
+                    <>
+                        <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setIsOpen(false)}
+                        />
+                        <div className="absolute top-full left-0 mt-2 w-48 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden animate-fade-in py-1">
+                            {STATUS_OPTIONS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    onClick={() => handleStatusChange(option.value)}
+                                    className="w-full px-4 py-2.5 text-left flex items-center gap-3 transition-all group hover:bg-white/5"
+                                >
+                                    <div className={`w-7 h-7 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-30 transition-all`}>
+                                        <option.icon className={`w-3.5 h-3.5 ${option.color.replace('bg-', 'text-')}`} />
+                                    </div>
+                                    <span className="font-semibold text-sm text-gray-300 group-hover:text-white">
+                                        {option.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </>
                 )}
-                Add to List
-                <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
+            </div>
         );
     }
 
@@ -253,11 +280,10 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             <div className="mt-2 relative h-2 bg-dark-200 rounded-full overflow-hidden">
                 <div
                     style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                    className={`h-full transition-all duration-500 ${
-                        totalEpisodes > 0 && episodesWatched >= totalEpisodes 
-                            ? 'bg-green-500' 
-                            : 'bg-accent'
-                    }`}
+                    className={`h-full transition-all duration-500 ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
+                        ? 'bg-green-500'
+                        : 'bg-accent'
+                        }`}
                 />
             </div>
         </div>

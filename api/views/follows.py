@@ -1,6 +1,7 @@
 """
 Views for handling user following/followers functionality.
 """
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,8 +10,13 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 import logging
 
-from users.models import UserFollow, UserProfile
-from api.serializers import FollowSerializer, UserFollowListSerializer
+from users.models import UserFollow, UserProfile, UserAnimeList
+from anime.models import Anime
+from api.serializers import (
+    FollowSerializer,
+    UserFollowListSerializer,
+    FriendWatchingSerializer,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -171,3 +177,54 @@ class FollowViewSet(viewsets.GenericViewSet):
         ).exists()
 
         return Response({"is_following": is_following})
+
+    @action(
+        detail=False,
+        methods=["GET"],
+        url_path="friends/watching",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def friends_watching(self, request):
+        """Get friends (mutual follows) who are watching a specific anime"""
+        anime_id = request.query_params.get("anime_id")
+        if not anime_id:
+            return Response(
+                {"detail": "anime_id parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify anime exists
+        anime = get_object_or_404(Anime, id=anime_id)
+
+        # Find mutual follows (friends): users I follow AND who follow me back
+        # First, get all users I follow
+        following_ids = list(
+            UserFollow.objects.filter(follower=request.user).values_list(
+                "following_id", flat=True
+            )
+        )
+
+        if not following_ids:
+            return Response([])
+
+        # Then, get all users who follow me (that I also follow back)
+        friends_ids = list(
+            UserFollow.objects.filter(
+                follower__in=following_ids, following=request.user
+            ).values_list("follower_id", flat=True)
+        )
+
+        if not friends_ids:
+            return Response([])
+
+        # Get friends who have this anime in their list
+        friends_watching = (
+            UserAnimeList.objects.filter(user__in=friends_ids, anime=anime)
+            .select_related("user__userprofile", "anime")
+            .order_by("-updated_at")
+        )
+
+        serializer = FriendWatchingSerializer(
+            friends_watching, many=True, context={"request": request}
+        )
+        return Response(serializer.data)
