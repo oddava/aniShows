@@ -116,7 +116,7 @@ export default function Home() {
                             className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-70' : 'opacity-0'}`}
                         >
                             <img
-                                src={getOptimizedImageUrl(anime, 'banner', 'large')}
+                                src={getImageUrl(anime.banner_image || anime.cover_image)}
                                 srcSet={getImageSrcSet(anime, 'banner')}
                                 sizes="100vw"
                                 alt=""
