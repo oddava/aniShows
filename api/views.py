@@ -52,6 +52,31 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
 
     lookup_field = "slug"
 
+    def get_object(self):
+        """Override to support lookup by both slug and anilist_id"""
+        queryset = self.get_queryset()
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup_value = self.kwargs.get(lookup_url_kwarg)
+
+        if lookup_value:
+            # Try slug first
+            try:
+                obj = queryset.get(slug=lookup_value)
+                return obj
+            except Anime.DoesNotExist:
+                pass
+
+            # Try anilist_id if lookup_value is numeric
+            if lookup_value.isdigit():
+                try:
+                    obj = queryset.get(anilist_id=int(lookup_value))
+                    return obj
+                except Anime.DoesNotExist:
+                    pass
+
+        # Fall back to default behavior (will raise 404)
+        return super().get_object()
+
     def get_queryset(self):
         queryset = Anime.objects.select_related("studio").prefetch_related("genres")
 
