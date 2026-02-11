@@ -7,6 +7,7 @@ from anime.models import (
     Studio,
     UserFavorite,
     Review,
+    ReviewComment,
     Character,
     Staff,
     AnimeCharacter,
@@ -25,6 +26,7 @@ MAX_BANNER_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 MAX_BIO_LENGTH = 1000
 MAX_REVIEW_LENGTH = 5000
+MAX_COMMENT_LENGTH = 2000
 
 
 def validate_image_content(file, max_size, field_name):
@@ -951,6 +953,7 @@ class ReviewSerializer(serializers.ModelSerializer):
     is_completed = serializers.BooleanField(read_only=True, source="_is_completed")
     helpful_count = serializers.IntegerField(read_only=True, source="_helpful_count")
     user_vote = serializers.SerializerMethodField()
+    comment_count = serializers.IntegerField(read_only=True, source="_comment_count")
 
     class Meta:
         model = Review
@@ -969,6 +972,7 @@ class ReviewSerializer(serializers.ModelSerializer):
             "is_completed",
             "helpful_count",
             "user_vote",
+            "comment_count",
             "created_at",
             "updated_at",
         ]
@@ -993,6 +997,64 @@ class ReviewSerializer(serializers.ModelSerializer):
             if vote:
                 return vote.is_helpful
         return None
+
+
+class ReviewCommentSerializer(serializers.ModelSerializer):
+    """Serializer for review comments with soft delete support"""
+
+    user = UserSerializer(read_only=True)
+    text = serializers.CharField(
+        required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH
+    )
+    is_owner = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReviewComment
+        fields = [
+            "id",
+            "user",
+            "text",
+            "is_deleted",
+            "is_owner",
+            "can_delete",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user", "is_deleted", "created_at", "updated_at"]
+
+    def validate_text(self, value):
+        """Sanitize comment text to prevent XSS."""
+        if value:
+            return escape(value.strip())
+        return value
+
+    def get_is_owner(self, obj):
+        """Check if current user is the comment author"""
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return obj.user == request.user
+        return False
+
+    def get_can_delete(self, obj):
+        """Check if current user can delete this comment
+
+        Users can delete their own comments, and review owners can delete
+        any comments on their reviews.
+        """
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+
+        # Comment author can delete
+        if obj.user == request.user:
+            return True
+
+        # Review owner can delete any comment on their review
+        if obj.review.user == request.user:
+            return True
+
+        return False
 
 
 class ChangePasswordSerializer(serializers.Serializer):

@@ -351,6 +351,35 @@ class ReviewVote(Model):
         return f"{self.user.username} voted {vote_type} on review {self.review.id}"
 
 
+class ReviewComment(Model):
+    """Comments on reviews with soft delete support"""
+
+    user = ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="review_comments"
+    )
+    review = ForeignKey(Review, on_delete=CASCADE, related_name="comments")
+    text = TextField(max_length=2000)
+    is_deleted = BooleanField(default=False)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["review", "-created_at"]),
+            Index(fields=["user", "-created_at"]),
+            Index(fields=["review", "is_deleted"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}'s comment on review {self.review.id}"
+
+    def soft_delete(self):
+        """Soft delete the comment"""
+        self.is_deleted = True
+        self.save(update_fields=["is_deleted", "updated_at"])
+
+
 class UserRecommendation(Model):
     """Precomputed anime recommendations for users"""
 

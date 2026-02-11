@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewApi } from '../api/client';
+import ReviewComments from './ReviewComments';
 
 // Generate consistent color from string
 const stringToColor = (str) => {
@@ -124,7 +125,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     });
 
     const handleVote = () => {
-        if (!isAuthenticated || isOwner) return;
+        if (!isAuthenticated || isOwner || voteMutation.isPending) return;
         voteMutation.mutate();
     };
 
@@ -357,6 +358,12 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                             {helpfulCount > 0 && <span>({helpfulCount})</span>}
                         </button>
                     </div>
+
+                    {/* Comments Section */}
+                    <ReviewComments 
+                        reviewId={review.id} 
+                        commentCount={review.comment_count} 
+                    />
                 </div>
 
                 {/* Right Column: Scorecard (desktop only) */}

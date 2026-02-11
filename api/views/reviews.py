@@ -7,9 +7,9 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 import logging
 
-from anime.models import Anime, Review, ReviewVote
+from anime.models import Anime, Review, ReviewVote, ReviewComment
 from users.models import UserAnimeList
-from api.serializers import ReviewSerializer
+from api.serializers import ReviewSerializer, ReviewCommentSerializer
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -22,9 +22,10 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Review.objects.select_related("user", "user__userprofile", "anime")
 
-        # Always annotate helpful_count to avoid N+1 queries
+        # Always annotate helpful_count and comment_count to avoid N+1 queries
         queryset = queryset.annotate(
-            _helpful_count=Count("votes", filter=Q(votes__is_helpful=True))
+            _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
+            _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
         )
 
         # Annotate is_completed to avoid N+1 queries
@@ -231,3 +232,121 @@ class ReviewViewSet(viewsets.ModelViewSet):
             # Create new vote
             ReviewVote.objects.create(user=user, review=review, is_helpful=is_helpful)
             return Response({"voted": True, "is_helpful": is_helpful})
+
+    @action(detail=True, methods=["get"])
+    def comments(self, request, pk=None):
+        """Get paginated comments for a review"""
+        review = self.get_object()
+
+        # Get pagination parameters
+        page = int(request.query_params.get("page", 1))
+        page_size = int(request.query_params.get("page_size", 10))
+
+        # Filter out soft-deleted comments
+        comments = (
+            review.comments.filter(is_deleted=False)
+            .select_related("user", "user__userprofile")
+            .order_by("-created_at")
+        )
+
+        # Manual pagination
+        start = (page - 1) * page_size
+        end = start + page_size
+        total = comments.count()
+
+        paginated_comments = comments[start:end]
+
+        serializer = ReviewCommentSerializer(
+            paginated_comments, many=True, context={"request": request}
+        )
+
+        return Response(
+            {
+                "results": serializer.data,
+                "count": total,
+                "next": page * page_size < total,
+                "page": page,
+            }
+        )
+
+    @action(
+        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
+    )
+    def add_comment(self, request, pk=None):
+        """Add a comment to a review"""
+        review = self.get_object()
+        user = request.user
+
+        text = request.data.get("text", "").strip()
+        if not text:
+            return Response(
+                {"text": ["Comment text is required."]},
+                status=400,
+            )
+
+        comment = ReviewComment.objects.create(user=user, review=review, text=text)
+
+        serializer = ReviewCommentSerializer(comment, context={"request": request})
+        return Response(serializer.data, status=201)
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="comments/(?P<comment_id>[^/.]+)",
+    )
+    def update_comment(self, request, pk=None, comment_id=None):
+        """Update a comment"""
+        review = self.get_object()
+
+        try:
+            comment = review.comments.get(id=comment_id)
+        except ReviewComment.DoesNotExist:
+            return Response(
+                {"detail": "Comment not found."},
+                status=404,
+            )
+
+        # Only comment author can edit
+        if comment.user != request.user:
+            raise PermissionDenied("You can only edit your own comments.")
+
+        text = request.data.get("text", "").strip()
+        if not text:
+            return Response(
+                {"text": ["Comment text is required."]},
+                status=400,
+            )
+
+        comment.text = text
+        comment.save()
+
+        serializer = ReviewCommentSerializer(comment, context={"request": request})
+        return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="comments/(?P<comment_id>[^/.]+)/delete",
+    )
+    def delete_comment(self, request, pk=None, comment_id=None):
+        """Soft delete a comment"""
+        review = self.get_object()
+
+        try:
+            comment = review.comments.get(id=comment_id)
+        except ReviewComment.DoesNotExist:
+            return Response(
+                {"detail": "Comment not found."},
+                status=404,
+            )
+
+        # Comment author or review owner can delete
+        if comment.user != request.user and review.user != request.user:
+            raise PermissionDenied("You don't have permission to delete this comment.")
+
+        # Soft delete
+        comment.soft_delete()
+
+        return Response({"deleted": True})
