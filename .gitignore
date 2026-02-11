@@ -184,3 +184,5 @@ backups-data/
 
 # Django ImageKit generated thumbnails
 CACHE/
+anime/banners/
+anime/covers/
