@@ -42,5 +42,11 @@
     "terser": "^5.46.0",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.1"
+  },
+  "overrides": {
+    "react-helmet-async": {
+      "react": "^19.0.0",
+      "react-dom": "^19.0.0"
+    }
   }
 }
