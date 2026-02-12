@@ -7,9 +7,9 @@ ENV ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY package*.json .npmrc* ./
 
-RUN npm install --legacy-peer-deps
+RUN npm install
 
 COPY . .
 

@@ -25,7 +25,11 @@
     handle_path /media/CACHE/* {
         root * /app/CACHE
         file_server
-        header Cache-Control "public, max-age=31536000, immutable"
+        header {
+            Access-Control-Allow-Origin "*"
+            Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+            Cache-Control "public, max-age=31536000, immutable"
+        }
     }
 
     # MinIO Media - proxy /media/* to MinIO bucket
@@ -33,6 +37,10 @@
         rewrite * /anishows-media/media{path}
         reverse_proxy minio:9000 {
             header_up Host {upstream_hostport}
+        }
+        header {
+            Access-Control-Allow-Origin "*"
+            Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
         }
     }
 
