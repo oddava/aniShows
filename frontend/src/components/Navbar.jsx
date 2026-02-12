@@ -6,7 +6,7 @@ import { authApi, animeApi } from '../api/client';
 import Fuse from 'fuse.js';
 
 // Navigation Item Component with Active State
-const NavItem = ({ to, icon: Icon, label, end = false }) => {
+const NavItem = ({ to, icon: Icon, label, end = false }) => {  // eslint-disable-line no-unused-vars
     return (
         <NavLink
             to={to}
@@ -132,7 +132,7 @@ const useFuzzySearch = (data, options = {}) => {
 export default function Navbar() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);  // eslint-disable-line no-unused-vars
     const [searchQuery, setSearchQuery] = useState('');
     const [searchSuggestions, setSearchSuggestions] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -159,7 +159,7 @@ export default function Navbar() {
         { id: 3, type: 'system', message: 'Welcome to AniShows!', time: '1 day ago', read: true },
     ]);
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = notifications.filter(n => !n.read).length;  // eslint-disable-line no-unused-vars
 
     // Initialize fuzzy search with cache - options are now inside the hook
     const { search: fuzzySearch } = useFuzzySearch(allAnimeCache, {});

@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://anishows.com/sitemap.xml
+
+# Disallow admin routes
+Disallow: /admin/
+Disallow: /admin
+
+# Disallow private user routes
+Disallow: /settings
+Disallow: /import
+Disallow: /export
+
+# Disallow auth callback routes
+Disallow: /auth/
+Disallow: /verify-email/
+Disallow: /confirm-email-change/
+Disallow: /reset-password/
+Disallow: /verification-pending
+
+# Crawl-delay to be respectful
+Crawl-delay: 1

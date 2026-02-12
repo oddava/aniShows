@@ -19,6 +19,7 @@ import { getImageUrl } from '../utils/imageUtils';
 import StatusSelector from '../components/StatusSelector';
 import { AnimeCardSkeleton } from '../components/AnimeCard';
 import { Link } from 'react-router-dom';
+import SEO from '../components/SEO';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -119,15 +120,15 @@ const ScheduleCard = ({ anime, onUpdate }) => {
   const { isAuthenticated } = useAuth();
   const timeRemaining = getTimeRemaining(anime.next_airing_date);
   const isUrgent = isWithin24Hours(anime.next_airing_date);
-  const hasAired = timeRemaining === 'Aired';
+  const hasAired = new Date(anime.next_airing_date) < new Date();
 
   return (
     <div
       className={`
-        group relative bg-dark-100 rounded-xl overflow-hidden border transition-all duration-300
+        group relative bg-dark-100 rounded-xl border overflow-hidden transition-all duration-300
         ${isUrgent
-          ? 'border-green-500/50 shadow-lg shadow-green-500/10 hover:shadow-green-500/20'
-          : 'border-gray-800 hover:border-accent/40'
+          ? 'border-green-500/30 shadow-lg shadow-green-500/5'
+          : 'border-gray-800 hover:border-gray-700'
         }
       `}
     >
@@ -301,7 +302,7 @@ export default function Schedule() {
     const year = currentWeek.getFullYear();
     const month = String(currentWeek.getMonth() + 1).padStart(2, '0');
     const day = String(currentWeek.getDate()).padStart(2, '0');
-    params.set('week', `${year}-${month}-${day}`);
+    params.set('week', `${year} -${month} -${day} `);
     params.set('day', DAY_NAMES[selectedDay].toLowerCase());
     setSearchParams(params, { replace: true });
   }, [currentWeek, selectedDay, setSearchParams]);
@@ -394,135 +395,141 @@ export default function Schedule() {
 
   if (error) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-400 mb-4">Failed to load schedule</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="btn-primary"
-          >
-            Retry
-          </button>
+      <>
+        <SEO page="schedule" />
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-red-400 mb-4">Failed to load schedule</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="btn-primary"
+            >
+              Retry
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen pb-20">
-      {/* Header */}
-      <div className="bg-dark-100/50 border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center">
-                  <Tv className="w-5 h-5 text-accent" />
+    <>
+      <SEO page="schedule" />
+      <div className="min-h-screen pb-20">
+        {/* Header */}
+        <div className="bg-dark-100/50 border-b border-gray-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center">
+                    <Tv className="w-5 h-5 text-accent" />
+                  </div>
+                  <h1 className="text-3xl font-bold text-white">Anime Schedule</h1>
                 </div>
-                <h1 className="text-3xl font-bold text-white">Anime Schedule</h1>
+                <p className="text-gray-400">
+                  Track your weekly anime releases and never miss an episode
+                </p>
               </div>
-              <p className="text-gray-400">
-                Track your weekly anime releases and never miss an episode
+
+              {/* View Toggle */}
+              <div className="flex items-center gap-2 bg-dark-100 rounded-xl p-1 border border-gray-800">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p - 2 rounded - lg transition - all ${viewMode === 'grid'
+                    ? 'bg-accent text-white'
+                    : 'text-gray-400 hover:text-white'
+                    } `}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p - 2 rounded - lg transition - all ${viewMode === 'list'
+                    ? 'bg-accent text-white'
+                    : 'text-gray-400 hover:text-white'
+                    } `}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Week Navigator */}
+          <WeekNavigator
+            currentWeek={currentWeek}
+            onPrevWeek={handlePrevWeek}
+            onNextWeek={handleNextWeek}
+            onToday={handleToday}
+          />
+
+          {/* Day Selector */}
+          <div className="mb-8">
+            <DaySelector
+              days={DAY_NAMES}
+              selectedDay={selectedDay}
+              onSelect={setSelectedDay}
+              animeCounts={animeCounts}
+            />
+          </div>
+
+          {/* Selected Day Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-white">
+              {DAY_NAMES[selectedDay]}
+              <span className="text-gray-500 font-normal ml-2">
+                {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}
+                {formatDate(new Date(currentWeek.getTime() + ((selectedDay + 6) % 7) * 24 * 60 * 60 * 1000))}
+              </span>
+            </h2>
+
+            <div className="text-sm text-gray-400">
+              {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
+            </div>
+          </div>
+
+          {/* Anime Grid/List */}
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {Array(10).fill(null).map((_, i) => (
+                <AnimeCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : selectedDayAnime.length > 0 ? (
+            <div className={`
+            ${viewMode === 'grid'
+                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'
+                : 'flex flex-col gap-3'
+              }
+  `}>
+              {selectedDayAnime.map((anime) => (
+                <ScheduleCard
+                  key={anime.id}
+                  anime={anime}
+                  onUpdate={handleListUpdate}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20">
+              <div className="w-20 h-20 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Bell className="w-8 h-8 text-gray-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                No episodes scheduled
+              </h3>
+              <p className="text-gray-400 max-w-md mx-auto">
+                There are no anime episodes airing on {DAY_NAMES[selectedDay]}.
+                Check other days or weeks to see upcoming releases.
               </p>
             </div>
-
-            {/* View Toggle */}
-            <div className="flex items-center gap-2 bg-dark-100 rounded-xl p-1 border border-gray-800">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'grid'
-                  ? 'bg-accent text-white'
-                  : 'text-gray-400 hover:text-white'
-                  }`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'list'
-                  ? 'bg-accent text-white'
-                  : 'text-gray-400 hover:text-white'
-                  }`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Week Navigator */}
-        <WeekNavigator
-          currentWeek={currentWeek}
-          onPrevWeek={handlePrevWeek}
-          onNextWeek={handleNextWeek}
-          onToday={handleToday}
-        />
-
-        {/* Day Selector */}
-        <div className="mb-8">
-          <DaySelector
-            days={DAY_NAMES}
-            selectedDay={selectedDay}
-            onSelect={setSelectedDay}
-            animeCounts={animeCounts}
-          />
-        </div>
-
-        {/* Selected Day Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">
-            {DAY_NAMES[selectedDay]}
-            <span className="text-gray-500 font-normal ml-2">
-              {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}
-              {formatDate(new Date(currentWeek.getTime() + ((selectedDay + 6) % 7) * 24 * 60 * 60 * 1000))}
-            </span>
-          </h2>
-
-          <div className="text-sm text-gray-400">
-            {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
-          </div>
-        </div>
-
-        {/* Anime Grid/List */}
-        {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {Array(10).fill(null).map((_, i) => (
-              <AnimeCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : selectedDayAnime.length > 0 ? (
-          <div className={`
-            ${viewMode === 'grid'
-              ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'
-              : 'flex flex-col gap-3'
-            }
-          `}>
-            {selectedDayAnime.map((anime) => (
-              <ScheduleCard
-                key={anime.id}
-                anime={anime}
-                onUpdate={handleListUpdate}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Bell className="w-8 h-8 text-gray-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">
-              No episodes scheduled
-            </h3>
-            <p className="text-gray-400 max-w-md mx-auto">
-              There are no anime episodes airing on {DAY_NAMES[selectedDay]}.
-              Check other days or weeks to see upcoming releases.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

@@ -41,7 +41,7 @@ const AdminLogs = () => {
       const response = await api.get(`/admin/logs/?${params}`);
       setLogs(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
+    } catch {
       console.error('Failed to fetch logs:', err);
       toast.error('Failed to load logs');
     }
@@ -51,7 +51,7 @@ const AdminLogs = () => {
     try {
       const response = await api.get('/admin/logs/stats/');
       setStats(response.data);
-    } catch (err) {
+    } catch {
       console.error('Failed to fetch stats:', err);
     }
   }, []);

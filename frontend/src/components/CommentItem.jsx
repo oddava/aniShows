@@ -14,7 +14,7 @@ const CommentItem = ({
   onSaveEdit,
   onCancelEdit
 }) => {
-  const { user } = useAuth();
+  useAuth();
   const [showMenu, setShowMenu] = useState(false);
 
   // Don't render deleted comments

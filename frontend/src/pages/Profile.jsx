@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { User, Heart, List, MessageSquare, Lock, BarChart3, Search, LayoutGrid, LayoutList, Clock, Star, Tv, Link as LinkIcon, ExternalLink, Award, Trophy, Zap, Sparkles, Plus, Flame, TrendingUp, Target } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
@@ -119,6 +119,7 @@ export default function Profile({ forcedUsername }) {
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [followersModalType, setFollowersModalType] = useState('followers');
     const [followersCount, setFollowersCount] = useState(0);
+    const initializedFollowers = useRef(false);
     const queryClient = useQueryClient();
 
     const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
@@ -136,9 +137,13 @@ export default function Profile({ forcedUsername }) {
     const displayUser = isPublicView ? publicProfile : currentUser;
     const isPrivate = isPublicView && displayUser?.is_private;
 
+    // Initialize followers count from displayUser when it becomes available
+    // This is intentionally done once on mount to avoid cascading renders
     useEffect(() => {
-        if (displayUser?.followers_count !== undefined) {
+        if (!initializedFollowers.current && displayUser?.followers_count !== undefined) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setFollowersCount(displayUser.followers_count);
+            initializedFollowers.current = true;
         }
     }, [displayUser?.followers_count]);
 
@@ -573,7 +578,7 @@ export default function Profile({ forcedUsername }) {
                         <>
                             <img 
                                 src={displayUser.banner} 
-                                alt="Banner" 
+                                alt={`${displayUser.username}'s profile banner`} 
                                 className="w-full h-full object-cover scale-105" 
                             />
                             <div className="absolute inset-0 bg-gradient-to-b from-dark/30 via-transparent to-dark" />

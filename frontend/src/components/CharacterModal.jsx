@@ -69,18 +69,20 @@ export default function CharacterModal({ role, onClose, accentColor }) {
         };
     }, [onClose]);
 
-    if (!role) return null;
-
-    const { character, voice_actor, role: characterRole } = role;
+    const { character, voice_actor, role: characterRole } = role || {};
 
     const getImageUrl = (url) => {
         if (!url) return '/placeholder-avatar.png';
         return url;
     };
 
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
     const parsedDescription = useMemo(() => {
+        if (!character) return null;
         return parseMarkdownText(character.description);
-    }, [character.description]);
+    }, [character?.description]);
+
+    if (!role) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">

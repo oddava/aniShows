@@ -45,7 +45,7 @@ const StarInput = ({ label, value, onChange, size = "md" }) => {
                                     const val = handleInteraction(e, index);
                                     setHoverValue(val);
                                 }}
-                                onTouchEnd={(e) => {
+                                onTouchEnd={() => {
                                     // Small delay allows the "tap" to be felt without sticking
                                     setTimeout(() => setHoverValue(0), 100);
                                 }}
@@ -95,10 +95,12 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
     const hasLoaded = useRef(false);
 
     useEffect(() => {
+    // Initialize form data from initialData - intentional setState in effect for form initialization
+    // eslint-disable-next-line react-hooks/set-state-in-effect
         if (hasLoaded.current) return;
 
         if (initialData) {
-            console.log('[ReviewForm] Initializing with data:', initialData);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setRating(initialData.rating || 0);
 
             const loadedSubRatings = {

@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
 import { Home, AlertCircle } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function NotFound() {
     return (
-        <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-4">
+        <>
+            <SEO page="notFound" />
+            <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-4">
             <div className="bg-dark-100 p-8 md:p-12 rounded-2xl border border-gray-800 shadow-xl max-w-lg w-full relative overflow-hidden">
                 {/* Background Decoration */}
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-accent to-purple-500" />
@@ -30,5 +33,6 @@ export default function NotFound() {
                 </Link>
             </div>
         </div>
+        </>
     );
 }

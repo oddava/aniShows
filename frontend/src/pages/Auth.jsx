@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import GoogleLoginButton from '../components/GoogleLoginButton';
+import SEO from '../components/SEO';
 
 export function Login() {
     const [formData, setFormData] = useState({
@@ -59,14 +60,16 @@ export function Login() {
     };
 
     return (
-        <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-                    <p className="text-gray-400">Sign in to continue your anime journey</p>
-                </div>
+        <>
+            <SEO page="login" />
+            <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
+                <div className="w-full max-w-md">
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
+                        <p className="text-gray-400">Sign in to continue your anime journey</p>
+                    </div>
 
-                <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
+                    <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
                     {error && (
                         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
                             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -152,6 +155,7 @@ export function Login() {
                 </div>
             </div>
         </div>
+        </>
     );
 }
 
@@ -229,14 +233,16 @@ export function Register() {
     };
 
     return (
-        <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
-                    <p className="text-gray-400">Join the community and track your anime</p>
-                </div>
+        <>
+            <SEO page="register" />
+            <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
+                <div className="w-full max-w-md">
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
+                        <p className="text-gray-400">Join the community and track your anime</p>
+                    </div>
 
-                <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
+                    <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
                     {errors.general && (
                         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
                             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -352,5 +358,6 @@ export function Register() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

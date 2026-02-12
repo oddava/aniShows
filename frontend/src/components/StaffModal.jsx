@@ -31,6 +31,19 @@ function parseMarkdownLinks(text) {
 }
 
 export default function StaffModal({ staffRole, onClose, accentColor }) {
+    const { staff, role } = staffRole || {};
+
+    const getImageUrl = (url) => {
+        if (!url) return '/placeholder-avatar.png';
+        return url;
+    };
+
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
+    const parsedDescription = useMemo(() => {
+        if (!staff) return null;
+        return parseMarkdownLinks(staff.description);
+    }, [staff?.description]);
+
     useEffect(() => {
         const handleEscape = (e) => {
             if (e.key === 'Escape') onClose();
@@ -44,17 +57,6 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
     }, [onClose]);
 
     if (!staffRole) return null;
-
-    const { staff, role } = staffRole;
-
-    const getImageUrl = (url) => {
-        if (!url) return '/placeholder-avatar.png';
-        return url;
-    };
-
-    const parsedDescription = useMemo(() => {
-        return parseMarkdownLinks(staff.description);
-    }, [staff.description]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">

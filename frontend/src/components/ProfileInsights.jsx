@@ -313,7 +313,7 @@ export default function ProfileInsights({ username, isPrivate }) {
 
 // Activity data placeholder - requires backend tracking for real data
 // Returns empty array to show the heatmap in empty state
-function generateMockActivityData(listsData) {
+function generateMockActivityData(_listsData) {  // eslint-disable-line no-unused-vars
     // This feature requires backend to track when episodes were watched
     // For now, return empty to show the heatmap structure without fake data
     return [];

@@ -4,6 +4,7 @@ import { Calendar, ChevronLeft, ChevronRight, Clock, Star, Users } from 'lucide-
 import { useState, useEffect, useMemo } from 'react';
 import { animeApi } from '../api/client';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
+import SEO from '../components/SEO';
 
 const SEASONS = [
     { value: 'winter', label: 'Winter', months: 'Jan - Mar', color: 'bg-blue-500' },
@@ -100,7 +101,9 @@ export default function Seasonal() {
     const currentSeasonData = SEASONS.find(s => s.value === selectedSeason);
 
     return (
-        <div className="min-h-screen py-8 px-4">
+        <>
+            <SEO page="seasonal" />
+            <div className="min-h-screen py-8 px-4">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-12">
@@ -242,5 +245,6 @@ export default function Seasonal() {
                 )}
             </div>
         </div>
+        </>
     );
 }

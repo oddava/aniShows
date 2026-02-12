@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, genreApi, studioApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import SEO from '../components/SEO';
 
 // Browse Tabs for quick context switching
 const BROWSE_TABS = [
@@ -338,7 +339,7 @@ export default function Browse() {
         ) || [];
         const displayedGenres = showAllGenres ? filteredGenres : filteredGenres.slice(0, 10);
 
-        const SectionHeader = ({ icon: Icon, title, section, count }) => (
+        const SectionHeader = ({ icon: Icon, title, section, count }) => (  // eslint-disable-line no-unused-vars
             <button
                 onClick={() => toggleSection(section)}
                 className="w-full flex items-center justify-between text-base font-bold text-white mb-3 hover:text-accent transition-colors group"
@@ -651,7 +652,9 @@ export default function Browse() {
 
 
     return (
-        <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4">
+        <>
+            <SEO page="browse" />
+            <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4">
             <div className="max-w-[1600px] mx-auto">
                 {/* Header */}
                 <div className="text-center mb-6 sm:mb-8">
@@ -1046,5 +1049,6 @@ export default function Browse() {
                 </div>
             )}
         </div>
+        </>
     );
 }

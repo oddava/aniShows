@@ -5,7 +5,7 @@ import { Flame } from 'lucide-react';
  * ActivityHeatmap - GitHub-style contribution/watching activity graph
  * Shows user's anime watching activity over the past year
  */
-export default function ActivityHeatmap({ activityData = [], username }) {
+export default function ActivityHeatmap({ activityData = [] }) {
     // Generate the past 52 weeks of dates
     const weeks = useMemo(() => {
         const today = new Date();
@@ -123,7 +123,7 @@ export default function ActivityHeatmap({ activityData = [], username }) {
                 <div className="flex gap-0.5 flex-1 overflow-x-auto scrollbar-hide">
                     {weeks.map((week, weekIndex) => (
                         <div key={weekIndex} className="flex flex-col gap-0.5">
-                            {week.map((day, dayIndex) => (
+                            {week.map((day) => (
                                 <div
                                     key={day.date}
                                     className={`heatmap-cell ${getColorClass(day.count)} transition-all cursor-default`}

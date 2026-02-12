@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { Star, BarChart3, Book, Film, Music, Users, EyeOff, Eye } from 'lucide-react';
 
 // Rating distribution bar
@@ -29,7 +29,7 @@ const RatingBar = ({ stars, count, total, onFilter, isActive, accentColor }) => 
 };
 
 // Average sub-score display
-const AvgSubScore = ({ icon: Icon, label, value }) => {
+const AvgSubScore = ({ icon: Icon, label, value }) => {  // eslint-disable-line no-unused-vars
     if (!value && value !== 0) return null;
     const displayValue = value.toFixed(1);
 

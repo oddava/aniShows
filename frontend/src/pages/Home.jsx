@@ -5,7 +5,8 @@ import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getImageUrl, getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import { getImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import SEO from '../components/SEO';
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
@@ -106,7 +107,9 @@ export default function Home() {
     }, []);
 
     return (
-        <div className="min-h-screen">
+        <>
+            <SEO page="home" />
+            <div className="min-h-screen">
             {/* Hero Section */}
             <section className="relative h-[50vh] sm:h-[60vh] min-h-[400px] sm:min-h-[480px] flex items-center overflow-hidden">
                 <div className="absolute inset-0 bg-dark">
@@ -119,7 +122,7 @@ export default function Home() {
                                 src={getImageUrl(anime.banner_image || anime.cover_image)}
                                 srcSet={getImageSrcSet(anime, 'banner')}
                                 sizes="100vw"
-                                alt=""
+                                alt={`${anime.title} banner image`}
                                 loading={index === 0 ? 'eager' : 'lazy'}
                                 className="w-full h-full object-cover scale-[1.02]"
                             />
@@ -309,6 +312,7 @@ export default function Home() {
                 )}
             </div>
         </div>
+        </>
     );
 }
 

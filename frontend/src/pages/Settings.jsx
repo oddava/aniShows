@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
 import { Link } from 'react-router-dom';
 import { Download, Upload } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Settings() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -79,7 +80,7 @@ export default function Settings() {
             setProfileSuccess('Profile updated successfully!');
             // Reload page to reflect changes in header after a short delay
             setTimeout(() => window.location.reload(), 1500);
-        } catch (err) {
+        } catch {
             console.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
 
@@ -123,7 +124,7 @@ export default function Settings() {
             setOldPassword('');
             setNewPassword('');
             setConfirmPassword('');
-        } catch (err) {
+        } catch {
             console.error('Failed to change password:', err);
             let msg = 'Failed to change password';
             if (err.response?.data) {
@@ -148,7 +149,7 @@ export default function Settings() {
         setIsPrivate(newPrivacy);
         try {
             await authApi.updateProfile({ is_private: newPrivacy });
-        } catch (err) {
+        } catch {
             console.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure
         }
@@ -159,7 +160,7 @@ export default function Settings() {
         try {
             await authApi.resendVerification({ email: user.email });
             setAccountSuccess('Verification email sent!');
-        } catch (err) {
+        } catch {
             setAccountError('Failed to send verification email');
         } finally {
             setIsResending(false);
@@ -183,7 +184,7 @@ export default function Settings() {
             setAccountSuccess('Confirmation email sent to new address!');
             setChangeEmail('');
             setChangeEmailPassword('');
-        } catch (err) {
+        } catch {
             setAccountError(err.response?.data?.error || 'Failed to change email');
         } finally {
             setIsChangingEmail(false);
@@ -205,7 +206,7 @@ export default function Settings() {
             localStorage.removeItem('refresh_token');
             // Force hard reload to reset application state
             window.location.href = '/';
-        } catch (err) {
+        } catch {
             console.error("Delete failed:", err);
             setAccountError(err.response?.data?.error || 'Failed to delete account');
         } finally {
@@ -214,7 +215,9 @@ export default function Settings() {
     };
 
     return (
-        <div className="min-h-screen py-20 px-4">
+        <>
+            <SEO page="settings" />
+            <div className="min-h-screen py-20 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -693,5 +696,6 @@ export default function Settings() {
                 )}
             </div>
         </div>
+        </>
     );
 }

@@ -151,6 +151,7 @@ const OptimizedImage = memo(function OptimizedImage({
  * @param {RefObject} containerRef - React ref to container element
  * @returns {string} - Optimal size key ('small', 'medium', 'large')
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useOptimalImageSize(containerRef) {
   const [size, setSize] = React.useState('medium');
 
@@ -180,6 +181,7 @@ export function useOptimalImageSize(containerRef) {
  * @param {string} preferredSize - 'small', 'medium', 'large', or 'original'
  * @returns {string} - Best available image URL
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function getOptimizedImageUrl(anime, type = 'cover', preferredSize = 'medium') {
   if (!anime) return null;
 

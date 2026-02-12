@@ -14,7 +14,7 @@ const STATUS_OPTIONS = [
     { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
 ];
 
-function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', showProgress = false, lite = false }) {
+function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = false }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 

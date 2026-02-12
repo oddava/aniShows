@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Privacy() {
     return (
-        <div className="min-h-screen py-12 px-4">
+        <>
+            <SEO page="privacy" />
+            <div className="min-h-screen py-12 px-4">
             <div className="max-w-3xl mx-auto">
                 <Link to="/" className="inline-flex items-center text-gray-400 hover:text-white mb-8 transition-colors">
                     <ChevronLeft className="w-5 h-5 mr-1" />
@@ -49,5 +52,6 @@ export default function Privacy() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

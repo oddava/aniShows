@@ -20,7 +20,7 @@ export default function VerificationPending() {
         try {
             await authApi.resendVerification({ email: resendEmail });
             setMessage('If an account exists with this email and is pending verification, a new link has been sent.');
-        } catch (err) {
+        } catch {
             setMessage('Something went wrong. Please try again.');
         } finally {
             setLoading(false);

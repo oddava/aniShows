@@ -44,7 +44,7 @@ api.interceptors.response.use(
                     originalRequest.headers.Authorization = `Bearer ${access}`;
                     return api(originalRequest);
                 }
-            } catch (refreshError) {
+            } catch {
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
                 window.location.href = '/login';

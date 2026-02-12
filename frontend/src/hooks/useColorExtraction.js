@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Custom hook to extract dominant colors from an image URL

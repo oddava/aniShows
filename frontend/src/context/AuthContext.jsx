@@ -7,10 +7,6 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        checkAuth();
-    }, []);
-
     const checkAuth = useCallback(async () => {
         const token = localStorage.getItem('access_token');
         console.log("AuthContext: checkAuth running. Token present:", !!token);
@@ -27,6 +23,11 @@ export function AuthProvider({ children }) {
         }
         setLoading(false);
     }, []);
+
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        checkAuth();
+    }, [checkAuth]);
 
     const login = useCallback(async (username, password) => {
         const response = await authApi.login({ username, password });

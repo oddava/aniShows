@@ -70,7 +70,7 @@ export default function MusicSection({ anime, accentColor }) {
     );
 }
 
-function ThemeItem({ theme, accentColor, number }) {
+function ThemeItem({ theme, number }) {
     return (
         <div className="flex items-center gap-3 p-3 rounded-xl bg-dark-100/50 hover:bg-dark-100 transition-colors group">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-dark-200 text-gray-500 font-bold text-sm">

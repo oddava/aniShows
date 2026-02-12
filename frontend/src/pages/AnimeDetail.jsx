@@ -195,7 +195,7 @@ const InformationBox = ({ anime, className, accentColor }) => {
     );
 };
 
-const InfoRow = ({ icon: Icon, label, value }) => (
+const InfoRow = ({ icon: Icon, label, value }) => (  // eslint-disable-line no-unused-vars
     <div className="flex items-start justify-between gap-4 py-1">
         <div className="flex items-center gap-2 pt-1 shrink-0">
             <Icon className="w-3.5 h-3.5 text-gray-500" />
@@ -253,7 +253,7 @@ export default function AnimeDetail() {
                 try {
                     const url = new URL(lastPage.next);
                     return url.searchParams.get('page');
-                } catch (e) { return undefined; }
+                } catch { return undefined; }
             }
             return undefined;
         },
@@ -887,7 +887,7 @@ export default function AnimeDetail() {
 }
 
 // Tab Components
-function OverviewTab({ anime, related, accentColor }) {
+function OverviewTab({ anime, accentColor }) {  // eslint-disable-line no-unused-vars
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
 
     return (

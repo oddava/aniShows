@@ -10,12 +10,9 @@ import { getImageUrl } from '../utils/imageUtils';
  * Includes quick progress update for Watching tab
  */
 function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, listEntryId, onProgressUpdate }) {
-    if (!anime) return null;
-
     const [isUpdating, setIsUpdating] = useState(false);
     const queryClient = useQueryClient();
-    const progress = anime.episode_count ? (episodesWatched / anime.episode_count) * 100 : 0;
-
+    
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -33,6 +30,10 @@ function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, li
             setIsUpdating(false);
         }
     }, [listEntryId, episodesWatched, isUpdating, queryClient, onProgressUpdate]);
+    
+    if (!anime) return null;
+    
+    const progress = anime.episode_count ? (episodesWatched / anime.episode_count) * 100 : 0;
 
     return (
         <div className="group relative bg-dark-100 rounded-xl border border-gray-800/60 overflow-hidden hover:border-accent/50 transition-all duration-300 card-hover-glow">

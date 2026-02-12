@@ -149,7 +149,7 @@ export default function StatsTab({ anime, accentColor }) {
     );
 }
 
-function StatCard({ icon: Icon, label, value, subtext, accentColor }) {
+function StatCard({ icon: Icon, label, value, subtext, accentColor }) {  // eslint-disable-line no-unused-vars
     return (
         <div className="bg-dark-100/50 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-colors">
             <Icon 
