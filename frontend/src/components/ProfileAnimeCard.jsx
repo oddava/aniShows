@@ -12,7 +12,7 @@ import { getImageUrl } from '../utils/imageUtils';
 function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, listEntryId, onProgressUpdate }) {
     const [isUpdating, setIsUpdating] = useState(false);
     const queryClient = useQueryClient();
-    
+
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -30,9 +30,9 @@ function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, li
             setIsUpdating(false);
         }
     }, [listEntryId, episodesWatched, isUpdating, queryClient, onProgressUpdate]);
-    
+
     if (!anime) return null;
-    
+
     const progress = anime.episode_count ? (episodesWatched / anime.episode_count) * 100 : 0;
 
     return (
@@ -43,7 +43,7 @@ function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, li
                     <img
                         src={getImageUrl(anime.cover_image, anime.title)}
                         alt={anime.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        className="w-full h-full object-cover transition-transform duration-500"
                         loading="lazy"
                     />
 

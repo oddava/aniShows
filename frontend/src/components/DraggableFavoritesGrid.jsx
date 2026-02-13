@@ -116,9 +116,8 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                 onDragLeave={handleDragLeave}
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
-                className={`group relative transition-all duration-200 ${
-                    isOwnProfile ? 'cursor-grab active:cursor-grabbing' : ''
-                } ${dragOverIndex === index ? 'scale-105 ring-2 ring-accent z-10' : ''}`}
+                className={`group relative transition-all duration-200 ${isOwnProfile ? 'cursor-grab active:cursor-grabbing' : ''
+                    } ${dragOverIndex === index ? 'scale-105 ring-2 ring-accent z-10' : ''}`}
             >
                 {/* Drag Handle */}
                 {isOwnProfile && (
@@ -132,12 +131,11 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                 {/* Rank Badge - only for position 2+ */}
                 {!isFeatured && (
                     <div className="absolute top-1.5 right-1.5 z-20">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                            index === 1 ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
-                            index === 2 ? 'bg-gray-400/20 border-gray-400/50 text-gray-300' :
-                            index === 3 ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' :
-                            'bg-dark-100/80 border-white/10 text-gray-400'
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${index === 1 ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
+                                index === 2 ? 'bg-gray-400/20 border-gray-400/50 text-gray-300' :
+                                    index === 3 ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' :
+                                        'bg-dark-100/80 border-white/10 text-gray-400'
+                            }`}>
                             {index + 1}
                         </div>
                     </div>
@@ -166,15 +164,14 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                         <img
                             src={fav.anime?.cover_image}
                             alt={fav.anime?.title}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            className="w-full h-full object-cover transition-transform duration-500"
                             loading="lazy"
                             draggable={false}
                         />
-                        
+
                         {/* Hover Stats Overlay */}
-                        <div className={`absolute inset-0 bg-gradient-to-t from-dark/95 via-dark/50 to-transparent transition-opacity duration-300 flex flex-col justify-end p-2 ${
-                            hoveredIndex === index ? 'opacity-100' : 'opacity-0'
-                        }`}>
+                        <div className={`absolute inset-0 bg-gradient-to-t from-dark/95 via-dark/50 to-transparent transition-opacity duration-300 flex flex-col justify-end p-2 ${hoveredIndex === index ? 'opacity-100' : 'opacity-0'
+                            }`}>
                             {listStatus ? (
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-1.5">
@@ -201,9 +198,8 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
 
                         {/* Rating Badge - hidden on hover */}
                         {fav.anime?.rating && (
-                            <div className={`absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[10px] border border-white/10 transition-opacity duration-300 ${
-                                hoveredIndex === index ? 'opacity-0' : 'opacity-100'
-                            }`}>
+                            <div className={`absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[10px] border border-white/10 transition-opacity duration-300 ${hoveredIndex === index ? 'opacity-0' : 'opacity-100'
+                                }`}>
                                 <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
                                 <span className="text-white font-bold">{fav.anime.rating}</span>
                             </div>
@@ -212,9 +208,8 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
 
                     {/* Card Info */}
                     <div className="p-2">
-                        <h3 className={`font-medium text-white line-clamp-2 leading-tight group-hover:text-accent transition-colors ${
-                            isFeatured ? 'text-xs font-bold' : 'text-xs'
-                        }`}>
+                        <h3 className={`font-medium text-white line-clamp-2 leading-tight group-hover:text-accent transition-colors ${isFeatured ? 'text-xs font-bold' : 'text-xs'
+                            }`}>
                             {fav.anime?.title}
                         </h3>
                         <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-1">

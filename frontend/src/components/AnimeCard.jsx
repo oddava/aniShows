@@ -14,7 +14,7 @@ const STATUS_OPTIONS = [
     { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
 ];
 
-function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = false }) {
+function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = false, priority = false, index = 0 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
@@ -41,6 +41,14 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = fa
     );
 
     const episodesWatched = localEpisodesWatched;
+
+    // Determine loading strategy based on priority and index
+    const loadingStrategy = useMemo(() => {
+        if (priority || index < 6) {
+            return { loading: 'eager', decoding: 'sync' };
+        }
+        return { loading: 'lazy', decoding: 'async' };
+    }, [priority, index]);
 
     // Memoized handlers
     const handleFavorite = useCallback(async (e) => {
@@ -138,8 +146,9 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = fa
                     srcSet={imageSrcSet}
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
                     alt={anime.title}
-                    loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading={loadingStrategy.loading}
+                    decoding={loadingStrategy.decoding}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 image-fade-in"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="absolute bottom-2 left-2 right-2">
@@ -162,8 +171,9 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = fa
                             srcSet={imageSrcSet}
                             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
                             alt={anime.title}
-                            loading="lazy"
-                            className="w-full h-full object-cover"
+                            loading={loadingStrategy.loading}
+                            decoding={loadingStrategy.decoding}
+                            className="w-full h-full object-cover image-fade-in"
                         />
                     </Link>
 
@@ -310,6 +320,8 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.rank !== nextProps.rank) return false;
     if (prevProps.titleLanguage !== nextProps.titleLanguage) return false;
     if (prevProps.lite !== nextProps.lite) return false;
+    if (prevProps.priority !== nextProps.priority) return false;
+    if (prevProps.index !== nextProps.index) return false;
     if (prevProps.anime.is_favorite !== nextProps.anime.is_favorite) return false;
     
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;

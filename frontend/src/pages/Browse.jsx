@@ -2,9 +2,14 @@ import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, SlidersHorizontal, ChevronDown, ChevronUp, X, Grid3X3, List, LayoutGrid, Filter, ChevronRight, Star, Building2, Calendar, Tv, Plus, TrendingUp, Play, Trophy, Clock, Sparkles, ArrowDownAZ, Users, Eye } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
+import AnimeCard from '../components/AnimeCard';
+import { GridSkeleton, ListSkeleton, MinimalSkeleton } from '../components/skeletons';
+import VirtualizedAnimeList from '../components/VirtualizedAnimeList';
+import { LoadingBar } from '../components/LoadingBar';
 import { animeApi, genreApi, studioApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useSkeletonCount } from '../hooks/useSkeletonCount';
+import { usePrefetchAnime } from '../hooks/usePrefetchAnime';
 import SEO from '../components/SEO';
 
 // Browse Tabs for quick context switching
@@ -75,6 +80,12 @@ export default function Browse() {
     const [showAllGenres, setShowAllGenres] = useState(false);
     const [isTabSwitching, setIsTabSwitching] = useState(false);
     const [minLoadingTime, setMinLoadingTime] = useState(false);
+
+    // Dynamic skeleton count based on viewport and view mode
+    const skeletonCount = useSkeletonCount(viewMode);
+
+    // Prefetch hook for next pages
+    const { prefetchNextPage } = usePrefetchAnime();
 
     // Local filter state (not applied until Apply button clicked)
     const [localFilters, setLocalFilters] = useState({
@@ -401,8 +412,10 @@ export default function Browse() {
 
 
 
-    // Infinite scroll with IntersectionObserver
+    // Infinite scroll with IntersectionObserver and prefetching
     const loadMoreRef = useRef(null);
+    const prefetchTriggeredRef = useRef(false);
+    
     useEffect(() => {
         // Don't observe during tab switching
         if (isTabSwitching) return;
@@ -411,9 +424,33 @@ export default function Browse() {
             (entries) => {
                 if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
                     fetchNextPage();
+                    
+                    // Prefetch the next page after this one
+                    if (!prefetchTriggeredRef.current) {
+                        prefetchTriggeredRef.current = true;
+                        const nextPage = data?.pages.length + 2; // +2 because we just fetched +1
+                        prefetchNextPage({
+                            genres: currentGenres,
+                            sort: currentSort,
+                            search: currentSearch,
+                            type: currentTypes,
+                            status: currentStatuses,
+                            studio: currentStudio,
+                            season: currentSeason,
+                            year: currentYearParam,
+                            minRating: currentMinRating,
+                            maxRating: currentMaxRating,
+                            pageSize: 12,
+                        }, nextPage);
+                        
+                        // Reset prefetch flag after a delay
+                        setTimeout(() => {
+                            prefetchTriggeredRef.current = false;
+                        }, 2000);
+                    }
                 }
             },
-            { threshold: 0.1, rootMargin: '200px' }
+            { threshold: 0.1, rootMargin: '300px' } // Increased rootMargin for earlier prefetching
         );
 
         if (loadMoreRef.current) {
@@ -421,7 +458,7 @@ export default function Browse() {
         }
 
         return () => observer.disconnect();
-    }, [fetchNextPage, hasNextPage, isFetchingNextPage, isTabSwitching, allAnime.length]);
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage, isTabSwitching, allAnime.length, data?.pages.length, prefetchNextPage, currentGenres, currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYearParam, currentMinRating, currentMaxRating]);
 
     // Search debounce
     useEffect(() => {
@@ -827,6 +864,7 @@ export default function Browse() {
     return (
         <>
             <SEO page="browse" />
+            <LoadingBar isLoading={isLoading || isTabSwitching} />
             <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4">
             <div className="max-w-[1600px] mx-auto">
                 {/* Header */}
@@ -1113,9 +1151,7 @@ export default function Browse() {
                             <div>
                                 {isLoading || isTabSwitching ? (
                                     <>
-                                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
-                                            {Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
-                                        </div>
+                                        <GridSkeleton count={skeletonCount} />
                                         {/* Hidden load more trigger for observer */}
                                         <div ref={loadMoreRef} className="h-0 overflow-hidden" />
                                     </>
@@ -1142,6 +1178,8 @@ export default function Browse() {
                                                     anime={anime}
                                                     titleLanguage={titleLanguage}
                                                     rank={currentSort === 'rating' ? (index + 1) : null}
+                                                    priority={index < 6}
+                                                    index={index}
                                                 />
                                             ))}
                                         </div>
@@ -1161,18 +1199,7 @@ export default function Browse() {
                             <div className="space-y-3">
                                 {isLoading || isTabSwitching ? (
                                     <>
-                                        <div className="space-y-3">
-                                            {Array(8).fill(0).map((_, i) => (
-                                                <div key={i} className="flex items-center gap-4 p-4 bg-dark-100/50 rounded-xl animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
-                                                    <div className="w-16 h-24 rounded-lg flex-shrink-0 shimmer-bg" />
-                                                    <div className="flex-1 space-y-2">
-                                                        <div className="h-4 bg-dark-100 rounded w-3/4 shimmer-bg" />
-                                                        <div className="h-3 bg-dark-100 rounded w-1/2 shimmer-bg" />
-                                                        <div className="h-3 bg-dark-100 rounded w-1/3 shimmer-bg" />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        <ListSkeleton count={skeletonCount} />
                                         {/* Hidden load more trigger for observer */}
                                         <div ref={loadMoreRef} className="h-0 overflow-hidden" />
                                     </>
@@ -1183,7 +1210,23 @@ export default function Browse() {
                                             Clear Filters
                                         </button>
                                     </div>
+                                ) : allAnime.length > 20 ? (
+                                    // Use virtualization for large lists
+                                    <>
+                                        <VirtualizedAnimeList
+                                            items={allAnime}
+                                            renderRow={(anime) => <AnimeListRow anime={anime} />}
+                                            estimateSize={108}
+                                            overscan={5}
+                                        />
+                                        <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">
+                                            {isFetchingNextPage && (
+                                                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                                            )}
+                                        </div>
+                                    </>
                                 ) : (
+                                    // Regular list for smaller datasets
                                     <>
                                         {allAnime.map((anime) => (
                                             <AnimeListRow key={anime.id} anime={anime} />
@@ -1203,11 +1246,7 @@ export default function Browse() {
                             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
                                 {isLoading || isTabSwitching ? (
                                     <>
-                                        {Array(20).fill(0).map((_, i) => (
-                                            <div key={i} className="aspect-[2/3] rounded-lg overflow-hidden animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
-                                                <div className="w-full h-full shimmer-bg" />
-                                            </div>
-                                        ))}
+                                        <MinimalSkeleton count={skeletonCount} />
                                         {/* Hidden load more trigger for observer */}
                                         <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />
                                     </>

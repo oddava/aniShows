@@ -491,3 +491,208 @@ a:focus-visible {
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ============================================
+   ENHANCED SKELETON LOADING ANIMATIONS
+   ============================================ */
+
+/* Wave shimmer animation - moves diagonally for dynamic effect */
+@keyframes skeleton-wave {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.skeleton-wave {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(139, 92, 246, 0.12) 30%,
+    rgba(167, 139, 250, 0.15) 50%,
+    rgba(139, 92, 246, 0.12) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-wave 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Gradient shimmer overlay for depth */
+.shimmer-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.04) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  animation: skeleton-wave 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+/* Smooth fade-in for skeleton containers */
+@keyframes skeleton-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.skeleton-fade-in {
+  animation: skeleton-fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+/* Card enter animation for loaded content */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-enter {
+  animation: card-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Staggered grid animation - use CSS custom properties for dynamic delays */
+.grid-stagger > * {
+  opacity: 0;
+  animation: card-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.grid-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.grid-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.grid-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.grid-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.grid-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.grid-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.grid-stagger > *:nth-child(7) { animation-delay: 240ms; }
+.grid-stagger > *:nth-child(8) { animation-delay: 280ms; }
+.grid-stagger > *:nth-child(9) { animation-delay: 320ms; }
+.grid-stagger > *:nth-child(10) { animation-delay: 360ms; }
+.grid-stagger > *:nth-child(11) { animation-delay: 400ms; }
+.grid-stagger > *:nth-child(12) { animation-delay: 440ms; }
+
+/* Progress bar animation for loading states */
+@keyframes progress-bar {
+  0% {
+    width: 0%;
+    opacity: 1;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-progress-bar {
+  animation: progress-bar 1.5s ease-in-out forwards;
+  background: linear-gradient(90deg, #8b5cf6, #a78bfa, #8b5cf6);
+  background-size: 200% 100%;
+}
+
+/* Tab switch transition overlay */
+@keyframes tab-switch-overlay {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+.tab-switch-overlay {
+  animation: tab-switch-overlay 0.3s ease-out forwards;
+}
+
+/* Loading spinner with accent gradient */
+@keyframes spin-accent {
+  0% {
+    transform: rotate(0deg);
+    border-color: #8b5cf6 transparent #8b5cf6 transparent;
+  }
+  50% {
+    border-color: #a78bfa transparent #a78bfa transparent;
+  }
+  100% {
+    transform: rotate(360deg);
+    border-color: #8b5cf6 transparent #8b5cf6 transparent;
+  }
+}
+
+.spinner-accent {
+  border: 3px solid transparent;
+  border-top-color: #8b5cf6;
+  border-bottom-color: #8b5cf6;
+  animation: spin-accent 1s linear infinite;
+}
+
+/* Image fade-in when loaded */
+@keyframes image-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.image-fade-in {
+  animation: image-fade-in 0.4s ease-out forwards;
+}
+
+/* Smooth height transition for expand/collapse */
+.animate-height {
+  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  overflow: hidden;
+}
+
+/* ============================================
+   LOADING STATE UTILITIES
+   ============================================ */
+
+/* Disable pointer events during loading */
+.loading-disabled {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Content transition wrapper */
+.content-transition {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.content-transition.loading {
+  opacity: 0.5;
+  transform: scale(0.995);
+}
+
+/* Skeleton background color utility */
+.skeleton-bg {
+  background-color: #1a1a1a;
+}
+
+.skeleton-bg-light {
+  background-color: #262626;
+}
