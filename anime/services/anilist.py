@@ -3,7 +3,8 @@ import asyncio
 import logging
 from typing import Literal, Optional, List, Dict
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone as dt_timezone
+from django.utils import timezone
 from django.utils.text import slugify
 from django.core.files.base import ContentFile
 from asgiref.sync import sync_to_async
@@ -631,8 +632,9 @@ class AniListService:
             "next_airing_episode": item.get("nextAiringEpisode", {}).get("episode")
             if item.get("nextAiringEpisode")
             else None,
-            "next_airing_date": datetime.fromtimestamp(
-                item["nextAiringEpisode"]["airingAt"]
+            "next_airing_date": timezone.make_aware(
+                datetime.fromtimestamp(item["nextAiringEpisode"]["airingAt"]),
+                timezone=dt_timezone.utc,
             )
             if item.get("nextAiringEpisode")
             and item["nextAiringEpisode"].get("airingAt")

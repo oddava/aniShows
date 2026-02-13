@@ -5,6 +5,7 @@ import random
 from datetime import datetime
 from typing import List, Dict
 from django.db import transaction
+from django.utils import timezone
 from .services.anilist import AniListService, MediaSort
 from .services.rate_limiting import APICallCache
 from .models import Anime, ThemeSong
@@ -916,7 +917,7 @@ def _save_theme_songs(anime: Anime, themes_data: dict, source: str = "jikan"):
                 episodes=parsed["episodes"],
                 anilist_raw=opening_text,
                 sync_source=source,
-                last_synced=datetime.now(),
+                last_synced=timezone.now(),
             )
             count += 1
 
@@ -935,7 +936,7 @@ def _save_theme_songs(anime: Anime, themes_data: dict, source: str = "jikan"):
                 episodes=parsed["episodes"],
                 anilist_raw=ending_text,
                 sync_source=source,
-                last_synced=datetime.now(),
+                last_synced=timezone.now(),
             )
             count += 1
 

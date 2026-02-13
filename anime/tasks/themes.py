@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from asgiref.sync import sync_to_async
 from celery import shared_task
+from django.utils import timezone
 import httpx
 
 from anime.models import Anime, ThemeSong
@@ -234,7 +235,7 @@ class ThemeSongSyncTask(BaseTask):
                     episodes=parsed["episodes"],
                     anilist_raw=opening_text,
                     sync_source="jikan",
-                    last_synced=datetime.now(),
+                    last_synced=timezone.now(),
                 )
                 count += 1
 
@@ -254,7 +255,7 @@ class ThemeSongSyncTask(BaseTask):
                     episodes=parsed["episodes"],
                     anilist_raw=ending_text,
                     sync_source="jikan",
-                    last_synced=datetime.now(),
+                    last_synced=timezone.now(),
                 )
                 count += 1
 
