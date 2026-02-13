@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
 import StatusSelector from '../components/StatusSelector';
 import { AnimeCardSkeleton } from '../components/AnimeCard';
+import { ScheduleSkeleton, ScheduleGridSkeleton, ScheduleListSkeleton } from '../components/skeletons';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 
@@ -46,7 +47,11 @@ const formatDate = (date) => {
 
 // Helper to format time remaining
 const getTimeRemaining = (dateString) => {
+  if (!dateString) return 'Unknown';
   const target = new Date(dateString);
+  // Check if date is valid
+  if (isNaN(target.getTime())) return 'Unknown';
+  
   const now = new Date();
   const diff = target - now;
 
@@ -64,7 +69,11 @@ const getTimeRemaining = (dateString) => {
 
 // Check if airing is within 24 hours
 const isWithin24Hours = (dateString) => {
+  if (!dateString) return false;
   const target = new Date(dateString);
+  // Check if date is valid
+  if (isNaN(target.getTime())) return false;
+  
   const now = new Date();
   const diff = target - now;
   return diff > 0 && diff < 24 * 60 * 60 * 1000;
@@ -120,7 +129,13 @@ const ScheduleCard = ({ anime, onUpdate }) => {
   const { isAuthenticated } = useAuth();
   const timeRemaining = getTimeRemaining(anime.next_airing_date);
   const isUrgent = isWithin24Hours(anime.next_airing_date);
-  const hasAired = new Date(anime.next_airing_date) < new Date();
+  
+  // Safely check if anime has aired
+  const hasAired = (() => {
+    if (!anime.next_airing_date) return false;
+    const airDate = new Date(anime.next_airing_date);
+    return !isNaN(airDate.getTime()) && airDate < new Date();
+  })();
 
   return (
     <div
@@ -137,75 +152,68 @@ const ScheduleCard = ({ anime, onUpdate }) => {
         <img
           src={getImageUrl(anime.cover_image)}
           alt={anime.title}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          className="w-full h-full object-cover"
         />
 
-        {/* Episode Badge */}
-        <div className="absolute top-2 left-2">
+        {/* Episode Badge - Top Right */}
+        <div className="absolute top-2 right-2">
           <div className={`
-            px-2 py-1 rounded-lg text-xs font-bold
+            px-2 py-1 rounded-md text-xs font-bold shadow-lg
             ${isUrgent
               ? 'bg-green-500 text-white'
-              : 'bg-dark/80 backdrop-blur-sm text-white border border-white/20'
+              : 'bg-dark/90 backdrop-blur-sm text-white border border-white/30'
             }
           `}>
             EP {anime.next_airing_episode}
           </div>
         </div>
 
-        {/* Urgent Indicator */}
-        {isUrgent && (
-          <div className="absolute top-2 right-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          </div>
-        )}
-
-        {/* Time Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3">
-          <div className={`
-            flex items-center gap-1.5 text-xs font-medium
-            ${hasAired ? 'text-green-400' : isUrgent ? 'text-green-400' : 'text-gray-300'}
-          `}>
-            <Clock className="w-3.5 h-3.5" />
-            {hasAired ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Aired</span>
-              </>
-            ) : (
-              <span>in {timeRemaining}</span>
-            )}
-          </div>
+        {/* Airing Info Overlay - Bottom */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8 pb-3 px-3">
+          {hasAired ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500/20">
+                <CheckCircle2 className="w-3 h-3 text-green-400" />
+              </div>
+              <span className="text-sm font-semibold text-green-400">Aired</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className={`
+                flex items-center justify-center w-5 h-5 rounded-full
+                ${isUrgent ? 'bg-green-500/20' : 'bg-white/10'}
+              `}>
+                <Clock className={`w-3 h-3 ${isUrgent ? 'text-green-400' : 'text-white'}`} />
+              </div>
+              <span className={`
+                text-sm font-semibold
+                ${isUrgent ? 'text-green-400' : 'text-white'}
+              `}>
+                {timeRemaining}
+              </span>
+            </div>
+          )}
         </div>
       </Link>
 
       {/* Content */}
       <div className="p-3">
         <Link to={`/anime/${anime.slug}`}>
-          <h3 className="text-sm font-semibold text-white line-clamp-2 group-hover:text-accent transition-colors mb-2">
+          <h3 className="text-xs font-semibold text-white line-clamp-2 group-hover:text-accent transition-colors mb-1.5 leading-relaxed">
             {anime.title}
           </h3>
         </Link>
 
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-gray-500">
-            {anime.anime_type} • {anime.episode_count} eps
-          </div>
-
-          {anime.rating && (
-            <div className="flex items-center gap-1 text-xs text-yellow-500">
-              <span>★</span>
-              <span className="font-semibold">{anime.rating}</span>
-            </div>
-          )}
+        <div className="text-[11px] text-gray-400">
+          {anime.anime_type} • {anime.episode_count} eps
         </div>
 
         {/* User Actions */}
         {isAuthenticated && anime.user_list_status && (
-          <div className="mt-3 pt-3 border-t border-gray-800">
-            <div className="flex items-center justify-between text-xs">
+          <div className="mt-2.5 pt-2 border-t border-gray-800/50">
+            <div className="flex items-center justify-between text-[11px]">
               <span className={`
-                px-2 py-1 rounded-md
+                px-2 py-0.5 rounded font-medium
                 ${anime.user_list_status.status === 'watching'
                   ? 'bg-green-500/20 text-green-400'
                   : 'bg-gray-700/50 text-gray-400'
@@ -215,8 +223,8 @@ const ScheduleCard = ({ anime, onUpdate }) => {
               </span>
 
               {anime.user_list_status.status === 'watching' && (
-                <span className="text-gray-500">
-                  {anime.user_list_status.episodes_watched}/{anime.episode_count}
+                <span className="text-gray-500 text-[11px]">
+                  EP {anime.user_list_status.episodes_watched}/{anime.episode_count}
                 </span>
               )}
             </div>
@@ -278,8 +286,16 @@ export default function Schedule() {
   // Get initial week from URL or use current week
   const [currentWeek, setCurrentWeek] = useState(() => {
     const weekParam = searchParams.get('week');
-    // Always run getWeekStart to ensure we are at the beginning of the week (Monday)
-    return getWeekStart(weekParam ? new Date(weekParam + 'T00:00:00') : new Date());
+    let date;
+    if (weekParam) {
+      // Trim any whitespace and parse the date; fallback to today if invalid
+      const trimmedParam = weekParam.trim();
+      const parsed = new Date(trimmedParam + 'T00:00:00');
+      date = isNaN(parsed.getTime()) ? new Date() : parsed;
+    } else {
+      date = new Date();
+    }
+    return getWeekStart(date);
   });
 
   // Get initial day from URL or use today
@@ -297,12 +313,17 @@ export default function Schedule() {
 
   // Update URL when week or day changes
   useEffect(() => {
+    // Safety check: if currentWeek is invalid, reset to today
+    if (!currentWeek || isNaN(currentWeek.getTime())) {
+      setCurrentWeek(getWeekStart(new Date()));
+      return;
+    }
     const params = new URLSearchParams();
     // Use local date string (YYYY-MM-DD) to avoid UTC shift issues
     const year = currentWeek.getFullYear();
     const month = String(currentWeek.getMonth() + 1).padStart(2, '0');
     const day = String(currentWeek.getDate()).padStart(2, '0');
-    params.set('week', `${year} -${month} -${day} `);
+    params.set('week', `${year}-${month}-${day}`);
     params.set('day', DAY_NAMES[selectedDay].toLowerCase());
     setSearchParams(params, { replace: true });
   }, [currentWeek, selectedDay, setSearchParams]);
@@ -334,6 +355,11 @@ export default function Schedule() {
           // Parse the UTC date and convert to local timezone
           const airDate = new Date(anime.next_airing_date);
 
+          // Check if date is valid before processing
+          if (isNaN(airDate.getTime())) {
+            return; // Skip anime with invalid dates
+          }
+
           // Check if airing date is within current week
           // Compare using local time
           if (airDate >= weekStart && airDate < weekEnd) {
@@ -347,7 +373,14 @@ export default function Schedule() {
       // Sort each day by airing time
       days.forEach(dayAnime => {
         dayAnime.sort((a, b) => {
-          return new Date(a.next_airing_date) - new Date(b.next_airing_date);
+          const dateA = a.next_airing_date ? new Date(a.next_airing_date) : null;
+          const dateB = b.next_airing_date ? new Date(b.next_airing_date) : null;
+          
+          // Handle null/invalid dates
+          if (!dateA || isNaN(dateA.getTime())) return 1;
+          if (!dateB || isNaN(dateB.getTime())) return -1;
+          
+          return dateA - dateB;
         });
       });
 
@@ -431,28 +464,6 @@ export default function Schedule() {
                   Track your weekly anime releases and never miss an episode
                 </p>
               </div>
-
-              {/* View Toggle */}
-              <div className="flex items-center gap-2 bg-dark-100 rounded-xl p-1 border border-gray-800">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p - 2 rounded - lg transition - all ${viewMode === 'grid'
-                    ? 'bg-accent text-white'
-                    : 'text-gray-400 hover:text-white'
-                    } `}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p - 2 rounded - lg transition - all ${viewMode === 'list'
-                    ? 'bg-accent text-white'
-                    : 'text-gray-400 hover:text-white'
-                    } `}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -494,11 +505,11 @@ export default function Schedule() {
 
           {/* Anime Grid/List */}
           {isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {Array(10).fill(null).map((_, i) => (
-                <AnimeCardSkeleton key={i} />
-              ))}
-            </div>
+            viewMode === 'grid' ? (
+              <ScheduleGridSkeleton count={10} />
+            ) : (
+              <ScheduleListSkeleton count={8} />
+            )
           ) : selectedDayAnime.length > 0 ? (
             <div className={`
             ${viewMode === 'grid'

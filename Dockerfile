@@ -32,4 +32,24 @@ USER aniuser
 
 EXPOSE 8000
 
-CMD ["uv", "run", "gunicorn", "root.wsgi:application", "--bind", "0.0.0.0:8000", "--access-logfile", "-"]
+# Production-grade Gunicorn configuration
+# Workers: 4 (2-4x CPU cores)
+# Threads: 4 per worker for handling concurrent requests
+# Worker class: gthread (thread-based async)
+# Max requests: 1000 before worker restart (prevents memory leaks)
+# Timeout: 60s for long-running requests
+# Keep-alive: 5s for connection reuse
+CMD ["uv", "run", "gunicorn", "root.wsgi:application", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "4", \
+     "--worker-class", "gthread", \
+     "--threads", "4", \
+     "--worker-connections", "1000", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "50", \
+     "--timeout", "60", \
+     "--keep-alive", "5", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info", \
+     "--preload"]

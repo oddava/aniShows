@@ -1,7 +1,7 @@
 import { X, Users, Sparkles } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 
-// Parse markdown text into readable format with bold labels and links
+// Parse markdown text into readable format with bold/italic labels - links shown as plain text
 function parseMarkdownText(text) {
     if (!text) return null;
     
@@ -13,24 +13,18 @@ function parseMarkdownText(text) {
     
     return paragraphs.map((paragraph, pIndex) => {
         // Split the paragraph by markdown patterns
-        const parts = paragraph.split(/(\[.*?\]\(.*?\)|__.*?__)/g);
+        // Order matters: check bold (__) before italic (_) to avoid conflicts
+        const parts = paragraph.split(/(\[.*?\]\(.*?\)|__.+?__|_.+?_)/g);
         
         const processedParts = parts.map((part, index) => {
-            // Check for markdown links [text](url)
+            // Check for markdown links [text](url) - show as plain text
             const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
             if (linkMatch) {
-                const [, linkText, url] = linkMatch;
+                const [, linkText] = linkMatch;
                 return (
-                    <a
-                        key={index}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 underline transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <span key={index} className="text-gray-300">
                         {linkText}
-                    </a>
+                    </span>
                 );
             }
             
@@ -40,6 +34,16 @@ function parseMarkdownText(text) {
                 return (
                     <span key={index} className="font-bold text-gray-200">
                         {boldMatch[1]}
+                    </span>
+                );
+            }
+            
+            // Check for italic text _text_
+            const italicMatch = part.match(/_(.+?)_/);
+            if (italicMatch) {
+                return (
+                    <span key={index} className="italic text-gray-200">
+                        {italicMatch[1]}
                     </span>
                 );
             }

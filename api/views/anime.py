@@ -5,8 +5,11 @@ from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef, F
 from django.db.models.functions import Coalesce
 from django.core.cache import cache
 from django.core.validators import ValidationError
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from datetime import date
 import logging
+import hashlib
 
 from anime.models import Anime, Genre, Studio, UserFavorite
 from users.models import UserAnimeList
@@ -259,6 +262,35 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             return AnimeDetailSerializer
         return AnimeListSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        """Override to prefetch user_lists for status distribution calculation"""
+        instance = self.get_object()
+        from users.models import UserAnimeList
+
+        user_lists = UserAnimeList.objects.filter(anime=instance).only("status")
+        instance._prefetched_objects_cache = {"user_lists": user_lists}
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    def list(self, request, *args, **kwargs):
+        """Override to add caching for anime list endpoint"""
+        if request.user.is_authenticated:
+            return super().list(request, *args, **kwargs)
+
+        params = dict(request.query_params)
+        cache_key = f"anime_list:{hash(str(sorted(params.items())))}"
+
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+
+        # Cache the response data (5 minutes for anonymous users)
+        cache.set(cache_key, response.data, 300)
+
+        return response
+
     @action(detail=False, methods=["get"])
     def trending(self, request):
         """Get trending anime (most favorited recently)"""
@@ -310,14 +342,21 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["get"])
     def reviews(self, request, slug=None):
-        """Get reviews for a specific anime"""
+        """Get reviews for a specific anime with pagination"""
         from anime.models import Review
         from api.serializers import ReviewSerializer
 
         anime = self.get_object()
         reviews = Review.objects.filter(anime=anime).select_related("user")
-        serializer = ReviewSerializer(reviews, many=True, context={"request": request})
-        return Response(serializer.data)
+
+        # Paginate reviews to prevent memory issues with popular anime
+        paginator = PageNumberPagination()
+        paginator.page_size = 20  # 20 reviews per page
+        result_page = paginator.paginate_queryset(reviews, request)
+        serializer = ReviewSerializer(
+            result_page, many=True, context={"request": request}
+        )
+        return paginator.get_paginated_response(serializer.data)
 
     @action(detail=True, methods=["get"])
     def related(self, request, slug=None):

@@ -969,35 +969,24 @@ function CharactersTab({ anime, accentColor, onCharacterClick }) {
                 <div
                     key={role.id}
                     onClick={() => onCharacterClick(role)}
-                    className="group relative h-40 sm:h-48 md:h-56 lg:h-64 overflow-hidden rounded-lg sm:rounded-xl lg:rounded-2xl border border-white/5 bg-dark-200/40 backdrop-blur-sm transition-all duration-500 hover:shadow-2xl cursor-pointer"
-                    style={{
-                        '--card-accent': accentColor || '#8b5cf6'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = accentColor ? `${accentColor}50` : 'rgba(139,92,246,0.3)';
-                        e.currentTarget.style.boxShadow = `0 25px 50px -12px ${accentColor || '#8b5cf6'}15`;
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '';
-                        e.currentTarget.style.boxShadow = '';
-                    }}
+                    className="group relative h-40 sm:h-48 md:h-56 lg:h-64 overflow-hidden rounded-lg sm:rounded-xl lg:rounded-2xl border border-white/5 bg-dark-200/40 cursor-pointer hover:border-gray-600 transition-colors"
                 >
                     <div className="absolute inset-0">
                         <img
                             src={role.character.image || '/placeholder-avatar.png'}
                             alt={role.character.name}
-                            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-60 group-hover:opacity-40"
+                            loading="lazy"
+                            className="h-full w-full object-cover opacity-70"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent" />
-                        <div className="absolute inset-0 bg-gradient-to-r from-dark/90 via-dark/40 to-transparent" />
                     </div>
                     <div className="relative h-full flex flex-col justify-end p-4 z-10">
                         <div className="absolute top-3 right-3">
                             <span
-                                className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border backdrop-blur-md transition-colors duration-300
+                                className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border backdrop-blur-md
                                     ${role.role === 'MAIN'
-                                        ? ''
-                                        : 'bg-white/5 border-white/10 text-gray-400 group-hover:border-white/20 group-hover:text-gray-300'}`}
+                                        ? 'text-white'
+                                        : 'bg-white/5 border-white/10 text-gray-400'}`}
                                 style={role.role === 'MAIN' ? {
                                     backgroundColor: accentColor ? `${accentColor}30` : 'rgba(139,92,246,0.2)',
                                     borderColor: accentColor ? `${accentColor}50` : 'rgba(139,92,246,0.3)',
@@ -1007,11 +996,8 @@ function CharactersTab({ anime, accentColor, onCharacterClick }) {
                                 {role.role}
                             </span>
                         </div>
-                        <div className="transform transition-transform duration-300 group-hover:-translate-y-2">
-                            <h3
-                                className="text-xl font-black text-white leading-tight mb-1 transition-colors"
-                                style={{ '--hover-color': accentColor || '#8b5cf6' }}
-                            >
+                        <div>
+                            <h3 className="text-xl font-black text-white leading-tight mb-1">
                                 {role.character.name}
                             </h3>
                             {role.voice_actor && (
@@ -1020,11 +1006,12 @@ function CharactersTab({ anime, accentColor, onCharacterClick }) {
                                         <img
                                             src={role.voice_actor.image || '/placeholder-avatar.png'}
                                             alt={role.voice_actor.name}
+                                            loading="lazy"
                                             className="w-full h-full object-cover"
                                         />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors leading-tight">
+                                        <p className="text-sm font-bold text-gray-300 leading-tight">
                                             {role.voice_actor.name}
                                         </p>
                                         <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mt-0.5">

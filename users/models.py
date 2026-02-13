@@ -75,6 +75,12 @@ class UserAnimeList(Model):
         indexes = [
             Index(fields=["user", "status"]),
             Index(fields=["-updated_at"]),
+            Index(fields=["anime", "status"]),
+            Index(fields=["anime", "user"]),
+            Index(fields=["status", "anime"]),
+            Index(fields=["user", "-updated_at"]),
+            Index(fields=["user", "score"]),
+            Index(fields=["anime", "score"]),
         ]
 
     def __str__(self):

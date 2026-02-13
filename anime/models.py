@@ -279,6 +279,17 @@ class Anime(Model):
             Index(fields=["title"]),
             Index(fields=["release_date"]),
             Index(fields=["-member_count"]),
+            Index(
+                fields=["status", "anime_type", "-release_date"]
+            ),
+            Index(
+                fields=["season", "season_year", "-popularity_rank"]
+            ),
+            Index(fields=["season_year", "season", "-member_count"]),
+            Index(fields=["status", "-site_rank", "-rating"]),
+            Index(fields=["anime_type", "status", "-rating"]),
+            Index(fields=["title", "status"]),
+            Index(fields=["title_jp", "status"]),
         ]
 
     def __str__(self):
@@ -307,7 +318,7 @@ class AnimeCharacter(Model):
             "anime",
             "character",
             "voice_actor",
-        )  # Allowing same character multiple times if different VAs (rare but possible across langs if we tracked that, otherwise safe)
+        )
 
 
 class AnimeStaff(Model):

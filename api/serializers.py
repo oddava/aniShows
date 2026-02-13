@@ -521,10 +521,31 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
 
     def get_status_distribution(self, obj):
         """Aggregate user list statuses from the platform's own data"""
-        from django.db.models import Count
+        # Use pre-computed status distribution if available (set in view)
+        if hasattr(obj, "_status_distribution"):
+            return obj._status_distribution
 
-        distribution = obj.user_lists.values("status").annotate(count=Count("id"))
-        return {item["status"]: item["count"] for item in distribution}
+        # Fallback: compute from prefetched user_lists (avoiding extra query)
+        distribution = {}
+        if (
+            hasattr(obj, "_prefetched_objects_cache")
+            and "user_lists" in obj._prefetched_objects_cache
+        ):
+            for entry in obj._prefetched_objects_cache["user_lists"]:
+                status = entry.status
+                distribution[status] = distribution.get(status, 0) + 1
+        else:
+            # Last resort - query but only if absolutely necessary
+            from django.db.models import Count
+
+            distribution_query = obj.user_lists.values("status").annotate(
+                count=Count("id")
+            )
+            distribution = {
+                item["status"]: item["count"] for item in distribution_query
+            }
+
+        return distribution
 
     def get_is_favorite(self, obj):
         # Use prefetched annotation if available
