@@ -73,6 +73,23 @@ export default function Browse() {
     });
     const [genreSearch, setGenreSearch] = useState('');
     const [showAllGenres, setShowAllGenres] = useState(false);
+    const [isTabSwitching, setIsTabSwitching] = useState(false);
+    const [minLoadingTime, setMinLoadingTime] = useState(false);
+
+    // Local filter state (not applied until Apply button clicked)
+    const [localFilters, setLocalFilters] = useState({
+        genres: searchParams.get('genre')?.split(',').filter(Boolean) || [],
+        type: searchParams.get('type') || '',
+        status: searchParams.get('status') || '',
+        season: searchParams.get('season') || '',
+        year: searchParams.get('year') || '',
+        minRating: searchParams.get('min_rating') || '',
+        maxRating: searchParams.get('max_rating') || '',
+        studio: searchParams.get('studio') || '',
+    });
+
+    // Track if local filters differ from applied filters
+    const [hasUnappliedChanges, setHasUnappliedChanges] = useState(false);
 
     // Quick filter genres (popular ones)
     const QUICK_FILTER_GENRES = useMemo(() => ['action', 'romance', 'comedy', 'fantasy', 'drama', 'sci-fi'], []);
@@ -91,6 +108,105 @@ export default function Browse() {
     const currentYearParam = searchParams.get('year') || '';
     const currentMinRating = searchParams.get('min_rating') || '';
     const currentMaxRating = searchParams.get('max_rating') || '';
+
+    // Sync local filters when URL params change (from external navigation)
+    useEffect(() => {
+        const newLocalFilters = {
+            genres: searchParams.get('genre')?.split(',').filter(Boolean) || [],
+            type: searchParams.get('type') || '',
+            status: searchParams.get('status') || '',
+            season: searchParams.get('season') || '',
+            year: searchParams.get('year') || '',
+            minRating: searchParams.get('min_rating') || '',
+            maxRating: searchParams.get('max_rating') || '',
+            studio: searchParams.get('studio') || '',
+        };
+        setLocalFilters(newLocalFilters);
+        setHasUnappliedChanges(false);
+    }, [searchParams]);
+
+    // Check if local filters differ from applied filters
+    useEffect(() => {
+        const hasChanges = 
+            JSON.stringify(localFilters.genres.sort()) !== JSON.stringify(currentGenres.sort()) ||
+            localFilters.type !== currentTypes ||
+            localFilters.status !== currentStatuses ||
+            localFilters.season !== currentSeason ||
+            localFilters.year !== currentYearParam ||
+            localFilters.minRating !== currentMinRating ||
+            localFilters.maxRating !== currentMaxRating ||
+            localFilters.studio !== currentStudio;
+        setHasUnappliedChanges(hasChanges);
+    }, [localFilters, currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio]);
+
+    // Apply filters to URL
+    const applyFilters = useCallback(() => {
+        const newParams = new URLSearchParams(searchParams);
+        
+        if (localFilters.genres.length > 0) {
+            newParams.set('genre', localFilters.genres.join(','));
+        } else {
+            newParams.delete('genre');
+        }
+        
+        if (localFilters.type) {
+            newParams.set('type', localFilters.type);
+        } else {
+            newParams.delete('type');
+        }
+        
+        if (localFilters.status) {
+            newParams.set('status', localFilters.status);
+        } else {
+            newParams.delete('status');
+        }
+        
+        if (localFilters.season) {
+            newParams.set('season', localFilters.season);
+        } else {
+            newParams.delete('season');
+        }
+        
+        if (localFilters.year) {
+            newParams.set('year', localFilters.year);
+        } else {
+            newParams.delete('year');
+        }
+        
+        if (localFilters.minRating) {
+            newParams.set('min_rating', localFilters.minRating);
+        } else {
+            newParams.delete('min_rating');
+        }
+        
+        if (localFilters.maxRating) {
+            newParams.set('max_rating', localFilters.maxRating);
+        } else {
+            newParams.delete('max_rating');
+        }
+        
+        if (localFilters.studio) {
+            newParams.set('studio', localFilters.studio);
+        } else {
+            newParams.delete('studio');
+        }
+        
+        setSearchParams(newParams);
+    }, [localFilters, searchParams, setSearchParams]);
+
+    // Reset local filters to match applied filters
+    const resetFilters = useCallback(() => {
+        setLocalFilters({
+            genres: currentGenres,
+            type: currentTypes,
+            status: currentStatuses,
+            season: currentSeason,
+            year: currentYearParam,
+            minRating: currentMinRating,
+            maxRating: currentMaxRating,
+            studio: currentStudio,
+        });
+    }, [currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio]);
 
     // Update active tab based on params
     useEffect(() => {
@@ -174,6 +290,7 @@ export default function Browse() {
         }
 
         setActiveTab(key);
+        setIsTabSwitching(true);
         setSearchParams(newParams);
     }, [searchParams, setSearchParams]);
 
@@ -226,6 +343,36 @@ export default function Browse() {
         staleTime: 1000 * 60 * 5,
     });
 
+    // Reset tab switching state when data loads with minimum 0.5s delay
+    useEffect(() => {
+        if (!isLoading && data && minLoadingTime) {
+            setIsTabSwitching(false);
+            setMinLoadingTime(false);
+        }
+    }, [isLoading, data, minLoadingTime]);
+
+    // Start minimum loading timer when tab switching begins
+    useEffect(() => {
+        if (isTabSwitching) {
+            setMinLoadingTime(false);
+            const timer = setTimeout(() => {
+                setMinLoadingTime(true);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [isTabSwitching]);
+
+    // Fallback: Reset tab switching after 3 seconds to prevent getting stuck
+    useEffect(() => {
+        if (isTabSwitching) {
+            const timer = setTimeout(() => {
+                setIsTabSwitching(false);
+                setMinLoadingTime(false);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [isTabSwitching]);
+
     // Persist view mode
     useEffect(() => {
         localStorage.setItem('browse_view_mode', viewMode);
@@ -257,6 +404,9 @@ export default function Browse() {
     // Infinite scroll with IntersectionObserver
     const loadMoreRef = useRef(null);
     useEffect(() => {
+        // Don't observe during tab switching
+        if (isTabSwitching) return;
+        
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
@@ -271,7 +421,7 @@ export default function Browse() {
         }
 
         return () => observer.disconnect();
-    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+    }, [fetchNextPage, hasNextPage, isFetchingNextPage, isTabSwitching, allAnime.length]);
 
     // Search debounce
     useEffect(() => {
@@ -332,6 +482,21 @@ export default function Browse() {
 
     const hasActiveFilters = currentGenres.length > 0 || currentTypes || currentStatuses || currentStudio || currentSeason || currentYearParam || currentMinRating || currentMaxRating;
 
+    // Local filter update helpers (don't apply immediately)
+    const updateLocalFilter = useCallback((key, value) => {
+        setLocalFilters(prev => ({ ...prev, [key]: value }));
+    }, []);
+
+    const toggleLocalGenre = useCallback((genreSlug) => {
+        setLocalFilters(prev => {
+            const current = prev.genres;
+            const updated = current.includes(genreSlug)
+                ? current.filter(g => g !== genreSlug)
+                : [...current, genreSlug];
+            return { ...prev, genres: updated };
+        });
+    }, []);
+
     // Filter Sidebar Component
     const FilterSidebar = useCallback(({ className = '', isMobile = false }) => {
         const filteredGenres = genres?.filter(g =>
@@ -363,33 +528,33 @@ export default function Browse() {
             <div className={`${className} space-y-5`}>
                 {/* Format/Type */}
                 <div>
-                    <SectionHeader icon={Tv} title="Format" section="format" count={currentTypes ? 1 : 0} />
+                    <SectionHeader icon={Tv} title="Format" section="format" count={localFilters.type ? 1 : 0} />
                     {!collapsedSections.format && (
                         <div className="space-y-2 animate-fade-in">
                             <label className="flex items-center gap-3 cursor-pointer group">
-                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${!currentTypes ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
-                                    {!currentTypes && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${!localFilters.type ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
+                                    {!localFilters.type && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                 </div>
                                 <input
                                     type="radio"
-                                    checked={!currentTypes}
-                                    onChange={() => updateParam('type', '')}
+                                    checked={!localFilters.type}
+                                    onChange={() => updateLocalFilter('type', '')}
                                     className="hidden"
                                 />
-                                <span className={`text-sm transition-colors ${!currentTypes ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>Any Format</span>
+                                <span className={`text-sm transition-colors ${!localFilters.type ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>Any Format</span>
                             </label>
                             {TYPE_OPTIONS.map((type) => (
                                 <label key={type.value} className="flex items-center gap-3 cursor-pointer group">
-                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${currentTypes === type.value ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
-                                        {currentTypes === type.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${localFilters.type === type.value ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
+                                        {localFilters.type === type.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                     </div>
                                     <input
                                         type="radio"
-                                        checked={currentTypes === type.value}
-                                        onChange={() => updateParam('type', type.value)}
+                                        checked={localFilters.type === type.value}
+                                        onChange={() => updateLocalFilter('type', type.value)}
                                         className="hidden"
                                     />
-                                    <span className={`text-sm transition-colors ${currentTypes === type.value ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>{type.label}</span>
+                                    <span className={`text-sm transition-colors ${localFilters.type === type.value ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>{type.label}</span>
                                 </label>
                             ))}
                         </div>
@@ -398,33 +563,33 @@ export default function Browse() {
 
                 {/* Status */}
                 <div>
-                    <SectionHeader icon={ChevronRight} title="Status" section="status" count={currentStatuses ? 1 : 0} />
+                    <SectionHeader icon={ChevronRight} title="Status" section="status" count={localFilters.status ? 1 : 0} />
                     {!collapsedSections.status && (
                         <div className="space-y-2 animate-fade-in">
                             <label className="flex items-center gap-3 cursor-pointer group">
-                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${!currentStatuses ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
-                                    {!currentStatuses && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${!localFilters.status ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
+                                    {!localFilters.status && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                 </div>
                                 <input
                                     type="radio"
-                                    checked={!currentStatuses}
-                                    onChange={() => updateParam('status', '')}
+                                    checked={!localFilters.status}
+                                    onChange={() => updateLocalFilter('status', '')}
                                     className="hidden"
                                 />
-                                <span className={`text-sm transition-colors ${!currentStatuses ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>Any Status</span>
+                                <span className={`text-sm transition-colors ${!localFilters.status ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>Any Status</span>
                             </label>
                             {STATUS_OPTIONS.map((status) => (
                                 <label key={status.value} className="flex items-center gap-3 cursor-pointer group">
-                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${currentStatuses === status.value ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
-                                        {currentStatuses === status.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${localFilters.status === status.value ? 'border-accent bg-accent' : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'}`}>
+                                        {localFilters.status === status.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                     </div>
                                     <input
                                         type="radio"
-                                        checked={currentStatuses === status.value}
-                                        onChange={() => updateParam('status', status.value)}
+                                        checked={localFilters.status === status.value}
+                                        onChange={() => updateLocalFilter('status', status.value)}
                                         className="hidden"
                                     />
-                                    <span className={`text-sm transition-colors ${currentStatuses === status.value ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>{status.label}</span>
+                                    <span className={`text-sm transition-colors ${localFilters.status === status.value ? 'text-white font-medium' : 'text-gray-400 group-hover:text-white'}`}>{status.label}</span>
                                 </label>
                             ))}
                         </div>
@@ -433,12 +598,12 @@ export default function Browse() {
 
                 {/* Season & Year */}
                 <div>
-                    <SectionHeader icon={Calendar} title="Season" section="season" count={(currentSeason || currentYearParam) ? 1 : 0} />
+                    <SectionHeader icon={Calendar} title="Season" section="season" count={(localFilters.season || localFilters.year) ? 1 : 0} />
                     {!collapsedSections.season && (
                         <div className="grid grid-cols-2 gap-2 animate-fade-in">
                             <select
-                                value={currentSeason}
-                                onChange={(e) => updateParam('season', e.target.value)}
+                                value={localFilters.season}
+                                onChange={(e) => updateLocalFilter('season', e.target.value)}
                                 className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent"
                             >
                                 <option value="">Any Season</option>
@@ -447,8 +612,8 @@ export default function Browse() {
                                 ))}
                             </select>
                             <select
-                                value={currentYearParam}
-                                onChange={(e) => updateParam('year', e.target.value)}
+                                value={localFilters.year}
+                                onChange={(e) => updateLocalFilter('year', e.target.value)}
                                 className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent"
                             >
                                 <option value="">Any Year</option>
@@ -462,7 +627,7 @@ export default function Browse() {
 
                 {/* Rating Range */}
                 <div>
-                    <SectionHeader icon={Star} title="Rating" section="rating" count={(currentMinRating || currentMaxRating) ? 1 : 0} />
+                    <SectionHeader icon={Star} title="Rating" section="rating" count={(localFilters.minRating || localFilters.maxRating) ? 1 : 0} />
                     {!collapsedSections.rating && (
                         <div className="flex items-center gap-2 animate-fade-in">
                             <input
@@ -471,8 +636,8 @@ export default function Browse() {
                                 max="10"
                                 step="0.5"
                                 placeholder="Min"
-                                value={currentMinRating}
-                                onChange={(e) => updateParam('min_rating', e.target.value)}
+                                value={localFilters.minRating}
+                                onChange={(e) => updateLocalFilter('minRating', e.target.value)}
                                 className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent"
                             />
                             <span className="text-gray-500">-</span>
@@ -482,8 +647,8 @@ export default function Browse() {
                                 max="10"
                                 step="0.5"
                                 placeholder="Max"
-                                value={currentMaxRating}
-                                onChange={(e) => updateParam('max_rating', e.target.value)}
+                                value={localFilters.maxRating}
+                                onChange={(e) => updateLocalFilter('maxRating', e.target.value)}
                                 className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent"
                             />
                         </div>
@@ -492,11 +657,11 @@ export default function Browse() {
 
                 {/* Studios */}
                 <div>
-                    <SectionHeader icon={Building2} title="Studio" section="studio" count={currentStudio ? 1 : 0} />
+                    <SectionHeader icon={Building2} title="Studio" section="studio" count={localFilters.studio ? 1 : 0} />
                     {!collapsedSections.studio && (
                         <select
-                            value={currentStudio}
-                            onChange={(e) => updateParam('studio', e.target.value)}
+                            value={localFilters.studio}
+                            onChange={(e) => updateLocalFilter('studio', e.target.value)}
                             className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent animate-fade-in"
                         >
                             <option value="">All Studios</option>
@@ -509,7 +674,7 @@ export default function Browse() {
 
                 {/* Genres */}
                 <div>
-                    <SectionHeader icon={Filter} title="Genres" section="genres" count={currentGenres.length} />
+                    <SectionHeader icon={Filter} title="Genres" section="genres" count={localFilters.genres.length} />
                     {!collapsedSections.genres && (
                         <div className="space-y-3 animate-fade-in">
                             {genres?.length > 10 && (
@@ -525,11 +690,11 @@ export default function Browse() {
                             )}
                             <div className="flex flex-wrap gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                                 {displayedGenres.map((genre) => {
-                                    const isSelected = currentGenres.includes(genre.slug);
+                                    const isSelected = localFilters.genres.includes(genre.slug);
                                     return (
                                         <button
                                             key={genre.id}
-                                            onClick={() => toggleArrayParam('genre', genre.slug)}
+                                            onClick={() => toggleLocalGenre(genre.slug)}
                                             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all
                                                 ${isSelected
                                                     ? 'bg-accent text-white shadow-sm shadow-accent/30'
@@ -552,18 +717,26 @@ export default function Browse() {
                     )}
                 </div>
 
-                {/* Clear Filters */}
-                {hasActiveFilters && (
-                    <button
-                        onClick={clearAllFilters}
-                        className="w-full py-2.5 text-sm font-bold text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400/50 rounded-xl transition-colors"
-                    >
-                        Clear All Filters
-                    </button>
+                {/* Apply/Reset Buttons */}
+                {hasUnappliedChanges && (
+                    <div className="sticky bottom-0 bg-dark-100/95 backdrop-blur-sm -mx-2 px-2 py-3 border-t border-gray-800 space-y-2 animate-fade-in">
+                        <button
+                            onClick={applyFilters}
+                            className="w-full py-2.5 text-sm font-bold text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors shadow-lg shadow-accent/20"
+                        >
+                            Apply Filters
+                        </button>
+                        <button
+                            onClick={resetFilters}
+                            className="w-full py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                        >
+                            Reset Changes
+                        </button>
+                    </div>
                 )}
             </div>
         );
-    }, [genres, studios, collapsedSections, currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio, genreSearch, showAllGenres, hasActiveFilters, toggleSection, updateParam, toggleArrayParam, clearAllFilters]);
+    }, [genres, studios, collapsedSections, localFilters, hasUnappliedChanges, genreSearch, showAllGenres, toggleSection, updateLocalFilter, toggleLocalGenre, applyFilters, resetFilters]);
 
     // List View Row Component
     const AnimeListRow = useCallback(({ anime }) => (
@@ -737,7 +910,7 @@ export default function Browse() {
                 <div className="flex gap-8">
                     {/* Filter Sidebar - Desktop */}
                     <aside className="hidden lg:block w-64 flex-shrink-0">
-                        <div className="sticky top-24 bg-dark-100/30 backdrop-blur-md rounded-2xl border border-gray-800 p-6 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar">
+                        <div className="sticky top-24 bg-dark-100/30 backdrop-blur-md rounded-2xl border border-gray-800 p-6 h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar">
                             <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                                 <Filter className="w-5 h-5 text-accent" />
                                 Filters
@@ -748,108 +921,117 @@ export default function Browse() {
 
                     {/* Main Content */}
                     <main className="flex-1 min-w-0">
-                        {/* Hero Section */}
+                        {/* Compact Trending Carousel */}
                         {showHero && trendingHero && (
-                            <div className="mb-10 animate-fade-in">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                        <TrendingUp className="w-5 h-5 text-accent" />
+                            <div className="mb-8 animate-fade-in">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h2 className="text-base font-semibold text-white flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4 text-accent" />
                                         Trending Now
                                     </h2>
                                     <button
                                         onClick={() => handleTabChange('trending')}
-                                        className="text-sm font-bold text-accent hover:text-white transition-colors flex items-center gap-1 group"
+                                        className="text-xs font-medium text-accent hover:text-white transition-colors flex items-center gap-0.5 group"
                                     >
-                                        View All
-                                        <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                        See all
+                                        <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {trendingHero.slice(0, 3).map((anime, index) => (
-                                        <div key={anime.id} className="relative aspect-[16/9] md:aspect-[4/3] lg:aspect-[16/9] rounded-2xl overflow-hidden group border border-gray-800 hover:border-accent/50 transition-all duration-500 hover:shadow-2xl hover:shadow-accent/10">
-                                            <img
-                                                src={anime.cover_image}
-                                                alt={anime.title}
-                                                loading="lazy"
-                                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                            />
-                                            {anime.user_list_status?.status === 'Watching' && anime.episode_count > 0 && (
-                                                <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60 z-20">
-                                                    <div
-                                                        style={{ width: `${Math.min((anime.user_list_status.episodes_watched / anime.episode_count) * 100, 100)}%` }}
-                                                        className="h-full bg-purple-500"
-                                                    />
-                                                </div>
-                                            )}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent p-6 flex flex-col justify-end">
-                                                <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <span className="px-2 py-0.5 bg-accent text-white text-[10px] font-bold rounded uppercase tracking-wider">
-                                                            #{index + 1} Trending
-                                                        </span>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                                    {trendingHero.slice(0, 6).map((anime) => (
+                                        <Link
+                                            key={anime.id}
+                                            to={`/anime/${anime.slug}`}
+                                            className="group"
+                                        >
+                                            <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-dark-100 mb-2">
+                                                <img
+                                                    src={anime.cover_image}
+                                                    alt={anime.title}
+                                                    loading="lazy"
+                                                    className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                                                />
+                                                {/* Info Overlay on Hover */}
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-2">
+                                                    <h4 className="font-semibold text-[11px] text-white mb-1 line-clamp-2">
+                                                        {anime.title}
+                                                    </h4>
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-300 mb-1">
                                                         {anime.rating && (
-                                                            <span className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
+                                                            <span className="flex items-center gap-0.5 text-yellow-400">
                                                                 <Star className="w-3 h-3 fill-current" />
                                                                 {anime.rating}
                                                             </span>
                                                         )}
+                                                        <span>{anime.anime_type}</span>
+                                                        {anime.episode_count && (
+                                                            <span>{anime.episode_count} eps</span>
+                                                        )}
                                                     </div>
-                                                    <h3 className="text-xl md:text-2xl font-bold text-white mb-2 line-clamp-1">
-                                                        {titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title}
-                                                    </h3>
-                                                    <p className="text-gray-300 text-sm line-clamp-2 mb-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100 hidden md:block">
-                                                        {anime.synopsis}
-                                                    </p>
-                                                    <Link
-                                                        to={`/anime/${anime.slug}`}
-                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-accent text-white rounded-lg backdrop-blur-sm text-sm font-bold transition-all"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                        View Details
-                                                    </Link>
+                                                    <div className="flex items-center gap-1 text-[9px] text-accent truncate">
+                                                        {anime.genres?.slice(0, 2).map((genre, idx) => (
+                                                            <span key={genre.id} className="truncate">
+                                                                {genre.name}{idx < (anime.genres?.slice(0, 2).length || 0) - 1 ? ',' : ''}
+                                                            </span>
+                                                        ))}
+                                                        {(anime.genres?.length || 0) > 2 && (
+                                                            <span className="text-gray-400 flex-shrink-0">+{(anime.genres?.length || 0) - 2}</span>
+                                                        )}
+                                                    </div>
                                                 </div>
+                                                {anime.user_list_status?.status === 'Watching' && anime.episode_count > 0 && (
+                                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60 z-10">
+                                                        <div
+                                                            style={{ width: `${Math.min((anime.user_list_status.episodes_watched / anime.episode_count) * 100, 100)}%` }}
+                                                            className="h-full bg-accent"
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
+                                            <h3 className="text-xs font-medium text-white line-clamp-2 group-hover:text-accent transition-colors">
+                                                {titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title}
+                                            </h3>
+                                        </Link>
                                     ))}
                                 </div>
                             </div>
                         )}
 
                         {/* Controls Bar */}
-                        <div className="flex flex-wrap justify-between gap-4 mb-4">
-                            <div className="flex gap-4">
-                                <p className="text-gray-400 text-sm flex gap-1.5">
-                                    <span className="text-accent font-bold text-base">{totalCount}</span>
-                                    <span>results</span>
+                        <div className="flex items-center justify-between gap-4 mb-4">
+                            <div className="flex items-center gap-3">
+                                <p className="flex items-baseline gap-1.5">
+                                    <span className="text-accent font-bold text-lg">{totalCount}</span>
+                                    <span className="text-gray-500 text-sm">results</span>
                                 </p>
 
                                 {/* Mobile Filter Toggle */}
                                 <button
                                     onClick={() => setShowFilters(true)}
-                                    className="lg:hidden flex items-center gap-2 px-3 py-1.5 bg-dark-100 border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-accent transition-colors"
+                                    className="lg:hidden flex items-center gap-1.5 px-2.5 py-1.5 bg-dark-100 border border-gray-700 rounded-lg text-xs text-gray-300 hover:border-accent transition-colors"
                                 >
-                                    <Filter className="w-4 h-4" />
+                                    <Filter className="w-3.5 h-3.5" />
                                     Filters
                                     {hasActiveFilters && (
-                                        <span className="w-2 h-2 bg-accent rounded-full" />
+                                        <span className="w-1.5 h-1.5 bg-accent rounded-full" />
                                     )}
                                 </button>
                             </div>
 
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                                 {/* View Mode Toggle */}
-                                <div className="hidden sm:flex items-center bg-dark-100 border border-gray-700 rounded-xl p-1">
+                                <div className="hidden sm:flex items-center bg-dark-100 border border-gray-700 rounded-lg p-0.5">
                                     {VIEW_MODES.map((mode) => (
                                         <button
                                             key={mode.value}
                                             onClick={() => setViewMode(mode.value)}
                                             title={mode.label}
-                                            className={`p-1.5 rounded-lg transition-colors ${viewMode === mode.value
+                                            className={`p-1.5 rounded-md transition-colors ${viewMode === mode.value
                                                 ? 'bg-accent text-white'
                                                 : 'text-gray-400 hover:text-white'
                                                 }`}
                                         >
-                                            <mode.icon className="w-4 h-4" />
+                                            <mode.icon className="w-3.5 h-3.5" />
                                         </button>
                                     ))}
                                 </div>
@@ -857,7 +1039,7 @@ export default function Browse() {
                                 {/* Title Language Toggle */}
                                 <button
                                     onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                                    className="hidden sm:flex items-center gap-2 px-3 py-2 bg-dark-100 border border-gray-700 rounded-xl text-xs font-bold text-gray-300 hover:border-accent transition-colors"
+                                    className="hidden sm:flex items-center justify-center w-8 h-8 bg-dark-100 border border-gray-700 rounded-lg text-[10px] font-bold text-gray-300 hover:border-accent transition-colors"
                                     title="Toggle title language"
                                 >
                                     {titleLanguage === 'en' ? 'EN' : 'JP'}
@@ -929,10 +1111,14 @@ export default function Browse() {
                         {/* Anime Grid */}
                         {viewMode === 'grid' && (
                             <div>
-                                {isLoading ? (
-                                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
-                                        {Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
-                                    </div>
+                                {isLoading || isTabSwitching ? (
+                                    <>
+                                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
+                                            {Array(12).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
+                                        </div>
+                                        {/* Hidden load more trigger for observer */}
+                                        <div ref={loadMoreRef} className="h-0 overflow-hidden" />
+                                    </>
                                 ) : isError ? (
                                     <div className="text-center py-16">
                                         <p className="text-red-400 mb-4">Failed to load anime</p>
@@ -973,10 +1159,23 @@ export default function Browse() {
                         {/* List View */}
                         {viewMode === 'list' && (
                             <div className="space-y-3">
-                                {isLoading ? (
-                                    Array(8).fill(0).map((_, i) => (
-                                        <div key={i} className="h-32 bg-dark-100/50 rounded-xl animate-pulse" />
-                                    ))
+                                {isLoading || isTabSwitching ? (
+                                    <>
+                                        <div className="space-y-3">
+                                            {Array(8).fill(0).map((_, i) => (
+                                                <div key={i} className="flex items-center gap-4 p-4 bg-dark-100/50 rounded-xl animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
+                                                    <div className="w-16 h-24 rounded-lg flex-shrink-0 shimmer-bg" />
+                                                    <div className="flex-1 space-y-2">
+                                                        <div className="h-4 bg-dark-100 rounded w-3/4 shimmer-bg" />
+                                                        <div className="h-3 bg-dark-100 rounded w-1/2 shimmer-bg" />
+                                                        <div className="h-3 bg-dark-100 rounded w-1/3 shimmer-bg" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {/* Hidden load more trigger for observer */}
+                                        <div ref={loadMoreRef} className="h-0 overflow-hidden" />
+                                    </>
                                 ) : allAnime.length === 0 ? (
                                     <div className="text-center py-16">
                                         <p className="text-gray-400 mb-4">No anime found matching your criteria</p>
@@ -1002,10 +1201,16 @@ export default function Browse() {
                         {/* Minimal View */}
                         {viewMode === 'minimal' && (
                             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
-                                {isLoading ? (
-                                    Array(20).fill(0).map((_, i) => (
-                                        <div key={i} className="aspect-[2/3] bg-dark-100 rounded-lg animate-pulse" />
-                                    ))
+                                {isLoading || isTabSwitching ? (
+                                    <>
+                                        {Array(20).fill(0).map((_, i) => (
+                                            <div key={i} className="aspect-[2/3] rounded-lg overflow-hidden animate-fade-in" style={{ animationDelay: `${i * 30}ms` }}>
+                                                <div className="w-full h-full shimmer-bg" />
+                                            </div>
+                                        ))}
+                                        {/* Hidden load more trigger for observer */}
+                                        <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />
+                                    </>
                                 ) : allAnime.length === 0 ? (
                                     <div className="col-span-full text-center py-16">
                                         <p className="text-gray-400 mb-4">No anime found</p>

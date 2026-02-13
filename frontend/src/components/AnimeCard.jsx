@@ -322,16 +322,39 @@ const arePropsEqual = (prevProps, nextProps) => {
 
 export default React.memo(AnimeCard, arePropsEqual);
 
-// Skeleton loader
+// Skeleton loader with AniList-style shimmer effect
 export function AnimeCardSkeleton() {
     return (
-        <div className="bg-dark-100 rounded-lg border border-gray-800 overflow-hidden"
-        >
-            <div className="aspect-[2/3] bg-dark-50 animate-pulse" />
-            <div className="p-2 space-y-1.5"
-            >
-                <div className="h-3 bg-dark-50 rounded animate-pulse" />
-                <div className="h-2 bg-dark-50 rounded w-2/3 animate-pulse" />
+        <div className="relative overflow-hidden rounded-lg bg-dark-100">
+            {/* Shimmer overlay */}
+            <div className="absolute inset-0 z-10 pointer-events-none">
+                <div className="absolute inset-0 shimmer-overlay" />
+            </div>
+            
+            {/* Card image placeholder */}
+            <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden">
+                <div className="absolute inset-0 skeleton-shimmer" />
+            </div>
+            
+            {/* Card content placeholder */}
+            <div className="p-2.5 space-y-2">
+                {/* Title line */}
+                <div className="h-3.5 bg-dark-200 rounded relative overflow-hidden">
+                    <div className="absolute inset-0 skeleton-shimmer" />
+                </div>
+                {/* Subtitle line */}
+                <div className="h-2.5 bg-dark-200 rounded w-2/3 relative overflow-hidden">
+                    <div className="absolute inset-0 skeleton-shimmer" />
+                </div>
+                {/* Rating line */}
+                <div className="flex items-center gap-1.5 pt-0.5">
+                    <div className="w-3 h-3 bg-dark-200 rounded-full relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-shimmer" />
+                    </div>
+                    <div className="h-2.5 w-8 bg-dark-200 rounded relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-shimmer" />
+                    </div>
+                </div>
             </div>
         </div>
     );

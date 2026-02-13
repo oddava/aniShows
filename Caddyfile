@@ -21,19 +21,22 @@
         reverse_proxy web:8000
     }
 
-    # ImageKit CACHE - serve locally generated thumbnails
-    handle_path /media/CACHE/* {
-        root * /app/CACHE
-        file_server
-        header {
-            Access-Control-Allow-Origin "*"
-            Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-            Cache-Control "public, max-age=31536000, immutable"
-        }
-    }
-
     # MinIO Media - proxy /media/* to MinIO bucket
+    # Note: /media/CACHE/* is also handled here when thumbnails are in S3
     handle_path /media/* {
+        # Fix MIME types for common image formats (MinIO sometimes returns application/octet-stream)
+        @webp path *.webp
+        header @webp Content-Type "image/webp"
+
+        @jpg path *.jpg *.jpeg
+        header @jpg Content-Type "image/jpeg"
+
+        @png path *.png
+        header @png Content-Type "image/png"
+
+        @gif path *.gif
+        header @gif Content-Type "image/gif"
+
         rewrite * /anishows-media/media{path}
         reverse_proxy minio:9000 {
             header_up Host {upstream_hostport}
@@ -43,6 +46,17 @@
             Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
         }
     }
+
+    # ImageKit CACHE - serve locally generated thumbnails (Unused when USE_S3=True)
+    # handle_path /media/CACHE/* {
+    #     root * /app/CACHE
+    #     file_server
+    #     header {
+    #         Access-Control-Allow-Origin "*"
+    #         Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    #         Cache-Control "public, max-age=31536000, immutable"
+    #     }
+    # }
 
     # Vite HMR (WebSocket) - required for hot reload
     handle /vite-hmr {
