@@ -19,35 +19,11 @@ from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 from anime.models import Anime, ThemeSong
 from anime.services.anilist import AniListService
+from anime.services.jikan import JikanRateLimiter, fetch_themes_from_jikan, JIKAN_BASE_URL
 import logging
 import re
 
 logger = logging.getLogger(__name__)
-
-JIKAN_BASE_URL = "https://api.jikan.moe/v4"
-
-
-class JikanRateLimiter:
-    """
-    Adaptive rate limiter for Jikan API.
-    Jikan limit: ~3 requests per second (60 req/min).
-    Uses adaptive delays and exponential backoff for 429 errors.
-    """
-
-    def __init__(
-        self, base_delay: float = 0.35, min_delay: float = 0.25, max_delay: float = 5.0
-    ):
-        self.base_delay = base_delay
-        self.min_delay = min_delay
-        self.max_delay = max_delay
-        self.current_delay = base_delay
-        self.consecutive_429s = 0
-        self.last_request_time = 0
-        self.success_streak = 0
-
-    async def acquire(self) -> None:
-        """Acquire permission to make a request with adaptive rate limiting."""
-        now = time.time()
         elapsed = now - self.last_request_time
 
         # Ensure minimum time between requests

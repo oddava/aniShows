@@ -3,7 +3,7 @@ from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from .models import Anime, UserFavorite
 from users.models import UserAnimeList
-from .tasks import fetch_deep_metadata, generate_recommendations_for_user
+from anime.tasks import enrich_metadata, generate_recommendations
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
             f"New Anime created: {instance.title} (ID: {instance.id}). Triggering metadata fetch."
         )
         # This task routes to 'low_priority' queue via celery config
-        fetch_deep_metadata.delay(instance.id)
+        enrich_metadata.delay(anime_id=instance.id, mode="single")
 
 
 @receiver([post_save, post_delete], sender=UserAnimeList)
@@ -35,8 +35,8 @@ def trigger_recommendations_on_list_change(sender, instance, **kwargs):
             f"User {instance.user.username} updated anime list. Triggering recommendation refresh."
         )
         # Use countdown to batch rapid updates (e.g., if user updates multiple entries quickly)
-        generate_recommendations_for_user.apply_async(
-            args=[instance.user.id],
+        generate_recommendations.apply_async(
+            kwargs={"user_id": instance.user.id},
             countdown=300,  # Wait 5 minutes for potential batch updates
         )
 
@@ -52,7 +52,7 @@ def trigger_recommendations_on_favorite_change(sender, instance, **kwargs):
             f"User {instance.user.username} updated favorites. Triggering recommendation refresh."
         )
         # Wait 2 minutes for potential batch updates
-        generate_recommendations_for_user.apply_async(
-            args=[instance.user.id],
+        generate_recommendations.apply_async(
+            kwargs={"user_id": instance.user.id},
             countdown=120,
         )

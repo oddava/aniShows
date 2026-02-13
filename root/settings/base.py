@@ -388,50 +388,87 @@ CELERY_TIMEZONE = TIME_ZONE
 from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
-    # Hourly tasks - staggered to avoid API spikes
-    "sync-trending-every-hour": {
-        "task": "anime.tasks.sync_trending_anime",
+    # =========================================================================
+    # UNIFIED TASK SCHEDULE
+    # =========================================================================
+    #
+    # Hourly Tasks (Staggered to avoid API spikes)
+    # -------------------------------------------------------------------------
+    "sync-trending-hourly": {
+        "task": "anime.tasks.sync.sync_anime_catalog",
         "schedule": crontab(minute=5),  # 5 min past hour
-        "args": (50,),
+        "kwargs": {"sync_type": "trending", "limit": 50},
         "options": {"queue": "default"},
     },
-    "sync-airing-anime-hourly": {
-        "task": "anime.tasks.sync_airing_anime",
-        "schedule": crontab(minute=35),  # 35 min past hour - after trending
-        "args": (),
+    "sync-airing-workflow-hourly": {
+        "task": "anime.tasks.airing.sync_airing_workflow",
+        "schedule": crontab(minute=30),  # 30 min past hour
+        "kwargs": {"phases": ["sync"], "batch_size": 100},
         "options": {"queue": "default"},
     },
-    # Daily tasks - spread out during low-traffic hours
+    # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
+    # -------------------------------------------------------------------------
     "sync-seasonal-daily": {
-        "task": "anime.tasks.sync_seasonal_anime",
-        "schedule": crontab(hour=2, minute=0),  # 2 AM
-        "args": (100,),
+        "task": "anime.tasks.sync.sync_anime_catalog",
+        "schedule": crontab(hour=2, minute=0),  # 2:00 AM
+        "kwargs": {"sync_type": "seasonal", "limit": 100},
         "options": {"queue": "default"},
     },
-    "sync-upcoming-weekly": {
-        "task": "anime.tasks.sync_next_season_anime",
-        "schedule": crontab(day_of_week=0, hour=3, minute=0),  # Weekly Sunday 3 AM
-        "args": (100,),
-        "options": {"queue": "default"},
+    "enrich-metadata-daily": {
+        "task": "anime.tasks.metadata.enrich_metadata",
+        "schedule": crontab(hour=3, minute=0),  # 3:00 AM
+        "kwargs": {"mode": "backfill", "batch_size": 100},
+        "options": {"queue": "low_priority"},
     },
-    "cleanup-finished-airing-dates-daily": {
-        "task": "anime.tasks.cleanup_finished_airing_dates",
-        "schedule": crontab(hour=4, minute=0),  # After seasonal
-        "args": (),
+    "airing-workflow-cleanup-daily": {
+        "task": "anime.tasks.airing.sync_airing_workflow",
+        "schedule": crontab(hour=4, minute=0),  # 4:00 AM
+        "kwargs": {"phases": ["cleanup", "backfill"], "batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "generate-recommendations-daily": {
-        "task": "anime.tasks.generate_user_recommendations",
-        "schedule": crontab(hour=5, minute=0),  # After cleanup
-        "args": (),
+        "task": "anime.tasks.recommendations.generate_recommendations",
+        "schedule": crontab(hour=5, minute=0),  # 5:00 AM
+        "kwargs": {"limit": 10},
         "options": {"queue": "low_priority"},
     },
-    "sync-themes-for-new-anime-daily": {
-        "task": "anime.tasks.sync_themes_for_new_anime",
-        "schedule": crontab(hour=6, minute=0),  # After recommendations
-        "args": (100,),  # Process up to 100 anime per day
+    "sync-themes-daily": {
+        "task": "anime.tasks.themes.sync_theme_songs",
+        "schedule": crontab(hour=6, minute=0),  # 6:00 AM
+        "kwargs": {"limit": 100},
         "options": {"queue": "default"},
     },
+    "user-maintenance-daily": {
+        "task": "users.tasks.run_user_maintenance_workflow",
+        "schedule": crontab(hour=7, minute=0),  # 7:00 AM
+        "kwargs": {
+            "cleanup_unverified": True,
+            "cleanup_imports": True,
+            "unverified_days": 7,
+            "import_days": 30,
+        },
+        "options": {"queue": "low_priority"},
+    },
+    # Weekly Tasks
+    # -------------------------------------------------------------------------
+    "sync-upcoming-weekly": {
+        "task": "anime.tasks.sync.sync_anime_catalog",
+        "schedule": crontab(day_of_week=0, hour=3, minute=30),  # Sunday 3:30 AM
+        "kwargs": {"sync_type": "next_season", "limit": 100},
+        "options": {"queue": "default"},
+    },
+    # =========================================================================
+    # LEGACY TASKS (Backward Compatibility)
+    # =========================================================================
+    # These tasks are deprecated in favor of unified tasks above.
+    # They will be removed in a future version.
+    #
+    # "sync-trending-every-hour": {
+    #     "task": "anime.tasks.sync_trending_anime",
+    #     "schedule": crontab(minute=5),
+    #     "args": (50,),
+    #     "options": {"queue": "default"},
+    # },
 }
 
 # =============================================================================
