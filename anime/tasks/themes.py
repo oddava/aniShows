@@ -179,6 +179,7 @@ class ThemeSongSyncTask(BaseTask):
                 Anime.objects.filter(
                     theme_songs__isnull=True,
                     mal_id__isnull=False,
+                    status__in=['FINISHED', 'Airing'],  # Skip upcoming anime
                 )
                 .exclude(
                     id__in=ThemeSong.objects.filter(
@@ -189,12 +190,18 @@ class ThemeSongSyncTask(BaseTask):
                 .distinct()
             )
         elif force_resync:
-            queryset = Anime.objects.exclude(mal_id__isnull=True)
+            queryset = Anime.objects.exclude(
+                mal_id__isnull=True
+            ).filter(
+                status__in=['FINISHED', 'Airing']  # Skip upcoming anime even on resync
+            )
         else:
             # Get anime without themes (either never checked or not marked as no themes)
+            # Only process anime that have aired (FINISHED or Airing status)
             queryset = Anime.objects.filter(
                 theme_songs__isnull=True,
                 mal_id__isnull=False,
+                status__in=['FINISHED', 'Airing'],  # Skip upcoming anime
             ).distinct()
 
         anime_list = await sync_to_async(list)(queryset[:limit])
