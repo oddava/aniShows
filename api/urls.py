@@ -31,6 +31,14 @@ from .admin_views import (
     AdminReviewViewSet,
     AdminStatsExportView,
 )
+from .admin_celery_views import (
+    CeleryTaskResultViewSet,
+    CeleryTaskTriggerView,
+    CeleryTaskControlView,
+    CeleryWorkerStatusView,
+    CeleryTaskScheduleViewSet,
+    CeleryDashboardView,
+)
 from users.views import GoogleLogin
 from .import_export_views import (
     ImportJobCancelView,
@@ -59,6 +67,15 @@ admin_router = DefaultRouter()
 admin_router.register(r"users", AdminUserViewSet, basename="admin-users")
 admin_router.register(r"anime", AdminAnimeViewSet, basename="admin-anime")
 admin_router.register(r"reviews", AdminReviewViewSet, basename="admin-reviews")
+
+# Celery admin router
+celery_router = DefaultRouter()
+celery_router.register(
+    r"tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
+)
+celery_router.register(
+    r"tasks/schedules", CeleryTaskScheduleViewSet, basename="celery-task-schedules"
+)
 
 urlpatterns = [
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
@@ -111,5 +128,25 @@ urlpatterns = [
     path("admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
     path(
         "admin/stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"
+    ),
+    # Celery endpoints
+    path("admin/celery/", include(celery_router.urls)),
+    path(
+        "admin/celery/dashboard/",
+        CeleryDashboardView.as_view(),
+        name="celery-dashboard",
+    ),
+    path(
+        "admin/celery/tasks/trigger/",
+        CeleryTaskTriggerView.as_view(),
+        name="celery-task-trigger",
+    ),
+    path(
+        "admin/celery/tasks/<str:task_id>/control/",
+        CeleryTaskControlView.as_view(),
+        name="celery-task-control",
+    ),
+    path(
+        "admin/celery/workers/", CeleryWorkerStatusView.as_view(), name="celery-workers"
     ),
 ]
