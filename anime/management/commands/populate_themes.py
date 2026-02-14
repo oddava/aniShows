@@ -24,44 +24,6 @@ import logging
 import re
 
 logger = logging.getLogger(__name__)
-        elapsed = now - self.last_request_time
-
-        # Ensure minimum time between requests
-        if elapsed < self.current_delay:
-            wait_time = self.current_delay - elapsed
-            await asyncio.sleep(wait_time)
-
-        self.last_request_time = time.time()
-
-    def record_success(self) -> None:
-        """Record successful request - gradually reduce delay."""
-        self.consecutive_429s = 0
-        self.success_streak += 1
-
-        # Gradually reduce delay after streak of successes
-        if self.success_streak >= 10 and self.current_delay > self.min_delay:
-            self.current_delay = max(self.min_delay, self.current_delay * 0.95)
-
-    def record_429(self) -> None:
-        """Record 429 error - exponential backoff with jitter."""
-        self.consecutive_429s += 1
-        self.success_streak = 0
-
-        # Exponential backoff: 2^failures + random jitter
-        backoff = min(2**self.consecutive_429s, 60)  # Cap at 60 seconds
-        jitter = random.uniform(0, backoff * 0.3)  # 0-30% jitter
-        self.current_delay = min(self.max_delay, self.base_delay + backoff + jitter)
-
-        logger.warning(
-            f"Jikan 429 hit (consecutive: {self.consecutive_429s}). "
-            f"Backing off for {self.current_delay:.2f}s"
-        )
-
-    def record_error(self) -> None:
-        """Record general error - slight increase in delay."""
-        self.success_streak = 0
-        self.current_delay = min(self.max_delay, self.current_delay * 1.1)
-
 
 class Command(BaseCommand):
     help = (

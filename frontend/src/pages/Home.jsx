@@ -170,10 +170,10 @@ export default function Home() {
                                 {heroAnime.synopsis}
                             </p>
 
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <Link
                                     to={`/anime/${heroAnime.slug}`}
-                                    className="btn-primary flex items-center gap-2 py-2 px-4 sm:py-2.5 sm:px-6 font-bold text-sm sm:text-base"
+                                    className="btn-primary flex items-center justify-center gap-2 py-2.5 px-6 font-bold text-sm sm:text-base min-w-[140px]"
                                 >
                                     <Play className="w-4 h-4 fill-current" />
                                     View Series
@@ -182,7 +182,7 @@ export default function Home() {
                                     <button
                                         onClick={handleAddToList}
                                         disabled={heroListLoading || isHeroInList}
-                                        className={`flex items-center gap-2 px-6 py-2.5 border rounded-xl font-bold transition-colors ${isHeroInList
+                                        className={`flex items-center justify-center gap-2 py-2.5 px-6 border rounded-xl font-bold text-sm sm:text-base transition-colors min-w-[140px] ${isHeroInList
                                             ? 'bg-green-500/20 border-green-500/40 text-green-400 cursor-default'
                                             : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
                                             }`}
@@ -194,7 +194,7 @@ export default function Home() {
                                         ) : (
                                             <Plus className="w-4 h-4" />
                                         )}
-                                        {isHeroInList ? 'In Your List' : 'Add to List'}
+                                        {isHeroInList ? 'In List' : 'Add to List'}
                                     </button>
                                 )}
                             </div>
@@ -229,17 +229,17 @@ export default function Home() {
                                 </Link>
                             </div>
 
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
                                 {trendingLoading ? (
                                     Array(6).fill(0).map((_, i) => (
-                                        <div key={i} className="min-w-[160px] md:min-w-0 snap-start">
+                                        <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
                                             <AnimeCardSkeleton />
                                         </div>
                                     ))
                                 ) : trending?.length > 0 ? (
                                     trending.slice(0, 6).map((anime, index) => (
-                                        <div key={anime.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
-                                            <AnimeCard anime={anime} rank={index + 1} />
+                                        <div key={anime.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
+                                            <AnimeCard anime={anime} />
                                         </div>
                                     ))
                                 ) : (
@@ -265,16 +265,16 @@ export default function Home() {
                                 </Link>
                             </div>
 
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
                                 {topRatedLoading ? (
                                     Array(6).fill(0).map((_, i) => (
-                                        <div key={i} className="min-w-[160px] md:min-w-0 snap-start">
+                                        <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
                                             <AnimeCardSkeleton />
                                         </div>
                                     ))
                                 ) : topRated?.length > 0 ? (
                                     topRated.slice(0, 6).map((anime) => (
-                                        <div key={anime.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
+                                        <div key={anime.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
                                             <AnimeCard anime={anime} />
                                         </div>
                                     ))
@@ -340,9 +340,9 @@ function CurrentlyWatchingSection() {
                     </Link>
                 </div>
 
-                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
                     {watching.map((entry) => (
-                        <div key={entry.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
+                        <div key={entry.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
                             <AnimeCard
                                 anime={entry.anime}
                                 userListEntry={entry}
@@ -403,16 +403,16 @@ function RecommendedForYouSection({ revealRef }) {
                     <p className="text-sm text-gray-400 pl-1">{subtitle}</p>
                 </div>
 
-                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-6 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
                     {isLoading ? (
                         Array(6).fill(0).map((_, i) => (
-                            <div key={i} className="min-w-[160px] md:min-w-0">
+                            <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
                                 <AnimeCardSkeleton />
                             </div>
                         ))
                     ) : (
                         recommendations?.map((rec) => (
-                            <div key={rec.id} className="min-w-[160px] md:min-w-0 snap-start h-full">
+                            <div key={rec.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
                                 <AnimeCard anime={rec.anime} />
                             </div>
                         ))

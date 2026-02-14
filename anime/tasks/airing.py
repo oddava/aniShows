@@ -47,7 +47,7 @@ class AiringWorkflowTask(BaseTask):
     service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
-    def run(
+    def execute(
         self,
         phases: Optional[List[str]] = None,
         batch_size: int = 100,
@@ -377,4 +377,4 @@ def sync_airing_workflow(
     Returns:
         Dict with workflow summary
     """
-    return self.run(phases, batch_size, dedup_window)
+    return self.execute(phases, batch_size, dedup_window)

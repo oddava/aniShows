@@ -1,6 +1,10 @@
-import { Music, Play, Disc } from 'lucide-react';
+import { Music, Play, Disc, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState } from 'react';
 
 export default function MusicSection({ anime, accentColor }) {
+    const [showAllOpenings, setShowAllOpenings] = useState(false);
+    const [showAllEndings, setShowAllEndings] = useState(false);
+    
     // Get themes from API data
     const themeSongs = anime?.theme_songs || [];
     
@@ -10,6 +14,8 @@ export default function MusicSection({ anime, accentColor }) {
     };
 
     const hasThemes = themes.openings.length > 0 || themes.endings.length > 0;
+    
+    const MAX_VISIBLE = 6;
 
     if (!hasThemes) {
         return (
@@ -43,10 +49,28 @@ export default function MusicSection({ anime, accentColor }) {
                             <span className="text-xs text-gray-500">({themes.openings.length})</span>
                         </div>
                         <div className="space-y-3">
-                            {themes.openings.map((theme, idx) => (
+                            {(showAllOpenings ? themes.openings : themes.openings.slice(0, MAX_VISIBLE)).map((theme, idx) => (
                                 <ThemeItem key={idx} theme={theme} accentColor={accentColor} number={idx + 1} />
                             ))}
                         </div>
+                        {themes.openings.length > MAX_VISIBLE && (
+                            <button
+                                onClick={() => setShowAllOpenings(!showAllOpenings)}
+                                className="w-full mt-4 py-2 px-4 flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-white bg-dark-200/50 hover:bg-dark-200 rounded-xl transition-all"
+                            >
+                                {showAllOpenings ? (
+                                    <>
+                                        <ChevronUp className="w-4 h-4" />
+                                        Show Less
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronDown className="w-4 h-4" />
+                                        Show {themes.openings.length - MAX_VISIBLE} More
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -59,10 +83,28 @@ export default function MusicSection({ anime, accentColor }) {
                             <span className="text-xs text-gray-500">({themes.endings.length})</span>
                         </div>
                         <div className="space-y-3">
-                            {themes.endings.map((theme, idx) => (
+                            {(showAllEndings ? themes.endings : themes.endings.slice(0, MAX_VISIBLE)).map((theme, idx) => (
                                 <ThemeItem key={idx} theme={theme} accentColor={accentColor} number={idx + 1} />
                             ))}
                         </div>
+                        {themes.endings.length > MAX_VISIBLE && (
+                            <button
+                                onClick={() => setShowAllEndings(!showAllEndings)}
+                                className="w-full mt-4 py-2 px-4 flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-white bg-dark-200/50 hover:bg-dark-200 rounded-xl transition-all"
+                            >
+                                {showAllEndings ? (
+                                    <>
+                                        <ChevronUp className="w-4 h-4" />
+                                        Show Less
+                                    </>
+                                ) : (
+                                    <>
+                                        <ChevronDown className="w-4 h-4" />
+                                        Show {themes.endings.length - MAX_VISIBLE} More
+                                    </>
+                                )}
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

@@ -37,6 +37,9 @@ app.conf.task_routes = {
     "anime.tasks.themes.sync_theme_songs": {"queue": "default"},
     # Recommendations (Low Priority - background processing)
     "anime.tasks.recommendations.generate_recommendations": {"queue": "low_priority"},
+    # Franchise Sync (Default - important for navigation)
+    "anime.tasks.franchises.sync_franchises": {"queue": "default"},
+    "anime.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
     # User Tasks
     "users.tasks.cleanup_unverified_accounts": {"queue": "low_priority"},
     "users.tasks.process_import_job": {"queue": "default"},
@@ -56,7 +59,7 @@ app.conf.task_routes = {
     "anime.tasks.fetch_themes_for_anime": {"queue": "default"},
     "anime.tasks.generate_user_recommendations": {"queue": "low_priority"},
     "anime.tasks.generate_recommendations_for_user": {"queue": "default"},
-    "anime.tasks.generate_image_thumbnails": {"queue": "low_priority"},
+    "anime.tasks.images.generate_image_thumbnails": {"queue": "low_priority"},
     "anime.tasks.backfill_catalog": {"queue": "low_priority"},
 }
 

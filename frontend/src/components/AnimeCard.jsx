@@ -14,7 +14,7 @@ const STATUS_OPTIONS = [
     { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
 ];
 
-function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = false, priority = false, index = 0 }) {
+function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, priority = false, index = 0 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
@@ -177,16 +177,7 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = fa
                         />
                     </Link>
 
-                    {/* Rank Badge */}
-                    {rank && (
-                        <div className="absolute bottom-0 right-0 z-20 pointer-events-none">
-                            <div className="px-3 py-1.5 rounded-tl-xl bg-black/60 border-t border-l border-white/10">
-                                <span className={`font-black text-lg ${rank === 1 ? 'rank-1' : rank === 2 ? 'rank-2' : rank === 3 ? 'rank-3' : 'text-white/80'}`}>
-                                    #{rank}
-                                </span>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* Status Icon */}
                     {isAuthenticated && (
@@ -244,15 +235,6 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = fa
                             />
                         </div>
                     )}
-
-                    {/* Rating badge */}
-                    {anime.rating && (
-                        <div className="absolute left-2 bottom-3 flex items-center gap-1.5 px-2 py-1 bg-black/70 rounded-lg text-xs z-10 border border-white/10">
-                            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                            <span className="text-white font-bold tracking-wide">{anime.rating}</span>
-                        </div>
-                    )}
-
                     {/* Quick progress button */}
                     {isAuthenticated && listStatus === 'Watching' && (
                             <button
@@ -317,7 +299,6 @@ function AnimeCard({ anime, userListEntry, rank, titleLanguage = 'en', lite = fa
 // Optimized prop comparison - shallow comparison is sufficient
 const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.anime.id !== nextProps.anime.id) return false;
-    if (prevProps.rank !== nextProps.rank) return false;
     if (prevProps.titleLanguage !== nextProps.titleLanguage) return false;
     if (prevProps.lite !== nextProps.lite) return false;
     if (prevProps.priority !== nextProps.priority) return false;

@@ -53,7 +53,7 @@ class MetadataEnrichmentTask(BaseTask):
     service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
-    def run(
+    def execute(
         self,
         anime_id: Optional[int] = None,
         mode: str = "single",
@@ -233,4 +233,4 @@ def enrich_metadata(
     Returns:
         Dict with enrichment results
     """
-    return self.run(anime_id, mode, batch_size, filters, priority_field)
+    return self.execute(anime_id, mode, batch_size, filters, priority_field)

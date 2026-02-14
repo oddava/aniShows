@@ -44,7 +44,7 @@ class RecommendationTask(BaseTask):
         generate_recommendations.delay(user_id=123, limit=20)
     """
 
-    def run(
+    def execute(
         self,
         user_id: Optional[int] = None,
         limit: int = 10,
@@ -80,7 +80,7 @@ class RecommendationTask(BaseTask):
             service = RecommendationService()
 
             # Generate recommendations
-            recs = service.generate_for_user(user, limit=limit)
+            recs = service.generate_for_user(user)
 
             logger.info(f"Generated {len(recs)} recommendations for {user.username}")
 
@@ -135,7 +135,7 @@ class RecommendationTask(BaseTask):
             for user_id in active_user_ids:
                 try:
                     user = User.objects.get(id=user_id)
-                    recs = service.generate_for_user(user, limit=limit)
+                    recs = service.generate_for_user(user)
                     total_recs += len(recs)
                     processed += 1
 
@@ -169,20 +169,11 @@ class RecommendationTask(BaseTask):
 
     def _get_active_user_ids(self) -> List[int]:
         """Get IDs of users with anime activity."""
-        from anime.models import UserAnimeList, UserFavorite
+        from users.models import UserAnimeList
 
         # Users with anime in their list
-        list_user_ids = UserAnimeList.objects.values_list(
-            "user_id", flat=True
-        ).distinct()
+        active_ids = UserAnimeList.objects.values_list("user_id", flat=True).distinct()
 
-        # Users with favorites
-        favorite_user_ids = UserFavorite.objects.values_list(
-            "user_id", flat=True
-        ).distinct()
-
-        # Combine and deduplicate
-        active_ids = set(list_user_ids) | set(favorite_user_ids)
         return list(active_ids)
 
 
@@ -214,4 +205,4 @@ def generate_recommendations(
     Returns:
         Dict with generation results
     """
-    return self.run(user_id, limit, algorithm)
+    return self.execute(user_id, limit, algorithm)

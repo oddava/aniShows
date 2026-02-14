@@ -8,97 +8,33 @@ Smart rate limiting features:
 - Exponential backoff for rate limit errors
 - Tracks consecutive failures and adjusts batch sizes
 - Circuit breaker integration for persistent failures
+
+Usage:
+    # Run synchronously (default) - imports missing anime to ensure all slugs are linked
+    python manage.py populate_franchises
+    
+    # Run via Celery tasks (async)
+    python manage.py populate_franchises --async
+    
+    # Process specific anime
+    python manage.py populate_franchises --anime-id 123
+    
+    # Don't import missing related anime (not recommended - slugs may be missing)
+    python manage.py populate_franchises --no-import-missing
 """
 
 import asyncio
-import time
-import random
 from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 from anime.models import Anime
-from anime.services.anilist import AniListService
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class AdaptiveBatchLimiter:
-    """
-    Adaptive batch rate limiter for AniList API.
-    Dynamically adjusts batch sizes and delays based on API performance.
-    """
-
-    def __init__(
-        self,
-        initial_batch_size: int = 5,
-        min_batch_size: int = 1,
-        max_batch_size: int = 10,
-        base_delay: float = 0.7,
-        min_delay: float = 0.5,
-    ):
-        self.batch_size = initial_batch_size
-        self.min_batch_size = min_batch_size
-        self.max_batch_size = max_batch_size
-        self.base_delay = base_delay
-        self.min_delay = min_delay
-        self.current_delay = base_delay
-        self.consecutive_failures = 0
-        self.consecutive_successes = 0
-        self.total_requests = 0
-        self.failed_requests = 0
-        self.last_batch_time = 0
-
-    def get_batch_size(self) -> int:
-        """Get current batch size based on recent performance."""
-        return self.batch_size
-
-    async def before_batch(self):
-        """Called before processing a batch - handles rate limiting."""
-        # Ensure minimum time between batches
-        now = time.time()
-        time_since_last = now - self.last_batch_time
-        if time_since_last < self.current_delay:
-            await asyncio.sleep(self.current_delay - time_since_last)
-
-    def after_batch(self, success: bool, error_count: int = 0):
-        """Called after processing a batch - adjusts parameters."""
-        self.last_batch_time = time.time()
-        self.total_requests += 1
-
-        if success and error_count == 0:
-            self.consecutive_successes += 1
-            self.consecutive_failures = 0
-
-            # Gradually increase batch size and reduce delay on success
-            if self.consecutive_successes >= 3:
-                self.batch_size = min(self.max_batch_size, self.batch_size + 1)
-                self.current_delay = max(self.min_delay, self.current_delay * 0.95)
-                self.consecutive_successes = 0
-        else:
-            self.consecutive_failures += 1
-            self.consecutive_successes = 0
-            self.failed_requests += 1
-
-            # Reduce batch size and increase delay on failure
-            if error_count > 0 or self.consecutive_failures >= 2:
-                self.batch_size = max(self.min_batch_size, self.batch_size - 1)
-                self.current_delay = min(self.current_delay * 1.2, 3.0)  # Cap at 3s
-                self.consecutive_failures = 0
-
-    def record_rate_limit_hit(self):
-        """Record when we hit a rate limit - aggressive backoff."""
-        self.consecutive_failures += 1
-        self.batch_size = max(self.min_batch_size, self.batch_size - 2)
-        self.current_delay = min(self.current_delay * 1.5, 5.0)  # Cap at 5s
-        logger.warning(
-            f"Rate limit hit! Reducing batch size to {self.batch_size}, "
-            f"increasing delay to {self.current_delay:.2f}s"
-        )
-
-
 class Command(BaseCommand):
-    help = "Populate franchise/relations data for existing anime from AniList, importing missing related anime"
+    help = "Populate franchise/relations data for existing anime from AniList, ensuring ALL franchises have slugs linked"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -115,40 +51,91 @@ class Command(BaseCommand):
         parser.add_argument(
             "--batch-size",
             type=int,
-            default=5,
-            help="Initial batch size for concurrent requests (default: 5)",
+            default=50,
+            help="Batch size for processing (default: 50)",
         )
         parser.add_argument(
-            "--adaptive",
+            "--no-import-missing",
             action="store_true",
-            help="Enable adaptive batch sizing based on API performance",
-        )
-        parser.add_argument(
-            "--delay",
-            type=float,
-            default=0.7,
-            help="Base delay between batches in seconds (default: 0.7)",
+            help="Don't import missing related anime (not recommended - slugs may be missing)",
         )
         parser.add_argument(
             "--max-imports",
             type=int,
-            default=None,
-            help="Maximum number of related anime to import (default: unlimited)",
+            default=10,
+            help="Maximum number of related anime to import per anime (default: 10)",
+        )
+        parser.add_argument(
+            "--async",
+            action="store_true",
+            dest="use_async",
+            help="Run via Celery tasks instead of synchronously",
+        )
+        parser.add_argument(
+            "--priority-field",
+            type=str,
+            default="-popularity_rank",
+            help="Field to order by (default: -popularity_rank)",
         )
 
     def handle(self, *args, **options):
         anime_id = options.get("anime_id")
         limit = options.get("limit")
         batch_size = options.get("batch_size")
-        adaptive = options.get("adaptive")
-        delay = options.get("delay")
+        import_missing = not options.get("no_import_missing")  # Default to True
         max_imports = options.get("max_imports")
+        use_async = options.get("use_async")
+        priority_field = options.get("priority_field")
 
+        if use_async:
+            self._handle_async(
+                anime_id, batch_size, import_missing, max_imports, priority_field
+            )
+        else:
+            self._handle_sync(anime_id, limit, batch_size, import_missing, max_imports)
+
+    def _handle_async(self, anime_id, batch_size, import_missing, max_imports, priority_field):
+        """Handle via Celery tasks."""
+        from anime.tasks import sync_franchises
+
+        if anime_id:
+            # Single anime
+            result = sync_franchises.delay(
+                anime_id=anime_id,
+                import_missing=import_missing,
+                max_imports=max_imports,
+            )
+            self.stdout.write(
+                self.style.SUCCESS(f"Triggered franchise sync for anime ID {anime_id}")
+            )
+            self.stdout.write(f"Task ID: {result.id}")
+            if import_missing:
+                self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
+        else:
+            # Batch backfill
+            result = sync_franchises.delay(
+                mode="backfill",
+                batch_size=batch_size,
+                import_missing=import_missing,
+                max_imports=max_imports,
+                priority_field=priority_field,
+            )
+            self.stdout.write(
+                self.style.SUCCESS(f"Triggered franchise backfill for {batch_size} anime")
+            )
+            self.stdout.write(f"Task ID: {result.id}")
+            if import_missing:
+                self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
+
+    def _handle_sync(self, anime_id, limit, batch_size, import_missing, max_imports):
+        """Handle synchronously."""
         if anime_id:
             try:
                 anime = Anime.objects.get(id=anime_id)
                 self.stdout.write(f"Processing relations for: {anime.title}")
-                asyncio.run(self.process_single_anime(anime, max_imports))
+                if import_missing:
+                    self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
+                asyncio.run(self.process_single_anime(anime, import_missing, max_imports))
             except Anime.DoesNotExist:
                 self.stderr.write(f"Anime with ID {anime_id} not found")
                 return
@@ -162,6 +149,8 @@ class Command(BaseCommand):
 
             total = queryset.count()
             self.stdout.write(f"Found {total} anime without relations data")
+            if import_missing:
+                self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
 
             if total == 0:
                 self.stdout.write(
@@ -170,234 +159,115 @@ class Command(BaseCommand):
                 return
 
             asyncio.run(
-                self.process_batch(queryset, batch_size, adaptive, delay, max_imports)
+                self.process_batch(queryset, batch_size, import_missing, max_imports)
             )
 
-    async def process_single_anime(self, anime, max_imports: int = None):
-        """Process relations for a single anime"""
-        client = AniListService()
-        try:
-            results = await client.search_anime(anime.title)
-            if not results:
-                self.stderr.write(f"No AniList data found for: {anime.title}")
-                return
-
-            data = results[0]
-            await self.save_relations(anime, data)
-            imported = await self.import_missing_related_anime(
-                client, data, max_imports
-            )
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Updated relations for: {anime.title} (imported {imported} new anime)"
+    async def process_single_anime(self, anime, import_missing: bool, max_imports: int):
+        """Process relations for a single anime using the franchise task logic."""
+        from anime.tasks.franchises import FranchiseSyncTask
+        
+        task = FranchiseSyncTask()
+        async with task.service_context() as service:
+            try:
+                result = await task._process_anime_franchises(
+                    service, anime, import_missing, max_imports
                 )
-            )
-        except Exception as e:
-            self.stderr.write(f"Error processing {anime.title}: {str(e)}")
-        finally:
-            await client.close()
+                
+                if result.get("status") == "success":
+                    linked = result.get("relations_linked", 0)
+                    total = result.get("relations_count", 0)
+                    imported = result.get("imported_count", 0)
+                    missing = result.get("missing_slugs", 0)
+                    
+                    status_msg = f"✓ Updated relations for: {anime.title} ({total} relations"
+                    if linked == total:
+                        status_msg += f", ALL {linked} linked with slugs"
+                    else:
+                        status_msg += f", {linked} linked, {missing} missing slugs"
+                    if imported > 0:
+                        status_msg += f", {imported} imported"
+                    status_msg += ")"
+                    
+                    self.stdout.write(self.style.SUCCESS(status_msg))
+                else:
+                    self.stderr.write(
+                        f"✗ Failed to update {anime.title}: {result.get('error')}"
+                    )
+            except Exception as e:
+                self.stderr.write(f"✗ Error processing {anime.title}: {e}")
 
     async def process_batch(
-        self,
-        queryset,
-        initial_batch_size: int,
-        adaptive: bool,
-        delay: float,
-        max_imports: int = None,
+        self, queryset, batch_size: int, import_missing: bool, max_imports: int
     ):
-        """Process relations for multiple anime with smart rate limiting"""
-        # Evaluate queryset in a sync context to avoid SynchronousOnlyOperation
-        anime_list = await sync_to_async(list)(queryset)
+        """Process relations for multiple anime."""
+        from anime.tasks.franchises import FranchiseSyncTask
+        
+        # Evaluate queryset in a sync context
+        anime_list = await sync_to_async(list)(queryset[:batch_size])
         total = len(anime_list)
         processed = 0
         errors = 0
         total_imported = 0
+        total_relations = 0
+        total_linked = 0
 
-        # Initialize adaptive limiter if enabled
-        limiter = (
-            AdaptiveBatchLimiter(
-                initial_batch_size=initial_batch_size, base_delay=delay
-            )
-            if adaptive
-            else None
-        )
-
-        client = AniListService()
-        try:
-            i = 0
-            while i < total:
-                # Determine batch size
-                if adaptive and limiter:
-                    batch_size = limiter.get_batch_size()
-                    await limiter.before_batch()
-                else:
-                    batch_size = initial_batch_size
-                    if i > 0:  # Fixed delay between batches
-                        await asyncio.sleep(delay)
-
-                batch = anime_list[i : i + batch_size]
-                batch_num = i // batch_size + 1
-                total_batches = (total + batch_size - 1) // batch_size
-
-                self.stdout.write(
-                    f"Processing batch {batch_num}/{total_batches} "
-                    f"(size: {len(batch)}, delay: {limiter.current_delay if limiter else delay:.2f}s)"
-                )
-
-                # Process batch
-                batch_errors = 0
-                batch_success = True
-
-                for anime in batch:
-                    try:
-                        imported = await self.process_anime_with_client(
-                            client, anime, max_imports
-                        )
+        task = FranchiseSyncTask()
+        
+        async with task.service_context() as service:
+            for i, anime in enumerate(anime_list):
+                try:
+                    result = await task._process_anime_franchises(
+                        service, anime, import_missing, max_imports
+                    )
+                    
+                    if result.get("status") == "success":
                         processed += 1
-                        total_imported += imported
-                        self.stdout.write(
-                            f"✓ ({processed}/{total}) {anime.title} (+{imported} new)"
-                        )
-                    except Exception as e:
+                        total_imported += result.get("imported_count", 0)
+                        rel_count = result.get("relations_count", 0)
+                        linked_count = result.get("relations_linked", 0)
+                        total_relations += rel_count
+                        total_linked += linked_count
+                        
+                        status_msg = f"✓ ({i+1}/{total}) {anime.title}: {rel_count} relations"
+                        if linked_count == rel_count:
+                            status_msg += f", ALL linked"
+                        else:
+                            status_msg += f", {linked_count} linked"
+                        if result.get("imported_count", 0) > 0:
+                            status_msg += f", {result['imported_count']} imported"
+                        
+                        self.stdout.write(status_msg)
+                    else:
                         errors += 1
-                        batch_errors += 1
-                        batch_success = False
-                        self.stderr.write(f"✗ Error ({anime.title}): {str(e)}")
+                        self.stderr.write(
+                            f"⚠ ({i+1}/{total}) {anime.title}: {result.get('error')}"
+                        )
 
-                # Update adaptive limiter
-                if adaptive and limiter:
-                    limiter.after_batch(batch_success, batch_errors)
+                    # Progress indicator
+                    if (i + 1) % 10 == 0:
+                        self.stdout.write(
+                            f"--- Progress: {i+1}/{total} "
+                            f"(Success: {processed}, Errors: {errors}, "
+                            f"Linked: {total_linked}/{total_relations}) ---"
+                        )
 
-                # Progress indicator
-                if processed % 50 == 0:
-                    success_rate = (
-                        ((processed - errors) / processed * 100) if processed > 0 else 0
-                    )
-                    self.stdout.write(
-                        f"--- Progress: {processed}/{total} "
-                        f"(Success rate: {success_rate:.1f}%) ---"
-                    )
+                except Exception as e:
+                    errors += 1
+                    self.stderr.write(f"✗ Error ({anime.title}): {str(e)}")
 
-                i += batch_size
-
-        finally:
-            await client.close()
-
-        success_rate = ((processed - errors) / processed * 100) if processed > 0 else 0
         self.stdout.write(
             self.style.SUCCESS(
-                f"\nComplete! Processed: {processed}, Imported: {total_imported}, "
-                f"Errors: {errors}, Success rate: {success_rate:.1f}%"
+                f"\nComplete! Processed: {processed}, "
+                f"Total relations: {total_relations}, "
+                f"Linked with slugs: {total_linked}, "
+                f"Imported: {total_imported}, Errors: {errors}"
             )
         )
-
-        # Print adaptive stats if enabled
-        if adaptive and limiter:
+        
+        if total_linked < total_relations:
             self.stdout.write(
-                f"Adaptive stats: Final batch size: {limiter.batch_size}, "
-                f"Final delay: {limiter.current_delay:.2f}s, "
-                f"Total requests: {limiter.total_requests}, "
-                f"Failed: {limiter.failed_requests}"
-            )
-
-    async def process_anime_with_client(self, client, anime, max_imports: int = None):
-        """Process a single anime with the provided client, returns count of imported anime"""
-        try:
-            results = await client.search_anime(anime.title)
-            if not results:
-                return 0
-
-            data = results[0]
-            await self.save_relations(anime, data)
-            imported = await self.import_missing_related_anime(
-                client, data, max_imports
-            )
-            return imported
-
-        except Exception as e:
-            raise e
-
-    async def import_missing_related_anime(self, client, data, max_imports: int = None):
-        """
-        For each related anime in the data, check if it exists in our DB.
-        If not, fetch its full data from AniList and import it.
-        Returns count of newly imported anime.
-        """
-        relations = data.get("relations", {}).get("edges", [])
-        anime_relations = [
-            edge for edge in relations if edge["node"]["type"] == "ANIME"
-        ]
-
-        if not anime_relations:
-            return 0
-
-        imported = 0
-        for edge in anime_relations:
-            # Check max imports limit
-            if max_imports is not None and imported >= max_imports:
-                logger.info(f"Reached max imports limit ({max_imports})")
-                break
-
-            node = edge["node"]
-            anilist_id = node["id"]
-            title = node["title"].get("english") or node["title"].get("romaji")
-
-            if not title:
-                continue
-
-            # Check if this anime already exists in our DB
-            exists = await sync_to_async(
-                Anime.objects.filter(anilist_id=anilist_id).exists
-            )()
-
-            if exists:
-                continue
-
-            # Fetch full data from AniList and import
-            try:
-                # Add small delay to avoid hitting rate limits during imports
-                await asyncio.sleep(0.2)
-
-                full_results = await client.search_anime(title)
-                if full_results:
-                    stats = await client.process_media_list(full_results[:1])
-                    if stats.get("created", 0) > 0:
-                        imported += 1
-                        logger.info(f"Imported related anime: {title}")
-            except Exception as e:
-                logger.warning(f"Could not import related anime '{title}': {e}")
-
-        return imported
-
-    @sync_to_async
-    def save_relations(self, anime, data):
-        """Save relations metadata to the anime's JSON field"""
-        from anime.models import Anime
-
-        relations = []
-
-        for edge in data.get("relations", {}).get("edges", []):
-            if edge["node"]["type"] == "ANIME":
-                anilist_id = edge["node"]["id"]
-                # Try to find the local anime to get its slug
-                try:
-                    related_anime = Anime.objects.get(anilist_id=anilist_id)
-                    slug = related_anime.slug
-                except Anime.DoesNotExist:
-                    slug = None
-
-                relations.append(
-                    {
-                        "id": anilist_id,
-                        "slug": slug,
-                        "type": edge["relationType"],
-                        "title": edge["node"]["title"].get("english")
-                        or edge["node"]["title"].get("romaji"),
-                        "format": edge["node"]["format"],
-                        "status": edge["node"]["status"],
-                        "cover": edge["node"]["coverImage"].get("large"),
-                    }
+                self.style.WARNING(
+                    f"WARNING: {total_relations - total_linked} relations still missing slugs. "
+                    f"Run 'update_relation_slugs' task to fix."
                 )
-
-        anime.relations = relations
-        anime.save(update_fields=["relations"])
+            )

@@ -481,6 +481,10 @@ class AniListService:
                     logger.info(f"Created Anime: {title}")
                 else:
                     # Always update for real-time freshness
+                    # Preserve existing slug to maintain URL stability
+                    if "slug" in anime_data_dict:
+                        del anime_data_dict["slug"]
+
                     await self._update_anime(anime, anime_data_dict)
                     stats["updated"] += 1
                     logger.info(f"Updated Anime: {title}")
@@ -536,6 +540,15 @@ class AniListService:
 
     @sync_to_async
     def _get_or_create_anime(self, slug, anime_data_dict):
+        anilist_id = anime_data_dict.get("anilist_id")
+
+        if anilist_id:
+            try:
+                anime = Anime.objects.get(anilist_id=anilist_id)
+                return anime, False
+            except Anime.DoesNotExist:
+                pass
+
         return Anime.objects.get_or_create(slug=slug, defaults=anime_data_dict)
 
     @sync_to_async
@@ -960,8 +973,6 @@ class AniListService:
                     node { id name { full native } image { large } description }
                 }
             }
-            openings
-            endings
         """
 
         query = f"""

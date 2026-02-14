@@ -92,7 +92,7 @@ class SyncAnimeCatalogTask(BaseTask):
     service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
-    def run(self, sync_type: str = "trending", limit: int = 50, **kwargs):
+    def execute(self, sync_type: str = "trending", limit: int = 50, **kwargs):
         """
         Run sync based on sync_type.
 
@@ -235,14 +235,12 @@ class SyncAnimeCatalogTask(BaseTask):
         return current_season, year
 
     async def _update_trending_ranks(self, data: List[Dict]):
-        """Batch update trending ranks."""
+        """Batch update trending ranks using AniList ID."""
         rank_updates = {}
         for i, item in enumerate(data):
-            title = item.get("title", {}).get("english") or item.get("title", {}).get(
-                "romaji"
-            )
-            if title:
-                rank_updates[slugify(title)] = i + 1
+            anilist_id = item.get("id")
+            if anilist_id:
+                rank_updates[anilist_id] = i + 1
 
         @sync_to_async
         def batch_update():
@@ -253,8 +251,8 @@ class SyncAnimeCatalogTask(BaseTask):
                 )
 
                 # Update new ranks
-                for slug, rank in rank_updates.items():
-                    Anime.objects.filter(slug=slug).update(trending_rank=rank)
+                for aid, rank in rank_updates.items():
+                    Anime.objects.filter(anilist_id=aid).update(trending_rank=rank)
 
         await batch_update()
         logger.info(f"Updated {len(rank_updates)} trending ranks")
@@ -283,4 +281,4 @@ def sync_anime_catalog(self, sync_type: str = "trending", limit: int = 50, **kwa
     Returns:
         Dict with sync statistics
     """
-    return self.run(sync_type, limit, **kwargs)
+    return self.execute(sync_type, limit, **kwargs)

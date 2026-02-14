@@ -1144,3 +1144,17 @@ def fetch_themes_for_anime(self, anime_id: int):
                 raise self.retry(exc=e)
 
     return run_async(_process())
+
+
+# ============================================================================
+# FRANCHISE SYNC TASKS (Also defined in anime/tasks/franchises.py)
+# These are duplicated here to ensure Celery worker registration
+# ============================================================================
+
+from anime.tasks.franchises import sync_franchises, update_relation_slugs
+
+# Re-export for Celery discovery
+__all__ = [
+    'sync_franchises',
+    'update_relation_slugs',
+]

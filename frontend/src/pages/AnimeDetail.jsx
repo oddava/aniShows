@@ -531,7 +531,7 @@ export default function AnimeDetail() {
                                 </div>
 
                                 {/* Main Actions */}
-                                <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-4 sm:gap-6 bg-dark-100/40 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
+                                <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 sm:gap-4 md:gap-6 bg-dark-100/40 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
                                     {isAuthenticated ? (
                                         <>
                                             {/* Left: Progress Tracker */}
@@ -545,10 +545,10 @@ export default function AnimeDetail() {
                                             </div>
 
                                             {/* Right: Like, Share, Watch Time */}
-                                            <div className="flex items-center justify-between sm:justify-start gap-4 sm:gap-5 sm:pl-6 sm:border-l border-gray-800/50 order-1 sm:order-2">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Watch Time</span>
-                                                    <span className="text-sm sm:text-base font-black text-white whitespace-nowrap">
+                                            <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 md:gap-5 sm:pl-4 md:pl-6 sm:border-l border-gray-800/50 order-1 sm:order-2">
+                                                <div className="flex flex-col min-w-[60px]">
+                                                    <span className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-0.5 sm:mb-1">Watch Time</span>
+                                                    <span className="text-xs sm:text-sm md:text-base font-black text-white whitespace-nowrap">
                                                         {anime.episode_count ? (() => {
                                                             const duration = anime.duration_minutes || 24;
                                                             const totalMinutes = anime.episode_count * duration;
@@ -558,16 +558,16 @@ export default function AnimeDetail() {
                                                         })() : 'N/A'}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1.5 sm:gap-2">
                                                     <button
                                                         onClick={handleFavorite}
                                                         title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                                                        className={`p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all duration-300 group
+                                                        className={`p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border transition-all duration-300 group flex-shrink-0
                                                             ${isFavorite
                                                                 ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20'
                                                                 : 'bg-dark-200 border-gray-700 text-gray-400 hover:border-red-500/50 hover:text-red-500'}`}
                                                     >
-                                                        <Heart className={`w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110 ${isFavorite ? 'fill-current' : ''}`} />
+                                                        <Heart className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 transition-transform group-hover:scale-110 ${isFavorite ? 'fill-current' : ''}`} />
                                                     </button>
 
                                                     <button
@@ -576,9 +576,9 @@ export default function AnimeDetail() {
                                                             alert('Link copied to clipboard!');
                                                         }}
                                                         title="Share Anime"
-                                                        className="p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300 active:scale-95"
+                                                        className="p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300 active:scale-95 flex-shrink-0"
                                                     >
-                                                        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                                         </svg>
                                                     </button>
@@ -587,7 +587,7 @@ export default function AnimeDetail() {
                                         </>
                                     ) : (
                                         <div className="flex-1 w-full">
-                                            <Link to="/login" className="btn-primary w-full py-3 sm:py-4 text-center rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base">
+                                            <Link to="/login" className="btn-primary w-full py-2.5 sm:py-3 md:py-4 text-center rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base">
                                                 <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> Sign In to Track Progress
                                             </Link>
                                         </div>

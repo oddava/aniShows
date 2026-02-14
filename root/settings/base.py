@@ -435,8 +435,14 @@ CELERY_BEAT_SCHEDULE = {
     "sync-themes-daily": {
         "task": "anime.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=6, minute=0),  # 6:00 AM
-        "kwargs": {"limit": 100},
+        "kwargs": {"limit": 500},  # Increased from 100 to 500
         "options": {"queue": "default"},
+    },
+    "sync-themes-retry": {
+        "task": "anime.tasks.themes.sync_theme_songs",
+        "schedule": crontab(hour=18, minute=0),  # 6:00 PM - retry failed
+        "kwargs": {"limit": 200, "retry_failed": True},
+        "options": {"queue": "low_priority"},
     },
     "user-maintenance-daily": {
         "task": "users.tasks.run_user_maintenance_workflow",
