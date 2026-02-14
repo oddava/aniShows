@@ -1,4 +1,4 @@
-import { BarChart3, Users, Star, TrendingUp, Activity, Calendar } from 'lucide-react';
+import { BarChart3, Users, Star, TrendingUp, Activity } from 'lucide-react';
 
 export default function StatsTab({ anime, accentColor }) {
     // Calculate total platform members from status_distribution
@@ -97,25 +97,7 @@ export default function StatsTab({ anime, accentColor }) {
                         </div>
                     </div>
                 </div>
-                {/* Season Info */}
-                {(anime?.season || anime?.season_year) && (
-                    <div className="bg-dark-100/50 rounded-2xl p-6 border border-gray-800">
-                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                            <Calendar className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
-                            Season Information
-                        </h3>
-                        <div className="space-y-3">
-                            <div className="flex justify-between">
-                                <span className="text-gray-400">Season</span>
-                                <span className="text-white font-medium capitalize">
-                                    {anime.season?.toLowerCase()} {anime.season_year}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Scores by Category */}
+                {/* Rankings */}
                 <div className="bg-dark-100/50 rounded-2xl p-6 border border-gray-800">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <BarChart3 className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
