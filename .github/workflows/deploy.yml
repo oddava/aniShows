@@ -33,6 +33,9 @@ jobs:
             echo "📂 Navigating to project directory..."
             cd /home/ubuntu/aniShows
             
+            echo "🔄 Stashing any local changes..."
+            git stash
+            
             echo "🔄 Pulling latest changes from GitHub..."
             git pull origin main
             
