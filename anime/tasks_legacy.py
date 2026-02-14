@@ -883,10 +883,25 @@ async def fetch_themes_from_jikan(
 
 @sync_to_async
 def _get_anime_without_themes(limit: int = 100):
-    """Get anime that don't have theme songs yet."""
+    """Get anime that don't have theme songs yet.
+    
+    Only fetches for anime that have aired (not upcoming) to avoid
+    wasting API calls on anime without themes yet.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    
     return list(
-        Anime.objects.filter(theme_songs__isnull=True)
-        .exclude(mal_id__isnull=True)
+        Anime.objects.filter(
+            theme_songs__isnull=True,
+            mal_id__isnull=False,  # Has MAL ID
+            status__in=['FINISHED', 'Airing'],  # Has aired or finished
+        )
+        .exclude(  # Exclude recently aired (give time for themes to be added)
+            status='Airing',
+            release_date__gt=timezone.now().date() - timedelta(days=7)
+        )
+        .order_by('-popularity_rank')  # Prioritize popular anime
         .distinct()[:limit]
     )
 
