@@ -345,18 +345,23 @@ class ThemeSongSyncTask(BaseTask):
                 parsed = self._parse_theme_song(clean_text)
 
                 try:
+                    # Truncate fields to fit database limits (200 chars for title/artist)
+                    title = (parsed["title"] or "")[:200]
+                    artist = (parsed["artist"] or "")[:200]
+                    episodes = (parsed["episodes"] or "")[:100]
+                    
                     ThemeSong.objects.create(
                         anime=anime,
                         song_type=ThemeSong.SongType.OPENING,
                         track_number=idx,
-                        title=parsed["title"],
-                        artist=parsed["artist"],
-                        episodes=parsed["episodes"],
-                        anilist_raw=opening_text,
+                        title=title,
+                        artist=artist,
+                        episodes=episodes,
+                        anilist_raw=opening_text[:500],  # Also limit raw text
                         sync_source="jikan",
                         last_synced=timezone.now(),
                         youtube_url=self._generate_youtube_url(
-                            parsed["title"], parsed["artist"], "opening", anime.title
+                            title, artist, "opening", anime.title
                         ),
                     )
                     count += 1
@@ -371,18 +376,23 @@ class ThemeSongSyncTask(BaseTask):
                 parsed = self._parse_theme_song(clean_text)
 
                 try:
+                    # Truncate fields to fit database limits (200 chars for title/artist)
+                    title = (parsed["title"] or "")[:200]
+                    artist = (parsed["artist"] or "")[:200]
+                    episodes = (parsed["episodes"] or "")[:100]
+                    
                     ThemeSong.objects.create(
                         anime=anime,
                         song_type=ThemeSong.SongType.ENDING,
                         track_number=idx,
-                        title=parsed["title"],
-                        artist=parsed["artist"],
-                        episodes=parsed["episodes"],
-                        anilist_raw=ending_text,
+                        title=title,
+                        artist=artist,
+                        episodes=episodes,
+                        anilist_raw=ending_text[:500],  # Also limit raw text
                         sync_source="jikan",
                         last_synced=timezone.now(),
                         youtube_url=self._generate_youtube_url(
-                            parsed["title"], parsed["artist"], "ending", anime.title
+                            title, artist, "ending", anime.title
                         ),
                     )
                     count += 1

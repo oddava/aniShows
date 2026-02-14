@@ -923,14 +923,19 @@ def _save_theme_songs(anime: Anime, themes_data: dict, source: str = "jikan"):
             clean_text = re.sub(r"^\d+:\s*", "", opening_text)
             parsed = _parse_theme_song(clean_text)
 
+            # Truncate fields to fit database limits
+            title = (parsed.get("title") or "")[:200]
+            artist = (parsed.get("artist") or "")[:200]
+            episodes = (parsed.get("episodes") or "")[:100]
+            
             ThemeSong.objects.create(
                 anime=anime,
                 song_type=ThemeSong.SongType.OPENING,
                 track_number=idx,
-                title=parsed["title"],
-                artist=parsed["artist"],
-                episodes=parsed["episodes"],
-                anilist_raw=opening_text,
+                title=title,
+                artist=artist,
+                episodes=episodes,
+                anilist_raw=opening_text[:500],
                 sync_source=source,
                 last_synced=timezone.now(),
             )
@@ -942,14 +947,19 @@ def _save_theme_songs(anime: Anime, themes_data: dict, source: str = "jikan"):
             clean_text = re.sub(r"^\d+:\s*", "", ending_text)
             parsed = _parse_theme_song(clean_text)
 
+            # Truncate fields to fit database limits
+            title = (parsed.get("title") or "")[:200]
+            artist = (parsed.get("artist") or "")[:200]
+            episodes = (parsed.get("episodes") or "")[:100]
+            
             ThemeSong.objects.create(
                 anime=anime,
                 song_type=ThemeSong.SongType.ENDING,
                 track_number=idx,
-                title=parsed["title"],
-                artist=parsed["artist"],
-                episodes=parsed["episodes"],
-                anilist_raw=ending_text,
+                title=title,
+                artist=artist,
+                episodes=episodes,
+                anilist_raw=ending_text[:500],
                 sync_source=source,
                 last_synced=timezone.now(),
             )
