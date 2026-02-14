@@ -246,6 +246,7 @@ if USE_S3:
 
     STATIC_LOCATION = "static"
     STATIC_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/"
+    STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
     PUBLIC_MEDIA_LOCATION = "media"
     MEDIA_URL = (
@@ -485,43 +486,82 @@ JAZZMIN_SETTINGS = {
     "site_title": "aniShows Admin",
     "site_header": "aniShows",
     "site_brand": "aniShows",
-    "site_logo": "books/img/logo.png",
+    "site_logo": None,
     "login_logo": None,
     "login_logo_dark": None,
     "site_logo_classes": "img-circle",
-    "site_icon": None,
-    "welcome_sign": "Welcome to the library",
-    "copyright": "Acme Library Ltd",
-    "search_model": ["auth.User", "auth.Group"],
+    "site_icon": "fas fa-tv",
+    "welcome_sign": "Welcome to aniShows Administration",
+    "copyright": "aniShows",
+    "search_model": ["auth.User", "users.CustomUser", "anime.Anime"],
     "user_avatar": None,
     "topmenu_links": [
-        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {
-            "name": "Support",
-            "url": "https://github.com/farridav/django-jazzmin/issues",
-            "new_window": True,
-        },
-        {"model": "auth.User"},
+        {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "API Admin", "url": "/api/v1/admin/dashboard/", "new_window": True},
+        {"app": "users"},
         {"app": "anime"},
+        {"app": "core"},
     ],
     "usermenu_links": [
-        {
-            "name": "Support",
-            "url": "https://github.com/farridav/django-jazzmin/issues",
-            "new_window": True,
-        },
+        {"name": "API Admin", "url": "/api/v1/admin/dashboard/", "new_window": True},
         {"model": "auth.user"},
     ],
     "show_sidebar": True,
     "navigation_expanded": True,
     "hide_apps": [],
     "hide_models": [],
-    "order_with_respect_to": ["auth", "users", "anime"],
-    "custom_links": {},
+    "order_with_respect_to": [
+        "auth",
+        "users",
+        "anime",
+        "core",
+        "django_celery_beat",
+        "django_celery_results",
+    ],
+    "custom_links": {
+        "core": [
+            {
+                "name": "Celery Dashboard",
+                "url": "admin:core_celerytaskresult_changelist",
+                "icon": "fas fa-tasks",
+                "permissions": ["core.view_celerytaskresult"],
+            }
+        ]
+    },
     "icons": {
+        # Auth
         "auth": "fas fa-users-cog",
         "auth.user": "fas fa-user",
         "auth.Group": "fas fa-users",
+        # Users app
+        "users": "fas fa-users",
+        "users.CustomUser": "fas fa-user",
+        "users.UserProfile": "fas fa-id-card",
+        "users.UserImportJob": "fas fa-file-import",
+        # Anime app
+        "anime": "fas fa-film",
+        "anime.Anime": "fas fa-tv",
+        "anime.Genre": "fas fa-tags",
+        "anime.Studio": "fas fa-building",
+        "anime.Review": "fas fa-star",
+        # Core app
+        "core": "fas fa-cog",
+        "core.SystemLog": "fas fa-clipboard-list",
+        "core.AuditLog": "fas fa-history",
+        "core.CeleryTaskResult": "fas fa-tasks",
+        "core.CeleryWorkerStatus": "fas fa-server",
+        "core.CeleryTaskSchedule": "fas fa-calendar-alt",
+        # Celery Beat
+        "django_celery_beat": "fas fa-clock",
+        "django_celery_beat.PeriodicTask": "fas fa-clock",
+        "django_celery_beat.IntervalSchedule": "fas fa-hourglass-half",
+        "django_celery_beat.CrontabSchedule": "fas fa-calendar",
+        "django_celery_beat.SolarSchedule": "fas fa-sun",
+        "django_celery_beat.ClockedSchedule": "fas fa-stopwatch",
+        # Celery Results
+        "django_celery_results": "fas fa-chart-bar",
+        "django_celery_results.TaskResult": "fas fa-check-circle",
+        "django_celery_results.GroupResult": "fas fa-layer-group",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",
@@ -529,6 +569,17 @@ JAZZMIN_SETTINGS = {
     "ui_tweaks": {
         "theme": "darkly",
         "dark_mode_theme": "darkly",
+        "navbar": "navbar-dark",
+        "navbar_fixed": False,
+        "footer_fixed": False,
+        "sidebar_fixed": True,
+        "sidebar": "sidebar-dark-primary",
+        "sidebar_nav_small_text": False,
+        "sidebar_disable_expand": False,
+        "sidebar_nav_child_indent": True,
+        "sidebar_nav_compact_style": False,
+        "sidebar_nav_legacy_style": False,
+        "sidebar_nav_flat_style": False,
     },
     "custom_css": None,
     "custom_js": None,
@@ -538,6 +589,8 @@ JAZZMIN_SETTINGS = {
     "changeform_format_overrides": {
         "auth.user": "collapsible",
         "auth.group": "vertical_tabs",
+        "users.CustomUser": "collapsible",
+        "anime.Anime": "horizontal_tabs",
     },
-    "language_chooser": True,
+    "language_chooser": False,
 }
