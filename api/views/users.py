@@ -22,7 +22,7 @@ User = get_user_model()
 
 def get_annotated_user_queryset(user=None):
     """Helper to get user queryset with all performance annotations."""
-    from django.db.models import FloatField
+    from django.db.models import FloatField, Subquery, OuterRef
     from django.db.models.functions import Coalesce, Round
 
     queryset = User.objects.select_related("userprofile")
@@ -37,16 +37,19 @@ def get_annotated_user_queryset(user=None):
         _episodes_watched=Coalesce(Sum("anime_lists__episodes_watched"), 0),
     )
 
-    # Calculate total minutes watched correctly
-    # Sum episodes_watched * duration_minutes for each anime list entry
+    # Calculate total minutes watched using subquery to avoid join duplicates
+    from users.models import UserAnimeList
+
+    total_minutes_subquery = (
+        UserAnimeList.objects.filter(user=OuterRef("pk"))
+        .annotate(entry_minutes=F("episodes_watched") * F("anime__duration_minutes"))
+        .values("user")
+        .annotate(total=Sum("entry_minutes"))
+        .values("total")
+    )
+
     queryset = queryset.annotate(
-        _total_minutes=Coalesce(
-            Sum(
-                F("anime_lists__episodes_watched")
-                * F("anime_lists__anime__duration_minutes")
-            ),
-            0,
-        )
+        _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
     )
 
     # Calculate mean score (exclude 0 scores) - round to 1 decimal place

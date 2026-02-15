@@ -745,8 +745,9 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = "username"
 
     def get_queryset(self):
-        from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
+        from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef, Subquery
         from django.db.models.functions import Coalesce
+        from users.models import UserAnimeList
 
         user = self.request.user
 
@@ -762,15 +763,19 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             _episodes_watched=Coalesce(Sum("anime_lists__episodes_watched"), 0),
         )
 
-        # Calculate total minutes watched correctly with Coalesce
-        queryset = queryset.annotate(
-            _total_minutes=Coalesce(
-                Sum(
-                    F("anime_lists__episodes_watched")
-                    * F("anime_lists__anime__duration_minutes")
-                ),
-                0,
+        # Calculate total minutes watched using subquery to avoid join duplicates
+        total_minutes_subquery = (
+            UserAnimeList.objects.filter(user=OuterRef("pk"))
+            .annotate(
+                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
             )
+            .values("user")
+            .annotate(total=Sum("entry_minutes"))
+            .values("total")
+        )
+
+        queryset = queryset.annotate(
+            _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
         )
 
         # Calculate mean score (exclude 0 scores) - use _mean_score_raw for rounding in serializer
@@ -793,7 +798,7 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             )
 
-        return queryset
+        return queryset.distinct()
 
 
 class FavoriteViewSet(viewsets.ModelViewSet):
