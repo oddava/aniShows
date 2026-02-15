@@ -234,18 +234,32 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
 
     def get_cover_image_small(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_small.url)
-            return obj.cover_image_small.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_small.url)
+                return obj.cover_image_small.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_cover_image_medium(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_medium.url)
-            return obj.cover_image_medium.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_medium.url)
+                return obj.cover_image_medium.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_is_favorite(self, obj):
@@ -312,34 +326,62 @@ class AnimeListSerializer(serializers.ModelSerializer):
 
     def get_cover_image_small(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_small.url)
-            return obj.cover_image_small.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_small.url)
+                return obj.cover_image_small.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_cover_image_medium(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_medium.url)
-            return obj.cover_image_medium.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_medium.url)
+                return obj.cover_image_medium.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_banner_image_small(self, obj):
         if obj.banner_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.banner_image_small.url)
-            return obj.banner_image_small.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image_small.url)
+                return obj.banner_image_small.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image.url)
+                return obj.banner_image.url
         return None
 
     def get_banner_image_medium(self, obj):
         if obj.banner_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.banner_image_medium.url)
-            return obj.banner_image_medium.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image_medium.url)
+                return obj.banner_image_medium.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image.url)
+                return obj.banner_image.url
         return None
 
     def get_is_favorite(self, obj):
@@ -438,50 +480,92 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
 
     def get_cover_image_small(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_small.url)
-            return obj.cover_image_small.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_small.url)
+                return obj.cover_image_small.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_cover_image_medium(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_medium.url)
-            return obj.cover_image_medium.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_medium.url)
+                return obj.cover_image_medium.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_cover_image_large(self, obj):
         if obj.cover_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.cover_image_large.url)
-            return obj.cover_image_large.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image_large.url)
+                return obj.cover_image_large.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.cover_image.url)
+                return obj.cover_image.url
         return None
 
     def get_banner_image_small(self, obj):
         if obj.banner_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.banner_image_small.url)
-            return obj.banner_image_small.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image_small.url)
+                return obj.banner_image_small.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image.url)
+                return obj.banner_image.url
         return None
 
     def get_banner_image_medium(self, obj):
         if obj.banner_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.banner_image_medium.url)
-            return obj.banner_image_medium.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image_medium.url)
+                return obj.banner_image_medium.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image.url)
+                return obj.banner_image.url
         return None
 
     def get_banner_image_large(self, obj):
         if obj.banner_image:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.banner_image_large.url)
-            return obj.banner_image_large.url
+            try:
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image_large.url)
+                return obj.banner_image_large.url
+            except Exception:
+                # Fallback to original image if thumbnail fails
+                request = self.context.get("request")
+                if request:
+                    return request.build_absolute_uri(obj.banner_image.url)
+                return obj.banner_image.url
         return None
 
     def get_status_distribution(self, obj):

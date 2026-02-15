@@ -1,4 +1,4 @@
-import { Music, Play, Disc, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Disc, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 
 export default function MusicSection({ anime, accentColor }) {
@@ -18,18 +18,7 @@ export default function MusicSection({ anime, accentColor }) {
     const MAX_VISIBLE = 6;
 
     if (!hasThemes) {
-        return (
-            <div className="mb-12 animate-tab-content">
-                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                    <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
-                    Themes
-                </h2>
-                <div className="bg-dark-100/30 rounded-2xl p-8 border border-gray-800 text-center">
-                    <Music className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                    <p className="text-gray-400">Theme song information not available.</p>
-                </div>
-            </div>
-        );
+        return null;
     }
 
     return (

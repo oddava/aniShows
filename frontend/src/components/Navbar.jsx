@@ -143,7 +143,7 @@ export default function Navbar() {
     const [lastScrollY, setLastScrollY] = useState(0);
     const [allAnimeCache, setAllAnimeCache] = useState([]);
     const [selectedIndex, setSelectedIndex] = useState(-1);
-    const { user, logout, isAuthenticated } = useAuth();
+    const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const profileRef = useRef(null);
@@ -493,7 +493,7 @@ export default function Navbar() {
                             <NavItem to="/browse" icon={Search} label="Browse" />
                             <NavItem to="/seasonal" icon={Calendar} label="Seasonal" />
                             <NavItem to="/schedule" icon={Tv} label="Schedule" />
-                            {isAuthenticated && (
+                            {(isAuthenticated || authLoading) && (
                                 <NavItem to="/profile" icon={Heart} label="My List" />
                             )}
 
@@ -634,9 +634,15 @@ export default function Navbar() {
                         {/* Right Section: Notifications + Auth */}
                         <div className="hidden md:flex items-center gap-2">
                             {/* Notifications */}
-                            {isAuthenticated && <NotificationBell />}
+                            {isAuthenticated && !authLoading && <NotificationBell />}
 
-                            {isAuthenticated ? (
+                            {authLoading ? (
+                                // Loading state - show skeleton instead of "Sign In" buttons
+                                <div className="flex items-center gap-2">
+                                    <div className="w-20 h-8 bg-dark-100 rounded-lg animate-pulse" />
+                                    <div className="w-8 h-8 bg-dark-100 rounded-lg animate-pulse" />
+                                </div>
+                            ) : isAuthenticated ? (
                                 <div className="relative" ref={profileRef}>
                                     {/* Profile Button */}
                                     <button
@@ -837,7 +843,7 @@ export default function Navbar() {
                                     <Tv className="w-5 h-5" />
                                     Schedule
                                 </Link>
-                                {isAuthenticated && (
+                                {(isAuthenticated || authLoading) && (
                                     <Link
                                         to="/profile"
                                         className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/profile'
@@ -852,7 +858,18 @@ export default function Navbar() {
                                 )}
                             </div>
 
-                            {isAuthenticated ? (
+                            {authLoading ? (
+                                // Loading state for mobile
+                                <div className="space-y-2 pt-4 border-t border-gray-700/50">
+                                    <div className="flex items-center gap-3 py-3 px-3">
+                                        <div className="w-12 h-12 rounded-xl bg-dark-50 animate-pulse" />
+                                        <div className="space-y-2">
+                                            <div className="w-24 h-4 bg-dark-50 rounded animate-pulse" />
+                                            <div className="w-32 h-3 bg-dark-50 rounded animate-pulse" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : isAuthenticated ? (
                                 <div className="space-y-1 pt-4 border-t border-gray-700/50">
                                     {/* Mobile Profile Header with Stats */}
                                     <Link to="/profile" className="flex items-center gap-3 py-3 px-3 hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>

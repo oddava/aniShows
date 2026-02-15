@@ -17,19 +17,22 @@ export default function Home() {
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
-    // Use useQueries for parallel fetching with proper stale times
+    // Critical: Load trending immediately for hero section
     const { data: trending, isLoading: trendingLoading } = useQuery({
         queryKey: ['anime', 'trending'],
         queryFn: () => animeApi.getTrending().then(res => res.data),
         staleTime: 1000 * 60 * 15, // 15 minutes
         gcTime: 1000 * 60 * 30,
+        priority: 'high', // Load this first
     });
 
+    // Non-critical: Defer top rated to reduce initial load
     const { data: topRated, isLoading: topRatedLoading } = useQuery({
         queryKey: ['anime', 'top_rated'],
         queryFn: () => animeApi.getTopRated().then(res => res.data),
         staleTime: 1000 * 60 * 15,
         gcTime: 1000 * 60 * 30,
+        enabled: !trendingLoading, // Only load after trending is loaded
     });
 
     // Hero Carousel Logic - optimized with useCallback
@@ -317,12 +320,14 @@ export default function Home() {
 }
 
 function CurrentlyWatchingSection() {
+    const { isAuthenticated } = useAuth();
+
     const { data: watching, isLoading } = useQuery({
         queryKey: ['user', 'list', 'watching'],
         queryFn: () => listApi.getAll({ status: 'Watching', sort: '-updated_at', limit: 6 }).then(res => res.data.results || res.data),
         staleTime: 1000 * 60 * 2,
         retry: false,
-        enabled: typeof window !== 'undefined',
+        enabled: isAuthenticated, // Only fetch if authenticated
     });
 
     if (isLoading || !watching || watching.length === 0) return null;
