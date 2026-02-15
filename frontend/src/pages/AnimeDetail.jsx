@@ -290,42 +290,75 @@ export default function AnimeDetail() {
     useEffect(() => {
         if (!anime?.cover_image) return;
 
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = anime.cover_image;
-
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = 1;
-                canvas.height = 1;
-                ctx.drawImage(img, 0, 0, 1, 1);
-                const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-
-                const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-                if (luminance > 0.85) return;
-
-                let finalR = r, finalG = g, finalB = b;
-
-                if (luminance < 0.25) {
-                    const lightenFactor = 0.25 / Math.max(luminance, 0.01);
-                    finalR = Math.min(255, Math.round(r * lightenFactor));
-                    finalG = Math.min(255, Math.round(g * lightenFactor));
-                    finalB = Math.min(255, Math.round(b * lightenFactor));
-                }
-
-                const toHex = (c) => {
-                    const hex = c.toString(16);
-                    return hex.length === 1 ? '0' + hex : hex;
+        const extractColor = (imageUrl) => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 1;
+                        canvas.height = 1;
+                        ctx.drawImage(img, 0, 0, 1, 1);
+                        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+                        resolve({ r, g, b });
+                    } catch (e) {
+                        reject(e);
+                    }
                 };
-                setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
-            } catch (e) {
-                console.warn('Color extraction failed:', e);
-            }
+                
+                img.onerror = () => {
+                    reject(new Error('Failed to load image'));
+                };
+
+                // Add cache buster to avoid cached images without CORS headers
+                img.src = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+            });
         };
-    }, [anime?.cover_image]);
+
+        const processColor = ({ r, g, b }) => {
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+            if (luminance > 0.85) {
+                setAccentColor(null);
+                return;
+            }
+
+            let finalR = r, finalG = g, finalB = b;
+
+            if (luminance < 0.25) {
+                const lightenFactor = 0.25 / Math.max(luminance, 0.01);
+                finalR = Math.min(255, Math.round(r * lightenFactor));
+                finalG = Math.min(255, Math.round(g * lightenFactor));
+                finalB = Math.min(255, Math.round(b * lightenFactor));
+            }
+
+            const toHex = (c) => {
+                const hex = c.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            };
+            setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
+        };
+
+        // Try cover image first, then banner as fallback
+        extractColor(anime.cover_image)
+            .then(processColor)
+            .catch((err) => {
+                console.warn('Cover image color extraction failed:', err);
+                if (anime.banner_image) {
+                    extractColor(anime.banner_image)
+                        .then(processColor)
+                        .catch((err2) => {
+                            console.warn('Banner image color extraction failed:', err2);
+                            setAccentColor(null);
+                        });
+                } else {
+                    setAccentColor(null);
+                }
+            });
+    }, [anime?.cover_image, anime?.banner_image]);
 
     const createReviewMutation = useMutation({
         mutationFn: (data) => reviewApi.create({ ...data, anime_slug: slug }),

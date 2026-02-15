@@ -279,12 +279,8 @@ class Anime(Model):
             Index(fields=["title"]),
             Index(fields=["release_date"]),
             Index(fields=["-member_count"]),
-            Index(
-                fields=["status", "anime_type", "-release_date"]
-            ),
-            Index(
-                fields=["season", "season_year", "-popularity_rank"]
-            ),
+            Index(fields=["status", "anime_type", "-release_date"]),
+            Index(fields=["season", "season_year", "-popularity_rank"]),
             Index(fields=["season_year", "season", "-member_count"]),
             Index(fields=["status", "-site_rank", "-rating"]),
             Index(fields=["anime_type", "status", "-rating"]),
@@ -396,6 +392,9 @@ class Review(Model):
         indexes = [
             Index(fields=["anime", "-created_at"]),
             Index(fields=["user", "-created_at"]),
+            Index(fields=["anime", "user"]),  # For checking if user reviewed anime
+            Index(fields=["rating", "-created_at"]),  # For filtering by rating
+            Index(fields=["has_spoilers", "-created_at"]),  # For spoiler filtering
         ]
 
     def __str__(self):

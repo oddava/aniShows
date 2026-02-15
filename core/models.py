@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -361,3 +362,109 @@ class CeleryTaskSchedule(models.Model):
                 period_map.get(self.interval_period, datetime.timedelta(hours=1))
             )
         return None
+
+
+class Notification(models.Model):
+    """User notifications for various events."""
+
+    class NotificationType(models.TextChoices):
+        NEW_EPISODE = "new_episode", "New Episode"
+        REVIEW_REPLY = "review_reply", "Review Reply"
+        NEW_FOLLOWER = "new_follower", "New Follower"
+        SYSTEM = "system", "System"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        MEDIUM = "medium", "Medium"
+        HIGH = "high", "High"
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="notifications"
+    )
+    notification_type = models.CharField(
+        max_length=20, choices=NotificationType.choices
+    )
+
+    # Content
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Additional data (anime_id, review_id, etc.)",
+    )
+
+    # Status tracking
+    is_read = models.BooleanField(default=False, db_index=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    is_email_sent = models.BooleanField(default=False)
+    is_push_sent = models.BooleanField(default=False)
+
+    # Priority for delivery ordering
+    priority = models.CharField(
+        max_length=10, choices=Priority.choices, default=Priority.MEDIUM
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["user", "is_read", "-created_at"]),
+            models.Index(fields=["notification_type", "-created_at"]),
+            models.Index(fields=["is_email_sent", "created_at"]),
+            models.Index(fields=["is_push_sent", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.title}"
+
+    def mark_as_read(self):
+        """Mark notification as read."""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=["is_read", "read_at"])
+
+
+class PushSubscription(models.Model):
+    """Web Push subscription data for users."""
+
+    class DeviceType(models.TextChoices):
+        BROWSER = "browser", "Browser"
+        MOBILE = "mobile", "Mobile"
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="push_subscriptions"
+    )
+    endpoint = models.URLField()
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+
+    device_type = models.CharField(
+        max_length=20, choices=DeviceType.choices, default=DeviceType.BROWSER
+    )
+    device_info = models.JSONField(
+        default=dict, blank=True, help_text="Browser, OS, device details"
+    )
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["endpoint"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.device_type}"
+
+    def deactivate(self):
+        """Deactivate subscription (e.g., when push fails)."""
+        self.is_active = False
+        self.save(update_fields=["is_active"])

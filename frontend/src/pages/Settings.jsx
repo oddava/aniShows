@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Lock, Shield, Eye, EyeOff, AlertCircle, Check, Plus, Trash2 } from 'lucide-react';
+import { User, Lock, Shield, Eye, EyeOff, AlertCircle, Check, Plus, Trash2, Mail, Bell, Tv, MessageCircle, Users, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { authApi } from '../api/client';
+import { authApi, notificationApi } from '../api/client';
 import { Link } from 'react-router-dom';
 import { Download, Upload } from 'lucide-react';
 import SEO from '../components/SEO';
@@ -41,6 +41,17 @@ export default function Settings() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+    // Notification preferences state
+    const [preferences, setPreferences] = useState({
+        email_new_episodes: true,
+        push_new_episodes: true,
+        push_review_replies: true,
+        push_new_follower: true,
+    });
+    const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
+    const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+    const [preferencesMessage, setPreferencesMessage] = useState('');
+
     // Initialize state from user data
     useEffect(() => {
         if (user) {
@@ -49,6 +60,24 @@ export default function Settings() {
             setSocialLinks(user.social_links || []);
             setIsPrivate(user.is_private || false);
         }
+    }, [user]);
+
+    // Load notification preferences
+    useEffect(() => {
+        if (!user) return;
+        
+        const fetchPreferences = async () => {
+            try {
+                const response = await notificationApi.getPreferences();
+                setPreferences(response.data);
+            } catch (error) {
+                console.error('Failed to fetch preferences:', error);
+            } finally {
+                setIsLoadingPreferences(false);
+            }
+        };
+
+        fetchPreferences();
     }, [user]);
 
     if (loading) {
@@ -214,6 +243,30 @@ export default function Settings() {
         }
     };
 
+    // Notification preferences handlers
+    const handleTogglePreference = async (key) => {
+        const newPreferences = {
+            ...preferences,
+            [key]: !preferences[key],
+        };
+
+        setPreferences(newPreferences);
+        setIsSavingPreferences(true);
+
+        try {
+            await notificationApi.updatePreferences(newPreferences);
+            setPreferencesMessage('Preferences saved successfully');
+            setTimeout(() => setPreferencesMessage(''), 3000);
+        } catch (error) {
+            console.error('Failed to update preferences:', error);
+            setPreferences(preferences); // Revert on error
+            setPreferencesMessage('Failed to save preferences');
+            setTimeout(() => setPreferencesMessage(''), 3000);
+        } finally {
+            setIsSavingPreferences(false);
+        }
+    };
+
     return (
         <>
             <SEO page="settings" />
@@ -246,6 +299,16 @@ export default function Settings() {
                         Account
                         <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
                             ${activeTab === 'account' ? 'scale-x-100' : 'scale-x-0'}`} />
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('notifications')}
+                        className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
+                            ${activeTab === 'notifications' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        <Bell className="w-4 h-4" />
+                        Notifications
+                        <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
+                            ${activeTab === 'notifications' ? 'scale-x-100' : 'scale-x-0'}`} />
                     </button>
                 </div>
 
@@ -691,6 +754,178 @@ export default function Settings() {
                                     )}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Notifications Tab */}
+                {activeTab === 'notifications' && (
+                    <div className="space-y-6 animate-fade-in">
+                        {/* Success/Error Message */}
+                        {preferencesMessage && (
+                            <div className={`p-4 rounded-xl flex items-center gap-3 ${
+                                preferencesMessage.includes('success') 
+                                    ? 'bg-green-500/10 border border-green-500/20 text-green-400' 
+                                    : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                            }`}>
+                                {preferencesMessage.includes('success') ? (
+                                    <Check className="w-5 h-5" />
+                                ) : (
+                                    <AlertCircle className="w-5 h-5" />
+                                )}
+                                <span className="font-medium">{preferencesMessage}</span>
+                            </div>
+                        )}
+
+                        {/* Email Notifications */}
+                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                    <Mail className="w-5 h-5 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-semibold text-white">Email Notifications</h2>
+                                    <p className="text-sm text-gray-500">Get notified via email</p>
+                                </div>
+                            </div>
+                            
+                            {isLoadingPreferences ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {/* New Episode Alerts */}
+                                    <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${preferences.email_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                <Tv className={`w-5 h-5 ${preferences.email_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-white">New Episode Alerts</p>
+                                                <p className="text-xs text-gray-500">Notify me when a new episode airs for anime in my list</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleTogglePreference('email_new_episodes')}
+                                            disabled={isSavingPreferences}
+                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
+                                                preferences.email_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.email_new_episodes ? 'left-8' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Push Notifications */}
+                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                                    <Bell className="w-5 h-5 text-purple-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-semibold text-white">Push Notifications</h2>
+                                    <p className="text-sm text-gray-500">Get notified in your browser</p>
+                                </div>
+                            </div>
+                            
+                            {isLoadingPreferences ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {/* New Episode Alerts */}
+                                    <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${preferences.push_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                <Tv className={`w-5 h-5 ${preferences.push_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-white">New Episode Alerts</p>
+                                                <p className="text-xs text-gray-500">Send push notification when a new episode airs</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleTogglePreference('push_new_episodes')}
+                                            disabled={isSavingPreferences}
+                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
+                                                preferences.push_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.push_new_episodes ? 'left-8' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+
+                                    {/* Review Replies */}
+                                    <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${preferences.push_review_replies ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                <MessageCircle className={`w-5 h-5 ${preferences.push_review_replies ? 'text-accent' : 'text-gray-400'}`} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-white">Review Replies</p>
+                                                <p className="text-xs text-gray-500">Send push notification when someone replies to my reviews</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleTogglePreference('push_review_replies')}
+                                            disabled={isSavingPreferences}
+                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
+                                                preferences.push_review_replies ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.push_review_replies ? 'left-8' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+
+                                    {/* New Followers */}
+                                    <div className="flex items-center justify-between py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${preferences.push_new_follower ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                <Users className={`w-5 h-5 ${preferences.push_new_follower ? 'text-accent' : 'text-gray-400'}`} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-white">New Followers</p>
+                                                <p className="text-xs text-gray-500">Send push notification when someone follows me</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleTogglePreference('push_new_follower')}
+                                            disabled={isSavingPreferences}
+                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
+                                                preferences.push_new_follower ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.push_new_follower ? 'left-8' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Info Section */}
+                        <div className="bg-dark-100/50 p-4 rounded-xl border border-gray-700/30">
+                            <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 bg-gray-700/50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <Bell className="w-4 h-4 text-gray-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-medium text-white mb-1">About Notifications</h3>
+                                    <p className="text-sm text-gray-500">
+                                        Notifications help you stay up to date with your anime. You'll receive alerts for new episodes 
+                                        of anime in your Watching or Plan to Watch lists, as well as replies to your reviews.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

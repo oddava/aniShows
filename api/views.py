@@ -296,13 +296,22 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["get"])
     def related(self, request, slug=None):
-        """Get related anime based on genres"""
+        """Get related anime based on genres - optimized with single query"""
+        from django.db.models import Subquery
+
         anime = self.get_object()
-        genre_ids = anime.genres.values_list("id", flat=True)
-        related = Anime.objects.filter(genres__in=genre_ids).exclude(id=anime.id)
-        related = related.annotate(shared_genres=Count("genres")).order_by(
-            "-shared_genres"
-        )[:8]
+
+        # Use subquery to get genre IDs directly in the filter
+        # This reduces the query from 2 to 1
+        related = (
+            Anime.objects.filter(genres__id__in=Subquery(anime.genres.values("id")))
+            .exclude(id=anime.id)
+            .select_related("studio")
+            .prefetch_related("genres")
+            .annotate(shared_genres=Count("genres", distinct=True))
+            .order_by("-shared_genres")[:8]
+        )
+
         serializer = AnimeListSerializer(
             related, many=True, context={"request": request}
         )
@@ -310,15 +319,31 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class GenreViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Genre.objects.all().order_by("name")
     serializer_class = GenreSerializer
     pagination_class = None
 
+    def get_queryset(self):
+        # Cache genre list for 1 hour since it rarely changes
+        cache_key = "genres_all"
+        queryset = cache.get(cache_key)
+        if queryset is None:
+            queryset = Genre.objects.all().order_by("name")
+            cache.set(cache_key, queryset, 60 * 60)  # 1 hour
+        return queryset
+
 
 class StudioViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Studio.objects.all().order_by("name")
     serializer_class = StudioSerializer
     pagination_class = None
+
+    def get_queryset(self):
+        # Cache studio list for 1 hour since it rarely changes
+        cache_key = "studios_all"
+        queryset = cache.get(cache_key)
+        if queryset is None:
+            queryset = Studio.objects.all().order_by("name")
+            cache.set(cache_key, queryset, 60 * 60)  # 1 hour
+        return queryset
 
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -717,7 +742,52 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = "username"
 
     def get_queryset(self):
-        return User.objects.select_related("userprofile").all()
+        from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
+
+        user = self.request.user
+
+        queryset = User.objects.select_related("userprofile").all()
+
+        # Annotate with counts to avoid N+1 queries
+        queryset = queryset.annotate(
+            _favorites_count=Count("favorites", distinct=True),
+            _reviews_count=Count("reviews", distinct=True),
+            _followers_count=Count("followers", distinct=True),
+            _following_count=Count("following", distinct=True),
+            _anime_count=Count("anime_lists", distinct=True),
+            _episodes_watched=Sum("anime_lists__episodes_watched"),
+        )
+
+        # Calculate total minutes watched
+        queryset = queryset.annotate(
+            _total_minutes=Sum(
+                F("anime_lists__episodes_watched")
+                * F("anime_lists__anime__duration_minutes")
+            )
+        )
+
+        # Calculate mean score (exclude 0 scores)
+        queryset = queryset.annotate(
+            _mean_score=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
+        )
+
+        # Calculate days watched from total minutes
+        from django.db.models import FloatField
+        from django.db.models.functions import Coalesce
+
+        queryset = queryset.annotate(
+            _days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0
+        )
+
+        # Annotate is_following if user is authenticated
+        if user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_following=Exists(
+                    UserFollow.objects.filter(follower=user, following=OuterRef("pk"))
+                )
+            )
+
+        return queryset
 
 
 class FavoriteViewSet(viewsets.ModelViewSet):

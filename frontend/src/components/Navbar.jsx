@@ -3,6 +3,7 @@ import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, Che
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi, animeApi } from '../api/client';
+import { NotificationBell } from './NotificationBell';
 import Fuse from 'fuse.js';
 
 // Navigation Item Component with Active State
@@ -11,8 +12,9 @@ const NavItem = ({ to, icon: Icon, label, end = false }) => {  // eslint-disable
         <NavLink
             to={to}
             end={end}
+            title={label}
             className={({ isActive }) => `
-                relative flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all duration-200
+                relative flex items-center gap-2 px-2 lg:px-3 py-2 rounded-lg font-medium transition-all duration-200
                 ${isActive
                     ? 'text-white bg-white/10'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -22,7 +24,7 @@ const NavItem = ({ to, icon: Icon, label, end = false }) => {  // eslint-disable
             {({ isActive }) => (
                 <>
                     <Icon className="w-4 h-4" />
-                    <span className="text-sm">{label}</span>
+                    <span className="text-sm hidden lg:inline">{label}</span>
                     {isActive && (
                         <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-accent rounded-full" />
                     )}
@@ -487,7 +489,7 @@ export default function Navbar() {
                         </Link>
 
                         {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-1 flex-1 ml-6">
+                        <div className="hidden md:flex items-center gap-1 flex-1 ml-4 lg:ml-6">
                             <NavItem to="/browse" icon={Search} label="Browse" />
                             <NavItem to="/seasonal" icon={Calendar} label="Seasonal" />
                             <NavItem to="/schedule" icon={Tv} label="Schedule" />
@@ -496,9 +498,9 @@ export default function Navbar() {
                             )}
 
                             {/* Search - Always Extended with Fuzzy Search */}
-                            <div className="flex-1 flex justify-center mx-4" ref={searchRef}>
+                            <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
                                 <div
-                                    className={`relative transition-all duration-300 ease-out w-full max-w-md ${hideSearch
+                                    className={`relative transition-all duration-300 ease-out w-full max-w-[200px] lg:max-w-md ${hideSearch
                                         ? 'opacity-0 pointer-events-none'
                                         : 'opacity-100'
                                         }`}
@@ -631,66 +633,8 @@ export default function Navbar() {
 
                         {/* Right Section: Notifications + Auth */}
                         <div className="hidden md:flex items-center gap-2">
-                            {/* Notifications - Hidden until system is implemented
-                            {isAuthenticated && (
-                                <div className="relative" ref={notificationsRef}>
-                                    <button
-                                        onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                                        className="relative p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all"
-                                    >
-                                        <Bell className="w-5 h-5" />
-                                        {unreadCount > 0 && (
-                                            <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                                {unreadCount > 9 ? '9+' : unreadCount}
-                                            </span>
-                                        )}
-                                    </button>
-
-                                    {isNotificationsOpen && (
-                                        <div className="absolute right-0 top-full mt-2 w-80 py-2 bg-dark-100/95 backdrop-blur-xl 
-                                                    rounded-xl border border-gray-700/50 shadow-xl shadow-black/20 animate-fade-in">
-                                            <div className="px-4 py-3 border-b border-gray-700/50 flex items-center justify-between">
-                                                <p className="text-sm font-semibold text-white">Notifications</p>
-                                                <button className="text-xs text-accent hover:text-accent/80 transition-colors">
-                                                    Mark all read
-                                                </button>
-                                            </div>
-                                            <div className="max-h-64 overflow-y-auto">
-                                                {notifications.length === 0 ? (
-                                                    <div className="py-8 text-center text-gray-400 text-sm">
-                                                        No notifications yet
-                                                    </div>
-                                                ) : (
-                                                    notifications.map((notification) => (
-                                                        <button
-                                                            key={notification.id}
-                                                            className={`w-full flex items-start gap-3 px-4 py-3 hover:bg-dark-50 transition-colors text-left ${!notification.read ? 'bg-accent/5' : ''
-                                                                }`}
-                                                        >
-                                                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${!notification.read ? 'bg-accent' : 'bg-gray-600'
-                                                                }`} />
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-sm text-gray-200 line-clamp-2">{notification.message}</p>
-                                                                <p className="text-xs text-gray-500 mt-1">{notification.time}</p>
-                                                            </div>
-                                                        </button>
-                                                    ))
-                                                )}
-                                            </div>
-                                            <div className="px-4 py-2 border-t border-gray-700/50">
-                                                <Link
-                                                    to="/notifications"
-                                                    onClick={() => setIsNotificationsOpen(false)}
-                                                    className="block text-center text-sm text-accent hover:text-accent/80 transition-colors"
-                                                >
-                                                    View all notifications
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            */}
+                            {/* Notifications */}
+                            {isAuthenticated && <NotificationBell />}
 
                             {isAuthenticated ? (
                                 <div className="relative" ref={profileRef}>

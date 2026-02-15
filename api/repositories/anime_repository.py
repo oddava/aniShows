@@ -125,12 +125,17 @@ class AnimeRepository:
         )
 
     def get_related(self, anime: Anime, limit: int = 8) -> QuerySet:
-        """Get related anime based on genres."""
-        genre_ids = anime.genres.values_list("id", flat=True)
+        """Get related anime based on genres - optimized with subquery."""
+        from django.db.models import Subquery
+
+        # Use subquery to get genre IDs directly in the filter
+        # This reduces the query from 2 to 1
         return (
-            Anime.objects.filter(genres__in=genre_ids)
+            Anime.objects.filter(genres__id__in=Subquery(anime.genres.values("id")))
             .exclude(id=anime.id)
-            .annotate(shared_genres=Count("genres"))
+            .select_related("studio")
+            .prefetch_related("genres")
+            .annotate(shared_genres=Count("genres", distinct=True))
             .order_by("-shared_genres")[:limit]
         )
 

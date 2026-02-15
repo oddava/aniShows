@@ -88,6 +88,8 @@ class FollowViewSet(viewsets.GenericViewSet):
     )
     def followers(self, request, username=None):
         """Get list of a user's followers"""
+        from django.db.models import Exists, OuterRef
+
         target_user = get_object_or_404(User, username=username)
 
         # Check if profile is private
@@ -105,6 +107,21 @@ class FollowViewSet(viewsets.GenericViewSet):
         queryset = UserFollow.objects.filter(following=target_user).select_related(
             "follower__userprofile"
         )
+
+        # Annotate is_following and is_follower to avoid N+1 queries
+        if request.user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_following=Exists(
+                    UserFollow.objects.filter(
+                        follower=request.user, following=OuterRef("follower")
+                    )
+                ),
+                _is_follower=Exists(
+                    UserFollow.objects.filter(
+                        follower=OuterRef("follower"), following=request.user
+                    )
+                ),
+            )
 
         # Annotate the user to display
         for follow in queryset:
@@ -130,6 +147,8 @@ class FollowViewSet(viewsets.GenericViewSet):
     )
     def following(self, request, username=None):
         """Get list of users this user is following"""
+        from django.db.models import Exists, OuterRef
+
         target_user = get_object_or_404(User, username=username)
 
         profile = getattr(target_user, "userprofile", None)
@@ -146,6 +165,21 @@ class FollowViewSet(viewsets.GenericViewSet):
         queryset = UserFollow.objects.filter(follower=target_user).select_related(
             "following__userprofile"
         )
+
+        # Annotate is_following and is_follower to avoid N+1 queries
+        if request.user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_following=Exists(
+                    UserFollow.objects.filter(
+                        follower=request.user, following=OuterRef("following")
+                    )
+                ),
+                _is_follower=Exists(
+                    UserFollow.objects.filter(
+                        follower=OuterRef("following"), following=request.user
+                    )
+                ),
+            )
 
         for follow in queryset:
             follow._display_user = follow.following
@@ -185,7 +219,9 @@ class FollowViewSet(viewsets.GenericViewSet):
         permission_classes=[permissions.IsAuthenticated],
     )
     def friends_watching(self, request):
-        """Get friends (mutual follows) who are watching a specific anime"""
+        """Get friends (mutual follows) who are watching a specific anime - optimized"""
+        from django.db.models import Exists, OuterRef
+
         anime_id = request.query_params.get("anime_id")
         if not anime_id:
             return Response(
@@ -196,30 +232,18 @@ class FollowViewSet(viewsets.GenericViewSet):
         # Verify anime exists
         anime = get_object_or_404(Anime, id=anime_id)
 
-        # Find mutual follows (friends): users I follow AND who follow me back
-        # First, get all users I follow
-        following_ids = list(
-            UserFollow.objects.filter(follower=request.user).values_list(
-                "following_id", flat=True
-            )
-        )
-
-        if not following_ids:
-            return Response([])
-
-        # Then, get all users who follow me (that I also follow back)
-        friends_ids = list(
-            UserFollow.objects.filter(
-                follower__in=following_ids, following=request.user
-            ).values_list("follower_id", flat=True)
-        )
-
-        if not friends_ids:
-            return Response([])
-
-        # Get friends who have this anime in their list
+        # Optimized: Find mutual follows in a single query using subqueries
+        # Users who follow me AND who I follow back
         friends_watching = (
-            UserAnimeList.objects.filter(user__in=friends_ids, anime=anime)
+            UserAnimeList.objects.filter(
+                anime=anime,
+                # User must be someone I follow
+                user__in=UserFollow.objects.filter(follower=request.user).values(
+                    "following"
+                ),
+                # User must also follow me back (mutual)
+                user__following__following=request.user,
+            )
             .select_related("user__userprofile", "anime")
             .order_by("-updated_at")
         )

@@ -1,9 +1,10 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
-from .models import Anime, UserFavorite
+from .models import Anime, UserFavorite, ReviewComment
 from users.models import UserAnimeList
 from anime.tasks import enrich_metadata, generate_recommendations
+from core.services.notification_service import NotificationService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -56,3 +57,26 @@ def trigger_recommendations_on_favorite_change(sender, instance, **kwargs):
             kwargs={"user_id": instance.user.id},
             countdown=120,
         )
+
+
+@receiver(post_save, sender=ReviewComment)
+def handle_review_comment_created(sender, instance, created, **kwargs):
+    """Send notification when a comment is created on a review."""
+    if not created:
+        return
+
+    # Don't notify if user commented on their own review
+    if instance.user == instance.review.user:
+        logger.debug(f"Skipping self-reply notification for user {instance.user.id}")
+        return
+
+    try:
+        NotificationService.create_review_reply_notification(
+            user=instance.review.user, review=instance.review, comment=instance
+        )
+        logger.info(
+            f"Created review reply notification for user {instance.review.user.id} "
+            f"from comment by {instance.user.id}"
+        )
+    except Exception as e:
+        logger.exception(f"Failed to create review reply notification: {e}")

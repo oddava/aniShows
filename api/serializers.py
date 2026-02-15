@@ -249,14 +249,13 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
         return None
 
     def get_is_favorite(self, obj):
+        # Use prefetched annotation only - no fallback to avoid N+1
         if hasattr(obj, "_is_favorite"):
             return obj._is_favorite
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
         return False
 
     def get_user_list_status(self, obj):
+        # Use prefetched list entries only - no fallback to avoid N+1
         if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
             entry = obj._user_list_entries[0]
             return {
@@ -267,20 +266,6 @@ class AnimeMinimalSerializer(serializers.ModelSerializer):
                 if obj.episode_count and obj.episode_count > 0
                 else 0,
             }
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            user_list = UserAnimeList.objects.filter(
-                user=request.user, anime=obj
-            ).first()
-            if user_list:
-                return {
-                    "id": user_list.id,
-                    "status": user_list.status,
-                    "episodes_watched": user_list.episodes_watched,
-                    "progress": (user_list.episodes_watched / obj.episode_count * 100)
-                    if obj.episode_count and obj.episode_count > 0
-                    else 0,
-                }
         return None
 
 
@@ -358,17 +343,13 @@ class AnimeListSerializer(serializers.ModelSerializer):
         return None
 
     def get_is_favorite(self, obj):
-        # Use prefetched annotation if available (avoids N+1)
+        # Use prefetched annotation only - no fallback to avoid N+1
         if hasattr(obj, "_is_favorite"):
             return obj._is_favorite
-        # Fallback for non-prefetched contexts
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
         return False
 
     def get_user_list_status(self, obj):
-        # Use prefetched list entries if available (avoids N+1)
+        # Use prefetched list entries only - no fallback to avoid N+1
         if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
             entry = obj._user_list_entries[0]
             return {
@@ -380,22 +361,6 @@ class AnimeListSerializer(serializers.ModelSerializer):
                 if obj.episode_count and obj.episode_count > 0
                 else 0,
             }
-        # Fallback for non-prefetched contexts
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            user_list = UserAnimeList.objects.filter(
-                user=request.user, anime=obj
-            ).first()
-            if user_list:
-                return {
-                    "id": user_list.id,
-                    "status": user_list.status,
-                    "score": user_list.score,
-                    "episodes_watched": user_list.episodes_watched,
-                    "progress": (user_list.episodes_watched / obj.episode_count * 100)
-                    if obj.episode_count and obj.episode_count > 0
-                    else 0,
-                }
         return None
 
 
@@ -548,16 +513,13 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
         return distribution
 
     def get_is_favorite(self, obj):
-        # Use prefetched annotation if available
+        # Use prefetched annotation only - no fallback to avoid N+1
         if hasattr(obj, "_is_favorite"):
             return obj._is_favorite
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return UserFavorite.objects.filter(user=request.user, anime=obj).exists()
         return False
 
     def get_user_list_status(self, obj):
-        # Use prefetched list entries if available
+        # Use prefetched list entries only - no fallback to avoid N+1
         if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
             entry = obj._user_list_entries[0]
             return {
@@ -569,35 +531,12 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                 if obj.episode_count and obj.episode_count > 0
                 else 0,
             }
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            user_list = UserAnimeList.objects.filter(
-                user=request.user, anime=obj
-            ).first()
-            if user_list:
-                return {
-                    "id": user_list.id,
-                    "status": user_list.status,
-                    "score": user_list.score,
-                    "episodes_watched": user_list.episodes_watched,
-                    "progress": (user_list.episodes_watched / obj.episode_count * 100)
-                    if obj.episode_count and obj.episode_count > 0
-                    else 0,
-                }
         return None
 
     def get_user_review(self, obj):
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            review = Review.objects.filter(user=request.user, anime=obj).first()
-            if review:
-                # Return minimal data needed for "Edit Review" functionality
-                return {
-                    "id": review.id,
-                    "rating": review.rating,
-                    "text": review.text,
-                    "has_spoilers": review.has_spoilers,
-                }
+        # Use prefetched annotation if available
+        if hasattr(obj, "_user_review"):
+            return obj._user_review
         return None
 
 
@@ -606,14 +545,18 @@ class UserSerializer(serializers.ModelSerializer):
     banner = serializers.SerializerMethodField()
     bio = serializers.SerializerMethodField()
     is_private = serializers.SerializerMethodField()
-    favorites_count = serializers.SerializerMethodField()
-    reviews_count = serializers.SerializerMethodField()
+    favorites_count = serializers.IntegerField(
+        read_only=True, source="_favorites_count"
+    )
+    reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
 
     # Computed stats
-    days_watched = serializers.SerializerMethodField()
-    mean_score = serializers.SerializerMethodField()
-    anime_count = serializers.SerializerMethodField()
-    episodes_watched = serializers.SerializerMethodField()
+    days_watched = serializers.FloatField(read_only=True, source="_days_watched")
+    mean_score = serializers.FloatField(read_only=True, source="_mean_score")
+    anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
+    episodes_watched = serializers.IntegerField(
+        read_only=True, source="_episodes_watched"
+    )
 
     # Social links
     social_links = serializers.SerializerMethodField()
@@ -623,8 +566,12 @@ class UserSerializer(serializers.ModelSerializer):
 
     # Social features
     points = serializers.SerializerMethodField()
-    followers_count = serializers.SerializerMethodField()
-    following_count = serializers.SerializerMethodField()
+    followers_count = serializers.IntegerField(
+        read_only=True, source="_followers_count"
+    )
+    following_count = serializers.IntegerField(
+        read_only=True, source="_following_count"
+    )
 
     class Meta:
         model = User
@@ -673,12 +620,6 @@ class UserSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "userprofile", None)
         return profile.bio if profile else None
 
-    def get_favorites_count(self, obj):
-        return obj.favorites.count()
-
-    def get_reviews_count(self, obj):
-        return obj.reviews.count()
-
     def get_is_private(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.is_private if profile else False
@@ -690,35 +631,6 @@ class UserSerializer(serializers.ModelSerializer):
     def get_has_password(self, obj):
         return obj.has_usable_password()
 
-    def get_days_watched(self, obj):
-        """Calculate total days watched from user's anime list"""
-        from django.db.models import Sum, F
-
-        total_minutes = (
-            obj.anime_lists.annotate(
-                watch_time=F("episodes_watched") * F("anime__duration_minutes")
-            ).aggregate(total=Sum("watch_time"))["total"]
-            or 0
-        )
-        return round(total_minutes / 1440, 1)  # Convert minutes to days
-
-    def get_mean_score(self, obj):
-        """Calculate average score from user's anime list"""
-        from django.db.models import Avg
-
-        avg = obj.anime_lists.filter(score__gt=0).aggregate(avg=Avg("score"))["avg"]
-        return round(avg, 1) if avg else None
-
-    def get_anime_count(self, obj):
-        """Count total anime in user's list"""
-        return obj.anime_lists.count()
-
-    def get_episodes_watched(self, obj):
-        """Count total episodes watched across all anime"""
-        from django.db.models import Sum
-
-        return obj.anime_lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
-
     def get_social_links(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.social_links if profile else []
@@ -727,12 +639,6 @@ class UserSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "userprofile", None)
         return profile.points if profile else 0
 
-    def get_followers_count(self, obj):
-        return obj.followers.count()
-
-    def get_following_count(self, obj):
-        return obj.following.count()
-
 
 class PublicUserSerializer(serializers.ModelSerializer):
     """Limited serializer for public profile view"""
@@ -740,23 +646,31 @@ class PublicUserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
     bio = serializers.SerializerMethodField()
-    favorites_count = serializers.SerializerMethodField()
-    reviews_count = serializers.SerializerMethodField()
+    favorites_count = serializers.IntegerField(
+        read_only=True, source="_favorites_count"
+    )
+    reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
     is_private = serializers.SerializerMethodField()
 
     # Computed stats
-    days_watched = serializers.SerializerMethodField()
-    mean_score = serializers.SerializerMethodField()
-    anime_count = serializers.SerializerMethodField()
-    episodes_watched = serializers.SerializerMethodField()
+    days_watched = serializers.FloatField(read_only=True, source="_days_watched")
+    mean_score = serializers.FloatField(read_only=True, source="_mean_score")
+    anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
+    episodes_watched = serializers.IntegerField(
+        read_only=True, source="_episodes_watched"
+    )
 
     # Dynamic Social links
     social_links = serializers.SerializerMethodField()
 
     # Social features
     points = serializers.SerializerMethodField()
-    followers_count = serializers.SerializerMethodField()
-    following_count = serializers.SerializerMethodField()
+    followers_count = serializers.IntegerField(
+        read_only=True, source="_followers_count"
+    )
+    following_count = serializers.IntegerField(
+        read_only=True, source="_following_count"
+    )
     is_following = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
 
@@ -797,44 +711,9 @@ class PublicUserSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "userprofile", None)
         return profile.bio if profile else None
 
-    def get_favorites_count(self, obj):
-        return obj.favorites.count()
-
-    def get_reviews_count(self, obj):
-        return obj.reviews.count()
-
     def get_is_private(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.is_private if profile else False
-
-    def get_days_watched(self, obj):
-        """Calculate total days watched from user's anime list"""
-        from django.db.models import Sum, F
-
-        total_minutes = (
-            obj.anime_lists.annotate(
-                watch_time=F("episodes_watched") * F("anime__duration_minutes")
-            ).aggregate(total=Sum("watch_time"))["total"]
-            or 0
-        )
-        return round(total_minutes / 1440, 1)
-
-    def get_mean_score(self, obj):
-        """Calculate average score from user's anime list"""
-        from django.db.models import Avg
-
-        avg = obj.anime_lists.filter(score__gt=0).aggregate(avg=Avg("score"))["avg"]
-        return round(avg, 1) if avg else None
-
-    def get_anime_count(self, obj):
-        """Count total anime in user's list"""
-        return obj.anime_lists.count()
-
-    def get_episodes_watched(self, obj):
-        """Count total episodes watched across all anime"""
-        from django.db.models import Sum
-
-        return obj.anime_lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
 
     def get_social_links(self, obj):
         profile = getattr(obj, "userprofile", None)
@@ -844,14 +723,12 @@ class PublicUserSerializer(serializers.ModelSerializer):
         profile = getattr(obj, "userprofile", None)
         return profile.points if profile else 0
 
-    def get_followers_count(self, obj):
-        return obj.followers.count()
-
-    def get_following_count(self, obj):
-        return obj.following.count()
-
     def get_is_following(self, obj):
         """Check if the current user is following this user"""
+        # Use annotated field if available
+        if hasattr(obj, "_is_following"):
+            return obj._is_following
+
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             return obj.followers.filter(follower=request.user).exists()
@@ -1365,35 +1242,17 @@ class UserFollowListSerializer(serializers.ModelSerializer):
 
     def get_is_following(self, obj):
         """Check if the current user follows this user"""
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-
-        # Get the user object (either follower or following depending on context)
-        user_obj = getattr(obj, "_display_user", obj.follower)
-
-        # Check if current user follows this user
-        from users.models import UserFollow
-
-        return UserFollow.objects.filter(
-            follower=request.user, following=user_obj
-        ).exists()
+        # Use annotated field if available
+        if hasattr(obj, "_is_following"):
+            return obj._is_following
+        return False
 
     def get_is_follower(self, obj):
         """Check if this user follows the current user"""
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
-
-        # Get the user object (either follower or following depending on context)
-        user_obj = getattr(obj, "_display_user", obj.follower)
-
-        # Check if this user follows current user
-        from users.models import UserFollow
-
-        return UserFollow.objects.filter(
-            follower=user_obj, following=request.user
-        ).exists()
+        # Use annotated field if available
+        if hasattr(obj, "_is_follower"):
+            return obj._is_follower
+        return False
 
 
 class FriendWatchingSerializer(serializers.ModelSerializer):

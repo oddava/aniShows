@@ -69,17 +69,32 @@ Note: Unverified accounts are automatically deleted after 7 days.
 
 
 @shared_task(bind=True, max_retries=3)
-def send_email_task(self, subject, message, recipient_list):
+def send_email_task(self, subject, message, recipient_list, html_message=None):
     """Celery task for sending emails."""
     try:
-        result = send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=recipient_list,
-            fail_silently=False,
+        from django.core.mail import EmailMultiAlternatives
+
+        # Use EmailMultiAlternatives if HTML message is provided
+        if html_message:
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=recipient_list,
+            )
+            email.attach_alternative(html_message, "text/html")
+            result = email.send()
+        else:
+            result = send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=recipient_list,
+                fail_silently=False,
+            )
+        logger.info(
+            f"Email sent successfully to {recipient_list}: {result} message(s) sent"
         )
-        logger.info(f"Email sent successfully to {recipient_list}: {result} message(s) sent")
         return result
     except Exception as exc:
         logger.exception(f"Failed to send email to {recipient_list}: {exc}")

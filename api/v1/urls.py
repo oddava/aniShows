@@ -59,6 +59,11 @@ from api.import_export_views import (
     ExportUserDataJSONView,
 )
 from api.views.image_views import ImageResizeView
+from api.notification_views import (
+    NotificationViewSet,
+    NotificationPreferenceView,
+    PushSubscriptionView,
+)
 
 # Main router for v1
 router = DefaultRouter()
@@ -71,6 +76,7 @@ router.register(r"reviews", ReviewViewSet, basename="reviews")
 router.register(r"users", PublicUserProfileViewSet, basename="users")
 router.register(r"recommendations", RecommendationsViewSet, basename="recommendations")
 router.register(r"follows", FollowViewSet, basename="follows")
+router.register(r"notifications", NotificationViewSet, basename="notifications")
 
 # Admin router
 admin_router = DefaultRouter()
@@ -90,6 +96,17 @@ admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit
 urlpatterns = [
     # User profile
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
+    # Notification endpoints (must be before router to avoid conflicts)
+    path(
+        "notifications/preferences/",
+        NotificationPreferenceView.as_view(),
+        name="notification_preferences",
+    ),
+    path(
+        "notifications/subscribe/",
+        PushSubscriptionView.as_view(),
+        name="push_subscribe",
+    ),
     # Router URLs
     path("", include(router.urls)),
     # Authentication

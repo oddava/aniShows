@@ -51,6 +51,12 @@ class UserProfile(Model):
     # preferred_genres = ArrayField(CharField(max_length=50), default=list)
     # telegram_id = BigIntegerField(null=True, blank=True)
 
+    # Notification preferences
+    email_new_episodes = BooleanField(default=True)
+    push_new_episodes = BooleanField(default=True)
+    push_review_replies = BooleanField(default=True)
+    push_new_follower = BooleanField(default=True)
+
 
 class UserAnimeList(Model):
     class UserAnimeStatus(TextChoices):
@@ -162,6 +168,8 @@ class UserFollow(Model):
         indexes = [
             Index(fields=["follower", "-created_at"]),
             Index(fields=["following", "-created_at"]),
+            Index(fields=["follower", "following"]),  # For checking mutual follows
+            Index(fields=["following", "follower"]),  # For reverse lookups
         ]
 
     def __str__(self):

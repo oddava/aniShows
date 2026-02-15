@@ -24,6 +24,11 @@ from .views import (
     RecommendationsViewSet,
     FollowViewSet,
 )
+from .notification_views import (
+    NotificationViewSet,
+    NotificationPreferenceView,
+    PushSubscriptionView,
+)
 from .admin_views import (
     AdminDashboardView,
     AdminUserViewSet,
@@ -61,6 +66,7 @@ router.register(r"reviews", ReviewViewSet, basename="reviews")
 router.register(r"users", PublicUserProfileViewSet, basename="users")
 router.register(r"recommendations", RecommendationsViewSet, basename="recommendations")
 router.register(r"follows", FollowViewSet, basename="follows")
+router.register(r"notifications", NotificationViewSet, basename="notifications")
 
 # Admin router
 admin_router = DefaultRouter()
@@ -148,5 +154,16 @@ urlpatterns = [
     ),
     path(
         "admin/celery/workers/", CeleryWorkerStatusView.as_view(), name="celery-workers"
+    ),
+    # Notification endpoints
+    path(
+        "notifications/preferences/",
+        NotificationPreferenceView.as_view(),
+        name="notification_preferences",
+    ),
+    path(
+        "notifications/subscribe/",
+        PushSubscriptionView.as_view(),
+        name="push_subscribe",
     ),
 ]

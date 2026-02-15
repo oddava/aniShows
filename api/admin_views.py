@@ -147,8 +147,19 @@ class AdminUserViewSet(viewsets.ViewSet):
     pagination_class = AdminPagination
 
     def list(self, request):
-        """List all users with filtering and search."""
-        queryset = User.objects.select_related("userprofile").all()
+        """List all users with filtering and search - optimized with annotations."""
+        from django.db.models import Count
+
+        # Annotate with counts to avoid N+1 queries
+        queryset = (
+            User.objects.select_related("userprofile")
+            .annotate(
+                _favorites_count=Count("favorites", distinct=True),
+                _reviews_count=Count("reviews", distinct=True),
+                _list_entries_count=Count("anime_lists", distinct=True),
+            )
+            .all()
+        )
 
         # Search
         search = request.query_params.get("search", "")
@@ -208,20 +219,25 @@ class AdminUserViewSet(viewsets.ViewSet):
         return paginator.get_paginated_response(users_data)
 
     def retrieve(self, request, pk=None):
-        """Get detailed user information."""
+        """Get detailed user information - optimized with annotations."""
+        from django.db.models import Count
+
         try:
-            user = User.objects.select_related("userprofile").get(pk=pk)
+            user = (
+                User.objects.select_related("userprofile")
+                .annotate(
+                    _favorites_count=Count("favorites", distinct=True),
+                    _reviews_count=Count("reviews", distinct=True),
+                    _list_entries_count=Count("anime_lists", distinct=True),
+                )
+                .get(pk=pk)
+            )
         except User.DoesNotExist:
             return Response(
                 {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
         profile = getattr(user, "userprofile", None)
-
-        # Get user activity stats
-        favorites_count = user.favorites.count()
-        reviews_count = user.reviews.count()
-        list_entries_count = user.anime_lists.count()
 
         return Response(
             {
@@ -239,9 +255,9 @@ class AdminUserViewSet(viewsets.ViewSet):
                 "bio": profile.bio if profile else None,
                 "is_private": profile.is_private if profile else False,
                 "activity": {
-                    "favorites_count": favorites_count,
-                    "reviews_count": reviews_count,
-                    "list_entries_count": list_entries_count,
+                    "favorites_count": user._favorites_count,
+                    "reviews_count": user._reviews_count,
+                    "list_entries_count": user._list_entries_count,
                 },
             }
         )

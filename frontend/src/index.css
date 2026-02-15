@@ -240,7 +240,6 @@ input[type=number] {
 /* Enhanced Card Hover */
 .card-hover-glow:hover {
   box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
-  transform: translateY(-4px);
 }
 
 /* Rank Podium Styles */

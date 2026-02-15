@@ -1,0 +1,10 @@
+------------------
+feb 14
+- implemented deployment automation via github actions
+- enhanced and fixed some celery tasks such as fetch themes and import trending
+- improved & fixed responsiveness on home and discovery pages
+
+
+Generate VAPID Keys (for push notifications):
+      openssl ecparam -genkey -name prime256v1 -out vapid_private.pem
+      openssl ec -in vapid_private.pem -pubout -out vapid_public.pem

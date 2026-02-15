@@ -464,6 +464,23 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"sync_type": "next_season", "limit": 100},
         "options": {"queue": "default"},
     },
+    # Notification Tasks
+    "check-new-episodes": {
+        "task": "core.tasks.notifications.check_new_episodes",
+        "schedule": crontab(hour="*/6", minute=0),  # Every 6 hours
+        "options": {"queue": "default"},
+    },
+    "send-pending-notifications": {
+        "task": "core.tasks.notifications.send_pending_notifications",
+        "schedule": crontab(minute="*/10"),  # Every 10 minutes
+        "options": {"queue": "default"},
+    },
+    "cleanup-old-notifications": {
+        "task": "core.tasks.notifications.cleanup_old_notifications_task",
+        "schedule": crontab(hour=2, minute=30),  # Daily at 2:30 AM
+        "kwargs": {"days": 90},
+        "options": {"queue": "low_priority"},
+    },
     # =========================================================================
     # LEGACY TASKS (Backward Compatibility)
     # =========================================================================
@@ -594,3 +611,14 @@ JAZZMIN_SETTINGS = {
     },
     "language_chooser": False,
 }
+
+# =============================================================================
+# WEB PUSH NOTIFICATIONS (VAPID)
+# =============================================================================
+
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+
+# Generate VAPID keys if not set (for development)
+# Run: openssl ecparam -genkey -name prime256v1 -out vapid_private.pem
+# Then: openssl ec -in vapid_private.pem -pubout -out vapid_public.pem

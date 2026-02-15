@@ -229,7 +229,7 @@ export default function Home() {
                                 </Link>
                             </div>
 
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
+                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
                                 {trendingLoading ? (
                                     Array(6).fill(0).map((_, i) => (
                                         <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
@@ -265,7 +265,7 @@ export default function Home() {
                                 </Link>
                             </div>
 
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
+                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
                                 {topRatedLoading ? (
                                     Array(6).fill(0).map((_, i) => (
                                         <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
@@ -340,7 +340,7 @@ function CurrentlyWatchingSection() {
                     </Link>
                 </div>
 
-                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
+                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
                     {watching.map((entry) => (
                         <div key={entry.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
                             <AnimeCard
@@ -403,7 +403,7 @@ function RecommendedForYouSection({ revealRef }) {
                     <p className="text-sm text-gray-400 pl-1">{subtitle}</p>
                 </div>
 
-                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 touch-pan-x">
+                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
                     {isLoading ? (
                         Array(6).fill(0).map((_, i) => (
                             <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
