@@ -232,7 +232,7 @@ export default function Home() {
                                 </Link>
                             </div>
 
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
+                            <div className="flex overflow-x-auto pb-4 gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4 touch-pan-y">
                                 {trendingLoading ? (
                                     Array(6).fill(0).map((_, i) => (
                                         <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
@@ -241,7 +241,7 @@ export default function Home() {
                                     ))
                                 ) : trending?.length > 0 ? (
                                     trending.slice(0, 6).map((anime, index) => (
-                                        <div key={anime.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
+                                        <div key={anime.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto h-full">
                                             <AnimeCard anime={anime} />
                                         </div>
                                     ))
@@ -268,7 +268,7 @@ export default function Home() {
                                 </Link>
                             </div>
 
-                            <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
+                            <div className="flex overflow-x-auto pb-4 gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4 touch-pan-y">
                                 {topRatedLoading ? (
                                     Array(6).fill(0).map((_, i) => (
                                         <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
@@ -277,7 +277,7 @@ export default function Home() {
                                     ))
                                 ) : topRated?.length > 0 ? (
                                     topRated.slice(0, 6).map((anime) => (
-                                        <div key={anime.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
+                                        <div key={anime.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto h-full">
                                             <AnimeCard anime={anime} />
                                         </div>
                                     ))
@@ -345,9 +345,9 @@ function CurrentlyWatchingSection() {
                     </Link>
                 </div>
 
-                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
+                <div className="flex overflow-x-auto pb-4 gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4 touch-pan-y">
                     {watching.map((entry) => (
-                        <div key={entry.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
+                        <div key={entry.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto h-full">
                             <AnimeCard
                                 anime={entry.anime}
                                 userListEntry={entry}
@@ -408,7 +408,7 @@ function RecommendedForYouSection({ revealRef }) {
                     <p className="text-sm text-gray-400 pl-1">{subtitle}</p>
                 </div>
 
-                <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4">
+                <div className="flex overflow-x-auto pb-4 gap-3 sm:gap-4 md:grid md:grid-cols-3 lg:grid-cols-6 md:gap-5 md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 scroll-pl-4 touch-pan-y">
                     {isLoading ? (
                         Array(6).fill(0).map((_, i) => (
                             <div key={i} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start">
@@ -417,7 +417,7 @@ function RecommendedForYouSection({ revealRef }) {
                         ))
                     ) : (
                         recommendations?.map((rec) => (
-                            <div key={rec.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto snap-start h-full">
+                            <div key={rec.id} className="flex-shrink-0 w-[140px] sm:w-[160px] md:w-auto h-full">
                                 <AnimeCard anime={rec.anime} />
                             </div>
                         ))

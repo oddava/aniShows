@@ -160,7 +160,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
     }
 
     return (
-        <div className="group relative block h-full select-none overflow-visible hover:z-[150]"
+        <div className="group relative block h-full overflow-visible hover:z-[150] touch-pan-y"
         >
             <div className="bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative transition-all duration-300 hover:border-accent/40 card-hover-glow">
                 {/* Image Container */}

@@ -1,14 +1,14 @@
 import time
 import logging
-from django.db import connection
 from django.conf import settings
 from core.models import SystemLog, AuditLog
+from core.tasks.logging_tasks import log_request_async
 
 logger = logging.getLogger(__name__)
 
 
 class LoggingMiddleware:
-    """Middleware to log all requests and responses."""
+    """Middleware to log all requests and responses asynchronously."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -17,7 +17,7 @@ class LoggingMiddleware:
             "/health/",
             "/static/",
             "/media/",
-            "/admin/logs/",  # Don't log the logs page itself
+            "/admin/logs/",
         ]
 
     def __call__(self, request):
@@ -34,6 +34,7 @@ class LoggingMiddleware:
             if hasattr(request, "user") and request.user.is_authenticated
             else None
         )
+        user_id = user.id if user else None
 
         # Process the request
         response = self.get_response(request)
@@ -64,26 +65,27 @@ class LoggingMiddleware:
         else:
             ip = request.META.get("REMOTE_ADDR")
 
-        # Create log entry (async to not slow down response)
+        # Fire and forget - log asynchronously via Celery
         try:
-            SystemLog.objects.create(
-                level=level,
-                log_type=log_type,
-                user=user,
-                user_ip=ip,
-                method=request.method,
-                path=request.path[:500],
-                status_code=response.status_code,
-                message=f"{request.method} {request.path} - {response.status_code}",
-                details={
+            log_data = {
+                "level": level,
+                "log_type": log_type,
+                "user_id": user_id,
+                "user_ip": ip,
+                "method": request.method,
+                "path": request.path[:500],
+                "status_code": response.status_code,
+                "message": f"{request.method} {request.path} - {response.status_code}",
+                "details": {
                     "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                     "query_params": dict(request.GET),
                 },
-                duration_ms=duration_ms,
-            )
+                "duration_ms": duration_ms,
+            }
+            log_request_async.delay(log_data)
         except Exception as e:
             # Don't let logging errors break the request
-            logger.error(f"Failed to create log entry: {e}")
+            logger.error(f"Failed to queue async log entry: {e}")
 
         return response
 
