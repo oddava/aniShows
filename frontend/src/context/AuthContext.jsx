@@ -8,15 +8,32 @@ const AuthContext = createContext(null);
 const decodeToken = (token) => {
     try {
         const decoded = jwtDecode(token);
+        
+        // Handle both old tokens (only user_id) and new tokens (with username/email)
+        // For old tokens without username, we'll need to fetch from API
+        if (!decoded.username && !decoded.email) {
+            console.log("AuthContext: Token missing username/email (old token), will fetch from API");
+            return {
+                id: decoded.user_id,
+                username: null, // Will be populated by API call
+                email: null,
+                avatar: null,
+                bio: '',
+                is_private: false,
+                email_verified: true,
+                _needsApiFetch: true, // Flag to indicate we need API data
+            };
+        }
+        
         return {
             id: decoded.user_id,
-            username: decoded.username,
-            email: decoded.email,
-            // Set defaults for fields not in token
+            username: decoded.username || 'User', // Fallback if somehow missing
+            email: decoded.email || '',
             avatar: null,
             bio: '',
             is_private: false,
-            email_verified: true, // Assume verified if token exists
+            email_verified: true,
+            _needsApiFetch: false,
         };
     } catch (error) {
         console.error("AuthContext: Failed to decode token:", error);
@@ -47,19 +64,28 @@ export function AuthProvider({ children }) {
             // INSTANT: Decode token to get user info without API call
             const decodedUser = decodeToken(token);
             if (decodedUser) {
-                console.log("AuthContext: Token decoded instantly. User:", decodedUser.username);
-                setUser(decodedUser);
-                setLoading(false); // Stop loading immediately!
+                console.log("AuthContext: Token decoded instantly. User:", decodedUser.username || 'loading...');
                 
-                // BACKGROUND: Verify token and get lightweight profile (fast, no expensive calculations)
+                // If we have username from token, show it immediately
+                if (!decodedUser._needsApiFetch) {
+                    setUser(decodedUser);
+                    setLoading(false); // Stop loading immediately!
+                    console.log("AuthContext: Using token data instantly");
+                } else {
+                    // Old token - need to fetch username, but set user anyway to avoid blank state
+                    setUser({ ...decodedUser, username: 'Loading...' });
+                    setLoading(false);
+                    console.log("AuthContext: Old token detected, fetching username...");
+                }
+                
+                // BACKGROUND: Get full profile (fast lightweight endpoint)
                 try {
                     const response = await authApi.getProfile(true); // lightweight=true
-                    console.log("AuthContext: Profile verified. User:", response.data.username);
+                    console.log("AuthContext: Profile fetched. User:", response.data.username);
                     setUser(response.data);
                 } catch (error) {
-                    console.error("AuthContext: Profile verification failed:", error);
-                    // Don't remove tokens on verification failure - token might still be valid
-                    // Just keep the decoded user info
+                    console.error("AuthContext: Profile fetch failed:", error);
+                    // Don't remove tokens - keep using decoded data
                 }
                 return;
             }
