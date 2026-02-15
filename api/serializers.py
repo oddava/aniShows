@@ -738,6 +738,69 @@ class UserSerializer(serializers.ModelSerializer):
         return profile.points if profile else 0
 
 
+class UserLightweightSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for navbar/quick profile view - no expensive calculations"""
+
+    avatar = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    is_private = serializers.SerializerMethodField()
+    email_verified = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
+
+    # Use default values for stats (0) - will be fetched separately when needed
+    anime_count = serializers.IntegerField(default=0)
+    episodes_watched = serializers.IntegerField(default=0)
+    days_watched = serializers.FloatField(default=0.0)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "avatar",
+            "bio",
+            "is_private",
+            "email_verified",
+            "has_password",
+            "social_links",
+            "anime_count",
+            "episodes_watched",
+            "days_watched",
+            "date_joined",
+        ]
+        read_only_fields = [
+            "id",
+            "date_joined",
+            "email_verified",
+            "has_password",
+        ]
+
+    def get_avatar(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.avatar.url if profile and profile.avatar else None
+
+    def get_bio(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.bio if profile else None
+
+    def get_is_private(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.is_private if profile else False
+
+    def get_email_verified(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.email_verified if profile else False
+
+    def get_has_password(self, obj):
+        return obj.has_usable_password()
+
+    def get_social_links(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.social_links if profile else []
+
+
 class PublicUserSerializer(serializers.ModelSerializer):
     """Limited serializer for public profile view"""
 

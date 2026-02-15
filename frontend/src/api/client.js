@@ -78,23 +78,17 @@ export const studioApi = {
 export const authApi = {
     login: (credentials) => api.post('/auth/login/', credentials),
     register: (data) => api.post('/auth/register/', data),
-    verifyEmail: (data) => api.post('/auth/verify-email/', data),
-    resendVerification: (data) => api.post('/auth/resend-verification/', data),
-    resetPassword: (data) => api.post('/auth/password-reset/', data),
-    resetPasswordConfirm: (data) => api.post('/auth/password-reset-confirm/', data),
-    getProfile: () => api.get('/users/me/'),
-    updateProfile: (data) => {
-        const isFormData = data instanceof FormData;
-        return api.patch('/users/me/', data, {
-            headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
-        });
-    },
-    googleLogin: (code, callback_url) => api.post('/auth/google/', { code, callback_url }),
+    logout: () => api.post('/auth/logout/'),
+    getProfile: (lightweight = false) => api.get('/users/me/', { params: { lightweight } }),
+    updateProfile: (data) => api.patch('/users/me/', data),
     changePassword: (data) => api.post('/auth/change-password/', data),
-    deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),
+    requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),
+    resetPassword: (uid, token, password) => api.post('/auth/password-reset-confirm/', { uid, token, password }),
+    verifyEmail: (uid, token) => api.get(`/verify-email/${uid}/${token}/`),
+    resendVerification: () => api.post('/auth/resend-verification/'),
     changeEmail: (data) => api.post('/auth/change-email/', data),
-    confirmEmailChange: (data) => api.post('/auth/confirm-email-change/', data),
-    getByUsername: (username) => api.get(`/users/${username}/`),
+    confirmEmailChange: (uid, token, newEmail) => api.get(`/confirm-email-change/${uid}/${token}/${newEmail}/`),
+    deleteAccount: (data) => api.post('/auth/delete-account/', data),
 };
 
 export const favoriteApi = {

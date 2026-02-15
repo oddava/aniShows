@@ -51,9 +51,9 @@ export function AuthProvider({ children }) {
                 setUser(decodedUser);
                 setLoading(false); // Stop loading immediately!
                 
-                // BACKGROUND: Verify token and get full profile (optional, non-blocking)
+                // BACKGROUND: Verify token and get lightweight profile (fast, no expensive calculations)
                 try {
-                    const response = await authApi.getProfile();
+                    const response = await authApi.getProfile(true); // lightweight=true
                     console.log("AuthContext: Profile verified. User:", response.data.username);
                     setUser(response.data);
                 } catch (error) {

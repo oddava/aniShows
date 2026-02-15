@@ -660,7 +660,30 @@ class UserProfileView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        # Cache user profile data to avoid expensive recalculation
+        # Check if this is a lightweight request (for navbar)
+        lightweight = request.query_params.get("lightweight", "false").lower() == "true"
+
+        if lightweight:
+            # Return only basic user info without expensive stats calculations
+            cache_key = f"user_profile_light:{request.user.id}"
+            cached_data = cache.get(cache_key)
+
+            if cached_data:
+                return Response(cached_data)
+
+            # Use lightweight serializer
+            from api.serializers import UserLightweightSerializer
+
+            serializer = UserLightweightSerializer(
+                request.user, context={"request": request}
+            )
+            data = serializer.data
+
+            # Cache lightweight data for 10 minutes (600 seconds)
+            cache.set(cache_key, data, 600)
+            return Response(data)
+
+        # Full profile request - use cached data with stats
         cache_key = f"user_profile:{request.user.id}"
         cached_data = cache.get(cache_key)
 
