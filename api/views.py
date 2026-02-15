@@ -452,7 +452,10 @@ class VerifyEmailView(APIView):
 
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
+            # Import the helper function
+            from api.views.users import get_annotated_user_queryset
+
+            user = get_annotated_user_queryset().get(pk=uid)
             profile = getattr(user, "userprofile", None)
 
             is_valid = default_token_generator.check_token(user, token)

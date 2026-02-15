@@ -29,9 +29,11 @@ class AuthService:
         try:
             from django.utils.encoding import force_str
             from django.utils.http import urlsafe_base64_decode
+            from api.views.users import get_annotated_user_queryset
 
             uid = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
+            # Get user with annotations for proper serializer output
+            user = get_annotated_user_queryset().get(pk=uid)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return False, None
 
