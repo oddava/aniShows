@@ -660,8 +660,20 @@ class UserProfileView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
+        # Cache user profile data to avoid expensive recalculation
+        cache_key = f"user_profile:{request.user.id}"
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            return Response(cached_data)
+
         serializer = UserSerializer(request.user, context={"request": request})
-        return Response(serializer.data)
+        data = serializer.data
+
+        # Cache for 5 minutes (300 seconds)
+        cache.set(cache_key, data, 300)
+
+        return Response(data)
 
     def patch(self, request):
         serializer = UserProfileUpdateSerializer(data=request.data)
@@ -713,6 +725,9 @@ class UserProfileView(APIView):
                 profile.social_links = serializer.validated_data["social_links"]
 
             profile.save()
+
+            # Invalidate profile cache after update
+            cache.delete(f"user_profile:{request.user.id}")
 
             return Response(
                 UserSerializer(request.user, context={"request": request}).data
