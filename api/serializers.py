@@ -551,12 +551,19 @@ class UserSerializer(serializers.ModelSerializer):
     reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
 
     # Computed stats
-    days_watched = serializers.FloatField(read_only=True, source="_days_watched")
+    days_watched = serializers.SerializerMethodField()
     mean_score = serializers.SerializerMethodField()
     anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
     episodes_watched = serializers.IntegerField(
         read_only=True, source="_episodes_watched"
     )
+
+    def get_days_watched(self, obj):
+        """Return days watched rounded to 1 decimal place"""
+        days = getattr(obj, "_days_watched", None)
+        if days is not None:
+            return round(float(days), 1)
+        return 0.0
 
     def get_mean_score(self, obj):
         """Return mean score rounded to 1 decimal place"""
@@ -660,12 +667,19 @@ class PublicUserSerializer(serializers.ModelSerializer):
     is_private = serializers.SerializerMethodField()
 
     # Computed stats
-    days_watched = serializers.FloatField(read_only=True, source="_days_watched")
+    days_watched = serializers.SerializerMethodField()
     mean_score = serializers.SerializerMethodField()
     anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
     episodes_watched = serializers.IntegerField(
         read_only=True, source="_episodes_watched"
     )
+
+    def get_days_watched(self, obj):
+        """Return days watched rounded to 1 decimal place"""
+        days = getattr(obj, "_days_watched", None)
+        if days is not None:
+            return round(float(days), 1)
+        return 0.0
 
     def get_mean_score(self, obj):
         """Return mean score rounded to 1 decimal place"""

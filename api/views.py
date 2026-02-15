@@ -760,7 +760,33 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             _followers_count=Count("followers", distinct=True),
             _following_count=Count("following", distinct=True),
             _anime_count=Count("anime_lists", distinct=True),
-            _episodes_watched=Coalesce(Sum("anime_lists__episodes_watched"), 0),
+        )
+
+        # Calculate episodes watched using subquery to avoid join duplicates
+        episodes_subquery = (
+            UserAnimeList.objects.filter(user=OuterRef("pk"))
+            .values("user")
+            .annotate(total=Sum("episodes_watched"))
+            .values("total")
+        )
+
+        queryset = queryset.annotate(
+            _episodes_watched=Coalesce(Subquery(episodes_subquery), 0)
+        )
+
+        # Calculate total minutes watched using subquery to avoid join duplicates
+        total_minutes_subquery = (
+            UserAnimeList.objects.filter(user=OuterRef("pk"))
+            .annotate(
+                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
+            )
+            .values("user")
+            .annotate(total=Sum("entry_minutes"))
+            .values("total")
+        )
+
+        queryset = queryset.annotate(
+            _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
         )
 
         # Calculate total minutes watched using subquery to avoid join duplicates
