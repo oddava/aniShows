@@ -552,11 +552,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     # Computed stats
     days_watched = serializers.FloatField(read_only=True, source="_days_watched")
-    mean_score = serializers.FloatField(read_only=True, source="_mean_score")
+    mean_score = serializers.SerializerMethodField()
     anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
     episodes_watched = serializers.IntegerField(
         read_only=True, source="_episodes_watched"
     )
+
+    def get_mean_score(self, obj):
+        """Return mean score rounded to 1 decimal place"""
+        raw_score = getattr(obj, "_mean_score_raw", None)
+        if raw_score is not None:
+            return round(float(raw_score), 1)
+        return None
 
     # Social links
     social_links = serializers.SerializerMethodField()
@@ -654,11 +661,18 @@ class PublicUserSerializer(serializers.ModelSerializer):
 
     # Computed stats
     days_watched = serializers.FloatField(read_only=True, source="_days_watched")
-    mean_score = serializers.FloatField(read_only=True, source="_mean_score")
+    mean_score = serializers.SerializerMethodField()
     anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
     episodes_watched = serializers.IntegerField(
         read_only=True, source="_episodes_watched"
     )
+
+    def get_mean_score(self, obj):
+        """Return mean score rounded to 1 decimal place"""
+        raw_score = getattr(obj, "_mean_score_raw", None)
+        if raw_score is not None:
+            return round(float(raw_score), 1)
+        return None
 
     # Dynamic Social links
     social_links = serializers.SerializerMethodField()

@@ -746,6 +746,7 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
+        from django.db.models.functions import Coalesce
 
         user = self.request.user
 
@@ -758,26 +759,28 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             _followers_count=Count("followers", distinct=True),
             _following_count=Count("following", distinct=True),
             _anime_count=Count("anime_lists", distinct=True),
-            _episodes_watched=Sum("anime_lists__episodes_watched"),
+            _episodes_watched=Coalesce(Sum("anime_lists__episodes_watched"), 0),
         )
 
-        # Calculate total minutes watched
+        # Calculate total minutes watched correctly with Coalesce
         queryset = queryset.annotate(
-            _total_minutes=Sum(
-                F("anime_lists__episodes_watched")
-                * F("anime_lists__anime__duration_minutes")
+            _total_minutes=Coalesce(
+                Sum(
+                    F("anime_lists__episodes_watched")
+                    * F("anime_lists__anime__duration_minutes")
+                ),
+                0,
             )
         )
 
-        # Calculate mean score (exclude 0 scores)
+        # Calculate mean score (exclude 0 scores) - use _mean_score_raw for rounding in serializer
         queryset = queryset.annotate(
-            _mean_score=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
+            _mean_score_raw=Avg(
+                "anime_lists__score", filter=Q(anime_lists__score__gt=0)
+            )
         )
 
         # Calculate days watched from total minutes
-        from django.db.models import FloatField
-        from django.db.models.functions import Coalesce
-
         queryset = queryset.annotate(
             _days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0
         )

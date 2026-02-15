@@ -22,6 +22,9 @@ User = get_user_model()
 
 def get_annotated_user_queryset(user=None):
     """Helper to get user queryset with all performance annotations."""
+    from django.db.models import FloatField
+    from django.db.models.functions import Coalesce, Round
+
     queryset = User.objects.select_related("userprofile")
 
     # Annotate with counts to avoid N+1 queries
@@ -31,26 +34,27 @@ def get_annotated_user_queryset(user=None):
         _followers_count=Count("followers", distinct=True),
         _following_count=Count("following", distinct=True),
         _anime_count=Count("anime_lists", distinct=True),
-        _episodes_watched=Sum("anime_lists__episodes_watched"),
+        _episodes_watched=Coalesce(Sum("anime_lists__episodes_watched"), 0),
     )
 
-    # Calculate total minutes watched
+    # Calculate total minutes watched correctly
+    # Sum episodes_watched * duration_minutes for each anime list entry
     queryset = queryset.annotate(
-        _total_minutes=Sum(
-            F("anime_lists__episodes_watched")
-            * F("anime_lists__anime__duration_minutes")
+        _total_minutes=Coalesce(
+            Sum(
+                F("anime_lists__episodes_watched")
+                * F("anime_lists__anime__duration_minutes")
+            ),
+            0,
         )
     )
 
-    # Calculate mean score (exclude 0 scores)
+    # Calculate mean score (exclude 0 scores) - round to 1 decimal place
     queryset = queryset.annotate(
-        _mean_score=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
+        _mean_score_raw=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
     )
 
     # Calculate days watched from total minutes
-    from django.db.models import FloatField
-    from django.db.models.functions import Coalesce
-
     queryset = queryset.annotate(
         _days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0
     )
