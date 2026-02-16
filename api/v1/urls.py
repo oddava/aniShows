@@ -98,9 +98,15 @@ admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit
 urlpatterns = [
     # Health check
     path("health/", HealthCheckView.as_view(), name="health_check"),
-    # User profile
+    # User profile - me endpoints must come before username lookup
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
     path("users/me/stats/", UserStatsView.as_view(), name="user_stats"),
+    # Public user profile lookup by username (must come after me/)
+    path(
+        "users/<str:username>/",
+        PublicUserProfileViewSet.as_view({"get": "retrieve"}),
+        name="public_user_profile",
+    ),
     # Notification endpoints (must be before router to avoid conflicts)
     path(
         "notifications/preferences/",

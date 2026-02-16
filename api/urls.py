@@ -87,6 +87,11 @@ celery_router.register(
 urlpatterns = [
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
     path("users/me/stats/", UserStatsView.as_view(), name="user_stats"),
+    path(
+        "users/<str:username>/",
+        PublicUserProfileViewSet.as_view({"get": "retrieve"}),
+        name="public_user_profile",
+    ),
     path("", include(router.urls)),
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
