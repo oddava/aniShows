@@ -22,18 +22,18 @@ services:
         reservations:
           memory: 64M
 
-  # Web - Optimized Gunicorn settings for EC2
+  # Web - Optimized Gunicorn settings for small EC2 (t2.micro - 1 vCPU)
   web:
     command: >
       uv run gunicorn root.wsgi:application
       --bind 0.0.0.0:8000
-      --workers 2
+      --workers 1
       --worker-class gthread
       --threads 4
       --worker-connections 1000
-      --max-requests 10000
+      --max-requests 1000
       --max-requests-jitter 100
-      --timeout 60
+      --timeout 30
       --keep-alive 5
       --access-logfile -
       --error-logfile -
@@ -52,12 +52,12 @@ services:
         reservations:
           memory: 512M
 
-  # Redis - Memory optimized for small instances
+  # Redis - Optimized for profile caching with 512MB
   redis:
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD:-redispassword123}
-      --maxmemory 192mb
+      --maxmemory 512mb
       --maxmemory-policy allkeys-lru
       --appendonly no
       --save ""

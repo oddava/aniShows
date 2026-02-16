@@ -132,7 +132,10 @@ export default function Profile({ forcedUsername }) {
         queryKey: ['profile', targetUsername],
         queryFn: () => authApi.getByUsername(targetUsername).then(res => res.data),
         enabled: isPublicView,
-        retry: false
+        retry: false,
+        staleTime: 5 * 60 * 1000,
+        cacheTime: 10 * 60 * 1000,
+        refetchOnMount: false,
     });
 
     const displayUser = isPublicView ? publicProfile : currentUser;
@@ -178,7 +181,9 @@ export default function Profile({ forcedUsername }) {
             return undefined;
         },
         enabled: !!displayUser && activeTab === 'favorites' && !isPrivate,
-        refetchOnMount: 'always',
+        staleTime: 5 * 60 * 1000,
+        cacheTime: 10 * 60 * 1000,
+        refetchOnMount: false,
     });
 
     const favorites = favoritesData?.pages.flatMap(page => {
@@ -198,6 +203,9 @@ export default function Profile({ forcedUsername }) {
         queryKey: ['lists', targetUsername, listStatusFilter],
         queryFn: () => listApi.getAll({ status: listStatusFilter, username: targetUsername }).then(res => res.data.results || res.data || []),
         enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
+        staleTime: 5 * 60 * 1000,
+        cacheTime: 10 * 60 * 1000,
+        refetchOnMount: false,
     });
 
     const {
@@ -220,6 +228,9 @@ export default function Profile({ forcedUsername }) {
             return undefined;
         },
         enabled: !!displayUser && activeTab === 'reviews' && !isPrivate,
+        staleTime: 5 * 60 * 1000,
+        cacheTime: 10 * 60 * 1000,
+        refetchOnMount: false,
     });
 
     const reviews = reviewsData?.pages.flatMap(page => {

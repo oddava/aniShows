@@ -5,6 +5,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.core.cache import cache
 from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
 from datetime import timedelta
 import logging
@@ -146,6 +147,12 @@ class UserProfileView(APIView):
 
             profile.save()
 
+            # Invalidate public profile cache for all users (both authenticated and anonymous)
+            username = request.user.username
+            cache.delete(f"public_profile:{username}:anon")
+            # We can't easily delete all authenticated user caches, but they will expire in 5 minutes
+            # Alternatively, we could use a cache versioning approach or wildcard delete if Redis supports it
+
             # Get user with annotations after update
             user = get_annotated_user_queryset().get(pk=request.user.pk)
             return Response(UserSerializer(user, context={"request": request}).data)
@@ -230,6 +237,15 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Get user with basic profile info only (fast query)
         username = self.kwargs.get(self.lookup_field)
+
+        # Build cache key based on username and requesting user
+        cache_key = f"public_profile:{username}:{request.user.id if request.user.is_authenticated else 'anon'}"
+
+        # Try to get from cache first
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+
         queryset = User.objects.select_related("userprofile").filter(username=username)
 
         if not queryset.exists():
@@ -249,4 +265,9 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             user._is_following = is_following
 
         serializer = self.get_serializer(user)
-        return Response(serializer.data)
+        data = serializer.data
+
+        # Cache for 5 minutes (300 seconds)
+        cache.set(cache_key, data, 300)
+
+        return Response(data)
