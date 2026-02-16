@@ -645,6 +645,46 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
             return obj._user_review
         return None
 
+    def get_status_distribution(self, obj):
+        """Calculate anime list status distribution from prefetched data."""
+        from users.models import UserAnimeList
+
+        distribution = {
+            "watching": 0,
+            "completed": 0,
+            "on_hold": 0,
+            "dropped": 0,
+            "plan_to_watch": 0,
+        }
+
+        # Use prefetched user_lists if available
+        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get(
+            "user_lists"
+        ) or getattr(obj, "user_lists", None)
+
+        if user_lists:
+            for entry in user_lists.all():
+                status_key = entry.status.lower().replace(" ", "_")
+                if status_key in distribution:
+                    distribution[status_key] += 1
+
+        return distribution
+
+    def get_member_count(self, obj):
+        """Get total number of users who have this anime in their list."""
+        from users.models import UserAnimeList
+
+        # Use prefetched data if available
+        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get(
+            "user_lists"
+        ) or getattr(obj, "user_lists", None)
+
+        if user_lists is not None:
+            return user_lists.count()
+
+        # Fallback to querying
+        return UserAnimeList.objects.filter(anime=obj).count()
+
 
 class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
