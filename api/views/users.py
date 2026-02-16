@@ -213,7 +213,9 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = "username"
 
     def get_queryset(self):
-        return get_annotated_user_queryset(self.request)
+        return get_annotated_user_queryset(
+            self.request.user if self.request.user.is_authenticated else None
+        )
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
