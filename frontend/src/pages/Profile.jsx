@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { User, Heart, List, MessageSquare, Lock, BarChart3, Search, LayoutGrid, LayoutList, Clock, Star, Tv, Link as LinkIcon, ExternalLink, Award, Trophy, Zap, Sparkles, Plus, Flame, TrendingUp, Target } from 'lucide-react';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
@@ -119,8 +119,6 @@ export default function Profile({ forcedUsername }) {
     const [listStatusFilter, setListStatusFilter] = useState('Watching');
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [followersModalType, setFollowersModalType] = useState('followers');
-    const [followersCount, setFollowersCount] = useState(0);
-    const initializedFollowers = useRef(false);
     const queryClient = useQueryClient();
 
     const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
@@ -141,18 +139,15 @@ export default function Profile({ forcedUsername }) {
     const displayUser = isPublicView ? publicProfile : currentUser;
     const isPrivate = isPublicView && displayUser?.is_private;
 
-    // Initialize followers count from displayUser when it becomes available
-    // This is intentionally done once on mount to avoid cascading renders
-    useEffect(() => {
-        if (!initializedFollowers.current && displayUser?.followers_count !== undefined) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setFollowersCount(displayUser.followers_count);
-            initializedFollowers.current = true;
-        }
-    }, [displayUser?.followers_count]);
-
     const handleFollowChange = (isFollowing, newFollowersCount) => {
-        setFollowersCount(newFollowersCount);
+        // Update the query cache directly for immediate UI update
+        if (isPublicView && publicProfile) {
+            queryClient.setQueryData(['profile', targetUsername], {
+                ...publicProfile,
+                followers_count: newFollowersCount,
+                is_following: isFollowing
+            });
+        }
     };
 
     const openFollowersModal = (type) => {
@@ -701,14 +696,14 @@ export default function Profile({ forcedUsername }) {
                                     onClick={() => openFollowersModal('followers')}
                                     className="text-sm text-gray-400 hover:text-white transition-colors"
                                 >
-                                    <span className="font-bold text-white">{followersCount.toLocaleString()}</span> Followers
+                                    <span className="font-bold text-white">{(displayUser?.followers_count ?? 0).toLocaleString()}</span> Followers
                                 </button>
                                 <span className="text-gray-600">•</span>
                                 <button 
                                     onClick={() => openFollowersModal('following')}
                                     className="text-sm text-gray-400 hover:text-white transition-colors"
                                 >
-                                    <span className="font-bold text-white">{(displayUser?.following_count || 0).toLocaleString()}</span> Following
+                                    <span className="font-bold text-white">{(displayUser?.following_count ?? 0).toLocaleString()}</span> Following
                                 </button>
                             </div>
 

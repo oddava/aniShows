@@ -716,12 +716,8 @@ class PublicUserSerializer(serializers.ModelSerializer):
 
     # Social features
     points = serializers.SerializerMethodField()
-    followers_count = serializers.IntegerField(
-        read_only=True, source="_followers_count"
-    )
-    following_count = serializers.IntegerField(
-        read_only=True, source="_following_count"
-    )
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
 
@@ -784,6 +780,22 @@ class PublicUserSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.followers.filter(follower=request.user).exists()
         return False
+
+    def get_followers_count(self, obj):
+        """Return followers count from annotation or fallback to database query"""
+        count = getattr(obj, "_followers_count", None)
+        if count is not None:
+            return int(count)
+        # Fallback: query the database
+        return obj.followers.count()
+
+    def get_following_count(self, obj):
+        """Return following count from annotation or fallback to database query"""
+        count = getattr(obj, "_following_count", None)
+        if count is not None:
+            return int(count)
+        # Fallback: query the database
+        return obj.following.count()
 
     def get_is_online(self, obj):
         """Check if user is currently online based on recent activity"""

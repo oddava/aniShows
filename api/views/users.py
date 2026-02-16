@@ -21,57 +21,72 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-def get_annotated_user_queryset(user=None):
-    """Helper to get user queryset with all performance annotations."""
+def get_annotated_user_queryset(user=None, lightweight=False):
+    """Helper to get user queryset with all performance annotations.
+
+    Args:
+        user: The requesting user (for is_following annotation)
+        lightweight: If True, only include essential fields for faster loading
+    """
     from django.db.models import FloatField, Subquery, OuterRef
     from django.db.models.functions import Coalesce, Round
     from users.models import UserAnimeList
 
+    # Base queryset with select_related for userprofile
     queryset = User.objects.select_related("userprofile")
 
-    # Annotate with counts to avoid N+1 queries
+    # Essential annotations always included (fast counts)
     queryset = queryset.annotate(
-        _favorites_count=Count("favorites", distinct=True),
-        _reviews_count=Count("reviews", distinct=True),
         _followers_count=Count("followers", distinct=True),
         _following_count=Count("following", distinct=True),
         _anime_count=Count("anime_lists", distinct=True),
     )
 
-    # Calculate episodes watched using subquery to avoid join duplicates
-    episodes_subquery = (
-        UserAnimeList.objects.filter(user=OuterRef("pk"))
-        .values("user")
-        .annotate(total=Sum("episodes_watched"))
-        .values("total")
-    )
+    if not lightweight:
+        # Full annotations for complete profile (slower, only when needed)
+        queryset = queryset.annotate(
+            _favorites_count=Count("favorites", distinct=True),
+            _reviews_count=Count("reviews", distinct=True),
+        )
 
-    queryset = queryset.annotate(
-        _episodes_watched=Coalesce(Subquery(episodes_subquery), 0)
-    )
+        # Calculate episodes watched using subquery to avoid join duplicates
+        episodes_subquery = (
+            UserAnimeList.objects.filter(user=OuterRef("pk"))
+            .values("user")
+            .annotate(total=Sum("episodes_watched"))
+            .values("total")
+        )
 
-    # Calculate total minutes watched using subquery to avoid join duplicates
-    total_minutes_subquery = (
-        UserAnimeList.objects.filter(user=OuterRef("pk"))
-        .annotate(entry_minutes=F("episodes_watched") * F("anime__duration_minutes"))
-        .values("user")
-        .annotate(total=Sum("entry_minutes"))
-        .values("total")
-    )
+        queryset = queryset.annotate(
+            _episodes_watched=Coalesce(Subquery(episodes_subquery), 0)
+        )
 
-    queryset = queryset.annotate(
-        _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
-    )
+        # Calculate total minutes watched using subquery to avoid join duplicates
+        total_minutes_subquery = (
+            UserAnimeList.objects.filter(user=OuterRef("pk"))
+            .annotate(
+                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
+            )
+            .values("user")
+            .annotate(total=Sum("entry_minutes"))
+            .values("total")
+        )
 
-    # Calculate mean score (exclude 0 scores) - round to 1 decimal place
-    queryset = queryset.annotate(
-        _mean_score_raw=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
-    )
+        queryset = queryset.annotate(
+            _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
+        )
 
-    # Calculate days watched from total minutes
-    queryset = queryset.annotate(
-        _days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0
-    )
+        # Calculate mean score (exclude 0 scores) - round to 1 decimal place
+        queryset = queryset.annotate(
+            _mean_score_raw=Avg(
+                "anime_lists__score", filter=Q(anime_lists__score__gt=0)
+            )
+        )
+
+        # Calculate days watched from total minutes
+        queryset = queryset.annotate(
+            _days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0
+        )
 
     # Annotate is_following if user is provided
     if user and user.is_authenticated:
@@ -237,19 +252,30 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         """Override retrieve to use annotated queryset with all stats"""
         username = self.kwargs.get(self.lookup_field)
-        viewer_id = request.user.id if request.user.is_authenticated else "anon"
+        is_authenticated = request.user.is_authenticated
 
-        # Get cache version (default to 0 if not set)
+        # Use a single cache key for all viewers - public data is the same for everyone
+        # Only is_following varies by viewer, which we'll compute separately
         version_key = f"profile_cache_version:{username}"
         cache_version = cache.get(version_key, 0)
-
-        # Build cache key with versioning to support cache invalidation
-        cache_key = f"public_profile:{username}:{viewer_id}:v{cache_version}"
+        cache_key = f"public_profile:{username}:v{cache_version}"
 
         # Try to get from cache first
         cached_data = cache.get(cache_key)
         if cached_data:
-            return Response(cached_data)
+            data = cached_data.copy()  # Make a copy to avoid modifying cached data
+
+            # Add viewer-specific data (is_following) - this is fast to compute
+            if is_authenticated:
+                from users.models import UserFollow
+
+                data["is_following"] = UserFollow.objects.filter(
+                    follower=request.user, following__username=username
+                ).exists()
+            else:
+                data["is_following"] = False
+
+            return Response(data)
 
         # Use the annotated queryset from get_queryset() which includes all stats
         queryset = self.get_queryset().filter(username=username)
@@ -260,11 +286,14 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             raise NotFound("User not found")
 
         user = queryset.first()
-
         serializer = self.get_serializer(user)
         data = serializer.data
 
-        # Cache for 5 minutes (300 seconds)
-        cache.set(cache_key, data, 300)
+        # Cache the public data (without is_following for consistency)
+        cache_data = data.copy()
+        cache_data.pop(
+            "is_following", None
+        )  # Remove viewer-specific field before caching
+        cache.set(cache_key, cache_data, 300)
 
         return Response(data)
