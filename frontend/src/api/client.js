@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
 
 const API_BASE_URL = '/api/v1';
+const TOKEN_REFRESH_THRESHOLD = 5 * 60; // Refresh token if it expires in less than 5 minutes
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -10,44 +12,110 @@ const api = axios.create({
     withCredentials: true,
 });
 
-// Request interceptor - add auth token
+// Check if token needs proactive refresh
+const shouldRefreshToken = (token) => {
+    try {
+        const decoded = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        const timeUntilExpiry = decoded.exp - currentTime;
+        return timeUntilExpiry < TOKEN_REFRESH_THRESHOLD && timeUntilExpiry > 0;
+    } catch {
+        return false;
+    }
+};
+
+// Refresh token proactively
+let isRefreshing = false;
+let refreshPromise = null;
+
+const refreshAccessToken = async () => {
+    if (isRefreshing) {
+        return refreshPromise;
+    }
+
+    isRefreshing = true;
+    refreshPromise = new Promise(async (resolve, reject) => {
+        try {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                reject(new Error('No refresh token available'));
+                return;
+            }
+
+            const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
+                refresh: refreshToken,
+            });
+
+            const { access } = response.data;
+            localStorage.setItem('access_token', access);
+            resolve(access);
+        } catch (error) {
+            console.error('Proactive token refresh failed:', error);
+            reject(error);
+        } finally {
+            isRefreshing = false;
+            refreshPromise = null;
+        }
+    });
+
+    return refreshPromise;
+};
+
+// Request interceptor - add auth token and proactive refresh
 api.interceptors.request.use(
-    (config) => {
+    async (config) => {
         const token = localStorage.getItem('access_token');
+        
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            // Check if token needs proactive refresh (but don't block the request)
+            if (shouldRefreshToken(token) && !config._skipProactiveRefresh) {
+                try {
+                    const newToken = await refreshAccessToken();
+                    config.headers.Authorization = `Bearer ${newToken}`;
+                } catch (error) {
+                    // If proactive refresh fails, still try with current token
+                    console.warn('Proactive refresh failed, using current token');
+                    config.headers.Authorization = `Bearer ${token}`;
+                }
+            } else {
+                config.headers.Authorization = `Bearer ${token}`;
+            }
         }
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh
+// Response interceptor - handle token refresh with retry logic
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
 
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Don't retry if already retried or if it's a refresh request itself
+        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh/')) {
             originalRequest._retry = true;
 
             try {
-                const refreshToken = localStorage.getItem('refresh_token');
-                if (refreshToken) {
-                    const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
-                        refresh: refreshToken,
-                    });
-
-                    const { access } = response.data;
-                    localStorage.setItem('access_token', access);
-
-                    originalRequest.headers.Authorization = `Bearer ${access}`;
-                    return api(originalRequest);
-                }
-            } catch {
+                // Use the proactive refresh function
+                const newToken = await refreshAccessToken();
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                return api(originalRequest);
+            } catch (refreshError) {
+                console.error('Token refresh failed after 401:', refreshError);
+                // Only clear tokens and redirect if refresh truly fails
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
-                window.location.href = '/login';
+                
+                // Don't redirect immediately - let the app handle it gracefully
+                // This prevents flash redirects on transient errors
+                if (!window.location.pathname.includes('/login')) {
+                    setTimeout(() => {
+                        if (!localStorage.getItem('access_token')) {
+                            window.location.href = '/login';
+                        }
+                    }, 100);
+                }
             }
         }
 
@@ -79,7 +147,8 @@ export const authApi = {
     login: (credentials) => api.post('/auth/login/', credentials),
     register: (data) => api.post('/auth/register/', data),
     logout: () => api.post('/auth/logout/'),
-    getProfile: (lightweight = false) => api.get('/users/me/', { params: { lightweight } }),
+    getProfile: (full = false) => api.get('/users/me/', { params: { full } }),
+    getStats: () => api.get('/users/me/stats/'),
     updateProfile: (data) => api.patch('/users/me/', data),
     changePassword: (data) => api.post('/auth/change-password/', data),
     requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),

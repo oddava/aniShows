@@ -56,6 +56,16 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const fetchUserStats = useCallback(async () => {
+        try {
+            const response = await authApi.getStats();
+            return response.data;
+        } catch (error) {
+            console.error("AuthContext: Stats fetch failed:", error);
+            return null;
+        }
+    }, []);
+
     const checkAuth = useCallback(async () => {
         const token = localStorage.getItem('access_token');
         console.log("AuthContext: checkAuth running. Token present:", !!token);
@@ -78,11 +88,19 @@ export function AuthProvider({ children }) {
                     console.log("AuthContext: Old token detected, fetching username...");
                 }
                 
-                // BACKGROUND: Get full profile (fast lightweight endpoint)
+                // BACKGROUND: Get lightweight profile (fast, no expensive stats)
                 try {
-                    const response = await authApi.getProfile(true); // lightweight=true
+                    const response = await authApi.getProfile(false); // lightweight (default)
                     console.log("AuthContext: Profile fetched. User:", response.data.username);
                     setUser(response.data);
+                    
+                    // BACKGROUND: Fetch expensive stats asynchronously (don't block UI)
+                    fetchUserStats().then(stats => {
+                        if (stats) {
+                            setUser(prev => ({ ...prev, ...stats }));
+                            console.log("AuthContext: Stats loaded asynchronously");
+                        }
+                    });
                 } catch (error) {
                     console.error("AuthContext: Profile fetch failed:", error);
                     // Don't remove tokens - keep using decoded data
@@ -99,24 +117,42 @@ export function AuthProvider({ children }) {
         }
         
         setLoading(false);
-    }, []);
+    }, [fetchUserStats]);
 
     useEffect(() => {
         checkAuth();
     }, [checkAuth]);
 
     const login = useCallback(async (username, password) => {
+        const startTime = performance.now();
         const response = await authApi.login({ username, password });
         const { access, refresh } = response.data;
 
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
 
-        const profileResponse = await authApi.getProfile();
+        // Decode token instantly for immediate UI update
+        const decodedUser = decodeToken(access);
+        if (decodedUser) {
+            setUser(decodedUser);
+        }
+
+        // Fetch lightweight profile (fast)
+        const profileResponse = await authApi.getProfile(false);
         setUser(profileResponse.data);
 
+        // Fetch stats asynchronously in background
+        fetchUserStats().then(stats => {
+            if (stats) {
+                setUser(prev => ({ ...prev, ...stats }));
+            }
+        });
+
+        const duration = performance.now() - startTime;
+        console.log(`AuthContext: Login completed in ${duration.toFixed(0)}ms`);
+
         return profileResponse.data;
-    }, []);
+    }, [fetchUserStats]);
 
     const register = useCallback(async (username, email, password) => {
         const response = await authApi.register({

@@ -325,6 +325,7 @@ class AnimeListSerializer(serializers.ModelSerializer):
         ]
 
     def get_cover_image_small(self, obj):
+        # Try local image first
         if obj.cover_image:
             try:
                 request = self.context.get("request")
@@ -332,14 +333,19 @@ class AnimeListSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.cover_image_small.url)
                 return obj.cover_image_small.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.cover_image.url)
-                return obj.cover_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.cover_image.url)
+                    return obj.cover_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.cover_image_external_url or None
 
     def get_cover_image_medium(self, obj):
+        # Try local image first
         if obj.cover_image:
             try:
                 request = self.context.get("request")
@@ -347,14 +353,19 @@ class AnimeListSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.cover_image_medium.url)
                 return obj.cover_image_medium.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.cover_image.url)
-                return obj.cover_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.cover_image.url)
+                    return obj.cover_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.cover_image_external_url or None
 
     def get_banner_image_small(self, obj):
+        # Try local image first
         if obj.banner_image:
             try:
                 request = self.context.get("request")
@@ -362,14 +373,19 @@ class AnimeListSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.banner_image_small.url)
                 return obj.banner_image_small.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.banner_image.url)
-                return obj.banner_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.banner_image.url)
+                    return obj.banner_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.banner_image_external_url or None
 
     def get_banner_image_medium(self, obj):
+        # Try local image first
         if obj.banner_image:
             try:
                 request = self.context.get("request")
@@ -377,12 +393,16 @@ class AnimeListSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.banner_image_medium.url)
                 return obj.banner_image_medium.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.banner_image.url)
-                return obj.banner_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.banner_image.url)
+                    return obj.banner_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.banner_image_external_url or None
 
     def get_is_favorite(self, obj):
         # Use prefetched annotation only - no fallback to avoid N+1
@@ -479,6 +499,7 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_cover_image_small(self, obj):
+        # Try local image first
         if obj.cover_image:
             try:
                 request = self.context.get("request")
@@ -486,14 +507,19 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.cover_image_small.url)
                 return obj.cover_image_small.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.cover_image.url)
-                return obj.cover_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.cover_image.url)
+                    return obj.cover_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.cover_image_external_url or None
 
     def get_cover_image_medium(self, obj):
+        # Try local image first
         if obj.cover_image:
             try:
                 request = self.context.get("request")
@@ -501,14 +527,19 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.cover_image_medium.url)
                 return obj.cover_image_medium.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.cover_image.url)
-                return obj.cover_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.cover_image.url)
+                    return obj.cover_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.cover_image_external_url or None
 
     def get_cover_image_large(self, obj):
+        # Try local image first
         if obj.cover_image:
             try:
                 request = self.context.get("request")
@@ -516,14 +547,19 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.cover_image_large.url)
                 return obj.cover_image_large.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.cover_image.url)
-                return obj.cover_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.cover_image.url)
+                    return obj.cover_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.cover_image_external_url or None
 
     def get_banner_image_small(self, obj):
+        # Try local image first
         if obj.banner_image:
             try:
                 request = self.context.get("request")
@@ -531,14 +567,19 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.banner_image_small.url)
                 return obj.banner_image_small.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.banner_image.url)
-                return obj.banner_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.banner_image.url)
+                    return obj.banner_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.banner_image_external_url or None
 
     def get_banner_image_medium(self, obj):
+        # Try local image first
         if obj.banner_image:
             try:
                 request = self.context.get("request")
@@ -546,14 +587,19 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.banner_image_medium.url)
                 return obj.banner_image_medium.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.banner_image.url)
-                return obj.banner_image.url
-        return None
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.banner_image.url)
+                    return obj.banner_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.banner_image_external_url or None
 
     def get_banner_image_large(self, obj):
+        # Try local image first
         if obj.banner_image:
             try:
                 request = self.context.get("request")
@@ -561,40 +607,16 @@ class AnimeDetailSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(obj.banner_image_large.url)
                 return obj.banner_image_large.url
             except Exception:
-                # Fallback to original image if thumbnail fails
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(obj.banner_image.url)
-                return obj.banner_image.url
-        return None
-
-    def get_status_distribution(self, obj):
-        """Aggregate user list statuses from the platform's own data"""
-        # Use pre-computed status distribution if available (set in view)
-        if hasattr(obj, "_status_distribution"):
-            return obj._status_distribution
-
-        # Fallback: compute from prefetched user_lists (avoiding extra query)
-        distribution = {}
-        if (
-            hasattr(obj, "_prefetched_objects_cache")
-            and "user_lists" in obj._prefetched_objects_cache
-        ):
-            for entry in obj._prefetched_objects_cache["user_lists"]:
-                status = entry.status
-                distribution[status] = distribution.get(status, 0) + 1
-        else:
-            # Last resort - query but only if absolutely necessary
-            from django.db.models import Count
-
-            distribution_query = obj.user_lists.values("status").annotate(
-                count=Count("id")
-            )
-            distribution = {
-                item["status"]: item["count"] for item in distribution_query
-            }
-
-        return distribution
+                # Fallback to original local image if thumbnail fails
+                try:
+                    request = self.context.get("request")
+                    if request:
+                        return request.build_absolute_uri(obj.banner_image.url)
+                    return obj.banner_image.url
+                except Exception:
+                    pass
+        # Fallback to external AniList URL
+        return obj.banner_image_external_url or None
 
     def get_is_favorite(self, obj):
         # Use prefetched annotation only - no fallback to avoid N+1

@@ -6,7 +6,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from django.db.models import Count, Avg, Q, Prefetch
-from django.db import IntegrityError
+from django.db import IntegrityError, models
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.tokens import default_token_generator
@@ -669,42 +669,43 @@ class UserProfileView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        # Check if this is a lightweight request (for navbar)
-        lightweight = request.query_params.get("lightweight", "false").lower() == "true"
+        # Check if this is a full profile request (with stats)
+        full = request.query_params.get("full", "false").lower() == "true"
 
-        if lightweight:
-            # Return only basic user info without expensive stats calculations
-            cache_key = f"user_profile_light:{request.user.id}"
+        if full:
+            # Full profile request with expensive stats - use cached data
+            cache_key = f"user_profile_full:{request.user.id}"
             cached_data = cache.get(cache_key)
 
             if cached_data:
                 return Response(cached_data)
 
-            # Use lightweight serializer
-            from api.serializers import UserLightweightSerializer
-
-            serializer = UserLightweightSerializer(
-                request.user, context={"request": request}
-            )
+            # Get user with select_related to avoid N+1
+            user = User.objects.select_related("userprofile").get(pk=request.user.pk)
+            serializer = UserSerializer(user, context={"request": request})
             data = serializer.data
 
-            # Cache lightweight data for 10 minutes (600 seconds)
-            cache.set(cache_key, data, 600)
+            # Cache for 5 minutes (300 seconds)
+            cache.set(cache_key, data, 300)
             return Response(data)
 
-        # Full profile request - use cached data with stats
+        # Default: Return lightweight profile (fast, no expensive calculations)
         cache_key = f"user_profile:{request.user.id}"
         cached_data = cache.get(cache_key)
 
         if cached_data:
             return Response(cached_data)
 
-        serializer = UserSerializer(request.user, context={"request": request})
+        # Use lightweight serializer for fast response
+        from api.serializers import UserLightweightSerializer
+
+        # Get user with select_related to avoid N+1 query
+        user = User.objects.select_related("userprofile").get(pk=request.user.pk)
+        serializer = UserLightweightSerializer(user, context={"request": request})
         data = serializer.data
 
-        # Cache for 5 minutes (300 seconds)
-        cache.set(cache_key, data, 300)
-
+        # Cache lightweight data for 10 minutes (600 seconds)
+        cache.set(cache_key, data, 600)
         return Response(data)
 
     def patch(self, request):
@@ -758,13 +759,85 @@ class UserProfileView(APIView):
 
             profile.save()
 
-            # Invalidate profile cache after update
+            # Invalidate all profile caches after update
             cache.delete(f"user_profile:{request.user.id}")
+            cache.delete(f"user_profile_full:{request.user.id}")
 
             return Response(
                 UserSerializer(request.user, context={"request": request}).data
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserStatsView(APIView):
+    """Separate endpoint for expensive user stats - loaded asynchronously"""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Get user stats with caching"""
+        cache_key = f"user_stats:{request.user.id}"
+        data = cache.get(cache_key)
+
+        if data:
+            return Response(data)
+
+        # Calculate stats efficiently with select_related
+        from django.db.models import Count, Avg, Sum, Q
+        from users.models import UserAnimeList
+
+        user = (
+            User.objects.filter(pk=request.user.pk)
+            .select_related("userprofile")
+            .annotate(
+                _favorites_count=Count("favorites", distinct=True),
+                _reviews_count=Count("reviews", distinct=True),
+                _followers_count=Count("followers", distinct=True),
+                _following_count=Count("following", distinct=True),
+                _anime_count=Count("anime_lists", distinct=True),
+                _episodes_watched=Sum(
+                    "anime_lists__episodes_watched",
+                    filter=Q(anime_lists__episodes_watched__gt=0),
+                ),
+                _mean_score_raw=Avg(
+                    "anime_lists__score", filter=Q(anime_lists__score__gt=0)
+                ),
+            )
+            .first()
+        )
+
+        if not user:
+            return Response(
+                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Calculate total minutes and days watched
+        total_minutes = (
+            UserAnimeList.objects.filter(user=user)
+            .annotate(
+                entry_minutes=models.F("episodes_watched")
+                * models.F("anime__duration_minutes")
+            )
+            .aggregate(total=models.Sum("entry_minutes"))
+            .get("total", 0)
+            or 0
+        )
+
+        data = {
+            "favorites_count": getattr(user, "_favorites_count", 0),
+            "reviews_count": getattr(user, "_reviews_count", 0),
+            "followers_count": getattr(user, "_followers_count", 0),
+            "following_count": getattr(user, "_following_count", 0),
+            "anime_count": getattr(user, "_anime_count", 0),
+            "episodes_watched": getattr(user, "_episodes_watched", 0) or 0,
+            "days_watched": round(total_minutes / 1440.0, 1),
+            "mean_score": (round(float(getattr(user, "_mean_score_raw", 0) or 0), 1)),
+        }
+
+        # Cache for 5 minutes
+        cache.set(cache_key, data, 300)
+
+        return Response(data)
 
 
 class ChangePasswordView(APIView):
@@ -819,21 +892,6 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset = queryset.annotate(
             _episodes_watched=Coalesce(Subquery(episodes_subquery), 0)
-        )
-
-        # Calculate total minutes watched using subquery to avoid join duplicates
-        total_minutes_subquery = (
-            UserAnimeList.objects.filter(user=OuterRef("pk"))
-            .annotate(
-                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
-            )
-            .values("user")
-            .annotate(total=Sum("entry_minutes"))
-            .values("total")
-        )
-
-        queryset = queryset.annotate(
-            _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
         )
 
         # Calculate total minutes watched using subquery to avoid join duplicates

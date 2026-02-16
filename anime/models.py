@@ -191,6 +191,15 @@ class Anime(Model):
         format="WEBP",
         options={"quality": 90},
     )
+
+    # External image URLs (fallback to CDN when local images not available)
+    cover_image_external_url = URLField(
+        blank=True, help_text="External AniList cover image URL"
+    )
+    banner_image_external_url = URLField(
+        blank=True, help_text="External AniList banner image URL"
+    )
+
     trailer_url = URLField(blank=True)
 
     rating = DecimalField(

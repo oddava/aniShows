@@ -28,7 +28,7 @@ class CustomUser(AbstractUser):
 
 
 class UserProfile(Model):
-    user = OneToOneField(settings.AUTH_USER_MODEL, on_delete=CASCADE)
+    user = OneToOneField(settings.AUTH_USER_MODEL, on_delete=CASCADE, db_index=True)
     avatar = ImageField(
         upload_to=user_avatar_path, blank=True, null=True, storage=MediaStorage()
     )

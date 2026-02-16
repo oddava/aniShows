@@ -882,6 +882,17 @@ class AniListService:
             has_banner = await sync_to_async(lambda: bool(anime.banner_image))()
             has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
 
+            # Always store external URLs for fallback, even if download fails
+            if cover_url:
+                await self._save_external_url(
+                    anime, "cover_image_external_url", cover_url
+                )
+
+            if banner_url:
+                await self._save_external_url(
+                    anime, "banner_image_external_url", banner_url
+                )
+
             if cover_url and not has_cover:
                 cover_data = await self.download_image(cover_url)
                 if cover_data:
@@ -931,6 +942,12 @@ class AniListService:
     def _save_trailer_url(self, anime, trailer_url):
         anime.trailer_url = trailer_url
         anime.save()
+
+    @sync_to_async
+    def _save_external_url(self, anime, field_name, url):
+        """Save external image URL for fallback purposes"""
+        setattr(anime, field_name, url)
+        anime.save(update_fields=[field_name])
 
     async def get_anime_by_id(self, anilist_id: int) -> Optional[dict]:
         """Fetch a single anime by AniList ID"""
