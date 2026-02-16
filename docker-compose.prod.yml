@@ -18,9 +18,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 2G
         reservations:
-          memory: 64M
+          memory: 512M
 
   # Web - Optimized Gunicorn settings for small EC2 (t2.micro - 1 vCPU)
   web:

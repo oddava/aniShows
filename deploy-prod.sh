@@ -258,10 +258,40 @@ if [ "$REBUILD_FRONTEND" = true ]; then
     $COMPOSE_CMD build frontend
     
     echo -e "${BLUE}   Generating static files...${NC}"
-    # Build frontend using production configuration
-    if ! $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build; then
-        echo -e "${RED}❌ Frontend build failed!${NC}"
+    echo -e "${BLUE}   Using 4GB memory limit for Node.js build process${NC}"
+    
+    # Build frontend using production configuration with retry logic
+    BUILD_ATTEMPTS=0
+    MAX_ATTEMPTS=2
+    BUILD_SUCCESS=false
+    
+    while [ $BUILD_ATTEMPTS -lt $MAX_ATTEMPTS ] && [ "$BUILD_SUCCESS" = false ]; do
+        BUILD_ATTEMPTS=$((BUILD_ATTEMPTS + 1))
+        echo -e "${BLUE}   Build attempt ${BUILD_ATTEMPTS}/${MAX_ATTEMPTS}...${NC}"
+        
+        if [ $BUILD_ATTEMPTS -eq 1 ]; then
+            # First attempt: Full memory
+            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build; then
+                BUILD_SUCCESS=true
+            else
+                echo -e "${YELLOW}⚠️  Build failed, trying with lower memory optimization...${NC}"
+            fi
+        else
+            # Second attempt: Use low memory build script
+            echo -e "${BLUE}   Attempting build with 2GB memory limit...${NC}"
+            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=2048" frontend npm run build:lowmem; then
+                BUILD_SUCCESS=true
+            fi
+        fi
+    done
+    
+    if [ "$BUILD_SUCCESS" = false ]; then
+        echo -e "${RED}❌ Frontend build failed after ${MAX_ATTEMPTS} attempts!${NC}"
         echo -e "${YELLOW}   Check build logs: $COMPOSE_CMD logs frontend${NC}"
+        echo -e "${YELLOW}   Possible causes:${NC}"
+        echo -e "      - Insufficient memory on host system"
+        echo -e "      - Corrupted node_modules (try: rm -rf frontend/node_modules)"
+        echo -e "      - TypeScript/JavaScript errors in code"
         exit 1
     fi
     
