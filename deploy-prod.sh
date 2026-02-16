@@ -220,14 +220,42 @@ fi
 
 echo ""
 
-# Step 6: Health check
-echo -e "${BLUE}🏥 Step 6: Running health check...${NC}"
+# Step 6: Wait for MinIO to be ready
+echo -e "${BLUE}⏳ Step 6: Waiting for MinIO to be ready...${NC}"
+MAX_RETRIES=30
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -sf http://localhost:9000/minio/health/live > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ MinIO is ready!${NC}"
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo -e "${YELLOW}   Waiting for MinIO... (${RETRY_COUNT}/${MAX_RETRIES})${NC}"
+    sleep 2
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    echo -e "${RED}❌ MinIO failed to start - check logs with: docker compose logs minio${NC}"
+fi
+
+echo ""
+
+# Step 7: Health check
+echo -e "${BLUE}🏥 Step 7: Running health check...${NC}"
 sleep 5
 
 if curl -sf http://localhost/api/health/ > /dev/null 2>&1; then
     echo -e "${GREEN}✅ API is responding!${NC}"
 else
     echo -e "${YELLOW}⚠️  API health check failed - check logs with: docker compose logs web${NC}"
+fi
+
+# Check media endpoint
+echo -e "${BLUE}   Checking media endpoint...${NC}"
+if curl -sf http://localhost/media/ > /dev/null 2>&1 || curl -sfI http://localhost/media/ > /dev/null 2>&1; then
+    echo -e "${GREEN}✅ Media endpoint is accessible!${NC}"
+else
+    echo -e "${YELLOW}⚠️  Media endpoint check failed - MinIO may still be initializing${NC}"
 fi
 
 # Save current commit as last deployed

@@ -263,14 +263,38 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         return AnimeListSerializer
 
     def retrieve(self, request, *args, **kwargs):
-        """Override to prefetch user_lists for status distribution calculation"""
-        instance = self.get_object()
-        from users.models import UserAnimeList
+        """Override to prefetch user_lists for status distribution calculation with caching"""
+        slug = kwargs.get("slug")
+        user_id = request.user.id if request.user.is_authenticated else "anon"
+        cache_key = f"anime_detail:{slug}:{user_id}"
 
-        user_lists = UserAnimeList.objects.filter(anime=instance).only("status")
-        instance._prefetched_objects_cache = {"user_lists": user_lists}
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        # Try to get from cache first
+        cached_data = cache.get(cache_key)
+        if cached_data and not request.user.is_authenticated:
+            return Response(cached_data)
+
+        try:
+            instance = self.get_object()
+            from users.models import UserAnimeList
+
+            user_lists = UserAnimeList.objects.filter(anime=instance).only("status")
+            instance._prefetched_objects_cache = {"user_lists": user_lists}
+            serializer = self.get_serializer(instance)
+            data = serializer.data
+
+            # Cache for 10 minutes (longer cache for better performance)
+            # Only cache for anonymous users to avoid stale data for logged-in users
+            if not request.user.is_authenticated:
+                cache.set(cache_key, data, 600)
+
+            return Response(data)
+        except Exception as e:
+            logger.error(f"Error retrieving anime {slug}: {str(e)}")
+            # If cache exists, return stale data rather than 500 error
+            if cached_data:
+                logger.warning(f"Returning stale cache for anime {slug}")
+                return Response(cached_data)
+            raise
 
     def list(self, request, *args, **kwargs):
         """Override to add caching for anime list endpoint"""

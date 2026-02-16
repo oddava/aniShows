@@ -16,6 +16,7 @@ from api.views import (
     CustomTokenObtainPairView,
     RegisterView,
     UserProfileView,
+    UserStatsView,
     FavoriteViewSet,
     UserAnimeListViewSet,
     ReviewViewSet,
@@ -64,6 +65,7 @@ from api.notification_views import (
     NotificationPreferenceView,
     PushSubscriptionView,
 )
+from api.health_views import HealthCheckView
 
 # Main router for v1
 router = DefaultRouter()
@@ -94,8 +96,11 @@ admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
 admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
 
 urlpatterns = [
+    # Health check
+    path("health/", HealthCheckView.as_view(), name="health_check"),
     # User profile
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
+    path("users/me/stats/", UserStatsView.as_view(), name="user_stats"),
     # Notification endpoints (must be before router to avoid conflicts)
     path(
         "notifications/preferences/",

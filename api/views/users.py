@@ -150,6 +150,60 @@ class UserProfileView(APIView):
         return Response(serializer.errors, status=400)
 
 
+class UserStatsView(APIView):
+    """Get user statistics for the current user."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from users.models import UserAnimeList
+
+        user = request.user
+
+        # Get counts
+        favorites_count = user.favorites.count()
+        reviews_count = user.reviews.count()
+        anime_count = UserAnimeList.objects.filter(user=user).count()
+
+        # Calculate episodes watched
+        episodes_watched = (
+            UserAnimeList.objects.filter(user=user).aggregate(
+                total=Sum("episodes_watched")
+            )["total"]
+            or 0
+        )
+
+        # Calculate total minutes watched
+        total_minutes = (
+            UserAnimeList.objects.filter(user=user)
+            .annotate(
+                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
+            )
+            .aggregate(total=Sum("entry_minutes"))["total"]
+            or 0
+        )
+
+        # Calculate mean score (excluding 0 scores)
+        mean_score = UserAnimeList.objects.filter(user=user, score__gt=0).aggregate(
+            avg=Avg("score")
+        )["avg"]
+
+        # Calculate days watched
+        days_watched = total_minutes / 1440.0
+
+        return Response(
+            {
+                "favorites_count": favorites_count,
+                "reviews_count": reviews_count,
+                "anime_count": anime_count,
+                "episodes_watched": episodes_watched,
+                "total_minutes": total_minutes,
+                "days_watched": round(days_watched, 1),
+                "mean_score": round(mean_score, 1) if mean_score else 0,
+            }
+        )
+
+
 class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
     """Public profile view by username"""
 

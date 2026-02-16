@@ -7,7 +7,7 @@ from .auth import (
     PasswordResetView,
     PasswordResetConfirmView,
 )
-from .users import UserProfileView, PublicUserProfileViewSet
+from .users import UserProfileView, UserStatsView, PublicUserProfileViewSet
 from .favorites import FavoriteViewSet
 from .lists import UserAnimeListViewSet
 from .reviews import ReviewViewSet

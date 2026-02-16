@@ -42,6 +42,9 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
+    depends_on:
+      minio:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -85,8 +88,30 @@ services:
         reservations:
           memory: 64M
 
+  # MinIO - Required for production media storage
+  minio:
+    image: minio/minio:latest
+    restart: always
+    expose:
+      - "9000"
+    env_file:
+      - .env
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Remove unnecessary services for small EC2
   # Comment out services you don't need:
   # beat:  # Uncomment if you need scheduled tasks
   # backup:  # Use AWS automated backups instead
-  # minio:  # Use AWS S3 in production
