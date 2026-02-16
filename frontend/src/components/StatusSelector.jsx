@@ -3,6 +3,7 @@ import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Check, Play, Pause, Bookmark, Trash2, Minus, Plus } from 'lucide-react';
+import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', color: 'bg-green-500', icon: Play },
@@ -70,7 +71,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             if (onUpdate) onUpdate(response.data);
             setIsOpen(false);
         } catch (error) {
-            console.error('Failed to update status:', error);
+            logger.error('Failed to update status:', error);
         } finally {
             setIsLoading(false);
         }
@@ -89,7 +90,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             if (onUpdate) onUpdate(null);
             setIsOpen(false);
         } catch (error) {
-            console.error('Failed to remove entry:', error);
+            logger.error('Failed to remove entry:', error);
         } finally {
             setIsLoading(false);
         }
@@ -129,7 +130,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             if (onUpdate) onUpdate(response.data);
         } catch (error) {
-            console.error('Failed to update episodes:', error);
+            logger.error('Failed to update episodes:', error);
             setEpisodesWatched(prevEpisodes);
             setCurrentStatus(prevStatus);
         }

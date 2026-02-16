@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import logger from '../utils/logger';
 
 export default function VerifyEmail() {
     const { uid, token } = useParams();
@@ -15,21 +16,21 @@ export default function VerifyEmail() {
         const verify = async () => {
             try {
                 const response = await authApi.verifyEmail({ uid, token });
-                console.log("VerifyEmail: API success", response.data);
+                logger.log("VerifyEmail: API success", response.data);
 
                 // If backend returns tokens, auto-login
                 if (response.data.access && response.data.refresh) {
-                    console.log("VerifyEmail: Tokens received, calling setTokens");
+                    logger.log("VerifyEmail: Tokens received, calling setTokens");
                     // Pass only tokens, let setTokens fetch profile to verify they work
                     await setTokens(response.data.access, response.data.refresh);
 
                     // Redirect after a short delay so they can see the success message
                     setTimeout(() => {
-                        console.log("VerifyEmail: Redirecting to /browse");
+                        logger.log("VerifyEmail: Redirecting to /browse");
                         navigate('/browse');
                     }, 2000);
                 } else {
-                    console.warn("VerifyEmail: No tokens in response", response.data);
+                    logger.warn("VerifyEmail: No tokens in response", response.data);
                 }
 
                 setStatus('success');

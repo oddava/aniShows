@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'react-hot-toast';
+import logger from '../../utils/logger';
 
 const AdminReports = () => {
   const [stats, setStats] = useState(null);
@@ -17,7 +18,7 @@ const AdminReports = () => {
       const response = await api.get(`/admin/reports/?${params}`);
       setStats(response.data);
     } catch (err) {
-      console.error('Failed to fetch reports:', err);
+      logger.error('Failed to fetch reports:', err);
       toast.error('Failed to load reports');
     } finally {
       setLoading(false);

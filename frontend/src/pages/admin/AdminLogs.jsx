@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../api/client';
 import { toast } from 'react-hot-toast';
+import logger from '../../utils/logger';
 
 const AdminLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -42,7 +43,7 @@ const AdminLogs = () => {
       setLogs(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
     } catch {
-      console.error('Failed to fetch logs:', err);
+      logger.error('Failed to fetch logs:', err);
       toast.error('Failed to load logs');
     }
   }, [page, filters]);
@@ -52,7 +53,7 @@ const AdminLogs = () => {
       const response = await api.get('/admin/logs/stats/');
       setStats(response.data);
     } catch {
-      console.error('Failed to fetch stats:', err);
+      logger.error('Failed to fetch stats:', err);
     }
   }, []);
 

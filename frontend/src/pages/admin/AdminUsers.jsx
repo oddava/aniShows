@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../api/client';
+import logger from '../../utils/logger';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -29,7 +30,7 @@ const AdminUsers = () => {
             setUsers(response.data.results);
             setTotalPages(Math.ceil(response.data.count / 20));
         } catch (err) {
-            console.error('Failed to fetch users:', err);
+            logger.error('Failed to fetch users:', err);
             setError(err.response?.data?.detail || 'Failed to load users');
         } finally {
             setLoading(false);

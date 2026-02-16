@@ -5,6 +5,7 @@ import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
+import logger from '../../utils/logger';
 
 const AdminStudios = () => {
   const [studios, setStudios] = useState([]);
@@ -33,7 +34,7 @@ const AdminStudios = () => {
       setStudios(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
     } catch (err) {
-      console.error('Failed to fetch studios:', err);
+      logger.error('Failed to fetch studios:', err);
       toast.error('Failed to load studios');
     } finally {
       setLoading(false);

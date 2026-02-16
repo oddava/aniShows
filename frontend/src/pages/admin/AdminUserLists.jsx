@@ -4,6 +4,7 @@ import api from '../../api/client';
 import DataTable from './components/DataTable';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
+import logger from '../../utils/logger';
 
 const AdminUserLists = () => {
   const [entries, setEntries] = useState([]);
@@ -31,7 +32,7 @@ const AdminUserLists = () => {
       setEntries(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
     } catch (err) {
-      console.error('Failed to fetch entries:', err);
+      logger.error('Failed to fetch entries:', err);
       toast.error('Failed to load list entries');
     } finally {
       setLoading(false);

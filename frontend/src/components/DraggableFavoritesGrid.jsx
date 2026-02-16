@@ -3,6 +3,7 @@ import { GripVertical, Star, Tv, Clock, Eye, CheckCircle, PauseCircle, XCircle, 
 import { Link } from 'react-router-dom';
 import { favoriteApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
+import logger from '../utils/logger';
 
 /**
  * DraggableFavoritesGrid - Unified grid layout with consistent card sizing
@@ -48,7 +49,7 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                     await favoriteApi.reorder(orderedIds);
                     queryClient.invalidateQueries({ queryKey: ['favorites', username] });
                 } catch (error) {
-                    console.error('Failed to save order:', error);
+                    logger.error('Failed to save order:', error);
                     setItems(favorites);
                 } finally {
                     setIsSaving(false);

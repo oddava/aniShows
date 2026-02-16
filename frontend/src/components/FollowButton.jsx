@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { followApi } from '../api/client';
 import { UserPlus, UserMinus, UserCheck, Users, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import logger from '../utils/logger';
 
 /**
  * Follow button with support for different relationship states:
@@ -62,7 +63,7 @@ export default function FollowButton({
         onError: (error) => {
             // Revert on error
             setIsFollowing(prev => !prev);
-            console.error('Follow error:', error);
+            logger.error('Follow error:', error);
         }
     });
 

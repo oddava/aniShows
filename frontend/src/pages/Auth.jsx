@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import SEO from '../components/SEO';
+import logger from '../utils/logger';
 
 export function Login() {
     const [formData, setFormData] = useState({
@@ -35,7 +36,7 @@ export function Login() {
             await login(formData.username.trim(), formData.password.trim());
             navigate('/browse');
         } catch (err) {
-            console.error('Login error:', err);
+            logger.error('Login error:', err);
             let msg = 'Invalid username or password';
             if (err.response?.data) {
                 const data = err.response.data;

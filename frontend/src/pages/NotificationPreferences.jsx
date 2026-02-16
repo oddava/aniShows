@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Bell, Tv, MessageCircle, Check, X, Loader2 } from 'lucide-react';
 import { notificationApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import logger from '../utils/logger';
 
 const ToggleSwitch = ({ enabled, onToggle, loading }) => (
     <button
@@ -54,7 +55,7 @@ const NotificationPreferences = () => {
                 const response = await notificationApi.getPreferences();
                 setPreferences(response.data);
             } catch (error) {
-                console.error('Failed to fetch preferences:', error);
+                logger.error('Failed to fetch preferences:', error);
             } finally {
                 setLoading(false);
             }
@@ -77,7 +78,7 @@ const NotificationPreferences = () => {
             setMessage('Preferences saved successfully');
             setTimeout(() => setMessage(''), 3000);
         } catch (error) {
-            console.error('Failed to update preferences:', error);
+            logger.error('Failed to update preferences:', error);
             setPreferences(preferences); // Revert on error
             setMessage('Failed to save preferences');
         } finally {

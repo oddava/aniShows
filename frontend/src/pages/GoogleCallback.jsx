@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import logger from '../utils/logger';
 
 export default function GoogleCallback() {
     const [searchParams] = useSearchParams();
@@ -40,7 +41,7 @@ export default function GoogleCallback() {
             await setTokens(access, refresh);
             navigate('/browse');
         } catch (err) {
-            console.error('Google login failed:', err);
+            logger.error('Google login failed:', err);
             const msg = err.response?.data?.non_field_errors?.[0]
                 || err.response?.data?.detail
                 || 'Failed to log in with Google. Please try again.';

@@ -1,4 +1,3 @@
-from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import (
     Model,
@@ -23,8 +22,8 @@ from django.db.models.indexes import Index
 from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit, ResizeToFill
+from django.conf import settings
 
-from root import settings
 from root.storage_backends import MediaStorage
 
 

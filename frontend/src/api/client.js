@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import logger from '../utils/logger';
 
 const API_BASE_URL = '/api/v1';
 const TOKEN_REFRESH_THRESHOLD = 5 * 60; // Refresh token if it expires in less than 5 minutes
@@ -50,7 +51,7 @@ const refreshAccessToken = async () => {
             localStorage.setItem('access_token', access);
             resolve(access);
         } catch (error) {
-            console.error('Proactive token refresh failed:', error);
+            logger.error('Proactive token refresh failed:', error);
             reject(error);
         } finally {
             isRefreshing = false;
@@ -74,7 +75,6 @@ api.interceptors.request.use(
                     config.headers.Authorization = `Bearer ${newToken}`;
                 } catch (error) {
                     // If proactive refresh fails, still try with current token
-                    console.warn('Proactive refresh failed, using current token');
                     config.headers.Authorization = `Bearer ${token}`;
                 }
             } else {
@@ -102,7 +102,6 @@ api.interceptors.response.use(
                 originalRequest.headers.Authorization = `Bearer ${newToken}`;
                 return api(originalRequest);
             } catch (refreshError) {
-                console.error('Token refresh failed after 401:', refreshError);
                 // Only clear tokens and redirect if refresh truly fails
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
@@ -148,6 +147,7 @@ export const authApi = {
     register: (data) => api.post('/auth/register/', data),
     logout: () => api.post('/auth/logout/'),
     getProfile: (full = false) => api.get('/users/me/', { params: { full } }),
+    getByUsername: (username) => api.get(`/users/${username}/`),
     getStats: () => api.get('/users/me/stats/'),
     updateProfile: (data) => api.patch('/users/me/', data),
     changePassword: (data) => api.post('/auth/change-password/', data),

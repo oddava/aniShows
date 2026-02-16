@@ -6,8 +6,9 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 
 from anime.models import UserFavorite
-from users.models import UserProfile, UserAnimeList
+from users.models import UserAnimeList
 from api.serializers import UserAnimeListSerializer
+from api.permissions import EmailVerificationMixin
 
 User = get_user_model()
 
@@ -18,9 +19,10 @@ def invalidate_user_anime_cache(user_id):
     cache.delete(f"anime_top_rated_{user_id}")
 
 
-class UserAnimeListViewSet(viewsets.ModelViewSet):
+class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     serializer_class = UserAnimeListSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    verification_error_message = "Please verify your email to add anime to your list."
 
     def get_queryset(self):
         username = self.request.query_params.get("username")
@@ -50,12 +52,6 @@ class UserAnimeListViewSet(viewsets.ModelViewSet):
         return queryset.order_by("-updated_at")
 
     def perform_create(self, serializer):
-        # Check email verification
-        profile = getattr(self.request.user, "userprofile", None)
-        if not profile or not profile.email_verified:
-            raise PermissionDenied(
-                "Please verify your email to add anime to your list."
-            )
         try:
             serializer.save(user=self.request.user)
             invalidate_user_anime_cache(self.request.user.id)

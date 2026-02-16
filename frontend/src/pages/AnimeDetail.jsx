@@ -18,6 +18,7 @@ import MusicSection from '../components/MusicSection';
 import SEOHelmet from '../components/SEOHelmet';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import logger from '../utils/logger';
 
 const InformationBox = ({ anime, className, accentColor }) => {
     const formatDateRange = () => {
@@ -346,12 +347,12 @@ export default function AnimeDetail() {
         extractColor(anime.cover_image)
             .then(processColor)
             .catch((err) => {
-                console.warn('Cover image color extraction failed:', err);
+                logger.warn('Cover image color extraction failed:', err);
                 if (anime.banner_image) {
                     extractColor(anime.banner_image)
                         .then(processColor)
                         .catch((err2) => {
-                            console.warn('Banner image color extraction failed:', err2);
+                            logger.warn('Banner image color extraction failed:', err2);
                             setAccentColor(null);
                         });
                 } else {
@@ -402,7 +403,7 @@ export default function AnimeDetail() {
                 queryClient.invalidateQueries({ queryKey: ['favorites', user.username] });
             }
         } catch (error) {
-            console.error('Error toggling favorite:', error);
+            logger.error('Error toggling favorite:', error);
         }
     };
 

@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { listApi } from '../api/client';
 import { getImageUrl } from '../utils/imageUtils';
+import logger from '../utils/logger';
 
 /**
  * ProfileAnimeCard - Lightweight card for profile anime lists
@@ -25,7 +26,7 @@ function ProfileAnimeCard({ anime, episodesWatched = 0, showProgress = false, li
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             if (onProgressUpdate) onProgressUpdate();
         } catch (error) {
-            console.error('Failed to update progress:', error);
+            logger.error('Failed to update progress:', error);
         } finally {
             setIsUpdating(false);
         }

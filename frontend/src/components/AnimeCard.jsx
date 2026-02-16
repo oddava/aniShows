@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
 import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40' },
@@ -61,7 +62,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
         } catch (error) {
-            console.error('Error toggling favorite:', error);
+            logger.error('Error toggling favorite:', error);
         } finally {
             setIsLoading(false);
         }
@@ -83,7 +84,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
             setListStatus(newStatus);
             setShowStatusMenu(false);
         } catch (error) {
-            console.error('Error updating list:', error);
+            logger.error('Error updating list:', error);
         } finally {
             setIsLoading(false);
         }
@@ -101,7 +102,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
             setListId(null);
             setShowStatusMenu(false);
         } catch (error) {
-            console.error('Error removing from list:', error);
+            logger.error('Error removing from list:', error);
         } finally {
             setIsLoading(false);
         }
@@ -122,7 +123,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             queryClient.invalidateQueries({ queryKey: ['anime'] });
         } catch (error) {
-            console.error("Failed to update progress", error);
+            logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(episodesWatched);
         } finally {
             setIsLoading(false);

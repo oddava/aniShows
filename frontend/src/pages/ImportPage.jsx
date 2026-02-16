@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import logger from '../utils/logger';
 import { 
     Upload, 
     Globe, 
@@ -52,7 +53,7 @@ const ImportPage = () => {
             const response = await importExportApi.getImportJobs();
             setJobs(response.data);
         } catch (err) {
-            console.error('Failed to fetch import jobs:', err);
+            logger.error('Failed to fetch import jobs:', err);
         }
     };
 
@@ -78,7 +79,7 @@ const ImportPage = () => {
                 }
             }
         } catch (err) {
-            console.error('Failed to poll job status:', err);
+            logger.error('Failed to poll job status:', err);
         }
     }, []);
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import logger from '../../utils/logger';
 
 const AdminDashboard = () => {
     const [stats, setStats] = useState(null);
@@ -16,7 +17,7 @@ const AdminDashboard = () => {
             const response = await api.get('/admin/dashboard/');
             setStats(response.data);
         } catch (err) {
-            console.error('Failed to fetch dashboard stats:', err);
+            logger.error('Failed to fetch dashboard stats:', err);
             setError(err.response?.data?.detail || 'Failed to load dashboard');
         } finally {
             setLoading(false);

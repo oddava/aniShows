@@ -284,6 +284,22 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # Max number of form fields
 DATA_UPLOAD_MAX_NUMBER_FILES = 10  # Max number of file uploads
 
 # =============================================================================
+# FILE UPLOAD VALIDATION SETTINGS
+# =============================================================================
+
+MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
+MAX_BANNER_SIZE = 5 * 1024 * 1024  # 5MB
+ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
+# =============================================================================
+# TEXT FIELD LIMITS
+# =============================================================================
+
+MAX_BIO_LENGTH = 1000
+MAX_REVIEW_LENGTH = 5000
+MAX_COMMENT_LENGTH = 2000
+
+# =============================================================================
 # EMAIL SETTINGS (base configuration)
 # =============================================================================
 

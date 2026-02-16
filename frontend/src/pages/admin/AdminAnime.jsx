@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import logger from '../../utils/logger';
 
 const AdminAnime = () => {
     const [animeList, setAnimeList] = useState([]);
@@ -30,7 +31,7 @@ const AdminAnime = () => {
             setAnimeList(response.data.results);
             setTotalPages(Math.ceil(response.data.count / 20));
         } catch (err) {
-            console.error('Failed to fetch anime:', err);
+            logger.error('Failed to fetch anime:', err);
             setError(err.response?.data?.detail || 'Failed to load anime');
         } finally {
             setLoading(false);

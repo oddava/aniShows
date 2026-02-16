@@ -5,6 +5,7 @@ import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
+import logger from '../../utils/logger';
 
 const AdminFavorites = () => {
   const [favorites, setFavorites] = useState([]);
@@ -33,7 +34,7 @@ const AdminFavorites = () => {
       setFavorites(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
     } catch (err) {
-      console.error('Failed to fetch favorites:', err);
+      logger.error('Failed to fetch favorites:', err);
       toast.error('Failed to load favorites');
     } finally {
       setLoading(false);
@@ -46,7 +47,7 @@ const AdminFavorites = () => {
       const response = await api.get('/admin/favorites/stats/');
       setStats(response.data);
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      logger.error('Failed to fetch stats:', err);
     } finally {
       setStatsLoading(false);
     }

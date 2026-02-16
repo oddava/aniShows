@@ -10,22 +10,28 @@ import logging
 from anime.models import Anime, Review, ReviewVote, ReviewComment
 from users.models import UserAnimeList
 from api.serializers import ReviewSerializer, ReviewCommentSerializer
+from api.permissions import EmailVerificationMixin
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-class ReviewViewSet(viewsets.ModelViewSet):
+class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    verification_error_message = "Please verify your email to write reviews."
 
     def get_queryset(self):
         queryset = Review.objects.select_related("user", "user__userprofile", "anime")
 
         # Always annotate helpful_count and comment_count to avoid N+1 queries
         queryset = queryset.annotate(
-            _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
-            _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
+            _helpful_count=Count(
+                "votes", filter=Q(votes__is_helpful=True), distinct=True
+            ),
+            _comment_count=Count(
+                "comments", filter=Q(comments__is_deleted=False), distinct=True
+            ),
         )
 
         # Annotate is_completed to avoid N+1 queries
@@ -157,12 +163,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-
-        # Check email verification
-        profile = getattr(user, "userprofile", None)
-        if not profile or not profile.email_verified:
-            raise PermissionDenied("Please verify your email to write reviews.")
-
         anime = serializer.validated_data.get("anime")
         if not anime:
             raise serializers.ValidationError(

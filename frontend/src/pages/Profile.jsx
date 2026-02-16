@@ -12,6 +12,7 @@ import DraggableFavoritesGrid from '../components/DraggableFavoritesGrid';
 import useColorExtraction from '../hooks/useColorExtraction';
 import FollowButton from '../components/FollowButton';
 import FollowersModal from '../components/FollowersModal';
+import logger from '../utils/logger';
 
 // Social link icons as SVG components
 const TwitterIcon = () => (
@@ -373,7 +374,7 @@ export default function Profile({ forcedUsername }) {
                                             try {
                                                 await listApi.update(item.id, { episodes_watched: (item.episodes_watched || 0) + 1 });
                                                 queryClient.invalidateQueries({ queryKey: ['lists', targetUsername] });
-                                            } catch (err) { console.error(err); }
+                                            } catch (err) { logger.error(err); }
                                         }}
                                         className="w-8 h-8 flex items-center justify-center rounded-lg bg-accent/20 text-accent hover:bg-accent hover:text-white transition-all border border-accent/30"
                                         title="Mark next episode"

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { authApi } from '../api/client';
+import logger from '../utils/logger';
 
 const AuthContext = createContext(null);
 
@@ -12,7 +13,6 @@ const decodeToken = (token) => {
         // Handle both old tokens (only user_id) and new tokens (with username/email)
         // For old tokens without username, we'll need to fetch from API
         if (!decoded.username && !decoded.email) {
-            console.log("AuthContext: Token missing username/email (old token), will fetch from API");
             return {
                 id: decoded.user_id,
                 username: null, // Will be populated by API call
@@ -36,7 +36,6 @@ const decodeToken = (token) => {
             _needsApiFetch: false,
         };
     } catch (error) {
-        console.error("AuthContext: Failed to decode token:", error);
         return null;
     }
 };
@@ -61,48 +60,40 @@ export function AuthProvider({ children }) {
             const response = await authApi.getStats();
             return response.data;
         } catch (error) {
-            console.error("AuthContext: Stats fetch failed:", error);
             return null;
         }
     }, []);
 
     const checkAuth = useCallback(async () => {
         const token = localStorage.getItem('access_token');
-        console.log("AuthContext: checkAuth running. Token present:", !!token);
         
         if (token && !isTokenExpired(token)) {
             // INSTANT: Decode token to get user info without API call
             const decodedUser = decodeToken(token);
             if (decodedUser) {
-                console.log("AuthContext: Token decoded instantly. User:", decodedUser.username || 'loading...');
                 
                 // If we have username from token, show it immediately
                 if (!decodedUser._needsApiFetch) {
                     setUser(decodedUser);
                     setLoading(false); // Stop loading immediately!
-                    console.log("AuthContext: Using token data instantly");
                 } else {
                     // Old token - need to fetch username, but set user anyway to avoid blank state
                     setUser({ ...decodedUser, username: 'Loading...' });
                     setLoading(false);
-                    console.log("AuthContext: Old token detected, fetching username...");
                 }
                 
                 // BACKGROUND: Get lightweight profile (fast, no expensive stats)
                 try {
                     const response = await authApi.getProfile(false); // lightweight (default)
-                    console.log("AuthContext: Profile fetched. User:", response.data.username);
                     setUser(response.data);
                     
                     // BACKGROUND: Fetch expensive stats asynchronously (don't block UI)
                     fetchUserStats().then(stats => {
                         if (stats) {
                             setUser(prev => ({ ...prev, ...stats }));
-                            console.log("AuthContext: Stats loaded asynchronously");
                         }
                     });
                 } catch (error) {
-                    console.error("AuthContext: Profile fetch failed:", error);
                     // Don't remove tokens - keep using decoded data
                 }
                 return;
@@ -111,7 +102,6 @@ export function AuthProvider({ children }) {
         
         // No token or invalid token
         if (token && isTokenExpired(token)) {
-            console.log("AuthContext: Token expired, clearing storage");
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
         }
@@ -124,7 +114,6 @@ export function AuthProvider({ children }) {
     }, [checkAuth]);
 
     const login = useCallback(async (username, password) => {
-        const startTime = performance.now();
         const response = await authApi.login({ username, password });
         const { access, refresh } = response.data;
 
@@ -148,9 +137,6 @@ export function AuthProvider({ children }) {
             }
         });
 
-        const duration = performance.now() - startTime;
-        console.log(`AuthContext: Login completed in ${duration.toFixed(0)}ms`);
-
         return profileResponse.data;
     }, [fetchUserStats]);
 
@@ -172,7 +158,6 @@ export function AuthProvider({ children }) {
     }, []);
 
     const setTokens = useCallback(async (access, refresh, userData = null) => {
-        console.log("AuthContext: setTokens called. HasUserData:", !!userData);
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
 

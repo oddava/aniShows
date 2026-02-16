@@ -3,6 +3,7 @@ import { Bell, X, CheckCheck, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { notificationApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import logger from '../utils/logger';
 
 export const NotificationBell = () => {
     const { user } = useAuth();
@@ -21,7 +22,7 @@ export const NotificationBell = () => {
                 const response = await notificationApi.getUnreadCount();
                 setUnreadCount(response.data.count);
             } catch (error) {
-                console.error('Failed to fetch unread count:', error);
+                logger.error('Failed to fetch unread count:', error);
             }
         };
 
@@ -49,7 +50,7 @@ export const NotificationBell = () => {
             const response = await notificationApi.getAll({ is_read: false });
             setNotifications(response.data.results || []);
         } catch (error) {
-            console.error('Failed to fetch notifications:', error);
+            logger.error('Failed to fetch notifications:', error);
         } finally {
             setLoading(false);
         }
@@ -70,7 +71,7 @@ export const NotificationBell = () => {
             setNotifications(prev => prev.filter(n => n.id !== notificationId));
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (error) {
-            console.error('Failed to mark as read:', error);
+            logger.error('Failed to mark as read:', error);
         }
     };
 
@@ -80,7 +81,7 @@ export const NotificationBell = () => {
             setNotifications([]);
             setUnreadCount(0);
         } catch (error) {
-            console.error('Failed to mark all as read:', error);
+            logger.error('Failed to mark all as read:', error);
         }
     };
 
@@ -99,7 +100,7 @@ export const NotificationBell = () => {
                 window.location.href = `/profile/${notification.data.follower_username}`;
             }
         } catch (error) {
-            console.error('Failed to handle notification click:', error);
+            logger.error('Failed to handle notification click:', error);
         }
     };
 

@@ -3,6 +3,7 @@ import api from '../../api/client';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import { toast } from 'react-hot-toast';
+import logger from '../../utils/logger';
 
 const AdminImportJobs = () => {
   const [jobs, setJobs] = useState([]);
@@ -34,7 +35,7 @@ const AdminImportJobs = () => {
       setJobs(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
     } catch (err) {
-      console.error('Failed to fetch import jobs:', err);
+      logger.error('Failed to fetch import jobs:', err);
       toast.error('Failed to load import jobs');
     } finally {
       setLoading(false);

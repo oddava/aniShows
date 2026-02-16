@@ -6,6 +6,7 @@ import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import logger from '../utils/logger';
 import SEO from '../components/SEO';
 
 export default function Home() {
@@ -64,7 +65,7 @@ export default function Home() {
             if (error.response?.status === 400 || error.response?.status === 409) {
                 setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
             }
-            console.error('Error adding to list:', error);
+            logger.error('Error adding to list:', error);
         } finally {
             setHeroListLoading(false);
         }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Send } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import logger from '../utils/logger';
 
 const CommentForm = ({ onSubmit, placeholder = "Write a comment...", initialText = "" }) => {
   const { user } = useAuth();
@@ -19,7 +20,7 @@ const CommentForm = ({ onSubmit, placeholder = "Write a comment...", initialText
       await onSubmit(text.trim());
       setText('');
     } catch (error) {
-      console.error('Failed to submit comment:', error);
+      logger.error('Failed to submit comment:', error);
     } finally {
       setIsSubmitting(false);
     }

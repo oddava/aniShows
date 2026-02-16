@@ -6,6 +6,7 @@ import { authApi, notificationApi } from '../api/client';
 import { Link } from 'react-router-dom';
 import { Download, Upload } from 'lucide-react';
 import SEO from '../components/SEO';
+import logger from '../utils/logger';
 
 export default function Settings() {
     const { user, isAuthenticated, loading } = useAuth();
@@ -71,7 +72,7 @@ export default function Settings() {
                 const response = await notificationApi.getPreferences();
                 setPreferences(response.data);
             } catch (error) {
-                console.error('Failed to fetch preferences:', error);
+                logger.error('Failed to fetch preferences:', error);
             } finally {
                 setIsLoadingPreferences(false);
             }
@@ -110,7 +111,7 @@ export default function Settings() {
             // Reload page to reflect changes in header after a short delay
             setTimeout(() => window.location.reload(), 1500);
         } catch {
-            console.error('Failed to update profile:', err);
+            logger.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
 
             if (err.response?.data) {
@@ -154,7 +155,7 @@ export default function Settings() {
             setNewPassword('');
             setConfirmPassword('');
         } catch {
-            console.error('Failed to change password:', err);
+            logger.error('Failed to change password:', err);
             let msg = 'Failed to change password';
             if (err.response?.data) {
                 const data = err.response.data;
@@ -179,7 +180,7 @@ export default function Settings() {
         try {
             await authApi.updateProfile({ is_private: newPrivacy });
         } catch {
-            console.error('Failed to update privacy:', err);
+            logger.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure
         }
     };
@@ -236,7 +237,7 @@ export default function Settings() {
             // Force hard reload to reset application state
             window.location.href = '/';
         } catch {
-            console.error("Delete failed:", err);
+            logger.error("Delete failed:", err);
             setAccountError(err.response?.data?.error || 'Failed to delete account');
         } finally {
             setIsDeleting(false);
@@ -258,7 +259,7 @@ export default function Settings() {
             setPreferencesMessage('Preferences saved successfully');
             setTimeout(() => setPreferencesMessage(''), 3000);
         } catch (error) {
-            console.error('Failed to update preferences:', error);
+            logger.error('Failed to update preferences:', error);
             setPreferences(preferences); // Revert on error
             setPreferencesMessage('Failed to save preferences');
             setTimeout(() => setPreferencesMessage(''), 3000);

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi, animeApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
+import logger from '../utils/logger';
 import Fuse from 'fuse.js';
 
 // Navigation Item Component with Active State
@@ -174,7 +175,7 @@ export default function Navbar() {
                 const response = await animeApi.getAll({ page_size: 100 });
                 setAllAnimeCache(response.data.results || []);
             } catch (error) {
-                console.error('Failed to load anime cache:', error);
+                logger.error('Failed to load anime cache:', error);
             }
         };
         loadAllAnime();
@@ -326,7 +327,7 @@ export default function Navbar() {
                         isApiResult: true
                     }));
                 } catch (apiError) {
-                    console.error('API search error:', apiError);
+                    logger.error('API search error:', apiError);
                     // Fall back to cache-only results if API fails
                 }
 
@@ -367,7 +368,7 @@ export default function Navbar() {
                     setIsSearching(false);
                 }, remainingTime);
             } catch (error) {
-                console.error('Search error:', error);
+                logger.error('Search error:', error);
                 setSearchSuggestions([]);
                 setIsSearching(false);
             }
@@ -404,7 +405,7 @@ export default function Navbar() {
             setResendSuccess(true);
             setTimeout(() => setResendSuccess(false), 5000);
         } catch (err) {
-            console.error('Failed to resend verification:', err);
+            logger.error('Failed to resend verification:', err);
         } finally {
             setIsResending(false);
         }

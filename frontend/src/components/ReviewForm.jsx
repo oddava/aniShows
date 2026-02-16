@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Star, AlertTriangle, X, ChevronDown, ChevronUp } from 'lucide-react';
+import logger from '../utils/logger';
 
 // Helper component for 5-star input (handles 1-10 backend value)
 const StarInput = ({ label, value, onChange, size = "md" }) => {
@@ -138,7 +139,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                     if (parsed.subRatings) setSubRatings(parsed.subRatings);
                     if (parsed.hasSpoilers !== undefined) setHasSpoilers(parsed.hasSpoilers);
                 } catch (e) {
-                    console.error('Failed to load draft:', e);
+                    logger.error('Failed to load draft:', e);
                 }
             }
             hasLoaded.current = true;
@@ -200,7 +201,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 localStorage.removeItem(draftKey);
             }
         } catch (err) {
-            console.error('Submission error:', err);
+            logger.error('Submission error:', err);
             const data = err.response?.data;
             const status = err.response?.status;
 

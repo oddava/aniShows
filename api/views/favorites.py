@@ -6,17 +6,18 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 
 from anime.models import Anime, UserFavorite
-from users.models import UserProfile
 from api.serializers import FavoriteSerializer
+from api.permissions import EmailVerificationMixin
 
 User = get_user_model()
 
 
-class FavoriteViewSet(viewsets.ModelViewSet):
+class FavoriteViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     """Manage user favorites with email verification enforcement."""
 
     serializer_class = FavoriteSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    verification_error_message = "Please verify your email to add favorites."
 
     def get_queryset(self):
         username = self.request.query_params.get("username")
@@ -38,13 +39,6 @@ class FavoriteViewSet(viewsets.ModelViewSet):
             "anime__genres"
         )
 
-    def perform_create(self, serializer):
-        # Check email verification
-        profile = getattr(self.request.user, "userprofile", None)
-        if not profile or not profile.email_verified:
-            raise PermissionDenied("Please verify your email to add favorites.")
-        serializer.save(user=self.request.user)
-
     def perform_destroy(self, instance):
         """Ensure users can only delete their own favorites."""
         if instance.user != self.request.user:
@@ -64,12 +58,7 @@ class FavoriteViewSet(viewsets.ModelViewSet):
             return Response({"error": "Anime not found"}, status=404)
 
         # Check email verification
-        profile = getattr(request.user, "userprofile", None)
-        if not profile or not profile.email_verified:
-            return Response(
-                {"error": "Please verify your email to add favorites."},
-                status=403,
-            )
+        self.check_email_verified(request.user)
 
         favorite, created = UserFavorite.objects.get_or_create(
             user=request.user, anime=anime

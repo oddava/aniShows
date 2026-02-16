@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import logger from '../../utils/logger';
 
 const AdminReviews = () => {
     const [reviews, setReviews] = useState([]);
@@ -33,7 +34,7 @@ const AdminReviews = () => {
             setReviews(response.data.results);
             setTotalPages(Math.ceil(response.data.count / 20));
         } catch {
-            console.error('Failed to fetch reviews:', err);
+            logger.error('Failed to fetch reviews:', err);
             setError(err.response?.data?.detail || 'Failed to load reviews');
         } finally {
             setLoading(false);
