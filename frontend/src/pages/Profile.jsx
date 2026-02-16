@@ -242,7 +242,7 @@ export default function Profile({ forcedUsername }) {
         }
     }, [displayUser]);
 
-    // Dynamic color extraction from banner
+    // Dynamic color extraction from banner - lazy/non-blocking
     const { colors: extractedColors } = useColorExtraction(displayUser?.banner);
 
     useEffect(() => {
@@ -261,7 +261,9 @@ export default function Profile({ forcedUsername }) {
         };
     }, [extractedColors]);
 
-    if (loading) {
+    // Only show full loading spinner for public profiles while fetching
+    // For own profile, show skeleton UI instead of blocking
+    if (isPublicView && profileLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />

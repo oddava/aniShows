@@ -1,21 +1,43 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+
+// Cache for color extractions to avoid re-processing same images
+const colorCache = new Map();
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Custom hook to extract dominant colors from an image URL
  * Uses Canvas API to sample colors and find the dominant palette
+ * Optimized with caching and requestIdleCallback for non-blocking execution
  * @param {string} imageUrl - The URL of the image to extract colors from
  * @returns {Object} - { colors, isLoading, error }
  */
 export default function useColorExtraction(imageUrl) {
-    const [colors, setColors] = useState(null);
+    // Start with default colors immediately - no waiting
+    const [colors, setColors] = useState({
+        primary: '#8b5cf6',
+        secondary: '#a855f7',
+        accent: '#a78bfa',
+        palette: ['#8b5cf6', '#a855f7', '#ec4899']
+    });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
+    const extractionRef = useRef(false);
 
     useEffect(() => {
         if (!imageUrl) {
-            setColors(null);
             return;
         }
+
+        // Check cache first
+        const cached = colorCache.get(imageUrl);
+        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+            setColors(cached.colors);
+            return;
+        }
+
+        // Prevent duplicate extractions
+        if (extractionRef.current) return;
+        extractionRef.current = true;
 
         const extractColors = async () => {
             setIsLoading(true);
@@ -34,7 +56,7 @@ export default function useColorExtraction(imageUrl) {
                 // Create canvas and draw image
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                const sampleSize = 50; // Sample a 50x50 area for performance
+                const sampleSize = 30; // Reduced from 50 to 30 for faster processing
 
                 canvas.width = sampleSize;
                 canvas.height = sampleSize;
@@ -47,7 +69,8 @@ export default function useColorExtraction(imageUrl) {
                 // Simple color averaging with weighted sampling
                 const colorCounts = {};
 
-                for (let i = 0; i < pixels.length; i += 4) {
+                // Sample every 4th pixel for performance (reduces iterations by 75%)
+                for (let i = 0; i < pixels.length; i += 16) {
                     const r = pixels[i];
                     const g = pixels[i + 1];
                     const b = pixels[i + 2];
@@ -60,15 +83,15 @@ export default function useColorExtraction(imageUrl) {
                     const brightness = (r + g + b) / 3;
                     if (brightness < 30 || brightness > 225) continue;
 
-                    // Quantize colors to reduce variations
-                    const key = `${Math.round(r / 32) * 32},${Math.round(g / 32) * 32},${Math.round(b / 32) * 32}`;
+                    // Quantize colors to reduce variations (larger step = fewer variations)
+                    const key = `${Math.round(r / 48) * 48},${Math.round(g / 48) * 48},${Math.round(b / 48) * 48}`;
                     colorCounts[key] = (colorCounts[key] || 0) + 1;
                 }
 
                 // Sort colors by frequency and extract top colors
                 const sortedColors = Object.entries(colorCounts)
                     .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
+                    .slice(0, 3) // Reduced from 5 to 3
                     .map(([color]) => {
                         const [r, g, b] = color.split(',').map(Number);
                         return { r, g, b, hex: rgbToHex(r, g, b), hsl: rgbToHsl(r, g, b) };
@@ -80,37 +103,38 @@ export default function useColorExtraction(imageUrl) {
                         curr.hsl.s > prev.hsl.s ? curr : prev
                     );
 
-                    setColors({
+                    const newColors = {
                         primary: vibrantColor.hex,
                         secondary: sortedColors[1]?.hex || vibrantColor.hex,
                         accent: adjustBrightness(vibrantColor.hex, 20),
                         palette: sortedColors.map(c => c.hex)
-                    });
-                } else {
-                    // Fallback to default purple
-                    setColors({
-                        primary: '#8b5cf6',
-                        secondary: '#a855f7',
-                        accent: '#a78bfa',
-                        palette: ['#8b5cf6', '#a855f7', '#ec4899']
+                    };
+
+                    setColors(newColors);
+                    
+                    // Cache the result
+                    colorCache.set(imageUrl, {
+                        colors: newColors,
+                        timestamp: Date.now()
                     });
                 }
             } catch (err) {
                 console.warn('Color extraction failed:', err);
                 setError(err);
-                // Fallback to default theme
-                setColors({
-                    primary: '#8b5cf6',
-                    secondary: '#a855f7',
-                    accent: '#a78bfa',
-                    palette: ['#8b5cf6', '#a855f7', '#ec4899']
-                });
+                // Keep default colors on error
             } finally {
                 setIsLoading(false);
+                extractionRef.current = false;
             }
         };
 
-        extractColors();
+        // Use requestIdleCallback for non-blocking execution
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(() => extractColors(), { timeout: 1000 });
+        } else {
+            // Fallback to setTimeout for browsers without requestIdleCallback
+            setTimeout(extractColors, 100);
+        }
     }, [imageUrl]);
 
     return { colors, isLoading, error };
