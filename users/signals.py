@@ -1,6 +1,7 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.signals import social_account_added
 from allauth.account.signals import user_signed_up
@@ -10,6 +11,18 @@ import logging
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def invalidate_profile_cache(username):
+    """Invalidate all cached versions of a user's public profile."""
+    version_key = f"profile_cache_version:{username}"
+    try:
+        cache.incr(version_key)
+        logger.debug(f"Invalidated profile cache for user: {username}")
+    except ValueError:
+        # Version doesn't exist yet, set it to 1
+        cache.set(version_key, 1, timeout=3600)
+        logger.debug(f"Created new cache version for user: {username}")
 
 
 @receiver(post_save, sender=User)
@@ -65,9 +78,13 @@ def _verify_user_profile(user, sociallogin):
 
 @receiver(post_save, sender=UserFollow)
 def handle_new_follower(sender, instance, created, **kwargs):
-    """Send notification when someone is followed."""
+    """Send notification and invalidate cache when someone is followed."""
     if not created:
         return
+
+    # Invalidate cache for both users
+    invalidate_profile_cache(instance.follower.username)
+    invalidate_profile_cache(instance.following.username)
 
     # Don't notify if user follows themselves
     if instance.follower == instance.following:
@@ -86,3 +103,25 @@ def handle_new_follower(sender, instance, created, **kwargs):
         )
     except Exception as e:
         logger.exception(f"Failed to create new follower notification: {e}")
+
+
+@receiver(post_delete, sender=UserFollow)
+def handle_unfollow(sender, instance, **kwargs):
+    """Invalidate cache when a follow relationship is deleted."""
+    # Invalidate cache for both users
+    invalidate_profile_cache(instance.follower.username)
+    invalidate_profile_cache(instance.following.username)
+    logger.info(
+        f"Cache invalidated due to unfollow: {instance.follower.username} "
+        f"unfollowed {instance.following.username}"
+    )
+
+
+@receiver(post_save, sender=UserProfile)
+def handle_profile_update(sender, instance, created, **kwargs):
+    """Invalidate cache when profile is updated (avatar, banner, bio, etc.)."""
+    if not created:  # Only invalidate on updates, not initial creation
+        invalidate_profile_cache(instance.user.username)
+        logger.debug(
+            f"Cache invalidated due to profile update for user: {instance.user.username}"
+        )

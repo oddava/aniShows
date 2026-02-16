@@ -147,11 +147,14 @@ class UserProfileView(APIView):
 
             profile.save()
 
-            # Invalidate public profile cache for all users (both authenticated and anonymous)
+            # Invalidate public profile cache using versioning
+            # This will invalidate ALL cached versions (authenticated and anonymous)
             username = request.user.username
-            cache.delete(f"public_profile:{username}:anon")
-            # We can't easily delete all authenticated user caches, but they will expire in 5 minutes
-            # Alternatively, we could use a cache versioning approach or wildcard delete if Redis supports it
+            version_key = f"profile_cache_version:{username}"
+            try:
+                cache.incr(version_key)
+            except ValueError:
+                cache.set(version_key, 1, timeout=3600)
 
             # Get user with annotations after update
             user = get_annotated_user_queryset().get(pk=request.user.pk)
@@ -232,21 +235,24 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         return context
 
     def retrieve(self, request, *args, **kwargs):
-        """Override retrieve to use fast queryset first, then enrich with stats"""
-        from django.db.models import Count
-
-        # Get user with basic profile info only (fast query)
+        """Override retrieve to use annotated queryset with all stats"""
         username = self.kwargs.get(self.lookup_field)
+        viewer_id = request.user.id if request.user.is_authenticated else "anon"
 
-        # Build cache key based on username and requesting user
-        cache_key = f"public_profile:{username}:{request.user.id if request.user.is_authenticated else 'anon'}"
+        # Get cache version (default to 0 if not set)
+        version_key = f"profile_cache_version:{username}"
+        cache_version = cache.get(version_key, 0)
+
+        # Build cache key with versioning to support cache invalidation
+        cache_key = f"public_profile:{username}:{viewer_id}:v{cache_version}"
 
         # Try to get from cache first
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response(cached_data)
 
-        queryset = User.objects.select_related("userprofile").filter(username=username)
+        # Use the annotated queryset from get_queryset() which includes all stats
+        queryset = self.get_queryset().filter(username=username)
 
         if not queryset.exists():
             from rest_framework.exceptions import NotFound
@@ -254,15 +260,6 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             raise NotFound("User not found")
 
         user = queryset.first()
-
-        # Add is_following annotation if user is authenticated
-        if request.user.is_authenticated:
-            from users.models import UserFollow
-
-            is_following = UserFollow.objects.filter(
-                follower=request.user, following=user
-            ).exists()
-            user._is_following = is_following
 
         serializer = self.get_serializer(user)
         data = serializer.data

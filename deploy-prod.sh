@@ -32,10 +32,70 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Check if git is available
+# Docker Compose command with production files
+COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+
+# Error handler
+cleanup_on_error() {
+    local exit_code=$?
+    echo ""
+    echo -e "${RED}❌ Deployment failed with exit code ${exit_code}${NC}"
+    echo -e "${YELLOW}📋 Troubleshooting:${NC}"
+    echo -e "   ${BLUE}1. Check container status:${NC} $COMPOSE_CMD ps"
+    echo -e "   ${BLUE}2. View web logs:${NC} $COMPOSE_CMD logs web --tail 50"
+    echo -e "   ${BLUE}3. View frontend build logs:${NC} $COMPOSE_CMD logs frontend --tail 50"
+    echo -e "   ${BLUE}4. View MinIO logs:${NC} $COMPOSE_CMD logs minio --tail 20"
+    exit $exit_code
+}
+
+trap cleanup_on_error ERR
+
+# Check prerequisites
 if ! command -v git &> /dev/null; then
     echo -e "${RED}❌ Git is not installed${NC}"
     exit 1
+fi
+
+if ! command -v docker &> /dev/null; then
+    echo -e "${RED}❌ Docker is not installed${NC}"
+    exit 1
+fi
+
+if ! docker compose version &> /dev/null; then
+    echo -e "${RED}❌ Docker Compose is not installed${NC}"
+    exit 1
+fi
+
+# Check if we're in the right directory (has docker-compose.yml)
+if [ ! -f "docker-compose.yml" ]; then
+    echo -e "${RED}❌ docker-compose.yml not found in current directory${NC}"
+    echo -e "${YELLOW}   Please run this script from the project root directory${NC}"
+    exit 1
+fi
+
+# Check if production compose file exists
+if [ ! -f "docker-compose.prod.yml" ]; then
+    echo -e "${RED}❌ docker-compose.prod.yml not found${NC}"
+    exit 1
+fi
+
+# Check for uncommitted changes (safety feature)
+if [ -n "$(git status --porcelain)" ]; then
+    echo -e "${YELLOW}⚠️  Warning: You have uncommitted changes${NC}"
+    echo -e "${YELLOW}   Current changes:${NC}"
+    git status --short
+    echo ""
+    
+    if [ "$MODE" != "quick" ]; then
+        read -p "Continue deployment? (y/N) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${RED}❌ Deployment cancelled${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${BLUE}   Quick mode: Continuing with uncommitted changes${NC}"
+    fi
 fi
 
 # Get the last deployed commit (stored in a file)
@@ -150,23 +210,48 @@ esac
 
 echo ""
 
+# Docker Compose command with production files
+COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
+
 # Step 1: Build frontend if needed
 if [ "$REBUILD_FRONTEND" = true ]; then
     echo -e "${BLUE}📦 Step 1: Building frontend static files...${NC}"
     export NODE_OPTIONS="--max-old-space-size=4096"
     
+    # Check if frontend node_modules exists
+    if [ ! -d "./frontend/node_modules" ]; then
+        echo -e "${YELLOW}⚠️  Frontend node_modules not found, installing dependencies...${NC}"
+        $COMPOSE_CMD run --rm frontend npm ci
+    fi
+    
     echo -e "${BLUE}   Building frontend image...${NC}"
-    docker compose build frontend
+    $COMPOSE_CMD build frontend
     
     echo -e "${BLUE}   Generating static files...${NC}"
-    docker compose run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build
+    # Build frontend using production configuration
+    if ! $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build; then
+        echo -e "${RED}❌ Frontend build failed!${NC}"
+        echo -e "${YELLOW}   Check build logs: $COMPOSE_CMD logs frontend${NC}"
+        exit 1
+    fi
+    
+    # Wait a moment for files to sync
+    sleep 2
     
     if [ ! -d "./frontend/dist" ]; then
         echo -e "${RED}❌ Error: dist folder not found!${NC}"
+        echo -e "${YELLOW}   Build may have succeeded but dist folder was not created${NC}"
+        exit 1
+    fi
+    
+    # Verify dist folder has content
+    if [ ! "$(ls -A ./frontend/dist)" ]; then
+        echo -e "${RED}❌ Error: dist folder is empty!${NC}"
         exit 1
     fi
     
     echo -e "${GREEN}✅ Frontend built successfully!${NC}"
+    echo -e "${BLUE}   Dist folder size: $(du -sh ./frontend/dist | cut -f1)${NC}"
 else
     echo -e "${BLUE}📦 Step 1: Skipping frontend build${NC}"
 fi
@@ -176,7 +261,7 @@ echo ""
 # Step 2: Build backend if needed
 if [ "$REBUILD_BACKEND" = true ]; then
     echo -e "${BLUE}🔨 Step 2: Building backend...${NC}"
-    docker compose build web
+    $COMPOSE_CMD build web
     echo -e "${GREEN}✅ Backend built!${NC}"
 else
     echo -e "${BLUE}🔨 Step 2: Skipping backend build${NC}"
@@ -187,11 +272,11 @@ echo ""
 # Step 3: Deploy/restart services
 if [ "$RESTART_ONLY" = true ] && [ "$REBUILD_FRONTEND" = false ] && [ "$REBUILD_BACKEND" = false ]; then
     echo -e "${BLUE}🚀 Step 3: Restarting containers...${NC}"
-    docker compose restart web celery beat
+    $COMPOSE_CMD restart web celery beat
     echo -e "${GREEN}✅ Containers restarted!${NC}"
 else
     echo -e "${BLUE}🚀 Step 3: Deploying with production configuration...${NC}"
-    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+    $COMPOSE_CMD up -d
     echo -e "${GREEN}✅ Deployment complete!${NC}"
 fi
 
@@ -200,9 +285,15 @@ echo ""
 # Step 4: Run migrations (only if backend was changed or on full deploy)
 if [ "$MODE" != "frontend" ] && [ "$MODE" != "quick" ]; then
     echo -e "${BLUE}🔄 Step 4: Running database migrations...${NC}"
-    sleep 2  # Wait for containers to be ready
-    docker compose exec -T web uv run python manage.py migrate --noinput
-    echo -e "${GREEN}✅ Migrations completed!${NC}"
+    sleep 3  # Wait for containers to be ready
+    $COMPOSE_CMD exec -T web uv run python manage.py migrate --noinput
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Migrations completed!${NC}"
+    else
+        echo -e "${RED}❌ Migrations failed!${NC}"
+        echo -e "${YELLOW}   Check logs: $COMPOSE_CMD logs web${NC}"
+        exit 1
+    fi
 else
     echo -e "${BLUE}🔄 Step 4: Skipping migrations${NC}"
 fi
@@ -212,8 +303,12 @@ echo ""
 # Step 5: Collect static files (if backend or static files changed)
 if [ "$MODE" != "quick" ] && [ "$REBUILD_BACKEND" = true ]; then
     echo -e "${BLUE}📁 Step 5: Collecting static files...${NC}"
-    docker compose exec -T web uv run python manage.py collectstatic --noinput
-    echo -e "${GREEN}✅ Static files collected!${NC}"
+    $COMPOSE_CMD exec -T web uv run python manage.py collectstatic --noinput
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Static files collected!${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Static files collection had issues${NC}"
+    fi
 else
     echo -e "${BLUE}📁 Step 5: Skipping static collection${NC}"
 fi
@@ -235,7 +330,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
 done
 
 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo -e "${RED}❌ MinIO failed to start - check logs with: docker compose logs minio${NC}"
+    echo -e "${RED}❌ MinIO failed to start - check logs with: $COMPOSE_CMD logs minio${NC}"
 fi
 
 echo ""
@@ -244,30 +339,54 @@ echo ""
 echo -e "${BLUE}🏥 Step 7: Running health check...${NC}"
 sleep 5
 
-if curl -sf http://localhost/api/health/ > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ API is responding!${NC}"
+# Check if API is responding
+HEALTH_STATUS=$(curl -sf http://localhost/api/health/ -w "%{http_code}" -o /dev/null 2>&1 || echo "000")
+
+if [ "$HEALTH_STATUS" = "200" ]; then
+    echo -e "${GREEN}✅ API is responding (HTTP 200)!${NC}"
+elif [ "$HEALTH_STATUS" = "301" ] || [ "$HEALTH_STATUS" = "302" ]; then
+    echo -e "${GREEN}✅ API is responding (HTTP ${HEALTH_STATUS} redirect)!${NC}"
 else
-    echo -e "${YELLOW}⚠️  API health check failed - check logs with: docker compose logs web${NC}"
+    echo -e "${YELLOW}⚠️  API health check failed (HTTP ${HEALTH_STATUS}) - check logs with: $COMPOSE_CMD logs web${NC}"
 fi
 
 # Check media endpoint
 echo -e "${BLUE}   Checking media endpoint...${NC}"
-if curl -sf http://localhost/media/ > /dev/null 2>&1 || curl -sfI http://localhost/media/ > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Media endpoint is accessible!${NC}"
+MEDIA_STATUS=$(curl -sfI http://localhost/media/ -w "%{http_code}" -o /dev/null 2>&1 || echo "000")
+
+if [ "$MEDIA_STATUS" = "200" ] || [ "$MEDIA_STATUS" = "301" ] || [ "$MEDIA_STATUS" = "302" ]; then
+    echo -e "${GREEN}✅ Media endpoint is accessible (HTTP ${MEDIA_STATUS})!${NC}"
 else
-    echo -e "${YELLOW}⚠️  Media endpoint check failed - MinIO may still be initializing${NC}"
+    echo -e "${YELLOW}⚠️  Media endpoint check failed (HTTP ${MEDIA_STATUS}) - MinIO may still be initializing${NC}"
 fi
 
 # Save current commit as last deployed
 echo "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 
 echo ""
-echo -e "${GREEN}📊 Production Status:${NC}"
-docker compose ps
+
+# Step 8: Cleanup old Docker images (optional, keeps last 3 versions)
+echo -e "${BLUE}🧹 Step 8: Cleaning up old Docker images...${NC}"
+# Remove dangling images
+docker image prune -f > /dev/null 2>&1 || true
+# Remove old anishows images (keep last 3)
+docker images --format "{{.Repository}}:{{.Tag}} {{.ID}} {{.CreatedAt}}" | \
+    grep "anishows" | \
+    sort -k3 -r | \
+    tail -n +4 | \
+    awk '{print $2}' | \
+    xargs -r docker rmi > /dev/null 2>&1 || true
+echo -e "${GREEN}✅ Cleanup completed${NC}"
+
 echo ""
-echo -e "${BLUE}📝 To view logs: docker compose logs -f${NC}"
+echo -e "${GREEN}📊 Production Status:${NC}"
+$COMPOSE_CMD ps
+echo ""
+echo -e "${BLUE}📝 To view logs: $COMPOSE_CMD logs -f${NC}"
 echo -e "${BLUE}📝 Usage examples:${NC}"
 echo -e "   ${YELLOW}./deploy-prod.sh quick${NC}     # Fast restart for code changes"
 echo -e "   ${YELLOW}./deploy-prod.sh frontend${NC}  # Rebuild React only"
 echo -e "   ${YELLOW}./deploy-prod.sh backend${NC}   # Rebuild Django only"
 echo -e "   ${YELLOW}./deploy-prod.sh full${NC}      # Complete rebuild"
+echo ""
+echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"

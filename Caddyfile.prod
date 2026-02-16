@@ -97,6 +97,25 @@
         header Cache-Control "public, max-age=31536000, immutable"
     }
 
+    # Favicon and icon files
+    handle /favicon.ico {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "public, max-age=86400"
+    }
+
+    handle /apple-touch-icon.png {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "public, max-age=86400"
+    }
+
+    handle /icon.svg {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "public, max-age=86400"
+    }
+
     # Frontend (STATIC) - Production mode
     handle {
         root * /srv/frontend

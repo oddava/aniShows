@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 import logging
 
@@ -20,6 +21,25 @@ from api.serializers import (
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def invalidate_profile_cache(username):
+    """Invalidate all cached versions of a user's public profile.
+
+    Since we cache profiles with keys like public_profile:{username}:{viewer_id},
+    we need to invalidate the anonymous version immediately. For authenticated
+    users' cached views, we'll use a cache versioning approach.
+    """
+    # Delete anonymous cache immediately
+    cache.delete(f"public_profile:{username}:anon")
+
+    # Increment cache version to invalidate all authenticated views
+    version_key = f"profile_cache_version:{username}"
+    try:
+        cache.incr(version_key)
+    except ValueError:
+        # Version doesn't exist yet, set it to 1
+        cache.set(version_key, 1, timeout=3600)  # 1 hour
 
 
 class FollowPagination(PageNumberPagination):
@@ -62,6 +82,11 @@ class FollowViewSet(viewsets.GenericViewSet):
         if not created:
             follow.delete()
             logger.info(f"{request.user.username} unfollowed {target_user.username}")
+
+            # Invalidate cache for both users involved
+            invalidate_profile_cache(target_user.username)
+            invalidate_profile_cache(request.user.username)
+
             return Response(
                 {
                     "status": "unfollowed",
@@ -71,6 +96,11 @@ class FollowViewSet(viewsets.GenericViewSet):
             )
 
         logger.info(f"{request.user.username} followed {target_user.username}")
+
+        # Invalidate cache for both users involved
+        invalidate_profile_cache(target_user.username)
+        invalidate_profile_cache(request.user.username)
+
         return Response(
             {
                 "status": "followed",
