@@ -174,3 +174,53 @@ class UserFollow(Model):
 
     def __str__(self):
         return f"{self.follower.username} follows {self.following.username}"
+
+
+class UserStats(Model):
+    """Materialized view for user statistics - updated every 5 minutes via Celery.
+
+    This table stores pre-calculated statistics to avoid expensive COUNT and SUM
+    queries on the profile page. Data is batch-updated every 5 minutes.
+    """
+
+    user = OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=CASCADE,
+        related_name="stats",
+        primary_key=True,
+    )
+
+    # Social stats
+    followers_count = IntegerField(default=0)
+    following_count = IntegerField(default=0)
+
+    # Anime stats
+    anime_count = IntegerField(default=0)
+    episodes_watched = IntegerField(default=0)
+    total_minutes = IntegerField(default=0)
+    days_watched = FloatField(default=0.0)
+    mean_score = FloatField(null=True, blank=True)
+
+    # Activity stats
+    favorites_count = IntegerField(default=0)
+    reviews_count = IntegerField(default=0)
+
+    # Metadata
+    last_updated = DateTimeField(auto_now=True)
+    is_active = BooleanField(default=True)
+
+    class Meta:
+        db_table = "users_userstats"
+        ordering = ["-last_updated"]
+        indexes = [
+            Index(fields=["-last_updated"]),
+            Index(fields=["is_active", "-last_updated"]),
+        ]
+
+    def __str__(self):
+        return f"Stats for {self.user.username}"
+
+    @property
+    def calculated_days_watched(self):
+        """Calculate days from total minutes."""
+        return round(self.total_minutes / 1440.0, 1)

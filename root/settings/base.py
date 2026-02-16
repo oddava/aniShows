@@ -474,6 +474,17 @@ CELERY_BEAT_SCHEDULE = {
         },
         "options": {"queue": "low_priority"},
     },
+    # Profile Stats Tasks (Every 5 minutes for fast profile loading)
+    "update-user-stats-5min": {
+        "task": "users.tasks.update_all_user_stats",
+        "schedule": 300.0,  # Every 5 minutes (300 seconds)
+        "options": {"queue": "low_priority"},
+    },
+    "warm-profile-cache-hourly": {
+        "task": "users.tasks.warm_profile_cache",
+        "schedule": crontab(minute=0),  # Every hour
+        "options": {"queue": "low_priority"},
+    },
     # Weekly Tasks
     # -------------------------------------------------------------------------
     "sync-upcoming-weekly": {

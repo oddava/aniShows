@@ -261,3 +261,162 @@ def run_user_maintenance_workflow(
 
     logger.info(f"User maintenance workflow complete: {results}")
     return results
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    time_limit=300,  # 5 minutes max
+)
+def update_user_stats(self, user_id: int = None):
+    """
+    Update user statistics in the materialized view.
+
+    This task pre-calculates expensive statistics to avoid slow queries
+    on the profile page. Run every 5 minutes via Celery beat.
+
+    Args:
+        user_id: Specific user to update, or None to update all active users
+
+    Returns:
+        Dict with update results
+    """
+    from django.db.models import Count, Sum, Avg, F, Q
+    from users.models import UserStats, UserAnimeList
+
+    start_time = timezone.now()
+    updated_count = 0
+
+    try:
+        if user_id:
+            # Update single user
+            users = User.objects.filter(id=user_id)
+        else:
+            # Update all active users (logged in within last 30 days)
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            users = User.objects.filter(last_login__gte=thirty_days_ago).select_related(
+                "userprofile"
+            )
+
+        total_users = users.count()
+        logger.info(f"Starting stats update for {total_users} users")
+
+        for user in users.iterator(chunk_size=100):
+            try:
+                # Get or create stats record
+                stats, created = UserStats.objects.get_or_create(user=user)
+
+                # Calculate social stats (fast - indexed)
+                stats.followers_count = user.followers.count()
+                stats.following_count = user.following.count()
+
+                # Calculate anime stats
+                anime_stats = UserAnimeList.objects.filter(user=user).aggregate(
+                    anime_count=Count("id", distinct=True),
+                    episodes_watched=Sum("episodes_watched"),
+                    mean_score=Avg("score", filter=Q(score__gt=0)),
+                )
+
+                stats.anime_count = anime_stats["anime_count"] or 0
+                stats.episodes_watched = anime_stats["episodes_watched"] or 0
+                stats.mean_score = anime_stats["mean_score"]
+
+                # Calculate total minutes (expensive - use pre-calculated episodes)
+                total_minutes = (
+                    UserAnimeList.objects.filter(user=user).aggregate(
+                        total=Sum(F("episodes_watched") * F("anime__duration_minutes"))
+                    )["total"]
+                    or 0
+                )
+
+                stats.total_minutes = total_minutes
+                stats.days_watched = round(total_minutes / 1440.0, 1)
+
+                # Calculate activity stats
+                stats.favorites_count = user.favorites.count()
+                stats.reviews_count = user.reviews.count()
+
+                stats.save()
+                updated_count += 1
+
+                # Log progress every 100 users
+                if updated_count % 100 == 0:
+                    logger.info(
+                        f"Updated stats for {updated_count}/{total_users} users"
+                    )
+
+            except Exception as e:
+                logger.error(f"Error updating stats for user {user.id}: {e}")
+                continue
+
+        duration = (timezone.now() - start_time).total_seconds()
+        logger.info(f"Stats update complete: {updated_count} users in {duration:.2f}s")
+
+        return {
+            "updated_count": updated_count,
+            "total_users": total_users,
+            "duration_seconds": duration,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in update_user_stats task: {e}")
+        raise self.retry(exc=e)
+
+
+@shared_task
+def update_all_user_stats():
+    """
+    Update stats for all users - scheduled task run every 5 minutes.
+    """
+    return update_user_stats.delay()
+
+
+@shared_task
+def warm_profile_cache(usernames: list = None):
+    """
+    Pre-warm Redis cache for popular user profiles.
+
+    Args:
+        usernames: List of usernames to warm, or None for popular users
+    """
+    from api.views.users import get_annotated_user_queryset
+    from api.serializers import PublicUserSerializer
+    from django.core.cache import cache
+
+    if not usernames:
+        # Get users with most activity (most follows + anime watched)
+        from django.db.models import Count
+
+        popular_users = User.objects.annotate(
+            total_activity=Count("followers")
+            + Count("following")
+            + Count("anime_lists")
+        ).order_by("-total_activity")[:50]
+
+        usernames = list(popular_users.values_list("username", flat=True))
+
+    warmed_count = 0
+    for username in usernames:
+        try:
+            # Get user with annotations
+            user = get_annotated_user_queryset().filter(username=username).first()
+            if not user:
+                continue
+
+            # Serialize and cache
+            serializer = PublicUserSerializer(user)
+            data = serializer.data
+
+            # Use simple cache key (no viewer_id for public data)
+            cache_key = f"public_profile:{username}:v0"
+            cache.set(cache_key, data, timeout=1800)  # 30 minutes
+
+            warmed_count += 1
+
+        except Exception as e:
+            logger.error(f"Error warming cache for {username}: {e}")
+            continue
+
+    logger.info(f"Warmed cache for {warmed_count} profiles")
+    return {"warmed_count": warmed_count}

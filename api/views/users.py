@@ -250,22 +250,22 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         return context
 
     def retrieve(self, request, *args, **kwargs):
-        """Override retrieve to use annotated queryset with all stats"""
+        """Optimized retrieve using pre-calculated stats table and caching."""
+        import time
+
+        start_time = time.time()
+
         username = self.kwargs.get(self.lookup_field)
         is_authenticated = request.user.is_authenticated
 
-        # Use a single cache key for all viewers - public data is the same for everyone
-        # Only is_following varies by viewer, which we'll compute separately
-        version_key = f"profile_cache_version:{username}"
-        cache_version = cache.get(version_key, 0)
-        cache_key = f"public_profile:{username}:v{cache_version}"
-
-        # Try to get from cache first
+        # Try cache first (fastest path - <10ms)
+        cache_key = f"public_profile:{username}:v0"
         cached_data = cache.get(cache_key)
-        if cached_data:
-            data = cached_data.copy()  # Make a copy to avoid modifying cached data
 
-            # Add viewer-specific data (is_following) - this is fast to compute
+        if cached_data:
+            data = cached_data.copy()
+
+            # Add viewer-specific data
             if is_authenticated:
                 from users.models import UserFollow
 
@@ -275,9 +275,80 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             else:
                 data["is_following"] = False
 
+            logger.debug(
+                f"Profile cache hit for {username}: {(time.time() - start_time) * 1000:.2f}ms"
+            )
             return Response(data)
 
-        # Use the annotated queryset from get_queryset() which includes all stats
+        # Try pre-calculated stats table (fast path - <50ms)
+        try:
+            from users.models import UserStats
+
+            user = User.objects.select_related("userprofile", "stats").get(
+                username=username
+            )
+
+            if hasattr(user, "stats"):
+                # Use pre-calculated stats
+                stats = user.stats
+                data = {
+                    "id": user.id,
+                    "username": user.username,
+                    "date_joined": user.date_joined,
+                    "avatar": user.userprofile.avatar.url
+                    if user.userprofile and user.userprofile.avatar
+                    else None,
+                    "banner": user.userprofile.banner.url
+                    if user.userprofile and user.userprofile.banner
+                    else None,
+                    "bio": user.userprofile.bio if user.userprofile else None,
+                    "is_private": user.userprofile.is_private
+                    if user.userprofile
+                    else False,
+                    "social_links": user.userprofile.social_links
+                    if user.userprofile
+                    else [],
+                    "points": user.userprofile.points if user.userprofile else 0,
+                    # Stats from materialized view
+                    "followers_count": stats.followers_count,
+                    "following_count": stats.following_count,
+                    "anime_count": stats.anime_count,
+                    "episodes_watched": stats.episodes_watched,
+                    "days_watched": stats.days_watched,
+                    "mean_score": round(stats.mean_score, 1)
+                    if stats.mean_score
+                    else None,
+                    "favorites_count": stats.favorites_count,
+                    "reviews_count": stats.reviews_count,
+                    "is_online": self._check_user_online(user),
+                }
+
+                # Add viewer-specific data
+                if is_authenticated:
+                    from users.models import UserFollow
+
+                    data["is_following"] = UserFollow.objects.filter(
+                        follower=request.user, following=user
+                    ).exists()
+                else:
+                    data["is_following"] = False
+
+                # Cache for 30 minutes (longer since we have stats table)
+                cache.set(cache_key, data, timeout=1800)
+
+                duration = (time.time() - start_time) * 1000
+                logger.info(f"Profile stats hit for {username}: {duration:.2f}ms")
+                return Response(data)
+
+        except User.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("User not found")
+        except Exception as e:
+            logger.warning(f"Stats table lookup failed for {username}: {e}")
+
+        # Fallback: Use expensive query (slow path - 1-6s)
+        logger.warning(f"Using fallback query for {username} - stats table miss")
         queryset = self.get_queryset().filter(username=username)
 
         if not queryset.exists():
@@ -289,11 +360,33 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(user)
         data = serializer.data
 
-        # Cache the public data (without is_following for consistency)
-        cache_data = data.copy()
-        cache_data.pop(
-            "is_following", None
-        )  # Remove viewer-specific field before caching
-        cache.set(cache_key, cache_data, 300)
+        # Cache the result
+        cache.set(cache_key, data, timeout=1800)
+
+        # Trigger async stats update for this user
+        from users.tasks import update_user_stats
+
+        update_user_stats.delay(user.id)
+
+        duration = (time.time() - start_time) * 1000
+        logger.warning(f"Profile fallback query for {username}: {duration:.2f}ms")
+        return Response(data)
+
+    def _check_user_online(self, user):
+        """Check if user is currently online."""
+        from django.core.cache import cache
+        from django.utils import timezone
+        from datetime import timedelta
+
+        cache_key = f"user_online:{user.id}"
+        if cache.get(cache_key) is not None:
+            return True
+
+        if user.userprofile and user.userprofile.last_activity:
+            time_since = timezone.now() - user.userprofile.last_activity
+            if time_since < timedelta(minutes=5):
+                return True
+
+        return False
 
         return Response(data)
