@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
@@ -17,9 +17,14 @@ export function Login() {
     const navigate = useNavigate();
 
     // Redirect if already authenticated
-    // Redirect if already authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate('/browse');
+        }
+    }, [isAuthenticated, navigate]);
+
+    // Show loading spinner during redirect
     if (isAuthenticated) {
-        navigate('/browse');
         return (
             <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
@@ -173,9 +178,14 @@ export function Register() {
     const navigate = useNavigate();
 
     // Redirect if already authenticated
-    // Redirect if already authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate('/browse');
+        }
+    }, [isAuthenticated, navigate]);
+
+    // Show loading spinner during redirect
     if (isAuthenticated) {
-        navigate('/browse');
         return (
             <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
