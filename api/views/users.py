@@ -74,9 +74,11 @@ def get_annotated_user_queryset(user=None):
 
     # Annotate is_following if user is provided
     if user and user.is_authenticated:
+        from users.models import UserFollow
+
         queryset = queryset.annotate(
             _is_following=Exists(
-                UserProfile.objects.filter(user=user, following=OuterRef("pk"))
+                UserFollow.objects.filter(follower=user, following=OuterRef("pk"))
             )
         )
 
