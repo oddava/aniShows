@@ -16,6 +16,7 @@ from django.db.models.fields import (
     URLField,
     CharField,
     IntegerField,
+    FloatField,
     DateTimeField,
 )
 from django.conf import settings
