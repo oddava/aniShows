@@ -70,11 +70,6 @@
         # Add cross-origin headers for images
         header Access-Control-Allow-Origin "*"
         header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-        # Handle errors gracefully
-        handle_errors {
-            rewrite * /api/v1/media/placeholder/{path}
-            reverse_proxy web:8000
-        }
     }
 
     # ImageKit CACHE - serve locally generated thumbnails (Unused when USE_S3=True)
