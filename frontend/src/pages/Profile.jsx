@@ -571,6 +571,50 @@ export default function Profile({ forcedUsername }) {
 
     const badges = getUserBadges(displayUser);
 
+    // Show skeleton while user data is loading
+    if (!displayUser) {
+        return (
+            <div className="min-h-screen pb-20">
+                {/* Skeleton Banner */}
+                <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden">
+                    <div className="w-full h-full bg-gradient-to-br from-accent/20 via-dark-200 to-dark animate-pulse" />
+                    <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark to-transparent" />
+                </div>
+                
+                {/* Skeleton Profile Header */}
+                <div className="max-w-7xl mx-auto px-4 relative -mt-16 sm:-mt-20 md:-mt-24 lg:-mt-28 z-10">
+                    <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6">
+                        {/* Skeleton Avatar */}
+                        <div className="relative shrink-0">
+                            <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-2xl bg-dark-100 p-1.5 shadow-2xl">
+                                <div className="w-full h-full rounded-xl bg-dark-200 animate-pulse" />
+                            </div>
+                        </div>
+                        
+                        {/* Skeleton User Info */}
+                        <div className="flex-1 text-center md:text-left pb-2 w-full">
+                            <div className="h-8 sm:h-10 md:h-12 lg:h-14 w-48 bg-dark-200 rounded animate-pulse mb-3 mx-auto md:mx-0" />
+                            <div className="h-4 w-32 bg-dark-200 rounded animate-pulse mb-4 mx-auto md:mx-0" />
+                            <div className="h-4 w-64 bg-dark-200 rounded animate-pulse mx-auto md:mx-0" />
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Skeleton Stats */}
+                <div className="max-w-7xl mx-auto px-4 mt-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[1, 2, 3, 4].map(i => (
+                            <div key={i} className="bg-dark-100/50 rounded-xl p-4 border border-gray-800">
+                                <div className="h-6 w-16 bg-dark-200 rounded animate-pulse mb-2" />
+                                <div className="h-4 w-24 bg-dark-200 rounded animate-pulse" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen pb-20">
             {/* Hero Section with Dynamic Banner */}
