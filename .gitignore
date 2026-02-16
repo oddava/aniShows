@@ -186,3 +186,7 @@ backups-data/
 CACHE/
 anime/banners/
 anime/covers/
+
+# Deployment files
+.last-deploy-commit
+static/

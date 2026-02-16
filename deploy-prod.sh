@@ -4,7 +4,7 @@
 # Supports multiple deployment modes for faster updates
 #
 # Usage:
-#   ./deploy-prod.sh [mode]
+#   ./deploy-prod.sh [mode] [--yes|-y]
 #
 # Modes:
 #   quick       - Fast restart (no rebuild, for code-only changes)
@@ -13,17 +13,40 @@
 #   full        - Full rebuild (everything, slowest)
 #   auto        - Detect changes and rebuild only what's needed (default)
 #
+# Options:
+#   --yes, -y   - Skip confirmation prompts (for CI/CD)
+#
 # Examples:
-#   ./deploy-prod.sh quick      # Fast restart for small code changes
-#   ./deploy-prod.sh frontend   # Only rebuild React app
-#   ./deploy-prod.sh backend    # Only rebuild Python/Django
-#   ./deploy-prod.sh full       # Complete rebuild (Dockerfile changes)
+#   ./deploy-prod.sh quick                # Fast restart for small code changes
+#   ./deploy-prod.sh frontend             # Only rebuild React app
+#   ./deploy-prod.sh backend              # Only rebuild Python/Django
+#   ./deploy-prod.sh full                 # Complete rebuild (Dockerfile changes)
+#   ./deploy-prod.sh full --yes           # Full rebuild without confirmation
 #
 
 set -e
 
-# Default mode
-MODE="${1:-auto}"
+# Parse arguments
+MODE="auto"
+FORCE_YES=false
+
+for arg in "$@"; do
+    case $arg in
+        --yes|-y)
+            FORCE_YES=true
+            shift
+            ;;
+        quick|frontend|backend|full|auto)
+            MODE="$arg"
+            shift
+            ;;
+    esac
+done
+
+# If no mode specified, default to auto
+if [ -z "$MODE" ]; then
+    MODE="auto"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -86,15 +109,22 @@ if [ -n "$(git status --porcelain)" ]; then
     git status --short
     echo ""
     
-    if [ "$MODE" != "quick" ]; then
+    # Skip confirmation if --yes flag is set or running in non-interactive mode
+    if [ "$FORCE_YES" = true ]; then
+        echo -e "${BLUE}   --yes flag set: Continuing with uncommitted changes${NC}"
+    elif [ "$MODE" = "quick" ]; then
+        echo -e "${BLUE}   Quick mode: Continuing with uncommitted changes${NC}"
+    elif [ ! -t 0 ]; then
+        # Non-interactive mode (CI/CD)
+        echo -e "${YELLOW}   Non-interactive mode detected, continuing with uncommitted changes${NC}"
+        echo -e "${YELLOW}   Use --yes flag to suppress this warning${NC}"
+    else
         read -p "Continue deployment? (y/N) " -n 1 -r
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo -e "${RED}❌ Deployment cancelled${NC}"
             exit 1
         fi
-    else
-        echo -e "${BLUE}   Quick mode: Continuing with uncommitted changes${NC}"
     fi
 fi
 
@@ -384,9 +414,10 @@ $COMPOSE_CMD ps
 echo ""
 echo -e "${BLUE}📝 To view logs: $COMPOSE_CMD logs -f${NC}"
 echo -e "${BLUE}📝 Usage examples:${NC}"
-echo -e "   ${YELLOW}./deploy-prod.sh quick${NC}     # Fast restart for code changes"
-echo -e "   ${YELLOW}./deploy-prod.sh frontend${NC}  # Rebuild React only"
-echo -e "   ${YELLOW}./deploy-prod.sh backend${NC}   # Rebuild Django only"
-echo -e "   ${YELLOW}./deploy-prod.sh full${NC}      # Complete rebuild"
+echo -e "   ${YELLOW}./deploy-prod.sh quick${NC}              # Fast restart for code changes"
+echo -e "   ${YELLOW}./deploy-prod.sh frontend${NC}           # Rebuild React only"
+echo -e "   ${YELLOW}./deploy-prod.sh backend${NC}            # Rebuild Django only"
+echo -e "   ${YELLOW}./deploy-prod.sh full${NC}               # Complete rebuild"
+echo -e "   ${YELLOW}./deploy-prod.sh full --yes${NC}         # Full rebuild without prompts (CI/CD)"
 echo ""
 echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
