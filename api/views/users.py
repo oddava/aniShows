@@ -223,3 +223,30 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         context = super().get_serializer_context()
         context["request"] = self.request
         return context
+
+    def retrieve(self, request, *args, **kwargs):
+        """Override retrieve to use fast queryset first, then enrich with stats"""
+        from django.db.models import Count
+
+        # Get user with basic profile info only (fast query)
+        username = self.kwargs.get(self.lookup_field)
+        queryset = User.objects.select_related("userprofile").filter(username=username)
+
+        if not queryset.exists():
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("User not found")
+
+        user = queryset.first()
+
+        # Add is_following annotation if user is authenticated
+        if request.user.is_authenticated:
+            from users.models import UserFollow
+
+            is_following = UserFollow.objects.filter(
+                follower=request.user, following=user
+            ).exists()
+            user._is_following = is_following
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data)
