@@ -15,13 +15,15 @@ logger = logging.getLogger(__name__)
 
 def invalidate_profile_cache(username):
     """Invalidate all cached versions of a user's public profile."""
-    version_key = f"profile_cache_version:{username}"
+    from django.conf import settings
+
+    version_key = settings.PROFILE_CACHE_VERSION_KEY_TEMPLATE.format(username=username)
     try:
         cache.incr(version_key)
         logger.debug(f"Invalidated profile cache for user: {username}")
     except ValueError:
         # Version doesn't exist yet, set it to 1
-        cache.set(version_key, 1, timeout=3600)
+        cache.set(version_key, 1, timeout=settings.PROFILE_CACHE_VERSION_TTL)
         logger.debug(f"Created new cache version for user: {username}")
 
 

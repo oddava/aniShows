@@ -29,7 +29,7 @@ class Command(BaseCommand):
         # Sync catalog options
         parser.add_argument(
             "--sync-type",
-            choices=["trending", "seasonal", "next_season", "airing"],
+            choices=["trending", "seasonal", "next_season", "airing", "full_catalog"],
             default="trending",
             help="Type of catalog sync (for sync-catalog workflow)",
         )
@@ -248,12 +248,13 @@ class Command(BaseCommand):
         self.stdout.write("Starting full synchronization workflow...")
 
         # Create task chain
+        # Use .si() (immutable signature) to prevent passing previous task results
         task_chain = chain(
             sync_anime_catalog.s(sync_type="trending", limit=50),
-            sync_airing_workflow.s(phases=["sync", "cleanup", "backfill"]),
-            enrich_metadata.s(mode="backfill", batch_size=50),
-            sync_theme_songs.s(limit=50),
-            generate_recommendations.s(),
+            sync_airing_workflow.si(phases=["sync", "cleanup", "backfill"]),
+            enrich_metadata.si(mode="backfill", batch_size=50),
+            sync_theme_songs.si(limit=50),
+            generate_recommendations.si(),
         )
 
         if run_async:

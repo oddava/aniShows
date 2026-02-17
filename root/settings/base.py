@@ -369,6 +369,20 @@ SIMPLE_JWT = {
 }
 
 # =============================================================================
+# PROFILE CACHE SETTINGS
+# =============================================================================
+
+# Cache key prefixes and templates
+PROFILE_CACHE_KEY_TEMPLATE = "public_profile:{username}:v{version}"
+PROFILE_CACHE_VERSION_KEY_TEMPLATE = "profile_cache_version:{username}"
+USER_ONLINE_CACHE_KEY_TEMPLATE = "user_online:{user_id}"
+
+# Cache TTLs (in seconds)
+PROFILE_CACHE_TTL = 1800  # 30 minutes for public profiles
+PROFILE_CACHE_VERSION_TTL = 3600  # 1 hour for version keys
+USER_ONLINE_CACHE_TTL = 300  # 5 minutes for online status
+
+# =============================================================================
 # REDIS CACHE (with authentication support)
 # =============================================================================
 
@@ -493,6 +507,16 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(day_of_week=0, hour=3, minute=30),  # Sunday 3:30 AM
         "kwargs": {"sync_type": "next_season", "limit": 100},
         "options": {"queue": "default"},
+    },
+    # Weekly: Fetch popular anime to build comprehensive catalog
+    "sync-popular-weekly": {
+        "task": "anime.tasks.sync.sync_anime_catalog",
+        "schedule": crontab(day_of_week=1, hour=2, minute=0),  # Monday 2:00 AM
+        "kwargs": {
+            "sync_type": "airing",
+            "limit": 500,
+        },  # Fetch 500 popular/airing anime
+        "options": {"queue": "low_priority"},
     },
     # Notification Tasks
     "check-new-episodes": {

@@ -1,5 +1,24 @@
 import { X, Users, Sparkles } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+// Spoiler component that hides content until clicked
+function Spoiler({ children }) {
+    const [revealed, setRevealed] = useState(false);
+    
+    if (revealed) {
+        return <span className="bg-yellow-500/20 px-1 rounded">{children}</span>;
+    }
+    
+    return (
+        <button
+            onClick={() => setRevealed(true)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300 transition-colors cursor-pointer"
+        >
+            <Sparkles className="w-3 h-3" />
+            Spoiler
+        </button>
+    );
+}
 
 // Parse markdown text into readable format with bold/italic labels - links shown as plain text
 function parseMarkdownText(text) {
@@ -12,51 +31,93 @@ function parseMarkdownText(text) {
     const paragraphs = cleanText.split(/\n+/).filter(p => p.trim());
     
     return paragraphs.map((paragraph, pIndex) => {
-        // Split the paragraph by markdown patterns
-        // Order matters: check bold (__) before italic (_) to avoid conflicts
-        const parts = paragraph.split(/(\[.*?\]\(.*?\)|__.+?__|_.+?_)/g);
+        // Split by spoiler tags first (~!content!~)
+        const spoilerParts = paragraph.split(/(~!.+?!~)/g);
         
-        const processedParts = parts.map((part, index) => {
-            // Check for markdown links [text](url) - show as plain text
-            const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
-            if (linkMatch) {
-                const [, linkText] = linkMatch;
-                return (
-                    <span key={index} className="text-gray-300">
-                        {linkText}
-                    </span>
-                );
+        const processedSpoilers = spoilerParts.map((part, sIndex) => {
+            // Check for spoiler syntax ~!content!~
+            const spoilerMatch = part.match(/~!(.+?)!~/);
+            if (spoilerMatch) {
+                const spoilerContent = spoilerMatch[1];
+                // Parse markdown inside spoiler
+                const parsedSpoilerContent = parseInlineMarkdown(spoilerContent);
+                return <Spoiler key={`spoiler-${pIndex}-${sIndex}`}>{parsedSpoilerContent}</Spoiler>;
             }
             
-            // Check for bold text __text__
-            const boldMatch = part.match(/__(.+?)__/);
-            if (boldMatch) {
-                return (
-                    <span key={index} className="font-bold text-gray-200">
-                        {boldMatch[1]}
-                    </span>
-                );
-            }
-            
-            // Check for italic text _text_
-            const italicMatch = part.match(/_(.+?)_/);
-            if (italicMatch) {
-                return (
-                    <span key={index} className="italic text-gray-200">
-                        {italicMatch[1]}
-                    </span>
-                );
-            }
-            
-            // Regular text
-            return <span key={index}>{part}</span>;
+            // Parse regular markdown
+            return parseInlineMarkdown(part, `text-${pIndex}-${sIndex}`);
         });
         
         return (
             <p key={pIndex} className="mb-3 last:mb-0">
-                {processedParts}
+                {processedSpoilers}
             </p>
         );
+    });
+}
+
+// Parse inline markdown (bold, italic, links)
+function parseInlineMarkdown(text, keyPrefix = '') {
+    // Split by markdown patterns
+    // Order matters: check bold (**) and (__) before italic (*) and (_) to avoid conflicts
+    const parts = text.split(/(\[.*?\]\(.*?\)|\*\*.+?\*\*|__.+?__|_.+?_|\*.+?\*)/g);
+    
+    return parts.map((part, index) => {
+        const key = `${keyPrefix}-${index}`;
+        
+        // Check for markdown links [text](url) - show as plain text
+        const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
+        if (linkMatch) {
+            const [, linkText] = linkMatch;
+            return (
+                <span key={key} className="text-gray-300">
+                    {linkText}
+                </span>
+            );
+        }
+        
+        // Check for bold text **text** or __text__
+        const boldMatch = part.match(/\*\*(.+?)\*\*/);
+        if (boldMatch) {
+            return (
+                <span key={key} className="font-bold text-gray-200">
+                    {boldMatch[1]}
+                </span>
+            );
+        }
+        
+        // Check for bold text __text__
+        const boldMatch2 = part.match(/__(.+?)__/);
+        if (boldMatch2) {
+            return (
+                <span key={key} className="font-bold text-gray-200">
+                    {boldMatch2[1]}
+                </span>
+            );
+        }
+        
+        // Check for italic text *text* or _text_
+        const italicMatch = part.match(/\*(.+?)\*/);
+        if (italicMatch) {
+            return (
+                <span key={key} className="italic text-gray-200">
+                    {italicMatch[1]}
+                </span>
+            );
+        }
+        
+        // Check for italic text _text_
+        const italicMatch2 = part.match(/_(.+?)_/);
+        if (italicMatch2) {
+            return (
+                <span key={key} className="italic text-gray-200">
+                    {italicMatch2[1]}
+                </span>
+            );
+        }
+        
+        // Regular text
+        return <span key={key}>{part}</span>;
     });
 }
 

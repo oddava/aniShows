@@ -10,6 +10,7 @@ Consolidates:
 Into a single parameterized task with smart routing.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -62,6 +63,13 @@ SYNC_CONFIGS = {
         "priority": "high",
         "deduplication": True,
     },
+    "full_catalog": {
+        "method": "get_top_rated",
+        "kwargs": {"limit": 1000},
+        "schedule": "weekly",
+        "priority": "low",
+        "description": "Fetch top 1000 rated anime to build comprehensive catalog",
+    },
 }
 
 
@@ -74,6 +82,7 @@ class SyncAnimeCatalogTask(BaseTask):
     - 'seasonal': Current season anime
     - 'next_season': Upcoming season anime
     - 'airing': All currently airing anime
+    - 'full_catalog': Top 1000 rated anime (for building comprehensive catalog)
 
     Usage:
         # Sync trending anime
@@ -81,6 +90,9 @@ class SyncAnimeCatalogTask(BaseTask):
 
         # Sync current season
         sync_anime_catalog.delay(sync_type='seasonal')
+
+        # Full catalog sync (manual only, not scheduled due to API limits)
+        sync_anime_catalog.delay(sync_type='full_catalog', limit=1000)
 
         # Chain with other tasks
         chain(
@@ -154,6 +166,14 @@ class SyncAnimeCatalogTask(BaseTask):
                 # Handle trending rank updates
                 if config.get("update_ranks"):
                     await self._update_trending_ranks(data)
+
+                # Trigger theme sync for newly created anime
+                created_anime_ids = stats.get("created_anime_ids", [])
+                if created_anime_ids:
+                    logger.info(
+                        f"Triggering theme sync for {len(created_anime_ids)} new anime"
+                    )
+                    await self._trigger_theme_sync_for_new_anime(created_anime_ids)
 
                 # Record API calls
                 self.metrics.record_api_call("anilist", len(data))
@@ -256,6 +276,40 @@ class SyncAnimeCatalogTask(BaseTask):
 
         await batch_update()
         logger.info(f"Updated {len(rank_updates)} trending ranks")
+
+    async def _trigger_theme_sync_for_new_anime(self, anime_ids: List[int]):
+        """
+        Trigger theme sync for newly created anime.
+        Uses Jikan API to fetch opening and ending themes.
+        """
+        from anime.tasks import sync_theme_songs
+
+        logger.info(f"Queueing theme sync for {len(anime_ids)} new anime")
+
+        # Create a group of tasks to sync themes in parallel
+        # Use chunks to avoid overwhelming the queue
+        chunk_size = 10
+        for i in range(0, len(anime_ids), chunk_size):
+            chunk = anime_ids[i : i + chunk_size]
+            logger.info(
+                f"Queueing theme sync chunk {i // chunk_size + 1}: {len(chunk)} anime"
+            )
+
+            # Queue individual theme sync tasks
+            for anime_id in chunk:
+                try:
+                    sync_theme_songs.delay(anime_id=anime_id)
+                    logger.debug(f"Queued theme sync for anime ID: {anime_id}")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to queue theme sync for anime {anime_id}: {e}"
+                    )
+
+            # Small delay between chunks to avoid rate limiting
+            if i + chunk_size < len(anime_ids):
+                await asyncio.sleep(0.5)
+
+        logger.info(f"Theme sync queued for all {len(anime_ids)} new anime")
 
 
 @shared_task(
