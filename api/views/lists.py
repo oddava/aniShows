@@ -3,20 +3,14 @@ from rest_framework.exceptions import PermissionDenied
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 
 from anime.models import UserFavorite
 from users.models import UserAnimeList
 from api.serializers import UserAnimeListSerializer
 from api.permissions import EmailVerificationMixin
+from api.cache_utils import invalidate_user_caches, invalidate_user_anime_caches
 
 User = get_user_model()
-
-
-def invalidate_user_anime_cache(user_id):
-    """Clear user-specific anime caches when their list changes."""
-    cache.delete(f"anime_trending_{user_id}")
-    cache.delete(f"anime_top_rated_{user_id}")
 
 
 class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
@@ -54,7 +48,9 @@ class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         try:
             serializer.save(user=self.request.user)
-            invalidate_user_anime_cache(self.request.user.id)
+            # Invalidate user caches - list changes affect stats
+            invalidate_user_caches(self.request.user.id, self.request.user.username)
+            invalidate_user_anime_caches(self.request.user.id)
         except IntegrityError:
             raise serializers.ValidationError(
                 {"detail": "This anime is already in your list."}
@@ -65,7 +61,9 @@ class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         if serializer.instance.user != self.request.user:
             raise PermissionDenied("You can only modify your own anime list.")
         serializer.save()
-        invalidate_user_anime_cache(self.request.user.id)
+        # Invalidate user caches - list changes affect stats
+        invalidate_user_caches(self.request.user.id, self.request.user.username)
+        invalidate_user_anime_caches(self.request.user.id)
 
     def perform_destroy(self, instance):
         """Ensure users can only delete their own list entries."""
@@ -74,4 +72,6 @@ class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
                 "You can only remove items from your own anime list."
             )
         instance.delete()
-        invalidate_user_anime_cache(self.request.user.id)
+        # Invalidate user caches - list changes affect stats
+        invalidate_user_caches(self.request.user.id, self.request.user.username)
+        invalidate_user_anime_caches(self.request.user.id)

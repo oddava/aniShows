@@ -9,7 +9,7 @@ import SEO from '../components/SEO';
 import logger from '../utils/logger';
 
 export default function Settings() {
-    const { user, isAuthenticated, loading } = useAuth();
+    const { user, isAuthenticated, loading, refreshProfile } = useAuth();
     const [activeTab, setActiveTab] = useState('profile');
 
     // Profile settings state
@@ -103,14 +103,21 @@ export default function Settings() {
             formData.append('username', username.trim());
             formData.append('social_links', JSON.stringify(socialLinks));
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
-            if (avatarFile) formData.append('avatar', avatarFile);
-            if (bannerFile) formData.append('banner', bannerFile);
+            if (avatarFile) {
+                formData.append('avatar', avatarFile);
+            }
+            if (bannerFile) {
+                formData.append('banner', bannerFile);
+            }
 
             await authApi.updateProfile(formData);
             setProfileSuccess('Profile updated successfully!');
-            // Reload page to reflect changes in header after a short delay
-            setTimeout(() => window.location.reload(), 1500);
-        } catch {
+            // Refresh profile data immediately to show updates
+            await refreshProfile();
+            // Clear file inputs
+            setAvatarFile(null);
+            setBannerFile(null);
+        } catch (err) {
             logger.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
 
@@ -154,7 +161,7 @@ export default function Settings() {
             setOldPassword('');
             setNewPassword('');
             setConfirmPassword('');
-        } catch {
+        } catch (err) {
             logger.error('Failed to change password:', err);
             let msg = 'Failed to change password';
             if (err.response?.data) {
@@ -179,7 +186,7 @@ export default function Settings() {
         setIsPrivate(newPrivacy);
         try {
             await authApi.updateProfile({ is_private: newPrivacy });
-        } catch {
+        } catch (err) {
             logger.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure
         }
@@ -190,7 +197,7 @@ export default function Settings() {
         try {
             await authApi.resendVerification({ email: user.email });
             setAccountSuccess('Verification email sent!');
-        } catch {
+        } catch (err) {
             setAccountError('Failed to send verification email');
         } finally {
             setIsResending(false);
@@ -214,7 +221,7 @@ export default function Settings() {
             setAccountSuccess('Confirmation email sent to new address!');
             setChangeEmail('');
             setChangeEmailPassword('');
-        } catch {
+        } catch (err) {
             setAccountError(err.response?.data?.error || 'Failed to change email');
         } finally {
             setIsChangingEmail(false);
@@ -236,7 +243,7 @@ export default function Settings() {
             localStorage.removeItem('refresh_token');
             // Force hard reload to reset application state
             window.location.href = '/';
-        } catch {
+        } catch (err) {
             logger.error("Delete failed:", err);
             setAccountError(err.response?.data?.error || 'Failed to delete account');
         } finally {

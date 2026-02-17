@@ -827,6 +827,12 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     )
     is_private = serializers.BooleanField(required=False, default=False)
 
+    def validate_is_private(self, value):
+        # Handle string values from FormData
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        return value
+
     # Dynamic social links
     social_links = serializers.JSONField(required=False)
 
@@ -834,6 +840,14 @@ class UserProfileUpdateSerializer(serializers.Serializer):
         from urllib.parse import urlparse
         from django.core.validators import URLValidator
         from django.core.exceptions import ValidationError as DjangoValidationError
+        import json
+
+        # Handle JSON string from FormData
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError("Social links must be valid JSON.")
 
         if not isinstance(value, list):
             raise serializers.ValidationError("Social links must be a list.")

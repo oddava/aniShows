@@ -24,6 +24,7 @@ from .views import (
     ConfirmEmailChangeView,
     RecommendationsViewSet,
     FollowViewSet,
+    health_check,
 )
 from .notification_views import (
     NotificationViewSet,
@@ -85,6 +86,7 @@ celery_router.register(
 )
 
 urlpatterns = [
+    path("health/", health_check, name="health_check"),
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
     path("users/me/stats/", UserStatsView.as_view(), name="user_stats"),
     path(

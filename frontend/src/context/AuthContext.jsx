@@ -5,29 +5,34 @@ import logger from '../utils/logger';
 
 const AuthContext = createContext(null);
 
+// Cache keys
+const TOKEN_KEY = 'access_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const PROFILE_CACHE_KEY = 'anishows_profile_cache';
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 // Decode JWT token to get user info instantly without API call
 const decodeToken = (token) => {
     try {
         const decoded = jwtDecode(token);
         
         // Handle both old tokens (only user_id) and new tokens (with username/email)
-        // For old tokens without username, we'll need to fetch from API
         if (!decoded.username && !decoded.email) {
             return {
                 id: decoded.user_id,
-                username: null, // Will be populated by API call
+                username: null,
                 email: null,
                 avatar: null,
                 bio: '',
                 is_private: false,
                 email_verified: true,
-                _needsApiFetch: true, // Flag to indicate we need API data
+                _needsApiFetch: true,
             };
         }
         
         return {
             id: decoded.user_id,
-            username: decoded.username || 'User', // Fallback if somehow missing
+            username: decoded.username || 'User',
             email: decoded.email || '',
             avatar: null,
             bio: '',
@@ -51,63 +56,147 @@ const isTokenExpired = (token) => {
     }
 };
 
+// Get cached profile from localStorage
+const getCachedProfile = () => {
+    try {
+        const cached = localStorage.getItem(PROFILE_CACHE_KEY);
+        if (!cached) return null;
+        
+        const { data, timestamp } = JSON.parse(cached);
+        const age = Date.now() - timestamp;
+        
+        // Return cached data if not expired
+        if (age < PROFILE_CACHE_TTL) {
+            return { ...data, _cached: true, _cacheAge: age };
+        }
+        
+        return null;
+    } catch {
+        return null;
+    }
+};
+
+// Save profile to localStorage cache
+const cacheProfile = (data) => {
+    try {
+        const cacheData = {
+            data,
+            timestamp: Date.now(),
+        };
+        localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cacheData));
+    } catch (error) {
+        logger.warn('Failed to cache profile:', error);
+    }
+};
+
+// Clear profile cache
+const clearProfileCache = () => {
+    try {
+        localStorage.removeItem(PROFILE_CACHE_KEY);
+    } catch (error) {
+        logger.warn('Failed to clear profile cache:', error);
+    }
+};
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isFetchingProfile, setIsFetchingProfile] = useState(false);
 
     const fetchUserStats = useCallback(async () => {
         try {
             const response = await authApi.getStats();
             return response.data;
         } catch (error) {
+            logger.warn('Failed to fetch user stats:', error);
             return null;
         }
     }, []);
 
     const checkAuth = useCallback(async () => {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem(TOKEN_KEY);
         
         if (token && !isTokenExpired(token)) {
             // INSTANT: Decode token to get user info without API call
             const decodedUser = decodeToken(token);
+            
             if (decodedUser) {
+                // Try to get cached profile first
+                const cachedProfile = getCachedProfile();
                 
-                // If we have username from token, show it immediately
-                if (!decodedUser._needsApiFetch) {
-                    setUser(decodedUser);
-                    setLoading(false); // Stop loading immediately!
-                } else {
-                    // Old token - need to fetch username, but set user anyway to avoid blank state
-                    setUser({ ...decodedUser, username: 'Loading...' });
+                if (cachedProfile && !cachedProfile._needsApiFetch) {
+                    // Use cached data immediately for instant UI
+                    const { _cached, _cacheAge, ...profileData } = cachedProfile;
+                    setUser({ ...decodedUser, ...profileData });
                     setLoading(false);
+                    
+                    // Refresh cache in background if it's getting old (> 1 minute)
+                    if (_cacheAge > 60000 && !isFetchingProfile) {
+                        setIsFetchingProfile(true);
+                        try {
+                            const response = await authApi.getProfile(false);
+                            const freshData = response.data;
+                            setUser(freshData);
+                            cacheProfile(freshData);
+                        } catch (error) {
+                            logger.warn('Background profile refresh failed:', error);
+                        } finally {
+                            setIsFetchingProfile(false);
+                        }
+                    }
+                    
+                    // Fetch stats asynchronously
+                    fetchUserStats().then(stats => {
+                        if (stats) {
+                            setUser(prev => ({ ...prev, ...stats }));
+                        }
+                    });
+                    
+                    return;
                 }
                 
-                // BACKGROUND: Get lightweight profile (fast, no expensive stats)
+                // No valid cache, show decoded data immediately
+                if (!decodedUser._needsApiFetch) {
+                    setUser(decodedUser);
+                } else {
+                    setUser({ ...decodedUser, username: 'Loading...' });
+                }
+                setLoading(false);
+                
+                // Fetch profile in background
+                setIsFetchingProfile(true);
                 try {
-                    const response = await authApi.getProfile(false); // lightweight (default)
-                    setUser(response.data);
+                    const response = await authApi.getProfile(false);
+                    const profileData = response.data;
+                    setUser(profileData);
+                    cacheProfile(profileData);
                     
-                    // BACKGROUND: Fetch expensive stats asynchronously (don't block UI)
+                    // Fetch stats asynchronously
                     fetchUserStats().then(stats => {
                         if (stats) {
                             setUser(prev => ({ ...prev, ...stats }));
                         }
                     });
                 } catch (error) {
-                    // Don't remove tokens - keep using decoded data
+                    logger.error('Failed to fetch profile:', error);
+                    // Keep using decoded data
+                } finally {
+                    setIsFetchingProfile(false);
                 }
+                
                 return;
             }
         }
         
         // No token or invalid token
         if (token && isTokenExpired(token)) {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(REFRESH_TOKEN_KEY);
+            clearProfileCache();
         }
         
         setLoading(false);
-    }, [fetchUserStats]);
+    }, [fetchUserStats, isFetchingProfile]);
 
     useEffect(() => {
         checkAuth();
@@ -117,8 +206,8 @@ export function AuthProvider({ children }) {
         const response = await authApi.login({ username, password });
         const { access, refresh } = response.data;
 
-        localStorage.setItem('access_token', access);
-        localStorage.setItem('refresh_token', refresh);
+        localStorage.setItem(TOKEN_KEY, access);
+        localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
 
         // Decode token instantly for immediate UI update
         const decodedUser = decodeToken(access);
@@ -126,9 +215,11 @@ export function AuthProvider({ children }) {
             setUser(decodedUser);
         }
 
-        // Fetch lightweight profile (fast)
+        // Fetch profile and cache it
         const profileResponse = await authApi.getProfile(false);
-        setUser(profileResponse.data);
+        const profileData = profileResponse.data;
+        setUser(profileData);
+        cacheProfile(profileData);
 
         // Fetch stats asynchronously in background
         fetchUserStats().then(stats => {
@@ -137,7 +228,7 @@ export function AuthProvider({ children }) {
             }
         });
 
-        return profileResponse.data;
+        return profileData;
     }, [fetchUserStats]);
 
     const register = useCallback(async (username, email, password) => {
@@ -152,35 +243,61 @@ export function AuthProvider({ children }) {
     }, []);
 
     const logout = useCallback(() => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        clearProfileCache();
         setUser(null);
     }, []);
 
     const setTokens = useCallback(async (access, refresh, userData = null) => {
-        localStorage.setItem('access_token', access);
-        localStorage.setItem('refresh_token', refresh);
+        localStorage.setItem(TOKEN_KEY, access);
+        localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
 
         if (userData) {
             setUser(userData);
+            cacheProfile(userData);
             return userData;
         }
 
-        const profileResponse = await authApi.getProfile();
-        setUser(profileResponse.data);
+        try {
+            const profileResponse = await authApi.getProfile();
+            const profileData = profileResponse.data;
+            setUser(profileData);
+            cacheProfile(profileData);
+            return profileData;
+        } catch (error) {
+            logger.error('Failed to fetch profile after token set:', error);
+            throw error;
+        }
+    }, []);
 
-        return profileResponse.data;
+    // Refresh user profile manually (e.g., after profile update)
+    const refreshProfile = useCallback(async () => {
+        try {
+            // Clear cache first to ensure fresh data
+            clearProfileCache();
+            const response = await authApi.getProfile(false);
+            const profileData = response.data;
+            setUser(profileData);
+            cacheProfile(profileData);
+            return profileData;
+        } catch (error) {
+            logger.error('Failed to refresh profile:', error);
+            throw error;
+        }
     }, []);
 
     const value = useMemo(() => ({
         user,
         loading,
+        isFetchingProfile,
         login,
         register,
         logout,
         setTokens,
+        refreshProfile,
         isAuthenticated: !!user,
-    }), [user, loading, login, register, logout, setTokens]);
+    }), [user, loading, isFetchingProfile, login, register, logout, setTokens, refreshProfile]);
 
     return (
         <AuthContext.Provider value={value}>

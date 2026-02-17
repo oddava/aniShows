@@ -21,26 +21,10 @@ ps:
 logs:
 	docker compose logs -f
 
-# Specific Service Logs
-web-logs:
-	docker compose logs -f web
-
-front-logs:
-	docker compose logs -f frontend
-
-celery-logs:
-	docker compose logs -f celery beat
-
 # Django Commands
 mig:
 	docker compose exec web uv run python manage.py makemigrations
 	docker compose exec web uv run python manage.py migrate
-
-migrate:
-	docker compose exec web uv run python manage.py migrate
-
-makemigrations:
-	docker compose exec web uv run python manage.py makemigrations
 
 shell:
 	docker compose exec web uv run python manage.py shell
@@ -64,24 +48,6 @@ icomp:
 # Data Management
 import_anime:
 	docker compose exec web uv run python manage.py import_anime
-
-backfill_metadata:
-	docker compose exec web uv run python manage.py backfill_metadata
-
-remove_duplicates:
-	docker compose exec web uv run python manage.py remove_duplicate_lists
-
-sync_trending:
-	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_trending_anime; sync_trending_anime.delay(limit=50)"
-
-sync_seasonal:
-	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_seasonal_anime; sync_seasonal_anime.delay(limit=100)"
-
-sync_upcoming:
-	docker compose exec web uv run python manage.py shell -c "from anime.tasks import sync_next_season_anime; sync_next_season_anime.delay(limit=100)"
-
-backfill_catalog:
-	docker compose exec web uv run python manage.py shell -c "from anime.tasks import backfill_catalog; backfill_catalog.delay(start_page=1, pages=50)"
 
 # Maintenance
 clean:
@@ -115,8 +81,6 @@ help:
 	@echo "  build          Build services"
 	@echo "  ps             List running services"
 	@echo "  logs           View global logs"
-	@echo "  web-logs       View backend logs"
-	@echo "  celery-logs    View worker/scheduler logs"
 	@echo ""
 	@echo "Django Commands:"
 	@echo "  mig            Run makemigrations + migrate"
@@ -126,11 +90,7 @@ help:
 	@echo "  collectstatic  Collect static files"
 	@echo ""
 	@echo "Data Management:"
-	@echo "  sync_trending  Sync currently airing anime"
-	@echo "  sync_seasonal  Sync current season"
-	@echo "  sync_upcoming  Sync next season (upcoming)"
 	@echo "  import_anime   Run full import command"
-	@echo "  backfill_metadata Backfill characters/staff"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  clean          Remove pyc/pycache files"

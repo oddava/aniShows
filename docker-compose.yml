@@ -109,7 +109,7 @@ services:
         reservations:
           memory: 256M
 
-  # Redis
+  # Redis with persistence enabled
   redis:
     image: redis:7-alpine
     restart: always
@@ -118,12 +118,20 @@ services:
       --requirepass ${REDIS_PASSWORD:-redispassword123}
       --maxmemory 192mb
       --maxmemory-policy allkeys-lru
-      --appendonly no
-      --save ""
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
     volumes:
       - redis_data:/data
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     deploy:
       resources:
         limits:

@@ -13,6 +13,23 @@ const api = axios.create({
     withCredentials: true,
 });
 
+// Token refresh state management
+let isRefreshing = false;
+let refreshPromise = null;
+let failedRequestQueue = [];
+
+// Process queued requests after refresh succeeds/fails
+const processQueue = (error, token = null) => {
+    failedRequestQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedRequestQueue = [];
+};
+
 // Check if token needs proactive refresh
 const shouldRefreshToken = (token) => {
     try {
@@ -25,12 +42,11 @@ const shouldRefreshToken = (token) => {
     }
 };
 
-// Refresh token proactively
-let isRefreshing = false;
-let refreshPromise = null;
-
+// Refresh access token with proper locking and queueing
 const refreshAccessToken = async () => {
+    // If refresh is already in progress, wait for it
     if (isRefreshing) {
+        logger.debug('Token refresh already in progress, waiting...');
         return refreshPromise;
     }
 
@@ -39,19 +55,37 @@ const refreshAccessToken = async () => {
         try {
             const refreshToken = localStorage.getItem('refresh_token');
             if (!refreshToken) {
-                reject(new Error('No refresh token available'));
-                return;
+                throw new Error('No refresh token available');
+            }
+
+            // Check if refresh token itself is expired
+            try {
+                const decoded = jwtDecode(refreshToken);
+                const currentTime = Date.now() / 1000;
+                if (decoded.exp < currentTime) {
+                    throw new Error('Refresh token expired');
+                }
+            } catch (decodeError) {
+                throw new Error('Invalid refresh token');
             }
 
             const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
                 refresh: refreshToken,
             });
 
-            const { access } = response.data;
+            const { access, refresh } = response.data;
             localStorage.setItem('access_token', access);
+            
+            // Update refresh token if rotated (when BLACKLIST_AFTER_ROTATION is enabled)
+            if (refresh) {
+                localStorage.setItem('refresh_token', refresh);
+                logger.debug('Refresh token rotated and updated');
+            }
+            
+            logger.debug('Token refresh successful');
             resolve(access);
         } catch (error) {
-            logger.error('Proactive token refresh failed:', error);
+            logger.error('Token refresh failed:', error.message);
             reject(error);
         } finally {
             isRefreshing = false;
@@ -62,19 +96,21 @@ const refreshAccessToken = async () => {
     return refreshPromise;
 };
 
-// Request interceptor - add auth token and proactive refresh
+// Request interceptor - add auth token and handle proactive refresh
 api.interceptors.request.use(
     async (config) => {
         const token = localStorage.getItem('access_token');
         
         if (token) {
-            // Check if token needs proactive refresh (but don't block the request)
+            // Check if token needs proactive refresh
             if (shouldRefreshToken(token) && !config._skipProactiveRefresh) {
                 try {
                     const newToken = await refreshAccessToken();
                     config.headers.Authorization = `Bearer ${newToken}`;
                 } catch (error) {
                     // If proactive refresh fails, still try with current token
+                    // The response interceptor will handle the failure
+                    logger.warn('Proactive refresh failed, using existing token:', error.message);
                     config.headers.Authorization = `Bearer ${token}`;
                 }
             } else {
@@ -86,35 +122,64 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh with retry logic
+// Response interceptor - handle token refresh with retry logic and queueing
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
 
         // Don't retry if already retried or if it's a refresh request itself
-        if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh/')) {
+        if (error.response?.status === 401 && 
+            !originalRequest._retry && 
+            !originalRequest.url?.includes('/auth/refresh/') &&
+            !originalRequest.url?.includes('/auth/login/')) {
+            
             originalRequest._retry = true;
 
+            // If refresh is in progress, queue this request
+            if (isRefreshing) {
+                logger.debug('Queuing request while token refresh is in progress');
+                return new Promise((resolve, reject) => {
+                    failedRequestQueue.push({
+                        resolve: (token) => {
+                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                            resolve(api(originalRequest));
+                        },
+                        reject: (err) => {
+                            reject(err);
+                        },
+                    });
+                });
+            }
+
             try {
-                // Use the proactive refresh function
                 const newToken = await refreshAccessToken();
+                processQueue(null, newToken);
                 originalRequest.headers.Authorization = `Bearer ${newToken}`;
                 return api(originalRequest);
             } catch (refreshError) {
-                // Only clear tokens and redirect if refresh truly fails
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
+                processQueue(refreshError, null);
                 
-                // Don't redirect immediately - let the app handle it gracefully
-                // This prevents flash redirects on transient errors
-                if (!window.location.pathname.includes('/login')) {
-                    setTimeout(() => {
-                        if (!localStorage.getItem('access_token')) {
-                            window.location.href = '/login';
-                        }
-                    }, 100);
+                // Clear tokens only on authentication errors (not network errors)
+                if (refreshError.response?.status === 401 || 
+                    refreshError.message?.includes('expired') ||
+                    refreshError.message?.includes('No refresh token')) {
+                    
+                    logger.error('Authentication failed, clearing tokens');
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    
+                    // Redirect to login after a short delay to allow cleanup
+                    if (!window.location.pathname.includes('/login')) {
+                        setTimeout(() => {
+                            if (!localStorage.getItem('access_token')) {
+                                window.location.href = '/login';
+                            }
+                        }, 100);
+                    }
                 }
+                
+                return Promise.reject(refreshError);
             }
         }
 
@@ -149,7 +214,17 @@ export const authApi = {
     getProfile: (full = false) => api.get('/users/me/', { params: { full } }),
     getByUsername: (username) => api.get(`/users/${username}/`),
     getStats: () => api.get('/users/me/stats/'),
-    updateProfile: (data) => api.patch('/users/me/', data),
+    updateProfile: (data) => {
+        // Handle FormData (file uploads) - transformRequest removes default headers
+        // This lets the browser set the correct multipart/form-data boundary
+        const isFormData = data instanceof FormData;
+        return api.patch('/users/me/', data, isFormData ? {
+            transformRequest: [(data, headers) => {
+                delete headers['Content-Type'];
+                return data;
+            }]
+        } : {});
+    },
     changePassword: (data) => api.post('/auth/change-password/', data),
     requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),
     resetPassword: (uid, token, password) => api.post('/auth/password-reset-confirm/', { uid, token, password }),

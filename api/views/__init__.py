@@ -19,3 +19,4 @@ from .account_management import (
     ConfirmEmailChangeView,
     ChangePasswordView,
 )
+from .health import health_check

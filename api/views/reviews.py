@@ -5,12 +5,14 @@ from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Q, Exists, OuterRef, Avg
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.db import IntegrityError
 import logging
 
 from anime.models import Anime, Review, ReviewVote, ReviewComment
 from users.models import UserAnimeList
 from api.serializers import ReviewSerializer, ReviewCommentSerializer
 from api.permissions import EmailVerificationMixin
+from api.cache_utils import invalidate_user_caches
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -181,6 +183,8 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
         try:
             serializer.save(user=user)
+            # Invalidate user caches - reviews count changed
+            invalidate_user_caches(user.id, user.username)
         except IntegrityError:
             raise serializers.ValidationError(
                 {"non_field_errors": ["You have already reviewed this anime."]}
@@ -191,12 +195,16 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         if serializer.instance.user != self.request.user:
             raise PermissionDenied("You can only edit your own reviews.")
         serializer.save()
+        # Invalidate user caches - reviews may affect stats
+        invalidate_user_caches(self.request.user.id, self.request.user.username)
 
     def perform_destroy(self, instance):
         """Ensure users can only delete their own reviews."""
         if instance.user != self.request.user:
             raise PermissionDenied("You can only delete your own reviews.")
         instance.delete()
+        # Invalidate user caches - reviews count changed
+        invalidate_user_caches(self.request.user.id, self.request.user.username)
 
     @action(
         detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
