@@ -126,7 +126,7 @@ export default function Profile({ forcedUsername }) {
     const targetUsername = isPublicView ? username : currentUser?.username;
 
     // Fetch Public Profile Data
-    const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
+    const { data: publicProfile, isLoading: profileLoading, isError, refetch: refetchProfile } = useQuery({
         queryKey: ['profile', targetUsername],
         queryFn: () => authApi.getByUsername(targetUsername).then(res => res.data),
         enabled: isPublicView,
@@ -138,17 +138,6 @@ export default function Profile({ forcedUsername }) {
 
     const displayUser = isPublicView ? publicProfile : currentUser;
     const isPrivate = isPublicView && displayUser?.is_private;
-
-    const handleFollowChange = (isFollowing, newFollowersCount) => {
-        // Update the query cache directly for immediate UI update
-        if (isPublicView && publicProfile) {
-            queryClient.setQueryData(['profile', targetUsername], {
-                ...publicProfile,
-                followers_count: newFollowersCount,
-                is_following: isFollowing
-            });
-        }
-    };
 
     const openFollowersModal = (type) => {
         setFollowersModalType(type);
@@ -752,7 +741,7 @@ export default function Profile({ forcedUsername }) {
                                     <FollowButton
                                         username={targetUsername}
                                         initialIsFollowing={displayUser?.is_following}
-                                        onFollowChange={handleFollowChange}
+                                        onSuccess={() => isPublicView && refetchProfile()}
                                         className="px-4 md:px-6"
                                     />
                                 </>
