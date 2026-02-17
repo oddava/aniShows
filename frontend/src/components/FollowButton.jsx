@@ -33,36 +33,125 @@ export default function FollowButton({
     const toggleMutation = useMutation({
         mutationFn: () => followApi.toggle(username),
         onMutate: async () => {
-            // Optimistic update
-            setIsFollowing(prev => !prev);
-        },
-        onSuccess: (response) => {
-            const newIsFollowing = response.data?.is_following ?? !isFollowing;
+            // Cancel any outgoing refetches to avoid overwriting optimistic update
+            await queryClient.cancelQueries({ queryKey: ['user', username] });
+            await queryClient.cancelQueries({ queryKey: ['profile', username] });
+            await queryClient.cancelQueries({ queryKey: ['follows'] });
+
+            // Snapshot previous values
+            const previousTargetProfile = queryClient.getQueryData(['profile', username]);
+            const previousTargetUser = queryClient.getQueryData(['user', username]);
+            const previousMyProfile = queryClient.getQueryData(['profile', 'me']);
+            const previousMyUser = queryClient.getQueryData(['user', 'me']);
+
+            // Calculate new values
+            const newIsFollowing = !isFollowing;
+            const followerDelta = newIsFollowing ? 1 : -1;
+
+            // Optimistically update target user's profile (followers_count)
+            if (previousTargetProfile) {
+                queryClient.setQueryData(['profile', username], {
+                    ...previousTargetProfile,
+                    followers_count: (previousTargetProfile.followers_count || 0) + followerDelta,
+                    is_following: newIsFollowing
+                });
+            }
+
+            // Optimistically update target user's data
+            if (previousTargetUser) {
+                queryClient.setQueryData(['user', username], {
+                    ...previousTargetUser,
+                    followers_count: (previousTargetUser.followers_count || 0) + followerDelta,
+                    is_following: newIsFollowing
+                });
+            }
+
+            // Optimistically update current user's profile (following_count)
+            if (previousMyProfile) {
+                queryClient.setQueryData(['profile', 'me'], {
+                    ...previousMyProfile,
+                    following_count: (previousMyProfile.following_count || 0) + followerDelta
+                });
+            }
+
+            // Optimistically update current user's data
+            if (previousMyUser) {
+                queryClient.setQueryData(['user', 'me'], {
+                    ...previousMyUser,
+                    following_count: (previousMyUser.following_count || 0) + followerDelta
+                });
+            }
+
+            // Optimistically update local state
             setIsFollowing(newIsFollowing);
 
-            // Invalidate profile queries to update follower counts
-            queryClient.invalidateQueries({ queryKey: ['user', username] });
-            queryClient.invalidateQueries({ queryKey: ['profile', username] });
+            // Return context for rollback
+            return {
+                previousTargetProfile,
+                previousTargetUser,
+                previousMyProfile,
+                previousMyUser,
+                previousIsFollowing: isFollowing
+            };
+        },
+        onSuccess: (response, variables, context) => {
+            const newIsFollowing = response.data?.is_following ?? !context.previousIsFollowing;
             
+            // Update with server response (in case it differs)
+            setIsFollowing(newIsFollowing);
+
+            // Update caches with server data
+            const followerCount = response.data?.followers_count;
+            if (followerCount !== undefined) {
+                // Update target user's profile with exact server count
+                queryClient.setQueryData(['profile', username], (old) => 
+                    old ? { ...old, followers_count: followerCount, is_following: newIsFollowing } : old
+                );
+                queryClient.setQueryData(['user', username], (old) => 
+                    old ? { ...old, followers_count: followerCount, is_following: newIsFollowing } : old
+                );
+            }
+
             // Only invalidate follows query if we're NOT in the modal
             // (when onUnfollow is provided, modal manages its own state)
             if (!onUnfollow) {
                 queryClient.invalidateQueries({ queryKey: ['follows'] });
             }
 
+            // Invalidate queries to ensure consistency (but data already updated optimistically)
+            // This will refetch in background to sync with server
+            queryClient.invalidateQueries({ queryKey: ['user', username] }, { refetchType: 'none' });
+            queryClient.invalidateQueries({ queryKey: ['profile', username] }, { refetchType: 'none' });
+
             if (onFollowChange) {
                 onFollowChange(newIsFollowing, response.data?.followers_count);
             }
 
-            // Check if this was an unfollow action by checking the response
-            // If newIsFollowing is false, it means we just unfollowed
+            // Check if this was an unfollow action
             if (!newIsFollowing && onUnfollow) {
                 onUnfollow(username);
             }
         },
-        onError: (error) => {
-            // Revert on error
-            setIsFollowing(prev => !prev);
+        onError: (error, variables, context) => {
+            // Rollback optimistic updates
+            if (context?.previousTargetProfile) {
+                queryClient.setQueryData(['profile', username], context.previousTargetProfile);
+            }
+            if (context?.previousTargetUser) {
+                queryClient.setQueryData(['user', username], context.previousTargetUser);
+            }
+            if (context?.previousMyProfile) {
+                queryClient.setQueryData(['profile', 'me'], context.previousMyProfile);
+            }
+            if (context?.previousMyUser) {
+                queryClient.setQueryData(['user', 'me'], context.previousMyUser);
+            }
+            
+            // Revert local state
+            if (context?.previousIsFollowing !== undefined) {
+                setIsFollowing(context.previousIsFollowing);
+            }
+            
             logger.error('Follow error:', error);
         }
     });
