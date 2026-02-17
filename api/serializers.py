@@ -971,22 +971,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ["username", "email", "password"]
 
-    def validate_username(self, value):
-        """Normalize username and check for existing usernames."""
-        username = value.lower().strip()
-
-        if User.objects.filter(username__iexact=username).exists():
-            raise serializers.ValidationError(
-                "Unable to create account. The email or username may already be in use."
-            )
-
-        return username
-
     def validate_email(self, value):
-        """Normalize email and check for existing emails."""
+        # Normalize email to prevent case-based enumeration
         normalized_email = value.lower().strip()
 
-        if User.objects.filter(email__iexact=normalized_email).exists():
+        # Check for existing email to prevent duplicates
+        # This provides defense in depth even if DB doesn't enforce uniqueness
+        if User.objects.filter(email=normalized_email).exists():
             raise serializers.ValidationError(
                 "Unable to create account. The email or username may already be in use."
             )
