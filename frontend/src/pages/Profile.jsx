@@ -564,7 +564,7 @@ export default function Profile({ forcedUsername }) {
         }
     };
 
-    const badges = getUserBadges(displayUser);
+
 
     // Show skeleton while user data is loading
     if (!displayUser) {
@@ -667,16 +667,7 @@ export default function Profile({ forcedUsername }) {
                                 <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight">
                                     {displayUser?.username}
                                 </h1>
-                                {badges.map((badge, index) => (
-                                    <span
-                                        key={index}
-                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${badge.bg} ${badge.color} border ${badge.border} shadow-sm animate-fade-in`}
-                                        style={{ animationDelay: `${index * 100}ms` }}
-                                        title={badge.label}
-                                    >
-                                        <badge.icon className="w-3.5 h-3.5" />
-                                    </span>
-                                ))}
+
                             </div>
 
                             {/* Social Cluster - Followers/Following */}
