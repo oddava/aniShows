@@ -42,33 +42,32 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         if username:
             username = username.strip()
-            attrs["username"] = username
 
-        # If username is provided but looks like an email, extract it
-        if username and "@" in username:
-            email = username
-            username = None
+            # If username looks like an email, try to find user by email
+            if "@" in username:
+                try:
+                    user = User.objects.get(email__iexact=username)
+                    attrs["username"] = user.username
+                except User.DoesNotExist:
+                    # Let parent handle the failure
+                    attrs["username"] = username
+            else:
+                # Try case-insensitive username lookup
+                try:
+                    user = User.objects.get(username__iexact=username)
+                    attrs["username"] = user.username
+                except User.DoesNotExist:
+                    # Use original username and let parent handle failure
+                    attrs["username"] = username
 
-        if email and not username:
-            # Try to find user by email with constant-time behavior
-            # Always perform both lookups to prevent timing attacks
-            user_by_email = None
-            user_by_username = None
-
+        elif email:
+            # Try to find user by email
             try:
-                user_by_email = User.objects.get(email=email)
+                user = User.objects.get(email__iexact=email)
+                attrs["username"] = user.username
             except User.DoesNotExist:
+                # Let parent handle the failure
                 pass
-
-            # Perform a dummy query to maintain constant time
-            try:
-                user_by_username = User.objects.get(username="__nonexistent_user_")
-            except User.DoesNotExist:
-                pass
-
-            if user_by_email:
-                attrs["username"] = user_by_email.username
-            # If not found, continue and let parent handle failure
 
         return super().validate(attrs)
 
@@ -118,6 +117,54 @@ class VerifyEmailView(APIView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.auth_service = AuthService()
+
+    def get(self, request, uid=None, token=None):
+        """Handle GET request from email verification link."""
+        # Support both URL path parameters and query parameters
+        uidb64 = uid or request.query_params.get("uid")
+        token = token or request.query_params.get("token")
+
+        if not uidb64 or not token:
+            return Response(
+                {"error": "Missing UID or Token"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        is_valid, user = self.auth_service.verify_email(uidb64, token)
+
+        if is_valid and user:
+            # Generate tokens for auto-login
+            refresh = RefreshToken.for_user(user)
+
+            return Response(
+                {
+                    "message": "Email verified successfully!",
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                    "user": UserSerializer(user, context={"request": request}).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        elif (
+            user
+            and getattr(user, "userprofile", None)
+            and user.userprofile.email_verified
+        ):
+            # Already verified, return tokens
+            refresh = RefreshToken.for_user(user)
+            return Response(
+                {
+                    "message": "Email already verified",
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                    "user": UserSerializer(user, context={"request": request}).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"error": "Invalid or expired token"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     def post(self, request):
         uidb64 = request.data.get("uid")

@@ -8,7 +8,6 @@ from django.contrib.auth import get_user_model
 from anime.models import Anime, UserFavorite
 from api.serializers import FavoriteSerializer
 from api.permissions import EmailVerificationMixin
-from api.cache_utils import invalidate_user_caches
 
 User = get_user_model()
 
@@ -67,12 +66,8 @@ class FavoriteViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
         if not created:
             favorite.delete()
-            # Invalidate user caches - favorites count changed
-            invalidate_user_caches(request.user.id, request.user.username)
             return Response({"is_favorite": False, "message": "Removed from favorites"})
 
-        # Invalidate user caches - favorites count changed
-        invalidate_user_caches(request.user.id, request.user.username)
         return Response({"is_favorite": True, "message": "Added to favorites"})
 
     @action(detail=False, methods=["post"])

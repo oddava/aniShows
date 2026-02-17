@@ -125,6 +125,12 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/verify-email/", VerifyEmailView.as_view(), name="verify_email"),
+    # Email verification link (GET endpoint for email links)
+    path(
+        "verify-email/<str:uid>/<str:token>/",
+        VerifyEmailView.as_view(),
+        name="verify_email_link",
+    ),
     path(
         "auth/resend-verification/",
         ResendVerificationView.as_view(),

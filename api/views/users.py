@@ -9,259 +9,16 @@ from django.core.cache import cache
 from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
 from datetime import timedelta
 import logging
-import time
 
 from api.serializers import (
     UserSerializer,
     PublicUserSerializer,
     UserProfileUpdateSerializer,
-    UserLightweightSerializer,
 )
-from users.models import UserProfile, UserStats
-from api.cache_utils import invalidate_user_caches
+from users.models import UserProfile
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
-
-
-class UserProfileView(APIView):
-    """
-    Get/update current user profile.
-
-    GET /users/me/ - Returns user profile (cached, fast)
-    Supports 'full' query param for complete stats.
-    """
-
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser, JSONParser]
-
-    def get(self, request):
-        start_time = time.time()
-        user_id = request.user.id
-        is_full = request.query_params.get("full", "false").lower() == "true"
-
-        # Try cache first
-        cache_key = f"user_profile:{user_id}:{'full' if is_full else 'light'}"
-        cached_data = cache.get(cache_key)
-
-        if cached_data:
-            duration = (time.time() - start_time) * 1000
-            logger.debug(f"Profile cache hit for user {user_id}: {duration:.2f}ms")
-            return Response(cached_data)
-
-        # Get user with basic profile
-        try:
-            user = User.objects.select_related("userprofile").get(pk=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=404)
-
-        # Get stats from UserStats table (pre-calculated, fast)
-        stats = None
-        try:
-            stats = UserStats.objects.get(user=user)
-        except UserStats.DoesNotExist:
-            # Trigger async stats creation
-            from users.tasks import update_user_stats
-
-            update_user_stats.delay(user_id)
-
-        # Build response data
-        profile = getattr(user, "userprofile", None)
-        data = {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "date_joined": user.date_joined,
-            "avatar": profile.avatar.url if profile and profile.avatar else None,
-            "banner": profile.banner.url if profile and profile.banner else None,
-            "bio": profile.bio if profile else None,
-            "is_private": profile.is_private if profile else False,
-            "email_verified": profile.email_verified if profile else False,
-            "social_links": profile.social_links if profile else [],
-            "points": profile.points if profile else 0,
-            "has_password": user.has_usable_password(),
-            "is_staff": user.is_staff,
-            "is_superuser": user.is_superuser,
-        }
-
-        # Add stats from UserStats table
-        if stats:
-            data.update(
-                {
-                    "followers_count": stats.followers_count,
-                    "following_count": stats.following_count,
-                    "anime_count": stats.anime_count,
-                    "episodes_watched": stats.episodes_watched,
-                    "total_minutes": getattr(stats, "total_minutes", 0),
-                    "days_watched": round(stats.days_watched, 1),
-                    "mean_score": round(stats.mean_score, 1)
-                    if stats.mean_score
-                    else None,
-                    "favorites_count": stats.favorites_count,
-                    "reviews_count": stats.reviews_count,
-                }
-            )
-        else:
-            # Fallback: minimal stats
-            data.update(
-                {
-                    "followers_count": 0,
-                    "following_count": 0,
-                    "anime_count": 0,
-                    "episodes_watched": 0,
-                    "total_minutes": 0,
-                    "days_watched": 0.0,
-                    "mean_score": None,
-                    "favorites_count": 0,
-                    "reviews_count": 0,
-                }
-            )
-
-        # Cache for 5 minutes (300 seconds)
-        # Short TTL ensures fresh data while reducing DB load
-        cache.set(cache_key, data, timeout=300)
-
-        duration = (time.time() - start_time) * 1000
-        logger.info(f"Profile fetched for user {user_id}: {duration:.2f}ms")
-
-        return Response(data)
-
-    def patch(self, request):
-        serializer = UserProfileUpdateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=400)
-
-        user = request.user
-
-        # Handle username change
-        new_username = serializer.validated_data.get("username")
-        if new_username and new_username != user.username:
-            profile, _ = UserProfile.objects.get_or_create(user=user)
-
-            # Check cooldown
-            if profile.last_username_change:
-                elapsed = timezone.now() - profile.last_username_change
-                if elapsed < timedelta(days=14):
-                    days_left = 14 - elapsed.days
-                    return Response(
-                        {
-                            "username": f"You can change your username again in {days_left} days."
-                        },
-                        status=400,
-                    )
-
-            # Check availability
-            if User.objects.filter(username=new_username).exists():
-                return Response(
-                    {"username": "This username is already taken."}, status=400
-                )
-
-            user.username = new_username
-            user.save()
-            profile.last_username_change = timezone.now()
-            profile.save()
-
-        # Update profile fields
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-
-        if "avatar" in serializer.validated_data:
-            profile.avatar = serializer.validated_data["avatar"]
-        if "banner" in serializer.validated_data:
-            profile.banner = serializer.validated_data["banner"]
-        if "bio" in serializer.validated_data:
-            profile.bio = serializer.validated_data["bio"]
-        if "is_private" in serializer.validated_data:
-            profile.is_private = serializer.validated_data["is_private"]
-        if "social_links" in serializer.validated_data:
-            profile.social_links = serializer.validated_data["social_links"]
-
-        profile.save()
-
-        # Invalidate caches
-        self._invalidate_user_caches(user.id, user.username)
-
-        # Return fresh data
-        return self.get(request)
-
-    def _invalidate_user_caches(self, user_id, username):
-        """Invalidate all user-related caches."""
-        invalidate_user_caches(user_id, username)
-
-
-class UserStatsView(APIView):
-    """Get detailed user statistics (separate endpoint for heavy calculations)."""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        user_id = request.user.id
-        cache_key = f"user_stats:{user_id}"
-
-        # Try cache first
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return Response(cached_data)
-
-        # Try UserStats table first (fast)
-        try:
-            stats = UserStats.objects.get(user=request.user)
-            data = {
-                "favorites_count": stats.favorites_count,
-                "reviews_count": stats.reviews_count,
-                "anime_count": stats.anime_count,
-                "episodes_watched": stats.episodes_watched,
-                "total_minutes": getattr(stats, "total_minutes", 0),
-                "days_watched": round(stats.days_watched, 1),
-                "mean_score": round(stats.mean_score, 1) if stats.mean_score else 0,
-                "last_updated": stats.last_updated,
-            }
-            cache.set(cache_key, data, timeout=300)
-            return Response(data)
-        except UserStats.DoesNotExist:
-            pass
-
-        # Fallback: calculate on the fly (slow)
-        from users.models import UserAnimeList
-
-        favorites_count = request.user.favorites.count()
-        reviews_count = request.user.reviews.count()
-        anime_count = UserAnimeList.objects.filter(user=request.user).count()
-
-        episodes_watched = (
-            UserAnimeList.objects.filter(user=request.user).aggregate(
-                total=Sum("episodes_watched")
-            )["total"]
-            or 0
-        )
-
-        total_minutes = (
-            UserAnimeList.objects.filter(user=request.user)
-            .annotate(
-                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
-            )
-            .aggregate(total=Sum("entry_minutes"))["total"]
-            or 0
-        )
-
-        mean_score = UserAnimeList.objects.filter(
-            user=request.user, score__gt=0
-        ).aggregate(avg=Avg("score"))["avg"]
-
-        days_watched = total_minutes / 1440.0
-
-        data = {
-            "favorites_count": favorites_count,
-            "reviews_count": reviews_count,
-            "anime_count": anime_count,
-            "episodes_watched": episodes_watched,
-            "total_minutes": total_minutes,
-            "days_watched": round(days_watched, 1),
-            "mean_score": round(mean_score, 1) if mean_score else 0,
-            "last_updated": timezone.now(),
-        }
-
-        cache.set(cache_key, data, timeout=300)
-        return Response(data)
 
 
 def get_annotated_user_queryset(user=None, lightweight=False):
@@ -342,6 +99,136 @@ def get_annotated_user_queryset(user=None, lightweight=False):
         )
 
     return queryset
+
+
+class UserProfileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        # Get user with annotations
+        user = get_annotated_user_queryset().get(pk=request.user.pk)
+        serializer = UserSerializer(user, context={"request": request})
+        return Response(serializer.data)
+
+    def patch(self, request):
+        serializer = UserProfileUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            # Username Change Logic
+            new_username = serializer.validated_data.get("username")
+            if new_username and new_username != request.user.username:
+                profile, created = UserProfile.objects.get_or_create(user=request.user)
+
+                # Check for cooldown
+                if profile.last_username_change:
+                    elapsed = timezone.now() - profile.last_username_change
+                    if elapsed < timedelta(days=14):
+                        days_left = 14 - elapsed.days
+                        return Response(
+                            {
+                                "username": f"You can change your username again in {days_left} days."
+                            },
+                            status=400,
+                        )
+
+                # Check availability (User model handles unique constraint but good to be explicit for API)
+                if User.objects.filter(username=new_username).exists():
+                    return Response(
+                        {"username": "This username is already taken."},
+                        status=400,
+                    )
+
+                request.user.username = new_username
+                request.user.save()
+
+                # Update timestamp
+                profile.last_username_change = timezone.now()
+                profile.save()
+
+            # Update profile fields - only from validated_data (mass assignment protection)
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            if "avatar" in serializer.validated_data:
+                profile.avatar = serializer.validated_data["avatar"]
+            if "banner" in serializer.validated_data:
+                profile.banner = serializer.validated_data["banner"]
+            if "bio" in serializer.validated_data:
+                profile.bio = serializer.validated_data["bio"]
+            if "is_private" in serializer.validated_data:
+                profile.is_private = serializer.validated_data["is_private"]
+
+            # Social links
+            if "social_links" in serializer.validated_data:
+                profile.social_links = serializer.validated_data["social_links"]
+
+            profile.save()
+
+            # Invalidate public profile cache using versioning
+            # This will invalidate ALL cached versions (authenticated and anonymous)
+            username = request.user.username
+            version_key = f"profile_cache_version:{username}"
+            try:
+                cache.incr(version_key)
+            except ValueError:
+                cache.set(version_key, 1, timeout=3600)
+
+            # Get user with annotations after update
+            user = get_annotated_user_queryset().get(pk=request.user.pk)
+            return Response(UserSerializer(user, context={"request": request}).data)
+        return Response(serializer.errors, status=400)
+
+
+class UserStatsView(APIView):
+    """Get user statistics for the current user."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from users.models import UserAnimeList
+
+        user = request.user
+
+        # Get counts
+        favorites_count = user.favorites.count()
+        reviews_count = user.reviews.count()
+        anime_count = UserAnimeList.objects.filter(user=user).count()
+
+        # Calculate episodes watched
+        episodes_watched = (
+            UserAnimeList.objects.filter(user=user).aggregate(
+                total=Sum("episodes_watched")
+            )["total"]
+            or 0
+        )
+
+        # Calculate total minutes watched
+        total_minutes = (
+            UserAnimeList.objects.filter(user=user)
+            .annotate(
+                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
+            )
+            .aggregate(total=Sum("entry_minutes"))["total"]
+            or 0
+        )
+
+        # Calculate mean score (excluding 0 scores)
+        mean_score = UserAnimeList.objects.filter(user=user, score__gt=0).aggregate(
+            avg=Avg("score")
+        )["avg"]
+
+        # Calculate days watched
+        days_watched = total_minutes / 1440.0
+
+        return Response(
+            {
+                "favorites_count": favorites_count,
+                "reviews_count": reviews_count,
+                "anime_count": anime_count,
+                "episodes_watched": episodes_watched,
+                "total_minutes": total_minutes,
+                "days_watched": round(days_watched, 1),
+                "mean_score": round(mean_score, 1) if mean_score else 0,
+            }
+        )
 
 
 class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
@@ -501,3 +388,5 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                 return True
 
         return False
+
+        return Response(data)
