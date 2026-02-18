@@ -272,12 +272,18 @@ if [ "$REBUILD_FRONTEND" = true ]; then
             # Remove old container if exists from previous failed build
             docker rm -f frontend_builder 2>/dev/null || true
             docker create --name frontend_builder anishows_frontend:builder
-            # Remove old dist folder if exists
-            rm -rf ./frontend/dist
+            
+            # Remove old dist folder if exists (using Docker to avoid permission issues)
+            echo -e "${BLUE}   Cleaning old dist folder...${NC}"
+            docker run --rm -v "$(pwd)/frontend:/host" alpine:latest rm -rf /host/dist 2>/dev/null || true
+            
             # Copy with proper handling of permissions
-            docker cp frontend_builder:/app/dist ./frontend/ 2>/dev/null || true
-            # Fix permissions on the copied files
-            chmod -R 755 ./frontend/dist 2>/dev/null || true
+            docker cp frontend_builder:/app/dist ./frontend/
+            
+            # Fix permissions on the copied files using Docker (to handle root ownership)
+            docker run --rm -v "$(pwd)/frontend/dist:/dist" alpine:latest chmod -R 755 /dist 2>/dev/null || true
+            docker run --rm -v "$(pwd)/frontend/dist:/dist" alpine:latest chown -R "$(id -u):$(id -g)" /dist 2>/dev/null || true
+            
             docker rm -f frontend_builder 2>/dev/null || true
             
             BUILD_SUCCESS=true
