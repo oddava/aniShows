@@ -67,6 +67,8 @@ export default defineConfig(({ mode }) => ({
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Disable source maps in all outputs
+        sourcemap: false,
       },
     },
     // Minification options - use esbuild (faster than terser)
@@ -77,8 +79,9 @@ export default defineConfig(({ mode }) => ({
     // Optimize bundle size
     target: 'es2015',
     sourcemap: false,
-    // CSS optimization
+    // CSS optimization - no source maps in production
     cssMinify: true,
+    cssCodeSplit: true,
     // Report bundle size
     reportCompressedSize: true,
     // Enable chunk size warnings

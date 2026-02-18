@@ -972,11 +972,13 @@ function OverviewTab({ anime, accentColor }) {  // eslint-disable-line no-unused
                         </h2>
                         <div className="relative rounded-2xl overflow-hidden border border-gray-800 aspect-video shadow-2xl">
                             <iframe
-                                src={`https://www.youtube.com/embed/${videoId}`}
+                                src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
                                 title="Trailer"
                                 frameBorder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allow="fullscreen"
                                 allowFullScreen
+                                sandbox="allow-scripts allow-same-origin allow-presentation"
+                                loading="lazy"
                                 className="absolute inset-0 w-full h-full"
                             />
                         </div>
