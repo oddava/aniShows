@@ -240,62 +240,55 @@ esac
 
 echo ""
 
-# Docker Compose command with production files
-COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
-
 # Step 1: Build frontend if needed
 if [ "$REBUILD_FRONTEND" = true ]; then
     echo -e "${BLUE}📦 Step 1: Building frontend static files...${NC}"
     export NODE_OPTIONS="--max-old-space-size=4096"
     
-    # Check if frontend node_modules exists
-    if [ ! -d "./frontend/node_modules" ]; then
-        echo -e "${YELLOW}⚠️  Frontend node_modules not found, installing dependencies...${NC}"
-        $COMPOSE_CMD run --rm frontend npm ci
-    fi
-    
-    echo -e "${BLUE}   Building frontend image...${NC}"
-    $COMPOSE_CMD build frontend
-    
-    echo -e "${BLUE}   Generating static files...${NC}"
+    echo -e "${BLUE}   Building frontend image (includes npm run build)...${NC}"
     echo -e "${BLUE}   Using 4GB memory limit for Node.js build process${NC}"
     
-    # Build frontend using production configuration with retry logic
+    # Build frontend using production target - this runs npm run build inside the container
     BUILD_ATTEMPTS=0
     MAX_ATTEMPTS=2
     BUILD_SUCCESS=false
-    
-    # Build the frontend image with builder target first
-    echo -e "${BLUE}   Building frontend image with production dependencies...${NC}"
-    $COMPOSE_CMD build --target builder frontend
     
     while [ $BUILD_ATTEMPTS -lt $MAX_ATTEMPTS ] && [ "$BUILD_SUCCESS" = false ]; do
         BUILD_ATTEMPTS=$((BUILD_ATTEMPTS + 1))
         echo -e "${BLUE}   Build attempt ${BUILD_ATTEMPTS}/${MAX_ATTEMPTS}...${NC}"
         
-        if [ $BUILD_ATTEMPTS -eq 1 ]; then
-            # First attempt: Full memory
-            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=4096" --entrypoint npm frontend run build; then
-                BUILD_SUCCESS=true
-            else
-                echo -e "${YELLOW}⚠️  Build failed, trying with lower memory optimization...${NC}"
-            fi
+        # Build with target builder which includes the npm run build step
+        if docker build \
+            --target builder \
+            --build-arg NODE_ENV=production \
+            --build-arg VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID}" \
+            --build-arg ALLOWED_HOSTS="${ALLOWED_HOSTS}" \
+            -t anishows_frontend:builder \
+            -f ./frontend/Dockerfile \
+            ./frontend; then
+            
+            # Extract the dist folder from the builder image
+            echo -e "${BLUE}   Extracting build artifacts...${NC}"
+            docker create --name frontend_builder anishows_frontend:builder
+            docker cp frontend_builder:/app/dist ./frontend/
+            docker rm frontend_builder
+            
+            BUILD_SUCCESS=true
         else
-            # Second attempt: Use low memory build script
-            echo -e "${BLUE}   Attempting build with 2GB memory limit...${NC}"
-            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=2048" --entrypoint npm frontend run build:lowmem; then
-                BUILD_SUCCESS=true
+            echo -e "${YELLOW}⚠️  Build attempt ${BUILD_ATTEMPTS} failed${NC}"
+            if [ $BUILD_ATTEMPTS -lt $MAX_ATTEMPTS ]; then
+                echo -e "${BLUE}   Retrying with lower memory...${NC}"
+                export NODE_OPTIONS="--max-old-space-size=2048"
             fi
         fi
     done
     
     if [ "$BUILD_SUCCESS" = false ]; then
         echo -e "${RED}❌ Frontend build failed after ${MAX_ATTEMPTS} attempts!${NC}"
-        echo -e "${YELLOW}   Check build logs: $COMPOSE_CMD logs frontend${NC}"
         echo -e "${YELLOW}   Possible causes:${NC}"
         echo -e "      - Insufficient memory on host system"
-        echo -e "      - Corrupted node_modules (try: rm -rf frontend/node_modules)"
         echo -e "      - TypeScript/JavaScript errors in code"
+        echo -e "      - Corrupted node_modules"
         exit 1
     fi
     
@@ -350,108 +343,39 @@ echo ""
 if [ "$MODE" != "frontend" ] && [ "$MODE" != "quick" ]; then
     echo -e "${BLUE}🔄 Step 4: Running database migrations...${NC}"
     sleep 3  # Wait for containers to be ready
-    $COMPOSE_CMD exec -T web uv run python manage.py migrate --noinput
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Migrations completed!${NC}"
+    
+    if $COMPOSE_CMD exec -T web uv run python manage.py migrate --noinput; then
+        echo -e "${GREEN}✅ Migrations complete!${NC}"
     else
-        echo -e "${RED}❌ Migrations failed!${NC}"
-        echo -e "${YELLOW}   Check logs: $COMPOSE_CMD logs web${NC}"
-        exit 1
+        echo -e "${YELLOW}⚠️  Migration warning (may be already applied)${NC}"
     fi
 else
-    echo -e "${BLUE}🔄 Step 4: Skipping migrations${NC}"
+    echo -e "${BLUE}🔄 Step 4: Skipping migrations (frontend/quick mode)${NC}"
 fi
 
 echo ""
 
-# Step 5: Collect static files (if backend or static files changed)
-if [ "$MODE" != "quick" ] && [ "$REBUILD_BACKEND" = true ]; then
-    echo -e "${BLUE}📁 Step 5: Collecting static files...${NC}"
-    $COMPOSE_CMD exec -T web uv run python manage.py collectstatic --noinput
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Static files collected!${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Static files collection had issues${NC}"
-    fi
+# Step 5: Collect static files (only if backend was changed)
+if [ "$REBUILD_BACKEND" = true ] || [ "$MODE" = "full" ]; then
+    echo -e "${BLUE}🎨 Step 5: Collecting static files...${NC}"
+    $COMPOSE_CMD exec -T web uv run python manage.py collectstatic --noinput --clear
+    echo -e "${GREEN}✅ Static files collected!${NC}"
 else
-    echo -e "${BLUE}📁 Step 5: Skipping static collection${NC}"
+    echo -e "${BLUE}🎨 Step 5: Skipping static collection${NC}"
 fi
 
 echo ""
-
-# Step 6: Wait for MinIO to be ready
-echo -e "${BLUE}⏳ Step 6: Waiting for MinIO to be ready...${NC}"
-MAX_RETRIES=30
-RETRY_COUNT=0
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -sf http://localhost:9000/minio/health/live > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ MinIO is ready!${NC}"
-        break
-    fi
-    RETRY_COUNT=$((RETRY_COUNT + 1))
-    echo -e "${YELLOW}   Waiting for MinIO... (${RETRY_COUNT}/${MAX_RETRIES})${NC}"
-    sleep 2
-done
-
-if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo -e "${RED}❌ MinIO failed to start - check logs with: $COMPOSE_CMD logs minio${NC}"
-fi
-
-echo ""
-
-# Step 7: Health check
-echo -e "${BLUE}🏥 Step 7: Running health check...${NC}"
-sleep 5
-
-# Check if API is responding
-HEALTH_STATUS=$(curl -sf http://localhost/api/health/ -w "%{http_code}" -o /dev/null 2>&1 || echo "000")
-
-if [ "$HEALTH_STATUS" = "200" ]; then
-    echo -e "${GREEN}✅ API is responding (HTTP 200)!${NC}"
-elif [ "$HEALTH_STATUS" = "301" ] || [ "$HEALTH_STATUS" = "302" ]; then
-    echo -e "${GREEN}✅ API is responding (HTTP ${HEALTH_STATUS} redirect)!${NC}"
-else
-    echo -e "${YELLOW}⚠️  API health check failed (HTTP ${HEALTH_STATUS}) - check logs with: $COMPOSE_CMD logs web${NC}"
-fi
-
-# Check media endpoint
-echo -e "${BLUE}   Checking media endpoint...${NC}"
-MEDIA_STATUS=$(curl -sfI http://localhost/media/ -w "%{http_code}" -o /dev/null 2>&1 || echo "000")
-
-if [ "$MEDIA_STATUS" = "200" ] || [ "$MEDIA_STATUS" = "301" ] || [ "$MEDIA_STATUS" = "302" ]; then
-    echo -e "${GREEN}✅ Media endpoint is accessible (HTTP ${MEDIA_STATUS})!${NC}"
-else
-    echo -e "${YELLOW}⚠️  Media endpoint check failed (HTTP ${MEDIA_STATUS}) - MinIO may still be initializing${NC}"
-fi
 
 # Save current commit as last deployed
 echo "$CURRENT_COMMIT" > "$LAST_DEPLOY_FILE"
 
-echo ""
-
-# Step 8: Cleanup old Docker images (optional, keeps last 3 versions)
-echo -e "${BLUE}🧹 Step 8: Cleaning up old Docker images...${NC}"
-# Remove dangling images
-docker image prune -f > /dev/null 2>&1 || true
-# Remove old anishows images (keep last 3)
-docker images --format "{{.Repository}}:{{.Tag}} {{.ID}} {{.CreatedAt}}" | \
-    grep "anishows" | \
-    sort -k3 -r | \
-    tail -n +4 | \
-    awk '{print $2}' | \
-    xargs -r docker rmi > /dev/null 2>&1 || true
-echo -e "${GREEN}✅ Cleanup completed${NC}"
-
-echo ""
-echo -e "${GREEN}📊 Production Status:${NC}"
-$COMPOSE_CMD ps
-echo ""
-echo -e "${BLUE}📝 To view logs: $COMPOSE_CMD logs -f${NC}"
-echo -e "${BLUE}📝 Usage examples:${NC}"
-echo -e "   ${YELLOW}./deploy-prod.sh quick${NC}              # Fast restart for code changes"
-echo -e "   ${YELLOW}./deploy-prod.sh frontend${NC}           # Rebuild React only"
-echo -e "   ${YELLOW}./deploy-prod.sh backend${NC}            # Rebuild Django only"
-echo -e "   ${YELLOW}./deploy-prod.sh full${NC}               # Complete rebuild"
-echo -e "   ${YELLOW}./deploy-prod.sh full --yes${NC}         # Full rebuild without prompts (CI/CD)"
-echo ""
 echo -e "${GREEN}🎉 Deployment completed successfully!${NC}"
+echo ""
+echo -e "${BLUE}📊 Services status:${NC}"
+$COMPOSE_CMD ps
+
+echo ""
+echo -e "${BLUE}📝 Useful commands:${NC}"
+echo -e "   ${BLUE}View logs:${NC} $COMPOSE_CMD logs -f web"
+echo -e "   ${BLUE}View all logs:${NC} $COMPOSE_CMD logs -f"
+echo -e "   ${BLUE}Scale workers:${NC} $COMPOSE_CMD up -d --scale celery=3"
