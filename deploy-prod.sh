@@ -265,13 +265,17 @@ if [ "$REBUILD_FRONTEND" = true ]; then
     MAX_ATTEMPTS=2
     BUILD_SUCCESS=false
     
+    # Build the frontend image with builder target first
+    echo -e "${BLUE}   Building frontend image with production dependencies...${NC}"
+    $COMPOSE_CMD build --target builder frontend
+    
     while [ $BUILD_ATTEMPTS -lt $MAX_ATTEMPTS ] && [ "$BUILD_SUCCESS" = false ]; do
         BUILD_ATTEMPTS=$((BUILD_ATTEMPTS + 1))
         echo -e "${BLUE}   Build attempt ${BUILD_ATTEMPTS}/${MAX_ATTEMPTS}...${NC}"
         
         if [ $BUILD_ATTEMPTS -eq 1 ]; then
             # First attempt: Full memory
-            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=4096" frontend npm run build; then
+            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=4096" --entrypoint npm frontend run build; then
                 BUILD_SUCCESS=true
             else
                 echo -e "${YELLOW}⚠️  Build failed, trying with lower memory optimization...${NC}"
@@ -279,7 +283,7 @@ if [ "$REBUILD_FRONTEND" = true ]; then
         else
             # Second attempt: Use low memory build script
             echo -e "${BLUE}   Attempting build with 2GB memory limit...${NC}"
-            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=2048" frontend npm run build:lowmem; then
+            if $COMPOSE_CMD run --rm -e NODE_OPTIONS="--max-old-space-size=2048" --entrypoint npm frontend run build:lowmem; then
                 BUILD_SUCCESS=true
             fi
         fi
