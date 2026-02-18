@@ -269,6 +269,8 @@ if [ "$REBUILD_FRONTEND" = true ]; then
             
             # Extract the dist folder from the builder image
             echo -e "${BLUE}   Extracting build artifacts...${NC}"
+            # Remove old container if exists from previous failed build
+            docker rm -f frontend_builder 2>/dev/null || true
             docker create --name frontend_builder anishows_frontend:builder
             # Remove old dist folder if exists
             rm -rf ./frontend/dist
@@ -276,7 +278,7 @@ if [ "$REBUILD_FRONTEND" = true ]; then
             docker cp frontend_builder:/app/dist ./frontend/ 2>/dev/null || true
             # Fix permissions on the copied files
             chmod -R 755 ./frontend/dist 2>/dev/null || true
-            docker rm frontend_builder
+            docker rm -f frontend_builder 2>/dev/null || true
             
             BUILD_SUCCESS=true
         else
