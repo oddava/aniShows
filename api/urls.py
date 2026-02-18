@@ -1,6 +1,5 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from .views import (
     AnimeViewSet,
@@ -25,6 +24,8 @@ from .views import (
     RecommendationsViewSet,
     FollowViewSet,
     health_check,
+    MetricsView,
+    LoggingTokenRefreshView,
 )
 from .notification_views import (
     NotificationViewSet,
@@ -96,9 +97,13 @@ urlpatterns = [
     ),
     path("", include(router.urls)),
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/refresh/", LoggingTokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/verify-email/", VerifyEmailView.as_view(), name="verify_email"),
+    path(
+        "verify-email/<str:uid>/<str:token>/",
+        VerifyEmailView.as_view(),
+        name="verify_email",
+    ),
     path(
         "auth/resend-verification/",
         ResendVerificationView.as_view(),

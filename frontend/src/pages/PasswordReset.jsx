@@ -14,7 +14,7 @@ export default function PasswordReset() {
         setMessage('');
 
         try {
-            await authApi.resetPassword({ email });
+            await authApi.requestPasswordReset(email);
             setStatus('success');
             setMessage('If an account exists with this email, a reset link has been sent.');
         } catch (err) {

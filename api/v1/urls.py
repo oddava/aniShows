@@ -7,8 +7,6 @@ All endpoints under /api/v1/ are defined here.
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView
-
 from api.views import (
     AnimeViewSet,
     GenreViewSet,
@@ -28,6 +26,7 @@ from api.views import (
     PublicUserProfileViewSet,
     DeleteAccountView,
     ChangeEmailView,
+    LoggingTokenRefreshView,
     ConfirmEmailChangeView,
     RecommendationsViewSet,
     FollowViewSet,
@@ -122,9 +121,13 @@ urlpatterns = [
     path("", include(router.urls)),
     # Authentication
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/refresh/", LoggingTokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/verify-email/", VerifyEmailView.as_view(), name="verify_email"),
+    path(
+        "verify-email/<str:uid>/<str:token>/",
+        VerifyEmailView.as_view(),
+        name="verify_email",
+    ),
     path(
         "auth/resend-verification/",
         ResendVerificationView.as_view(),

@@ -356,8 +356,8 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
@@ -535,18 +535,18 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"days": 90},
         "options": {"queue": "low_priority"},
     },
-    # =========================================================================
-    # LEGACY TASKS (Backward Compatibility)
-    # =========================================================================
-    # These tasks are deprecated in favor of unified tasks above.
-    # They will be removed in a future version.
-    #
-    # "sync-trending-every-hour": {
-    #     "task": "anime.tasks.sync_trending_anime",
-    #     "schedule": crontab(minute=5),
-    #     "args": (50,),
-    #     "options": {"queue": "default"},
-    # },
+    # Maintenance Tasks
+    "cleanup-task-results-daily": {
+        "task": "core.tasks.cleanup_tasks.cleanup_old_task_results",
+        "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM
+        "kwargs": {"days": 7, "batch_size": 1000},
+        "options": {"queue": "low_priority"},
+    },
+    "health-check-workers-hourly": {
+        "task": "core.tasks.cleanup_tasks.health_check_workers",
+        "schedule": crontab(minute=15),  # Every hour at 15 min past
+        "options": {"queue": "low_priority"},
+    },
 }
 
 # =============================================================================

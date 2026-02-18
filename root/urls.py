@@ -20,11 +20,14 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from api.views.monitoring import MetricsView
+
 urlpatterns = [
     path("api/v1/", include("api.v1.urls")),
     path("django-admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),
     path("i18n/", include("django.conf.urls.i18n")),
+    path("metrics", MetricsView.as_view(), name="metrics"),
 ]
 
 # Only serve media files if DEBUG is True

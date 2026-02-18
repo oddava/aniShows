@@ -1,6 +1,6 @@
 # Re-export for backwards compatibility during migration
 from .anime import AnimeViewSet, GenreViewSet, StudioViewSet
-from .auth import CustomTokenObtainPairView, RegisterView
+from .auth import CustomTokenObtainPairView, RegisterView, LoggingTokenRefreshView
 from .auth import (
     VerifyEmailView,
     ResendVerificationView,
@@ -20,3 +20,4 @@ from .account_management import (
     ChangePasswordView,
 )
 from .health import health_check
+from .monitoring import MetricsView

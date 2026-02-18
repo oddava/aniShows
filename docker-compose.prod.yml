@@ -82,7 +82,7 @@ services:
 
   # Celery - Reduced concurrency for EC2
   celery:
-    command: ["uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,low_priority", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000"]
+    command: ["uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,low_priority,notifications", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000"]
     deploy:
       resources:
         limits:

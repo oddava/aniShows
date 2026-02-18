@@ -1,12 +1,26 @@
 /**
  * Production-safe logging utility
- * Disables console methods in production environment
+ * Logs critical authentication errors in production while keeping debug logs disabled
  */
 
 const isProduction = import.meta.env.PROD;
 
 /**
- * Safe console wrapper that only logs in development
+ * Check if the error is an authentication-related error that should always be logged
+ */
+const isAuthError = (...args) => {
+    const message = args.join(' ').toLowerCase();
+    return message.includes('token') || 
+           message.includes('auth') || 
+           message.includes('refresh') ||
+           message.includes('login') ||
+           message.includes('logout') ||
+           message.includes('unauthorized') ||
+           message.includes('401');
+};
+
+/**
+ * Safe console wrapper that logs in development and critical errors in production
  */
 export const logger = {
     log: (...args) => {
@@ -15,18 +29,21 @@ export const logger = {
         }
     },
     error: (...args) => {
-        if (!isProduction) {
-            console.error(...args);
+        // Always log auth errors, even in production
+        if (!isProduction || isAuthError(...args)) {
+            console.error('[AuthError]', ...args);
         }
     },
     warn: (...args) => {
-        if (!isProduction) {
-            console.warn(...args);
+        // Always log auth warnings, even in production
+        if (!isProduction || isAuthError(...args)) {
+            console.warn('[AuthWarning]', ...args);
         }
     },
     info: (...args) => {
-        if (!isProduction) {
-            console.info(...args);
+        // Always log auth info messages
+        if (!isProduction || isAuthError(...args)) {
+            console.info('[AuthInfo]', ...args);
         }
     },
     debug: (...args) => {
@@ -41,7 +58,7 @@ export const logger = {
  * Useful for critical errors that should be visible in production debugging
  */
 export const criticalError = (...args) => {
-    console.error(...args);
+    console.error('[CriticalError]', ...args);
 };
 
 export default logger;

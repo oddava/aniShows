@@ -15,14 +15,14 @@ export default function VerifyEmail() {
     useEffect(() => {
         const verify = async () => {
             try {
-                const response = await authApi.verifyEmail({ uid, token });
+                const response = await authApi.verifyEmail(uid, token);
                 logger.log("VerifyEmail: API success", response.data);
 
                 // If backend returns tokens, auto-login
                 if (response.data.access && response.data.refresh) {
                     logger.log("VerifyEmail: Tokens received, calling setTokens");
-                    // Pass only tokens, let setTokens fetch profile to verify they work
-                    await setTokens(response.data.access, response.data.refresh);
+                    // Pass tokens and user data to update email_verified status
+                    await setTokens(response.data.access, response.data.refresh, response.data.user);
 
                     // Redirect after a short delay so they can see the success message
                     setTimeout(() => {

@@ -23,7 +23,7 @@ export default function PasswordResetConfirm() {
         setStatus('loading');
 
         try {
-            await authApi.resetPasswordConfirm({ uid, token, password });
+            await authApi.resetPassword(uid, token, password);
             navigate('/login', {
                 state: { message: 'Password reset successfully. Please login with your new password.' }
             });

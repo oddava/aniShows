@@ -112,5 +112,10 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "api.auth": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }

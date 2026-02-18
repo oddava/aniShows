@@ -6,16 +6,20 @@ Provides:
 - Decorator utilities for retry configuration
 - Service management helpers
 - Metrics collection
+- Task deduplication with idempotency keys
+- Lock-based task execution prevention
 """
 
 import asyncio
 import functools
+import hashlib
 import logging
 import time
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar, Union
 from contextlib import asynccontextmanager
 from celery import Task
 from celery.exceptions import MaxRetriesExceededError
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +120,8 @@ class BaseTask(Task):
     - Metrics collection
     - Structured logging
     - Async/sync bridge utilities
+    - Task deduplication with idempotency keys
+    - Task locking to prevent concurrent execution
     """
 
     abstract = True
@@ -124,9 +130,109 @@ class BaseTask(Task):
     service_class = None
     service_kwargs = {}
 
+    # Task deduplication settings
+    idempotency_ttl = 3600  # 1 hour default
+    enable_deduplication = False
+    enable_locking = False
+    lock_timeout = 300  # 5 minutes default
+
     def __init__(self):
         super().__init__()
         self.metrics = TaskMetrics()
+
+    def _generate_idempotency_key(self, args, kwargs):
+        """Generate idempotency key from task arguments."""
+        key_data = f"{self.name}:{str(args)}:{str(kwargs)}"
+        return hashlib.sha256(key_data.encode()).hexdigest()
+
+    def _get_lock_key(self, args, kwargs):
+        """Generate lock key for task execution."""
+        return f"celery:lock:{self._generate_idempotency_key(args, kwargs)}"
+
+    def _get_idempotency_cache_key(self, args, kwargs):
+        """Generate cache key for idempotency check."""
+        return f"celery:idempotency:{self._generate_idempotency_key(args, kwargs)}"
+
+    def apply_async(
+        self,
+        args=None,
+        kwargs=None,
+        task_id=None,
+        producer=None,
+        link=None,
+        link_error=None,
+        shadow=None,
+        **options,
+    ):
+        """
+        Override apply_async to support idempotency and locking.
+
+        Args:
+            idempotency_key: Custom idempotency key (optional)
+            skip_if_running: Skip if same task is currently running
+        """
+        task_args = args or ()
+        task_kwargs = kwargs or {}
+
+        # Check idempotency
+        if self.enable_deduplication:
+            idempotency_key = options.pop("idempotency_key", None)
+            if not idempotency_key:
+                idempotency_key = self._generate_idempotency_key(task_args, task_kwargs)
+
+            cache_key = f"celery:idempotency:{idempotency_key}"
+
+            # Check if this task was recently executed
+            if cache.get(cache_key):
+                logger.info(
+                    f"Task {self.name} skipped due to idempotency (key: {idempotency_key})"
+                )
+                # Return a mock AsyncResult indicating duplicate
+                from celery.result import EagerResult
+
+                return EagerResult(
+                    task_id or self.app.gen_task_name(self.name, self.name),
+                    {
+                        "status": "skipped",
+                        "reason": "duplicate",
+                        "idempotency_key": idempotency_key,
+                    },
+                    "SUCCESS",
+                )
+
+            # Store idempotency marker before execution
+            cache.set(cache_key, True, timeout=self.idempotency_ttl)
+
+        return super().apply_async(
+            args=task_args,
+            kwargs=task_kwargs,
+            task_id=task_id,
+            producer=producer,
+            link=link,
+            link_error=link_error,
+            shadow=shadow,
+            **options,
+        )
+
+    def __call__(self, *args, **kwargs):
+        """Execute task with optional locking."""
+        if self.enable_locking:
+            lock_key = self._get_lock_key(args, kwargs)
+
+            # Try to acquire lock
+            lock_acquired = cache.add(lock_key, True, timeout=self.lock_timeout)
+
+            if not lock_acquired:
+                logger.warning(f"Task {self.name} skipped - already running")
+                return {"status": "skipped", "reason": "already_running"}
+
+            try:
+                return self.run(*args, **kwargs)
+            finally:
+                # Release lock
+                cache.delete(lock_key)
+        else:
+            return self.run(*args, **kwargs)
 
     @asynccontextmanager
     async def service_context(self, **kwargs):
@@ -159,6 +265,35 @@ class BaseTask(Task):
                 "metrics": self.metrics.to_dict(),
             },
         )
+        # Emit Prometheus metrics
+        try:
+            from anime.services.metrics import (
+                TASK_EXECUTION_TIME,
+                TASK_EXECUTION_COUNT,
+                ANIME_SYNCED,
+            )
+
+            duration = self.metrics.duration
+            queue = getattr(self, "queue", "default")
+
+            # Record execution time
+            TASK_EXECUTION_TIME.labels(
+                task_name=self.name, queue=queue, status="success"
+            ).observe(duration)
+
+            # Record execution count
+            TASK_EXECUTION_COUNT.labels(
+                task_name=self.name, queue=queue, status="success"
+            ).inc()
+
+            # Record anime synced if applicable
+            if hasattr(self, "sync_type") and self.metrics.records_processed > 0:
+                ANIME_SYNCED.labels(
+                    sync_type=getattr(self, "sync_type", "unknown"), source="anilist"
+                ).inc(self.metrics.records_processed)
+
+        except Exception as e:
+            logger.warning(f"Failed to emit Prometheus metrics: {e}")
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Called when task fails."""
@@ -171,6 +306,28 @@ class BaseTask(Task):
                 "exception": str(exc),
             },
         )
+        # Emit Prometheus metrics for failure
+        try:
+            from anime.services.metrics import (
+                TASK_EXECUTION_TIME,
+                TASK_EXECUTION_COUNT,
+            )
+
+            duration = self.metrics.duration
+            queue = getattr(self, "queue", "default")
+
+            # Record execution time
+            TASK_EXECUTION_TIME.labels(
+                task_name=self.name, queue=queue, status="failure"
+            ).observe(duration)
+
+            # Record execution count
+            TASK_EXECUTION_COUNT.labels(
+                task_name=self.name, queue=queue, status="failure"
+            ).inc()
+
+        except Exception as e:
+            logger.warning(f"Failed to emit Prometheus metrics: {e}")
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Called when task retries."""
@@ -232,3 +389,77 @@ def task_with_retry(
 def run_async_in_task(coro):
     """Helper to run async code in sync celery task context."""
     return asyncio.run(coro)
+
+
+def task_with_deduplication(ttl_seconds: int = 3600):
+    """
+    Decorator to enable task deduplication.
+
+    Prevents the same task from running multiple times within the TTL period.
+
+    Args:
+        ttl_seconds: Time-to-live for idempotency cache (default: 1 hour)
+
+    Usage:
+        @shared_task(base=BaseTask, bind=True)
+        @task_with_deduplication(ttl_seconds=1800)
+        def my_task(self, ...):
+            pass
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+
+        # Mark function with deduplication settings
+        wrapper._deduplication_ttl = ttl_seconds
+        wrapper._enable_deduplication = True
+        return wrapper
+
+    return decorator
+
+
+def task_with_lock(timeout_seconds: int = 300):
+    """
+    Decorator to enable task execution locking.
+
+    Prevents concurrent execution of the same task with identical arguments.
+
+    Args:
+        timeout_seconds: Lock timeout in seconds (default: 5 minutes)
+
+    Usage:
+        @shared_task(base=BaseTask, bind=True)
+        @task_with_lock(timeout_seconds=600)
+        def my_task(self, ...):
+            pass
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+
+        # Mark function with locking settings
+        wrapper._lock_timeout = timeout_seconds
+        wrapper._enable_locking = True
+        return wrapper
+
+    return decorator
+
+
+def generate_task_idempotency_key(task_name: str, *args, **kwargs) -> str:
+    """
+    Generate an idempotency key for a task.
+
+    Args:
+        task_name: Name of the task
+        *args: Task positional arguments
+        **kwargs: Task keyword arguments
+
+    Returns:
+        SHA256 hash string representing the idempotency key
+    """
+    key_data = f"{task_name}:{str(args)}:{str(kwargs)}"
+    return hashlib.sha256(key_data.encode()).hexdigest()

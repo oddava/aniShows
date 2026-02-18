@@ -14,6 +14,7 @@ from api import throttling
 from api.serializers import RegisterSerializer, UserSerializer
 from api.services.auth_service import AuthService
 from api.services.email_service import EmailService
+from api.cache_utils import invalidate_user_caches
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -132,6 +133,9 @@ class VerifyEmailView(APIView):
         is_valid, user = self.auth_service.verify_email(uidb64, token)
 
         if is_valid and user:
+            # Invalidate user cache to refresh email_verified status
+            invalidate_user_caches(user.id, user.username)
+
             # Generate tokens for auto-login
             refresh = RefreshToken.for_user(user)
 
@@ -178,6 +182,9 @@ class VerifyEmailView(APIView):
         is_valid, user = self.auth_service.verify_email(uidb64, token)
 
         if is_valid and user:
+            # Invalidate user cache to refresh email_verified status
+            invalidate_user_caches(user.id, user.username)
+
             # Generate tokens for auto-login
             refresh = RefreshToken.for_user(user)
 
@@ -329,3 +336,33 @@ class PasswordResetConfirmView(APIView):
             return Response(
                 {"error": "Invalid or expired link"}, status=status.HTTP_400_BAD_REQUEST
             )
+
+
+from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+
+
+class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
+    """Token refresh serializer with logging for failed attempts."""
+
+    def validate(self, attrs):
+        try:
+            data = super().validate(attrs)
+            logger.info(f"Token refresh successful for user")
+            return data
+        except Exception as e:
+            refresh_token = attrs.get("refresh", "unknown")
+            token_preview = (
+                f"{refresh_token[:20]}..." if len(refresh_token) > 20 else refresh_token
+            )
+            logger.warning(
+                f"Token refresh failed: {str(e)}, token_preview={token_preview}"
+            )
+            raise
+
+
+class LoggingTokenRefreshView(BaseTokenRefreshView):
+    """Token refresh view with logging for monitoring authentication issues."""
+
+    serializer_class = LoggingTokenRefreshSerializer
+    throttle_classes = [throttling.LoginRateThrottle]

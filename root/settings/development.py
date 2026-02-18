@@ -82,6 +82,11 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        "api.auth": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
         "anime": {
             "handlers": ["console"],
             "level": "DEBUG",

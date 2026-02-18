@@ -51,6 +51,20 @@ const isTokenExpired = (token) => {
     }
 };
 
+// Check if token will expire soon (within 5 minutes)
+const willExpireSoon = (token) => {
+    try {
+        const decoded = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        const timeUntilExpiry = decoded.exp - currentTime;
+        return timeUntilExpiry > 0 && timeUntilExpiry < 300; // 5 minutes = 300 seconds
+    } catch {
+        return true;
+    }
+};
+
+const API_BASE_URL = '/api/v1';
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -64,11 +78,53 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
+    const refreshAccessToken = useCallback(async () => {
+        try {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) {
+                throw new Error('No refresh token available');
+            }
+
+            // Check if refresh token itself is expired
+            try {
+                const decoded = jwtDecode(refreshToken);
+                const currentTime = Date.now() / 1000;
+                if (decoded.exp < currentTime) {
+                    throw new Error('Refresh token expired');
+                }
+            } catch (decodeError) {
+                throw new Error('Invalid refresh token');
+            }
+
+            // Use axios directly to avoid interceptors
+            const axios = (await import('axios')).default;
+            const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
+                refresh: refreshToken,
+            });
+
+            const { access, refresh } = response.data;
+            localStorage.setItem('access_token', access);
+            
+            // Update refresh token if rotated
+            if (refresh) {
+                localStorage.setItem('refresh_token', refresh);
+                logger.debug('Refresh token rotated and updated');
+            }
+            
+            logger.info('Token refresh successful on app load');
+            return access;
+        } catch (error) {
+            logger.error('Token refresh failed on app load:', error.message);
+            throw error;
+        }
+    }, []);
+
     const checkAuth = useCallback(async () => {
         const token = localStorage.getItem('access_token');
+        const refreshToken = localStorage.getItem('refresh_token');
         
         if (token && !isTokenExpired(token)) {
-            // INSTANT: Decode token to get user info without API call
+            // Token is valid - proceed as before
             const decodedUser = decodeToken(token);
             if (decodedUser) {
                 
@@ -95,19 +151,59 @@ export function AuthProvider({ children }) {
                     });
                 } catch (error) {
                     // Don't remove tokens - keep using decoded data
+                    logger.warn('Failed to fetch profile during checkAuth:', error.message);
                 }
                 return;
             }
         }
         
+        // Token is expired or missing, but we have a refresh token - try to refresh
+        if (refreshToken) {
+            try {
+                logger.info('Access token expired or missing, attempting refresh...');
+                const newAccessToken = await refreshAccessToken();
+                
+                // Decode and set user from new token
+                const decodedUser = decodeToken(newAccessToken);
+                if (decodedUser) {
+                    if (!decodedUser._needsApiFetch) {
+                        setUser(decodedUser);
+                        setLoading(false);
+                    } else {
+                        setUser({ ...decodedUser, username: 'Loading...' });
+                        setLoading(false);
+                    }
+                    
+                    // Fetch profile in background
+                    try {
+                        const response = await authApi.getProfile(false);
+                        setUser(response.data);
+                        
+                        fetchUserStats().then(stats => {
+                            if (stats) {
+                                setUser(prev => ({ ...prev, ...stats }));
+                            }
+                        });
+                    } catch (error) {
+                        logger.warn('Failed to fetch profile after token refresh:', error.message);
+                    }
+                }
+                return;
+            } catch (refreshError) {
+                logger.error('Refresh failed, clearing tokens:', refreshError.message);
+                // Refresh failed - clear tokens and log user out
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+            }
+        }
+        
         // No token or invalid token
-        if (token && isTokenExpired(token)) {
+        if (token && isTokenExpired(token) && !refreshToken) {
             localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
         }
         
         setLoading(false);
-    }, [fetchUserStats]);
+    }, [fetchUserStats, refreshAccessToken]);
 
     useEffect(() => {
         checkAuth();
@@ -172,6 +268,17 @@ export function AuthProvider({ children }) {
         return profileResponse.data;
     }, []);
 
+    const refreshProfile = useCallback(async () => {
+        try {
+            const response = await authApi.getProfile();
+            setUser(response.data);
+            return response.data;
+        } catch (error) {
+            logger.error('Failed to refresh profile:', error);
+            throw error;
+        }
+    }, []);
+
     const value = useMemo(() => ({
         user,
         loading,
@@ -179,8 +286,9 @@ export function AuthProvider({ children }) {
         register,
         logout,
         setTokens,
+        refreshProfile,
         isAuthenticated: !!user,
-    }), [user, loading, login, register, logout, setTokens]);
+    }), [user, loading, login, register, logout, setTokens, refreshProfile]);
 
     return (
         <AuthContext.Provider value={value}>

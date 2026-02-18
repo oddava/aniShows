@@ -42,8 +42,14 @@ const shouldRefreshToken = (token) => {
     }
 };
 
-// Refresh access token with proper locking and queueing
-const refreshAccessToken = async () => {
+// Helper function to delay execution
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Refresh access token with proper locking, queueing, and retry logic
+const refreshAccessToken = async (retryCount = 0) => {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 1000;
+
     // If refresh is already in progress, wait for it
     if (isRefreshing) {
         logger.debug('Token refresh already in progress, waiting...');
@@ -85,11 +91,40 @@ const refreshAccessToken = async () => {
             logger.debug('Token refresh successful');
             resolve(access);
         } catch (error) {
-            logger.error('Token refresh failed:', error.message);
+            // Check if we should retry (network errors only, not 401s)
+            const isNetworkError = !error.response && error.request;
+            const isServerError = error.response && error.response.status >= 500 && error.response.status < 600;
+            
+            if ((isNetworkError || isServerError) && retryCount < MAX_RETRIES) {
+                logger.warn(`Token refresh failed (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), retrying in ${RETRY_DELAY_MS}ms:`, error.message);
+                
+                isRefreshing = false;
+                refreshPromise = null;
+                
+                await delay(RETRY_DELAY_MS * (retryCount + 1)); // Exponential backoff
+                
+                try {
+                    const result = await refreshAccessToken(retryCount + 1);
+                    resolve(result);
+                    return;
+                } catch (retryError) {
+                    reject(retryError);
+                    return;
+                }
+            }
+            
+            logger.error('Token refresh failed:', error.message, {
+                retryCount,
+                status: error.response?.status,
+                isNetworkError,
+                isServerError
+            });
             reject(error);
         } finally {
-            isRefreshing = false;
-            refreshPromise = null;
+            if (retryCount === 0 || error?.response?.status === 401) {
+                isRefreshing = false;
+                refreshPromise = null;
+            }
         }
     });
 
@@ -229,7 +264,7 @@ export const authApi = {
     requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),
     resetPassword: (uid, token, password) => api.post('/auth/password-reset-confirm/', { uid, token, password }),
     verifyEmail: (uid, token) => api.get(`/verify-email/${uid}/${token}/`),
-    resendVerification: () => api.post('/auth/resend-verification/'),
+    resendVerification: (email) => api.post('/auth/resend-verification/', { email }),
     changeEmail: (data) => api.post('/auth/change-email/', data),
     confirmEmailChange: (uid, token, newEmail) => api.get(`/confirm-email-change/${uid}/${token}/${newEmail}/`),
     deleteAccount: (data) => api.post('/auth/delete-account/', data),
