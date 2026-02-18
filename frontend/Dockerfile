@@ -1,18 +1,64 @@
-FROM node:20-alpine
+# Multi-stage Dockerfile for React frontend
+# Supports both development and production builds
+
+# ============================================================================
+# Base stage - Dependencies
+# ============================================================================
+FROM node:20-alpine AS base
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json .npmrc* ./
+
+# Install dependencies
+RUN npm ci
+
+# ============================================================================
+# Development stage
+# ============================================================================
+FROM base AS development
 
 ARG VITE_GOOGLE_CLIENT_ID
 ARG ALLOWED_HOSTS
 ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
 ENV ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
 
-WORKDIR /app
-
-COPY package*.json .npmrc* ./
-
-RUN npm install
-
+# Copy source code
 COPY . .
 
 EXPOSE 5173
 
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+# ============================================================================
+# Production builder stage
+# ============================================================================
+FROM base AS builder
+
+ARG VITE_GOOGLE_CLIENT_ID
+ARG ALLOWED_HOSTS
+ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+ENV ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+ENV NODE_ENV=production
+
+# Copy source code
+COPY . .
+
+# Build production assets
+RUN npm run build
+
+# ============================================================================
+# Production stage - Serve static files (optional, Caddy serves them directly)
+# ============================================================================
+FROM nginx:alpine AS production
+
+# Copy built assets from builder
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

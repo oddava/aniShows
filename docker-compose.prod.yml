@@ -38,7 +38,6 @@ services:
       --access-logfile -
       --error-logfile -
       --log-level warning
-      --preload
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
@@ -155,6 +154,11 @@ services:
           memory: 256M
         reservations:
           memory: 64M
+
+  # Disable Grafana in production (not needed)
+  grafana:
+    deploy:
+      replicas: 0
 
   # Remove unnecessary services for small EC2
   # backup:  # Use AWS automated backups instead
