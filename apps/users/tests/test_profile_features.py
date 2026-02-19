@@ -13,6 +13,9 @@ User = get_user_model()
 
 class ProfileFeaturesTest(APITestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        
         self.user = User.objects.create_user(
             username="mainuser", email="main@example.com", password="password123"
         )
@@ -28,6 +31,52 @@ class ProfileFeaturesTest(APITestCase):
         self.public_profile_url = lambda username: reverse(
             "users-detail", kwargs={"username": username}
         )
+
+
+    @patch("apps.animes.signals.enrich_metadata")
+    @patch("apps.animes.signals.generate_recommendations")
+    def test_computed_statistics(self, mock_recommendations, mock_enrich):
+        """Test mean_score, anime_count, days_watched calculation."""
+        # Create Dummy Anime and List Entries
+        anime1 = Anime.objects.create(
+            title="Anime 1", slug="anime-1", episode_count=12, duration_minutes=24
+        )
+        anime2 = Anime.objects.create(
+            title="Anime 2", slug="anime-2", episode_count=24, duration_minutes=24
+        )
+
+        # Add to list
+        UserAnimeList.objects.create(
+            user=self.user,
+            anime=anime1,
+            status="Completed",
+            score=8,
+            episodes_watched=12,
+        )
+        UserAnimeList.objects.create(
+            user=self.user,
+            anime=anime2,
+            status="Watching",
+            score=0,  # Unscored
+            episodes_watched=12,
+        )
+
+        # Calculated Expected:
+        # Anime Count: 2
+        # Mean Score: Only counted scored items. (8) / 1 = 8.0.
+        # Days Watched: (12*24 + 12*24) / 1440 = (288 + 288) / 1440 = 576 / 1440 = 0.4
+
+        # Trigger stats update manually since it's normally a periodic task
+        # and the view only triggers it asynchronously if missing (returning 0s first time)
+        from apps.users.tasks import update_user_stats
+        update_user_stats(self.user.id)
+
+        res = self.client.get(self.profile_url)
+        stats = res.data
+
+        self.assertEqual(stats["anime_count"], 2)
+        self.assertEqual(stats["mean_score"], 8.0)
+        self.assertEqual(stats["days_watched"], 0.4)
 
     def test_profile_update_social_links(self):
         """Test adding and removing social links."""
@@ -147,40 +196,3 @@ class ProfileFeaturesTest(APITestCase):
         res = self.client.get(list_url)
         self.assertEqual(len(res.data["results"]), 0)
 
-    def test_computed_statistics(self):
-        """Test mean_score, anime_count, days_watched calculation."""
-        # Create Dummy Anime and List Entries
-        anime1 = Anime.objects.create(
-            title="Anime 1", slug="anime-1", episode_count=12, duration_minutes=24
-        )
-        anime2 = Anime.objects.create(
-            title="Anime 2", slug="anime-2", episode_count=24, duration_minutes=24
-        )
-
-        # Add to list
-        UserAnimeList.objects.create(
-            user=self.user,
-            anime=anime1,
-            status="Completed",
-            score=8,
-            episodes_watched=12,
-        )
-        UserAnimeList.objects.create(
-            user=self.user,
-            anime=anime2,
-            status="Watching",
-            score=0,  # Unscored
-            episodes_watched=12,
-        )
-
-        # Calculated Expected:
-        # Anime Count: 2
-        # Mean Score: Only counted scored items. (8) / 1 = 8.0.
-        # Days Watched: (12*24 + 12*24) / 1440 = (288 + 288) / 1440 = 576 / 1440 = 0.4
-
-        res = self.client.get(self.profile_url)
-        stats = res.data
-
-        self.assertEqual(stats["anime_count"], 2)
-        self.assertEqual(stats["mean_score"], 8.0)
-        self.assertEqual(stats["days_watched"], 0.4)
