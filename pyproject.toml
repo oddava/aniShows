@@ -1,3 +1,11 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["apps*", "root*"]
+exclude = ["frontend*", "backups*", "monitoring*", "tests*"]
+
 [project]
 name = "anishows"
 version = "0.1.0"

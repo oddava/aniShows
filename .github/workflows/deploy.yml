@@ -30,7 +30,8 @@ jobs:
       - name: Install dependencies
         run: |
           echo "📦 Installing dependencies..."
-          uv pip install --system -e ".[dev]"
+          uv pip install --system setuptools wheel
+          uv pip install --system ".[dev]"
 
       - name: Run Ruff linting
         run: |
@@ -107,7 +108,8 @@ jobs:
       - name: Install dependencies
         run: |
           echo "📦 Installing dependencies..."
-          uv pip install --system -e ".[dev]"
+          uv pip install --system setuptools wheel
+          uv pip install --system ".[dev]"
 
       - name: Run Django system checks
         env:
