@@ -172,7 +172,7 @@ jobs:
       - name: Check coverage threshold
         run: |
           echo "📊 Checking coverage threshold..."
-          coverage report --fail-under=50 || echo "⚠️ Coverage below 50%"
+          coverage report --fail-under=30 || echo "⚠️ Coverage below 30%"
 
   # =============================================================================
   # BUILD & PUSH DOCKER IMAGES

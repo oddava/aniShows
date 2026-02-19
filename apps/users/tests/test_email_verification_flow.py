@@ -27,13 +27,9 @@ class EmailVerificationFlowTests(APITestCase):
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         
-        url = reverse('verify_email')
-        data = {
-            'uid': uid,
-            'token': token
-        }
+        url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
         
-        response = self.client.post(url, data)
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
@@ -68,13 +64,9 @@ class EmailVerificationFlowTests(APITestCase):
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         
-        url = reverse('verify_email')
-        data = {
-            'uid': uid,
-            'token': token
-        }
+        url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
         
-        response = self.client.post(url, data)
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should still return tokens for auto-login
         self.assertIn('access', response.data)

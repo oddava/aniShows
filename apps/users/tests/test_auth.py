@@ -103,7 +103,6 @@ class EmailVerificationTests(APITestCase):
         from django.utils.http import urlsafe_base64_encode
         from django.utils.encoding import force_bytes
 
-        self.verify_url = reverse("verify_email")
         self.resend_url = reverse("resend_verification")
         self.login_url = reverse("token_obtain_pair")
 
@@ -126,6 +125,13 @@ class EmailVerificationTests(APITestCase):
         self.valid_token = default_token_generator.make_token(self.user)
         self.valid_uid = urlsafe_base64_encode(force_bytes(self.user.pk))
 
+    def _get_verify_url(self, uid=None, token=None):
+        """Helper to build the verify_email URL with path parameters."""
+        return reverse(
+            "verify_email",
+            kwargs={"uid": uid or self.valid_uid, "token": token or self.valid_token},
+        )
+
     def test_login_succeeds_for_unverified_user(self):
         """Test that unverified users CAN login."""
         data = {"username": "unverified", "password": "securepass123"}
@@ -134,8 +140,8 @@ class EmailVerificationTests(APITestCase):
 
     def test_verify_email_success(self):
         """Test successful email verification activates user."""
-        data = {"uid": self.valid_uid, "token": self.valid_token}
-        response = self.client.post(self.verify_url, data)
+        url = self._get_verify_url()
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify user is now active
@@ -145,19 +151,18 @@ class EmailVerificationTests(APITestCase):
 
     def test_verify_email_invalid_token(self):
         """Test verification fails with invalid token."""
-        data = {"uid": self.valid_uid, "token": "invalid-token"}
-        response = self.client.post(self.verify_url, data)
+        url = self._get_verify_url(token="invalid-token")
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-        # User should still be inactive
         # User should still be unverified
         self.user.userprofile.refresh_from_db()
         self.assertFalse(self.user.userprofile.email_verified)
 
     def test_verify_email_invalid_uid(self):
         """Test verification fails with invalid UID."""
-        data = {"uid": "invalid-uid", "token": self.valid_token}
-        response = self.client.post(self.verify_url, data)
+        url = self._get_verify_url(uid="invalid-uid")
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_verify_already_verified_user(self):
@@ -165,8 +170,8 @@ class EmailVerificationTests(APITestCase):
         self.user.userprofile.email_verified = True
         self.user.userprofile.save()
 
-        data = {"uid": self.valid_uid, "token": self.valid_token}
-        response = self.client.post(self.verify_url, data)
+        url = self._get_verify_url()
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # We don't necessarily check for specific message if generic success is returned for idempotency
         # But if you implemented specific message, check it.
@@ -198,8 +203,8 @@ class EmailVerificationTests(APITestCase):
     def test_verified_user_can_login(self):
         """Test that after verification, user can login."""
         # First verify
-        data = {"uid": self.valid_uid, "token": self.valid_token}
-        self.client.post(self.verify_url, data)
+        url = self._get_verify_url()
+        self.client.post(url)
 
         # Now login should work
         login_data = {"username": "unverified", "password": "securepass123"}
