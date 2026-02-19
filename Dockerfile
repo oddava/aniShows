@@ -22,6 +22,9 @@ COPY pyproject.toml uv.lock ./
 # Install Python dependencies
 RUN uv sync --frozen --no-dev
 
+# Add virtual environment to PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
 # Copy the rest of the application
 COPY . .
 
@@ -40,16 +43,16 @@ EXPOSE 8000
 # Timeout: 60s for long-running requests
 # Keep-alive: 5s for connection reuse
 CMD ["uv", "run", "gunicorn", "root.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "4", \
-     "--worker-class", "gthread", \
-     "--threads", "4", \
-     "--worker-connections", "1000", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "50", \
-     "--timeout", "60", \
-     "--keep-alive", "5", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--log-level", "info", \
-     "--preload"]
+    "--bind", "0.0.0.0:8000", \
+    "--workers", "4", \
+    "--worker-class", "gthread", \
+    "--threads", "4", \
+    "--worker-connections", "1000", \
+    "--max-requests", "1000", \
+    "--max-requests-jitter", "50", \
+    "--timeout", "60", \
+    "--keep-alive", "5", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-", \
+    "--log-level", "info", \
+    "--preload"]
