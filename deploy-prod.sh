@@ -371,6 +371,13 @@ echo ""
 # Step 5: Collect static files (only if backend was changed)
 if [ "$REBUILD_BACKEND" = true ] || [ "$MODE" = "full" ]; then
     echo -e "${BLUE}🎨 Step 5: Collecting static files...${NC}"
+    
+    # Fix permissions for static directory (ensure aniuser can write)
+    # This addresses PermissionError when collectstatic tries to delete/update files owned by root
+    echo -e "${BLUE}   Fixing permissions for static files...${NC}"
+    mkdir -p static
+    docker run --rm -v "$(pwd)/static:/static" alpine:latest chown -R 1000:1000 /static 2>/dev/null || true
+
     $COMPOSE_CMD exec -T web uv run python manage.py collectstatic --noinput --clear
     echo -e "${GREEN}✅ Static files collected!${NC}"
 else
