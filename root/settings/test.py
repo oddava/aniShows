@@ -11,13 +11,13 @@ from .base import *
 
 DEBUG = True
 
-# Use in-memory SQLite for faster tests (optional - can use PostgreSQL too)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': ':memory:',
-#     }
-# }
+# Use in-memory SQLite for faster tests
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',
+    }
+}
 
 # Use very high throttle rates during tests (effectively disabled)
 REST_FRAMEWORK = {
