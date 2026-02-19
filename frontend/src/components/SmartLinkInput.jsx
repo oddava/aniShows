@@ -242,6 +242,8 @@ const SmartLinkInput = ({
                             type="text"
                             value={localPlatform}
                             onChange={handlePlatformChange}
+                            spellCheck="false"
+                            autoComplete="off"
                             className="input py-2 text-sm w-full pl-9"
                             placeholder="Twitter"
                             disabled={disabled}
@@ -262,6 +264,8 @@ const SmartLinkInput = ({
                             type="text"
                             value={localValue}
                             onChange={handleValueChange}
+                            spellCheck="false"
+                            autoComplete="off"
                             className={`input py-2 text-sm w-full pr-10 ${
                                 error ? 'border-red-500/50 focus:border-red-500' : ''
                             }`}

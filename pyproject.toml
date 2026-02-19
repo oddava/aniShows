@@ -1,7 +1,7 @@
 [project]
 name = "anishows"
 version = "0.1.0"
-description = "Add your description here"
+description = "Anime tracking and discovery platform"
 requires-python = ">=3.12"
 dependencies = [
     "cookiecutter>=2.6.0",
@@ -43,3 +43,141 @@ dependencies = [
     "google-api-python-client>=2.100.0",
     "pydantic>=2.5.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6.9",
+    "mypy>=1.11.2",
+    "django-stubs>=5.1.0",
+    "djangorestframework-stubs>=3.15.0",
+    "pre-commit>=3.8.0",
+    "bandit>=1.7.10",
+    "safety>=3.2.0",
+    "pytest>=8.3.0",
+    "pytest-django>=4.9.0",
+    "pytest-cov>=5.0.0",
+    "factory-boy>=3.3.0",
+    "freezegun>=1.5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# =============================================================================
+# RUFF CONFIGURATION
+# =============================================================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "D",   # pydocstyle
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "PTH", # flake8-use-pathlib
+    "ERA", # eradicate
+    "PGH", # pygrep-hooks
+    "RUF", # Ruff-specific rules
+    "DJ",  # flake8-django
+    "ASYNC", # flake8-async
+    "S",   # flake8-bandit (security)
+]
+
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+    "D105",  # Missing docstring in magic method
+    "D107",  # Missing docstring in __init__
+    "S101",  # Use of assert detected (allowed in tests)
+    "S105",  # Possible hardcoded password (too many false positives)
+    "S106",  # Possible hardcoded password (too many false positives)
+    "S107",  # Possible hardcoded password (too many false positives)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "root"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# =============================================================================
+# MYPY CONFIGURATION
+# =============================================================================
+[tool.mypy]
+python_version = "3.12"
+check_untyped_defs = true
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "root.settings.development"
+
+# =============================================================================
+# PYTEST CONFIGURATION
+# =============================================================================
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "root.settings.test"
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["apps"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "-ra",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/admin.py",
+    "*/apps.py",
+    "manage.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+fail_under = 70
+
+# =============================================================================
+# BANDIT CONFIGURATION (Security)
+# =============================================================================
+[tool.bandit]
+exclude_dirs = ["tests", "migrations", ".venv"]
+skips = ["B101", "B105", "B106", "B107"]  # Allow assert, reduce false positives on passwords

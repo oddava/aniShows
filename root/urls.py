@@ -36,8 +36,3 @@ if settings.DEBUG:
         static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
         + debug_toolbar_urls()
     )
-else:
-    # Serve media files manually in production (since we are not using Nginx yet)
-    urlpatterns += [
-        re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
-    ]

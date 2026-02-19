@@ -645,11 +645,11 @@ export default function Profile({ forcedUsername }) {
                 </div>
 
                 {/* Profile Header Content - Overlapping Avatar */}
-                <div className="max-w-7xl mx-auto px-4 relative -mt-16 sm:-mt-20 md:-mt-24 lg:-mt-28 z-10">
-                    <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6">
+                <div className="max-w-7xl mx-auto px-4 relative -mt-12 sm:-mt-16 md:-mt-20 lg:-mt-24 z-10">
+                    <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8">
                         {/* Avatar - Breaking the border */}
                         <div className="relative shrink-0">
-                            <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-2xl bg-dark-100 p-1.5 shadow-2xl">
+                            <div className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-2xl bg-dark-100 p-1.5 shadow-2xl">
                                 <div className="w-full h-full rounded-xl border-2 border-white/20 overflow-hidden relative">
                                     {displayUser?.avatar ? (
                                         <img 
@@ -659,49 +659,48 @@ export default function Profile({ forcedUsername }) {
                                         />
                                     ) : (
                                         <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
-                                            <User className="w-20 h-20 text-white" />
+                                            <User className="w-16 h-16 text-white" />
                                         </div>
                                     )}
                                 </div>
                             </div>
                             {/* Online status indicator */}
                             {displayUser?.is_online ? (
-                                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-4 border-dark shadow-lg" title="Online" />
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-4 border-dark shadow-lg" title="Online" />
                             ) : (
-                                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-500 rounded-full border-4 border-dark shadow-lg" title="Offline" />
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gray-500 rounded-full border-4 border-dark shadow-lg" title="Offline" />
                             )}
                         </div>
 
                         {/* User Info Section */}
-                        <div className="flex-1 text-center md:text-left pb-2 w-full">
+                        <div className="flex-1 text-center md:text-left pt-2 md:pt-4 w-full">
                             {/* Username & Badges */}
-                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-3 mb-2">
-                                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white tracking-tight">
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 md:gap-3 mb-3">
+                                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight">
                                     {displayUser?.username}
                                 </h1>
-
                             </div>
 
                             {/* Social Cluster - Followers/Following */}
-                            <div className="flex items-center gap-4 justify-center md:justify-start mb-4">
+                            <div className="flex items-center gap-3 justify-center md:justify-start mb-4 text-sm">
                                 <button 
                                     onClick={() => openFollowersModal('followers')}
-                                    className="text-sm text-gray-400 hover:text-white transition-colors"
+                                    className="text-gray-400 hover:text-white transition-colors"
                                 >
-                                    <span className="font-bold text-white">{(displayUser?.followers_count ?? 0).toLocaleString()}</span> Followers
+                                    <span className="font-semibold text-white">{(displayUser?.followers_count ?? 0).toLocaleString()}</span> <span className="text-gray-500">followers</span>
                                 </button>
-                                <span className="text-gray-600">•</span>
+                                <span className="text-gray-700">•</span>
                                 <button 
                                     onClick={() => openFollowersModal('following')}
-                                    className="text-sm text-gray-400 hover:text-white transition-colors"
+                                    className="text-gray-400 hover:text-white transition-colors"
                                 >
-                                    <span className="font-bold text-white">{(displayUser?.following_count ?? 0).toLocaleString()}</span> Following
+                                    <span className="font-semibold text-white">{(displayUser?.following_count ?? 0).toLocaleString()}</span> <span className="text-gray-500">following</span>
                                 </button>
                             </div>
 
                             {/* Bio */}
                             {displayUser?.bio && (
-                                <p className="text-gray-300 text-sm md:text-base max-w-2xl mb-4 leading-relaxed">
+                                <p className="text-gray-300 text-sm md:text-[15px] max-w-xl mb-5 leading-6 whitespace-pre-wrap">
                                     {decodeHtmlEntities(displayUser.bio)}
                                 </p>
                             )}
@@ -722,14 +721,14 @@ export default function Profile({ forcedUsername }) {
                                                 href={displayUrl}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all border border-white/10 text-xs font-medium"
+                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-all border border-white/5 text-xs"
                                                 title={metadata.title || link.platform}
                                             >
                                                 {favicon ? (
                                                     <img 
                                                         src={favicon} 
                                                         alt="" 
-                                                        className="w-4 h-4 rounded-sm object-contain"
+                                                        className="w-3.5 h-3.5 rounded-sm object-contain"
                                                         onError={(e) => {
                                                             // Fallback to platform icon on error
                                                             e.target.style.display = 'none';
@@ -740,7 +739,7 @@ export default function Profile({ forcedUsername }) {
                                                 <span style={{ display: favicon ? 'none' : 'block' }}>
                                                     <PlatformIcon platform={link.platform} />
                                                 </span>
-                                                <span>{link.platform}</span>
+                                                <span className="hidden sm:inline">{link.platform}</span>
                                             </a>
                                         );
                                     })}
@@ -749,11 +748,11 @@ export default function Profile({ forcedUsername }) {
                         </div>
 
                         {/* Action Row */}
-                        <div className="flex items-center gap-2 md:gap-3 justify-center md:justify-end pb-2 shrink-0 w-full md:w-auto">
+                        <div className="flex items-center gap-2 md:gap-3 justify-center md:justify-end pt-2 md:pt-4 shrink-0 w-full md:w-auto">
                             {!isPublicView ? (
                                 <Link 
                                     to="/settings" 
-                                    className="px-4 py-2 md:px-5 md:py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all border border-white/10 text-sm font-semibold active:scale-95 flex items-center gap-2"
+                                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all border border-white/10 text-sm font-medium active:scale-95 flex items-center gap-2"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c-.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c.94-1.543-.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

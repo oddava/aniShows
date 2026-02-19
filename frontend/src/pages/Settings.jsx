@@ -475,13 +475,36 @@ export default function Settings() {
 
                             {/* Bio */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Bio</label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium text-gray-300">Bio</label>
+                                    <span className={`text-xs ${
+                                        bio.length > 160 ? 'text-red-400' : 
+                                        bio.length > 140 ? 'text-yellow-400' : 
+                                        'text-gray-500'
+                                    }`}>
+                                        {bio.length}/180
+                                    </span>
+                                </div>
+                                
                                 <textarea
                                     value={bio}
-                                    onChange={(e) => setBio(e.target.value)}
+                                    onChange={(e) => {
+                                        if (e.target.value.length <= 180) {
+                                            setBio(e.target.value);
+                                        }
+                                    }}
+                                    maxLength={180}
+                                    spellCheck="false"
                                     placeholder="Tell us about yourself..."
-                                    className="input min-h-[120px] resize-none w-full max-w-xl"
+                                    className={`input min-h-[80px] resize-none w-full max-w-xl ${
+                                        bio.length > 160 ? 'border-red-500/50 focus:border-red-500' : ''
+                                    }`}
                                 />
+                                {bio.length > 160 && (
+                                    <p className="text-xs text-red-400 mt-1">
+                                        {180 - bio.length} characters remaining
+                                    </p>
+                                )}
                             </div>
 
                             {/* Social Links */}
