@@ -54,7 +54,7 @@ services:
       - .:/app
       - /app/.venv
       - prometheus_multiproc:/tmp/prometheus
-    user: "0:0"
+    user: "1000:1000"
     deploy:
       resources:
         limits:

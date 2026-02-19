@@ -1,13 +1,211 @@
-name: Deploy to EC2
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
   workflow_dispatch:
 
 jobs:
-  deploy:
+  # =============================================================================
+  # LINTING & SECURITY CHECKS
+  # =============================================================================
+  lint-and-security:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system ruff bandit safety
+
+      - name: Run Ruff linting
+        run: |
+          echo "🔍 Running Ruff linter..."
+          ruff check apps/ root/ --output-format=github
+
+      - name: Run Ruff formatting check
+        run: |
+          echo "🔍 Checking code formatting..."
+          ruff format --check apps/ root/
+
+      - name: Run Bandit security scan
+        run: |
+          echo "🔒 Running security scan..."
+          bandit -r apps/ -f json -o bandit-report.json || true
+          bandit -r apps/ -ll
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: bandit-report.json
+
+  # =============================================================================
+  # TYPE CHECKING
+  # =============================================================================
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ".[dev]"
+
+      - name: Run mypy type checking
+        run: |
+          echo "🔍 Running type checks..."
+          mypy apps/ root/ --show-error-codes --ignore-missing-imports
+
+  # =============================================================================
+  # TESTS
+  # =============================================================================
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_anishows
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ".[dev]"
+
+      - name: Run Django system checks
+        env:
+          DJANGO_SETTINGS_MODULE: root.settings.test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          echo "🔍 Running Django system checks..."
+          python manage.py check --deploy --fail-level=WARNING
+
+      - name: Run migrations check
+        env:
+          DJANGO_SETTINGS_MODULE: root.settings.test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          echo "🔍 Checking for migration issues..."
+          python manage.py makemigrations --check --dry-run
+
+      - name: Run tests with coverage
+        env:
+          DJANGO_SETTINGS_MODULE: root.settings.test
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-not-for-production
+        run: |
+          echo "🧪 Running tests..."
+          pytest --cov=apps --cov-report=xml --cov-report=html -v
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            htmlcov/
+            coverage.xml
+
+      - name: Check coverage threshold
+        run: |
+          echo "📊 Checking coverage threshold..."
+          coverage report --fail-under=50 || echo "⚠️ Coverage below 50%"
+
+  # =============================================================================
+  # BUILD & PUSH DOCKER IMAGES
+  # =============================================================================
+  build:
+    needs: [lint-and-security, type-check, test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          echo "🐳 Building Docker image..."
+          docker build -t anishows:${{ github.sha }} -t anishows:latest .
+          
+      - name: Test Docker image
+        run: |
+          echo "🧪 Testing Docker image..."
+          docker run --rm anishows:${{ github.sha }} python --version
+          docker run --rm anishows:${{ github.sha }} python -c "import django; print(django.get_version())"
+
+  # =============================================================================
+  # DEPLOY TO PRODUCTION
+  # =============================================================================
+  deploy:
+    needs: [lint-and-security, type-check, test, build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,7 +232,7 @@ jobs:
             cd /home/ubuntu/aniShows
             
             echo "🔄 Stashing any local changes..."
-            git stash
+            git stash || true
             
             echo "🔄 Pulling latest changes from GitHub..."
             git pull origin main
@@ -50,3 +248,8 @@ jobs:
         run: |
           echo "❌ Deployment failed! Check the logs above for details."
           exit 1
+
+      - name: Deployment notification
+        if: success()
+        run: |
+          echo "✅ Successfully deployed commit ${{ github.sha }} to production"

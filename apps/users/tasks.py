@@ -183,9 +183,7 @@ def fetch_anime_by_external_id(
                 logger.info(f"Created/updated anime: {anime.title}")
                 return anime.id
 
-        logger.warning(
-            f"Could not find anime: MAL={mal_id}, AniList={anilist_id}, Title={title}"
-        )
+        logger.warning(f"Could not find anime: MAL={mal_id}, AniList={anilist_id}, Title={title}")
         return None
 
     except Exception as e:
@@ -238,6 +236,9 @@ def run_user_maintenance_workflow(
     """
     Run comprehensive user maintenance workflow.
 
+    This task orchestrates multiple maintenance tasks. Note: Tasks are triggered
+    asynchronously and their results are not waited for (non-blocking).
+
     Args:
         cleanup_unverified: Whether to clean unverified accounts
         cleanup_imports: Whether to clean old import jobs
@@ -245,22 +246,29 @@ def run_user_maintenance_workflow(
         import_days: Days threshold for import jobs
 
     Returns:
-        Dict with workflow results
+        Dict with task IDs for tracking
     """
-    results = {}
+    from celery import chain
 
+    task_ids = {}
+
+    # Run tasks asynchronously without blocking
+    # Use .delay() instead of .get() to avoid blocking the worker
     if cleanup_unverified:
-        results["unverified_cleanup"] = cleanup_unverified_accounts.delay(
-            days=unverified_days
-        ).get()
+        task = cleanup_unverified_accounts.delay(days=unverified_days)
+        task_ids["unverified_cleanup"] = task.id
 
     if cleanup_imports:
-        results["import_cleanup"] = cleanup_old_import_jobs.delay(
-            days=import_days
-        ).get()
+        task = cleanup_old_import_jobs.delay(days=import_days)
+        task_ids["import_cleanup"] = task.id
 
-    logger.info(f"User maintenance workflow complete: {results}")
-    return results
+    logger.info(f"User maintenance workflow triggered: {task_ids}")
+    return {
+        "status": "triggered",
+        "task_ids": task_ids,
+        "cleanup_unverified": cleanup_unverified,
+        "cleanup_imports": cleanup_imports,
+    }
 
 
 @shared_task(
@@ -342,9 +350,7 @@ def update_user_stats(self, user_id: int = None):
 
                 # Log progress every 100 users
                 if updated_count % 100 == 0:
-                    logger.info(
-                        f"Updated stats for {updated_count}/{total_users} users"
-                    )
+                    logger.info(f"Updated stats for {updated_count}/{total_users} users")
 
             except Exception as e:
                 logger.error(f"Error updating stats for user {user.id}: {e}")
@@ -389,9 +395,7 @@ def warm_profile_cache(usernames: list = None):
         from django.db.models import Count
 
         popular_users = User.objects.annotate(
-            total_activity=Count("followers")
-            + Count("following")
-            + Count("anime_lists")
+            total_activity=Count("followers") + Count("following") + Count("anime_lists")
         ).order_by("-total_activity")[:50]
 
         usernames = list(popular_users.values_list("username", flat=True))
