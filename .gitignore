@@ -189,6 +189,3 @@ anime/covers/
 .last-deploy-commit
 static/
 
-# Migrations
-**/migrations/*
-!**/migrations/__init__.py
