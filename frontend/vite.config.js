@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Parse ALLOWED_HOSTS from environment variable
-const allowedHosts = process.env.ALLOWED_HOSTS 
+const allowedHosts = process.env.ALLOWED_HOSTS
   ? process.env.ALLOWED_HOSTS.split(',').map(h => h.trim()).filter(Boolean)
   : ['localhost', '127.0.0.1']
 
@@ -115,14 +115,5 @@ export default defineConfig(({ mode }) => ({
       '@tanstack/react-virtual',
     ],
     exclude: ['lucide-react'], // Lucide icons are tree-shaken better when excluded
-  },
-  // Preload critical assets
-  experimental: {
-    renderBuiltUrl(filename, { hostType }) {
-      if (hostType === 'js') {
-        return { relative: true }
-      }
-      return { relative: true }
-    },
   },
 }))
