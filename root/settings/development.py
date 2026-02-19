@@ -77,17 +77,17 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        "api": {
+        "apps.api": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },
-        "api.auth": {
+        "apps.api.auth": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },
-        "anime": {
+        "apps.anime": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,

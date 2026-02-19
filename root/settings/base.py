@@ -61,10 +61,10 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    "core",
-    "users",
-    "anime",
-    "api",
+    "apps.core",
+    "apps.users",
+    "apps.anime",
+    "apps.api",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -90,7 +90,7 @@ LOGIN_REDIRECT_URL = "/browse/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 SITE_ID = 1
 
-SOCIALACCOUNT_ADAPTER = "users.adapters.MySocialAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "apps.users.adapters.MySocialAccountAdapter"
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
@@ -123,7 +123,7 @@ REST_AUTH = {
 # =============================================================================
 
 MIDDLEWARE = [
-    "api.middleware.csp_middleware.CSPMiddleware",
+    "apps.api.middleware.csp_middleware.CSPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -132,10 +132,10 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "core.middleware.LoggingMiddleware",
-    "core.middleware.AdminAuditMiddleware",
-    "core.middleware.ExceptionLoggingMiddleware",
-    "api.middleware.activity_middleware.UserActivityMiddleware",
+    "apps.core.middleware.LoggingMiddleware",
+    "apps.core.middleware.AdminAuditMiddleware",
+    "apps.core.middleware.ExceptionLoggingMiddleware",
+    "apps.api.middleware.activity_middleware.UserActivityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
@@ -429,13 +429,13 @@ CELERY_BEAT_SCHEDULE = {
     # Hourly Tasks (Staggered to avoid API spikes)
     # -------------------------------------------------------------------------
     "sync-trending-hourly": {
-        "task": "anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.anime.tasks.sync.sync_anime_catalog",
         "schedule": crontab(minute=5),  # 5 min past hour
         "kwargs": {"sync_type": "trending", "limit": 50},
         "options": {"queue": "default"},
     },
     "sync-airing-workflow-hourly": {
-        "task": "anime.tasks.airing.sync_airing_workflow",
+        "task": "apps.anime.tasks.airing.sync_airing_workflow",
         "schedule": crontab(minute=30),  # 30 min past hour
         "kwargs": {"phases": ["sync"], "batch_size": 100},
         "options": {"queue": "default"},
@@ -443,43 +443,43 @@ CELERY_BEAT_SCHEDULE = {
     # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
     # -------------------------------------------------------------------------
     "sync-seasonal-daily": {
-        "task": "anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.anime.tasks.sync.sync_anime_catalog",
         "schedule": crontab(hour=2, minute=0),  # 2:00 AM
         "kwargs": {"sync_type": "seasonal", "limit": 100},
         "options": {"queue": "default"},
     },
     "enrich-metadata-daily": {
-        "task": "anime.tasks.metadata.enrich_metadata",
+        "task": "apps.anime.tasks.metadata.enrich_metadata",
         "schedule": crontab(hour=3, minute=0),  # 3:00 AM
         "kwargs": {"mode": "backfill", "batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "airing-workflow-cleanup-daily": {
-        "task": "anime.tasks.airing.sync_airing_workflow",
+        "task": "apps.anime.tasks.airing.sync_airing_workflow",
         "schedule": crontab(hour=4, minute=0),  # 4:00 AM
         "kwargs": {"phases": ["cleanup", "backfill"], "batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "generate-recommendations-daily": {
-        "task": "anime.tasks.recommendations.generate_recommendations",
+        "task": "apps.anime.tasks.recommendations.generate_recommendations",
         "schedule": crontab(hour=5, minute=0),  # 5:00 AM
         "kwargs": {"limit": 10},
         "options": {"queue": "low_priority"},
     },
     "sync-themes-daily": {
-        "task": "anime.tasks.themes.sync_theme_songs",
+        "task": "apps.anime.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=6, minute=0),  # 6:00 AM
         "kwargs": {"limit": 500},  # Increased from 100 to 500
         "options": {"queue": "default"},
     },
     "sync-themes-retry": {
-        "task": "anime.tasks.themes.sync_theme_songs",
+        "task": "apps.anime.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=18, minute=0),  # 6:00 PM - retry failed
         "kwargs": {"limit": 200, "retry_failed": True},
         "options": {"queue": "low_priority"},
     },
     "user-maintenance-daily": {
-        "task": "users.tasks.run_user_maintenance_workflow",
+        "task": "apps.users.tasks.run_user_maintenance_workflow",
         "schedule": crontab(hour=7, minute=0),  # 7:00 AM
         "kwargs": {
             "cleanup_unverified": True,
@@ -491,26 +491,26 @@ CELERY_BEAT_SCHEDULE = {
     },
     # Profile Stats Tasks (Every 5 minutes for fast profile loading)
     "update-user-stats-5min": {
-        "task": "users.tasks.update_all_user_stats",
+        "task": "apps.users.tasks.update_all_user_stats",
         "schedule": 300.0,  # Every 5 minutes (300 seconds)
         "options": {"queue": "low_priority"},
     },
     "warm-profile-cache-hourly": {
-        "task": "users.tasks.warm_profile_cache",
+        "task": "apps.users.tasks.warm_profile_cache",
         "schedule": crontab(minute=0),  # Every hour
         "options": {"queue": "low_priority"},
     },
     # Weekly Tasks
     # -------------------------------------------------------------------------
     "sync-upcoming-weekly": {
-        "task": "anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.anime.tasks.sync.sync_anime_catalog",
         "schedule": crontab(day_of_week=0, hour=3, minute=30),  # Sunday 3:30 AM
         "kwargs": {"sync_type": "next_season", "limit": 100},
         "options": {"queue": "default"},
     },
     # Weekly: Fetch popular anime to build comprehensive catalog
     "sync-popular-weekly": {
-        "task": "anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.anime.tasks.sync.sync_anime_catalog",
         "schedule": crontab(day_of_week=1, hour=2, minute=0),  # Monday 2:00 AM
         "kwargs": {
             "sync_type": "airing",
@@ -520,30 +520,30 @@ CELERY_BEAT_SCHEDULE = {
     },
     # Notification Tasks
     "check-new-episodes": {
-        "task": "core.tasks.notifications.check_new_episodes",
+        "task": "apps.core.tasks.notifications.check_new_episodes",
         "schedule": crontab(hour="*/6", minute=0),  # Every 6 hours
         "options": {"queue": "default"},
     },
     "send-pending-notifications": {
-        "task": "core.tasks.notifications.send_pending_notifications",
+        "task": "apps.core.tasks.notifications.send_pending_notifications",
         "schedule": crontab(minute="*/10"),  # Every 10 minutes
         "options": {"queue": "default"},
     },
     "cleanup-old-notifications": {
-        "task": "core.tasks.notifications.cleanup_old_notifications_task",
+        "task": "apps.core.tasks.notifications.cleanup_old_notifications_task",
         "schedule": crontab(hour=2, minute=30),  # Daily at 2:30 AM
         "kwargs": {"days": 90},
         "options": {"queue": "low_priority"},
     },
     # Maintenance Tasks
     "cleanup-task-results-daily": {
-        "task": "core.tasks.cleanup_tasks.cleanup_old_task_results",
+        "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results",
         "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM
         "kwargs": {"days": 7, "batch_size": 1000},
         "options": {"queue": "low_priority"},
     },
     "health-check-workers-hourly": {
-        "task": "core.tasks.cleanup_tasks.health_check_workers",
+        "task": "apps.core.tasks.cleanup_tasks.health_check_workers",
         "schedule": crontab(minute=15),  # Every hour at 15 min past
         "options": {"queue": "low_priority"},
     },

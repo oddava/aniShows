@@ -113,12 +113,12 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        "api": {
+        "apps.api": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,
         },
-        "api.auth": {
+        "apps.api.auth": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,

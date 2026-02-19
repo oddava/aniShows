@@ -177,8 +177,6 @@ dmypy.json
 .pytype/
 cython_debug/
 .env
-.env
-.env
 backups-data/
 .vscode
 
@@ -190,3 +188,4 @@ anime/covers/
 # Deployment files
 .last-deploy-commit
 static/
+migrations/

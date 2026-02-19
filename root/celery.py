@@ -44,58 +44,60 @@ app.conf.task_routes = {
     # =========================================================================
     # CRITICAL QUEUE - User-facing, time-sensitive
     # =========================================================================
-    "users.tasks.process_import_job": {"queue": "critical"},
+    "apps.users.tasks.process_import_job": {"queue": "critical"},
     # =========================================================================
     # HIGH PRIORITY - Important for user experience
     # =========================================================================
     # Anime Catalog Sync Tasks
-    "anime.tasks.sync.sync_anime_catalog": {"queue": "high_priority"},
+    "apps.anime.tasks.sync.sync_anime_catalog": {"queue": "high_priority"},
     # Airing Workflow - affects schedule display
-    "anime.tasks.airing.sync_airing_workflow": {"queue": "high_priority"},
+    "apps.anime.tasks.airing.sync_airing_workflow": {"queue": "high_priority"},
     # Theme Song Sync - time-sensitive but can queue
-    "anime.tasks.themes.sync_theme_songs": {"queue": "high_priority"},
+    "apps.anime.tasks.themes.sync_theme_songs": {"queue": "high_priority"},
     # Franchise Sync - important for navigation
-    "anime.tasks.franchises.sync_franchises": {"queue": "high_priority"},
+    "apps.anime.tasks.franchises.sync_franchises": {"queue": "high_priority"},
     # =========================================================================
     # DEFAULT QUEUE - Standard operations
     # =========================================================================
     # User Tasks
-    "users.tasks.cleanup_unverified_accounts": {"queue": "default"},
-    "users.tasks.fetch_anime_by_external_id": {"queue": "default"},
-    "users.tasks.cleanup_old_import_jobs": {"queue": "default"},
-    "users.tasks.run_user_maintenance_workflow": {"queue": "default"},
+    "apps.users.tasks.cleanup_unverified_accounts": {"queue": "default"},
+    "apps.users.tasks.fetch_anime_by_external_id": {"queue": "default"},
+    "apps.users.tasks.cleanup_old_import_jobs": {"queue": "default"},
+    "apps.users.tasks.run_user_maintenance_workflow": {"queue": "default"},
     # Core Tasks
-    "core.tasks.notifications.send_pending_notifications": {"queue": "default"},
-    "core.tasks.notifications.check_new_episodes": {"queue": "default"},
+    "apps.core.tasks.notifications.send_pending_notifications": {"queue": "default"},
+    "apps.core.tasks.notifications.check_new_episodes": {"queue": "default"},
     # =========================================================================
     # BATCH QUEUE - Import/export operations
     # =========================================================================
-    "anime.tasks.metadata.enrich_metadata": {"queue": "batch"},
+    "apps.anime.tasks.metadata.enrich_metadata": {"queue": "batch"},
     # =========================================================================
     # IMAGES QUEUE - Image processing
     # =========================================================================
-    "anime.tasks.images.generate_image_thumbnails": {"queue": "images"},
+    "apps.anime.tasks.images.generate_image_thumbnails": {"queue": "images"},
     # =========================================================================
     # NOTIFICATIONS QUEUE - Email/push
     # =========================================================================
-    "api.services.email_service.*": {"queue": "notifications"},
+    "apps.api.services.email_service.*": {"queue": "notifications"},
     # =========================================================================
     # ANALYTICS QUEUE - Statistics and reporting
     # =========================================================================
-    "anime.tasks.recommendations.generate_recommendations": {"queue": "analytics"},
-    "users.tasks.update_user_statistics": {"queue": "analytics"},
+    "apps.anime.tasks.recommendations.generate_recommendations": {"queue": "analytics"},
+    "apps.users.tasks.update_user_statistics": {"queue": "analytics"},
     # =========================================================================
     # LOW PRIORITY - Background maintenance
     # =========================================================================
     # Metadata and maintenance
-    "anime.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
+    "apps.anime.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
     # Cleanup tasks
-    "anime.tasks.airing.cleanup_old_airing_data": {"queue": "low_priority"},
-    "core.tasks.notifications.cleanup_old_notifications": {"queue": "low_priority"},
-    "core.tasks.cleanup_old_task_results": {"queue": "low_priority"},
+    "apps.anime.tasks.airing.cleanup_old_airing_data": {"queue": "low_priority"},
+    "apps.core.tasks.notifications.cleanup_old_notifications": {
+        "queue": "low_priority"
+    },
+    "apps.core.tasks.cleanup_old_task_results": {"queue": "low_priority"},
     # User maintenance
-    "users.tasks.warm_profile_cache": {"queue": "low_priority"},
-    "users.tasks.update_all_user_stats": {"queue": "low_priority"},
+    "apps.users.tasks.warm_profile_cache": {"queue": "low_priority"},
+    "apps.users.tasks.update_all_user_stats": {"queue": "low_priority"},
 }
 
 # Define all queues
