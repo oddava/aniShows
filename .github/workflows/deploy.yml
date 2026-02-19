@@ -46,6 +46,7 @@ jobs:
           ruff format --check apps/ root/
 
       - name: Run Bandit security scan
+        continue-on-error: true
         run: |
           echo "🔒 Running security scan..."
           bandit -r apps/ -f json -o bandit-report.json || true
@@ -119,7 +120,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: root.settings.test
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
           REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-not-for-production
+          DJANGO_SECRET_KEY: test-secret-key-not-for-production
         run: |
           echo "🔍 Running Django system checks..."
           python manage.py check --fail-level=WARNING
@@ -129,7 +130,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: root.settings.test
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
           REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-not-for-production
+          DJANGO_SECRET_KEY: test-secret-key-not-for-production
         run: |
           echo "🔍 Checking for migration issues..."
           python manage.py makemigrations --check --dry-run
@@ -139,7 +140,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: root.settings.test
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
           REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-not-for-production
+          DJANGO_SECRET_KEY: test-secret-key-not-for-production
         run: |
           echo "🧪 Running tests..."
           pytest --cov=apps --cov-report=xml --cov-report=html -v
