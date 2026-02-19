@@ -247,9 +247,9 @@ class SocialLinkChangeLog(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            Index(fields=["user", "-created_at"]),
-            Index(fields=["action", "-created_at"]),
-            Index(fields=["created_at"]),
+            Index(fields=["user", "-created_at"], name="soclinklog_user_created_idx"),
+            Index(fields=["action", "-created_at"], name="soclinklog_action_created_idx"),
+            Index(fields=["created_at"], name="soclinklog_created_idx"),
         ]
 
     def __str__(self):
