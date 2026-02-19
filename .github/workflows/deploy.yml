@@ -118,8 +118,13 @@ jobs:
       - name: Run Django system checks
         env:
           DJANGO_SETTINGS_MODULE: root.settings.test
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
-          REDIS_URL: redis://localhost:6379/0
+          DB_NAME: test_anishows
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
           DJANGO_SECRET_KEY: test-secret-key-not-for-production
         run: |
           echo "🔍 Running Django system checks..."
@@ -128,8 +133,13 @@ jobs:
       - name: Run migrations check
         env:
           DJANGO_SETTINGS_MODULE: root.settings.test
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
-          REDIS_URL: redis://localhost:6379/0
+          DB_NAME: test_anishows
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
           DJANGO_SECRET_KEY: test-secret-key-not-for-production
         run: |
           echo "🔍 Checking for migration issues..."
@@ -138,8 +148,13 @@ jobs:
       - name: Run tests with coverage
         env:
           DJANGO_SETTINGS_MODULE: root.settings.test
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_anishows
-          REDIS_URL: redis://localhost:6379/0
+          DB_NAME: test_anishows
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
           DJANGO_SECRET_KEY: test-secret-key-not-for-production
         run: |
           echo "🧪 Running tests..."
