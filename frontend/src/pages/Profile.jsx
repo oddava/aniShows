@@ -50,6 +50,18 @@ const PlatformIcon = ({ platform }) => {
             <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
         </svg>
     );
+    // Buymeacoffee icon
+    if (p.includes('buymeacoffee') || p.includes('coffee')) return (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M5.59 2.028A1.587 1.587 0 0 1 6.883 1h10.235c.608 0 1.147.352 1.411.891l.027.063 1.211 5.515a2.59 2.59 0 0 1-.208 1.643l-.006.013-.01.019a2.65 2.65 0 0 1-1.025 1.072l-.013.006-.013.008a3.768 3.768 0 0 1-.97.253l-.032.003H4.51l-.032-.003a3.768 3.768 0 0 1-.97-.253l-.013-.008-.013-.006a2.65 2.65 0 0 1-1.025-1.072l-.01-.019-.006-.013a2.59 2.59 0 0 1-.208-1.643l1.211-5.515.027-.063a1.587 1.587 0 0 1 1.17-.855l.035-.005zm.71 8.012h11.403l-.095.092a3.813 3.813 0 0 1-1.068.65l-.024.01-.024.01a4.63 4.63 0 0 1-1.12.251l-.032.004H6.86l-.032-.004a4.63 4.63 0 0 1-1.12-.251l-.024-.01-.024-.01a3.813 3.813 0 0 1-1.068-.65l-.095-.092zM4.504 12h15.001c.32 0 .593.204.697.487l.015.046.001.024c.002.018.002.037.002.057l-.001.056-.001.024-.015.046a.75.75 0 0 1-.697.487h-.006l-.002 4.5c0 .966-.405 1.84-1.055 2.46l-.015.014-.014.015A3.493 3.493 0 0 1 16.55 21H7.449a3.493 3.493 0 0 1-2.359-.808l-.014-.015-.015-.014A3.473 3.473 0 0 1 4.506 17.5V12h-.002z"/>
+        </svg>
+    );
+    // Telegram icon
+    if (p.includes('telegram')) return (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+        </svg>
+    );
     return <LinkIcon className="w-4 h-4" />;
 };
 
@@ -697,18 +709,41 @@ export default function Profile({ forcedUsername }) {
                             {/* Social Links */}
                             {displayUser?.social_links?.length > 0 && (
                                 <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start">
-                                    {displayUser.social_links.map((link, index) => (
-                                        <a
-                                            key={index}
-                                            href={link.value.startsWith('http') ? link.value : `https://${link.value}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all border border-white/5 text-xs font-medium"
-                                        >
-                                            <PlatformIcon platform={link.platform} />
-                                            <span>{link.platform}</span>
-                                        </a>
-                                    ))}
+                                    {displayUser.social_links.map((link, index) => {
+                                        // Handle both old format {platform, value} and new format {platform, url, metadata}
+                                        const url = link.url || link.value || '';
+                                        const displayUrl = url.startsWith('http') ? url : `https://${url}`;
+                                        const metadata = link.metadata || {};
+                                        const favicon = metadata.favicon;
+                                        
+                                        return (
+                                            <a
+                                                key={index}
+                                                href={displayUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-300 hover:text-white transition-all border border-white/10 text-xs font-medium"
+                                                title={metadata.title || link.platform}
+                                            >
+                                                {favicon ? (
+                                                    <img 
+                                                        src={favicon} 
+                                                        alt="" 
+                                                        className="w-4 h-4 rounded-sm object-contain"
+                                                        onError={(e) => {
+                                                            // Fallback to platform icon on error
+                                                            e.target.style.display = 'none';
+                                                            e.target.nextElementSibling.style.display = 'block';
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <span style={{ display: favicon ? 'none' : 'block' }}>
+                                                    <PlatformIcon platform={link.platform} />
+                                                </span>
+                                                <span>{link.platform}</span>
+                                            </a>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

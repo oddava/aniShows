@@ -6,8 +6,8 @@ from apps.core.models import Notification
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
 from apps.users.models import UserProfile
-from apps.anime.models import Anime, ReviewComment
-from apps.api.services.email_service import send_email_task
+from apps.animes.models import Anime, ReviewComment
+from apps.users.services.email_service import send_email_task
 
 logger = logging.getLogger(__name__)
 

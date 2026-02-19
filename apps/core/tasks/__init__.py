@@ -11,3 +11,9 @@ from apps.core.tasks.cleanup_tasks import (
     cleanup_celery_backend,
     health_check_workers,
 )
+
+# Import metadata tasks
+from apps.core.tasks.metadata import (
+    fetch_link_metadata_async,
+    fetch_multiple_link_metadata,
+)

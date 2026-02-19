@@ -1,0 +1,1318 @@
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.utils.html import escape
+from django.conf import settings
+from apps.animes.models import (
+    Anime,
+    Genre,
+    Studio,
+    UserFavorite,
+    Review,
+    ReviewComment,
+    Character,
+    Staff,
+    AnimeCharacter,
+    AnimeStaff,
+    ThemeSong,
+)
+from apps.users.models import UserProfile, UserAnimeList
+from apps.animes.serializers_mixins import ImageUrlMixin
+import logging
+
+User = get_user_model()
+logger = logging.getLogger(__name__)
+
+# Import limits from settings
+MAX_AVATAR_SIZE = getattr(settings, "MAX_AVATAR_SIZE", 2 * 1024 * 1024)
+MAX_BANNER_SIZE = getattr(settings, "MAX_BANNER_SIZE", 5 * 1024 * 1024)
+ALLOWED_IMAGE_TYPES = getattr(
+    settings,
+    "ALLOWED_IMAGE_TYPES",
+    ["image/jpeg", "image/png", "image/webp", "image/gif"],
+)
+MAX_BIO_LENGTH = getattr(settings, "MAX_BIO_LENGTH", 1000)
+MAX_REVIEW_LENGTH = getattr(settings, "MAX_REVIEW_LENGTH", 5000)
+MAX_COMMENT_LENGTH = getattr(settings, "MAX_COMMENT_LENGTH", 2000)
+
+
+def validate_image_content(file, max_size, field_name):
+    """
+    Validate image file content for security.
+    Checks file size, magic bytes, and image integrity.
+    """
+    import magic
+    from PIL import Image
+
+    # Check file size
+    if file.size > max_size:
+        raise serializers.ValidationError(
+            f"{field_name} file too large. Maximum size is {max_size // (1024 * 1024)}MB."
+        )
+
+    # Check magic bytes for actual content type
+    file.seek(0)
+    magic_bytes = file.read(2048)
+    file.seek(0)
+
+    mime = magic.from_buffer(magic_bytes, mime=True)
+    if mime not in ALLOWED_IMAGE_TYPES:
+        raise serializers.ValidationError(
+            f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
+        )
+
+    # Verify image can be opened and is not corrupted
+    try:
+        img = Image.open(file)
+        img.verify()  # Verify it's a valid image
+        file.seek(0)
+    except Exception:
+        raise serializers.ValidationError(
+            f"Invalid or corrupted image file for {field_name}."
+        )
+
+    return file
+
+
+class GenreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Genre
+        fields = ["id", "name", "slug"]
+
+
+class StudioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Studio
+        fields = ["id", "name", "website"]
+
+
+class CharacterSerializer(ImageUrlMixin, serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    image_small = serializers.SerializerMethodField()
+    image_medium = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Character
+        fields = [
+            "id",
+            "name",
+            "name_native",
+            "image",
+            "image_small",
+            "image_medium",
+            "description",
+        ]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
+
+    def get_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "image_small", "image", "image_url"
+        )
+
+    def get_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "image_medium", "image", "image_url"
+        )
+
+
+class StaffSerializer(ImageUrlMixin, serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    image_small = serializers.SerializerMethodField()
+    image_medium = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Staff
+        fields = [
+            "id",
+            "name",
+            "name_native",
+            "image",
+            "image_small",
+            "image_medium",
+            "description",
+        ]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
+
+    def get_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "image_small", "image", "image_url"
+        )
+
+    def get_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "image_medium", "image", "image_url"
+        )
+
+
+class AnimeCharacterSerializer(serializers.ModelSerializer):
+    character = CharacterSerializer(read_only=True)
+    voice_actor = StaffSerializer(read_only=True)
+
+    class Meta:
+        model = AnimeCharacter
+        fields = ["id", "character", "role", "voice_actor"]
+
+
+class AnimeStaffSerializer(serializers.ModelSerializer):
+    staff = StaffSerializer(read_only=True)
+
+    class Meta:
+        model = AnimeStaff
+        fields = ["id", "staff", "role"]
+
+
+class ThemeSongSerializer(serializers.ModelSerializer):
+    """Serializer for anime theme songs (openings and endings)"""
+
+    class Meta:
+        model = ThemeSong
+        fields = [
+            "id",
+            "song_type",
+            "track_number",
+            "title",
+            "artist",
+            "episodes",
+            "spotify_url",
+            "youtube_url",
+        ]
+
+
+class AnimeMinimalSerializer(ImageUrlMixin, serializers.ModelSerializer):
+    """Minimal serializer for list views - excludes synopsis for smaller payload"""
+
+    genres = GenreSerializer(many=True, read_only=True)
+    studio_name = serializers.CharField(
+        source="studio.name", read_only=True, default=None
+    )
+    is_favorite = serializers.SerializerMethodField()
+    user_list_status = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    cover_image_medium = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Anime
+        fields = [
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
+            "rating",
+            "episode_count",
+            "anime_type",
+            "status",
+            "genres",
+            "studio_name",
+            "is_favorite",
+            "user_list_status",
+            "release_date",
+            "next_airing_episode",
+            "next_airing_date",
+        ]
+
+    def get_cover_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_small", "cover_image", "cover_image_external_url"
+        )
+
+    def get_cover_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_medium", "cover_image", "cover_image_external_url"
+        )
+
+    def get_is_favorite(self, obj):
+        # Use prefetched annotation only - no fallback to avoid N+1
+        if hasattr(obj, "_is_favorite"):
+            return obj._is_favorite
+        return False
+
+    def get_user_list_status(self, obj):
+        # Use prefetched list entries only - no fallback to avoid N+1
+        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
+            entry = obj._user_list_entries[0]
+            return {
+                "id": entry.id,
+                "status": entry.status,
+                "episodes_watched": entry.episodes_watched,
+                "progress": (entry.episodes_watched / obj.episode_count * 100)
+                if obj.episode_count and obj.episode_count > 0
+                else 0,
+            }
+        return None
+
+
+class AnimeListSerializer(ImageUrlMixin, serializers.ModelSerializer):
+    """Lightweight serializer for lists with synopsis"""
+
+    genres = GenreSerializer(many=True, read_only=True)
+    studio_name = serializers.CharField(
+        source="studio.name", read_only=True, default=None
+    )
+    is_favorite = serializers.SerializerMethodField()
+    user_list_status = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    cover_image_medium = serializers.SerializerMethodField()
+    banner_image_small = serializers.SerializerMethodField()
+    banner_image_medium = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Anime
+        fields = [
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
+            "banner_image",
+            "banner_image_small",
+            "banner_image_medium",
+            "rating",
+            "episode_count",
+            "anime_type",
+            "status",
+            "genres",
+            "studio_name",
+            "is_favorite",
+            "user_list_status",
+            "synopsis",
+            "release_date",
+            "next_airing_episode",
+            "next_airing_date",
+        ]
+
+    def get_cover_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_small", "cover_image", "cover_image_external_url"
+        )
+
+    def get_cover_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_medium", "cover_image", "cover_image_external_url"
+        )
+
+    def get_banner_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_small", "banner_image", "banner_image_external_url"
+        )
+
+    def get_banner_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_medium", "banner_image", "banner_image_external_url"
+        )
+
+    def get_is_favorite(self, obj):
+        # Use prefetched annotation only - no fallback to avoid N+1
+        if hasattr(obj, "_is_favorite"):
+            return obj._is_favorite
+        return False
+
+    def get_user_list_status(self, obj):
+        # Use prefetched list entries only - no fallback to avoid N+1
+        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
+            entry = obj._user_list_entries[0]
+            return {
+                "id": entry.id,
+                "status": entry.status,
+                "score": entry.score,
+                "episodes_watched": entry.episodes_watched,
+                "progress": (entry.episodes_watched / obj.episode_count * 100)
+                if obj.episode_count and obj.episode_count > 0
+                else 0,
+            }
+        return None
+
+
+class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
+    """Full serializer for detail page"""
+
+    genres = GenreSerializer(many=True, read_only=True)
+    studio = StudioSerializer(read_only=True)
+    characters = AnimeCharacterSerializer(source="cast", many=True, read_only=True)
+    staff = AnimeStaffSerializer(source="production_staff", many=True, read_only=True)
+    theme_songs = ThemeSongSerializer(many=True, read_only=True)
+
+    is_favorite = serializers.SerializerMethodField()
+    user_list_status = serializers.SerializerMethodField()
+    user_review = serializers.SerializerMethodField()
+    review_count = serializers.IntegerField(read_only=True)
+    avg_rating = serializers.DecimalField(
+        max_digits=3, decimal_places=1, read_only=True
+    )
+    status_distribution = serializers.SerializerMethodField()
+    cover_image_small = serializers.SerializerMethodField()
+    cover_image_medium = serializers.SerializerMethodField()
+    cover_image_large = serializers.SerializerMethodField()
+    banner_image_small = serializers.SerializerMethodField()
+    banner_image_medium = serializers.SerializerMethodField()
+    banner_image_large = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Anime
+        fields = [
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "synopsis",
+            "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
+            "cover_image_large",
+            "banner_image",
+            "banner_image_small",
+            "banner_image_medium",
+            "banner_image_large",
+            "trailer_url",
+            "rating",
+            "episode_count",
+            "duration_minutes",
+            "anime_type",
+            "status",
+            "release_date",
+            "end_date",
+            "genres",
+            "studio",
+            "characters",
+            "staff",
+            "external_links",
+            "relations",
+            "site_rank",
+            "popularity_rank",
+            "is_favorite",
+            "user_list_status",
+            "user_review",
+            "review_count",
+            "avg_rating",
+            "created_at",
+            "next_airing_episode",
+            "next_airing_date",
+            "status_distribution",
+            "member_count",
+            "source_material",
+            "season",
+            "season_year",
+            "theme_songs",
+        ]
+
+    def get_cover_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_small", "cover_image", "cover_image_external_url"
+        )
+
+    def get_cover_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_medium", "cover_image", "cover_image_external_url"
+        )
+
+    def get_cover_image_large(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_large", "cover_image", "cover_image_external_url"
+        )
+
+    def get_banner_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_small", "banner_image", "banner_image_external_url"
+        )
+
+    def get_banner_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_medium", "banner_image", "banner_image_external_url"
+        )
+
+    def get_banner_image_large(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_large", "banner_image", "banner_image_external_url"
+        )
+
+    def get_is_favorite(self, obj):
+        # Use prefetched annotation only - no fallback to avoid N+1
+        if hasattr(obj, "_is_favorite"):
+            return obj._is_favorite
+        return False
+
+    def get_user_list_status(self, obj):
+        # Use prefetched list entries only - no fallback to avoid N+1
+        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
+            entry = obj._user_list_entries[0]
+            return {
+                "id": entry.id,
+                "status": entry.status,
+                "score": entry.score,
+                "episodes_watched": entry.episodes_watched,
+                "progress": (entry.episodes_watched / obj.episode_count * 100)
+                if obj.episode_count and obj.episode_count > 0
+                else 0,
+            }
+        return None
+
+    def get_user_review(self, obj):
+        # Use prefetched annotation if available
+        if hasattr(obj, "_user_review"):
+            return obj._user_review
+        return None
+
+    def get_status_distribution(self, obj):
+        """Calculate anime list status distribution from prefetched data."""
+        from apps.users.models import UserAnimeList
+
+        distribution = {
+            "watching": 0,
+            "completed": 0,
+            "on_hold": 0,
+            "dropped": 0,
+            "plan_to_watch": 0,
+        }
+
+        # Use prefetched user_lists if available
+        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get(
+            "user_lists"
+        ) or getattr(obj, "user_lists", None)
+
+        if user_lists:
+            for entry in user_lists.all():
+                status_key = entry.status.lower().replace(" ", "_")
+                if status_key in distribution:
+                    distribution[status_key] += 1
+
+        return distribution
+
+    def get_member_count(self, obj):
+        """Get total number of users who have this anime in their list."""
+        from apps.users.models import UserAnimeList
+
+        # Use prefetched data if available
+        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get(
+            "user_lists"
+        ) or getattr(obj, "user_lists", None)
+
+        if user_lists is not None:
+            return user_lists.count()
+
+        # Fallback to querying
+        return UserAnimeList.objects.filter(anime=obj).count()
+
+
+class UserSerializer(serializers.ModelSerializer):
+    avatar = serializers.SerializerMethodField()
+    banner = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    is_private = serializers.SerializerMethodField()
+    favorites_count = serializers.IntegerField(
+        read_only=True, source="_favorites_count"
+    )
+    reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
+
+    # Computed stats
+    days_watched = serializers.SerializerMethodField()
+    mean_score = serializers.SerializerMethodField()
+    anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
+    episodes_watched = serializers.IntegerField(
+        read_only=True, source="_episodes_watched"
+    )
+
+    def get_days_watched(self, obj):
+        """Return days watched rounded to 1 decimal place"""
+        days = getattr(obj, "_days_watched", None)
+        if days is not None:
+            return round(float(days), 1)
+        return 0.0
+
+    def get_mean_score(self, obj):
+        """Return mean score rounded to 1 decimal place"""
+        raw_score = getattr(obj, "_mean_score_raw", None)
+        if raw_score is not None:
+            return round(float(raw_score), 1)
+        return None
+
+    # Social links
+    social_links = serializers.SerializerMethodField()
+
+    email_verified = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
+
+    # Social features
+    points = serializers.SerializerMethodField()
+    followers_count = serializers.IntegerField(
+        read_only=True, source="_followers_count"
+    )
+    following_count = serializers.IntegerField(
+        read_only=True, source="_following_count"
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "date_joined",
+            "avatar",
+            "banner",
+            "bio",
+            "is_private",
+            "favorites_count",
+            "reviews_count",
+            "days_watched",
+            "mean_score",
+            "anime_count",
+            "episodes_watched",
+            "social_links",
+            "email_verified",
+            "has_password",
+            "is_staff",
+            "is_superuser",
+            "points",
+            "followers_count",
+            "following_count",
+        ]
+        read_only_fields = [
+            "id",
+            "date_joined",
+            "email_verified",
+            "has_password",
+            "is_staff",
+            "is_superuser",
+        ]
+
+    def get_avatar(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.avatar.url if profile and profile.avatar else None
+
+    def get_banner(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.banner.url if profile and profile.banner else None
+
+    def get_bio(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.bio if profile else None
+
+    def get_is_private(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.is_private if profile else False
+
+    def get_email_verified(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.email_verified if profile else False
+
+    def get_has_password(self, obj):
+        return obj.has_usable_password()
+
+    def get_social_links(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.social_links if profile else []
+
+    def get_points(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.points if profile else 0
+
+
+class UserLightweightSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for navbar/quick profile view - no expensive calculations"""
+
+    avatar = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    is_private = serializers.SerializerMethodField()
+    email_verified = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
+
+    # Use default values for stats (0) - will be fetched separately when needed
+    anime_count = serializers.IntegerField(default=0)
+    episodes_watched = serializers.IntegerField(default=0)
+    days_watched = serializers.FloatField(default=0.0)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "avatar",
+            "bio",
+            "is_private",
+            "email_verified",
+            "has_password",
+            "social_links",
+            "anime_count",
+            "episodes_watched",
+            "days_watched",
+            "date_joined",
+        ]
+        read_only_fields = [
+            "id",
+            "date_joined",
+            "email_verified",
+            "has_password",
+        ]
+
+    def get_avatar(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.avatar.url if profile and profile.avatar else None
+
+    def get_bio(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.bio if profile else None
+
+    def get_is_private(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.is_private if profile else False
+
+    def get_email_verified(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.email_verified if profile else False
+
+    def get_has_password(self, obj):
+        return obj.has_usable_password()
+
+    def get_social_links(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.social_links if profile else []
+
+
+class PublicUserSerializer(serializers.ModelSerializer):
+    """Limited serializer for public profile view"""
+
+    avatar = serializers.SerializerMethodField()
+    banner = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    favorites_count = serializers.IntegerField(
+        read_only=True, source="_favorites_count"
+    )
+    reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
+    is_private = serializers.SerializerMethodField()
+
+    # Computed stats
+    days_watched = serializers.SerializerMethodField()
+    mean_score = serializers.SerializerMethodField()
+    anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
+    episodes_watched = serializers.IntegerField(
+        read_only=True, source="_episodes_watched"
+    )
+
+    def get_days_watched(self, obj):
+        """Return days watched rounded to 1 decimal place"""
+        days = getattr(obj, "_days_watched", None)
+        if days is not None:
+            return round(float(days), 1)
+        return 0.0
+
+    def get_mean_score(self, obj):
+        """Return mean score rounded to 1 decimal place"""
+        raw_score = getattr(obj, "_mean_score_raw", None)
+        if raw_score is not None:
+            return round(float(raw_score), 1)
+        return None
+
+    # Dynamic Social links
+    social_links = serializers.SerializerMethodField()
+
+    # Social features
+    points = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    following_count = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
+    is_online = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "date_joined",
+            "avatar",
+            "banner",
+            "bio",
+            "favorites_count",
+            "reviews_count",
+            "is_private",
+            "days_watched",
+            "mean_score",
+            "anime_count",
+            "episodes_watched",
+            "social_links",
+            "points",
+            "followers_count",
+            "following_count",
+            "is_following",
+            "is_online",
+        ]
+        read_only_fields = fields
+
+    def get_avatar(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.avatar.url if profile and profile.avatar else None
+
+    def get_banner(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.banner.url if profile and profile.banner else None
+
+    def get_bio(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.bio if profile else None
+
+    def get_is_private(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.is_private if profile else False
+
+    def get_social_links(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.social_links if profile else []
+
+    def get_points(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.points if profile else 0
+
+    def get_is_following(self, obj):
+        """Check if the current user is following this user"""
+        # Use annotated field if available
+        if hasattr(obj, "_is_following"):
+            return obj._is_following
+
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return obj.followers.filter(follower=request.user).exists()
+        return False
+
+    def get_followers_count(self, obj):
+        """Return followers count from annotation or fallback to database query"""
+        count = getattr(obj, "_followers_count", None)
+        if count is not None:
+            return int(count)
+        # Fallback: query the database
+        return obj.followers.count()
+
+    def get_following_count(self, obj):
+        """Return following count from annotation or fallback to database query"""
+        count = getattr(obj, "_following_count", None)
+        if count is not None:
+            return int(count)
+        # Fallback: query the database
+        return obj.following.count()
+
+    def get_is_online(self, obj):
+        """Check if user is currently online based on recent activity"""
+        from django.core.cache import cache
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Check Redis cache first (fast)
+        cache_key = f"user_online:{obj.id}"
+        if cache.get(cache_key) is not None:
+            return True
+
+        # Fallback: Check last_activity field if within 5 minutes
+        profile = getattr(obj, "userprofile", None)
+        if profile and profile.last_activity:
+            time_since_activity = timezone.now() - profile.last_activity
+            if time_since_activity < timedelta(minutes=5):
+                return True
+
+        return False
+
+
+class UserProfileUpdateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150, required=False)
+    avatar = serializers.ImageField(required=False, allow_null=True)
+    banner = serializers.ImageField(required=False, allow_null=True)
+    remove_banner = serializers.BooleanField(required=False, default=False)
+    bio = serializers.CharField(
+        required=False, allow_blank=True, max_length=MAX_BIO_LENGTH
+    )
+    is_private = serializers.BooleanField(required=False, default=False)
+
+    def validate_is_private(self, value):
+        # Handle string values from FormData
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        return value
+
+    def validate_remove_banner(self, value):
+        # Handle string values from FormData
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        return value
+
+    # Dynamic social links
+    social_links = serializers.JSONField(required=False)
+
+    def validate_social_links(self, value):
+        from apps.core.services.social_links_service import (
+            SocialLinksService,
+            SocialLinkValidationError,
+        )
+        import json
+
+        # Handle JSON string from FormData
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                raise serializers.ValidationError("Social links must be valid JSON.")
+
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Social links must be a list.")
+
+        if len(value) > 5:
+            raise serializers.ValidationError("Maximum 5 social links allowed.")
+
+        # Clean up empty entries
+        cleaned_links = []
+        for link in value:
+            if (
+                isinstance(link, dict)
+                and link.get("platform", "").strip()
+                and link.get("value", "").strip()
+            ):
+                cleaned_links.append(
+                    {
+                        "platform": link["platform"].strip(),
+                        "value": link["value"].strip(),
+                    }
+                )
+
+        # Use the new SocialLinksService for validation
+        service = SocialLinksService()
+
+        try:
+            # Get user from context if available
+            user = (
+                self.context.get("request").user
+                if self.context.get("request")
+                else None
+            )
+            processed_links = service.validate_and_process(cleaned_links, user)
+            return processed_links
+        except SocialLinkValidationError as e:
+            raise serializers.ValidationError(str(e))
+
+    def validate_avatar(self, value):
+        """Validate avatar file size, type, and content."""
+        if value is None:
+            return value
+        return validate_image_content(value, MAX_AVATAR_SIZE, "Avatar")
+
+    def validate_banner(self, value):
+        """Validate banner file size, type, and content."""
+        if value is None:
+            return value
+        return validate_image_content(value, MAX_BANNER_SIZE, "Banner")
+
+    def validate_bio(self, value):
+        """Sanitize bio text to prevent XSS."""
+        if value:
+            # Basic HTML escape for XSS prevention
+            return escape(value.strip())
+        return value
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    class Meta:
+        model = User
+        fields = ["username", "email", "password"]
+
+    def validate_email(self, value):
+        # Normalize email to prevent case-based enumeration
+        normalized_email = value.lower().strip()
+
+        # Check for existing email to prevent duplicates
+        # This provides defense in depth even if DB doesn't enforce uniqueness
+        if User.objects.filter(email=normalized_email).exists():
+            raise serializers.ValidationError(
+                "Unable to create account. The email or username may already be in use."
+            )
+
+        return normalized_email
+
+    def create(self, validated_data):
+        from django.db import IntegrityError
+
+        try:
+            user = User.objects.create_user(
+                username=validated_data["username"],
+                email=validated_data["email"],
+                password=validated_data["password"],
+            )
+            return user
+        except IntegrityError:
+            # Don't reveal if email/username exists - return generic error
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Unable to create account. The email or username may already be in use."
+                    ]
+                }
+            )
+
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    anime = AnimeListSerializer(read_only=True)
+    anime_id = serializers.PrimaryKeyRelatedField(
+        queryset=Anime.objects.all(), source="anime", write_only=True
+    )
+
+    class Meta:
+        model = UserFavorite
+        fields = ["id", "anime", "anime_id", "added_at"]
+        read_only_fields = ["id", "added_at"]
+
+
+class UserAnimeListSerializer(serializers.ModelSerializer):
+    anime = AnimeListSerializer(read_only=True)
+    anime_id = serializers.PrimaryKeyRelatedField(
+        queryset=Anime.objects.all(),
+        source="anime",
+        write_only=True,
+        required=False,  # Not required for updates
+    )
+    status = serializers.ChoiceField(
+        choices=UserAnimeList.UserAnimeStatus.choices, required=False
+    )
+    progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserAnimeList
+        fields = [
+            "id",
+            "anime",
+            "anime_id",
+            "status",
+            "score",
+            "episodes_watched",
+            "progress",
+            "updated_at",
+        ]
+
+    def get_progress(self, obj):
+        if obj.anime.episode_count and obj.anime.episode_count > 0:
+            return int((obj.episodes_watched / obj.anime.episode_count) * 100)
+        return 0
+
+    def validate(self, attrs):
+        # For creation, anime_id is required
+        if not self.instance and "anime" not in attrs:
+            raise serializers.ValidationError({"anime_id": "This field is required."})
+
+        episodes_watched = attrs.get("episodes_watched")
+        anime = attrs.get("anime")
+        status = attrs.get("status")
+
+        # If updating, anime might not be in attrs, get from instance
+        if not anime and self.instance:
+            anime = self.instance.anime
+
+        if episodes_watched is not None and anime and anime.episode_count > 0:
+            if episodes_watched > anime.episode_count:
+                raise serializers.ValidationError(
+                    {
+                        "episodes_watched": f"Episodes watched cannot exceed total episodes ({anime.episode_count})."
+                    }
+                )
+
+            # Auto-complete logic
+            if episodes_watched == anime.episode_count:
+                attrs["status"] = UserAnimeList.UserAnimeStatus.completed
+
+        # If status is set to Completed, ensure episodes_watched is set to max
+        if (
+            status == UserAnimeList.UserAnimeStatus.completed
+            and anime
+            and anime.episode_count > 0
+        ):
+            attrs["episodes_watched"] = anime.episode_count
+
+        return attrs
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    anime = AnimeListSerializer(read_only=True)
+    anime_slug = serializers.SlugRelatedField(
+        slug_field="slug", queryset=Anime.objects.all(), source="anime", write_only=True
+    )
+    has_spoilers = serializers.BooleanField(default=False, required=False)
+    text = serializers.CharField(
+        required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH
+    )
+
+    # Use annotated fields from the view to avoid N+1 queries
+    is_completed = serializers.BooleanField(read_only=True, source="_is_completed")
+    helpful_count = serializers.IntegerField(read_only=True, source="_helpful_count")
+    user_vote = serializers.SerializerMethodField()
+    comment_count = serializers.IntegerField(read_only=True, source="_comment_count")
+
+    class Meta:
+        model = Review
+        fields = [
+            "id",
+            "user",
+            "anime",
+            "anime_slug",
+            "rating",
+            "rating_story",
+            "rating_animation",
+            "rating_music",
+            "rating_characters",
+            "text",
+            "has_spoilers",
+            "is_completed",
+            "helpful_count",
+            "user_vote",
+            "comment_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user", "anime", "created_at", "updated_at"]
+
+    def validate_text(self, value):
+        """Sanitize review text to prevent XSS."""
+        if value:
+            return escape(value)
+        return value
+
+    def get_user_vote(self, obj):
+        """Use the annotated _user_vote field to avoid N+1 queries."""
+        # The view annotates _user_vote as a boolean (Exists query result)
+        if hasattr(obj, "_user_vote"):
+            return obj._user_vote if obj._user_vote else None
+
+        # Fallback for when annotation is not available (e.g., single object retrieval)
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            vote = obj.votes.filter(user=request.user).first()
+            if vote:
+                return vote.is_helpful
+        return None
+
+
+class ReviewCommentSerializer(serializers.ModelSerializer):
+    """Serializer for review comments with soft delete support"""
+
+    user = UserSerializer(read_only=True)
+    text = serializers.CharField(
+        required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH
+    )
+    is_owner = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReviewComment
+        fields = [
+            "id",
+            "user",
+            "text",
+            "is_deleted",
+            "is_owner",
+            "can_delete",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user", "is_deleted", "created_at", "updated_at"]
+
+    def validate_text(self, value):
+        """Sanitize comment text to prevent XSS."""
+        if value:
+            return escape(value.strip())
+        return value
+
+    def get_is_owner(self, obj):
+        """Check if current user is the comment author"""
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return obj.user == request.user
+        return False
+
+    def get_can_delete(self, obj):
+        """Check if current user can delete this comment
+
+        Users can delete their own comments, and review owners can delete
+        any comments on their reviews.
+        """
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+
+        # Comment author can delete
+        if obj.user == request.user:
+            return True
+
+        # Review owner can delete any comment on their review
+        if obj.review.user == request.user:
+            return True
+
+        return False
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, write_only=True
+    )
+    new_password = serializers.CharField(required=True, write_only=True, min_length=8)
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        old_password = attrs.get("old_password")
+
+        # Log password change attempt without sensitive details
+        logger.debug("Password change validation attempted")
+
+        # If user has a password, old_password is REQUIRED
+        if user.has_usable_password():
+            if not old_password:
+                raise serializers.ValidationError(
+                    {"old_password": "Current password is required to set a new one."}
+                )
+            if not user.check_password(old_password):
+                raise serializers.ValidationError(
+                    {"old_password": "The current password you entered is incorrect."}
+                )
+
+        return attrs
+
+
+class UserRecommendationSerializer(serializers.ModelSerializer):
+    """Serializer for user recommendations with anime details and reason"""
+
+    anime = AnimeListSerializer(read_only=True)
+    reason_text = serializers.CharField(
+        source="get_reason_display_text", read_only=True
+    )
+
+    class Meta:
+        from apps.animes.models import UserRecommendation
+
+        model = UserRecommendation
+        fields = [
+            "id",
+            "anime",
+            "score",
+            "reason",
+            "reason_text",
+            "reason_metadata",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class UserImportJobSerializer(serializers.ModelSerializer):
+    """Serializer for import jobs"""
+
+    source_display = serializers.CharField(source="get_source_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    progress_percentage = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        from apps.users.models import UserImportJob
+
+        model = UserImportJob
+        fields = [
+            "id",
+            "source",
+            "source_display",
+            "status",
+            "status_display",
+            "total_entries",
+            "processed_entries",
+            "imported_entries",
+            "skipped_entries",
+            "failed_entries",
+            "fetched_entries",
+            "progress_percentage",
+            "errors",
+            "source_identifier",
+            "created_at",
+            "started_at",
+            "completed_at",
+        ]
+        read_only_fields = fields
+
+
+class FollowSerializer(serializers.Serializer):
+    """Serializer for follow/unfollow actions"""
+
+    username = serializers.CharField()
+
+
+class UserFollowListSerializer(serializers.ModelSerializer):
+    """Serializer for displaying followers/following lists"""
+
+    user = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
+    is_follower = serializers.SerializerMethodField()
+
+    class Meta:
+        from apps.users.models import UserFollow
+
+        model = UserFollow
+        fields = ["id", "user", "is_following", "is_follower", "created_at"]
+
+    def get_user(self, obj):
+        # Use the _display_user attribute set by the view
+        user_obj = getattr(obj, "_display_user", obj.follower)
+        profile = getattr(user_obj, "userprofile", None)
+        return {
+            "id": user_obj.id,
+            "username": user_obj.username,
+            "avatar": profile.avatar.url if profile and profile.avatar else None,
+            "points": profile.points if profile else 0,
+        }
+
+    def get_is_following(self, obj):
+        """Check if the current user follows this user"""
+        # Use annotated field if available
+        if hasattr(obj, "_is_following"):
+            return obj._is_following
+        return False
+
+    def get_is_follower(self, obj):
+        """Check if this user follows the current user"""
+        # Use annotated field if available
+        if hasattr(obj, "_is_follower"):
+            return obj._is_follower
+        return False
+
+
+class FriendWatchingSerializer(serializers.ModelSerializer):
+    """Serializer for displaying friends watching a specific anime"""
+
+    user = serializers.SerializerMethodField()
+    anime = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserAnimeList
+        fields = [
+            "id",
+            "user",
+            "anime",
+            "status",
+            "score",
+            "episodes_watched",
+            "updated_at",
+        ]
+
+    def get_user(self, obj):
+        """Return user details with avatar"""
+        user_obj = obj.user
+        profile = getattr(user_obj, "userprofile", None)
+        return {
+            "id": user_obj.id,
+            "username": user_obj.username,
+            "avatar": profile.avatar.url if profile and profile.avatar else None,
+        }
+
+    def get_anime(self, obj):
+        """Return minimal anime info"""
+        return {
+            "id": obj.anime.id,
+            "title": obj.anime.title,
+            "episode_count": obj.anime.episode_count,
+        }

@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { Download, Upload } from 'lucide-react';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
+import SmartLinkInput from '../components/SmartLinkInput';
 
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile } = useAuth();
@@ -17,6 +18,7 @@ export default function Settings() {
     const [username, setUsername] = useState('');
     const [avatarFile, setAvatarFile] = useState(null);
     const [bannerFile, setBannerFile] = useState(null);
+    const [removeBanner, setRemoveBanner] = useState(false);
     const [socialLinks, setSocialLinks] = useState([]);
     const [isPrivate, setIsPrivate] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -58,7 +60,12 @@ export default function Settings() {
         if (user) {
             setBio(user.bio || '');
             setUsername(user.username || '');
-            setSocialLinks(user.social_links || []);
+            // Convert backend 'url' field to frontend 'value' field for compatibility
+            const normalizedLinks = (user.social_links || []).map(link => ({
+                platform: link.platform || '',
+                value: link.value || link.url || ''  // Support both 'value' and 'url' fields
+            }));
+            setSocialLinks(normalizedLinks);
             setIsPrivate(user.is_private || false);
         }
     }, [user]);
@@ -97,33 +104,84 @@ export default function Settings() {
         setIsSavingProfile(true);
         setProfileError('');
         setProfileSuccess('');
+        
+        // Validate social links before saving
+        const nonEmptyLinks = socialLinks.filter(link => 
+            link.platform?.trim() || link.value?.trim()
+        );
+        
+        // Check for empty platform names
+        const emptyPlatformLinks = nonEmptyLinks.filter(link => !link.platform?.trim());
+        if (emptyPlatformLinks.length > 0) {
+            setProfileError('Please provide a platform name for all links');
+            setIsSavingProfile(false);
+            return;
+        }
+        
+        // Check for duplicate links
+        const linkValues = nonEmptyLinks.map(link => link.value?.toLowerCase()?.trim()).filter(Boolean);
+        const uniqueValues = new Set(linkValues);
+        if (linkValues.length !== uniqueValues.size) {
+            setProfileError('Duplicate links detected. Please remove duplicates before saving.');
+            setIsSavingProfile(false);
+            return;
+        }
+        
+        // Check if anything actually changed
+        const hasChanges = (
+            bio !== user.bio ||
+            username.trim() !== user.username ||
+            JSON.stringify(nonEmptyLinks) !== JSON.stringify(user.social_links || []) ||
+            isPrivate !== user.is_private ||
+            avatarFile !== null ||
+            bannerFile !== null ||
+            removeBanner
+        );
+        
+        if (!hasChanges) {
+            setProfileSuccess('No changes to save');
+            setIsSavingProfile(false);
+            return;
+        }
+        
+        // Optimistic UI update - show success immediately
+        setProfileSuccess('Saving...');
+        
         try {
             const formData = new FormData();
+            
+            // Only append changed fields
             if (bio !== user.bio) formData.append('bio', bio);
-            formData.append('username', username.trim());
-            formData.append('social_links', JSON.stringify(socialLinks));
+            if (username.trim() !== user.username) formData.append('username', username.trim());
+            
+            // Only send social links if they changed
+            const currentLinks = user.social_links || [];
+            const linksChanged = JSON.stringify(nonEmptyLinks) !== JSON.stringify(currentLinks);
+            if (linksChanged) {
+                formData.append('social_links', JSON.stringify(nonEmptyLinks));
+            }
+            
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
-            if (avatarFile) {
-                formData.append('avatar', avatarFile);
-            }
-            if (bannerFile) {
-                formData.append('banner', bannerFile);
-            }
+            if (avatarFile) formData.append('avatar', avatarFile);
+            if (bannerFile) formData.append('banner', bannerFile);
+            if (removeBanner) formData.append('remove_banner', 'true');
 
             await authApi.updateProfile(formData);
             setProfileSuccess('Profile updated successfully!');
-            // Refresh profile data immediately to show updates
-            await refreshProfile();
-            // Clear file inputs
+            
+            // Clear file inputs immediately for better UX
             setAvatarFile(null);
             setBannerFile(null);
+            setRemoveBanner(false);
+            
+            // Refresh profile data in background (don't block UI)
+            refreshProfile();
         } catch (err) {
             logger.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
 
             if (err.response?.data) {
                 const data = err.response.data;
-                // If it's a validation error object, grab the first message we find
                 if (typeof data === 'object') {
                     const firstKey = Object.keys(data)[0];
                     const firstVal = data[firstKey];
@@ -134,6 +192,7 @@ export default function Settings() {
                 }
             }
             setProfileError(msg);
+            setProfileSuccess('');
         } finally {
             setIsSavingProfile(false);
         }
@@ -342,8 +401,8 @@ export default function Settings() {
                             {/* Avatar */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-20 h-20 rounded-full bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                    <div className="w-24 h-24 sm:w-20 sm:h-20 rounded-full bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
                                         {avatarFile ? (
                                             <img src={URL.createObjectURL(avatarFile)} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.avatar ? (
@@ -365,22 +424,53 @@ export default function Settings() {
                             {/* Banner */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                <div className="aspect-[4/1] max-w-2xl rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-2">
+                                <div className="relative aspect-[3/1] sm:aspect-[4/1] max-w-2xl rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
                                     {bannerFile ? (
                                         <img src={URL.createObjectURL(bannerFile)} alt="Preview" className="w-full h-full object-cover" />
-                                    ) : user?.banner ? (
+                                    ) : user?.banner && !removeBanner ? (
                                         <img src={user.banner} alt="Current" className="w-full h-full object-cover" />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-500">No Banner</div>
+                                        <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">No Banner</div>
+                                    )}
+                                    {(user?.banner || bannerFile) && !removeBanner && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setRemoveBanner(true);
+                                                setBannerFile(null);
+                                            }}
+                                            className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 text-sm font-medium"
+                                            title="Remove banner"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            <span className="hidden sm:inline">Remove</span>
+                                        </button>
                                     )}
                                 </div>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => setBannerFile(e.target.files[0])}
-                                    className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
-                                               file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
-                                />
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            setBannerFile(e.target.files[0]);
+                                            setRemoveBanner(false);
+                                        }}
+                                        className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
+                                                   file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
+                                    />
+                                    {removeBanner && (
+                                        <div className="flex items-center gap-3 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                            <span className="text-xs text-yellow-400">Banner will be removed on save</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRemoveBanner(false)}
+                                                className="text-xs text-accent hover:text-accent/80"
+                                            >
+                                                Undo
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Bio */}
@@ -397,70 +487,128 @@ export default function Settings() {
                             {/* Social Links */}
                             <div className="pt-4 border-t border-gray-800">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-medium text-white">Social Links</h3>
+                                    <div className="flex items-center gap-3">
+                                        <h3 className="text-lg font-medium text-white">Social Links</h3>
+                                        <span className={`text-sm font-medium ${
+                                            socialLinks.length >= 5 ? 'text-red-400' : 'text-gray-400'
+                                        }`}>
+                                            {socialLinks.length}/5
+                                        </span>
+                                    </div>
                                     {socialLinks.length < 5 && (
                                         <button
                                             type="button"
                                             onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
-                                            className="text-xs font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1"
+                                            className="text-xs font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 rounded-lg hover:bg-accent/20"
                                         >
-                                            <Plus className="w-3 h-3" />
+                                            <Plus className="w-3.5 h-3.5" />
                                             Add Link
                                         </button>
                                     )}
                                 </div>
 
-                                <div className="space-y-3 max-w-xl">
+                                <div className="space-y-4 max-w-2xl">
                                     {socialLinks.length === 0 ? (
-                                        <p className="text-sm text-gray-500 italic">No social links added yet.</p>
+                                        <div className="p-6 bg-dark-200/30 rounded-xl border border-white/5 text-center">
+                                            <p className="text-gray-500 mb-2">No social links added yet.</p>
+                                            <p className="text-xs text-gray-600">Add up to 5 links to your profile</p>
+                                        </div>
                                     ) : (
-                                        socialLinks.map((link, index) => (
-                                            <div key={index} className="flex items-start gap-3 bg-dark-200/50 p-3 rounded-lg border border-white/5 group">
-                                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                    <div>
-                                                        <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Platform</label>
-                                                        <input
-                                                            type="text"
-                                                            value={link.platform}
-                                                            onChange={(e) => {
-                                                                const newLinks = [...socialLinks];
-                                                                newLinks[index].platform = e.target.value;
-                                                                setSocialLinks(newLinks);
-                                                            }}
-                                                            className="input py-1.5 text-sm w-full"
-                                                            placeholder="e.g. Twitter, Discord"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-500 mb-1">Username/URL</label>
-                                                        <input
-                                                            type="text"
+                                        <>
+                                            {socialLinks.map((link, index) => {
+                                                // Check for duplicates
+                                                const isDuplicate = socialLinks.some((l, i) => 
+                                                    i !== index && 
+                                                    l.value && 
+                                                    link.value && 
+                                                    l.value.toLowerCase() === link.value.toLowerCase()
+                                                );
+                                                
+                                                // Check for empty platform
+                                                const isEmptyPlatform = !link.platform?.trim();
+                                                
+                                                return (
+                                                    <div 
+                                                        key={index} 
+                                                        className={`relative bg-dark-200/50 p-4 rounded-xl border transition-all ${
+                                                            isDuplicate 
+                                                                ? 'border-red-500/30 bg-red-500/5' 
+                                                                : isEmptyPlatform
+                                                                    ? 'border-yellow-500/30'
+                                                                    : 'border-white/10'
+                                                        }`}
+                                                    >
+                                                        {/* Header with index and remove button */}
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-xs font-medium text-gray-500">
+                                                                Link {index + 1}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (confirm('Remove this link?')) {
+                                                                        setSocialLinks(socialLinks.filter((_, i) => i !== index));
+                                                                    }
+                                                                }}
+                                                                className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                                title="Remove link"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        <SmartLinkInput
+                                                            platform={link.platform}
                                                             value={link.value}
-                                                            onChange={(e) => {
+                                                            onChange={(newValue) => {
                                                                 const newLinks = [...socialLinks];
-                                                                newLinks[index].value = e.target.value;
+                                                                newLinks[index].value = newValue;
                                                                 setSocialLinks(newLinks);
                                                             }}
-                                                            className="input py-1.5 text-sm w-full"
-                                                            placeholder="Enter username or link"
+                                                            onPlatformChange={(newPlatform) => {
+                                                                const newLinks = [...socialLinks];
+                                                                newLinks[index].platform = newPlatform;
+                                                                setSocialLinks(newLinks);
+                                                            }}
+                                                            disabled={isSavingProfile}
                                                         />
+                                                        
+                                                        {/* Warnings */}
+                                                        {isDuplicate && (
+                                                            <div className="flex items-center gap-1.5 mt-2 text-red-400 text-xs">
+                                                                <AlertCircle className="w-3.5 h-3.5" />
+                                                                <span>Duplicate link detected</span>
+                                                            </div>
+                                                        )}
+                                                        {isEmptyPlatform && (
+                                                            <div className="flex items-center gap-1.5 mt-2 text-yellow-400 text-xs">
+                                                                <AlertCircle className="w-3.5 h-3.5" />
+                                                                <span>Platform name is required</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSocialLinks(socialLinks.filter((_, i) => i !== index))}
-                                                    className="p-2 text-gray-500 hover:text-red-400 transition-colors mt-4 sm:mt-5 opacity-0 group-hover:opacity-100"
-                                                    title="Remove link"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                );
+                                            })}
+                                            
+                                            {/* Help text */}
+                                            <div className="p-4 bg-dark-200/30 rounded-xl border border-white/5">
+                                                <h4 className="text-xs font-medium text-gray-400 mb-2">Tips:</h4>
+                                                <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
+                                                    <li>Enter @username for social platforms or paste a full URL</li>
+                                                    <li>Links are automatically normalized (e.g., @user → https://x.com/user)</li>
+                                                    <li>You can add up to 5 links to your profile</li>
+                                                </ul>
                                             </div>
-                                        ))
+                                        </>
                                     )}
-                                    {socialLinks.length > 0 && (
-                                        <p className="text-[10px] text-gray-500 mt-2">
-                                            Tip: Twitter/Instagram/YouTube links normalize automatically from usernames!
-                                        </p>
+                                    
+                                    {socialLinks.length >= 5 && (
+                                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                            <p className="text-xs text-yellow-400 text-center">
+                                                Maximum of 5 links reached. Remove a link to add a new one.
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>

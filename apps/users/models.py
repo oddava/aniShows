@@ -21,7 +21,7 @@ from django.db.models.fields import (
 )
 from django.conf import settings
 from root.storage_backends import MediaStorage
-from apps.api.utils.file_security import user_avatar_path, user_banner_path
+from apps.users.utils.file_security import user_avatar_path, user_banner_path
 
 
 class CustomUser(AbstractUser):
@@ -225,3 +225,32 @@ class UserStats(Model):
     def calculated_days_watched(self):
         """Calculate days from total minutes."""
         return round(self.total_minutes / 1440.0, 1)
+
+
+class SocialLinkChangeLog(models.Model):
+    """Audit log for social link changes"""
+
+    class ActionChoices(models.TextChoices):
+        ADD = "add", "Add"
+        EDIT = "edit", "Edit"
+        DELETE = "delete", "Delete"
+
+    user = ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="social_link_logs"
+    )
+    action = CharField(max_length=20, choices=ActionChoices.choices)
+    old_value = models.JSONField(null=True, blank=True)
+    new_value = models.JSONField(default=dict)
+    ip_address = models.GenericIPAddressField()
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["user", "-created_at"]),
+            Index(fields=["action", "-created_at"]),
+            Index(fields=["created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.action} at {self.created_at}"

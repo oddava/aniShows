@@ -119,9 +119,8 @@ export default function useColorExtraction(imageUrl) {
                     });
                 }
             } catch (err) {
-                console.warn('Color extraction failed:', err);
+                // Silently fail - keep default colors
                 setError(err);
-                // Keep default colors on error
             } finally {
                 setIsLoading(false);
                 extractionRef.current = false;

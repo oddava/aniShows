@@ -16,9 +16,9 @@ from celery import shared_task
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from apps.anime.services.anilist import AniListService
+from apps.animes.services.anilist import AniListService
 from apps.users.models import UserImportJob
-from apps.users.import_services import ImportService
+from apps.users.services.import_service import ImportService
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -380,8 +380,8 @@ def warm_profile_cache(usernames: list = None):
     Args:
         usernames: List of usernames to warm, or None for popular users
     """
-    from apps.api.views.users import get_annotated_user_queryset
-    from apps.api.serializers import PublicUserSerializer
+    from apps.users.views.users import get_annotated_user_queryset
+    from apps.animes.serializers import PublicUserSerializer
     from django.core.cache import cache
 
     if not usernames:

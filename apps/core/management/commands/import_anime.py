@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django.core.files.base import ContentFile
 from asgiref.sync import sync_to_async
-from apps.anime.models import Anime, Genre, Studio
+from apps.animes.models import Anime, Genre, Studio
 import httpx
 import asyncio
 import json
@@ -347,7 +347,7 @@ class Command(BaseCommand):
 
         # Queue thumbnail generation asynchronously to avoid blocking import
         # This runs in the background via Celery
-        from apps.anime.tasks import generate_image_thumbnails
+        from apps.animes.tasks import generate_image_thumbnails
 
         generate_image_thumbnails.delay(anime.id)
 

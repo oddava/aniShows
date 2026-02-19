@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Sum, Case, When, IntegerField
 
 from apps.users.models import UserProfile
-from apps.anime.models import ReviewVote
+from apps.animes.models import ReviewVote
 
 
 class Command(BaseCommand):

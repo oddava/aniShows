@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 # Import celery admin to register models (registers automatically via @admin.register)
-import apps.core.celery_admin  # noqa: F401
+from apps.core import celery_admin  # noqa: F401
 
 from apps.core.models import SystemLog, AuditLog
 

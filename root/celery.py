@@ -49,13 +49,13 @@ app.conf.task_routes = {
     # HIGH PRIORITY - Important for user experience
     # =========================================================================
     # Anime Catalog Sync Tasks
-    "apps.anime.tasks.sync.sync_anime_catalog": {"queue": "high_priority"},
+    "apps.animes.tasks.sync.sync_anime_catalog": {"queue": "high_priority"},
     # Airing Workflow - affects schedule display
-    "apps.anime.tasks.airing.sync_airing_workflow": {"queue": "high_priority"},
+    "apps.animes.tasks.airing.sync_airing_workflow": {"queue": "high_priority"},
     # Theme Song Sync - time-sensitive but can queue
-    "apps.anime.tasks.themes.sync_theme_songs": {"queue": "high_priority"},
+    "apps.animes.tasks.themes.sync_theme_songs": {"queue": "high_priority"},
     # Franchise Sync - important for navigation
-    "apps.anime.tasks.franchises.sync_franchises": {"queue": "high_priority"},
+    "apps.animes.tasks.franchises.sync_franchises": {"queue": "high_priority"},
     # =========================================================================
     # DEFAULT QUEUE - Standard operations
     # =========================================================================
@@ -70,27 +70,27 @@ app.conf.task_routes = {
     # =========================================================================
     # BATCH QUEUE - Import/export operations
     # =========================================================================
-    "apps.anime.tasks.metadata.enrich_metadata": {"queue": "batch"},
+    "apps.animes.tasks.metadata.enrich_metadata": {"queue": "batch"},
     # =========================================================================
     # IMAGES QUEUE - Image processing
     # =========================================================================
-    "apps.anime.tasks.images.generate_image_thumbnails": {"queue": "images"},
+    "apps.animes.tasks.images.generate_image_thumbnails": {"queue": "images"},
     # =========================================================================
     # NOTIFICATIONS QUEUE - Email/push
     # =========================================================================
-    "apps.api.services.email_service.*": {"queue": "notifications"},
+    "apps.users.services.email_service.*": {"queue": "notifications"},
     # =========================================================================
     # ANALYTICS QUEUE - Statistics and reporting
     # =========================================================================
-    "apps.anime.tasks.recommendations.generate_recommendations": {"queue": "analytics"},
+    "apps.animes.tasks.recommendations.generate_recommendations": {"queue": "analytics"},
     "apps.users.tasks.update_user_statistics": {"queue": "analytics"},
     # =========================================================================
     # LOW PRIORITY - Background maintenance
     # =========================================================================
     # Metadata and maintenance
-    "apps.anime.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
+    "apps.animes.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
     # Cleanup tasks
-    "apps.anime.tasks.airing.cleanup_old_airing_data": {"queue": "low_priority"},
+    "apps.animes.tasks.airing.cleanup_old_airing_data": {"queue": "low_priority"},
     "apps.core.tasks.notifications.cleanup_old_notifications": {
         "queue": "low_priority"
     },

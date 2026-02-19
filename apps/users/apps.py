@@ -8,4 +8,3 @@ class UsersConfig(AppConfig):
 
     def ready(self):
         import apps.users.signals
-        import apps.users.points_signals  # noqa: F401 - Register points update signals

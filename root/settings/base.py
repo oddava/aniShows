@@ -63,8 +63,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "apps.core",
     "apps.users",
-    "apps.anime",
-    "apps.api",
+    "apps.animes",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -123,7 +122,7 @@ REST_AUTH = {
 # =============================================================================
 
 MIDDLEWARE = [
-    "apps.api.middleware.csp_middleware.CSPMiddleware",
+    "apps.users.middleware.csp_middleware.CSPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -135,7 +134,7 @@ MIDDLEWARE = [
     "apps.core.middleware.LoggingMiddleware",
     "apps.core.middleware.AdminAuditMiddleware",
     "apps.core.middleware.ExceptionLoggingMiddleware",
-    "apps.api.middleware.activity_middleware.UserActivityMiddleware",
+    "apps.users.middleware.activity_middleware.UserActivityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
@@ -346,6 +345,7 @@ REST_FRAMEWORK = {
         "user_actions": "120/minute",
         "admin_actions": "60/minute",
         "strict_user": "10/minute",
+        "social_links": "5/day",
     },
 }
 
@@ -429,13 +429,13 @@ CELERY_BEAT_SCHEDULE = {
     # Hourly Tasks (Staggered to avoid API spikes)
     # -------------------------------------------------------------------------
     "sync-trending-hourly": {
-        "task": "apps.anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(minute=5),  # 5 min past hour
         "kwargs": {"sync_type": "trending", "limit": 50},
         "options": {"queue": "default"},
     },
     "sync-airing-workflow-hourly": {
-        "task": "apps.anime.tasks.airing.sync_airing_workflow",
+        "task": "apps.animes.tasks.airing.sync_airing_workflow",
         "schedule": crontab(minute=30),  # 30 min past hour
         "kwargs": {"phases": ["sync"], "batch_size": 100},
         "options": {"queue": "default"},
@@ -443,37 +443,37 @@ CELERY_BEAT_SCHEDULE = {
     # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
     # -------------------------------------------------------------------------
     "sync-seasonal-daily": {
-        "task": "apps.anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(hour=2, minute=0),  # 2:00 AM
         "kwargs": {"sync_type": "seasonal", "limit": 100},
         "options": {"queue": "default"},
     },
     "enrich-metadata-daily": {
-        "task": "apps.anime.tasks.metadata.enrich_metadata",
+        "task": "apps.animes.tasks.metadata.enrich_metadata",
         "schedule": crontab(hour=3, minute=0),  # 3:00 AM
         "kwargs": {"mode": "backfill", "batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "airing-workflow-cleanup-daily": {
-        "task": "apps.anime.tasks.airing.sync_airing_workflow",
+        "task": "apps.animes.tasks.airing.sync_airing_workflow",
         "schedule": crontab(hour=4, minute=0),  # 4:00 AM
         "kwargs": {"phases": ["cleanup", "backfill"], "batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "generate-recommendations-daily": {
-        "task": "apps.anime.tasks.recommendations.generate_recommendations",
+        "task": "apps.animes.tasks.recommendations.generate_recommendations",
         "schedule": crontab(hour=5, minute=0),  # 5:00 AM
         "kwargs": {"limit": 10},
         "options": {"queue": "low_priority"},
     },
     "sync-themes-daily": {
-        "task": "apps.anime.tasks.themes.sync_theme_songs",
+        "task": "apps.animes.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=6, minute=0),  # 6:00 AM
         "kwargs": {"limit": 500},  # Increased from 100 to 500
         "options": {"queue": "default"},
     },
     "sync-themes-retry": {
-        "task": "apps.anime.tasks.themes.sync_theme_songs",
+        "task": "apps.animes.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=18, minute=0),  # 6:00 PM - retry failed
         "kwargs": {"limit": 200, "retry_failed": True},
         "options": {"queue": "low_priority"},
@@ -503,14 +503,14 @@ CELERY_BEAT_SCHEDULE = {
     # Weekly Tasks
     # -------------------------------------------------------------------------
     "sync-upcoming-weekly": {
-        "task": "apps.anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(day_of_week=0, hour=3, minute=30),  # Sunday 3:30 AM
         "kwargs": {"sync_type": "next_season", "limit": 100},
         "options": {"queue": "default"},
     },
     # Weekly: Fetch popular anime to build comprehensive catalog
     "sync-popular-weekly": {
-        "task": "apps.anime.tasks.sync.sync_anime_catalog",
+        "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(day_of_week=1, hour=2, minute=0),  # Monday 2:00 AM
         "kwargs": {
             "sync_type": "airing",
