@@ -141,7 +141,7 @@ class EmailVerificationTests(APITestCase):
     def test_verify_email_success(self):
         """Test successful email verification activates user."""
         url = self._get_verify_url()
-        response = self.client.post(url)
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify user is now active
@@ -152,7 +152,7 @@ class EmailVerificationTests(APITestCase):
     def test_verify_email_invalid_token(self):
         """Test verification fails with invalid token."""
         url = self._get_verify_url(token="invalid-token")
-        response = self.client.post(url)
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # User should still be unverified
@@ -162,7 +162,7 @@ class EmailVerificationTests(APITestCase):
     def test_verify_email_invalid_uid(self):
         """Test verification fails with invalid UID."""
         url = self._get_verify_url(uid="invalid-uid")
-        response = self.client.post(url)
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_verify_already_verified_user(self):
@@ -171,7 +171,7 @@ class EmailVerificationTests(APITestCase):
         self.user.userprofile.save()
 
         url = self._get_verify_url()
-        response = self.client.post(url)
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # We don't necessarily check for specific message if generic success is returned for idempotency
         # But if you implemented specific message, check it.
@@ -204,7 +204,7 @@ class EmailVerificationTests(APITestCase):
         """Test that after verification, user can login."""
         # First verify
         url = self._get_verify_url()
-        self.client.post(url)
+        self.client.get(url)
 
         # Now login should work
         login_data = {"username": "unverified", "password": "securepass123"}

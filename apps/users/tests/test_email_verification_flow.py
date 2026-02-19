@@ -29,7 +29,7 @@ class EmailVerificationFlowTests(APITestCase):
         
         url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
         
-        response = self.client.post(url)
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
@@ -66,7 +66,7 @@ class EmailVerificationFlowTests(APITestCase):
         
         url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
         
-        response = self.client.post(url)
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should still return tokens for auto-login
         self.assertIn('access', response.data)
