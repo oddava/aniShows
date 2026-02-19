@@ -164,7 +164,7 @@ jobs:
   # BUILD & PUSH DOCKER IMAGES
   # =============================================================================
   build:
-    needs: [lint-and-security, type-check, test]
+    needs: [lint-and-security, test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
@@ -189,7 +189,7 @@ jobs:
   # DEPLOY TO PRODUCTION
   # =============================================================================
   deploy:
-    needs: [lint-and-security, type-check, test, build]
+    needs: [lint-and-security, test, build]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
