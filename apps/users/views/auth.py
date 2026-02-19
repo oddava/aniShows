@@ -342,22 +342,32 @@ from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshV
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
 
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
 class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
     """Token refresh serializer with logging for failed attempts."""
 
     def validate(self, attrs):
         try:
             data = super().validate(attrs)
-            logger.info(f"Token refresh successful for user")
+            # logger.info(f"Token refresh successful for user") # Reduce noise
             return data
+        except User.DoesNotExist:
+            # Handle case where token is valid but user was deleted
+            logger.warning("Token refresh failed: User does not exist")
+            raise InvalidToken()
         except Exception as e:
             refresh_token = attrs.get("refresh", "unknown")
             token_preview = (
                 f"{refresh_token[:20]}..." if len(refresh_token) > 20 else refresh_token
             )
-            logger.warning(
-                f"Token refresh failed: {str(e)}, token_preview={token_preview}"
-            )
+            # Don't log full stack trace for known token errors
+            if isinstance(e, (InvalidToken, TokenError)):
+                logger.warning(f"Token refresh failed: {str(e)}")
+            else:
+                logger.error(
+                    f"Token refresh failed: {str(e)}, token_preview={token_preview}", exc_info=True
+                )
             raise
 
 
