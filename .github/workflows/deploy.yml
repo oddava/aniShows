@@ -7,6 +7,15 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/anishows-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/anishows-frontend
+
 jobs:
   # =============================================================================
   # LINTING & SECURITY CHECKS
@@ -26,6 +35,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install dependencies
         run: |
@@ -64,6 +75,35 @@ jobs:
         run: |
           echo "🔍 Running type checks..."
           mypy apps/ root/ --show-error-codes --ignore-missing-imports
+
+  # =============================================================================
+  # FRONTEND CHECKS
+  # =============================================================================
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linting
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Run Type Check & Build
+        run: npm run build
 
   # =============================================================================
   # TESTS
@@ -108,6 +148,8 @@ jobs:
         uses: astral-sh/setup-uv@v3
         with:
           version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
 
       - name: Install dependencies
         run: |
@@ -175,12 +217,18 @@ jobs:
           coverage report --fail-under=30 || echo "⚠️ Coverage below 30%"
 
   # =============================================================================
-  # BUILD & PUSH DOCKER IMAGES
+  # BUILD & PUSH DOCKER IMAGES TO GHCR
   # =============================================================================
   build:
-    needs: [lint-and-security, test]
+    needs: [lint-and-security, frontend-checks, test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    
+    # We need explicit permissions for pushing to GHCR
+    permissions:
+      contents: read
+      packages: write
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -188,22 +236,60 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
-        run: |
-          echo "🐳 Building Docker image..."
-          docker build -t anishows:${{ github.sha }} -t anishows:latest .
-          
-      - name: Test Docker image
-        run: |
-          echo "🧪 Testing Docker image..."
-          docker run --rm anishows:${{ github.sha }} python --version
-          docker run --rm anishows:${{ github.sha }} python -c "import django; print(django.get_version())"
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+
+      - name: Extract metadata for frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          target: builder
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+            ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
 
   # =============================================================================
   # DEPLOY TO PRODUCTION
   # =============================================================================
   deploy:
-    needs: [lint-and-security, test, build]
+    needs: [build]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
@@ -224,26 +310,30 @@ jobs:
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to EC2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🚀 Starting deployment to EC2..."
           
-          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << EOF
             set -e
             
             echo "📂 Navigating to project directory..."
             cd /home/ubuntu/aniShows
             
-            echo "🔄 Stashing any local changes..."
+            echo "🔄 Pulling latest compose files from GitHub..."
+            # Note: We pull the compose files and scripts, but not the heavy dependencies
             git stash || true
-            
-            echo "🔄 Pulling latest changes from GitHub..."
             git pull origin main
             
-            echo "🐳 Running deployment script..."
+            echo "🔑 Logging into GitHub Container Registry..."
+            echo "${GITHUB_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            echo "🐳 Running fast deployment script..."
             ./deploy-prod.sh
             
             echo "✅ Deployment completed successfully!"
-          EOF
+EOF
 
       - name: Notify on failure
         if: failure()

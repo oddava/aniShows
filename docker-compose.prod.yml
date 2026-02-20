@@ -1,29 +1,24 @@
 # Production Docker Compose Configuration for EC2
-#
-# Usage:
-#   1. Build: docker compose -f docker-compose.yml -f docker-compose.prod.yml build
-#   2. Deploy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-#
-# Optimized for small EC2 instances (2 vCPU, 2-4GB RAM)
+# optimized for GHCR pre-built images
 
 services:
-  # Frontend - Production build served by Caddy
+  # Frontend - Init container to copy built artifacts to a shared volume
   frontend:
-    build:
-      context: ./frontend
-      args:
-        - NODE_ENV=production
-    command: [ "sh", "-c", "echo 'Production mode: Frontend served by Caddy' && tail -f /dev/null" ]
-    ports: []
+    image: ghcr.io/oddava/anishows-frontend:latest
+    command: >
+      sh -c "cp -r /app/dist/* /srv/frontend/ && echo 'Frontend copied successfully' && exit 0"
+    volumes:
+      - frontend_dist:/srv/frontend
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 256M
         reservations:
-          memory: 512M
+          memory: 64M
 
   # Web - Optimized Gunicorn settings for small EC2 (t2.micro - 1 vCPU)
   web:
+    image: ghcr.io/oddava/anishows-backend:latest
     command: >
       uv run gunicorn root.wsgi:application --bind 0.0.0.0:8000 --workers 1 --worker-class gthread --threads 4 --worker-connections 1000 --max-requests 1000 --max-requests-jitter 100 --timeout 30 --keep-alive 5 --access-logfile - --error-logfile - --log-level warning
     environment:
@@ -61,6 +56,7 @@ services:
 
   # Celery - Reduced concurrency for EC2
   celery:
+    image: ghcr.io/oddava/anishows-backend:latest
     command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,low_priority,notifications", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000" ]
     deploy:
       resources:
@@ -73,11 +69,14 @@ services:
   caddy:
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile
-      - ./frontend/dist:/srv/frontend
+      - frontend_dist:/srv/frontend
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - web
+      web:
+        condition: service_started
+      frontend:
+        condition: service_completed_successfully
     deploy:
       resources:
         limits:
@@ -110,7 +109,7 @@ services:
 
   # Celery Beat - Required for scheduled tasks (user stats updates, cache warming)
   beat:
-    image: anishows_web:latest
+    image: ghcr.io/oddava/anishows-backend:latest
     command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
     env_file:
       - .env
@@ -139,5 +138,6 @@ services:
   grafana:
     deploy:
       replicas: 0
-  # Remove unnecessary services for small EC2
-  # backup:  # Use AWS automated backups instead
+
+volumes:
+  frontend_dist:
