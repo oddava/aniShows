@@ -723,85 +723,78 @@ class AniListService:
 
     @sync_to_async
     def _handle_extended_info_async(self, anime, item):
-        async def _sync_characters_and_staff():
-            from django.db import transaction
-            
-            @sync_to_async
-            def batch_update():
-                with transaction.atomic():
-                    # Handle Characters
-                    characters_data = item.get("characterPreview", {}).get("edges", [])
-                    for edge in characters_data:
-                        node = edge["node"]
-                        role = edge["role"]  # MAIN, SUPPORTING, etc.
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Handle Characters
+            characters_data = item.get("characterPreview", {}).get("edges", [])
+            for edge in characters_data:
+                node = edge["node"]
+                role = edge["role"]  # MAIN, SUPPORTING, etc.
 
-                        # Create/Get Character
-                        char_name = node["name"].get("full")
-                        char_native = node["name"].get("native")
-                        char_desc = node.get("description") or ""
-                        char_img = node.get("image", {}).get("large")
+                # Create/Get Character
+                char_name = node["name"].get("full")
+                char_native = node["name"].get("native")
+                char_desc = node.get("description") or ""
+                char_img = node.get("image", {}).get("large")
 
-                        character, _ = Character.objects.update_or_create(
-                            name=char_name,
-                            defaults={
-                                "name_native": char_native or "",
-                                "description": char_desc,
-                                "image_url": char_img,  # Save the remote URL
-                            },
-                        )
+                character, _ = Character.objects.update_or_create(
+                    name=char_name,
+                    defaults={
+                        "name_native": char_native or "",
+                        "description": char_desc,
+                        "image_url": char_img,  # Save the remote URL
+                    },
+                )
 
-                        # Handle Voice Actor (Japanese)
-                        voice_actors = edge.get("voiceActors", [])
-                        voice_actor = None
-                        if voice_actors:
-                            va_node = voice_actors[0]
-                            va_name = va_node["name"].get("full")
-                            va_native = va_node["name"].get("native")
-                            va_img = va_node.get("image", {}).get("large")
+                # Handle Voice Actor (Japanese)
+                voice_actors = edge.get("voiceActors", [])
+                voice_actor = None
+                if voice_actors:
+                    va_node = voice_actors[0]
+                    va_name = va_node["name"].get("full")
+                    va_native = va_node["name"].get("native")
+                    va_img = va_node.get("image", {}).get("large")
 
-                            voice_actor, _ = Staff.objects.update_or_create(
-                                name=va_name,
-                                defaults={"name_native": va_native or "", "image_url": va_img},
-                            )
+                    voice_actor, _ = Staff.objects.update_or_create(
+                        name=va_name,
+                        defaults={"name_native": va_native or "", "image_url": va_img},
+                    )
 
-                        # Link Anime -> Character
-                        role_map = {
-                            "MAIN": AnimeCharacter.Role.MAIN,
-                            "SUPPORTING": AnimeCharacter.Role.SUPPORTING,
-                            "BACKGROUND": AnimeCharacter.Role.BACKGROUND,
-                        }
+                # Link Anime -> Character
+                role_map = {
+                    "MAIN": AnimeCharacter.Role.MAIN,
+                    "SUPPORTING": AnimeCharacter.Role.SUPPORTING,
+                    "BACKGROUND": AnimeCharacter.Role.BACKGROUND,
+                }
 
-                        AnimeCharacter.objects.update_or_create(
-                            anime=anime,
-                            character=character,
-                            voice_actor=voice_actor,
-                            defaults={"role": role_map.get(role, AnimeCharacter.Role.SUPPORTING)},
-                        )
+                AnimeCharacter.objects.update_or_create(
+                    anime=anime,
+                    character=character,
+                    voice_actor=voice_actor,
+                    defaults={"role": role_map.get(role, AnimeCharacter.Role.SUPPORTING)},
+                )
 
-                    # Handle Staff
-                    staff_data = item.get("staffPreview", {}).get("edges", [])
-                    for edge in staff_data:
-                        node = edge["node"]
-                        role = edge["role"]
+            # Handle Staff
+            staff_data = item.get("staffPreview", {}).get("edges", [])
+            for edge in staff_data:
+                node = edge["node"]
+                role = edge["role"]
 
-                        staff_name = node["name"].get("full")
-                        staff_native = node["name"].get("native")
-                        staff_img = node.get("image", {}).get("large")
+                staff_name = node["name"].get("full")
+                staff_native = node["name"].get("native")
+                staff_img = node.get("image", {}).get("large")
 
-                        staff_member, _ = Staff.objects.update_or_create(
-                            name=staff_name,
-                            defaults={"name_native": staff_native or "", "image_url": staff_img},
-                        )
+                staff_member, _ = Staff.objects.update_or_create(
+                    name=staff_name,
+                    defaults={"name_native": staff_native or "", "image_url": staff_img},
+                )
 
-                        AnimeStaff.objects.update_or_create(
-                            anime=anime,
-                            staff=staff_member,
-                            role=role,  # Keep exact role string
-                        )
-            
-            await batch_update()
-
-        await _sync_characters_and_staff()
+                AnimeStaff.objects.update_or_create(
+                    anime=anime,
+                    staff=staff_member,
+                    role=role,  # Keep exact role string
+                )
 
         # Handle Theme Songs
         self._process_theme_songs(anime, item)
