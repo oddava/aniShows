@@ -315,25 +315,25 @@ jobs:
         run: |
           echo "🚀 Starting deployment to EC2..."
           
-          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} << EOF
+          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
             set -e
             
-            echo "📂 Navigating to project directory..."
+            echo '📂 Navigating to project directory...'
             cd /home/ubuntu/aniShows
             
-            echo "🔄 Pulling latest compose files from GitHub..."
+            echo '🔄 Pulling latest compose files from GitHub...'
             # Note: We pull the compose files and scripts, but not the heavy dependencies
             git stash || true
             git pull origin main
             
-            echo "🔑 Logging into GitHub Container Registry..."
-            echo "${GITHUB_TOKEN}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo '🔑 Logging into GitHub Container Registry...'
+            echo '${GITHUB_TOKEN}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            echo "🐳 Running fast deployment script..."
+            echo '🐳 Running fast deployment script...'
             ./deploy-prod.sh
             
-            echo "✅ Deployment completed successfully!"
-EOF
+            echo '✅ Deployment completed successfully!'
+          "
 
       - name: Notify on failure
         if: failure()
