@@ -175,7 +175,7 @@ class BaseTask(Task):
         task_kwargs = kwargs or {}
 
         # Check idempotency
-        if self.enable_deduplication:
+        if getattr(self.run, '_enable_deduplication', self.enable_deduplication):
             idempotency_key = options.pop("idempotency_key", None)
             if not idempotency_key:
                 idempotency_key = self._generate_idempotency_key(task_args, task_kwargs)
@@ -201,7 +201,8 @@ class BaseTask(Task):
                 )
 
             # Store idempotency marker before execution
-            cache.set(cache_key, True, timeout=self.idempotency_ttl)
+            ttl = getattr(self.run, '_deduplication_ttl', self.idempotency_ttl)
+            cache.set(cache_key, True, timeout=ttl)
 
         return super().apply_async(
             args=task_args,
@@ -216,11 +217,12 @@ class BaseTask(Task):
 
     def __call__(self, *args, **kwargs):
         """Execute task with optional locking."""
-        if self.enable_locking:
+        if getattr(self.run, '_enable_locking', self.enable_locking):
             lock_key = self._get_lock_key(args, kwargs)
 
             # Try to acquire lock
-            lock_acquired = cache.add(lock_key, True, timeout=self.lock_timeout)
+            timeout = getattr(self.run, '_lock_timeout', self.lock_timeout)
+            lock_acquired = cache.add(lock_key, True, timeout=timeout)
 
             if not lock_acquired:
                 logger.warning(f"Task {self.name} skipped - already running")

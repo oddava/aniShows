@@ -135,6 +135,8 @@ class SyncAnimeCatalogTask(BaseTask):
                 # Determine method parameters
                 method_name = config["method"]
                 method_kwargs = {**config.get("kwargs", {}), **kwargs}
+                if method_name != "_fetch_paginated":
+                    method_kwargs["limit"] = limit
 
                 # Handle dynamic season calculation
                 if config.get("dynamic_season"):
@@ -298,7 +300,7 @@ class SyncAnimeCatalogTask(BaseTask):
             # Queue individual theme sync tasks
             for anime_id in chunk:
                 try:
-                    sync_theme_songs.delay(anime_id=anime_id)
+                    await sync_to_async(sync_theme_songs.delay)(anime_id=anime_id)
                     logger.debug(f"Queued theme sync for anime ID: {anime_id}")
                 except Exception as e:
                     logger.error(

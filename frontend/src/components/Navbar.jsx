@@ -481,9 +481,33 @@ export default function Navbar() {
                     <div className="flex items-center justify-between h-16">
                         {/* Logo */}
                         <Link to="/" className="flex items-center gap-2.5 group">
-                            <div className="w-9 h-9 bg-gradient-to-br from-accent to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-accent/20 group-hover:shadow-accent/30 transition-shadow">
-                                <Play className="w-5 h-5 text-white fill-current ml-0.5" />
-                            </div>
+                            <svg
+                                viewBox="0 0 120 120"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="w-10 h-10 transition-all duration-300"
+                            >
+                                <defs>
+                                    <linearGradient id="neonPurple" x1="0%" y1="100%" x2="100%" y2="0%">
+                                        <stop offset="0%" stopColor="#7B1FA2" />
+                                        <stop offset="50%" stopColor="#B388FF" />
+                                        <stop offset="100%" stopColor="#EA80FC" />
+                                    </linearGradient>
+
+                                    <linearGradient id="darkPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stopColor="#4A148C" />
+                                        <stop offset="100%" stopColor="#210F40" />
+                                    </linearGradient>
+                                </defs>
+
+                                <g transform="translate(10, 5)">
+                                    <path d="M48 25 L22 85 L42 85 L68 25 Z" fill="url(#darkPurple)" />
+
+                                    <path d="M48 25 L88 85 L68 85 L36 40 Z" fill="url(#neonPurple)" />
+
+                                    <rect x="30" y="62" width="45" height="8" rx="4" fill="#311B92" />
+                                    <rect x="30" y="62" width="28" height="8" rx="4" fill="#EA80FC" />
+                                </g>
+                            </svg>
                             <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                                 AniShows
                             </span>

@@ -723,79 +723,85 @@ class AniListService:
 
     @sync_to_async
     def _handle_extended_info_async(self, anime, item):
-        # Handle Characters
-        characters_data = item.get("characterPreview", {}).get("edges", [])
-        for edge in characters_data:
-            node = edge["node"]
-            role = edge["role"]  # MAIN, SUPPORTING, etc.
+        async def _sync_characters_and_staff():
+            from django.db import transaction
+            
+            @sync_to_async
+            def batch_update():
+                with transaction.atomic():
+                    # Handle Characters
+                    characters_data = item.get("characterPreview", {}).get("edges", [])
+                    for edge in characters_data:
+                        node = edge["node"]
+                        role = edge["role"]  # MAIN, SUPPORTING, etc.
 
-            # Create/Get Character
-            char_name = node["name"].get("full")
-            char_native = node["name"].get("native")
-            char_desc = node.get("description") or ""
-            char_img = node.get("image", {}).get("large")
+                        # Create/Get Character
+                        char_name = node["name"].get("full")
+                        char_native = node["name"].get("native")
+                        char_desc = node.get("description") or ""
+                        char_img = node.get("image", {}).get("large")
 
-            character, _ = Character.objects.update_or_create(
-                name=char_name,
-                defaults={
-                    "name_native": char_native or "",
-                    "description": char_desc,
-                    "image_url": char_img,  # Save the remote URL
-                },
-            )
-            # We can download char image async later or just store URL if model allowed URL.
-            # Current model has ImageField. For MVP speed, let's skip downloading char images for now or queue it.
-            # To avoid stalling the scrape, we won't download char images here unless critically needed.
+                        character, _ = Character.objects.update_or_create(
+                            name=char_name,
+                            defaults={
+                                "name_native": char_native or "",
+                                "description": char_desc,
+                                "image_url": char_img,  # Save the remote URL
+                            },
+                        )
 
-            # Handle Voice Actor (Japanese)
-            voice_actors = edge.get("voiceActors", [])
-            voice_actor = None
-            if voice_actors:
-                va_node = voice_actors[0]
-                va_name = va_node["name"].get("full")
-                va_native = va_node["name"].get("native")
-                va_img = va_node.get("image", {}).get("large")
+                        # Handle Voice Actor (Japanese)
+                        voice_actors = edge.get("voiceActors", [])
+                        voice_actor = None
+                        if voice_actors:
+                            va_node = voice_actors[0]
+                            va_name = va_node["name"].get("full")
+                            va_native = va_node["name"].get("native")
+                            va_img = va_node.get("image", {}).get("large")
 
-                voice_actor, _ = Staff.objects.update_or_create(
-                    name=va_name,
-                    defaults={"name_native": va_native or "", "image_url": va_img},
-                )
+                            voice_actor, _ = Staff.objects.update_or_create(
+                                name=va_name,
+                                defaults={"name_native": va_native or "", "image_url": va_img},
+                            )
 
-            # Link Anime -> Character
-            # Map role
-            role_map = {
-                "MAIN": AnimeCharacter.Role.MAIN,
-                "SUPPORTING": AnimeCharacter.Role.SUPPORTING,
-                "BACKGROUND": AnimeCharacter.Role.BACKGROUND,
-            }
+                        # Link Anime -> Character
+                        role_map = {
+                            "MAIN": AnimeCharacter.Role.MAIN,
+                            "SUPPORTING": AnimeCharacter.Role.SUPPORTING,
+                            "BACKGROUND": AnimeCharacter.Role.BACKGROUND,
+                        }
 
-            AnimeCharacter.objects.update_or_create(
-                anime=anime,
-                character=character,
-                voice_actor=voice_actor,
-                defaults={"role": role_map.get(role, AnimeCharacter.Role.SUPPORTING)},
-            )
+                        AnimeCharacter.objects.update_or_create(
+                            anime=anime,
+                            character=character,
+                            voice_actor=voice_actor,
+                            defaults={"role": role_map.get(role, AnimeCharacter.Role.SUPPORTING)},
+                        )
 
-        # Handle Staff
-        staff_data = item.get("staffPreview", {}).get("edges", [])
-        for edge in staff_data:
-            node = edge["node"]
-            role = edge["role"]
+                    # Handle Staff
+                    staff_data = item.get("staffPreview", {}).get("edges", [])
+                    for edge in staff_data:
+                        node = edge["node"]
+                        role = edge["role"]
 
-            staff_name = node["name"].get("full")
-            staff_native = node["name"].get("native")
-            staff_img = node.get("image", {}).get("large")
+                        staff_name = node["name"].get("full")
+                        staff_native = node["name"].get("native")
+                        staff_img = node.get("image", {}).get("large")
 
-            staff_member, _ = Staff.objects.update_or_create(
-                name=staff_name,
-                defaults={"name_native": staff_native or "", "image_url": staff_img},
-            )
+                        staff_member, _ = Staff.objects.update_or_create(
+                            name=staff_name,
+                            defaults={"name_native": staff_native or "", "image_url": staff_img},
+                        )
 
-            AnimeStaff.objects.update_or_create(
-                anime=anime,
-                staff=staff_member,
-                role=role,  # Keep exact role string
-            )
+                        AnimeStaff.objects.update_or_create(
+                            anime=anime,
+                            staff=staff_member,
+                            role=role,  # Keep exact role string
+                        )
+            
+            await batch_update()
+
+        await _sync_characters_and_staff()
 
         # Handle Theme Songs
         self._process_theme_songs(anime, item)
@@ -884,33 +890,23 @@ class AniListService:
             ).get("large")
             banner_url = item.get("bannerImage")
 
-            # Using sync_to_async/lambda to check fields to avoid sync DB access in async
+            # Queue background task to download cover and banner images
             has_cover = await sync_to_async(lambda: bool(anime.cover_image))()
             has_banner = await sync_to_async(lambda: bool(anime.banner_image))()
-            has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
 
-            # Always store external URLs for fallback, even if download fails
-            if cover_url:
-                await self._save_external_url(
-                    anime, "cover_image_external_url", cover_url
+            # Pass mal_id for Jikan fallback
+            mal_id = item.get("idMal")
+
+            if (cover_url and not has_cover) or (banner_url and not has_banner) or (not has_banner and mal_id):
+                from apps.animes.tasks.images import fetch_anime_images
+                
+                logger.info(f"Queueing background image fetch for {anime.title}")
+                await sync_to_async(fetch_anime_images.delay)(
+                    anime_id=anime.id, 
+                    cover_url=cover_url, 
+                    banner_url=banner_url,
+                    mal_id=mal_id
                 )
-
-            if banner_url:
-                await self._save_external_url(
-                    anime, "banner_image_external_url", banner_url
-                )
-
-            if cover_url and not has_cover:
-                cover_data = await self.download_image(cover_url)
-                if cover_data:
-                    filename = f"{anime.slug}_cover.jpg"
-                    await self._save_image(anime, "cover_image", filename, cover_data)
-
-            if banner_url and not has_banner:
-                banner_data = await self.download_image(banner_url)
-                if banner_data:
-                    filename = f"{anime.slug}_banner.jpg"
-                    await self._save_image(anime, "banner_image", filename, banner_data)
 
             if not has_trailer:
                 trailer = item.get("trailer")

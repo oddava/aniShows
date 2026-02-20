@@ -172,7 +172,7 @@ class MetadataEnrichmentTask(BaseTask):
                     # Search and update
                     results = await service.search_anime(anime.title)
                     if results:
-                        await service.process_media_list([results[0]])
+                        await service.update_anime_manual(anime, results[0])
                         updated_count += 1
 
                         # Mark as updated
