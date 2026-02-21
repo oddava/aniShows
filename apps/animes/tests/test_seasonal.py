@@ -233,7 +233,14 @@ class SeasonalEdgeCasesTests(APITestCase):
 
     def test_edge_dates_in_season(self):
         """Test anime at season boundaries."""
-        # Anime on first day of winter
+        # Count existing winter anime
+        from django.db.models import Q
+
+        winter_count_before = Anime.objects.filter(
+            Q(release_date__gte=date(2024, 1, 1)) & Q(release_date__lte=date(2024, 3, 31))
+        ).count()
+
+        # Anime on first day of winter - use higher member_count to appear in results
         Anime.objects.create(
             title="Winter Start",
             slug="winter-start",
@@ -241,7 +248,7 @@ class SeasonalEdgeCasesTests(APITestCase):
             anime_type="TV",
             status="Airing",
             release_date=date(2024, 1, 1),
-            member_count=1000,  # Set member_count so it appears in results
+            member_count=500000,  # Higher than existing anime to appear first
         )
 
         # Anime on last day of winter
@@ -252,10 +259,18 @@ class SeasonalEdgeCasesTests(APITestCase):
             anime_type="TV",
             status="Airing",
             release_date=date(2024, 3, 31),
-            member_count=1000,  # Set member_count so it appears in results
+            member_count=400000,  # Higher than existing anime to appear early
         )
 
-        response = self.client.get(self.list_url, {"season": "winter", "year": "2024"})
+        # Verify anime were created
+        winter_count_after = Anime.objects.filter(
+            Q(release_date__gte=date(2024, 1, 1)) & Q(release_date__lte=date(2024, 3, 31))
+        ).count()
+        self.assertEqual(winter_count_after, winter_count_before + 2)
+
+        response = self.client.get(
+            self.list_url, {"season": "winter", "year": "2024", "page_size": 100}
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data.get("results", response.data)
