@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, CheckCircle, Star, Loader2, Play, Calendar, Heart, Tv, Bell, Clock, Command, Sparkles } from 'lucide-react';
+import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, CheckCircle, Star, Loader2, Play, Calendar, Heart, Tv, Bell, Clock, Command, Sparkles, MessageSquare } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi, animeApi } from '../api/client';
@@ -518,6 +518,7 @@ export default function Navbar() {
                             <NavItem to="/browse" icon={Search} label="Browse" />
                             <NavItem to="/seasonal" icon={Calendar} label="Seasonal" />
                             <NavItem to="/schedule" icon={Tv} label="Schedule" />
+                            <NavItem to="/forums" icon={MessageSquare} label="Forums" />
                             {(isAuthenticated || authLoading) && (
                                 <NavItem to="/profile" icon={Heart} label="My List" />
                             )}

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Star, Heart, Plus, Check, Eye, Clock, Pause, X, Loader2 } from 'lucide-react';
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
@@ -29,14 +29,35 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0
     );
 
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const statusMenuRef = useRef(null);
+
     // Memoized computed values - use optimized images with srcset
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
-    const displayTitle = useMemo(() => 
+    const displayTitle = useMemo(() =>
         titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
         [titleLanguage, anime.title_jp, anime.title]
     );
-    const currentStatusOption = useMemo(() => 
+
+    useEffect(() => {
+        setImageLoaded(false);
+    }, [imageUrl]);
+
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (statusMenuRef.current && !statusMenuRef.current.contains(event.target)) {
+                setShowStatusMenu(false);
+            }
+        }
+        if (showStatusMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showStatusMenu]);
+    const currentStatusOption = useMemo(() =>
         STATUS_OPTIONS.find(s => s.value === listStatus),
         [listStatus]
     );
@@ -57,21 +78,30 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         e.stopPropagation();
         if (!isAuthenticated || isLoading) return;
 
+        const previousFavorite = isFavorite;
+        setIsFavorite(!previousFavorite);
         setIsLoading(true);
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
         } catch (error) {
             logger.error('Error toggling favorite:', error);
+            setIsFavorite(previousFavorite);
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading]);
+    }, [anime.id, isAuthenticated, isLoading, isFavorite]);
 
     const handleStatusChange = useCallback(async (e, newStatus) => {
         e.preventDefault();
         e.stopPropagation();
         if (!isAuthenticated || isLoading) return;
+
+        const previousStatus = listStatus;
+        const previousId = listId;
+
+        setListStatus(newStatus);
+        setShowStatusMenu(false);
 
         setIsLoading(true);
         try {
@@ -81,39 +111,46 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
             }
-            setListStatus(newStatus);
-            setShowStatusMenu(false);
         } catch (error) {
             logger.error('Error updating list:', error);
+            setListStatus(previousStatus);
+            setListId(previousId);
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, listId]);
+    }, [anime.id, isAuthenticated, isLoading, listId, listStatus]);
 
     const handleRemoveFromList = useCallback(async (e) => {
         e.preventDefault();
         e.stopPropagation();
         if (!listId || isLoading) return;
 
+        const previousStatus = listStatus;
+        const previousId = listId;
+
+        setListStatus(null);
+        setListId(null);
+        setShowStatusMenu(false);
+
         setIsLoading(true);
         try {
-            await listApi.remove(listId);
-            setListStatus(null);
-            setListId(null);
-            setShowStatusMenu(false);
+            await listApi.remove(previousId);
         } catch (error) {
             logger.error('Error removing from list:', error);
+            setListStatus(previousStatus);
+            setListId(previousId);
         } finally {
             setIsLoading(false);
         }
-    }, [listId, isLoading]);
+    }, [listId, listStatus, isLoading]);
 
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
         e.stopPropagation();
         if (isLoading) return;
 
-        const newEpisodes = episodesWatched + 1;
+        const previousEpisodes = localEpisodesWatched;
+        const newEpisodes = previousEpisodes + 1;
         setLocalEpisodesWatched(newEpisodes);
         setIsLoading(true);
 
@@ -124,11 +161,11 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
             queryClient.invalidateQueries({ queryKey: ['anime'] });
         } catch (error) {
             logger.error("Failed to update progress", error);
-            setLocalEpisodesWatched(episodesWatched);
+            setLocalEpisodesWatched(previousEpisodes);
         } finally {
             setIsLoading(false);
         }
-    }, [episodesWatched, userListEntry?.id, listId, isLoading, queryClient]);
+    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, queryClient]);
 
     const toggleStatusMenu = useCallback((e) => {
         e.preventDefault();
@@ -142,6 +179,9 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 to={`/anime/${anime.slug}`}
                 className="block aspect-[2/3] rounded-lg overflow-hidden relative group"
             >
+                {!imageLoaded && (
+                    <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
+                )}
                 <img
                     src={imageUrl}
                     srcSet={imageSrcSet}
@@ -149,7 +189,8 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     alt={anime.title}
                     loading={loadingStrategy.loading}
                     decoding={loadingStrategy.decoding}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 image-fade-in"
+                    onLoad={() => setImageLoaded(true)}
+                    className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="absolute bottom-2 left-2 right-2">
@@ -167,6 +208,9 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 {/* Image Container */}
                 <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
                     <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
+                        {!imageLoaded && (
+                            <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
+                        )}
                         <img
                             src={imageUrl}
                             srcSet={imageSrcSet}
@@ -174,7 +218,8 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                             alt={anime.title}
                             loading={loadingStrategy.loading}
                             decoding={loadingStrategy.decoding}
-                            className="w-full h-full object-cover image-fade-in"
+                            onLoad={() => setImageLoaded(true)}
+                            className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                         />
                     </Link>
 
@@ -183,7 +228,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     {/* Status Icon */}
                     {isAuthenticated && (
                         <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-[100]">
-                            <div className="relative">
+                            <div className="relative" ref={statusMenuRef}>
                                 <button
                                     onClick={toggleStatusMenu}
                                     disabled={isLoading}
@@ -238,7 +283,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     )}
                     {/* Quick progress button */}
                     {isAuthenticated && listStatus === 'Watching' && (
-                            <button
+                        <button
                             onClick={handleQuickProgress}
                             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-accent text-white shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer z-40 border-2 border-white/30 touch-manipulation"
                             title={`Mark episode ${episodesWatched + 1} as watched`}
@@ -305,7 +350,7 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.priority !== nextProps.priority) return false;
     if (prevProps.index !== nextProps.index) return false;
     if (prevProps.anime.is_favorite !== nextProps.anime.is_favorite) return false;
-    
+
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
     const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;
     if (!!prevEntry !== !!nextEntry) return false;
@@ -324,12 +369,12 @@ export function AnimeCardSkeleton() {
             <div className="absolute inset-0 z-10 pointer-events-none">
                 <div className="absolute inset-0 shimmer-overlay" />
             </div>
-            
+
             {/* Card image placeholder */}
             <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden">
                 <div className="absolute inset-0 skeleton-shimmer" />
             </div>
-            
+
             {/* Card content placeholder */}
             <div className="p-2.5 space-y-2">
                 {/* Title line */}

@@ -7,20 +7,16 @@ import {
   ChevronRight,
   Clock,
   Tv,
-  List,
-  LayoutGrid,
   Bell,
-  Play,
   CheckCircle2
 } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
-import StatusSelector from '../components/StatusSelector';
-import { AnimeCardSkeleton } from '../components/AnimeCard';
-import { ScheduleSkeleton, ScheduleGridSkeleton, ScheduleListSkeleton } from '../components/skeletons';
+import { ScheduleGridSkeleton } from '../components/skeletons';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -308,8 +304,7 @@ export default function Schedule() {
     return new Date().getDay();
   });
 
-  // View mode (list or grid)
-  const [viewMode, setViewMode] = useState('grid');
+
 
   // Update URL when week or day changes
   useEffect(() => {
@@ -428,7 +423,7 @@ export default function Schedule() {
 
   if (error) {
     return (
-      <>
+      <ErrorBoundary>
         <SEO page="schedule" />
         <div className="min-h-[60vh] flex items-center justify-center">
           <div className="text-center">
@@ -441,12 +436,12 @@ export default function Schedule() {
             </button>
           </div>
         </div>
-      </>
+      </ErrorBoundary>
     );
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <SEO page="schedule" />
       <div className="min-h-screen pb-20">
         {/* Header */}
@@ -503,20 +498,11 @@ export default function Schedule() {
             </div>
           </div>
 
-          {/* Anime Grid/List */}
+          {/* Anime Grid */}
           {isLoading ? (
-            viewMode === 'grid' ? (
-              <ScheduleGridSkeleton count={10} />
-            ) : (
-              <ScheduleListSkeleton count={8} />
-            )
+            <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className={`
-            ${viewMode === 'grid'
-                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'
-                : 'flex flex-col gap-3'
-              }
-  `}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {selectedDayAnime.map((anime) => (
                 <ScheduleCard
                   key={anime.id}
@@ -541,6 +527,6 @@ export default function Schedule() {
           )}
         </div>
       </div>
-    </>
+    </ErrorBoundary>
   );
 }

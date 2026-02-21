@@ -64,6 +64,7 @@ LOCAL_APPS = [
     "apps.core",
     "apps.users",
     "apps.animes",
+    "apps.forums",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -250,9 +251,7 @@ if USE_S3:
     STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
     PUBLIC_MEDIA_LOCATION = "media"
-    MEDIA_URL = (
-        f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/"
-    )
+    MEDIA_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/"
     DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
 else:
     STATIC_URL = "/static/"
@@ -346,6 +345,8 @@ REST_FRAMEWORK = {
         "admin_actions": "60/minute",
         "strict_user": "10/minute",
         "social_links": "5/day",
+        "forum_like": "30/minute",
+        "forum_write": "10/minute",
     },
 }
 
@@ -476,6 +477,19 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.animes.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=18, minute=0),  # 6:00 PM - retry failed
         "kwargs": {"limit": 200, "retry_failed": True},
+        "options": {"queue": "low_priority"},
+    },
+    # YouTube URL Backfill Task - Runs twice daily to catch missed themes
+    "backfill-theme-youtube-urls-morning": {
+        "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",
+        "schedule": crontab(hour=8, minute=30),  # 8:30 AM
+        "kwargs": {"limit": 100},
+        "options": {"queue": "low_priority"},
+    },
+    "backfill-theme-youtube-urls-evening": {
+        "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",
+        "schedule": crontab(hour=20, minute=30),  # 8:30 PM
+        "kwargs": {"limit": 100},
         "options": {"queue": "low_priority"},
     },
     "user-maintenance-daily": {

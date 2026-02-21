@@ -60,9 +60,7 @@ class AniListService:
     MAX_PER_PAGE = 50
 
     def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
-        self.client = httpx.AsyncClient(
-            headers={"Content-Type": "application/json"}, timeout=15.0
-        )
+        self.client = httpx.AsyncClient(headers={"Content-Type": "application/json"}, timeout=15.0)
         self.rate_limiter = AniListRateLimiter() if enable_rate_limiting else None
         self.call_cache = APICallCache(ttl=1800) if enable_caching else None
         self.circuit_breaker = CircuitBreaker(
@@ -113,7 +111,9 @@ class AniListService:
             API response data or empty dict on failure
         """
         # Generate cache key from query and variables
-        cache_key = f"{hash(query) & 0xFFFFFFFF}:{hash(str(sorted(variables.items()))) & 0xFFFFFFFF}"
+        cache_key = (
+            f"{hash(query) & 0xFFFFFFFF}:{hash(str(sorted(variables.items()))) & 0xFFFFFFFF}"
+        )
         endpoint = "graphql"
 
         # Check cache first
@@ -162,9 +162,7 @@ class AniListService:
                 if "errors" in data:
                     error_msg = data["errors"][0]["message"]
                     if "Too Many Requests" in error_msg:
-                        logger.warning(
-                            f"AniList GraphQL Rate Limit Error. Sleeping 60s..."
-                        )
+                        logger.warning(f"AniList GraphQL Rate Limit Error. Sleeping 60s...")
                         await asyncio.sleep(60)
                         continue
                     logger.error(f"GraphQL Error: {error_msg}")
@@ -222,9 +220,7 @@ class AniListService:
         ]
 
         domain = parsed.netloc.lower()
-        if not any(
-            domain.endswith(trusted) or domain == trusted for trusted in trusted_domains
-        ):
+        if not any(domain.endswith(trusted) or domain == trusted for trusted in trusted_domains):
             logger.warning(f"Blocked untrusted image domain: {domain}")
             return None
 
@@ -450,7 +446,7 @@ class AniListService:
 
     # --- Processing Logic (Extracted from Command) ---
 
-    async def process_media_list(self, media_list: List[dict]):
+    async def process_media_list(self, media_list: List[dict], progress_callback=None):
         """
         Process a list of media items and save/update them in the database.
         Returns stats dict with created anime IDs for theme sync.
@@ -458,7 +454,7 @@ class AniListService:
         stats = {"created": 0, "updated": 0, "skipped": 0, "created_anime_ids": []}
         all_anime_ids = []  # Track all anime IDs for post-processing
 
-        for item in media_list:
+        for i, item in enumerate(media_list):
             try:
                 title_romaji = item.get("title", {}).get("romaji", "")
                 title_english = item.get("title", {}).get("english", "")
@@ -469,9 +465,7 @@ class AniListService:
                     continue
 
                 slug = slugify(title)
-                anime_data_dict = self._prepare_anime_data(
-                    item, title, title_native, slug
-                )
+                anime_data_dict = self._prepare_anime_data(item, title, title_native, slug)
 
                 # Get or Create
                 anime, created = await self._get_or_create_anime(slug, anime_data_dict)
@@ -500,9 +494,14 @@ class AniListService:
                 # Download images if missing
                 await self._download_and_save_images(anime, item)
 
+                if progress_callback:
+                    await progress_callback(i + 1)
+
             except Exception as e:
                 logger.error(f"Error processing anime {item.get('id')}: {e}")
                 stats["skipped"] += 1
+                if progress_callback:
+                    await progress_callback(i + 1)
 
         # Post-processing: Update relation slugs for all processed anime
         # This ensures related anime from the same batch are properly linked
@@ -523,9 +522,7 @@ class AniListService:
             title = title_english or title_romaji
 
             # Use the EXISTING slug to ensure we don't collide with other records
-            anime_data_dict = self._prepare_anime_data(
-                item, title, title_native, anime.slug
-            )
+            anime_data_dict = self._prepare_anime_data(item, title, title_native, anime.slug)
 
             # Explicitly ensure slug is NOT in the update dict to be safe (though passing it above helps)
             # If prepare_anime_data just puts it in the dict, passing anime.slug ensures the dict matches current state.
@@ -582,9 +579,7 @@ class AniListService:
             "NOT_YET_RELEASED": Anime.AnimeStatus.upcoming,
             "CANCELLED": Anime.AnimeStatus.finished,
         }
-        status = status_map.get(
-            item.get("status", "FINISHED"), Anime.AnimeStatus.finished
-        )
+        status = status_map.get(item.get("status", "FINISHED"), Anime.AnimeStatus.finished)
 
         start_date = self._parse_date(item.get("startDate", {}))
         end_date = self._parse_date(item.get("endDate", {}))
@@ -656,8 +651,7 @@ class AniListService:
                 datetime.fromtimestamp(item["nextAiringEpisode"]["airingAt"]),
                 timezone=dt_timezone.utc,
             )
-            if item.get("nextAiringEpisode")
-            and item["nextAiringEpisode"].get("airingAt")
+            if item.get("nextAiringEpisode") and item["nextAiringEpisode"].get("airingAt")
             else None,
             # Source Material
             "source_material": self._map_source_material(item.get("source")),
@@ -724,7 +718,7 @@ class AniListService:
     @sync_to_async
     def _handle_extended_info_async(self, anime, item):
         from django.db import transaction
-        
+
         with transaction.atomic():
             # Handle Characters
             characters_data = item.get("characterPreview", {}).get("edges", [])
@@ -803,11 +797,20 @@ class AniListService:
         """Process openings and endings from AniList data"""
         from apps.animes.models import ThemeSong
 
-        # Clear existing theme songs to avoid duplicates
+        # Get openings and endings from AniList
+        openings = item.get("openings", [])
+        endings = item.get("endings", [])
+
+        # Only process if there's actual theme data
+        # AniList doesn't provide themes, so this will typically be empty
+        # Themes are fetched separately via Jikan API
+        if not openings and not endings:
+            return
+
+        # Clear existing theme songs to avoid duplicates (only if we have data)
         ThemeSong.objects.filter(anime=anime).delete()
 
         # Process openings
-        openings = item.get("openings", [])
         for idx, opening_text in enumerate(openings, 1):
             if opening_text:
                 parsed = self._parse_theme_song(opening_text)
@@ -846,9 +849,7 @@ class AniListService:
         # Try to extract episode range (eps X-Y)
         import re
 
-        episode_match = re.search(
-            r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE
-        )
+        episode_match = re.search(r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE)
         if episode_match:
             result["episodes"] = episode_match.group(1).strip()
             text = text[: episode_match.start()].strip()
@@ -890,17 +891,20 @@ class AniListService:
             # Pass mal_id for Jikan fallback
             mal_id = item.get("idMal")
 
-            if (cover_url and not has_cover) or (banner_url and not has_banner) or (not has_banner and mal_id):
+            if (
+                (cover_url and not has_cover)
+                or (banner_url and not has_banner)
+                or (not has_banner and mal_id)
+            ):
                 from apps.animes.tasks.images import fetch_anime_images
-                
+
                 logger.info(f"Queueing background image fetch for {anime.title}")
                 await sync_to_async(fetch_anime_images.delay)(
-                    anime_id=anime.id, 
-                    cover_url=cover_url, 
-                    banner_url=banner_url,
-                    mal_id=mal_id
+                    anime_id=anime.id, cover_url=cover_url, banner_url=banner_url, mal_id=mal_id
                 )
 
+            # Check if anime already has a trailer URL
+            has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
             if not has_trailer:
                 trailer = item.get("trailer")
                 if trailer:
@@ -909,13 +913,9 @@ class AniListService:
                     if trailer_id and trailer_site:
                         trailer_url = None
                         if trailer_site.lower() == "youtube":
-                            trailer_url = (
-                                f"https://www.youtube.com/watch?v={trailer_id}"
-                            )
+                            trailer_url = f"https://www.youtube.com/watch?v={trailer_id}"
                         elif trailer_site.lower() == "dailymotion":
-                            trailer_url = (
-                                f"https://www.dailymotion.com/video/{trailer_id}"
-                            )
+                            trailer_url = f"https://www.dailymotion.com/video/{trailer_id}"
 
                         if trailer_url:
                             await self._save_trailer_url(anime, trailer_url)
@@ -1078,9 +1078,7 @@ class AniListService:
 
         anilist_id = item.get("id")
         mal_id = item.get("idMal")
-        title = item.get("title", {}).get("english") or item.get("title", {}).get(
-            "romaji"
-        )
+        title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
         title_native = item.get("title", {}).get("native")
 
         if not title:
@@ -1093,9 +1091,7 @@ class AniListService:
             try:
                 anime = await sync_to_async(Anime.objects.get)(anilist_id=anilist_id)
                 logger.debug(f"Found anime by AniList ID {anilist_id}: {anime.title}")
-                await self._update_anime_async(
-                    anime, item, title, title_native, anime.slug
-                )
+                await self._update_anime_async(anime, item, title, title_native, anime.slug)
                 return anime
             except Anime.DoesNotExist:
                 pass
@@ -1105,9 +1101,7 @@ class AniListService:
             try:
                 anime = await sync_to_async(Anime.objects.get)(mal_id=mal_id)
                 logger.debug(f"Found anime by MAL ID {mal_id}: {anime.title}")
-                await self._update_anime_async(
-                    anime, item, title, title_native, anime.slug
-                )
+                await self._update_anime_async(anime, item, title, title_native, anime.slug)
                 return anime
             except Anime.DoesNotExist:
                 pass
@@ -1167,9 +1161,7 @@ class AniListService:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
         except Exception as e:
-            logger.error(
-                f"Failed to create anime '{title}' with slug '{final_slug}': {e}"
-            )
+            logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
             raise
 
         # Handle relationships

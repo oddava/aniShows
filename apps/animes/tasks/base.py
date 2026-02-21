@@ -267,6 +267,21 @@ class BaseTask(Task):
                 "metrics": self.metrics.to_dict(),
             },
         )
+
+        # Update CeleryTaskResult in database
+        try:
+            from apps.core.models import CeleryTaskResult
+            from django.utils import timezone
+            job = CeleryTaskResult.objects.get(task_id=task_id)
+            job.status = CeleryTaskResult.TaskStatus.SUCCESS
+            job.result_data = retval if isinstance(retval, (dict, list, str, int, float, bool, type(None))) else {"result": str(retval)}
+            job.date_completed = timezone.now()
+            if job.date_started:
+                job.execution_time = (job.date_completed - job.date_started).total_seconds()
+            job.save(update_fields=["status", "result_data", "date_completed", "execution_time"])
+        except Exception as e:
+            logger.error(f"Failed to update CeleryTaskResult on success: {e}")
+
         # Emit Prometheus metrics
         try:
             from apps.animes.services.metrics import (
@@ -308,6 +323,21 @@ class BaseTask(Task):
                 "exception": str(exc),
             },
         )
+        # Update CeleryTaskResult in database
+        try:
+            from apps.core.models import CeleryTaskResult
+            from django.utils import timezone
+            job = CeleryTaskResult.objects.get(task_id=task_id)
+            job.status = CeleryTaskResult.TaskStatus.FAILURE
+            job.error_message = str(exc)
+            job.traceback = str(einfo.traceback) if einfo else ""
+            job.date_completed = timezone.now()
+            if job.date_started:
+                job.execution_time = (job.date_completed - job.date_started).total_seconds()
+            job.save(update_fields=["status", "error_message", "traceback", "date_completed", "execution_time"])
+        except Exception as e:
+            logger.error(f"Failed to update CeleryTaskResult on failure: {e}")
+
         # Emit Prometheus metrics for failure
         try:
             from apps.animes.services.metrics import (
@@ -337,6 +367,17 @@ class BaseTask(Task):
             f"Task {self.name} retrying (attempt {self.request.retries + 1}/{self.max_retries}): {exc}",
             extra={"task_id": task_id, "retry_count": self.request.retries},
         )
+        
+        # Update CeleryTaskResult
+        try:
+            from apps.core.models import CeleryTaskResult
+            job = CeleryTaskResult.objects.get(task_id=task_id)
+            job.status = CeleryTaskResult.TaskStatus.RETRY
+            job.retries += 1
+            job.error_message = f"Retrying: {exc}"
+            job.save(update_fields=["status", "retries", "error_message"])
+        except Exception as e:
+            logger.error(f"Failed to update CeleryTaskResult on retry: {e}")
 
 
 def task_with_retry(

@@ -96,9 +96,7 @@ class ThemeSongSyncTask(BaseTask):
 
                 # Validate MAL ID
                 if not isinstance(anime.mal_id, int) or anime.mal_id <= 0:
-                    logger.warning(
-                        f"Anime {anime.title} has invalid MAL ID: {anime.mal_id}"
-                    )
+                    logger.warning(f"Anime {anime.title} has invalid MAL ID: {anime.mal_id}")
                     return {
                         "mode": "single",
                         "anime_id": anime_id,
@@ -113,9 +111,7 @@ class ThemeSongSyncTask(BaseTask):
                 )
 
                 if themes is None:
-                    logger.warning(
-                        f"Failed to fetch themes for {anime.title} (API error)"
-                    )
+                    logger.warning(f"Failed to fetch themes for {anime.title} (API error)")
                     return {
                         "mode": "single",
                         "anime_id": anime_id,
@@ -130,6 +126,14 @@ class ThemeSongSyncTask(BaseTask):
                 if openings or endings:
                     count = await self._save_theme_songs(anime, themes)
                     logger.info(f"✓ Synced {count} themes for {anime.title}")
+
+                    # Auto-backfill any missing YouTube URLs
+                    backfilled = await self._backfill_missing_youtube_urls(anime)
+                    if backfilled > 0:
+                        logger.info(
+                            f"✓ Backfilled {backfilled} missing YouTube URLs for {anime.title}"
+                        )
+
                     return {
                         "mode": "single",
                         "anime_id": anime_id,
@@ -137,11 +141,10 @@ class ThemeSongSyncTask(BaseTask):
                         "themes_loaded": count,
                         "openings": len(openings),
                         "endings": len(endings),
+                        "backfilled": backfilled,
                     }
                 else:
-                    logger.info(
-                        f"⚠ No themes available for {anime.title} (empty response)"
-                    )
+                    logger.info(f"⚠ No themes available for {anime.title} (empty response)")
                     return {
                         "mode": "single",
                         "anime_id": anime_id,
@@ -179,7 +182,7 @@ class ThemeSongSyncTask(BaseTask):
                 Anime.objects.filter(
                     theme_songs__isnull=True,
                     mal_id__isnull=False,
-                    status__in=['FINISHED', 'Airing'],  # Skip upcoming anime
+                    status__in=["FINISHED", "Airing"],  # Skip upcoming anime
                 )
                 .exclude(
                     id__in=ThemeSong.objects.filter(
@@ -190,10 +193,8 @@ class ThemeSongSyncTask(BaseTask):
                 .distinct()
             )
         elif force_resync:
-            queryset = Anime.objects.exclude(
-                mal_id__isnull=True
-            ).filter(
-                status__in=['FINISHED', 'Airing']  # Skip upcoming anime even on resync
+            queryset = Anime.objects.exclude(mal_id__isnull=True).filter(
+                status__in=["FINISHED", "Airing"]  # Skip upcoming anime even on resync
             )
         else:
             # Get anime without themes (either never checked or not marked as no themes)
@@ -201,7 +202,7 @@ class ThemeSongSyncTask(BaseTask):
             queryset = Anime.objects.filter(
                 theme_songs__isnull=True,
                 mal_id__isnull=False,
-                status__in=['FINISHED', 'Airing'],  # Skip upcoming anime
+                status__in=["FINISHED", "Airing"],  # Skip upcoming anime
             ).distinct()
 
         anime_list = await sync_to_async(list)(queryset[:limit])
@@ -235,14 +236,8 @@ class ThemeSongSyncTask(BaseTask):
                     await rate_limiter.acquire()
 
                     # Validate MAL ID
-                    if (
-                        not anime.mal_id
-                        or not isinstance(anime.mal_id, int)
-                        or anime.mal_id <= 0
-                    ):
-                        logger.debug(
-                            f"Skipping {anime.title} - invalid MAL ID: {anime.mal_id}"
-                        )
+                    if not anime.mal_id or not isinstance(anime.mal_id, int) or anime.mal_id <= 0:
+                        logger.debug(f"Skipping {anime.title} - invalid MAL ID: {anime.mal_id}")
                         stats["skipped"] += 1
                         continue
 
@@ -255,9 +250,7 @@ class ThemeSongSyncTask(BaseTask):
                         # API error - will retry later
                         stats["failed"] += 1
                         rate_limiter.record_error()
-                        logger.warning(
-                            f"✗ API error for {anime.title} (MAL: {anime.mal_id})"
-                        )
+                        logger.warning(f"✗ API error for {anime.title} (MAL: {anime.mal_id})")
                         continue
 
                     # Check if themes data is valid
@@ -278,9 +271,7 @@ class ThemeSongSyncTask(BaseTask):
                         # No themes available - mark as checked but don't create placeholder
                         stats["without_themes"] += 1
                         rate_limiter.record_success()
-                        logger.info(
-                            f"⚠ ({i + 1}/{total}) {anime.title}: No themes available"
-                        )
+                        logger.info(f"⚠ ({i + 1}/{total}) {anime.title}: No themes available")
 
                     # Progress indicator every 10 anime
                     if (i + 1) % 10 == 0:
@@ -349,7 +340,7 @@ class ThemeSongSyncTask(BaseTask):
                     title = (parsed["title"] or "")[:200]
                     artist = (parsed["artist"] or "")[:200]
                     episodes = (parsed["episodes"] or "")[:100]
-                    
+
                     ThemeSong.objects.create(
                         anime=anime,
                         song_type=ThemeSong.SongType.OPENING,
@@ -380,7 +371,7 @@ class ThemeSongSyncTask(BaseTask):
                     title = (parsed["title"] or "")[:200]
                     artist = (parsed["artist"] or "")[:200]
                     episodes = (parsed["episodes"] or "")[:100]
-                    
+
                     ThemeSong.objects.create(
                         anime=anime,
                         song_type=ThemeSong.SongType.ENDING,
@@ -409,9 +400,7 @@ class ThemeSongSyncTask(BaseTask):
             return result
 
         # Extract episode range
-        episode_match = re.search(
-            r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE
-        )
+        episode_match = re.search(r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE)
         if episode_match:
             result["episodes"] = episode_match.group(1).strip()
             text = text[: episode_match.start()].strip()
@@ -473,6 +462,33 @@ class ThemeSongSyncTask(BaseTask):
 
         return f"https://www.youtube.com/results?search_query={encoded_query}"
 
+    @sync_to_async
+    def _backfill_missing_youtube_urls(self, anime: Anime) -> int:
+        """Backfill missing YouTube URLs for existing themes."""
+        count = 0
+
+        # Find themes without YouTube URLs
+        themes_without_urls = ThemeSong.objects.filter(anime=anime, youtube_url="").exclude(
+            title="No themes available"
+        )
+
+        for theme in themes_without_urls:
+            try:
+                # Generate YouTube URL
+                youtube_url = self._generate_youtube_url(
+                    theme.title, theme.artist, theme.song_type, anime.title
+                )
+
+                if youtube_url:
+                    theme.youtube_url = youtube_url
+                    theme.save(update_fields=["youtube_url"])
+                    count += 1
+                    logger.debug(f"Generated YouTube URL for {theme.title}: {youtube_url}")
+            except Exception as e:
+                logger.error(f"Error generating YouTube URL for {theme.title}: {e}")
+
+        return count
+
 
 @shared_task(
     bind=True,
@@ -507,3 +523,72 @@ def sync_theme_songs(
         Dict with sync results
     """
     return self.execute(anime_id, limit, force_resync, retry_failed, base_delay)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+def backfill_theme_youtube_urls(self, limit: int = 100):
+    """
+    Periodic task to backfill missing YouTube URLs for theme songs.
+
+    Runs daily to catch any themes that were created without YouTube URLs.
+    """
+    from apps.animes.models import ThemeSong
+
+    logger.info(f"Starting YouTube URL backfill for up to {limit} themes")
+
+    # Find themes without YouTube URLs
+    themes = (
+        ThemeSong.objects.filter(youtube_url="")
+        .exclude(title="No themes available")
+        .select_related("anime")[:limit]
+    )
+
+    updated = 0
+    errors = 0
+
+    for theme in themes:
+        try:
+            if theme.anime:
+                # Generate YouTube URL
+                youtube_url = _generate_youtube_url_sync(
+                    theme.title, theme.artist, theme.song_type, theme.anime.title
+                )
+
+                if youtube_url:
+                    theme.youtube_url = youtube_url
+                    theme.save(update_fields=["youtube_url"])
+                    updated += 1
+                    logger.debug(f"Generated YouTube URL for {theme.title}")
+        except Exception as e:
+            errors += 1
+            logger.error(f"Error generating YouTube URL for theme {theme.id}: {e}")
+
+    result = {
+        "processed": len(themes),
+        "updated": updated,
+        "errors": errors,
+    }
+
+    logger.info(f"YouTube URL backfill complete: {result}")
+    return result
+
+
+def _generate_youtube_url_sync(title: str, artist: str, song_type: str, anime_title: str) -> str:
+    """Synchronous version of _generate_youtube_url for use in tasks."""
+    query_parts = []
+
+    if title:
+        query_parts.append(title)
+    if artist:
+        query_parts.append(artist)
+    if anime_title:
+        query_parts.append(anime_title)
+    if song_type == "opening":
+        query_parts.append("opening")
+    elif song_type == "ending":
+        query_parts.append("ending")
+
+    query = " ".join(query_parts)
+    encoded_query = quote_plus(query)
+
+    return f"https://www.youtube.com/results?search_query={encoded_query}"

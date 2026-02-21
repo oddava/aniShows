@@ -371,6 +371,9 @@ class Notification(models.Model):
         NEW_EPISODE = "new_episode", "New Episode"
         REVIEW_REPLY = "review_reply", "Review Reply"
         NEW_FOLLOWER = "new_follower", "New Follower"
+        FORUM_REPLY = "forum_reply", "Forum Reply"
+        FORUM_MENTION = "forum_mention", "Forum Mention"
+        FORUM_LIKE = "forum_like", "Forum Like"
         SYSTEM = "system", "System"
 
     class Priority(models.TextChoices):

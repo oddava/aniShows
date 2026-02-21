@@ -14,6 +14,12 @@ const AdminImportJobs = () => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Trigger modal state
+  const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
+  const [triggerSyncType, setTriggerSyncType] = useState('trending');
+  const [triggerLimit, setTriggerLimit] = useState(50);
+  const [isTriggering, setIsTriggering] = useState(false);
+
   const statusOptions = [
     { value: '', label: 'All Status' },
     { value: 'pending', label: 'Pending' },
@@ -73,6 +79,25 @@ const AdminImportJobs = () => {
     }
   };
 
+  const handleTriggerJob = async (e) => {
+    e.preventDefault();
+    setIsTriggering(true);
+    try {
+      await api.post('/admin/import-jobs/trigger/', {
+        sync_type: triggerSyncType,
+        limit: Number(triggerLimit),
+      });
+      toast.success('Import job triggered successfully');
+      setIsTriggerModalOpen(false);
+      fetchJobs();
+    } catch (err) {
+      logger.error('Failed to trigger job:', err);
+      toast.error(err.response?.data?.detail || 'Failed to trigger job');
+    } finally {
+      setIsTriggering(false);
+    }
+  };
+
   const openJobDetails = (job) => {
     setSelectedJob(job);
     setIsModalOpen(true);
@@ -104,7 +129,7 @@ const AdminImportJobs = () => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${secs}s`;
     return `${secs}s`;
@@ -145,11 +170,10 @@ const AdminImportJobs = () => {
           </div>
           <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                item.status === 'failed' ? 'bg-red-500' :
-                item.status === 'completed' ? 'bg-green-500' :
-                'bg-violet-500'
-              }`}
+              className={`h-full rounded-full transition-all duration-300 ${item.status === 'failed' ? 'bg-red-500' :
+                  item.status === 'completed' ? 'bg-green-500' :
+                    'bg-violet-500'
+                }`}
               style={{ width: `${item.total_items ? (item.processed_items / item.total_items) * 100 : 0}%` }}
             />
           </div>
@@ -203,12 +227,20 @@ const AdminImportJobs = () => {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white">Import Jobs Management</h1>
-        <button
-          onClick={fetchJobs}
-          className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2"
-        >
-          <span>🔄</span> Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsTriggerModalOpen(true)}
+            className="px-4 py-2 bg-green-600/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-600/30 transition-colors flex items-center gap-2"
+          >
+            <span>▶️</span> Trigger Import
+          </button>
+          <button
+            onClick={fetchJobs}
+            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2"
+          >
+            <span>🔄</span> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -324,11 +356,10 @@ const AdminImportJobs = () => {
                 )}
                 <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden mt-2">
                   <div
-                    className={`h-full rounded-full ${
-                      selectedJob.status === 'failed' ? 'bg-red-500' :
-                      selectedJob.status === 'completed' ? 'bg-green-500' :
-                      'bg-violet-500'
-                    }`}
+                    className={`h-full rounded-full ${selectedJob.status === 'failed' ? 'bg-red-500' :
+                        selectedJob.status === 'completed' ? 'bg-green-500' :
+                          'bg-violet-500'
+                      }`}
                     style={{ width: `${selectedJob.total_items ? (selectedJob.processed_items / selectedJob.total_items) * 100 : 0}%` }}
                   />
                 </div>
@@ -389,6 +420,65 @@ const AdminImportJobs = () => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Trigger Job Modal */}
+      <Modal
+        isOpen={isTriggerModalOpen}
+        onClose={() => !isTriggering && setIsTriggerModalOpen(false)}
+        title="Trigger New Import Job"
+        size="medium"
+      >
+        <form onSubmit={handleTriggerJob} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-1">
+              Sync Type
+            </label>
+            <select
+              value={triggerSyncType}
+              onChange={(e) => setTriggerSyncType(e.target.value)}
+              disabled={isTriggering}
+              className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+            >
+              <option value="trending">Trending Anime</option>
+              <option value="seasonal">Current Season</option>
+              <option value="next_season">Next Season</option>
+              <option value="airing">Currently Airing</option>
+              <option value="full_catalog">Full Catalog (top 1000)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-1">
+              Limit (Number of Anime)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={triggerLimit}
+              onChange={(e) => setTriggerLimit(e.target.value)}
+              disabled={isTriggering}
+              className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => setIsTriggerModalOpen(false)}
+              disabled={isTriggering}
+              className="px-4 py-2 bg-white/5 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isTriggering}
+              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {isTriggering ? 'Triggering...' : 'Trigger Job'}
+            </button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

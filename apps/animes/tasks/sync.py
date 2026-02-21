@@ -119,9 +119,7 @@ class SyncAnimeCatalogTask(BaseTask):
         self.metrics.start()
 
         if sync_type not in SYNC_CONFIGS:
-            raise ValueError(
-                f"Unknown sync_type: {sync_type}. Use: {list(SYNC_CONFIGS.keys())}"
-            )
+            raise ValueError(f"Unknown sync_type: {sync_type}. Use: {list(SYNC_CONFIGS.keys())}")
 
         config = SYNC_CONFIGS[sync_type]
         logger.info(f"Starting {sync_type} sync (limit: {limit})")
@@ -149,9 +147,7 @@ class SyncAnimeCatalogTask(BaseTask):
                 method = getattr(service, method_name)
                 if method_name == "_fetch_paginated":
                     # Special handling for paginated fetching
-                    data = await self._fetch_paginated_with_limit(
-                        service, method_kwargs, limit
-                    )
+                    data = await self._fetch_paginated_with_limit(service, method_kwargs, limit)
                 else:
                     data = await method(**method_kwargs)
 
@@ -159,11 +155,38 @@ class SyncAnimeCatalogTask(BaseTask):
                     logger.warning(f"No data returned for {sync_type} sync")
                     return {"sync_type": sync_type, "status": "no_data"}
 
+                # Setup progress callback
+                task_id = getattr(self.request, "id", None)
+                total_items = len(data)
+
+                @sync_to_async
+                def update_job_progress(processed, total):
+                    if not task_id:
+                        return
+                    try:
+                        from apps.core.models import CeleryTaskResult
+
+                        job = CeleryTaskResult.objects.get(task_id=task_id)
+                        if job.result_data is None or not isinstance(job.result_data, dict):
+                            job.result_data = {}
+                        job.result_data["records_processed"] = processed
+                        job.task_kwargs["limit"] = total
+                        if job.status == CeleryTaskResult.TaskStatus.PENDING:
+                            job.status = CeleryTaskResult.TaskStatus.STARTED
+                        job.save(update_fields=["result_data", "task_kwargs", "status"])
+                    except Exception:
+                        pass
+
+                async def progress_callback(processed_count):
+                    # Update progress on every item for real-time feedback
+                    await update_job_progress(processed_count, total_items)
+
+                # Initialize progress immediately when task starts (0%)
+                await update_job_progress(0, total_items)
+
                 # Process data
-                stats = await service.process_media_list(data)
-                self.metrics.record_records(
-                    stats.get("created", 0) + stats.get("updated", 0)
-                )
+                stats = await service.process_media_list(data, progress_callback=progress_callback)
+                self.metrics.record_records(stats.get("created", 0) + stats.get("updated", 0))
 
                 # Handle trending rank updates
                 if config.get("update_ranks"):
@@ -172,9 +195,7 @@ class SyncAnimeCatalogTask(BaseTask):
                 # Trigger theme sync for newly created anime
                 created_anime_ids = stats.get("created_anime_ids", [])
                 if created_anime_ids:
-                    logger.info(
-                        f"Triggering theme sync for {len(created_anime_ids)} new anime"
-                    )
+                    logger.info(f"Triggering theme sync for {len(created_anime_ids)} new anime")
                     await self._trigger_theme_sync_for_new_anime(created_anime_ids)
 
                 # Record API calls
@@ -268,9 +289,7 @@ class SyncAnimeCatalogTask(BaseTask):
         def batch_update():
             with transaction.atomic():
                 # Clear all trending ranks
-                Anime.objects.filter(trending_rank__isnull=False).update(
-                    trending_rank=None
-                )
+                Anime.objects.filter(trending_rank__isnull=False).update(trending_rank=None)
 
                 # Update new ranks
                 for aid, rank in rank_updates.items():
@@ -293,9 +312,7 @@ class SyncAnimeCatalogTask(BaseTask):
         chunk_size = 10
         for i in range(0, len(anime_ids), chunk_size):
             chunk = anime_ids[i : i + chunk_size]
-            logger.info(
-                f"Queueing theme sync chunk {i // chunk_size + 1}: {len(chunk)} anime"
-            )
+            logger.info(f"Queueing theme sync chunk {i // chunk_size + 1}: {len(chunk)} anime")
 
             # Queue individual theme sync tasks
             for anime_id in chunk:
@@ -303,9 +320,7 @@ class SyncAnimeCatalogTask(BaseTask):
                     await sync_to_async(sync_theme_songs.delay)(anime_id=anime_id)
                     logger.debug(f"Queued theme sync for anime ID: {anime_id}")
                 except Exception as e:
-                    logger.error(
-                        f"Failed to queue theme sync for anime {anime_id}: {e}"
-                    )
+                    logger.error(f"Failed to queue theme sync for anime {anime_id}: {e}")
 
             # Small delay between chunks to avoid rate limiting
             if i + chunk_size < len(anime_ids):

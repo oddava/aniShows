@@ -14,8 +14,9 @@ User = get_user_model()
 class ProfileFeaturesTest(APITestCase):
     def setUp(self):
         from django.core.cache import cache
+
         cache.clear()
-        
+
         self.user = User.objects.create_user(
             username="mainuser", email="main@example.com", password="password123"
         )
@@ -31,7 +32,6 @@ class ProfileFeaturesTest(APITestCase):
         self.public_profile_url = lambda username: reverse(
             "users-detail", kwargs={"username": username}
         )
-
 
     @patch("apps.animes.signals.enrich_metadata")
     @patch("apps.animes.signals.generate_recommendations")
@@ -69,6 +69,7 @@ class ProfileFeaturesTest(APITestCase):
         # Trigger stats update manually since it's normally a periodic task
         # and the view only triggers it asynchronously if missing (returning 0s first time)
         from apps.users.tasks import update_user_stats
+
         update_user_stats(self.user.id)
 
         res = self.client.get(self.profile_url)
@@ -182,17 +183,15 @@ class ProfileFeaturesTest(APITestCase):
         res = self.client.patch(self.profile_url, {"is_private": True})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
-        # 2. Another user viewing
+        # 2. Another user viewing private profile should get 404
         other_user = User.objects.create_user(username="viewer", password="pw")
         self.client.force_authenticate(user=other_user)
 
         res = self.client.get(self.public_profile_url("mainuser"))
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertTrue(res.data["is_private"])
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
         # Verify lists endpoint (should return empty/blocked)
         # Using UserAnimeListViewSet logic: if user.profile.is_private -> returns empty
         list_url = reverse("lists-list") + f"?username=mainuser"
         res = self.client.get(list_url)
         self.assertEqual(len(res.data["results"]), 0)
-

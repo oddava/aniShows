@@ -35,6 +35,13 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Auto-discover tasks from installed apps
 app.autodiscover_tasks()
 
+# Import Celery signals for global task monitoring
+try:
+    import apps.core.celery_signals
+except ImportError as e:
+    import logging
+    logging.getLogger(__name__).warning(f"Failed to import celery_signals: {e}")
+
 # ============================================================================
 # TASK ROUTING CONFIGURATION
 # ============================================================================

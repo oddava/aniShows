@@ -57,11 +57,31 @@ class UserProfileView(APIView):
             return Response({"error": "User not found"}, status=404)
 
         # Get stats from UserStats table (pre-calculated, fast)
-        stats = None
+        # Fallback to on-the-fly calculation if not available
+        stats_data = None
         try:
             stats = UserStats.objects.get(user=user)
+            stats_data = {
+                "followers_count": stats.followers_count,
+                "following_count": stats.following_count,
+                "anime_count": stats.anime_count,
+                "episodes_watched": stats.episodes_watched,
+                "total_minutes": getattr(stats, "total_minutes", 0),
+                "days_watched": round(stats.days_watched, 1),
+                "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
+                "favorites_count": stats.favorites_count,
+                "reviews_count": stats.reviews_count,
+            }
         except UserStats.DoesNotExist:
-            # Trigger async stats creation
+            # Calculate stats on-the-fly (fallback)
+            from apps.users.services.stats_service import calculate_user_stats
+
+            stats_data = calculate_user_stats(user)
+            # Add follower counts (not included in calculate_user_stats)
+            stats_data["followers_count"] = 0
+            stats_data["following_count"] = 0
+
+            # Trigger async stats creation for next time
             from apps.users.tasks import update_user_stats
 
             update_user_stats.delay(user_id)
@@ -85,38 +105,9 @@ class UserProfileView(APIView):
             "is_superuser": user.is_superuser,
         }
 
-        # Add stats from UserStats table
-        if stats:
-            data.update(
-                {
-                    "followers_count": stats.followers_count,
-                    "following_count": stats.following_count,
-                    "anime_count": stats.anime_count,
-                    "episodes_watched": stats.episodes_watched,
-                    "total_minutes": getattr(stats, "total_minutes", 0),
-                    "days_watched": round(stats.days_watched, 1),
-                    "mean_score": round(stats.mean_score, 1)
-                    if stats.mean_score
-                    else None,
-                    "favorites_count": stats.favorites_count,
-                    "reviews_count": stats.reviews_count,
-                }
-            )
-        else:
-            # Fallback: minimal stats
-            data.update(
-                {
-                    "followers_count": 0,
-                    "following_count": 0,
-                    "anime_count": 0,
-                    "episodes_watched": 0,
-                    "total_minutes": 0,
-                    "days_watched": 0.0,
-                    "mean_score": None,
-                    "favorites_count": 0,
-                    "reviews_count": 0,
-                }
-            )
+        # Add stats
+        if stats_data:
+            data.update(stats_data)
 
         # Cache for 5 minutes (300 seconds)
         # Short TTL ensures fresh data while reducing DB load
@@ -145,17 +136,13 @@ class UserProfileView(APIView):
                 if elapsed < timedelta(days=14):
                     days_left = 14 - elapsed.days
                     return Response(
-                        {
-                            "username": f"You can change your username again in {days_left} days."
-                        },
+                        {"username": f"You can change your username again in {days_left} days."},
                         status=400,
                     )
 
             # Check availability
             if User.objects.filter(username=new_username).exists():
-                return Response(
-                    {"username": "This username is already taken."}, status=400
-                )
+                return Response({"username": "This username is already taken."}, status=400)
 
             user.username = new_username
             user.save()
@@ -185,9 +172,7 @@ class UserProfileView(APIView):
                 if not links:
                     return ""
                 link_strs = []
-                for link in sorted(
-                    links, key=lambda x: x.get("url", "") + x.get("value", "")
-                ):
+                for link in sorted(links, key=lambda x: x.get("url", "") + x.get("value", "")):
                     url = link.get("url") or link.get("value", "")
                     platform = link.get("platform", "")
                     link_strs.append(f"{platform}:{url}")
@@ -205,9 +190,7 @@ class UserProfileView(APIView):
                 service.log_changes(user, old_links, new_links, ip_address)
 
                 # Validate and process links (metadata fetched async)
-                processed_links = service.validate_and_process(
-                    new_links, user, skip_metadata=True
-                )
+                processed_links = service.validate_and_process(new_links, user, skip_metadata=True)
                 profile.social_links = processed_links
 
         profile.save()
@@ -280,16 +263,14 @@ class UserStatsView(APIView):
 
         total_minutes = (
             UserAnimeList.objects.filter(user=request.user)
-            .annotate(
-                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
-            )
+            .annotate(entry_minutes=F("episodes_watched") * F("anime__duration_minutes"))
             .aggregate(total=Sum("entry_minutes"))["total"]
             or 0
         )
 
-        mean_score = UserAnimeList.objects.filter(
-            user=request.user, score__gt=0
-        ).aggregate(avg=Avg("score"))["avg"]
+        mean_score = UserAnimeList.objects.filter(user=request.user, score__gt=0).aggregate(
+            avg=Avg("score")
+        )["avg"]
 
         days_watched = total_minutes / 1440.0
 
@@ -344,45 +325,33 @@ def get_annotated_user_queryset(user=None, lightweight=False):
             .values("total")
         )
 
-        queryset = queryset.annotate(
-            _episodes_watched=Coalesce(Subquery(episodes_subquery), 0)
-        )
+        queryset = queryset.annotate(_episodes_watched=Coalesce(Subquery(episodes_subquery), 0))
 
         # Calculate total minutes watched using subquery to avoid join duplicates
         total_minutes_subquery = (
             UserAnimeList.objects.filter(user=OuterRef("pk"))
-            .annotate(
-                entry_minutes=F("episodes_watched") * F("anime__duration_minutes")
-            )
+            .annotate(entry_minutes=F("episodes_watched") * F("anime__duration_minutes"))
             .values("user")
             .annotate(total=Sum("entry_minutes"))
             .values("total")
         )
 
-        queryset = queryset.annotate(
-            _total_minutes=Coalesce(Subquery(total_minutes_subquery), 0)
-        )
+        queryset = queryset.annotate(_total_minutes=Coalesce(Subquery(total_minutes_subquery), 0))
 
         # Calculate mean score (exclude 0 scores) - round to 1 decimal place
         queryset = queryset.annotate(
-            _mean_score_raw=Avg(
-                "anime_lists__score", filter=Q(anime_lists__score__gt=0)
-            )
+            _mean_score_raw=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
         )
 
         # Calculate days watched from total minutes
-        queryset = queryset.annotate(
-            _days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0
-        )
+        queryset = queryset.annotate(_days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0)
 
     # Annotate is_following if user is provided
     if user and user.is_authenticated:
         from apps.users.models import UserFollow
 
         queryset = queryset.annotate(
-            _is_following=Exists(
-                UserFollow.objects.filter(follower=user, following=OuterRef("pk"))
-            )
+            _is_following=Exists(UserFollow.objects.filter(follower=user, following=OuterRef("pk")))
         )
 
     return queryset
@@ -415,11 +384,18 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         username = self.kwargs.get(self.lookup_field)
         is_authenticated = request.user.is_authenticated
 
+        # Check if viewing own profile
+        is_own_profile = is_authenticated and request.user.username.lower() == username.lower()
+
         # Try cache first (fastest path - <10ms)
         cache_key = f"public_profile:{username}:v0"
         cached_data = cache.get(cache_key)
 
         if cached_data:
+            # Check if cached profile is private and viewer is not owner
+            if cached_data.get("is_private") and not is_own_profile:
+                return Response({"error": "Profile not found"}, status=404)
+
             data = cached_data.copy()
 
             # Add viewer-specific data
@@ -441,9 +417,12 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             from apps.users.models import UserStats
 
-            user = User.objects.select_related("userprofile", "stats").get(
-                username=username
-            )
+            user = User.objects.select_related("userprofile", "stats").get(username=username)
+
+            # Check if profile is private and viewer is not the owner
+            is_private = user.userprofile.is_private if user.userprofile else False
+            if is_private and not is_own_profile:
+                return Response({"error": "Profile not found"}, status=404)
 
             if hasattr(user, "stats"):
                 # Use pre-calculated stats
@@ -459,12 +438,8 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                     if user.userprofile and user.userprofile.banner
                     else None,
                     "bio": user.userprofile.bio if user.userprofile else None,
-                    "is_private": user.userprofile.is_private
-                    if user.userprofile
-                    else False,
-                    "social_links": user.userprofile.social_links
-                    if user.userprofile
-                    else [],
+                    "is_private": user.userprofile.is_private if user.userprofile else False,
+                    "social_links": user.userprofile.social_links if user.userprofile else [],
                     "points": user.userprofile.points if user.userprofile else 0,
                     # Stats from materialized view
                     "followers_count": stats.followers_count,
@@ -472,9 +447,7 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                     "anime_count": stats.anime_count,
                     "episodes_watched": stats.episodes_watched,
                     "days_watched": stats.days_watched,
-                    "mean_score": round(stats.mean_score, 1)
-                    if stats.mean_score
-                    else None,
+                    "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
                     "favorites_count": stats.favorites_count,
                     "reviews_count": stats.reviews_count,
                     "is_online": self._check_user_online(user),
@@ -514,6 +487,12 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             raise NotFound("User not found")
 
         user = queryset.first()
+
+        # Check if profile is private and viewer is not the owner
+        is_private = user.userprofile.is_private if user.userprofile else False
+        if is_private and not is_own_profile:
+            return Response({"error": "Profile not found"}, status=404)
+
         serializer = self.get_serializer(user)
         data = serializer.data
 

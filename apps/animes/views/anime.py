@@ -11,7 +11,7 @@ from datetime import date
 import logging
 import hashlib
 
-from apps.animes.models import Anime, Genre, Studio, UserFavorite
+from apps.animes.models import Anime, Genre, Studio, UserFavorite, AnimeCharacter, AnimeStaff
 from apps.users.models import UserAnimeList
 from apps.animes.serializers import (
     AnimeListSerializer,
@@ -50,16 +50,25 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = "slug"
 
     def get_queryset(self):
-        queryset = Anime.objects.select_related("studio").prefetch_related("genres")
+        queryset = Anime.objects.select_related("studio").prefetch_related(
+            "genres",
+            "theme_songs",
+            Prefetch(
+                "cast",
+                queryset=AnimeCharacter.objects.select_related("character", "voice_actor"),
+            ),
+            Prefetch(
+                "production_staff",
+                queryset=AnimeStaff.objects.select_related("staff"),
+            ),
+        )
 
         # Prefetch user-specific data to avoid N+1 queries in serializers
         user = self.request.user
         if user.is_authenticated:
             # Annotate is_favorite as boolean (avoids query per anime)
             queryset = queryset.annotate(
-                _is_favorite=Exists(
-                    UserFavorite.objects.filter(user=user, anime=OuterRef("pk"))
-                )
+                _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
             )
             # Prefetch user's list entries for these anime
             queryset = queryset.prefetch_related(
@@ -78,9 +87,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
         if self.action != "list":
-            return queryset.order_by(
-                "-id"
-            )  # Ensure stable ordering if needed, or default
+            return queryset.order_by("-id")  # Ensure stable ordering if needed, or default
 
         # Search - split query into words for better matching
         # This allows "Frieren beyond" to match "Frieren: Beyond Journey's End"
@@ -278,7 +285,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             from apps.users.models import UserAnimeList
 
             user_lists = UserAnimeList.objects.filter(anime=instance).only("status")
-            instance._prefetched_objects_cache = {"user_lists": user_lists}
+            instance._prefetched_objects_cache["user_lists"] = user_lists
             serializer = self.get_serializer(instance)
             data = serializer.data
 
@@ -329,9 +336,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 .filter(trending_rank__isnull=False)
                 .order_by("trending_rank")[:12]
             )
-            serializer = AnimeListSerializer(
-                queryset, many=True, context={"request": request}
-            )
+            serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
             # Shorter cache for authenticated users (5 min) vs anonymous (15 min)
             cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
@@ -349,14 +354,8 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
 
         if not data:
             # Use self.get_queryset() to include user-specific prefetching
-            queryset = (
-                self.get_queryset()
-                .filter(rating__isnull=False)
-                .order_by("-rating")[:12]
-            )
-            serializer = AnimeListSerializer(
-                queryset, many=True, context={"request": request}
-            )
+            queryset = self.get_queryset().filter(rating__isnull=False).order_by("-rating")[:12]
+            serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
             # Shorter cache for authenticated users (5 min) vs anonymous (15 min)
             cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
@@ -377,9 +376,7 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         paginator = PageNumberPagination()
         paginator.page_size = 20  # 20 reviews per page
         result_page = paginator.paginate_queryset(reviews, request)
-        serializer = ReviewSerializer(
-            result_page, many=True, context={"request": request}
-        )
+        serializer = ReviewSerializer(result_page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
 
     @action(detail=True, methods=["get"])
@@ -388,12 +385,8 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         anime = self.get_object()
         genre_ids = anime.genres.values_list("id", flat=True)
         related = Anime.objects.filter(genres__in=genre_ids).exclude(id=anime.id)
-        related = related.annotate(shared_genres=Count("genres")).order_by(
-            "-shared_genres"
-        )[:8]
-        serializer = AnimeListSerializer(
-            related, many=True, context={"request": request}
-        )
+        related = related.annotate(shared_genres=Count("genres")).order_by("-shared_genres")[:8]
+        serializer = AnimeListSerializer(related, many=True, context={"request": request})
         return Response(serializer.data)
 
 

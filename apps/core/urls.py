@@ -29,12 +29,12 @@ from apps.users.admin_views import (
     AdminStatsExportView,
     AdminUserListViewSet,
     AdminFavoritesViewSet,
-    AdminImportJobViewSet,
     AdminBulkOperationsView,
     AdminReportsView,
     AdminSystemLogViewSet,
     AdminAuditLogViewSet,
 )
+from apps.core.views.admin_import_jobs import AdminImportJobViewSet
 
 # Admin router
 admin_router = DefaultRouter()

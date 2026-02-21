@@ -32,6 +32,25 @@ const Schedule = lazy(() => import('./pages/Schedule'));
 const ImportPage = lazy(() => import('./pages/ImportPage'));
 const ExportPage = lazy(() => import('./pages/ExportPage'));
 
+// Forums imports — with preload support
+const forumCategoryListImport = () => import('./pages/forums/ForumCategoryList');
+const forumThreadListImport = () => import('./pages/forums/ForumThreadList');
+const forumThreadDetailImport = () => import('./pages/forums/ForumThreadDetail');
+const createThreadImport = () => import('./pages/forums/CreateThread');
+
+const ForumCategoryList = lazy(forumCategoryListImport);
+const ForumThreadList = lazy(forumThreadListImport);
+const ForumThreadDetail = lazy(forumThreadDetailImport);
+const CreateThread = lazy(createThreadImport);
+
+// Preload all forum chunks when any forum page is visited
+export const preloadForumChunks = () => {
+  forumCategoryListImport();
+  forumThreadListImport();
+  forumThreadDetailImport();
+  createThreadImport();
+};
+
 // Admin imports
 const AdminLayout = lazy(() => import('./components/AdminLayout'));
 const AdminRoute = lazy(() => import('./components/AdminRoute'));
@@ -76,85 +95,92 @@ function App() {
         <ErrorBoundary>
           <AuthProvider>
             <BrowserRouter>
-            <ScrollToTop />
-            <GoogleAnalytics />
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route element={<Layout />}>
-                  <Route index element={<Home />} />
-                  <Route path="browse" element={<Browse />} />
-                  <Route path="seasonal" element={<Seasonal />} />
-                  <Route path="schedule" element={<Schedule />} />
-                  <Route path="anime/:slug" element={<AnimeDetail />} />
-                  <Route path="profile" element={<Profile />} />
-                  <Route path="profile/:username" element={<Profile />} />
-                  <Route path="kiyo" element={<Profile forcedUsername="kiyo" />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="login" element={<Login />} />
-                  <Route path="register" element={<Register />} />
-                  <Route path="verification-pending" element={<VerificationPending />} />
-                  <Route path="verify-email/:uid/:token" element={<VerifyEmail />} />
-                  <Route path="confirm-email-change/:uid/:token/:new_email" element={<ConfirmEmailChange />} />
-                  <Route path="forgot-password" element={<PasswordReset />} />
-                  <Route path="reset-password/:uid/:token" element={<PasswordResetConfirm />} />
-                  <Route path="auth/google/callback" element={<GoogleCallback />} />
-                  <Route path="terms" element={<Terms />} />
-                  <Route path="privacy" element={<Privacy />} />
-                  <Route path="import" element={<ImportPage />} />
-                  <Route path="export" element={<ExportPage />} />
-                </Route>
+              <ScrollToTop />
+              <GoogleAnalytics />
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route element={<Layout />}>
+                    <Route index element={<Home />} />
+                    <Route path="browse" element={<Browse />} />
+                    <Route path="seasonal" element={<Seasonal />} />
+                    <Route path="schedule" element={<Schedule />} />
+                    <Route path="anime/:slug" element={<AnimeDetail />} />
+                    <Route path="profile" element={<Profile />} />
+                    <Route path="profile/:username" element={<Profile />} />
+                    <Route path="kiyo" element={<Profile forcedUsername="kiyo" />} />
+                    <Route path="settings" element={<Settings />} />
+                    <Route path="login" element={<Login />} />
+                    <Route path="register" element={<Register />} />
+                    <Route path="verification-pending" element={<VerificationPending />} />
+                    <Route path="verify-email/:uid/:token" element={<VerifyEmail />} />
+                    <Route path="confirm-email-change/:uid/:token/:new_email" element={<ConfirmEmailChange />} />
+                    <Route path="forgot-password" element={<PasswordReset />} />
+                    <Route path="reset-password/:uid/:token" element={<PasswordResetConfirm />} />
+                    <Route path="auth/google/callback" element={<GoogleCallback />} />
+                    <Route path="terms" element={<Terms />} />
+                    <Route path="privacy" element={<Privacy />} />
+                    <Route path="import" element={<ImportPage />} />
+                    <Route path="export" element={<ExportPage />} />
 
-                {/* Admin Routes */}
-                <Route path="/admin" element={
-                  <AdminRoute>
-                    <AdminLayout />
-                  </AdminRoute>
-                }>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="users" element={<AdminUsers />} />
-                  <Route path="anime" element={<AdminAnime />} />
-                  <Route path="reviews" element={<AdminReviews />} />
-                  <Route path="genres" element={<AdminGenres />} />
-                  <Route path="studios" element={<AdminStudios />} />
-                  <Route path="user-lists" element={<AdminUserLists />} />
-                  <Route path="favorites" element={<AdminFavorites />} />
-                  <Route path="import-jobs" element={<AdminImportJobs />} />
-                  <Route path="reports" element={<AdminReports />} />
-                  <Route path="characters" element={<AdminCharacters />} />
-                  <Route path="staff" element={<AdminStaff />} />
-                  <Route path="settings" element={<AdminSettings />} />
-                  <Route path="logs" element={<AdminLogs />} />
-                  <Route path="review-reports" element={<AdminReviewReports />} />
-                </Route>
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                style: {
-                  background: '#1a1a1a',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                },
-                success: {
-                  iconTheme: {
-                    primary: '#10b981',
-                    secondary: '#fff',
+                    {/* Forum Routes */}
+                    <Route path="forums" element={<ForumCategoryList />} />
+                    <Route path="forums/create" element={<CreateThread />} />
+                    <Route path="forums/category/:slug" element={<ForumThreadList />} />
+                    <Route path="forums/category/:slug/create" element={<CreateThread />} />
+                    <Route path="forums/thread/:id" element={<ForumThreadDetail />} />
+                  </Route>
+
+                  {/* Admin Routes */}
+                  <Route path="/admin" element={
+                    <AdminRoute>
+                      <AdminLayout />
+                    </AdminRoute>
+                  }>
+                    <Route index element={<AdminDashboard />} />
+                    <Route path="users" element={<AdminUsers />} />
+                    <Route path="anime" element={<AdminAnime />} />
+                    <Route path="reviews" element={<AdminReviews />} />
+                    <Route path="genres" element={<AdminGenres />} />
+                    <Route path="studios" element={<AdminStudios />} />
+                    <Route path="user-lists" element={<AdminUserLists />} />
+                    <Route path="favorites" element={<AdminFavorites />} />
+                    <Route path="import-jobs" element={<AdminImportJobs />} />
+                    <Route path="reports" element={<AdminReports />} />
+                    <Route path="characters" element={<AdminCharacters />} />
+                    <Route path="staff" element={<AdminStaff />} />
+                    <Route path="settings" element={<AdminSettings />} />
+                    <Route path="logs" element={<AdminLogs />} />
+                    <Route path="review-reports" element={<AdminReviewReports />} />
+                  </Route>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+              <Toaster
+                position="bottom-right"
+                toastOptions={{
+                  style: {
+                    background: '#1a1a1a',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.1)',
                   },
-                },
-                error: {
-                  iconTheme: {
-                    primary: '#ef4444',
-                    secondary: '#fff',
+                  success: {
+                    iconTheme: {
+                      primary: '#10b981',
+                      secondary: '#fff',
+                    },
                   },
-                },
-              }}
-            />
-          </BrowserRouter>
-        </AuthProvider>
-      </ErrorBoundary>
-    </QueryClientProvider>
+                  error: {
+                    iconTheme: {
+                      primary: '#ef4444',
+                      secondary: '#fff',
+                    },
+                  },
+                }}
+              />
+            </BrowserRouter>
+          </AuthProvider>
+        </ErrorBoundary>
+      </QueryClientProvider>
     </HelmetProvider>
   );
 }

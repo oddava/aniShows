@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { listApi, reviewApi } from '../api/client';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
-import { TrendingUp, Star, Tv, Clock, BarChart3 } from 'lucide-react';
-import ActivityHeatmap from './ActivityHeatmap';
+import { TrendingUp, Star, Tv, Clock, BarChart3, Clock as ActivityIcon } from 'lucide-react';
 
 // Color palette for charts
 const GENRE_COLORS = [
@@ -267,8 +266,21 @@ export default function ProfileInsights({ username, isPrivate }) {
                 </div>
             </div>
 
-            {/* Activity Heatmap */}
-            <ActivityHeatmap username={username} activityData={generateMockActivityData(listsData)} />
+            {/* Activity Heatmap - Coming Soon */}
+            <div className="bg-dark-100 rounded-xl border border-gray-800 p-6 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <ActivityIcon className="w-5 h-5 text-orange-500" />
+                        Watching Activity
+                    </h3>
+                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-full">Coming Soon</span>
+                </div>
+                <div className="text-center py-12 text-gray-500">
+                    <ActivityIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">Activity tracking will be available soon!</p>
+                    <p className="text-xs mt-1 text-gray-600">Track your episode watching history over time.</p>
+                </div>
+            </div>
 
             {/* Watching Progress */}
             {watchingCount > 0 && (
@@ -309,13 +321,5 @@ export default function ProfileInsights({ username, isPrivate }) {
             )}
         </div>
     );
-}
-
-// Activity data placeholder - requires backend tracking for real data
-// Returns empty array to show the heatmap in empty state
-function generateMockActivityData(_listsData) {  // eslint-disable-line no-unused-vars
-    // This feature requires backend to track when episodes were watched
-    // For now, return empty to show the heatmap structure without fake data
-    return [];
 }
 

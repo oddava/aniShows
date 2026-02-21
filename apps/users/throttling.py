@@ -119,3 +119,21 @@ class SocialLinksRateThrottle(UserRateThrottle):
 
         # Call parent to check rate limit
         return super().allow_request(request, view)
+
+
+class ForumLikeRateThrottle(UserRateThrottle):
+    """
+    Rate limiting for forum like/unlike actions.
+    Prevents like-button spam.
+    """
+
+    scope = "forum_like"
+
+
+class ForumWriteRateThrottle(UserRateThrottle):
+    """
+    Rate limiting for forum write operations (create/update threads and posts).
+    Prevents spam posting.
+    """
+
+    scope = "forum_write"

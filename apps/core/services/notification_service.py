@@ -36,9 +36,7 @@ class NotificationService:
         """
         # Check user preferences
         if not cls._should_notify_user(user, notification_type):
-            logger.debug(
-                f"Skipping notification for user {user.id}: preferences disabled"
-            )
+            logger.debug(f"Skipping notification for user {user.id}: preferences disabled")
             return None
 
         try:
@@ -51,9 +49,7 @@ class NotificationService:
                     data=data or {},
                     priority=priority,
                 )
-                logger.info(
-                    f"Created {notification_type} notification for user {user.id}"
-                )
+                logger.info(f"Created {notification_type} notification for user {user.id}")
                 return notification
         except Exception as e:
             logger.exception(f"Failed to create notification: {e}")
@@ -99,9 +95,7 @@ class NotificationService:
     def cleanup_old_notifications(cls, days: int = 90) -> int:
         """Delete read notifications older than specified days."""
         cutoff_date = timezone.now() - timezone.timedelta(days=days)
-        deleted, _ = Notification.objects.filter(
-            is_read=True, created_at__lt=cutoff_date
-        ).delete()
+        deleted, _ = Notification.objects.filter(is_read=True, created_at__lt=cutoff_date).delete()
         logger.info(f"Cleaned up {deleted} old notifications")
         return deleted
 
@@ -153,9 +147,85 @@ class NotificationService:
             data={
                 "follower_id": follower.id,
                 "follower_username": follower.username,
-                "follower_avatar": follower.avatar
-                if hasattr(follower, "avatar")
-                else None,
+                "follower_avatar": follower.avatar if hasattr(follower, "avatar") else None,
             },
             priority="medium",
+        )
+
+    @classmethod
+    def create_forum_reply_notification(cls, user, thread, post):
+        """Create notification for forum reply."""
+        return cls.create_notification(
+            user=user,
+            notification_type=Notification.NotificationType.FORUM_REPLY,
+            title=f"New reply to your thread",
+            message=f"{post.author.username} replied to your thread '{thread.title}'",
+            data={
+                "thread_id": thread.id,
+                "post_id": post.id,
+                "replier_username": post.author.username,
+                "thread_title": thread.title,
+            },
+            priority="medium",
+        )
+
+    @classmethod
+    def create_forum_reply_to_post_notification(cls, user, reply):
+        """Create notification for reply to a specific post (threaded reply)."""
+        return cls.create_notification(
+            user=user,
+            notification_type=Notification.NotificationType.FORUM_REPLY,
+            title=f"New reply to your post",
+            message=f"{reply.author.username} replied to your post in '{reply.thread.title}'",
+            data={
+                "thread_id": reply.thread.id,
+                "post_id": reply.id,
+                "parent_post_id": reply.parent.id,
+                "replier_username": reply.author.username,
+                "thread_title": reply.thread.title,
+                "is_threaded_reply": True,
+            },
+            priority="medium",
+        )
+
+    @classmethod
+    def create_forum_mention_notification(cls, user, author, instance, is_thread=False):
+        """Create notification for user mention."""
+        item_type = "thread" if is_thread else "post"
+        title = instance.title if is_thread else instance.thread.title
+        thread_id = instance.id if is_thread else instance.thread.id
+
+        return cls.create_notification(
+            user=user,
+            notification_type=Notification.NotificationType.FORUM_MENTION,
+            title=f"You were mentioned",
+            message=f"{author.username} mentioned you in a {item_type} in '{title}'",
+            data={
+                "thread_id": thread_id,
+                "mentioner_username": author.username,
+                "thread_title": title,
+                "is_thread": is_thread,
+            },
+            priority="medium",
+        )
+
+    @classmethod
+    def create_forum_like_notification(cls, user, author, instance, is_thread=False):
+        """Create notification for forum like."""
+        item_type = "thread" if is_thread else "post"
+        title = instance.title if is_thread else instance.thread.title
+        thread_id = instance.id if is_thread else instance.thread.id
+
+        return cls.create_notification(
+            user=user,
+            notification_type=Notification.NotificationType.FORUM_LIKE,
+            title=f"New Like",
+            message=f"{author.username} liked your {item_type} in '{title}'",
+            data={
+                "thread_id": thread_id,
+                "liker_username": author.username,
+                "thread_title": title,
+                "is_thread": is_thread,
+            },
+            priority="low",
         )

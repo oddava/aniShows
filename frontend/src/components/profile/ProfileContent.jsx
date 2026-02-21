@@ -1,0 +1,457 @@
+import React, { useMemo } from 'react';
+import { Heart, List, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
+import ProfileAnimeCard, { ProfileAnimeCardSkeleton } from '../ProfileAnimeCard';
+import ReviewCard from '../ReviewCard';
+import ProfileInsights from '../ProfileInsights';
+import DraggableFavoritesGrid from '../DraggableFavoritesGrid';
+import { listApi } from '../../api/client';
+import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
+import logger from '../../utils/logger';
+
+const STATUS_TABS = [
+    { value: 'Watching', label: 'Watching', icon: '👀' },
+    { value: 'Completed', label: 'Completed', icon: '✓' },
+    { value: 'Plan to Watch', label: 'Planning', icon: '📋' },
+    { value: 'On Hold', label: 'On Hold', icon: '⏸' },
+    { value: 'Dropped', label: 'Dropped', icon: '✗' },
+];
+
+export default function ProfileContent({
+    activeTab,
+    isPrivate,
+    isPublicView,
+    isOwnProfile,
+    targetUsername,
+    favoritesData,
+    favoritesLoading,
+    isFetchingNextFavorites,
+    hasNextFavorites,
+    fetchNextFavorites,
+    listStatusFilter,
+    setListStatusFilter,
+    searchQuery,
+    setSearchQuery,
+    viewMode,
+    setViewMode,
+    currentListData,
+    listsLoading,
+    reviewsData,
+    reviewsLoading,
+    isFetchingNextReviews,
+    hasNextReviews,
+    fetchNextReviews,
+}) {
+    const queryClient = useQueryClient();
+
+    if (isPrivate) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                <Lock className="w-16 h-16 mb-4 opacity-50" />
+                <h3 className="text-xl font-semibold mb-2">This profile is private</h3>
+                <p>Only the user can see their lists and reviews.</p>
+            </div>
+        );
+    }
+
+    switch (activeTab) {
+        case 'favorites':
+            return (
+                <FavoritesContent
+                    favoritesData={favoritesData}
+                    favoritesLoading={favoritesLoading}
+                    isFetchingNextFavorites={isFetchingNextFavorites}
+                    hasNextFavorites={hasNextFavorites}
+                    fetchNextFavorites={fetchNextFavorites}
+                    isOwnProfile={isOwnProfile}
+                    targetUsername={targetUsername}
+                    isPublicView={isPublicView}
+                />
+            );
+
+        case 'anime_list':
+            return (
+                <AnimeListContent
+                    listStatusFilter={listStatusFilter}
+                    setListStatusFilter={setListStatusFilter}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    viewMode={viewMode}
+                    setViewMode={setViewMode}
+                    currentListData={currentListData}
+                    listsLoading={listsLoading}
+                    isOwnProfile={isOwnProfile}
+                    isPublicView={isPublicView}
+                    targetUsername={targetUsername}
+                    queryClient={queryClient}
+                />
+            );
+
+        case 'reviews':
+            return (
+                <ReviewsContent
+                    reviewsData={reviewsData}
+                    reviewsLoading={reviewsLoading}
+                    isFetchingNextReviews={isFetchingNextReviews}
+                    hasNextReviews={hasNextReviews}
+                    fetchNextReviews={fetchNextReviews}
+                    isPublicView={isPublicView}
+                />
+            );
+
+        case 'insights':
+            return (
+                <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
+                    <ProfileInsights username={targetUsername} isPrivate={isPrivate} />
+                </ProfileErrorBoundary>
+            );
+
+        default:
+            return null;
+    }
+}
+
+function FavoritesContent({
+    favoritesData,
+    favoritesLoading,
+    isFetchingNextFavorites,
+    hasNextFavorites,
+    fetchNextFavorites,
+    isOwnProfile,
+    targetUsername,
+    isPublicView,
+}) {
+    const favorites = favoritesData?.pages.flatMap(page => {
+        if (Array.isArray(page)) return page;
+        return page.results || [];
+    }) || [];
+
+    return (
+        <div className="space-y-8 animate-tab-content">
+            {favoritesLoading ? (
+                <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 md:gap-3">
+                    {Array(7).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
+                </div>
+            ) : favorites?.length > 0 ? (
+                <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorites">
+                    <DraggableFavoritesGrid
+                        favorites={favorites}
+                        isOwnProfile={isOwnProfile}
+                        username={targetUsername}
+                    />
+                </ProfileErrorBoundary>
+            ) : (
+                <div className="flex flex-col items-center justify-center py-20 bg-dark-100/30 rounded-3xl border border-gray-800 border-dashed glass">
+                    <Heart className="w-12 h-12 text-gray-700 mb-4" />
+                    <p className="text-gray-400 text-lg font-medium">
+                        {isPublicView ? "No favorites yet." : "You haven't added any favorites yet."}
+                    </p>
+                    {!isPublicView && (
+                        <Link to="/browse" className="mt-6 px-6 py-2.5 bg-accent text-white rounded-xl font-bold shadow-lg shadow-accent/20 hover:scale-105 transition-transform">
+                            Browse Anime
+                        </Link>
+                    )}
+                </div>
+            )}
+
+            {hasNextFavorites && (
+                <div className="text-center">
+                    <button
+                        onClick={() => fetchNextFavorites()}
+                        disabled={isFetchingNextFavorites}
+                        className="btn-secondary text-sm px-6 py-2"
+                    >
+                        {isFetchingNextFavorites ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                            'Load More Favorites'
+                        )}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function AnimeListContent({
+    listStatusFilter,
+    setListStatusFilter,
+    searchQuery,
+    setSearchQuery,
+    viewMode,
+    setViewMode,
+    currentListData,
+    listsLoading,
+    isOwnProfile,
+    isPublicView,
+    targetUsername,
+    queryClient,
+}) {
+    const filteredListItems = React.useMemo(() => {
+        if (!currentListData || !searchQuery.trim()) return currentListData || [];
+        const query = searchQuery.toLowerCase();
+        return currentListData.filter(item =>
+            item.anime?.title?.toLowerCase().includes(query) ||
+            item.anime?.title_jp?.toLowerCase().includes(query)
+        );
+    }, [currentListData, searchQuery]);
+
+    const handleQuickProgress = async (item) => {
+        try {
+            await listApi.update(item.id, { episodes_watched: (item.episodes_watched || 0) + 1 });
+            queryClient.invalidateQueries({ queryKey: ['lists', targetUsername] });
+        } catch (err) {
+            logger.error(err);
+        }
+    };
+
+    return (
+        <div className="space-y-6 animate-tab-content">
+            <div className="flex flex-wrap gap-2">
+                {STATUS_TABS.map((tab) => (
+                    <button
+                        key={tab.value}
+                        onClick={() => setListStatusFilter(tab.value)}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${listStatusFilter === tab.value
+                            ? 'bg-accent text-white shadow-lg shadow-accent/20'
+                            : 'bg-dark-100 text-gray-400 hover:text-white hover:bg-dark-50 border border-gray-800'
+                            }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input
+                        type="text"
+                        placeholder={`Search in ${listStatusFilter}...`}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="input w-full pl-10 py-2 text-sm"
+                    />
+                </div>
+
+                <div className="flex items-center gap-1 bg-dark-100 rounded-lg p-1 border border-gray-800">
+                    <button
+                        onClick={() => setViewMode('grid')}
+                        className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
+                        title="Grid view"
+                    >
+                        <LayoutGrid className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
+                        title="List view"
+                    >
+                        <LayoutList className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+
+            {filteredListItems && filteredListItems.length > 0 && (
+                <div className="text-sm text-gray-500">
+                    Showing {filteredListItems.length} anime in {listStatusFilter}
+                </div>
+            )}
+
+            <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Anime List">
+                <AnimeListView
+                    listsLoading={listsLoading}
+                    filteredListItems={filteredListItems}
+                    viewMode={viewMode}
+                    listStatusFilter={listStatusFilter}
+                    isOwnProfile={isOwnProfile}
+                    isPublicView={isPublicView}
+                    searchQuery={searchQuery}
+                    handleQuickProgress={handleQuickProgress}
+                />
+            </ProfileErrorBoundary>
+        </div>
+    );
+}
+
+function AnimeListView({
+    listsLoading,
+    filteredListItems,
+    viewMode,
+    listStatusFilter,
+    isOwnProfile,
+    isPublicView,
+    searchQuery,
+    handleQuickProgress,
+}) {
+    if (listsLoading) {
+        return (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3">
+                {Array(12).fill(0).map((_, i) => <ProfileAnimeCardSkeleton key={i} />)}
+            </div>
+        );
+    }
+
+    if (!filteredListItems || filteredListItems.length === 0) {
+        return (
+            <div className="text-center py-16 text-gray-400 bg-dark-100/50 rounded-xl border border-gray-800 border-dashed">
+                <p>{searchQuery ? "No anime found matching your search." : `No anime in ${listStatusFilter}.`}</p>
+                {!searchQuery && !isPublicView && (
+                    <Link to="/browse" className="text-accent hover:underline mt-2 inline-block">Browse anime to add some!</Link>
+                )}
+            </div>
+        );
+    }
+
+    if (viewMode === 'grid') {
+        return (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3">
+                {filteredListItems.map((item) => (
+                    <ProfileAnimeCard
+                        key={item.id}
+                        anime={item.anime}
+                        episodesWatched={item.episodes_watched}
+                        showProgress={listStatusFilter === 'Watching'}
+                        listEntryId={item.id}
+                    />
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2">
+            {filteredListItems.map((item) => (
+                <Link
+                    key={item.id}
+                    to={`/anime/${item.anime?.slug}`}
+                    className="flex items-center gap-4 bg-dark-100 hover:bg-dark-50 rounded-lg p-3 border border-gray-800 hover:border-accent/30 transition-all group"
+                >
+                    <img
+                        src={item.anime?.cover_image}
+                        alt={item.anime?.title}
+                        className="w-12 h-16 rounded object-cover shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-white group-hover:text-accent transition-colors truncate">
+                            {item.anime?.title}
+                        </h4>
+                        <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                            <span>{item.anime?.anime_type || 'TV'}</span>
+                            <span>•</span>
+                            <span>{item.anime?.episode_count || '?'} eps</span>
+                            {item.score > 0 && (
+                                <>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1 text-yellow-500">
+                                        <Star className="w-3 h-3 fill-current" />
+                                        {item.score}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                    {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
+                        <div className="flex items-center gap-4 shrink-0 px-2" onClick={(e) => e.preventDefault()}>
+                            <div className="hidden sm:flex flex-col items-end gap-1">
+                                <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden border border-white/5">
+                                    <div
+                                        className={`h-full transition-all duration-700 ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1
+                                            ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]'
+                                            : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'}`}
+                                        style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
+                                    />
+                                </div>
+                                <span className="text-[11px] font-bold text-white tabular-nums">
+                                    <span className="text-accent">{item.episodes_watched || 0}</span>
+                                    <span className="mx-0.5 text-gray-500">/</span>
+                                    <span>{item.anime.episode_count}</span>
+                                    <span className="ml-1 text-gray-500 font-normal uppercase text-[9px]">eps</span>
+                                </span>
+                            </div>
+
+                            {isOwnProfile && (
+                                <button
+                                    onClick={async (e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleQuickProgress(item);
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-accent/20 text-accent hover:bg-accent hover:text-white transition-all border border-accent/30"
+                                    title="Mark next episode"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </Link>
+            ))}
+        </div>
+    );
+}
+
+function ReviewsContent({
+    reviewsData,
+    reviewsLoading,
+    isFetchingNextReviews,
+    hasNextReviews,
+    fetchNextReviews,
+    isPublicView,
+}) {
+    const reviews = reviewsData?.pages.flatMap(page => {
+        if (Array.isArray(page)) return page;
+        return page.results || [];
+    }) || [];
+
+    if (reviewsLoading) {
+        return (
+            <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (!reviews || reviews.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 bg-dark-100/30 rounded-3xl border border-gray-800 border-dashed">
+                <MessageSquare className="w-12 h-12 text-gray-700 mb-4" />
+                <p className="text-gray-400 text-lg font-medium">
+                    {isPublicView ? "No reviews yet." : "You haven't written any reviews yet."}
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-3xl mx-auto space-y-6">
+            <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Reviews">
+                <div className="space-y-6">
+                    {reviews.map((review) => (
+                        <div key={review.id} className="relative">
+                            <ReviewCard review={review} showAnime={true} />
+                        </div>
+                    ))}
+                </div>
+            </ProfileErrorBoundary>
+
+            {hasNextReviews && (
+                <div className="text-center mt-8">
+                    <button
+                        onClick={() => fetchNextReviews()}
+                        disabled={isFetchingNextReviews}
+                        className="btn-secondary text-sm px-6 py-2"
+                    >
+                        {isFetchingNextReviews ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                            'Load More Reviews'
+                        )}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}

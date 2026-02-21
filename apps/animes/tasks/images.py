@@ -132,10 +132,10 @@ def generate_image_thumbnails(self, anime_id: int):
         # Generate cover image thumbnails
         if anime.cover_image:
             try:
-                # Access each spec field to trigger generation
-                _ = anime.cover_image_small.url
-                _ = anime.cover_image_medium.url
-                _ = anime.cover_image_large.url
+                # Explicitly generate the thumbnails (since we use Optimistic cache strategy)
+                anime.cover_image_small.generate()
+                anime.cover_image_medium.generate()
+                anime.cover_image_large.generate()
                 generated_count += 3
                 logger.info(f"Generated cover thumbnails for {anime.title}")
             except Exception as e:
@@ -146,9 +146,10 @@ def generate_image_thumbnails(self, anime_id: int):
         # Generate banner image thumbnails
         if anime.banner_image:
             try:
-                _ = anime.banner_image_small.url
-                _ = anime.banner_image_medium.url
-                _ = anime.banner_image_large.url
+                # Explicitly generate the thumbnails (since we use Optimistic cache strategy)
+                anime.banner_image_small.generate()
+                anime.banner_image_medium.generate()
+                anime.banner_image_large.generate()
                 generated_count += 3
                 logger.info(f"Generated banner thumbnails for {anime.title}")
             except Exception as e:

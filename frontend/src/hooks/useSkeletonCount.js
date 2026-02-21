@@ -19,7 +19,7 @@ export function useSkeletonCount(viewMode = 'grid', options = {}) {
     const getColumnCount = useCallback(() => {
         if (typeof window === 'undefined') return 4;
         const width = window.innerWidth;
-        
+
         // Match Tailwind breakpoints from Browse.jsx grid classes
         if (width < 480) return 2;      // xs:grid-cols-2 (though xs is min-width)
         if (width < 640) return 3;      // xs breakpoint
@@ -31,12 +31,12 @@ export function useSkeletonCount(viewMode = 'grid', options = {}) {
 
     const calculateCount = useCallback(() => {
         if (typeof window === 'undefined') return minCount;
-        
+
         const viewportHeight = window.innerHeight;
         const availableHeight = viewportHeight - headerOffset;
-        
+
         let calculated = minCount;
-        
+
         switch (viewMode) {
             case 'grid': {
                 // Card height: 280px (aspect-[2/3] + title area) + gap: 20px
@@ -63,12 +63,14 @@ export function useSkeletonCount(viewMode = 'grid', options = {}) {
             default:
                 calculated = minCount;
         }
-        
+
         // Clamp between min and max
         return Math.max(minCount, Math.min(calculated, maxCount));
     }, [viewMode, headerOffset, buffer, minCount, maxCount, getColumnCount]);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
         // Initial calculation
         setCount(calculateCount());
 
@@ -82,7 +84,7 @@ export function useSkeletonCount(viewMode = 'grid', options = {}) {
         };
 
         window.addEventListener('resize', handleResize);
-        
+
         return () => {
             window.removeEventListener('resize', handleResize);
             clearTimeout(resizeTimer);

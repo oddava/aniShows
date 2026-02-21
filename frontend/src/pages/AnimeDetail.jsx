@@ -812,18 +812,6 @@ export default function AnimeDetail() {
                                             <div className="text-center py-16 bg-dark-100/50 rounded-2xl border border-gray-800 border-dashed">
                                                 <MessageSquare className="w-12 h-12 text-gray-700 mx-auto mb-4" />
                                                 <p className="text-gray-400 mb-4">No reviews for this anime yet.</p>
-                                                {isAuthenticated && canReview && (
-                                                    <button
-                                                        onClick={() => setIsWritingReview(true)}
-                                                        className="px-6 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg"
-                                                        style={{
-                                                            backgroundColor: accentColor || '#8b5cf6',
-                                                            boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
-                                                        }}
-                                                    >
-                                                        Be the first to write a review →
-                                                    </button>
-                                                )}
                                             </div>
                                         )
                                     )}

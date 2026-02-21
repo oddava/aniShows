@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/v1/", include("apps.animes.urls")),
     path("api/v1/", include("apps.users.urls")),
     path("api/v1/", include("apps.core.urls")),
+    path("api/v1/forums/", include("apps.forums.urls")),
     # Django admin
     path("django-admin/", admin.site.urls),
     path("accounts/", include("allauth.urls")),

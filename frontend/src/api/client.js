@@ -226,12 +226,12 @@ export default api;
 
 // API functions
 export const animeApi = {
-    getAll: (params) => api.get('/anime/', { params }),
-    getBySlug: (slug) => api.get(`/anime/${slug}/`),
-    getTrending: () => api.get('/anime/trending/'),
-    getTopRated: () => api.get('/anime/top_rated/'),
-    getRelated: (slug) => api.get(`/anime/${slug}/related/`),
-    getReviews: (slug) => api.get(`/anime/${slug}/reviews/`),
+    getAll: (params, signal) => api.get('/anime/', { params, signal }),
+    getBySlug: (slug, signal) => api.get(`/anime/${slug}/`, { signal }),
+    getTrending: (signal) => api.get('/anime/trending/', { signal }),
+    getTopRated: (signal) => api.get('/anime/top_rated/', { signal }),
+    getRelated: (slug, signal) => api.get(`/anime/${slug}/related/`, { signal }),
+    getReviews: (slug, signal) => api.get(`/anime/${slug}/reviews/`, { signal }),
 };
 
 export const genreApi = {

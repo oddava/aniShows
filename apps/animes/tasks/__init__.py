@@ -18,13 +18,13 @@ Usage:
 
     # Run full airing workflow
     sync_airing_workflow.delay()
-    
+
     # Sync franchises for a single anime (imports missing to ensure all slugs linked)
     sync_franchises.delay(anime_id=123)
-    
+
     # Batch sync franchises for anime missing relations
     sync_franchises.delay(mode='backfill', batch_size=50)
-    
+
     # Update relation slugs (run periodically to fix broken links)
     update_relation_slugs.delay(batch_size=100)
 """
@@ -33,7 +33,7 @@ Usage:
 from .sync import sync_anime_catalog
 from .airing import sync_airing_workflow
 from .metadata import enrich_metadata
-from .themes import sync_theme_songs
+from .themes import sync_theme_songs, backfill_theme_youtube_urls
 from .recommendations import generate_recommendations
 from .franchises import sync_franchises, update_relation_slugs
 
@@ -48,11 +48,13 @@ __all__ = [
     "sync_airing_workflow",
     "enrich_metadata",
     "sync_theme_songs",
+    "backfill_theme_youtube_urls",
     "generate_recommendations",
     "generate_image_thumbnails",
     "sync_franchises",
     "update_relation_slugs",
 ]
+
 
 # Explicitly register franchise tasks to ensure they're available
 # This is important for Celery autodiscover_tasks()
@@ -61,5 +63,6 @@ def _register_franchise_tasks():
     # Tasks are already registered via @shared_task decorator
     # This function exists to force import of the module
     pass
+
 
 _register_franchise_tasks()
