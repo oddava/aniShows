@@ -13,9 +13,9 @@ DEBUG = True
 
 # Use in-memory SQLite for faster tests
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
     }
 }
 
@@ -34,6 +34,8 @@ REST_FRAMEWORK = {
         "user_actions": "10000/minute",
         "admin_actions": "10000/minute",
         "strict_user": "10000/minute",
+        "forum_write": "10000/minute",
+        "forum_like": "10000/minute",
     },
 }
 

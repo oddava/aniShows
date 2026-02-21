@@ -233,6 +233,7 @@ class SeasonalEdgeCasesTests(APITestCase):
             anime_type="TV",
             status="Airing",
             release_date=date(2024, 1, 1),
+            member_count=1000,  # Set member_count so it appears in results
         )
 
         # Anime on last day of winter
@@ -243,6 +244,7 @@ class SeasonalEdgeCasesTests(APITestCase):
             anime_type="TV",
             status="Airing",
             release_date=date(2024, 3, 31),
+            member_count=1000,  # Set member_count so it appears in results
         )
 
         response = self.client.get(self.list_url, {"season": "winter", "year": "2024"})
