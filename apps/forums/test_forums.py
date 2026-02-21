@@ -6,96 +6,116 @@ from apps.forums.models import Category, Thread, Post, Tag, ThreadLike, PostLike
 
 User = get_user_model()
 
+
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(username='testuser', email='test@example.com', password='password123')
+    return User.objects.create_user(
+        username="testuser", email="test@example.com", password="password123"
+    )
+
 
 @pytest.fixture
 def api_client():
     from rest_framework.test import APIClient
+
     return APIClient()
+
 
 @pytest.fixture
 def authenticated_client(api_client, user):
     api_client.force_authenticate(user=user)
     return api_client
 
+
 @pytest.fixture
 def category(db):
-    return Category.objects.create(name='General Discussion', slug='general-discussion', description='Talk about anything')
+    return Category.objects.create(
+        name="General Discussion", slug="general-discussion", description="Talk about anything"
+    )
+
 
 @pytest.fixture
 def tag(db):
-    return Tag.objects.create(name='News', slug='news', color='#FF0000')
+    return Tag.objects.create(name="News", slug="news", color="#FF0000")
+
 
 @pytest.fixture
 def thread(db, category, user):
-    return Thread.objects.create(category=category, title='First Thread', author=user, content='Hello world')
+    return Thread.objects.create(
+        category=category, title="First Thread", author=user, content="Hello world"
+    )
+
 
 @pytest.mark.django_db
 class TestForumsAPI:
     def test_list_categories(self, api_client, category):
-        url = reverse('forums:category-list')
+        url = reverse("forums:category-list")
         response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) == 1
-        assert response.data['results'][0]['name'] == 'General Discussion'
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["name"] == "General Discussion"
 
     def test_list_threads(self, api_client, thread):
-        url = reverse('forums:thread-list')
+        url = reverse("forums:thread-list")
         response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) == 1
-        assert response.data['results'][0]['title'] == 'First Thread'
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["title"] == "First Thread"
 
     def test_create_thread_unauthenticated(self, api_client, category):
-        url = reverse('forums:thread-list')
-        data = {'category': category.id, 'title': 'New Thread', 'content': 'Test content'}
+        url = reverse("forums:thread-list")
+        data = {"category": category.id, "title": "New Thread", "content": "Test content"}
         response = api_client.post(url, data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_create_thread_authenticated(self, authenticated_client, category):
-        url = reverse('forums:thread-list')
-        data = {'category': category.id, 'title': 'New Thread', 'content': 'Test content'}
+        url = reverse("forums:thread-list")
+        data = {"category": category.id, "title": "New Thread", "content": "Test content"}
         response = authenticated_client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
         assert Thread.objects.count() == 1  # assuming thread fixture isn't loaded for this test
 
     def test_create_post_authenticated(self, authenticated_client, thread):
-        url = reverse('forums:post-list')
-        data = {'thread': thread.id, 'content': 'This is a reply'}
+        url = reverse("forums:post-list")
+        data = {"thread": thread.id, "content": "This is a reply"}
         response = authenticated_client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
         assert Post.objects.filter(thread=thread).count() == 1
 
     def test_list_posts(self, api_client, thread, user):
-        Post.objects.create(thread=thread, author=user, content='A reply')
-        url = reverse('forums:post-list')
-        response = api_client.get(url, {'thread__id': thread.id})
+        Post.objects.create(thread=thread, author=user, content="A reply")
+        url = reverse("forums:post-list")
+        response = api_client.get(url, {"thread__id": thread.id})
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) == 1
-        assert response.data['results'][0]['content'] == 'A reply'
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["content"] == "A reply"
 
     def test_create_thread_with_tags(self, authenticated_client, category, tag):
-        url = reverse('forums:thread-list')
-        data = {'category': category.id, 'title': 'Thread with Tags', 'content': 'Test tags', 'tag_ids': [tag.id]}
+        url = reverse("forums:thread-list")
+        data = {
+            "category": category.id,
+            "title": "Thread with Tags",
+            "content": "Test tags",
+            "tag_ids": [tag.id],
+        }
         response = authenticated_client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
-        assert Thread.objects.get(id=response.data['id']).tags.filter(id=tag.id).exists()
+        assert Thread.objects.get(id=response.data["id"]).tags.filter(id=tag.id).exists()
 
     def test_toggle_thread_like(self, authenticated_client, thread):
-        url = reverse('forums:thread-like', args=[thread.id])
         # Like
-        response = authenticated_client.post(url)
+        like_url = reverse("forums:thread-like", args=[thread.id])
+        response = authenticated_client.post(like_url)
         assert response.status_code == status.HTTP_201_CREATED
         assert ThreadLike.objects.filter(thread=thread).count() == 1
-        # Unlike
-        response = authenticated_client.post(url)
+        # Unlike (using separate unlike endpoint)
+        unlike_url = reverse("forums:thread-unlike", args=[thread.id])
+        response = authenticated_client.post(unlike_url)
         assert response.status_code == status.HTTP_200_OK
         assert ThreadLike.objects.filter(thread=thread).count() == 0
 
     def test_global_feed(self, api_client, thread):
-        url = reverse('forums:thread-list')
-        response = api_client.get(url, {'ordering': '-updated_at'})
+        url = reverse("forums:thread-list")
+        response = api_client.get(url, {"ordering": "-updated_at"})
         assert response.status_code == status.HTTP_200_OK
-        assert len(response.data['results']) >= 1
+        assert len(response.data["results"]) >= 1

@@ -10,12 +10,14 @@ Tests for:
 """
 
 from datetime import date
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from django.contrib.auth import get_user_model
 from apps.animes.models import Anime, Genre, Studio
+from apps.animes.signals import trigger_metadata_fetch
+from django.db.models.signals import post_save
 
 User = get_user_model()
 
@@ -207,6 +209,12 @@ class SeasonalEdgeCasesTests(APITestCase):
     def setUp(self):
         self.list_url = reverse("anime-list")
         self.client = APIClient()
+        # Disconnect the metadata fetch signal to prevent database locks in tests
+        post_save.disconnect(trigger_metadata_fetch, sender=Anime)
+
+    def tearDown(self):
+        # Reconnect the signal after tests
+        post_save.connect(trigger_metadata_fetch, sender=Anime)
 
     def test_empty_season(self):
         """Test filtering by season with no anime."""
