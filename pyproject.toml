@@ -12,6 +12,7 @@ version = "0.1.0"
 description = "Anime tracking and discovery platform"
 requires-python = ">=3.12"
 dependencies = [
+    "bleach>=6.2.0",
     "cookiecutter>=2.6.0",
     "cryptography>=46.0.3",
     "defusedxml>=0.7.1",
