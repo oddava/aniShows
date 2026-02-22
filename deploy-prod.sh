@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Production deployment script for anishows using GHCR images
-#
+# Production deployment script for anishows using GHCR
+# Fixed frontend caching issues
 
 set -e
 
@@ -28,32 +28,24 @@ $COMPOSE_CMD pull
 echo -e "${GREEN}✅ Images pulled successfully!${NC}"
 echo ""
 
-echo -e "${BLUE}🚀 Step 2: Restarting containers...${NC}"
-echo -e "${YELLOW}⚠️  Removing frontend volume to ensure clean deployment...${NC}"
-$COMPOSE_CMD down
-docker volume rm anishows-frontend_dist 2>/dev/null || true
+echo -e "${BLUE}🚀 Step 2: Clearing old frontend assets...${NC}"
+# Clear old frontend assets to prevent stale file accumulation (safe - only affects frontend build files)
+docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c "rm -rf /srv/frontend/assets/* /srv/frontend/sw.js /srv/frontend/workbox-*.js 2>/dev/null || true" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not clear frontend volume (may not exist yet)${NC}"
+echo -e "${GREEN}✅ Old frontend assets cleared!${NC}"
+echo ""
+
+echo -e "${BLUE}🚀 Step 3: Restarting containers...${NC}"
 $COMPOSE_CMD up -d
 echo -e "${GREEN}✅ Containers restarted!${NC}"
 echo ""
 
-echo -e "${BLUE}⏳ Waiting for frontend init container to complete...${NC}"
-sleep 5
-$COMPOSE_CMD ps | grep -q "frontend.*Exited (0)" && echo -e "${GREEN}✅ Frontend copied successfully!${NC}" || echo -e "${YELLOW}⚠️  Frontend container status unknown${NC}"
-echo ""
-
-echo -e "${BLUE}🔄 Step 3: Running database migrations...${NC}"
+echo -e "${BLUE}🔄 Step 4: Running database migrations...${NC}"
 sleep 3 # Wait for containers to start
 if $COMPOSE_CMD exec -T web uv run python manage.py migrate --noinput; then
     echo -e "${GREEN}✅ Migrations complete!${NC}"
 else
     echo -e "${YELLOW}⚠️  Migration warning (may be already applied)${NC}"
 fi
-echo ""
-
-echo -e "${BLUE}🔄 Step 4: Reloading Caddy to clear caches...${NC}"
-sleep 2
-$COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || echo -e "${YELLOW}⚠️  Caddy reload skipped (may need manual restart)${NC}"
-echo -e "${GREEN}✅ Caddy reloaded!${NC}"
 echo ""
 
 echo -e "${BLUE}🎨 Step 5: Collecting static files...${NC}"

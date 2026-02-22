@@ -85,6 +85,23 @@
         reverse_proxy web:8000
     }
 
+    # Service worker - never cache to ensure updates are detected
+    handle /sw.js {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        header Pragma "no-cache"
+        header Expires "0"
+    }
+
+    handle /workbox-*.js {
+        root * /srv/frontend
+        file_server
+        header Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+        header Pragma "no-cache"
+        header Expires "0"
+    }
+
     # Static assets with aggressive caching
     handle /assets/* {
         root * /srv/frontend
