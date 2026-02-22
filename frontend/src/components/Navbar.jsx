@@ -1,10 +1,11 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, CheckCircle, Star, Loader2, Play, Calendar, Heart, Tv, Bell, Clock, Command, Sparkles, MessageSquare } from 'lucide-react';
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi, animeApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
 import logger from '../utils/logger';
+
 import Fuse from 'fuse.js';
 
 // Navigation Item Component with Active State

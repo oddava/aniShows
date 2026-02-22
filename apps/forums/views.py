@@ -155,7 +155,7 @@ class ThreadViewSet(viewsets.ModelViewSet):
             queryset = queryset.annotate(
                 is_liked_by_user=Exists(
                     ThreadLike.objects.filter(thread=OuterRef("pk"), user=self.request.user)
-                )
+                ),
             )
 
         # Only prefetch posts for detail views (not list)
@@ -256,7 +256,7 @@ class ThreadViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "already_liked",
-                    "like_count": thread.likes.count(),
+                    "like_count": thread.like_count,
                     "is_liked": True,
                 },
                 status=status.HTTP_200_OK,
@@ -268,15 +268,13 @@ class ThreadViewSet(viewsets.ModelViewSet):
                 user=thread.author, author=request.user, instance=thread, is_thread=True
             )
 
-        # Trigger deferred count update (signal will also trigger one, but it's idempotent)
-        thread.update_like_count()
+        # Optimistically update the count on the instance for immediate feedback
+        thread.like_count += 1
 
-        # Return the expected new count immediately (actual update is deferred via on_commit)
-        new_count = thread.likes.count()
         return Response(
             {
                 "status": "liked",
-                "like_count": new_count,
+                "like_count": thread.like_count,
                 "is_liked": True,
             },
             status=status.HTTP_201_CREATED,
@@ -295,14 +293,12 @@ class ThreadViewSet(viewsets.ModelViewSet):
         try:
             like = ThreadLike.objects.get(thread=thread, user=request.user)
             like.delete()
-            # Trigger deferred count update (signal will also trigger one, but it's idempotent)
-            thread.update_like_count()
-            # Return the expected new count immediately (actual update is deferred via on_commit)
-            new_count = thread.likes.count()
+            # Optimistically update the count on the instance for immediate feedback
+            thread.like_count -= 1
             return Response(
                 {
                     "status": "unliked",
-                    "like_count": new_count,
+                    "like_count": thread.like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,
@@ -312,7 +308,7 @@ class ThreadViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "not_liked",
-                    "like_count": thread.likes.count(),
+                    "like_count": thread.like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,
@@ -367,17 +363,12 @@ class PostViewSet(viewsets.ModelViewSet):
             page_obj = self.paginate_queryset(top_level_queryset)
             if page_obj is not None:
                 # We have a page of top-level posts. Now we need to fetch all their descendants
-                top_level_ids = [post.id for post in page_obj]
+                top_level_posts = list(page_obj)
+                top_level_ids = [post.id for post in top_level_posts]
 
-                # Fetch all descendants recursively (up to max depth 10)
-                # Since depth is max 10, we can use an __in query iteratively or a CTE.
-                # For simplicity and DB compatibility without raw SQL CTEs:
-                # In most cases, a single thread page won't have more than ~1000 total replies.
-                # Let's get ALL posts for this thread that are NOT top level,
-                # then filter in Python to only include descendants of our paginated top_level_ids.
-                # This is much faster than N queries.
-
-                all_other_posts = list(queryset.filter(parent__isnull=False))
+                # Fetch all non-top-level posts for the current thread and build the hierarchy in Python.
+                # This is more efficient than recursive database queries.
+                all_other_posts = list(queryset.filter(parent__isnull=False, thread_id=thread_id))
 
                 # Build a map of parent -> children to find descendants
                 children_map = {}
@@ -399,7 +390,7 @@ class PostViewSet(viewsets.ModelViewSet):
                     get_descendants(post_id)
 
                 # Combine top level posts and their descendants
-                final_posts = list(page_obj) + descendants
+                final_posts = top_level_posts + descendants
 
                 # Sort the final list by created_at so the frontend can build the tree reliably
                 final_posts.sort(key=lambda x: x.created_at)

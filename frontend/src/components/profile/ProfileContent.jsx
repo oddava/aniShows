@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, lazy, Suspense } from 'react';
 import { Heart, List, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
 import ProfileAnimeCard, { ProfileAnimeCardSkeleton } from '../ProfileAnimeCard';
 import ReviewCard from '../ReviewCard';
-import ProfileInsights from '../ProfileInsights';
 import DraggableFavoritesGrid from '../DraggableFavoritesGrid';
 import { listApi } from '../../api/client';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import logger from '../../utils/logger';
+
+const ProfileInsights = lazy(() => import('../ProfileInsights'));
 
 const STATUS_TABS = [
     { value: 'Watching', label: 'Watching', icon: '👀' },
@@ -104,7 +105,9 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <ProfileInsights username={targetUsername} isPrivate={isPrivate} />
+                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                        <ProfileInsights username={targetUsername} isPrivate={isPrivate} />
+                    </Suspense>
                 </ProfileErrorBoundary>
             );
 

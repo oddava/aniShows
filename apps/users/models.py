@@ -30,12 +30,8 @@ class CustomUser(AbstractUser):
 
 class UserProfile(Model):
     user = OneToOneField(settings.AUTH_USER_MODEL, on_delete=CASCADE, db_index=True)
-    avatar = ImageField(
-        upload_to=user_avatar_path, blank=True, null=True, storage=MediaStorage()
-    )
-    banner = ImageField(
-        upload_to=user_banner_path, blank=True, null=True, storage=MediaStorage()
-    )
+    avatar = ImageField(upload_to=user_avatar_path, blank=True, null=True, storage=MediaStorage())
+    banner = ImageField(upload_to=user_banner_path, blank=True, null=True, storage=MediaStorage())
     bio = TextField(blank=True, null=True)
     last_username_change = DateTimeField(null=True, blank=True)
     is_private = BooleanField(default=False)
@@ -67,9 +63,7 @@ class UserAnimeList(Model):
         dropped = "Dropped"
         plan_to_watch = "Plan to Watch"
 
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="anime_lists"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="anime_lists")
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="user_lists")
     status = CharField(max_length=20, choices=UserAnimeStatus.choices)
     score = IntegerField(default=0)
@@ -108,13 +102,9 @@ class UserImportJob(models.Model):
         myanimelist_xml = "mal_xml", "MyAnimeList XML"
         anilist = "anilist", "AniList"
 
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="import_jobs"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="import_jobs")
     source = CharField(max_length=20, choices=ImportSource.choices)
-    status = CharField(
-        max_length=20, choices=ImportStatus.choices, default=ImportStatus.pending
-    )
+    status = CharField(max_length=20, choices=ImportStatus.choices, default=ImportStatus.pending)
 
     # Progress tracking
     total_entries = IntegerField(default=0)
@@ -155,12 +145,8 @@ class UserImportJob(models.Model):
 class UserFollow(Model):
     """Track user following relationships"""
 
-    follower = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="following"
-    )
-    following = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="followers"
-    )
+    follower = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="following")
+    following = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="followers")
     created_at = DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -235,9 +221,7 @@ class SocialLinkChangeLog(models.Model):
         EDIT = "edit", "Edit"
         DELETE = "delete", "Delete"
 
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="social_link_logs"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="social_link_logs")
     action = CharField(max_length=20, choices=ActionChoices.choices)
     old_value = models.JSONField(null=True, blank=True)
     new_value = models.JSONField(default=dict)
@@ -250,6 +234,7 @@ class SocialLinkChangeLog(models.Model):
             Index(fields=["user", "-created_at"], name="soclinklog_user_created_idx"),
             Index(fields=["action", "-created_at"], name="soclinklog_action_created_idx"),
             Index(fields=["created_at"], name="soclinklog_created_idx"),
+            Index(fields=["ip_address"], name="soclinklog_ip_address_idx"),
         ]
 
     def __str__(self):

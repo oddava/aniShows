@@ -4,12 +4,10 @@ from rest_framework.response import Response
 from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef, F
 from django.db.models.functions import Coalesce
 from django.core.cache import cache
-from django.core.validators import ValidationError
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from datetime import date
 import logging
-import hashlib
+from rest_framework.viewsets import ReadOnlyModelViewSet
+
 
 from apps.animes.models import Anime, Genre, Studio, UserFavorite, AnimeCharacter, AnimeStaff
 from apps.users.models import UserAnimeList
@@ -41,7 +39,11 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 200
 
 
-class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
+import hashlib
+import json
+
+
+class AnimeViewSet(ReadOnlyModelViewSet):
     """
     Anime listing and detail with filtering, search, and sorting.
     """
@@ -87,15 +89,13 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
         if self.action != "list":
-            return queryset.order_by("-id")  # Ensure stable ordering if needed, or default
+            return queryset.order_by("-id")
 
         # Search - split query into words for better matching
-        # This allows "Frieren beyond" to match "Frieren: Beyond Journey's End"
         search = self.request.query_params.get("q")
         if search:
             search_words = search.strip().split()
             if len(search_words) == 1:
-                # Single word search - match anywhere in title, title_jp, or synopsis
                 queryset = queryset.filter(
                     Q(title__icontains=search)
                     | Q(title_jp__icontains=search)
@@ -103,21 +103,17 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             else:
                 # Multi-word search - each word must appear in title OR title_jp
-                # This allows "Frieren beyond" to match "Frieren: Beyond Journey's End"
                 for word in search_words:
                     if len(word) >= 2:  # Skip very short words
                         queryset = queryset.filter(
                             Q(title__icontains=word) | Q(title_jp__icontains=word)
                         )
 
-        # Filter by genre
         genres = []
-        # Handle ?genre=action&genre=romance
         params = self.request.query_params.getlist("genre")
         for param in params:
             if param == "all":
                 continue
-            # Handle ?genre=action,romance
             if "," in param:
                 genres.extend(param.split(","))
             else:
@@ -233,8 +229,6 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         # Only use valid sort fields, default to popular if invalid
         sort_field = sort_mapping.get(sort_clean, "popularity_rank")
 
-        sort_field = sort_mapping.get(sort, "popularity_rank")
-
         # logical fixes for specific sorts:
         # Exclude upcoming (0 episodes) from rating and newest sorts to prevent them from hitting top
         if sort == "rating":
@@ -309,7 +303,10 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             return super().list(request, *args, **kwargs)
 
         params = dict(request.query_params)
-        cache_key = f"anime_list:{hash(str(sorted(params.items())))}"
+        # Use a deterministic, fixed-size hash for the cache key
+        param_string = json.dumps(sorted(params.items()), separators=(",", ":"))
+        cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
+        cache_key = f"anime_list:{cache_key_hash}"
 
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -325,7 +322,6 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def trending(self, request):
         """Get trending anime (most favorited recently)"""
-        # Cache key is user-specific for authenticated users to include user_list_status
         user_id = request.user.id if request.user.is_authenticated else "anon"
         cache_key = f"anime_trending_{user_id}"
         data = cache.get(cache_key)
@@ -338,7 +334,6 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
             )
             serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
-            # Shorter cache for authenticated users (5 min) vs anonymous (15 min)
             cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
             cache.set(cache_key, data, cache_time)
 
@@ -347,17 +342,14 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def top_rated(self, request):
         """Get top rated anime"""
-        # Cache key is user-specific for authenticated users to include user_list_status
         user_id = request.user.id if request.user.is_authenticated else "anon"
         cache_key = f"anime_top_rated_{user_id}"
         data = cache.get(cache_key)
 
         if not data:
-            # Use self.get_queryset() to include user-specific prefetching
             queryset = self.get_queryset().filter(rating__isnull=False).order_by("-rating")[:12]
             serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
-            # Shorter cache for authenticated users (5 min) vs anonymous (15 min)
             cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
             cache.set(cache_key, data, cache_time)
 
@@ -372,9 +364,8 @@ class AnimeViewSet(viewsets.ReadOnlyModelViewSet):
         anime = self.get_object()
         reviews = Review.objects.filter(anime=anime).select_related("user")
 
-        # Paginate reviews to prevent memory issues with popular anime
         paginator = PageNumberPagination()
-        paginator.page_size = 20  # 20 reviews per page
+        paginator.page_size = 20
         result_page = paginator.paginate_queryset(reviews, request)
         serializer = ReviewSerializer(result_page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)

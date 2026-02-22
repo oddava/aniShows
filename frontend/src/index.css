@@ -711,3 +711,222 @@ a:focus-visible {
 .skeleton-bg-light {
   background-color: #262626;
 }
+
+/* ============================================
+   BROWSE PAGE IMPROVEMENTS
+   ============================================ */
+
+/* Filter chip animation */
+@keyframes chip-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-chip-enter {
+  animation: chip-enter 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Filter sidebar section animation */
+@keyframes section-expand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+.animate-section-expand {
+  animation: section-expand 0.3s ease-out forwards;
+  overflow: hidden;
+}
+
+/* Mobile drawer slide animation */
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-drawer-slide-in {
+  animation: drawer-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Search focus ring pulse */
+@keyframes focus-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+  }
+}
+
+.search-focus-pulse:focus {
+  animation: focus-pulse 2s ease-in-out infinite;
+}
+
+/* Tab button hover glow */
+.tab-hover-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-hover-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.tab-hover-glow:hover::before {
+  opacity: 1;
+}
+
+/* View mode button active state */
+.view-mode-active {
+  position: relative;
+}
+
+.view-mode-active::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(167, 139, 250, 0.1));
+  border-radius: inherit;
+  z-index: -1;
+  filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.view-mode-active:hover::after {
+  opacity: 1;
+}
+
+/* Empty state illustration bounce */
+@keyframes empty-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.empty-illustration {
+  animation: empty-bounce 3s ease-in-out infinite;
+}
+
+/* Sticky header shadow on scroll */
+.sticky-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Quick filter hover lift */
+.quick-filter-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.quick-filter-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+/* Loading spinner pulse */
+@keyframes loading-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.95);
+  }
+}
+
+.loading-pulse {
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+
+/* Card stagger animation for grid */
+@keyframes card-stagger {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.card-stagger {
+  opacity: 0;
+  animation: card-stagger 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Result count update animation */
+@keyframes count-update {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+    color: #a78bfa;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.count-update {
+  animation: count-update 0.3s ease-out;
+}
+
+/* Keyboard shortcut hint fade */
+@keyframes hint-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  10%, 90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.keyboard-hint {
+  animation: hint-fade 3s ease-in-out forwards;
+}
+
+/* Filter badge pulse for unapplied changes */
+@keyframes unapplied-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0);
+  }
+}
+
+.unapplied-indicator {
+  animation: unapplied-pulse 2s ease-in-out infinite;
+}

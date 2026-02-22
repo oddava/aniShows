@@ -282,6 +282,7 @@ jobs:
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
             ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+            BUILD_DATE=${{ github.sha }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 

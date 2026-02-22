@@ -60,7 +60,7 @@ const ThreadCard = memo(({ thread, slug }) => {
                         </div>
                         <span className="text-[10px] text-gray-700">•</span>
                         <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                            {formatDistanceToNow(new Date(thread.updated_at), { addSuffix: true })}
+                            {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
                         </span>
 
                         <div className="hidden sm:flex items-center gap-1.5 ml-1">

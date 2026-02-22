@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeRaw from "rehype-raw";
 import DOMPurify from "dompurify";
+
+const ReactMarkdown = lazy(() => import("react-markdown"));
 
 const extractYouTubeId = (url) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -176,13 +177,15 @@ const MarkdownRenderer = ({ content, className = "" }) => {
 
     return (
         <div className={`markdown-preview max-w-none ${className}`}>
-            <ReactMarkdown
-                remarkPlugins={markdownRemarkPlugins}
-                rehypePlugins={markdownRehypePlugins}
-                components={markdownComponents}
-            >
-                {cleanContent}
-            </ReactMarkdown>
+            <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
+                <ReactMarkdown
+                    remarkPlugins={markdownRemarkPlugins}
+                    rehypePlugins={markdownRehypePlugins}
+                    components={markdownComponents}
+                >
+                    {cleanContent}
+                </ReactMarkdown>
+            </Suspense>
         </div>
     );
 };

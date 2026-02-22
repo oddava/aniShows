@@ -14,12 +14,12 @@ Current "Recommended for You" just reverses trending. Implement:
 - MyAnimeList/AniList import for easy migration ✅
 - User data export for privacy ✅
 3. Social Features (Engagement)
-- User following/followers ✅
-- Comments on reviews ✅
-- Activity feed ("What friends are watching") ✅
-- Discussion forums
+ Activity feed ("What friends are watching") ✅
+- Discussion forums ✅
 4. Notifications System ✅
-- New episode alerts ✅
+- New episode alerts ✅- User following/followers ✅
+- Comments on reviews ✅
+-
 - Review reply notifications ✅
 - Weekly digest emails ✅
 - Push notifications ✅
@@ -27,7 +27,7 @@ Current "Recommended for You" just reverses trending. Implement:
 - Mood-based filtering ("happy", "action-packed")
 - Time-based ("30 min episodes")
 - Advanced search with Elasticsearch
-- Fuzzy matching for typos
+- Fuzzy matching for typos ✅
 6. Gamification (Fun Factor)
 - Achievement badges
 - Watch streaks
@@ -47,3 +47,5 @@ Current "Recommended for You" just reverses trending. Implement:
 10. Monetization Ready
 - Premium tier (advanced stats, custom themes)
 - Streaming service affiliate links
+
+Fully analyze the Browse page and list out all the improvements that can be made to make it more user-friendly, UI/UX and sleek

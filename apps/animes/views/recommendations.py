@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from django.core.cache import cache
 import logging
 
-from apps.animes.models import UserRecommendation
 from apps.animes.serializers import UserRecommendationSerializer
 
 logger = logging.getLogger(__name__)
