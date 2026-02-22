@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Production deployment script for anishows using GHCR
-# Fixed frontend caching issues
+# Fixed frontend caching issues - now reloads Caddy to clear internal cache
 
 set -e
 
@@ -39,7 +39,16 @@ $COMPOSE_CMD up -d
 echo -e "${GREEN}✅ Containers restarted!${NC}"
 echo ""
 
-echo -e "${BLUE}🔄 Step 4: Running database migrations...${NC}"
+echo -e "${BLUE}🔄 Step 4: Reloading Caddy to clear cache...${NC}"
+sleep 2 # Wait for frontend init to complete
+if $COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force; then
+    echo -e "${GREEN}✅ Caddy reloaded successfully!${NC}"
+else
+    echo -e "${YELLOW}⚠️  Caddy reload warning (may already be up to date)${NC}"
+fi
+echo ""
+
+echo -e "${BLUE}🔄 Step 5: Running database migrations...${NC}"
 sleep 3 # Wait for containers to start
 if $COMPOSE_CMD exec -T web uv run python manage.py migrate --noinput; then
     echo -e "${GREEN}✅ Migrations complete!${NC}"
@@ -48,7 +57,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🎨 Step 5: Collecting static files...${NC}"
+echo -e "${BLUE}🎨 Step 6: Collecting static files...${NC}"
 # Fix permissions for static directory
 mkdir -p static
 docker run --rm -v "$(pwd)/static:/static" alpine:latest chown -R 1000:1000 /static 2>/dev/null || true
@@ -60,7 +69,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🧹 Step 6: Pruning old images...${NC}"
+echo -e "${BLUE}🧹 Step 7: Pruning old images...${NC}"
 docker image prune -a -f --filter "until=24h"
 echo -e "${GREEN}✅ Old images pruned!${NC}"
 echo ""
