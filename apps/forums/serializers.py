@@ -70,6 +70,7 @@ class ThreadListSerializer(serializers.ModelSerializer):
             "category_name",
             "category_slug",
             "title",
+            "content",
             "author",
             "created_at",
             "updated_at",

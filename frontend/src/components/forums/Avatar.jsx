@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Avatar = ({ user, size = 'md' }) => {
-    const dims = size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
+    const dims = size === 'xs' ? 'w-6 h-6 text-[10px]' : size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
     if (user?.avatar) {
         return (
             <img

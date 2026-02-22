@@ -85,7 +85,7 @@ const ThreadedPost = ({
                 {/* Post Card - Matching Thread Style */}
                 <div
                     id={`post-${post.id}`}
-                    className={`rounded-[20px] p-4 border transition-all duration-500 ${isFocused
+                    className={`relative rounded-[20px] p-4 border transition-all duration-500 ${isFocused
                         ? 'bg-accent/[0.03] border-accent/40 ring-1 ring-accent/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]'
                         : isOP
                             ? 'bg-accent/[0.05] border-accent/20 hover:border-accent/30'
@@ -112,7 +112,7 @@ const ThreadedPost = ({
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="absolute top-4 right-4 sm:static flex items-center gap-2">
                             {isOwner(post.author.username) && (
                                 <div className="flex items-center gap-1 mr-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                     <button

@@ -90,6 +90,11 @@ export default function Footer() {
                                 </Link>
                             </li>
                             <li>
+                                <Link to="/forums" className="text-gray-400 hover:text-accent transition-colors">
+                                    Forums
+                                </Link>
+                            </li>
+                            <li>
                                 <Link to="/browse?sort=popular" className="text-gray-400 hover:text-accent transition-colors">
                                     Trending Now
                                 </Link>

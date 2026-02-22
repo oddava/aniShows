@@ -2,7 +2,7 @@ import { useState, memo, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Pin, Lock, Plus, ChevronRight, ArrowLeft, MessageSquare } from 'lucide-react';
+import { Pin, Lock, Plus, ChevronRight, ArrowLeft, MessageSquare, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { forumsApi } from '../../api/forumsApi';
 import { useAuth } from '../../context/AuthContext';
@@ -26,48 +26,65 @@ const ThreadCard = memo(({ thread, slug }) => {
                 }
             }}
             className={`group p-4 rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.99] ${thread.is_pinned
-                    ? 'bg-yellow-500/[0.02] border-yellow-500/20 shadow-sm shadow-yellow-500/5'
-                    : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.1] shadow-sm'
+                ? 'bg-yellow-500/[0.02] border-yellow-500/20 shadow-sm shadow-yellow-500/5'
+                : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.1] shadow-sm'
                 }`}
         >
-            <div className="flex gap-3">
-                <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="shrink-0 hidden sm:block"
-                >
-                    <Link to={`/profile/${thread.author?.username}`}>
-                        <Avatar user={thread.author} />
-                    </Link>
+            <div className="flex flex-col gap-2">
+                {/* Title */}
+                <div className="flex items-center gap-2 min-w-0">
+                    {thread.is_pinned && <Pin size={12} className="text-yellow-500 shrink-0" />}
+                    {thread.is_locked && <Lock size={12} className="text-gray-500 shrink-0" />}
+                    <h3 className="text-[15px] sm:text-base font-semibold text-white group-hover:text-accent transition-colors truncate">
+                        {thread.title}
+                    </h3>
                 </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                        <h3
-                            className="text-[15px] font-semibold text-white group-hover:text-accent transition-colors line-clamp-1"
-                        >
-                            {thread.is_pinned && <Pin size={12} className="inline mr-1.5 text-yellow-500" />}
-                            {thread.is_locked && <Lock size={12} className="inline mr-1.5 text-gray-500" />}
-                            {thread.title}
-                        </h3>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
-                            <span>{thread.reply_count} replies</span>
-                            <span>{thread.view_count} views</span>
+
+                {/* Content Preview */}
+                <p className="text-sm text-gray-400 line-clamp-1 mb-1 leading-relaxed">
+                    {thread.content
+                        ? (thread.content.replace(/[#*`]/g, '').length > 150
+                            ? thread.content.replace(/[#*`]/g, '').substring(0, 150) + '...'
+                            : thread.content.replace(/[#*`]/g, ''))
+                        : 'No content...'}
+                </p>
+
+                {/* Footer Info */}
+                <div className="flex items-center justify-between gap-4 mt-0.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                            <Link to={`/profile/${thread.author?.username}`} className="flex items-center gap-2 group/author">
+                                <Avatar user={thread.author} size="xs" />
+                                <span className="text-[12px] font-bold text-accent-light group-hover/author:text-accent transition-colors truncate">{thread.author?.username}</span>
+                            </Link>
                         </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                        {thread.tags?.map(tag => (
-                            <span
-                                key={tag.id}
-                                className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md border border-white/10"
-                                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-                            >
-                                {tag.name}
-                            </span>
-                        ))}
-                        <span className="text-xs text-gray-600 ml-auto" onClick={(e) => e.stopPropagation()}>
-                            <Link to={`/profile/${thread.author?.username}`} className="text-accent-light hover:text-accent font-medium">{thread.author?.username}</Link>
-                            {' · '}
+                        <span className="text-[10px] text-gray-700">•</span>
+                        <span className="text-[10px] text-gray-500 whitespace-nowrap">
                             {formatDistanceToNow(new Date(thread.updated_at), { addSuffix: true })}
                         </span>
+
+                        <div className="hidden sm:flex items-center gap-1.5 ml-1">
+                            {thread.tags?.map(tag => (
+                                <span
+                                    key={tag.id}
+                                    className="px-1 py-0 text-[10px] font-extrabold uppercase tracking-tight"
+                                    style={{ color: tag.color }}
+                                >
+                                    {tag.name}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-gray-400 shrink-0">
+                        <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
+                            <MessageSquare size={11} />
+                            <span className="text-[11px] font-bold leading-none">{thread.reply_count}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
+                            <Eye size={11} />
+                            <span className="text-[11px] font-bold leading-none">{thread.view_count}</span>
+                        </div>
                     </div>
                 </div>
             </div>

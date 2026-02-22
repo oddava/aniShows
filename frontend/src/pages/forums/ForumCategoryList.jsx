@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Pin, Lock, Plus, ChevronRight, Clock, Flame, Search } from 'lucide-react';
+import { Pin, Lock, Plus, ChevronRight, Clock, Flame, Search, MessageSquare, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { forumsApi } from '../../api/forumsApi';
 import { Helmet } from 'react-helmet-async';
@@ -41,43 +41,64 @@ const ThreadRow = memo(({ thread }) => {
     return (
         <div
             onClick={() => navigate(`/forums/thread/${thread.id}`)}
-            className={`group flex items-center gap-4 p-4 hover:bg-white/[0.03] transition-colors border-b border-gray-800/50 last:border-b-0 cursor-pointer ${thread.is_pinned ? 'bg-accent/[0.03]' : ''}`}
+            className={`group p-4 hover:bg-white/[0.03] transition-colors border-b border-gray-800/50 last:border-b-0 cursor-pointer ${thread.is_pinned ? 'bg-accent/[0.03]' : ''}`}
         >
-            <div className="shrink-0 hidden sm:block" onClick={(e) => e.stopPropagation()}>
-                <Link to={`/profile/${thread.author?.username}`}>
-                    <Avatar user={thread.author} />
-                </Link>
-            </div>
-
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
+            <div className="flex flex-col gap-2">
+                {/* Title */}
+                <div className="flex items-center gap-2">
                     {thread.is_pinned && <Pin size={12} className="text-accent shrink-0" />}
                     {thread.is_locked && <Lock size={12} className="text-gray-600 shrink-0" />}
-                    <h3 className="text-[15px] font-semibold text-white group-hover:text-accent transition-colors truncate">
+                    <h3 className="text-[15px] sm:text-base font-semibold text-white group-hover:text-accent transition-colors truncate">
                         {thread.title}
                     </h3>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
-                    <span className="text-accent-light font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
-                        <Link to={`/profile/${thread.author?.username}`}>{thread.author?.username}</Link>
-                    </span>
-                    <span>·</span>
-                    <span>{formatDistanceToNow(new Date(thread.updated_at), { addSuffix: true })}</span>
-                    {thread.tags?.map(tag => (
-                        <span
-                            key={tag.id}
-                            className="px-1.5 py-0.5 text-[10px] font-bold rounded"
-                            style={{ backgroundColor: `${tag.color}18`, color: tag.color }}
-                        >
-                            {tag.name}
-                        </span>
-                    ))}
-                </div>
-            </div>
 
-            <div className="flex items-center gap-4 shrink-0 text-xs text-gray-500">
-                <span title="Replies">{thread.reply_count} replies</span>
-                <span className="hidden sm:inline" title="Views">{thread.view_count} views</span>
+                {/* Content Preview */}
+                <p className="text-sm text-gray-400 line-clamp-1 mb-1 leading-relaxed">
+                    {thread.content
+                        ? (thread.content.replace(/[#*`]/g, '').length > 150
+                            ? thread.content.replace(/[#*`]/g, '').substring(0, 150) + '...'
+                            : thread.content.replace(/[#*`]/g, ''))
+                        : 'No content...'}
+                </p>
+
+                {/* Footer Info */}
+                <div className="flex items-center justify-between gap-4 mt-0.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                            <Link to={`/profile/${thread.author?.username}`} className="flex items-center gap-2 group/author">
+                                <Avatar user={thread.author} size="xs" />
+                                <span className="text-[12px] font-bold text-accent-light group-hover/author:text-accent transition-colors truncate">{thread.author?.username}</span>
+                            </Link>
+                        </div>
+                        <span className="text-[10px] text-gray-700">•</span>
+                        <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                            {formatDistanceToNow(new Date(thread.updated_at), { addSuffix: true })}
+                        </span>
+                        <div className="hidden sm:flex items-center gap-1.5 ml-1">
+                            {thread.tags?.map(tag => (
+                                <span
+                                    key={tag.id}
+                                    className="px-1 py-0 text-[10px] font-extrabold uppercase tracking-tight"
+                                    style={{ color: tag.color }}
+                                >
+                                    {tag.name}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-gray-400 shrink-0">
+                        <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
+                            <MessageSquare size={11} />
+                            <span className="text-[11px] font-bold leading-none">{thread.reply_count}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
+                            <Eye size={11} />
+                            <span className="text-[11px] font-bold leading-none">{thread.view_count}</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -104,8 +125,8 @@ const ForumCategoryList = () => {
     // Reset page when switching tabs/search
     useEffect(() => { setPage(1); }, [activeTab, debouncedSearch]);
 
-    const { 
-        data: categories, 
+    const {
+        data: categories,
         isLoading: categoriesLoading,
         isPlaceholderData: isCategoriesPlaceholder
     } = useQuery({
@@ -289,7 +310,7 @@ const ForumCategoryList = () => {
                                 <LoadingSpinner />
                             </div>
                         ) : null}
-                        
+
                         {displayedData?.results?.length > 0 ? (
                             displayedData.results.map(thread => (
                                 <ThreadRow key={thread.id} thread={thread} />

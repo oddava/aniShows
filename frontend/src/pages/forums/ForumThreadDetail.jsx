@@ -539,7 +539,7 @@ const ForumThreadDetail = () => {
                 {/* Original Post */}
                 {page === 1 && (
                     <div className="mb-10 lg:w-[85%] mx-auto">
-                        <div className="bg-accent/[0.02] rounded-[20px] p-4 border border-accent/20 shadow-sm shadow-accent/5">
+                        <div className="bg-accent/[0.02] rounded-[20px] p-4 border border-accent/20 shadow-sm shadow-accent/5 relative">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                                 <div className="flex items-center gap-3.5">
                                     <Link to={`/profile/${thread.author.username}`} className="shrink-0">
@@ -557,7 +557,7 @@ const ForumThreadDetail = () => {
                                         </span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="absolute top-4 right-4 sm:static flex items-center gap-2">
                                     {isOwner(thread.author.username) && (
                                         <div className="flex items-center gap-1 mr-1">
                                             <button

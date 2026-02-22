@@ -869,6 +869,17 @@ export default function Navbar() {
                                     <Tv className="w-5 h-5" />
                                     Schedule
                                 </Link>
+                                <Link
+                                    to="/forums"
+                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname.startsWith('/forums')
+                                        ? 'bg-accent/10 text-white'
+                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
+                                        }`}
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    <MessageSquare className="w-5 h-5" />
+                                    Forums
+                                </Link>
                                 {(isAuthenticated || authLoading) && (
                                     <Link
                                         to="/profile"
