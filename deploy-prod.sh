@@ -29,8 +29,16 @@ echo -e "${GREEN}✅ Images pulled successfully!${NC}"
 echo ""
 
 echo -e "${BLUE}🚀 Step 2: Restarting containers...${NC}"
+echo -e "${YELLOW}⚠️  Removing frontend volume to ensure clean deployment...${NC}"
+$COMPOSE_CMD down
+docker volume rm anishows-frontend_dist 2>/dev/null || true
 $COMPOSE_CMD up -d
 echo -e "${GREEN}✅ Containers restarted!${NC}"
+echo ""
+
+echo -e "${BLUE}⏳ Waiting for frontend init container to complete...${NC}"
+sleep 5
+$COMPOSE_CMD ps | grep -q "frontend.*Exited (0)" && echo -e "${GREEN}✅ Frontend copied successfully!${NC}" || echo -e "${YELLOW}⚠️  Frontend container status unknown${NC}"
 echo ""
 
 echo -e "${BLUE}🔄 Step 3: Running database migrations...${NC}"
@@ -42,7 +50,13 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🎨 Step 4: Collecting static files...${NC}"
+echo -e "${BLUE}🔄 Step 4: Reloading Caddy to clear caches...${NC}"
+sleep 2
+$COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || echo -e "${YELLOW}⚠️  Caddy reload skipped (may need manual restart)${NC}"
+echo -e "${GREEN}✅ Caddy reloaded!${NC}"
+echo ""
+
+echo -e "${BLUE}🎨 Step 5: Collecting static files...${NC}"
 # Fix permissions for static directory
 mkdir -p static
 docker run --rm -v "$(pwd)/static:/static" alpine:latest chown -R 1000:1000 /static 2>/dev/null || true
@@ -54,7 +68,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🧹 Step 5: Pruning old images...${NC}"
+echo -e "${BLUE}🧹 Step 6: Pruning old images...${NC}"
 docker image prune -a -f --filter "until=24h"
 echo -e "${GREEN}✅ Old images pruned!${NC}"
 echo ""
