@@ -6,7 +6,7 @@ services:
   frontend:
     image: ghcr.io/oddava/anishows-frontend:latest
     command: >
-      sh -c "cp -r /app/dist/* /srv/frontend/ && echo 'Frontend copied successfully' && exit 0"
+      sh -c "rm -rf /srv/frontend/* /srv/frontend/.*[!.] 2>/dev/null || true && cp -r /app/dist/* /srv/frontend/ && echo 'Frontend copied successfully' && exit 0"
     volumes:
       - frontend_dist:/srv/frontend
     deploy:

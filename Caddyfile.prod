@@ -116,8 +116,9 @@
         root * /srv/frontend
         try_files {path} /index.html
         file_server
-        # Cache HTML for 5 minutes (balance between performance and updates)
-        header Cache-Control "public, max-age=300, must-revalidate"
+        # No cache for HTML to ensure fresh content on every deploy
+        header Cache-Control "public, max-age=0, must-revalidate, no-cache"
+        header Last-Modified "{http.request.time}"
     }
 
     log {
