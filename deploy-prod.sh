@@ -28,20 +28,36 @@ $COMPOSE_CMD pull
 echo -e "${GREEN}✅ Images pulled successfully!${NC}"
 echo ""
 
-echo -e "${BLUE}🚀 Step 2: Clearing old frontend assets...${NC}"
-# Clear old frontend assets to prevent stale file accumulation (safe - only affects frontend build files)
-docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c "rm -rf /srv/frontend/assets/* /srv/frontend/sw.js /srv/frontend/workbox-*.js 2>/dev/null || true" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not clear frontend volume (may not exist yet)${NC}"
-echo -e "${GREEN}✅ Old frontend assets cleared!${NC}"
+echo -e "${BLUE}🚀 Step 2: Nuking old frontend volume...${NC}"
+# Completely wipe the frontend volume to guarantee fresh files
+docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c "rm -rf /srv/frontend/*" 2>/dev/null || echo -e "${YELLOW}⚠️  Could not clear frontend volume (may not exist yet)${NC}"
+echo -e "${GREEN}✅ Frontend volume cleared!${NC}"
 echo ""
 
-echo -e "${BLUE}🚀 Step 3: Restarting containers...${NC}"
-# Force-recreate frontend init container so it always re-copies built assets
-$COMPOSE_CMD up -d --force-recreate frontend
+echo -e "${BLUE}🚀 Step 3: Recreating frontend container...${NC}"
+# Stop and remove the frontend container first, then recreate from scratch
+$COMPOSE_CMD rm -f -s frontend 2>/dev/null || true
+$COMPOSE_CMD up -d --force-recreate --no-deps frontend
+# Wait for the init container to finish copying
+echo -e "${BLUE}   Waiting for frontend init container to copy files...${NC}"
+sleep 5
+# Verify the copy actually worked
+if docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c "test -f /srv/frontend/index.html && ls -la /srv/frontend/index.html && echo 'HASH:' && md5sum /srv/frontend/index.html"; then
+    echo -e "${GREEN}✅ Frontend files verified on volume!${NC}"
+else
+    echo -e "${RED}❌ FATAL: index.html NOT found on frontend volume! Frontend copy failed!${NC}"
+    echo -e "${RED}   Checking frontend container logs:${NC}"
+    $COMPOSE_CMD logs frontend
+    exit 1
+fi
+echo ""
+
+echo -e "${BLUE}🚀 Step 4: Starting remaining services...${NC}"
 $COMPOSE_CMD up -d
-echo -e "${GREEN}✅ Containers restarted!${NC}"
+echo -e "${GREEN}✅ All containers started!${NC}"
 echo ""
 
-echo -e "${BLUE}🔄 Step 4: Reloading Caddy to clear cache...${NC}"
+echo -e "${BLUE}🔄 Step 5: Reloading Caddy to clear cache...${NC}"
 sleep 2 # Wait for frontend init to complete
 if $COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force; then
     echo -e "${GREEN}✅ Caddy reloaded successfully!${NC}"
@@ -50,7 +66,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🔄 Step 5: Running database migrations...${NC}"
+echo -e "${BLUE}🔄 Step 6: Running database migrations...${NC}"
 sleep 3 # Wait for containers to start
 if $COMPOSE_CMD exec -T web uv run python manage.py migrate --noinput; then
     echo -e "${GREEN}✅ Migrations complete!${NC}"
@@ -59,7 +75,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🎨 Step 6: Collecting static files...${NC}"
+echo -e "${BLUE}🎨 Step 7: Collecting static files...${NC}"
 # Fix permissions for static directory
 mkdir -p static
 docker run --rm -v "$(pwd)/static:/static" alpine:latest chown -R 1000:1000 /static 2>/dev/null || true
@@ -71,7 +87,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🧹 Step 7: Pruning old images...${NC}"
+echo -e "${BLUE}🧹 Step 8: Pruning old images...${NC}"
 docker image prune -a -f --filter "until=24h"
 echo -e "${GREEN}✅ Old images pruned!${NC}"
 echo ""
