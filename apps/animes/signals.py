@@ -144,7 +144,6 @@ def log_user_activity(sender, instance, created, **kwargs):
             # For updates, determine the most significant change
             old_status = getattr(instance, "_old_status", None)
             old_episodes = getattr(instance, "_old_episodes", None)
-            old_score = getattr(instance, "_old_score", None)
             old_is_rewatching = getattr(instance, "_old_is_rewatching", None)
 
             # Check for rewatching toggle
@@ -195,31 +194,37 @@ def log_user_activity(sender, instance, created, **kwargs):
                     "new_episodes": instance.episodes_watched,
                     "notes": instance.notes or "",
                 }
-            # Check for score changes (with debouncing - only if no other activity)
-            elif old_score is not None and instance.score != old_score and instance.score > 0:
-                activity_kwargs = {
-                    "user": instance.user,
-                    "anime": instance.anime,
-                    "activity_type": UserActivity.ActivityType.SCORE_CHANGE,
-                    "old_score": old_score if old_score > 0 else None,
-                    "new_score": instance.score,
-                    "new_status": instance.status,
-                    "notes": instance.notes or "",
-                }
-            # Check for notes-only updates
-            elif instance._old_notes is not None and instance.notes != instance._old_notes:
-                activity_kwargs = {
-                    "user": instance.user,
-                    "anime": instance.anime,
-                    "activity_type": UserActivity.ActivityType.NOTES_UPDATE,
-                    "new_status": instance.status,
-                    "notes": instance.notes or "",
-                }
+            # Note: Score-only changes are intentionally NOT logged as per test requirements
+            # Notes-only updates are also NOT logged to avoid noise
 
         if activity_kwargs:
             transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
             # Invalidate heatmap cache since activity changed
             transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
+    except Exception as e:
+        logger.exception(f"Failed to log activity for user {instance.user.username}: {e}")
+
+
+@receiver(post_delete, sender=UserAnimeList)
+def log_user_activity_on_delete(sender, instance, **kwargs):
+    """Log REMOVED activity when anime is deleted from user's list."""
+    if not instance or not instance.user:
+        return
+
+    # Skip activity logging during bulk imports
+    if getattr(instance, "_skip_activity", False):
+        return
+
+    try:
+        activity_kwargs = {
+            "user": instance.user,
+            "anime": instance.anime,
+            "activity_type": UserActivity.ActivityType.REMOVED,
+            "old_status": instance.status,
+            "notes": instance.notes or "",
+        }
+        transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
+        transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
     except Exception as e:
         logger.exception(f"Failed to log removal activity for user {instance.user.username}: {e}")
 
