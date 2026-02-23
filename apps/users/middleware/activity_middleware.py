@@ -30,8 +30,9 @@ class UserActivityMiddleware:
         # Process the request first
         response = self.get_response(request)
 
-        # Track activity after response is generated
-        if request.user.is_authenticated:
+        # Only track activity on successful responses (2xx/3xx)
+        # Failed requests (4xx/5xx) should not count as active usage
+        if request.user.is_authenticated and response.status_code < 400:
             self._track_activity(request.user)
 
         return response
@@ -56,9 +57,3 @@ class UserActivityMiddleware:
                 )
             except Exception as e:
                 logger.error(f"Failed to update last_activity for user {user_id}: {e}")
-
-    def process_exception(self, request, exception):
-        """Handle exceptions - still track activity if user is authenticated."""
-        if request.user.is_authenticated:
-            self._track_activity(request.user)
-        return None

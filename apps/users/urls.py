@@ -20,6 +20,7 @@ from .views import (
     PublicUserProfileViewSet,
     FollowViewSet,
     UserAnimeListViewSet,
+    UserActivityViewSet,
     DeleteAccountView,
     ChangeEmailView,
     ConfirmEmailChangeView,
@@ -45,6 +46,7 @@ router = DefaultRouter()
 router.register(r"users", PublicUserProfileViewSet, basename="users")
 router.register(r"follows", FollowViewSet, basename="follows")
 router.register(r"lists", UserAnimeListViewSet, basename="lists")
+router.register(r"activity", UserActivityViewSet, basename="activity")
 router.register(r"notifications", NotificationViewSet, basename="notifications")
 
 urlpatterns = [

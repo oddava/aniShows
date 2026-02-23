@@ -8,7 +8,11 @@ from apps.animes.models import UserFavorite
 from apps.users.models import UserAnimeList
 from apps.animes.serializers import UserAnimeListSerializer
 from apps.users.permissions import EmailVerificationMixin
-from apps.users.services.cache import invalidate_user_caches, invalidate_user_anime_caches
+from apps.users.services.cache import (
+    invalidate_user_caches,
+    invalidate_user_anime_caches,
+    invalidate_anime_detail_cache,
+)
 
 User = get_user_model()
 
@@ -34,9 +38,7 @@ class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         else:
             return UserAnimeList.objects.none()
 
-        queryset = queryset.select_related("anime__studio").prefetch_related(
-            "anime__genres"
-        )
+        queryset = queryset.select_related("anime__studio").prefetch_related("anime__genres")
 
         # Filter by status
         list_status = self.request.query_params.get("status")
@@ -51,10 +53,10 @@ class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             # Invalidate user caches - list changes affect stats
             invalidate_user_caches(self.request.user.id, self.request.user.username)
             invalidate_user_anime_caches(self.request.user.id)
+            # Invalidate anime detail cache for this specific anime
+            invalidate_anime_detail_cache(serializer.instance.anime.slug, self.request.user.id)
         except IntegrityError:
-            raise serializers.ValidationError(
-                {"detail": "This anime is already in your list."}
-            )
+            raise serializers.ValidationError({"detail": "This anime is already in your list."})
 
     def perform_update(self, serializer):
         """Ensure users can only update their own list entries."""
@@ -64,14 +66,18 @@ class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         # Invalidate user caches - list changes affect stats
         invalidate_user_caches(self.request.user.id, self.request.user.username)
         invalidate_user_anime_caches(self.request.user.id)
+        # Invalidate anime detail cache for this specific anime
+        invalidate_anime_detail_cache(serializer.instance.anime.slug, self.request.user.id)
 
     def perform_destroy(self, instance):
         """Ensure users can only delete their own list entries."""
         if instance.user != self.request.user:
-            raise PermissionDenied(
-                "You can only remove items from your own anime list."
-            )
+            raise PermissionDenied("You can only remove items from your own anime list.")
+        # Get anime slug before deletion
+        anime_slug = instance.anime.slug
         instance.delete()
         # Invalidate user caches - list changes affect stats
         invalidate_user_caches(self.request.user.id, self.request.user.username)
         invalidate_user_anime_caches(self.request.user.id)
+        # Invalidate anime detail cache for this specific anime
+        invalidate_anime_detail_cache(anime_slug, self.request.user.id)

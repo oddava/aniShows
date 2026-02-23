@@ -81,28 +81,28 @@ const refreshAccessToken = async (retryCount = 0) => {
 
             const { access, refresh } = response.data;
             localStorage.setItem('access_token', access);
-            
+
             // Update refresh token if rotated (when BLACKLIST_AFTER_ROTATION is enabled)
             if (refresh) {
                 localStorage.setItem('refresh_token', refresh);
                 logger.debug('Refresh token rotated and updated');
             }
-            
+
             logger.debug('Token refresh successful');
             resolve(access);
         } catch (error) {
             // Check if we should retry (network errors only, not 401s)
             const isNetworkError = !error.response && error.request;
             const isServerError = error.response && error.response.status >= 500 && error.response.status < 600;
-            
+
             if ((isNetworkError || isServerError) && retryCount < MAX_RETRIES) {
                 logger.warn(`Token refresh failed (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), retrying in ${RETRY_DELAY_MS}ms:`, error.message);
-                
+
                 isRefreshing = false;
                 refreshPromise = null;
-                
+
                 await delay(RETRY_DELAY_MS * (retryCount + 1)); // Exponential backoff
-                
+
                 try {
                     const result = await refreshAccessToken(retryCount + 1);
                     resolve(result);
@@ -112,7 +112,7 @@ const refreshAccessToken = async (retryCount = 0) => {
                     return;
                 }
             }
-            
+
             logger.error('Token refresh failed:', error.message, {
                 retryCount,
                 status: error.response?.status,
@@ -135,7 +135,7 @@ const refreshAccessToken = async (retryCount = 0) => {
 api.interceptors.request.use(
     async (config) => {
         const token = localStorage.getItem('access_token');
-        
+
         if (token) {
             // Check if token needs proactive refresh
             if (shouldRefreshToken(token) && !config._skipProactiveRefresh) {
@@ -164,11 +164,11 @@ api.interceptors.response.use(
         const originalRequest = error.config;
 
         // Don't retry if already retried or if it's a refresh request itself
-        if (error.response?.status === 401 && 
-            !originalRequest._retry && 
+        if (error.response?.status === 401 &&
+            !originalRequest._retry &&
             !originalRequest.url?.includes('/auth/refresh/') &&
             !originalRequest.url?.includes('/auth/login/')) {
-            
+
             originalRequest._retry = true;
 
             // If refresh is in progress, queue this request
@@ -194,16 +194,16 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                
+
                 // Clear tokens only on authentication errors (not network errors)
-                if (refreshError.response?.status === 401 || 
+                if (refreshError.response?.status === 401 ||
                     refreshError.message?.includes('expired') ||
                     refreshError.message?.includes('No refresh token')) {
-                    
+
                     logger.error('Authentication failed, clearing tokens');
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
-                    
+
                     // Redirect to login after a short delay to allow cleanup
                     if (!window.location.pathname.includes('/login')) {
                         setTimeout(() => {
@@ -213,7 +213,7 @@ api.interceptors.response.use(
                         }, 100);
                     }
                 }
-                
+
                 return Promise.reject(refreshError);
             }
         }
@@ -283,6 +283,11 @@ export const listApi = {
     remove: (id) => api.delete(`/lists/${id}/`),
 };
 
+export const activityApi = {
+    getFeed: (params) => api.get('/activity/', { params }),
+    getHeatmap: (params) => api.get('/activity/heatmap/', { params }),
+};
+
 export const reviewApi = {
     getAll: (params) => api.get('/reviews/', { params }),
     getStats: (animeSlug) => api.get(`/reviews/stats/`, { params: { anime: animeSlug } }),
@@ -291,13 +296,13 @@ export const reviewApi = {
     delete: (id) => api.delete(`/reviews/${id}/`),
     vote: (id, isHelpful = true) => api.post(`/reviews/${id}/vote/`, { is_helpful: isHelpful }),
     // Comments
-    getComments: (reviewId, page = 1, pageSize = 10) => 
+    getComments: (reviewId, page = 1, pageSize = 10) =>
         api.get(`/reviews/${reviewId}/comments/`, { params: { page, page_size: pageSize } }),
-    addComment: (reviewId, text) => 
+    addComment: (reviewId, text) =>
         api.post(`/reviews/${reviewId}/add_comment/`, { text }),
-    updateComment: (reviewId, commentId, text) => 
+    updateComment: (reviewId, commentId, text) =>
         api.patch(`/reviews/${reviewId}/comments/${commentId}/`, { text }),
-    deleteComment: (reviewId, commentId) => 
+    deleteComment: (reviewId, commentId) =>
         api.delete(`/reviews/${reviewId}/comments/${commentId}/delete/`),
 };
 

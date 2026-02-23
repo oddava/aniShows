@@ -35,9 +35,7 @@ class AnimeRepository:
         # Add user-specific annotations if authenticated
         if user and user.is_authenticated:
             queryset = queryset.annotate(
-                _is_favorite=Exists(
-                    UserFavorite.objects.filter(user=user, anime=OuterRef("pk"))
-                )
+                _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
             ).prefetch_related(
                 Prefetch(
                     "user_lists",
@@ -75,9 +73,7 @@ class AnimeRepository:
 
         if season and season.lower() in season_ranges:
             start, end = season_ranges[season.lower()]
-            return queryset.filter(
-                release_date__gte=date(*start), release_date__lte=date(*end)
-            )
+            return queryset.filter(release_date__gte=date(*start), release_date__lte=date(*end))
 
         return queryset.filter(release_date__year=year)
 
@@ -85,7 +81,7 @@ class AnimeRepository:
         """Apply sorting with special case handling."""
         sort_mapping = {
             "popular": "popularity_rank",
-            "rating": "site_rank",
+            "rating": "-rating",
             "newest": "-release_date",
             "title": "title",
             "upcoming": "-member_count",
@@ -96,7 +92,7 @@ class AnimeRepository:
 
         # Apply filters for specific sorts
         if sort == "rating":
-            queryset = queryset.filter(site_rank__isnull=False, member_count__gt=200000)
+            queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
         elif sort == "newest":
             queryset = queryset.filter(episode_count__gt=0)
         elif sort == "upcoming":
@@ -118,11 +114,7 @@ class AnimeRepository:
 
     def get_top_rated(self, limit: int = 12) -> QuerySet:
         """Get top rated anime."""
-        return (
-            self.get_base_queryset()
-            .filter(rating__isnull=False)
-            .order_by("-rating")[:limit]
-        )
+        return self.get_base_queryset().filter(rating__isnull=False).order_by("-rating")[:limit]
 
     def get_related(self, anime: Anime, limit: int = 8) -> QuerySet:
         """Get related anime based on genres - optimized with subquery."""

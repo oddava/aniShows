@@ -1,10 +1,11 @@
-import { Heart, List, MessageSquare, BarChart3 } from 'lucide-react';
+import { Heart, List, MessageSquare, BarChart3, Activity } from 'lucide-react';
 
 export default function ProfileTabs({ activeTab, onTabChange, counts = {} }) {
     const tabs = [
         { id: 'favorites', label: 'Favorites', shortLabel: 'Favs', icon: Heart, count: counts.favorites },
         { id: 'anime_list', label: 'Anime List', shortLabel: 'List', icon: List, count: counts.anime },
         { id: 'reviews', label: 'Reviews', shortLabel: 'Reviews', icon: MessageSquare, count: counts.reviews },
+        { id: 'activity', label: 'Activity', shortLabel: 'Activity', icon: Activity, count: null },
         { id: 'insights', label: 'Insights', shortLabel: 'Stats', icon: BarChart3, count: null },
     ];
 

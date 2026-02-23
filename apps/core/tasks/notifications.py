@@ -56,13 +56,9 @@ def _should_send_email(notification, profile):
     # Only send emails for new episodes, not for social interactions
     if notification.notification_type == Notification.NotificationType.NEW_EPISODE:
         return profile.email_new_episodes
-    # Don't send emails for review replies and new followers
-    elif notification.notification_type in [
-        Notification.NotificationType.REVIEW_REPLY,
-        Notification.NotificationType.NEW_FOLLOWER,
-    ]:
-        return False
-    return True
+    # All other types (review_reply, new_follower, forum_reply, forum_mention,
+    # forum_like, system) do not send emails.
+    return False
 
 
 def _should_send_push(notification, profile):
@@ -77,23 +73,21 @@ def _should_send_push(notification, profile):
 
 
 def _send_notification_email(notification):
-    """Send email for a notification."""
-    # Build email content
+    """Send email for a notification. Currently only NEW_EPISODE is supported."""
+    # Build email content — only new episode emails are sent
     if notification.notification_type == Notification.NotificationType.NEW_EPISODE:
         html_message = _build_new_episode_email(notification)
-    elif notification.notification_type == Notification.NotificationType.REVIEW_REPLY:
-        html_message = _build_review_reply_email(notification)
-    elif notification.notification_type == Notification.NotificationType.NEW_FOLLOWER:
-        html_message = _build_new_follower_email(notification)
     else:
-        html_message = None
-
-    # Plain text fallback
-    plain_message = notification.message
+        # Shouldn't reach here; _should_send_email guards this
+        logger.warning(
+            f"_send_notification_email called for unsupported type: "
+            f"{notification.notification_type}"
+        )
+        return
 
     send_email_task.delay(
         subject=notification.title,
-        message=plain_message,
+        message=notification.message,
         recipient_list=[notification.user.email],
         html_message=html_message,
     )
@@ -133,82 +127,6 @@ def _build_new_episode_email(notification):
     </body>
     </html>
     """
-
-
-def _build_review_reply_email(notification):
-    """Build HTML email for review reply notification."""
-    data = notification.data
-    anime_title = data.get("anime_title", "Unknown Anime")
-    anime_slug = data.get("anime_slug", "")
-    replier_username = data.get("replier_username", "Someone")
-
-    review_url = f"{settings.FRONTEND_URL}/anime/{anime_slug}#reviews"
-
-    return f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #1a1a2e; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0;">aniShows</h1>
-        </div>
-        <div style="padding: 20px; background: #f5f5f5;">
-            <h2 style="color: #333;">New Reply to Your Review</h2>
-            <p style="color: #666; font-size: 16px;">
-                <strong>{replier_username}</strong> replied to your review of <strong>{anime_title}</strong>.
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="{review_url}" 
-                   style="background: #e94560; color: white; padding: 12px 30px; 
-                          text-decoration: none; border-radius: 5px; display: inline-block;">
-                    View Reply
-                </a>
-            </div>
-        </div>
-        <div style="background: #333; color: #999; padding: 15px; text-align: center; font-size: 12px;">
-            <p>You're receiving this because someone replied to your review.</p>
-            <p><a href="{settings.FRONTEND_URL}/settings/notifications" style="color: #999;">
-               Manage notification preferences</a></p>
-        </div>
-    </body>
-    </html>
-    """
-
-
-def _build_new_follower_email(notification):
-    """Build HTML email for new follower notification."""
-    data = notification.data
-    follower_username = data.get("follower_username", "Someone")
-    follower_id = data.get("follower_id", "")
-
-    profile_url = f"{settings.FRONTEND_URL}/profile/{follower_username}"
-
-    return f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #1a1a2e; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0;">aniShows</h1>
-        </div>
-        <div style="padding: 20px; background: #f5f5f5;">
-            <h2 style="color: #333;">New Follower</h2>
-            <p style="color: #666; font-size: 16px;">
-                <strong>{follower_username}</strong> started following you!
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="{profile_url}"
-                   style="background: #e94560; color: white; padding: 12px 30px;
-                          text-decoration: none; border-radius: 5px; display: inline-block;">
-                    View Profile
-                </a>
-            </div>
-        </div>
-        <div style="background: #333; color: #999; padding: 15px; text-align: center; font-size: 12px;">
-            <p>You're receiving this because someone followed you.</p>
-            <p><a href="{settings.FRONTEND_URL}/settings" style="color: #999;">
-               Manage notification preferences</a></p>
-        </div>
-    </body>
-    </html>
-    """
-
 
 @shared_task
 def check_new_episodes():

@@ -565,22 +565,12 @@ export default function AnimeDetail() {
                                 </div>
 
                                 {/* Main Actions */}
-                                <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 sm:gap-4 md:gap-6 bg-dark-100/40 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
+                                <div className="flex flex-col gap-3 sm:gap-4 md:gap-5 bg-dark-100/40 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
                                     {isAuthenticated ? (
                                         <>
-                                            {/* Left: Progress Tracker */}
-                                            <div className="flex-1 min-w-0 order-2 sm:order-1">
-                                                <StatusSelector
-                                                    animeId={anime.id}
-                                                    initialStatus={anime.user_list_status}
-                                                    onUpdate={handleListUpdate}
-                                                    totalEpisodes={anime.episode_count}
-                                                />
-                                            </div>
-
-                                            {/* Right: Like, Share, Watch Time */}
-                                            <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 md:gap-5 sm:pl-4 md:pl-6 sm:border-l border-gray-800/50 order-1 sm:order-2">
-                                                <div className="flex flex-col min-w-[60px]">
+                                            {/* Top Row: Watch Time & Actions */}
+                                            <div className="flex items-center justify-between gap-3 sm:gap-4">
+                                                <div className="flex flex-col">
                                                     <span className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-0.5 sm:mb-1">Watch Time</span>
                                                     <span className="text-xs sm:text-sm md:text-base font-black text-white whitespace-nowrap">
                                                         {anime.episode_count ? (() => {
@@ -617,6 +607,16 @@ export default function AnimeDetail() {
                                                         </svg>
                                                     </button>
                                                 </div>
+                                            </div>
+
+                                            {/* Bottom Row: Progress Tracker - Full Width */}
+                                            <div className="w-full border-t border-gray-800/50 pt-3 sm:pt-4">
+                                                <StatusSelector
+                                                    animeId={anime.id}
+                                                    initialStatus={anime.user_list_status}
+                                                    onUpdate={handleListUpdate}
+                                                    totalEpisodes={anime.episode_count}
+                                                />
                                             </div>
                                         </>
                                     ) : (

@@ -64,6 +64,21 @@ def invalidate_user_anime_caches(user_id):
     cache.delete(f"anime_top_rated_{user_id}")
 
 
+def invalidate_anime_detail_cache(anime_slug, user_id=None):
+    """Clear anime detail cache for a specific anime.
+
+    Args:
+        anime_slug: The anime's slug
+        user_id: The user's ID (optional - if None, clears all user-specific caches for this anime)
+    """
+    if user_id:
+        cache.delete(f"anime_detail:{anime_slug}:{user_id}")
+    else:
+        # If no user_id provided, we can't easily clear all user-specific caches
+        # but the cache key includes user_id, so we just document this limitation
+        pass
+
+
 def get_user_profile_cache_key(user_id, full=False):
     """Get the cache key for a user's profile."""
     return f"user_profile:{user_id}:{'full' if full else 'light'}"

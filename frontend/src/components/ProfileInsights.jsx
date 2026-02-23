@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { listApi, reviewApi } from '../api/client';
+import { listApi, reviewApi, activityApi } from '../api/client';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
-import { TrendingUp, Star, Tv, Clock, BarChart3, Clock as ActivityIcon } from 'lucide-react';
+import { TrendingUp, Star, Tv, Clock, BarChart3, Activity } from 'lucide-react';
+import ActivityHeatmap from './ActivityHeatmap';
 
 // Color palette for charts
 const GENRE_COLORS = [
@@ -15,35 +16,102 @@ const SCORE_COLORS = {
     4: '#f59e0b', 3: '#fbbf24', 2: '#ef4444', 1: '#dc2626'
 };
 
-// eslint-disable-next-line no-unused-vars
-const StatCard = ({ icon: Icon, label, value, subtext }) => (
-    <div className="bg-dark-100/50 rounded-xl border border-gray-800 p-4 flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-            <Icon className="w-6 h-6 text-accent" />
-        </div>
-        <div>
-            <div className="text-2xl font-bold text-white">{value}</div>
-            <div className="text-xs text-gray-400">{label}</div>
-            {subtext && <div className="text-[10px] text-gray-500 mt-0.5">{subtext}</div>}
-        </div>
-    </div>
-);
+// Premium Stat Card with Glassmorphism and Glow
+const StatCard = ({ icon: Icon, label, value, subtext, color = 'accent' }) => {
+    const colorClasses = {
+        accent: 'bg-accent/10 text-accent ring-accent/20',
+        yellow: 'bg-yellow-500/10 text-yellow-500 ring-yellow-500/20',
+        blue: 'bg-blue-500/10 text-blue-500 ring-blue-500/20',
+        green: 'bg-green-500/10 text-green-500 ring-green-500/20',
+    };
 
-// Custom tooltip for charts - defined outside component to avoid re-creation
+    const gradientColors = {
+        accent: 'from-accent/10 to-transparent',
+        yellow: 'from-yellow-500/10 to-transparent',
+        blue: 'from-blue-500/10 to-transparent',
+        green: 'from-green-500/10 to-transparent',
+    };
+
+    return (
+        <div className="relative group overflow-hidden bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-5">
+            {/* Subtle Gradient Background */}
+            <div className={`absolute -right-8 -top-8 w-24 h-24 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity bg-gradient-to-br ${gradientColors[color]}`} />
+
+            <div className="flex items-center gap-4 relative z-10">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ${colorClasses[color] || colorClasses.accent}`}>
+                    <Icon className="w-6 h-6" />
+                </div>
+                <div>
+                    <div className="flex items-baseline gap-1">
+                        <div className="text-2xl font-black text-white tracking-tight">{value}</div>
+                        {subtext && !subtext.includes('from') && <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">{subtext}</span>}
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-black uppercase tracking-[0.1em]">{label}</div>
+                    {subtext && subtext.includes('from') && <div className="text-[10px] text-gray-500 font-medium mt-0.5">{subtext}</div>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Custom tooltip for charts
 const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-dark-50 border border-gray-700 rounded-lg px-3 py-2 shadow-xl">
-                <p className="text-white text-sm font-medium">{payload[0].payload.name || `Score ${payload[0].payload.score}`}</p>
-                <p className="text-gray-400 text-xs">{payload[0].value} anime</p>
+            <div className="bg-dark-100/95 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 shadow-2xl">
+                <p className="text-white text-sm font-black uppercase tracking-wider mb-1">
+                    {payload[0].payload.name || `Score ${payload[0].payload.score}`}
+                </p>
+                <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: payload[0].payload.color || payload[0].fill }} />
+                    <p className="text-gray-400 text-xs font-bold">{payload[0].value} <span className="uppercase tracking-widest text-[10px] opacity-70">Anime</span></p>
+                </div>
             </div>
         );
     }
     return null;
 };
 
+// Activity Heatmap Section
+const ActivityHeatmapSection = ({ username, isPrivate }) => {
+    const { data: heatmapData, isLoading, isError, refetch } = useQuery({
+        queryKey: ['activity-heatmap', username],
+        queryFn: () => activityApi.getHeatmap({ username }).then(res => res.data),
+        enabled: !isPrivate && !!username,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    if (isLoading) {
+        return (
+            <div className="bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-6 h-full flex items-center justify-center min-h-[300px]">
+                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (isError) {
+        return (
+            <div className="bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-6 flex flex-col items-center justify-center min-h-[200px] gap-3">
+                <p className="text-sm text-gray-500">Failed to load activity heatmap.</p>
+                <button
+                    onClick={() => refetch()}
+                    className="px-4 py-2 rounded-xl bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-all"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 w-fit mx-auto lg:mx-0">
+            <ActivityHeatmap activityData={heatmapData || []} />
+        </div>
+    );
+};
+
 export default function ProfileInsights({ username, isPrivate }) {
-    // Fetch all anime lists to calculate insights
+    // Fetch all anime lists
     const { data: listsData, isLoading: listsLoading } = useQuery({
         queryKey: ['insights-lists', username],
         queryFn: async () => {
@@ -61,7 +129,7 @@ export default function ProfileInsights({ username, isPrivate }) {
         enabled: !isPrivate,
     });
 
-    // Fetch reviews for score distribution
+    // Fetch reviews
     const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
         queryKey: ['insights-reviews', username],
         queryFn: () => reviewApi.getAll({ user: username }).then(res => res.data.results || res.data || []),
@@ -70,28 +138,36 @@ export default function ProfileInsights({ username, isPrivate }) {
 
     if (isPrivate) {
         return (
-            <div className="text-center py-16 text-gray-400">
-                <p>Insights are not available for private profiles.</p>
+            <div className="text-center py-20 bg-dark-100/40 backdrop-blur-xl rounded-3xl border border-white/5">
+                <Activity className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-400 font-bold px-4">Insights are not available for private profiles.</p>
             </div>
         );
     }
 
     if (listsLoading || reviewsLoading) {
         return (
-            <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
+                    {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="h-28 bg-dark-100/40 backdrop-blur-xl border border-white/5 rounded-2xl" />
+                    ))}
+                </div>
+                <div className="grid lg:grid-cols-2 gap-6 animate-pulse">
+                    <div className="h-96 bg-dark-100/40 backdrop-blur-xl border border-white/5 rounded-2xl" />
+                    <div className="h-96 bg-dark-100/40 backdrop-blur-xl border border-white/5 rounded-2xl" />
+                </div>
             </div>
         );
     }
 
-    // Calculate total anime and episodes
     const allItems = listsData?.flatMap(g => g.items) || [];
     const totalAnime = allItems.length;
     const totalEpisodes = allItems.reduce((sum, item) => sum + (item.episodes_watched || 0), 0);
     const completedCount = listsData?.find(g => g.status === 'Completed')?.items.length || 0;
     const watchingCount = listsData?.find(g => g.status === 'Watching')?.items.length || 0;
 
-    // Calculate genre distribution
+    // Genre distribution
     const genreCounts = {};
     allItems.forEach(item => {
         item.anime?.genres?.forEach(genre => {
@@ -108,16 +184,14 @@ export default function ProfileInsights({ username, isPrivate }) {
             color: GENRE_COLORS[index % GENRE_COLORS.length]
         }));
 
-    // Calculate score distribution from reviews
+    // Score distribution
     const reviews = Array.isArray(reviewsData) ? reviewsData : [];
     const scoreCounts = {};
     for (let i = 1; i <= 10; i++) scoreCounts[i] = 0;
 
     reviews.forEach(review => {
         const score = review.rating;
-        if (score >= 1 && score <= 10) {
-            scoreCounts[score]++;
-        }
+        if (score >= 1 && score <= 10) scoreCounts[score]++;
     });
 
     const scoreData = Object.entries(scoreCounts)
@@ -133,193 +207,198 @@ export default function ProfileInsights({ username, isPrivate }) {
         : '-';
 
     return (
-        <div className="space-y-8">
-            {/* Stats Overview */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard icon={Tv} label="Total Anime" value={totalAnime} />
-                <StatCard icon={Clock} label="Episodes" value={totalEpisodes.toLocaleString()} />
-                <StatCard icon={TrendingUp} label="Completed" value={completedCount} />
-                <StatCard icon={Star} label="Avg Score" value={avgScore} subtext={`from ${reviews.length} reviews`} />
+        <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-700 w-full overflow-x-hidden">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+                <StatCard icon={Tv} label="Total Anime" value={totalAnime} color="blue" />
+                <StatCard icon={Clock} label="Total Episodes" value={totalEpisodes.toLocaleString()} color="accent" />
+                <StatCard icon={TrendingUp} label="Completed" value={completedCount} color="green" />
+                <StatCard icon={Star} label="Avg Score" value={avgScore} subtext={`from ${reviews.length} reviews`} color="yellow" />
             </div>
 
-            {/* Charts Grid */}
-            <div className="grid md:grid-cols-2 gap-6">
-                {/* Anime DNA - Radar Chart */}
-                <div className="bg-dark-100 rounded-xl border border-gray-800 p-6">
-                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5 text-accent" />
-                        Anime DNA
-                        <span className="text-xs text-gray-500 font-normal ml-2">Your taste profile</span>
-                    </h3>
+            {/* Charts Row */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch w-full">
+                {/* Anime DNA - 5 cols on desktop, full on mobile, 1 col on tablet */}
+                <div className="lg:col-span-5 md:col-span-2 lg:md:col-span-5 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
+                                <BarChart3 className="w-3.5 h-3.5 text-accent" />
+                                Anime DNA
+                            </h3>
+                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Your unique taste profile</p>
+                        </div>
+                    </div>
                     {genreData.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                            <div className="w-full h-64">
+                        <div className="flex-1 flex flex-col justify-center gap-6">
+                            <div className="h-64 relative">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <RadarChart data={genreData} margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
-                                        <PolarGrid
-                                            stroke="rgba(139, 92, 246, 0.15)"
-                                            strokeDasharray="3 3"
-                                        />
+                                    <RadarChart data={genreData} margin={{ top: 0, right: 30, bottom: 0, left: 30 }}>
+                                        <PolarGrid stroke="rgba(255,255,255,0.05)" radialLines={true} />
                                         <PolarAngleAxis
                                             dataKey="name"
-                                            tick={{
-                                                fill: '#9ca3af',
-                                                fontSize: 11,
-                                                fontWeight: 500
-                                            }}
-                                            tickLine={false}
+                                            tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}
                                         />
-                                        <PolarRadiusAxis
-                                            angle={90}
-                                            domain={[0, 'auto']}
-                                            tick={{ fill: '#6b7280', fontSize: 10 }}
-                                            tickCount={4}
-                                            axisLine={false}
-                                        />
+                                        <PolarRadiusAxis domain={[0, 'auto']} tick={false} axisLine={false} />
                                         <Radar
-                                            name="Anime Count"
+                                            name="Genre Profile"
                                             dataKey="value"
                                             stroke="#8b5cf6"
-                                            strokeWidth={2}
+                                            strokeWidth={3}
                                             fill="url(#radarGradient)"
                                             fillOpacity={0.6}
-                                            dot={{
-                                                r: 4,
-                                                fill: '#8b5cf6',
-                                                stroke: '#fff',
-                                                strokeWidth: 1
-                                            }}
+                                            dot={{ r: 4, fill: '#8b5cf6', stroke: '#fff', strokeWidth: 1.5 }}
+                                            animationDuration={1500}
                                         />
                                         <Tooltip content={<CustomTooltip />} />
                                         <defs>
                                             <linearGradient id="radarGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                                                <stop offset="100%" stopColor="#ec4899" stopOpacity={0.3} />
+                                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.9} />
+                                                <stop offset="100%" stopColor="#ec4899" stopOpacity={0.4} />
                                             </linearGradient>
                                         </defs>
                                     </RadarChart>
                                 </ResponsiveContainer>
                             </div>
-                            {/* Genre Legend */}
-                            <div className="flex flex-wrap justify-center gap-3 mt-4 pt-4 border-t border-gray-800">
+                            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 pt-6 border-t border-white/5">
                                 {genreData.slice(0, 6).map((genre) => (
-                                    <div key={genre.name} className="flex items-center gap-1.5 text-xs text-gray-400">
-                                        <div
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: genre.color }}
-                                        />
-                                        <span>{genre.name}</span>
-                                        <span className="text-gray-600">({genre.value})</span>
+                                    <div key={genre.name} className="flex items-center gap-2 group cursor-default">
+                                        <div className="w-2 h-2 rounded-full ring-2 ring-white/5 shadow-lg group-hover:scale-125 transition-transform" style={{ backgroundColor: genre.color }} />
+                                        <span className="text-[10px] font-black text-gray-400 group-hover:text-white transition-colors uppercase tracking-widest">{genre.name}</span>
+                                        <span className="text-[10px] font-bold text-gray-600">({genre.value})</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        <div className="text-center py-8 text-gray-500">
-                            <p>No genre data available yet.</p>
-                            <p className="text-xs mt-1">Add anime to your list to see your taste profile!</p>
+                        <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
+                            <BarChart3 className="w-12 h-12 mb-4 text-gray-700" />
+                            <p className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em]">Build your list to see DNA</p>
                         </div>
                     )}
                 </div>
 
-                {/* Score Distribution */}
-                <div className="bg-dark-100 rounded-xl border border-gray-800 p-6">
-                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <Star className="w-5 h-5 text-yellow-500" />
-                        Score Distribution
-                    </h3>
+                {/* Score Distribution - 7 cols on desktop, full on mobile, 1 col on tablet */}
+                <div className="lg:col-span-7 md:col-span-2 lg:md:col-span-7 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
+                                <Star className="w-3.5 h-3.5 text-yellow-500" />
+                                Ratings Matrix
+                            </h3>
+                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">How you evaluate anime quality</p>
+                        </div>
+                        {reviews.length > 0 && (
+                            <div className="px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full">
+                                <span className="text-[10px] text-yellow-500 font-black uppercase tracking-widest">{avgScore} Average</span>
+                            </div>
+                        )}
+                    </div>
                     {reviews.length > 0 ? (
-                        <div className="h-48">
+                        <div className="flex-1 min-h-[300px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={scoreData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <BarChart data={scoreData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                     <XAxis
                                         dataKey="score"
-                                        tick={{ fill: '#9ca3af', fontSize: 12 }}
-                                        axisLine={{ stroke: '#374151' }}
+                                        tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 900 }}
+                                        axisLine={false}
                                         tickLine={false}
+                                        dy={10}
                                     />
                                     <YAxis
-                                        tick={{ fill: '#9ca3af', fontSize: 11 }}
-                                        axisLine={{ stroke: '#374151' }}
+                                        tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 800 }}
+                                        axisLine={false}
                                         tickLine={false}
                                         allowDecimals={false}
-                                        width={30}
+                                        dx={-10}
                                     />
-                                    <Tooltip content={<CustomTooltip />} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                                     <Bar
                                         dataKey="count"
-                                        radius={[4, 4, 0, 0]}
+                                        radius={[6, 6, 2, 2]}
+                                        animationDuration={1500}
                                     >
                                         {scoreData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={entry.fill}
+                                                fillOpacity={0.8}
+                                                className="hover:fill-opacity-100 transition-all duration-300"
+                                            />
                                         ))}
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
                     ) : (
-                        <div className="text-center py-8 text-gray-500">
-                            <p>No reviews yet to show score distribution.</p>
-                            <p className="text-xs mt-1">Start reviewing anime to see your rating patterns!</p>
+                        <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
+                            <Star className="w-12 h-12 mb-4 text-gray-700" />
+                            <p className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em]">Write reviews to see distribution</p>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* Activity Heatmap - Coming Soon */}
-            <div className="bg-dark-100 rounded-xl border border-gray-800 p-6 relative overflow-hidden">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <ActivityIcon className="w-5 h-5 text-orange-500" />
-                        Watching Activity
+            {/* Bottom Row - Activity & Progress */}
+            <div className="grid lg:grid-cols-12 md:grid-cols-2 gap-6 items-start w-full">
+                {/* Heatmap - 5 cols on desktop */}
+                <div className="lg:col-span-5 md:col-span-2 lg:md:col-span-5 min-w-0 relative z-10">
+                    <ActivityHeatmapSection username={username} isPrivate={isPrivate} />
+                </div>
+
+                {/* Watching Progress - 7 cols on desktop */}
+                <div className="lg:col-span-7 md:col-span-2 lg:md:col-span-7 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
+                    <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-6">
+                        <Activity className="w-3.5 h-3.5 text-cyan-500" />
+                        Live Progress
                     </h3>
-                    <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded-full">Coming Soon</span>
-                </div>
-                <div className="text-center py-12 text-gray-500">
-                    <ActivityIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Activity tracking will be available soon!</p>
-                    <p className="text-xs mt-1 text-gray-600">Track your episode watching history over time.</p>
-                </div>
-            </div>
+                    <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                        {watchingCount > 0 ? (
+                            listsData?.find(g => g.status === 'Watching')?.items.slice(0, 10).map((item) => {
+                                const eps = item.episodes_watched || 0;
+                                const total = item.anime?.episode_count || 0;
+                                const progress = total > 0 ? (eps / total) * 100 : 0;
 
-            {/* Watching Progress */}
-            {watchingCount > 0 && (
-                <div className="bg-dark-100 rounded-xl border border-gray-800 p-6">
-                    <h3 className="text-lg font-bold text-white mb-4">Currently Watching Progress</h3>
-                    <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
-                        {listsData?.find(g => g.status === 'Watching')?.items.slice(0, 10).map((item) => {
-                            const eps = item.episodes_watched || 0;
-                            const total = item.anime?.episode_count || 0;
-                            const progress = total > 0 ? (eps / total) * 100 : 0;
-
-                            return (
-                                <div key={item.id} className="flex items-center gap-3">
-                                    <img
-                                        src={item.anime?.cover_image}
-                                        alt={item.anime?.title}
-                                        className="w-8 h-12 rounded object-cover shrink-0"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-white truncate">{item.anime?.title}</p>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-accent rounded-full transition-all"
-                                                    style={{ width: `${progress}%` }}
+                                return (
+                                    <div key={item.id} className="group relative bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative shrink-0">
+                                                <img
+                                                    src={item.anime?.cover_image}
+                                                    alt={item.anime?.title}
+                                                    className="w-10 h-14 rounded-lg object-cover shadow-2xl"
                                                 />
                                             </div>
-                                            <span className="text-xs text-gray-400 shrink-0">
-                                                {eps}/{total || '?'}
-                                            </span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-black text-white truncate mb-2 tracking-tight">
+                                                    {item.anime?.title}
+                                                </p>
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-[0.1em]">
+                                                        <span className="text-gray-500">{progress.toFixed(0)}% <span className="text-[8px] opacity-70">Complete</span></span>
+                                                        <span className="text-gray-300">{eps} <span className="text-gray-600">/</span> {total || '?'} <span className="text-[8px] opacity-70 font-bold ml-0.5">EPS</span></span>
+                                                    </div>
+                                                    <div className="relative h-1.5 bg-dark-400 rounded-full overflow-hidden p-[1px] shadow-inner">
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-accent to-purple-500 rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                                                            style={{ width: `${progress}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-30">
+                                <Tv className="w-10 h-10 mb-3 text-gray-600" />
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">No active progress</p>
+                            </div>
+                        )}
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }
-

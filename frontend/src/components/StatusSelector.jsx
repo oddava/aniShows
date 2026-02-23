@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Check, Play, Pause, Bookmark, Trash2, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Check, Play, Pause, Bookmark, Trash2, Minus, Plus, Star, RotateCcw, StickyNote, Calendar, Edit3, X, Eye } from 'lucide-react';
 import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
-    { value: 'Watching', label: 'Watching', color: 'bg-green-500', icon: Play },
-    { value: 'Completed', label: 'Completed', color: 'bg-blue-500', icon: Check },
+    { value: 'Watching', label: 'Watching', color: 'bg-green-500', icon: Eye },
+    { value: 'Completed', label: 'Completed', color: 'bg-blue-500', icon: Check, hoverOnly: true },
     { value: 'On Hold', label: 'On Hold', color: 'bg-yellow-500', icon: Pause },
     { value: 'Dropped', label: 'Dropped', color: 'bg-red-500', icon: Trash2 },
     { value: 'Plan to Watch', label: 'Plan to Watch', color: 'bg-gray-500', icon: Bookmark },
@@ -17,20 +17,88 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
+    const [isClosingDropdown, setIsClosingDropdown] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Status state
     const [currentStatus, setCurrentStatus] = useState(initialStatus?.status || null);
     const [score, setScore] = useState(initialStatus?.score || 0);
     const [episodesWatched, setEpisodesWatched] = useState(initialStatus?.episodes_watched || 0);
+    const [localEpisodes, setLocalEpisodes] = useState(initialStatus?.episodes_watched || 0);
     const [listId, setListId] = useState(initialStatus?.id || null);
+
+    // Detail fields
+    const [showDetails, setShowDetails] = useState(false);
+    const [isClosingDetails, setIsClosingDetails] = useState(false);
+    const [notes, setNotes] = useState(initialStatus?.notes || '');
+    const [startedAt, setStartedAt] = useState(initialStatus?.started_at || '');
+    const [finishedAt, setFinishedAt] = useState(initialStatus?.finished_at || '');
+    const [isRewatching, setIsRewatching] = useState(initialStatus?.is_rewatching || false);
+
+    const dropdownRef = useRef(null);
+    const detailsRef = useRef(null);
+
+    const closeDropdown = () => {
+        if (!isOpen || isClosingDropdown) return;
+        setIsClosingDropdown(true);
+        setTimeout(() => {
+            setIsOpen(false);
+            setIsClosingDropdown(false);
+        }, 200);
+    };
+
+    const toggleDropdown = () => {
+        if (isOpen) {
+            closeDropdown();
+        } else {
+            setIsOpen(true);
+        }
+    };
+
+    const closeDetails = () => {
+        if (!showDetails || isClosingDetails) return;
+        setIsClosingDetails(true);
+        setTimeout(() => {
+            setShowDetails(false);
+            setIsClosingDetails(false);
+        }, 200);
+    };
+
+    const toggleDetails = () => {
+        if (showDetails) {
+            closeDetails();
+        } else {
+            setShowDetails(true);
+        }
+    };
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                closeDropdown();
+            }
+            if (detailsRef.current && !detailsRef.current.contains(event.target)) {
+                // If it's a click outside, we might NOT want to close details automatically
+                // because they might be interacting with something else, but it's often good UX.
+                // Let's keep details open until they click save or the close button.
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (initialStatus) {
             setCurrentStatus(initialStatus.status);
             setScore(initialStatus.score);
             setEpisodesWatched(initialStatus.episodes_watched);
+            setLocalEpisodes(initialStatus.episodes_watched);
             setListId(initialStatus.id);
+            setNotes(initialStatus.notes || '');
+            setStartedAt(initialStatus.started_at || '');
+            setFinishedAt(initialStatus.finished_at || '');
+            setIsRewatching(initialStatus.is_rewatching || false);
         }
     }, [initialStatus]);
 
@@ -54,22 +122,44 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 response = await listApi.update(listId, {
                     status: newStatus,
                     score,
-                    episodes_watched: nextEpisodes
+                    episodes_watched: nextEpisodes,
+                    notes,
+                    started_at: startedAt || null,
+                    finished_at: finishedAt || null,
+                    is_rewatching: isRewatching
                 });
             } else {
                 response = await listApi.add({
                     anime_id: animeId,
                     status: newStatus,
                     score,
-                    episodes_watched: nextEpisodes
+                    episodes_watched: nextEpisodes,
+                    notes,
+                    started_at: startedAt || null,
+                    finished_at: finishedAt || null,
+                    is_rewatching: isRewatching
                 });
-                setListId(response.data.id);
             }
 
-            setCurrentStatus(newStatus);
-            queryClient.invalidateQueries({ queryKey: ['lists'] });
-            if (onUpdate) onUpdate(response.data);
-            setIsOpen(false);
+            const isAdding = !currentStatus;
+
+            if (isAdding) {
+                // Wait for the dropdown to animate out before transforming the layout
+                setIsClosingDropdown(true);
+                setTimeout(() => {
+                    setCurrentStatus(newStatus);
+                    setListId(response.data.id);
+                    setIsOpen(false);
+                    setIsClosingDropdown(false);
+                    queryClient.invalidateQueries({ queryKey: ['lists'] });
+                    if (onUpdate) onUpdate(response.data);
+                }, 200);
+            } else {
+                setCurrentStatus(newStatus);
+                queryClient.invalidateQueries({ queryKey: ['lists'] });
+                if (onUpdate) onUpdate(response.data);
+                closeDropdown();
+            }
         } catch (error) {
             logger.error('Failed to update status:', error);
         } finally {
@@ -82,13 +172,20 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
         setIsLoading(true);
         try {
             await listApi.remove(listId);
-            setCurrentStatus(null);
-            setListId(null);
-            setScore(0);
-            setEpisodesWatched(0);
-            queryClient.invalidateQueries({ queryKey: ['lists'] });
-            if (onUpdate) onUpdate(null);
-            setIsOpen(false);
+
+            // Animate everything out first
+            closeDropdown();
+            if (showDetails) closeDetails();
+
+            // Wait for animations to complete before switching back to the "Add to List" button
+            setTimeout(() => {
+                setCurrentStatus(null);
+                setListId(null);
+                setScore(0);
+                setEpisodesWatched(0);
+                queryClient.invalidateQueries({ queryKey: ['lists'] });
+                if (onUpdate) onUpdate(null);
+            }, 200);
         } catch (error) {
             logger.error('Failed to remove entry:', error);
         } finally {
@@ -97,12 +194,16 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     };
 
     const handleEpisodeChange = async (newEpisodes) => {
-        if (newEpisodes < 0 || (totalEpisodes && newEpisodes > totalEpisodes)) return;
+        if (newEpisodes < 0 || (totalEpisodes && newEpisodes > totalEpisodes)) {
+            setLocalEpisodes(episodesWatched);
+            return;
+        }
 
         const prevEpisodes = episodesWatched;
         const prevStatus = currentStatus;
 
         setEpisodesWatched(newEpisodes);
+        setLocalEpisodes(newEpisodes);
 
         let newStatus = currentStatus;
         if (newEpisodes === totalEpisodes && totalEpisodes > 0) {
@@ -139,14 +240,14 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     const currentOption = STATUS_OPTIONS.find(opt => opt.value === currentStatus);
     const progressPercentage = totalEpisodes ? Math.round((episodesWatched / totalEpisodes) * 100) : 0;
 
-    // Compact inline design
+    // Premium Add to List button when no status
     if (!currentStatus) {
         return (
-            <div className="relative w-full">
+            <div className="relative w-full" ref={dropdownRef}>
                 <button
-                    onClick={() => setIsOpen(!isOpen)}
+                    onClick={toggleDropdown}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all bg-dark-100 text-gray-300 border border-gray-700 hover:border-accent hover:text-white"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-dark-200/90 backdrop-blur-xl text-gray-300 font-bold text-sm sm:text-base border border-white/10 active:scale-[0.99] transition-transform"
                 >
                     {isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -154,137 +255,331 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                         <Plus className="w-5 h-5" />
                     )}
                     Add to List
-                    <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isOpen && (
-                    <>
-                        <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setIsOpen(false)}
-                        />
-                        <div className="absolute top-full left-0 mt-2 w-48 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden animate-fade-in py-1">
-                            {STATUS_OPTIONS.map((option) => (
-                                <button
-                                    key={option.value}
-                                    onClick={() => handleStatusChange(option.value)}
-                                    className="w-full px-4 py-2.5 text-left flex items-center gap-3 transition-all group hover:bg-white/5"
-                                >
-                                    <div className={`w-7 h-7 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-30 transition-all`}>
-                                        <option.icon className={`w-3.5 h-3.5 ${option.color.replace('bg-', 'text-')}`} />
-                                    </div>
-                                    <span className="font-semibold text-sm text-gray-300 group-hover:text-white">
-                                        {option.label}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                    </>
+                    <div className={`absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100] ${isClosingDropdown ? 'animate-dropdown-out' : 'animate-dropdown-premium'}`}>
+                        {STATUS_OPTIONS.map((option, index) => (
+                            <button
+                                key={option.value}
+                                onClick={() => handleStatusChange(option.value)}
+                                style={{ animationDelay: `${index * 40}ms` }}
+                                className="w-full px-4 py-3 text-left flex items-center gap-3 transition-all duration-200 group hover:bg-white/5 rounded-xl animate-dropdown-premium"
+                            >
+                                <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
+                                    {option.icon && (
+                                        <option.icon className={`w-4 h-4 transition-all duration-300 ${option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100' : 'opacity-100'}`} />
+                                    )}
+                                </div>
+                                <span className="font-bold text-sm text-gray-300 group-hover:text-white">
+                                    {option.label}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 )}
             </div>
         );
     }
 
     return (
-        <div className="w-full">
-            {/* Main Controls Row */}
-            <div className="flex items-center gap-1.5 sm:gap-2 bg-dark-100/50 p-1.5 sm:p-2 rounded-xl border border-gray-800">
-                {/* Status Dropdown */}
-                <div className="relative flex-shrink-0">
+        <div className="w-full relative">
+            {/* Sleek Main Controls Bar */}
+            <div className="relative flex items-center justify-between p-1.5 sm:p-2 bg-dark-200/60 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-lg shadow-black/20 z-10">
+
+                {/* Status Dropdown - Left */}
+                <div className="relative flex-shrink-0 animate-bar-reveal" style={{ animationDelay: '100ms' }} ref={dropdownRef}>
                     <button
-                        onClick={() => setIsOpen(!isOpen)}
+                        onClick={toggleDropdown}
                         disabled={isLoading}
-                        className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all whitespace-nowrap
+                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300
                             ${currentOption
-                                ? `${currentOption.color} text-white hover:opacity-90`
-                                : 'bg-dark-100 text-gray-300 border border-gray-700 hover:border-accent hover:text-white'}`}
+                                ? `${currentOption.color} text-white hover:brightness-110`
+                                : 'bg-dark-100 text-gray-300 border border-gray-700'}`}
                     >
                         {isLoading ? (
-                            <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : currentOption && currentOption.icon ? (
+                            <currentOption.icon className="w-4 h-4" />
                         ) : (
-                            <currentOption.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <div className="w-4 h-4" />
                         )}
                         <span className="hidden sm:inline">{currentOption.label}</span>
-                        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-3.5 h-3.5 ml-0.5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
 
+                    {/* Status Menu */}
                     {isOpen && (
-                        <>
-                            <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setIsOpen(false)}
-                            />
-                            <div className="absolute top-full left-0 mt-2 w-44 sm:w-48 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden animate-fade-in py-1">
-                                {STATUS_OPTIONS.map((option) => (
-                                    <button
-                                        key={option.value}
-                                        onClick={() => handleStatusChange(option.value)}
-                                        className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-left flex items-center gap-2 sm:gap-3 transition-all group
-                                            ${currentStatus === option.value ? 'bg-accent/10' : 'hover:bg-white/5'}`}
-                                    >
-                                        <div className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-30 transition-all`}>
-                                            <option.icon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${option.color.replace('bg-', 'text-')}`} />
-                                        </div>
-                                        <span className={`font-semibold text-xs sm:text-sm transition-colors ${currentStatus === option.value ? 'text-accent' : 'text-gray-300 group-hover:text-white'}`}>
-                                            {option.label}
-                                        </span>
-                                        {currentStatus === option.value && <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-auto text-accent" />}
-                                    </button>
-                                ))}
-
-                                <div className="border-t border-gray-700 mt-1">
-                                    <button
-                                        onClick={handleRemove}
-                                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-left text-red-400 hover:bg-red-500/10 flex items-center gap-2 text-xs sm:text-sm"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                        Remove
-                                    </button>
+                        <div className={`absolute top-full left-0 mt-3 w-56 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100] ${isClosingDropdown ? 'animate-dropdown-out' : 'animate-dropdown-premium'}`}>
+                            {STATUS_OPTIONS.map((option, index) => (
+                                <button
+                                    key={option.value}
+                                    onClick={() => handleStatusChange(option.value)}
+                                    style={{ animationDelay: `${index * 40}ms` }}
+                                    className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 group rounded-xl animate-dropdown-premium
+                                        ${currentStatus === option.value ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                >
+                                    <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
+                                        {option.icon && (
+                                            <option.icon className={`w-4 h-4 transition-all duration-300 ${currentStatus === option.value ? option.color.replace('bg-', 'text-') : option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100' : 'opacity-100'}`} />
+                                        )}
+                                    </div>
+                                    <span className={`font-bold text-sm transition-colors ${currentStatus === option.value ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
+                                        {option.label}
+                                    </span>
+                                </button>
+                            ))}
+                            <div className="h-px bg-white/10 my-1" />
+                            <button
+                                onClick={handleRemove}
+                                style={{ animationDelay: `${STATUS_OPTIONS.length * 40}ms` }}
+                                className="w-full px-3 py-2.5 text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-3 text-sm font-bold rounded-xl transition-colors duration-200 group animate-dropdown-premium"
+                            >
+                                <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 group-hover:bg-red-500/20 transition-colors">
+                                    <Trash2 className="w-4 h-4" />
                                 </div>
-                            </div>
-                        </>
+                                Remove from List
+                            </button>
+                        </div>
                     )}
                 </div>
 
-                {/* Divider */}
-                <div className="w-px h-6 sm:h-8 bg-gray-700/50 flex-shrink-0" />
+                {/* Episode Counter - Center */}
+                <div className="flex items-center justify-center flex-1 px-2 sm:px-4 min-w-[120px] animate-bar-reveal" style={{ animationDelay: '200ms' }}>
+                    <div className="flex items-center gap-2 sm:gap-3 bg-dark-100/50 rounded-xl p-1 border border-white/5">
+                        <button
+                            onClick={() => handleEpisodeChange(episodesWatched - 1)}
+                            disabled={isLoading || episodesWatched <= 0}
+                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-dark-200 hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:hover:bg-dark-200 flex-shrink-0"
+                        >
+                            <Minus className="w-4 h-4" />
+                        </button>
 
-                {/* Episode Counter with Arrows */}
-                <div className="flex items-center gap-1 sm:gap-2 flex-1 justify-center">
-                    <button
-                        onClick={() => handleEpisodeChange(episodesWatched - 1)}
-                        disabled={isLoading || episodesWatched <= 0}
-                        className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-dark-200 hover:bg-dark-300 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-                    >
-                        <Minus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                    </button>
+                        <div className="flex items-baseline gap-0.5 px-1 min-w-[50px] sm:min-w-[70px] justify-center">
+                            <input
+                                type="text"
+                                value={localEpisodes}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^\d+$/.test(val)) {
+                                        setLocalEpisodes(val);
+                                    }
+                                }}
+                                onBlur={() => {
+                                    const val = localEpisodes === '' ? 0 : parseInt(localEpisodes);
+                                    handleEpisodeChange(val);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.target.blur();
+                                    }
+                                }}
+                                className="w-9 sm:w-11 bg-transparent text-white font-black text-base sm:text-lg tabular-nums tracking-tight text-center focus:outline-none focus:bg-white/5 rounded-lg transition-all"
+                            />
+                            <span className="text-gray-500 text-xs sm:text-sm font-bold">/</span>
+                            <span className="text-gray-400 text-xs sm:text-sm font-bold tabular-nums">
+                                {totalEpisodes || '?'}
+                            </span>
+                        </div>
 
-                    <div className="flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2 min-w-[60px] sm:min-w-[70px] justify-center">
-                        <span className="text-white font-bold text-xs sm:text-sm tabular-nums">{episodesWatched}</span>
-                        <span className="text-gray-500 text-[10px] sm:text-xs">/</span>
-                        <span className="text-gray-400 text-xs sm:text-sm tabular-nums">{totalEpisodes || '?'}</span>
+                        <button
+                            onClick={() => handleEpisodeChange(episodesWatched + 1)}
+                            disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
+                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
                     </div>
+                </div>
 
+                {/* Edit Details Button - Right */}
+                <div className="flex-shrink-0 animate-bar-reveal" style={{ animationDelay: '300ms' }}>
                     <button
-                        onClick={() => handleEpisodeChange(episodesWatched + 1)}
-                        disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
-                        className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-accent/10 hover:bg-accent text-accent hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                        onClick={toggleDetails}
+                        className={`w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl transition-all duration-300 border active:scale-95
+                            ${showDetails || score > 0 || notes || startedAt || isRewatching
+                                ? 'bg-accent/20 border-accent/30 text-accent hover:bg-accent hover:text-white hover:border-accent'
+                                : 'bg-dark-100 border-gray-700 text-gray-400 hover:border-white/20 hover:text-white hover:bg-white/5'}`}
+                        title="Edit Details"
                     >
-                        <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                        {score > 0 && !showDetails && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-accent rounded-full border-2 border-dark-200" />
+                        )}
                     </button>
                 </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="mt-2 relative h-1.5 sm:h-2 bg-dark-200 rounded-full overflow-hidden">
+            {/* Progress Bar (Attached below the bar) */}
+            <div className="absolute -bottom-1 left-4 right-4 h-1 sm:h-1.5 bg-dark-100 rounded-b-xl overflow-hidden opacity-80 z-0">
                 <div
                     style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                    className={`h-full transition-all duration-500 ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
+                    className={`h-full transition-all duration-700 ease-out rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
                         ? 'bg-green-500'
                         : 'bg-accent'
                         }`}
                 />
             </div>
+
+            {/* Premium Absolute Detail Popover */}
+            {showDetails && (
+                <>
+                    {/* Invisible backdrop to catch clicks outside the popover */}
+                    <div
+                        className="fixed inset-0 z-[60]"
+                        onClick={closeDetails}
+                    />
+
+                    <div
+                        ref={detailsRef}
+                        className={`absolute top-[calc(100%+12px)] right-0 w-[calc(100vw-2rem)] sm:w-[380px] max-w-full bg-dark-100/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] z-[70] overflow-hidden ${isClosingDetails ? 'animate-dropdown-out' : 'animate-dropdown-premium'}`}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.02]">
+                            <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                                <Edit3 className="w-4 h-4 text-accent" />
+                                Entry Details
+                            </h3>
+                            <button
+                                onClick={closeDetails}
+                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-5 space-y-6">
+                            {/* Score Slider / Buttons */}
+                            <div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                                        <Star className="w-3.5 h-3.5 text-yellow-500" /> Score
+                                    </label>
+                                    <span className="text-lg font-black text-white">
+                                        {score > 0 ? score : '-'} <span className="text-xs text-gray-500 font-bold">/ 10</span>
+                                    </span>
+                                </div>
+                                <div className="flex bg-dark-200 p-1 rounded-2xl border border-white/5 h-11">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((val) => (
+                                        <button
+                                            key={val}
+                                            onClick={() => setScore(score === val ? 0 : val)}
+                                            className={`flex-1 flex items-center justify-center transition-all duration-300 rounded-xl
+                                                ${val <= score ? 'bg-yellow-500 text-dark-900' : 'hover:bg-white/5 text-gray-500'}`}
+                                        >
+                                            <span className="font-black text-sm">{val}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Dates Row */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                                        <Calendar className="w-3.5 h-3.5 text-accent" /> Started
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={startedAt}
+                                        onChange={(e) => setStartedAt(e.target.value)}
+                                        className="w-full bg-dark-200/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all shadow-inner [color-scheme:dark]"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                                        <Check className="w-3.5 h-3.5 text-green-500" /> Finished
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={finishedAt}
+                                        onChange={(e) => setFinishedAt(e.target.value)}
+                                        className="w-full bg-dark-200/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all shadow-inner [color-scheme:dark]"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Rewatching Toggle */}
+                            <div className="flex items-center justify-between p-3.5 bg-dark-200/30 border border-white/5 rounded-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${isRewatching ? 'bg-cyan-500/20' : 'bg-white/5'}`}>
+                                        <RotateCcw className={`w-4 h-4 ${isRewatching ? 'text-cyan-400' : 'text-gray-500'}`} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-200">Rewatching</p>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Mark as rewatching</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setIsRewatching(!isRewatching)}
+                                    className={`relative w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${isRewatching ? 'bg-cyan-500' : 'bg-dark-100 border border-gray-700'
+                                        }`}
+                                >
+                                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ease-spring ${isRewatching ? 'translate-x-6' : 'translate-x-0.5'
+                                        }`} />
+                                </button>
+                            </div>
+
+                            {/* Notes */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                                    <StickyNote className="w-3.5 h-3.5 text-blue-400" /> Notes
+                                </label>
+                                <textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="Write your private thoughts..."
+                                    className="w-full bg-dark-200/50 border border-white/10 rounded-2xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all shadow-inner"
+                                    rows={3}
+                                />
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={closeDetails}
+                                    className="flex-1 py-3.5 rounded-xl font-bold text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                onClick={async () => {
+                                    if (!listId) return;
+                                    setIsLoading(true);
+                                    try {
+                                        const response = await listApi.update(listId, {
+                                            status: currentStatus,
+                                            score,
+                                            notes,
+                                            started_at: startedAt || null,
+                                            finished_at: finishedAt || null,
+                                            is_rewatching: isRewatching,
+                                        });
+                                        queryClient.invalidateQueries({ queryKey: ['lists'] });
+                                        if (onUpdate) onUpdate(response.data);
+                                        closeDetails();
+                                    } catch (error) {
+                                        logger.error('Failed to save details:', error);
+                                    } finally {
+                                        setIsLoading(false);
+                                    }
+                                }}
+                                    disabled={isLoading}
+                                    className="flex-[2] py-3.5 rounded-xl bg-accent text-white font-bold text-sm hover:brightness-110 transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center"
+                                >
+                                    {isLoading ? (
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        'Save Changes'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

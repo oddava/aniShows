@@ -11,6 +11,7 @@ import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import logger from '../../utils/logger';
 
 const ProfileInsights = lazy(() => import('../ProfileInsights'));
+const ActivityFeed = lazy(() => import('./ActivityFeed'));
 
 const STATUS_TABS = [
     { value: 'Watching', label: 'Watching', icon: '👀' },
@@ -100,6 +101,15 @@ export default function ProfileContent({
                     fetchNextReviews={fetchNextReviews}
                     isPublicView={isPublicView}
                 />
+            );
+
+        case 'activity':
+            return (
+                <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Activity">
+                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                        <ActivityFeed username={targetUsername} isPrivate={isPrivate} />
+                    </Suspense>
+                </ProfileErrorBoundary>
             );
 
         case 'insights':

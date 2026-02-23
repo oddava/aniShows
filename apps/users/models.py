@@ -18,6 +18,7 @@ from django.db.models.fields import (
     IntegerField,
     FloatField,
     DateTimeField,
+    DateField,
 )
 from django.conf import settings
 from root.storage_backends import MediaStorage
@@ -68,6 +69,10 @@ class UserAnimeList(Model):
     status = CharField(max_length=20, choices=UserAnimeStatus.choices)
     score = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
+    notes = TextField(blank=True, default="")
+    started_at = DateField(null=True, blank=True)
+    finished_at = DateField(null=True, blank=True)
+    is_rewatching = BooleanField(default=False)
     updated_at = DateTimeField(auto_now=True)
 
     class Meta:
@@ -86,6 +91,49 @@ class UserAnimeList(Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.anime.title} ({self.status})"
+
+
+class UserActivity(Model):
+    """Log individual activity events for heatmap and activity feed."""
+
+    class ActivityType(TextChoices):
+        ADDED = "added", "Added to List"
+        STATUS_CHANGE = "status_change", "Status Changed"
+        PROGRESS = "progress", "Progress Updated"
+        SCORE_CHANGE = "score", "Score Changed"
+        COMPLETED = "completed", "Completed"
+        REMOVED = "removed", "Removed from List"
+        REWATCHING = "rewatching", "Started Rewatching"
+        NOTES_UPDATE = "notes_update", "Notes Updated"
+
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="activities")
+    anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="user_activities")
+    activity_type = CharField(max_length=20, choices=ActivityType.choices)
+
+    # Snapshot fields — what changed
+    old_status = CharField(max_length=20, blank=True, null=True)
+    new_status = CharField(max_length=20, blank=True, null=True)
+    old_episodes = IntegerField(null=True, blank=True)
+    new_episodes = IntegerField(null=True, blank=True)
+    old_score = IntegerField(null=True, blank=True)
+    new_score = IntegerField(null=True, blank=True)
+
+    # User-provided detail
+    notes = TextField(blank=True, default="")
+
+    created_at = DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["user", "-created_at"]),
+            Index(fields=["anime", "user"]),
+            Index(fields=["user", "activity_type"]),
+        ]
+        verbose_name_plural = "User activities"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.activity_type} - {self.anime.title}"
 
 
 class UserImportJob(models.Model):

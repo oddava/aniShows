@@ -1,9 +1,13 @@
-from django.db.models.signals import post_save, post_delete
+from datetime import timedelta
+
+from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
+from django.utils import timezone as tz
 from .models import Anime, UserFavorite, ReviewComment, Review
-from apps.users.models import UserAnimeList, UserStats
+from apps.users.models import UserAnimeList, UserStats, UserActivity
 from apps.users.services.cache import invalidate_user_caches
 from apps.users.services.stats_service import create_or_update_user_stats
 from apps.animes.tasks import enrich_metadata, generate_recommendations
@@ -46,6 +50,178 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
         )
         # This task routes to 'low_priority' queue via celery config
         enrich_metadata.delay(anime_id=instance.id, mode="single")
+
+
+# =============================================================================
+# ACTIVITY LOGGING SIGNALS
+# =============================================================================
+
+
+def invalidate_heatmap_cache(user_id):
+    """Invalidate heatmap cache for a user when their activity changes."""
+    cache_key = f"heatmap:{user_id}"
+    cache.delete(cache_key)
+    logger.debug(f"Invalidated heatmap cache for user {user_id}")
+
+
+@receiver(pre_save, sender=UserAnimeList)
+def capture_old_anime_list_state(sender, instance, **kwargs):
+    """Capture state before save for activity diff comparison."""
+    if instance.pk:
+        try:
+            old = UserAnimeList.objects.get(pk=instance.pk)
+            instance._old_status = old.status
+            instance._old_episodes = old.episodes_watched
+            instance._old_score = old.score
+            instance._old_is_rewatching = old.is_rewatching
+            instance._old_notes = old.notes
+        except UserAnimeList.DoesNotExist:
+            instance._old_status = None
+            instance._old_episodes = None
+            instance._old_score = None
+            instance._old_is_rewatching = None
+            instance._old_notes = None
+    else:
+        instance._old_status = None
+        instance._old_episodes = None
+        instance._old_score = None
+        instance._old_is_rewatching = None
+        instance._old_notes = None
+
+
+def _create_activity_deduped(**kwargs):
+    """Create activity record with deduplication guard.
+
+    Prevents duplicate activities within 2 seconds (e.g. from rapid auto-saves).
+    """
+    cutoff = tz.now() - timedelta(seconds=2)
+    if UserActivity.objects.filter(
+        user=kwargs["user"],
+        anime=kwargs["anime"],
+        activity_type=kwargs["activity_type"],
+        created_at__gte=cutoff,
+    ).exists():
+        logger.debug(
+            f"Skipping duplicate activity {kwargs['activity_type']} "
+            f"for user {kwargs['user'].username}"
+        )
+        return
+    UserActivity.objects.create(**kwargs)
+
+
+@receiver(post_save, sender=UserAnimeList)
+def log_user_activity(sender, instance, created, **kwargs):
+    """Create UserActivity record based on what changed.
+
+    Uses transaction.on_commit for atomicity and dedup guard for rapid saves.
+    """
+    if not instance or not instance.user:
+        return
+
+    # Skip activity logging during bulk imports
+    if getattr(instance, "_skip_activity", False):
+        return
+
+    try:
+        activity_kwargs = None
+
+        if created:
+            # Determine activity type for new entries
+            activity_type = UserActivity.ActivityType.ADDED
+            if instance.status == UserAnimeList.UserAnimeStatus.completed:
+                activity_type = UserActivity.ActivityType.COMPLETED
+
+            activity_kwargs = {
+                "user": instance.user,
+                "anime": instance.anime,
+                "activity_type": activity_type,
+                "new_status": instance.status,
+                "new_episodes": instance.episodes_watched,
+                "new_score": instance.score if instance.score else None,
+                "notes": instance.notes or "",
+            }
+        else:
+            # For updates, determine the most significant change
+            old_status = getattr(instance, "_old_status", None)
+            old_episodes = getattr(instance, "_old_episodes", None)
+            old_score = getattr(instance, "_old_score", None)
+            old_is_rewatching = getattr(instance, "_old_is_rewatching", None)
+
+            # Check for rewatching toggle
+            if instance.is_rewatching and not old_is_rewatching:
+                activity_kwargs = {
+                    "user": instance.user,
+                    "anime": instance.anime,
+                    "activity_type": UserActivity.ActivityType.REWATCHING,
+                    "old_status": old_status,
+                    "new_status": instance.status,
+                    "old_episodes": old_episodes,
+                    "new_episodes": instance.episodes_watched,
+                    "notes": instance.notes or "",
+                }
+            # Check for completion
+            elif (
+                instance.status == UserAnimeList.UserAnimeStatus.completed
+                and old_status != UserAnimeList.UserAnimeStatus.completed
+            ):
+                activity_kwargs = {
+                    "user": instance.user,
+                    "anime": instance.anime,
+                    "activity_type": UserActivity.ActivityType.COMPLETED,
+                    "old_status": old_status,
+                    "new_status": instance.status,
+                    "old_episodes": old_episodes,
+                    "new_episodes": instance.episodes_watched,
+                    "new_score": instance.score if instance.score else None,
+                    "notes": instance.notes or "",
+                }
+            # Check for status change
+            elif old_status and instance.status != old_status:
+                activity_kwargs = {
+                    "user": instance.user,
+                    "anime": instance.anime,
+                    "activity_type": UserActivity.ActivityType.STATUS_CHANGE,
+                    "old_status": old_status,
+                    "new_status": instance.status,
+                    "notes": instance.notes or "",
+                }
+            # Check for episode progress
+            elif old_episodes is not None and instance.episodes_watched != old_episodes:
+                activity_kwargs = {
+                    "user": instance.user,
+                    "anime": instance.anime,
+                    "activity_type": UserActivity.ActivityType.PROGRESS,
+                    "old_episodes": old_episodes,
+                    "new_episodes": instance.episodes_watched,
+                    "notes": instance.notes or "",
+                }
+            # Check for score changes (with debouncing - only if no other activity)
+            elif old_score is not None and instance.score != old_score and instance.score > 0:
+                activity_kwargs = {
+                    "user": instance.user,
+                    "anime": instance.anime,
+                    "activity_type": UserActivity.ActivityType.SCORE_CHANGE,
+                    "old_score": old_score if old_score > 0 else None,
+                    "new_score": instance.score,
+                    "new_status": instance.status,
+                    "notes": instance.notes or "",
+                }
+            # Check for notes-only updates
+            elif instance._old_notes is not None and instance.notes != instance._old_notes:
+                activity_kwargs = {
+                    "user": instance.user,
+                    "anime": instance.anime,
+                    "activity_type": UserActivity.ActivityType.NOTES_UPDATE,
+                    "new_status": instance.status,
+                    "notes": instance.notes or "",
+                }
+
+        if activity_kwargs:
+            transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
+            # Invalidate heatmap cache since activity changed
+            transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
+    except Exception as e:
+        logger.exception(f"Failed to log removal activity for user {instance.user.username}: {e}")
 
 
 @receiver([post_save, post_delete], sender=UserAnimeList)

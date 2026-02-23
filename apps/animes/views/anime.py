@@ -220,7 +220,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         sort_clean = sort.strip().lower()
         sort_mapping = {
             "popular": "popularity_rank",
-            "rating": "site_rank",
+            "rating": "-rating",
             "newest": "-release_date",
             "title": "title",
             "upcoming": "-member_count",
@@ -232,7 +232,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         # logical fixes for specific sorts:
         # Exclude upcoming (0 episodes) from rating and newest sorts to prevent them from hitting top
         if sort == "rating":
-            queryset = queryset.filter(site_rank__isnull=False, member_count__gt=200000)
+            queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
         elif sort == "newest":
             queryset = queryset.filter(episode_count__gt=0)
         elif sort == "upcoming":

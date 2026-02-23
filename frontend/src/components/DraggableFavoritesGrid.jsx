@@ -15,7 +15,6 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
     const [draggedIndex, setDraggedIndex] = useState(null);
     const [dragOverIndex, setDragOverIndex] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
-    const [hoveredIndex, setHoveredIndex] = useState(null);
     const queryClient = useQueryClient();
 
     // Sync items when favorites prop changes
@@ -115,8 +114,6 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                 onDragEnd={handleDragEnd}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragLeave={handleDragLeave}
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
                 className={`group relative transition-all duration-200 ${isOwnProfile ? 'cursor-grab active:cursor-grabbing' : ''
                     } ${dragOverIndex === index ? 'scale-105 ring-2 ring-accent z-10' : ''}`}
             >
@@ -129,32 +126,12 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                     </div>
                 )}
 
-                {/* Rank Badge - only for position 2+ */}
-                {!isFeatured && (
-                    <div className="absolute top-1.5 right-1.5 z-20">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${index === 1 ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
-                                index === 2 ? 'bg-gray-400/20 border-gray-400/50 text-gray-300' :
-                                    index === 3 ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' :
-                                        'bg-dark-100/80 border-white/10 text-gray-400'
-                            }`}>
-                            {index + 1}
-                        </div>
-                    </div>
-                )}
 
-                {/* Featured Badge - only for position 1 */}
-                {isFeatured && (
-                    <div className="absolute top-1.5 right-1.5 z-20">
-                        <div className="px-1.5 py-0.5 bg-accent/90 backdrop-blur-sm rounded text-[9px] font-bold text-white border border-accent/30">
-                            #1
-                        </div>
-                    </div>
-                )}
 
                 {/* Card Content - Same structure for all cards */}
                 <Link
                     to={`/anime/${fav.anime?.slug}`}
-                    className="block bg-dark-100 rounded-lg border border-gray-800 overflow-hidden hover:border-accent/40 transition-all duration-300"
+                    className="block bg-dark-100 rounded-lg border border-gray-800 overflow-hidden transition-all duration-300"
                     onClick={(e) => {
                         if (draggedIndex !== null) {
                             e.preventDefault();
@@ -170,37 +147,9 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                             draggable={false}
                         />
 
-                        {/* Hover Stats Overlay */}
-                        <div className={`absolute inset-0 bg-gradient-to-t from-dark/95 via-dark/50 to-transparent transition-opacity duration-300 flex flex-col justify-end p-2 ${hoveredIndex === index ? 'opacity-100' : 'opacity-0'
-                            }`}>
-                            {listStatus ? (
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <status.icon className={`w-3 h-3 ${status.color}`} />
-                                        <span className="text-[10px] text-gray-200">{status.label}</span>
-                                    </div>
-                                    {userScore > 0 && (
-                                        <div className="flex items-center gap-1.5">
-                                            <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                                            <span className="text-[10px] text-gray-200">{userScore}/10</span>
-                                        </div>
-                                    )}
-                                    {episodesWatched > 0 && (
-                                        <div className="flex items-center gap-1.5">
-                                            <Eye className="w-3 h-3 text-gray-400" />
-                                            <span className="text-[10px] text-gray-400">{episodesWatched} eps</span>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <span className="text-[10px] text-gray-500">Not in list</span>
-                            )}
-                        </div>
-
-                        {/* Rating Badge - hidden on hover */}
+                        {/* Rating Badge */}
                         {fav.anime?.rating && (
-                            <div className={`absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[10px] border border-white/10 transition-opacity duration-300 ${hoveredIndex === index ? 'opacity-0' : 'opacity-100'
-                                }`}>
+                            <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-[10px] border border-white/10 transition-opacity duration-300">
                                 <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
                                 <span className="text-white font-bold">{fav.anime.rating}</span>
                             </div>
@@ -209,7 +158,7 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
 
                     {/* Card Info */}
                     <div className="p-2">
-                        <h3 className={`font-medium text-white line-clamp-2 leading-tight group-hover:text-accent transition-colors ${isFeatured ? 'text-xs font-bold' : 'text-xs'
+                        <h3 className={`font-medium text-white line-clamp-2 leading-tight transition-colors ${isFeatured ? 'text-xs font-bold' : 'text-xs'
                             }`}>
                             {fav.anime?.title}
                         </h3>

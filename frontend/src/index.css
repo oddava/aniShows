@@ -37,6 +37,13 @@
   .input {
     @apply bg-dark-200 border border-gray-800 text-white rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 placeholder:text-gray-600;
   }
+
+  .heatmap-cell {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
 }
 
 /* Hide number input spinners */
@@ -80,8 +87,53 @@ input[type=number] {
   }
 }
 
-.animate-slide-down-fade {
-  animation: slide-down-fade 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+@keyframes dropdown-premium {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-dropdown-premium {
+  animation: dropdown-premium 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes dropdown-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.95);
+  }
+}
+
+.animate-dropdown-out {
+  animation: dropdown-out 0.2s cubic-bezier(0.32, 0, 0.67, 0) forwards;
+}
+
+@keyframes bar-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-bar-reveal {
+  animation: bar-reveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
 }
 
 /* Staggered card fade-in */
@@ -448,12 +500,10 @@ a:focus-visible {
 
 /* Shimmer background for skeleton loaders */
 .shimmer-bg {
-  background: linear-gradient(
-    90deg,
-    #1a1a1a 25%,
-    #262626 50%,
-    #1a1a1a 75%
-  );
+  background: linear-gradient(90deg,
+      #1a1a1a 25%,
+      #262626 50%,
+      #1a1a1a 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite linear;
 }
@@ -463,18 +513,17 @@ a:focus-visible {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.06) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      transparent 100%);
   animation: skeleton-shimmer 1.6s infinite;
 }
 
@@ -485,12 +534,10 @@ a:focus-visible {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.03) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.03) 50%,
+      transparent 100%);
   animation: skeleton-shimmer 2s infinite;
 }
 
@@ -516,20 +563,19 @@ a:focus-visible {
   0% {
     transform: translateX(-100%) skewX(-15deg);
   }
+
   100% {
     transform: translateX(200%) skewX(-15deg);
   }
 }
 
 .skeleton-wave {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(139, 92, 246, 0.12) 30%,
-    rgba(167, 139, 250, 0.15) 50%,
-    rgba(139, 92, 246, 0.12) 70%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(139, 92, 246, 0.12) 30%,
+      rgba(167, 139, 250, 0.15) 50%,
+      rgba(139, 92, 246, 0.12) 70%,
+      transparent 100%);
   background-size: 200% 100%;
   animation: skeleton-wave 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
@@ -539,14 +585,12 @@ a:focus-visible {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    transparent 40%,
-    rgba(255, 255, 255, 0.04) 50%,
-    transparent 60%,
-    transparent 100%
-  );
+  background: linear-gradient(105deg,
+      transparent 0%,
+      transparent 40%,
+      rgba(255, 255, 255, 0.04) 50%,
+      transparent 60%,
+      transparent 100%);
   animation: skeleton-wave 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
 }
@@ -557,6 +601,7 @@ a:focus-visible {
     opacity: 0;
     transform: translateY(8px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -574,6 +619,7 @@ a:focus-visible {
     opacity: 0;
     transform: translateY(16px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -585,23 +631,58 @@ a:focus-visible {
 }
 
 /* Staggered grid animation - use CSS custom properties for dynamic delays */
-.grid-stagger > * {
+.grid-stagger>* {
   opacity: 0;
   animation: card-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-.grid-stagger > *:nth-child(1) { animation-delay: 0ms; }
-.grid-stagger > *:nth-child(2) { animation-delay: 40ms; }
-.grid-stagger > *:nth-child(3) { animation-delay: 80ms; }
-.grid-stagger > *:nth-child(4) { animation-delay: 120ms; }
-.grid-stagger > *:nth-child(5) { animation-delay: 160ms; }
-.grid-stagger > *:nth-child(6) { animation-delay: 200ms; }
-.grid-stagger > *:nth-child(7) { animation-delay: 240ms; }
-.grid-stagger > *:nth-child(8) { animation-delay: 280ms; }
-.grid-stagger > *:nth-child(9) { animation-delay: 320ms; }
-.grid-stagger > *:nth-child(10) { animation-delay: 360ms; }
-.grid-stagger > *:nth-child(11) { animation-delay: 400ms; }
-.grid-stagger > *:nth-child(12) { animation-delay: 440ms; }
+.grid-stagger>*:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.grid-stagger>*:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.grid-stagger>*:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.grid-stagger>*:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.grid-stagger>*:nth-child(5) {
+  animation-delay: 160ms;
+}
+
+.grid-stagger>*:nth-child(6) {
+  animation-delay: 200ms;
+}
+
+.grid-stagger>*:nth-child(7) {
+  animation-delay: 240ms;
+}
+
+.grid-stagger>*:nth-child(8) {
+  animation-delay: 280ms;
+}
+
+.grid-stagger>*:nth-child(9) {
+  animation-delay: 320ms;
+}
+
+.grid-stagger>*:nth-child(10) {
+  animation-delay: 360ms;
+}
+
+.grid-stagger>*:nth-child(11) {
+  animation-delay: 400ms;
+}
+
+.grid-stagger>*:nth-child(12) {
+  animation-delay: 440ms;
+}
 
 /* Progress bar animation for loading states */
 @keyframes progress-bar {
@@ -609,10 +690,12 @@ a:focus-visible {
     width: 0%;
     opacity: 1;
   }
+
   50% {
     width: 70%;
     opacity: 1;
   }
+
   100% {
     width: 100%;
     opacity: 0;
@@ -631,6 +714,7 @@ a:focus-visible {
     opacity: 0;
     backdrop-filter: blur(0px);
   }
+
   to {
     opacity: 1;
     backdrop-filter: blur(4px);
@@ -647,9 +731,11 @@ a:focus-visible {
     transform: rotate(0deg);
     border-color: #8b5cf6 transparent #8b5cf6 transparent;
   }
+
   50% {
     border-color: #a78bfa transparent #a78bfa transparent;
   }
+
   100% {
     transform: rotate(360deg);
     border-color: #8b5cf6 transparent #8b5cf6 transparent;
@@ -668,6 +754,7 @@ a:focus-visible {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -722,6 +809,7 @@ a:focus-visible {
     opacity: 0;
     transform: scale(0.9) translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -738,6 +826,7 @@ a:focus-visible {
     opacity: 0;
     max-height: 0;
   }
+
   to {
     opacity: 1;
     max-height: 500px;
@@ -754,6 +843,7 @@ a:focus-visible {
   from {
     transform: translateX(100%);
   }
+
   to {
     transform: translateX(0);
   }
@@ -765,9 +855,12 @@ a:focus-visible {
 
 /* Search focus ring pulse */
 @keyframes focus-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
   }
+
   50% {
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
   }
@@ -819,9 +912,12 @@ a:focus-visible {
 
 /* Empty state illustration bounce */
 @keyframes empty-bounce {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-8px);
   }
@@ -848,10 +944,13 @@ a:focus-visible {
 
 /* Loading spinner pulse */
 @keyframes loading-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.7;
     transform: scale(0.95);
@@ -868,6 +967,7 @@ a:focus-visible {
     opacity: 0;
     transform: translateY(20px) scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -884,10 +984,12 @@ a:focus-visible {
   0% {
     transform: scale(1);
   }
+
   50% {
     transform: scale(1.1);
     color: #a78bfa;
   }
+
   100% {
     transform: scale(1);
   }
@@ -903,10 +1005,13 @@ a:focus-visible {
     opacity: 0;
     transform: translateY(4px);
   }
-  10%, 90% {
+
+  10%,
+  90% {
     opacity: 1;
     transform: translateY(0);
   }
+
   100% {
     opacity: 0;
     transform: translateY(-4px);
@@ -919,9 +1024,12 @@ a:focus-visible {
 
 /* Filter badge pulse for unapplied changes */
 @keyframes unapplied-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
   }
+
   50% {
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0);
   }

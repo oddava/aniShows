@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Film } from 'lucide-react';
 
 export default function FranchiseSection({ relations, accentColor }) {
@@ -44,17 +43,16 @@ export default function FranchiseSection({ relations, accentColor }) {
 
             <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
                 {displayRelations.map((rel) => (
-                    <Link
+                    <div
                         key={rel.id}
-                        to={`/anime/${rel.slug || rel.id}`}
-                        className="relative group flex-shrink-0 w-28 snap-start"
+                        className="relative flex-shrink-0 w-28 snap-start cursor-default"
                     >
-                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200 group-hover:border-gray-600 transition-all">
+                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200">
                             {rel.cover ? (
                                 <img 
                                     src={rel.cover} 
                                     alt={rel.title} 
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                                    className="w-full h-full object-cover" 
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
@@ -72,10 +70,10 @@ export default function FranchiseSection({ relations, accentColor }) {
                             </div>
                         </div>
                         
-                        <h4 className="text-xs font-bold text-gray-300 line-clamp-2 leading-tight mt-1.5 group-hover:text-white transition-colors">
+                        <h4 className="text-xs font-bold text-gray-300 line-clamp-2 leading-tight mt-1.5">
                             {rel.title}
                         </h4>
-                    </Link>
+                    </div>
                 ))}
             </div>
         </div>

@@ -15,7 +15,7 @@ from apps.animes.models import (
     AnimeStaff,
     ThemeSong,
 )
-from apps.users.models import UserProfile, UserAnimeList
+from apps.users.models import UserProfile, UserAnimeList, UserActivity
 from apps.animes.serializers_mixins import ImageUrlMixin
 import logging
 
@@ -66,9 +66,7 @@ def validate_image_content(file, max_size, field_name):
         img.verify()  # Verify it's a valid image
         file.seek(0)
     except Exception:
-        raise serializers.ValidationError(
-            f"Invalid or corrupted image file for {field_name}."
-        )
+        raise serializers.ValidationError(f"Invalid or corrupted image file for {field_name}.")
 
     return file
 
@@ -106,14 +104,10 @@ class CharacterSerializer(ImageUrlMixin, serializers.ModelSerializer):
         return self.get_image_url(obj, "image", "image_url")
 
     def get_image_small(self, obj):
-        return self.get_image_url_with_thumbnail(
-            obj, "image_small", "image", "image_url"
-        )
+        return self.get_image_url_with_thumbnail(obj, "image_small", "image", "image_url")
 
     def get_image_medium(self, obj):
-        return self.get_image_url_with_thumbnail(
-            obj, "image_medium", "image", "image_url"
-        )
+        return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
 
 
 class StaffSerializer(ImageUrlMixin, serializers.ModelSerializer):
@@ -137,14 +131,10 @@ class StaffSerializer(ImageUrlMixin, serializers.ModelSerializer):
         return self.get_image_url(obj, "image", "image_url")
 
     def get_image_small(self, obj):
-        return self.get_image_url_with_thumbnail(
-            obj, "image_small", "image", "image_url"
-        )
+        return self.get_image_url_with_thumbnail(obj, "image_small", "image", "image_url")
 
     def get_image_medium(self, obj):
-        return self.get_image_url_with_thumbnail(
-            obj, "image_medium", "image", "image_url"
-        )
+        return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
 
 
 class AnimeCharacterSerializer(serializers.ModelSerializer):
@@ -185,9 +175,7 @@ class AnimeMinimalSerializer(ImageUrlMixin, serializers.ModelSerializer):
     """Minimal serializer for list views - excludes synopsis for smaller payload"""
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio_name = serializers.CharField(
-        source="studio.name", read_only=True, default=None
-    )
+    studio_name = serializers.CharField(source="studio.name", read_only=True, default=None)
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
     cover_image_small = serializers.SerializerMethodField()
@@ -239,7 +227,12 @@ class AnimeMinimalSerializer(ImageUrlMixin, serializers.ModelSerializer):
             return {
                 "id": entry.id,
                 "status": entry.status,
+                "score": entry.score,
                 "episodes_watched": entry.episodes_watched,
+                "notes": entry.notes,
+                "started_at": entry.started_at,
+                "finished_at": entry.finished_at,
+                "is_rewatching": entry.is_rewatching,
                 "progress": (entry.episodes_watched / obj.episode_count * 100)
                 if obj.episode_count and obj.episode_count > 0
                 else 0,
@@ -251,9 +244,7 @@ class AnimeListSerializer(ImageUrlMixin, serializers.ModelSerializer):
     """Lightweight serializer for lists with synopsis"""
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio_name = serializers.CharField(
-        source="studio.name", read_only=True, default=None
-    )
+    studio_name = serializers.CharField(source="studio.name", read_only=True, default=None)
     is_favorite = serializers.SerializerMethodField()
     user_list_status = serializers.SerializerMethodField()
     cover_image_small = serializers.SerializerMethodField()
@@ -323,6 +314,10 @@ class AnimeListSerializer(ImageUrlMixin, serializers.ModelSerializer):
                 "status": entry.status,
                 "score": entry.score,
                 "episodes_watched": entry.episodes_watched,
+                "notes": entry.notes,
+                "started_at": entry.started_at,
+                "finished_at": entry.finished_at,
+                "is_rewatching": entry.is_rewatching,
                 "progress": (entry.episodes_watched / obj.episode_count * 100)
                 if obj.episode_count and obj.episode_count > 0
                 else 0,
@@ -343,9 +338,7 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
     user_list_status = serializers.SerializerMethodField()
     user_review = serializers.SerializerMethodField()
     review_count = serializers.IntegerField(read_only=True)
-    avg_rating = serializers.DecimalField(
-        max_digits=3, decimal_places=1, read_only=True
-    )
+    avg_rating = serializers.DecimalField(max_digits=3, decimal_places=1, read_only=True)
     status_distribution = serializers.SerializerMethodField()
     cover_image_small = serializers.SerializerMethodField()
     cover_image_medium = serializers.SerializerMethodField()
@@ -447,6 +440,10 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
                 "status": entry.status,
                 "score": entry.score,
                 "episodes_watched": entry.episodes_watched,
+                "notes": entry.notes,
+                "started_at": entry.started_at,
+                "finished_at": entry.finished_at,
+                "is_rewatching": entry.is_rewatching,
                 "progress": (entry.episodes_watched / obj.episode_count * 100)
                 if obj.episode_count and obj.episode_count > 0
                 else 0,
@@ -472,9 +469,9 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
         }
 
         # Use prefetched user_lists if available
-        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get(
-            "user_lists"
-        ) or getattr(obj, "user_lists", None)
+        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get("user_lists") or getattr(
+            obj, "user_lists", None
+        )
 
         if user_lists:
             for entry in user_lists.all():
@@ -489,9 +486,9 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
         from apps.users.models import UserAnimeList
 
         # Use prefetched data if available
-        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get(
-            "user_lists"
-        ) or getattr(obj, "user_lists", None)
+        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get("user_lists") or getattr(
+            obj, "user_lists", None
+        )
 
         if user_lists is not None:
             return user_lists.count()
@@ -505,18 +502,14 @@ class UserSerializer(serializers.ModelSerializer):
     banner = serializers.SerializerMethodField()
     bio = serializers.SerializerMethodField()
     is_private = serializers.SerializerMethodField()
-    favorites_count = serializers.IntegerField(
-        read_only=True, source="_favorites_count"
-    )
+    favorites_count = serializers.IntegerField(read_only=True, source="_favorites_count")
     reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
 
     # Computed stats
     days_watched = serializers.SerializerMethodField()
     mean_score = serializers.SerializerMethodField()
     anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
-    episodes_watched = serializers.IntegerField(
-        read_only=True, source="_episodes_watched"
-    )
+    episodes_watched = serializers.IntegerField(read_only=True, source="_episodes_watched")
 
     def get_days_watched(self, obj):
         """Return days watched rounded to 1 decimal place"""
@@ -540,12 +533,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     # Social features
     points = serializers.SerializerMethodField()
-    followers_count = serializers.IntegerField(
-        read_only=True, source="_followers_count"
-    )
-    following_count = serializers.IntegerField(
-        read_only=True, source="_following_count"
-    )
+    followers_count = serializers.IntegerField(read_only=True, source="_followers_count")
+    following_count = serializers.IntegerField(read_only=True, source="_following_count")
 
     class Meta:
         model = User
@@ -683,9 +672,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
     bio = serializers.SerializerMethodField()
-    favorites_count = serializers.IntegerField(
-        read_only=True, source="_favorites_count"
-    )
+    favorites_count = serializers.IntegerField(read_only=True, source="_favorites_count")
     reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
     is_private = serializers.SerializerMethodField()
 
@@ -693,9 +680,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
     days_watched = serializers.SerializerMethodField()
     mean_score = serializers.SerializerMethodField()
     anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
-    episodes_watched = serializers.IntegerField(
-        read_only=True, source="_episodes_watched"
-    )
+    episodes_watched = serializers.IntegerField(read_only=True, source="_episodes_watched")
 
     def get_days_watched(self, obj):
         """Return days watched rounded to 1 decimal place"""
@@ -823,9 +808,7 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     avatar = serializers.ImageField(required=False, allow_null=True)
     banner = serializers.ImageField(required=False, allow_null=True)
     remove_banner = serializers.BooleanField(required=False, default=False)
-    bio = serializers.CharField(
-        required=False, allow_blank=True, max_length=MAX_BIO_LENGTH
-    )
+    bio = serializers.CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
     is_private = serializers.BooleanField(required=False, default=False)
 
     def validate_is_private(self, value):
@@ -883,11 +866,7 @@ class UserProfileUpdateSerializer(serializers.Serializer):
 
         try:
             # Get user from context if available
-            user = (
-                self.context.get("request").user
-                if self.context.get("request")
-                else None
-            )
+            user = self.context.get("request").user if self.context.get("request") else None
             processed_links = service.validate_and_process(cleaned_links, user)
             return processed_links
         except SocialLinkValidationError as e:
@@ -974,9 +953,7 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,  # Not required for updates
     )
-    status = serializers.ChoiceField(
-        choices=UserAnimeList.UserAnimeStatus.choices, required=False
-    )
+    status = serializers.ChoiceField(choices=UserAnimeList.UserAnimeStatus.choices, required=False)
     progress = serializers.SerializerMethodField()
 
     class Meta:
@@ -988,6 +965,10 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
             "status",
             "score",
             "episodes_watched",
+            "notes",
+            "started_at",
+            "finished_at",
+            "is_rewatching",
             "progress",
             "updated_at",
         ]
@@ -1023,14 +1004,74 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
                 attrs["status"] = UserAnimeList.UserAnimeStatus.completed
 
         # If status is set to Completed, ensure episodes_watched is set to max
-        if (
-            status == UserAnimeList.UserAnimeStatus.completed
-            and anime
-            and anime.episode_count > 0
-        ):
+        if status == UserAnimeList.UserAnimeStatus.completed and anime and anime.episode_count > 0:
             attrs["episodes_watched"] = anime.episode_count
 
         return attrs
+
+
+class UserActivitySerializer(serializers.ModelSerializer):
+    """Serializer for user activity feed entries."""
+
+    anime = AnimeMinimalSerializer(read_only=True)
+    activity_description = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserActivity
+        fields = [
+            "id",
+            "anime",
+            "activity_type",
+            "activity_description",
+            "old_status",
+            "new_status",
+            "old_episodes",
+            "new_episodes",
+            "old_score",
+            "new_score",
+            "notes",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_activity_description(self, obj):
+        """Generate human-readable activity description."""
+        title = obj.anime.title if obj.anime else "Unknown"
+        at = UserActivity.ActivityType
+
+        if obj.activity_type == at.COMPLETED:
+            desc = f"Completed {title}"
+            if obj.new_score:
+                desc += f" and rated it {obj.new_score}/10"
+            return desc
+
+        if obj.activity_type == at.ADDED:
+            status_label = obj.new_status or "list"
+            return f"Added {title} to {status_label}"
+
+        if obj.activity_type == at.PROGRESS:
+            if obj.old_episodes is not None and obj.new_episodes is not None:
+                if obj.new_episodes - obj.old_episodes == 1:
+                    return f"Watched episode {obj.new_episodes} of {title}"
+                return f"Watched episodes {obj.old_episodes + 1}-{obj.new_episodes} of {title}"
+            return f"Updated progress on {title}"
+
+        if obj.activity_type == at.STATUS_CHANGE:
+            return f"Changed {title} from {obj.old_status} to {obj.new_status}"
+
+        if obj.activity_type == at.SCORE_CHANGE:
+            return f"Rated {title} {obj.new_score}/10"
+
+        if obj.activity_type == at.REMOVED:
+            return f"Removed {title} from list"
+
+        if obj.activity_type == at.REWATCHING:
+            return f"Started rewatching {title}"
+
+        if obj.activity_type == at.NOTES_UPDATE:
+            return f"Updated notes for {title}"
+
+        return f"Updated {title}"
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -1040,9 +1081,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         slug_field="slug", queryset=Anime.objects.all(), source="anime", write_only=True
     )
     has_spoilers = serializers.BooleanField(default=False, required=False)
-    text = serializers.CharField(
-        required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH
-    )
+    text = serializers.CharField(required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH)
 
     # Use annotated fields from the view to avoid N+1 queries
     is_completed = serializers.BooleanField(read_only=True, source="_is_completed")
@@ -1098,9 +1137,7 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
     """Serializer for review comments with soft delete support"""
 
     user = UserSerializer(read_only=True)
-    text = serializers.CharField(
-        required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH
-    )
+    text = serializers.CharField(required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH)
     is_owner = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
 
@@ -1183,9 +1220,7 @@ class UserRecommendationSerializer(serializers.ModelSerializer):
     """Serializer for user recommendations with anime details and reason"""
 
     anime = AnimeListSerializer(read_only=True)
-    reason_text = serializers.CharField(
-        source="get_reason_display_text", read_only=True
-    )
+    reason_text = serializers.CharField(source="get_reason_display_text", read_only=True)
 
     class Meta:
         from apps.animes.models import UserRecommendation
