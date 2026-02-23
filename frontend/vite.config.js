@@ -28,8 +28,16 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        // Activate new SW immediately without waiting for tabs to close
+        skipWaiting: true,
+        clientsClaim: true,
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+        // Don't pre-cache HTML - let the browser always fetch index.html from network
+        // so Caddy's no-cache headers work and new deployments are seen immediately
+        globPatterns: ['**/*.{js,css,ico,png,svg,webp}'],
+        // SPA navigation fallback
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/django-admin\//, /^\/media\//, /^\/static\//],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|gif|webp|svg)$/,
