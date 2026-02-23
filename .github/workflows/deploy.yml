@@ -349,8 +349,11 @@ jobs:
             echo '🎯 DEPLOYING FRONTEND (commit: ${SHORT_SHA})'
             echo '====================================='
             
-            echo '� Pulling frontend image by SHA tag...'
+            echo '📦 Pulling frontend image by SHA tag...'
             docker pull ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA}
+            
+            echo '🏷️  Tagging as latest so docker compose uses the correct image...'
+            docker tag ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} ghcr.io/oddava/anishows-frontend:latest
             
             echo '🧹 Wiping frontend volume...'
             docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'rm -rf /srv/frontend/*'
