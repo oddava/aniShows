@@ -312,7 +312,7 @@ jobs:
 
       - name: Deploy to EC2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: |
           echo "🚀 Starting deployment to EC2..."
           
@@ -328,7 +328,7 @@ jobs:
             git pull origin main
             
             echo '🔑 Logging into GitHub Container Registry...'
-            echo '${GITHUB_TOKEN}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo '${GHCR_PAT}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             echo '🐳 Running fast deployment script...'
             ./deploy-prod.sh

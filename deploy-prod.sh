@@ -35,6 +35,8 @@ echo -e "${GREEN}✅ Old frontend assets cleared!${NC}"
 echo ""
 
 echo -e "${BLUE}🚀 Step 3: Restarting containers...${NC}"
+# Force-recreate frontend init container so it always re-copies built assets
+$COMPOSE_CMD up -d --force-recreate frontend
 $COMPOSE_CMD up -d
 echo -e "${GREEN}✅ Containers restarted!${NC}"
 echo ""
