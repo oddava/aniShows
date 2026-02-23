@@ -220,9 +220,7 @@ class ActivitySignalTests(TransactionTestCase):
             status=UserAnimeList.UserAnimeStatus.watching,
         )
         # Should have created activity without error
-        self.assertTrue(
-            UserActivity.objects.filter(user=self.user, anime=self.anime).exists()
-        )
+        self.assertTrue(UserActivity.objects.filter(user=self.user, anime=self.anime).exists())
 
 
 class HeatmapAPITests(APITestCase):
@@ -244,11 +242,14 @@ class HeatmapAPITests(APITestCase):
             status="Finished",
         )
 
+        # Clear heatmap cache to ensure fresh data for each test
+        from django.core.cache import cache
+
+        cache.delete(f"heatmap:{self.user.id}")
+
     def test_heatmap_empty(self):
         """Heatmap returns empty list when no activity exists."""
-        response = self.client.get(
-            reverse("activity-heatmap"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [])
 
@@ -261,9 +262,7 @@ class HeatmapAPITests(APITestCase):
             old_episodes=3,
             new_episodes=6,
         )
-        response = self.client.get(
-            reverse("activity-heatmap"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["count"], 3)  # 6 - 3 = 3
@@ -277,9 +276,7 @@ class HeatmapAPITests(APITestCase):
             old_episodes=20,
             new_episodes=24,
         )
-        response = self.client.get(
-            reverse("activity-heatmap"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         # Should be 4 (24-20), NOT 24
@@ -294,9 +291,7 @@ class HeatmapAPITests(APITestCase):
             old_episodes=None,
             new_episodes=12,
         )
-        response = self.client.get(
-            reverse("activity-heatmap"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["count"], 12)
@@ -311,9 +306,7 @@ class HeatmapAPITests(APITestCase):
             old_episodes=10,
             new_episodes=0,  # Reset for rewatch
         )
-        response = self.client.get(
-            reverse("activity-heatmap"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should be empty (0 is clamped, and we filter count > 0)
         self.assertEqual(response.data, [])
@@ -346,9 +339,7 @@ class HeatmapAPITests(APITestCase):
             new_episodes=5,
         )
 
-        response = self.client.get(
-            reverse("activity-heatmap"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [])
 
@@ -379,9 +370,7 @@ class ActivityFeedAPITests(APITestCase):
             activity_type=UserActivity.ActivityType.ADDED,
             new_status="Watching",
         )
-        response = self.client.get(
-            reverse("activity-list"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-list"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data.get("results", response.data)
         self.assertGreaterEqual(len(results), 1)
@@ -411,9 +400,7 @@ class ActivityFeedAPITests(APITestCase):
             new_status="Watching",
         )
 
-        response = self.client.get(
-            reverse("activity-list"), {"username": self.user.username}
-        )
+        response = self.client.get(reverse("activity-list"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data.get("results", response.data)
         self.assertEqual(len(results), 0)
