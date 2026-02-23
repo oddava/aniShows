@@ -38,17 +38,19 @@ FROM base AS builder
 
 ARG VITE_GOOGLE_CLIENT_ID
 ARG ALLOWED_HOSTS
-ARG BUILD_DATE
 ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
 ENV ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
 ENV NODE_ENV=production
-# Build date for cache busting
-ENV BUILD_DATE=${BUILD_DATE}
 
-# Copy source code
+# Copy source code (this layer is cached by content hash)
 COPY . .
 
-# Build production assets
+# BUILD_DATE declared AFTER COPY to bust cache for npm run build
+# when a new commit is deployed, even if source files haven't changed
+ARG BUILD_DATE
+ENV BUILD_DATE=${BUILD_DATE}
+
+# Build production assets (always re-runs when BUILD_DATE changes)
 RUN npm run build
 
 # ============================================================================
