@@ -285,6 +285,21 @@ jobs:
             BUILD_DATE=${{ github.sha }}
           no-cache: true
 
+      - name: Verify frontend image contents
+        run: |
+          echo "🔍 Verifying frontend image contents..."
+          echo "📋 Listing /app/dist/ in the pushed image:"
+          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest ls -la /app/dist/
+          echo ""
+          echo "📋 Listing /app/dist/assets/:"
+          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest ls -la /app/dist/assets/ | head -30
+          echo ""
+          echo "📋 index.html hash:"
+          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest md5sum /app/dist/index.html
+          echo ""
+          echo "📋 index.html content (first 20 lines):"
+          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest head -20 /app/dist/index.html
+
   # =============================================================================
   # DEPLOY TO PRODUCTION
   # =============================================================================
@@ -312,8 +327,10 @@ jobs:
       - name: Deploy to EC2
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          SHORT_SHA: ${{ github.sha }}
         run: |
           echo "🚀 Starting deployment to EC2..."
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           
           ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
             set -e
@@ -322,14 +339,29 @@ jobs:
             cd /home/ubuntu/aniShows
             
             echo '🔄 Pulling latest compose files from GitHub...'
-            # Note: We pull the compose files and scripts, but not the heavy dependencies
             git stash || true
             git pull origin main
             
             echo '🔑 Logging into GitHub Container Registry...'
             echo '${GHCR_PAT}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            echo '🐳 Running fast deployment script...'
+            echo '====================================='
+            echo '🎯 DEPLOYING FRONTEND (commit: ${SHORT_SHA})'
+            echo '====================================='
+            
+            echo '� Pulling frontend image by SHA tag...'
+            docker pull ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA}
+            
+            echo '🧹 Wiping frontend volume...'
+            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'rm -rf /srv/frontend/*'
+            
+            echo '📋 Copying new frontend files from image...'
+            docker run --rm -v anishows_frontend_dist:/srv/frontend ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} sh -c 'cp -r /app/dist/* /srv/frontend/ && echo DONE'
+            
+            echo '🔍 Verifying deployed files...'
+            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'ls -la /srv/frontend/ && echo --- && ls /srv/frontend/assets/ | head -10 && echo --- && md5sum /srv/frontend/index.html'
+            
+            echo '🐳 Running deployment script for remaining services...'
             ./deploy-prod.sh
             
             echo '✅ Deployment completed successfully!'
