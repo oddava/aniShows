@@ -34,6 +34,33 @@ $COMPOSE_CMD up -d
 echo -e "${GREEN}✅ All containers started!${NC}"
 echo ""
 
+echo -e "${BLUE}🧹 Step 2.5: Clearing Redis cache...${NC}"
+sleep 2
+if $COMPOSE_CMD exec -T redis redis-cli FLUSHALL; then
+    echo -e "${GREEN}✅ Redis cache cleared!${NC}"
+else
+    echo -e "${YELLOW}⚠️  Redis cache clear warning (may be already empty)${NC}"
+fi
+echo ""
+
+echo -e "${BLUE}🔍 Step 2.8: Verifying frontend assets...${NC}"
+sleep 2
+if docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest test -f /srv/frontend/index.html; then
+    echo -e "${GREEN}✅ Frontend index.html exists!${NC}"
+    docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest ls -la /srv/frontend/
+else
+    echo -e "${RED}❌ Frontend assets not found! Attempting to recreate...${NC}"
+    $COMPOSE_CMD up -d frontend
+    sleep 5
+    if docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest test -f /srv/frontend/index.html; then
+        echo -e "${GREEN}✅ Frontend assets created successfully!${NC}"
+    else
+        echo -e "${RED}❌ Failed to create frontend assets!${NC}"
+        exit 1
+    fi
+fi
+echo ""
+
 echo -e "${BLUE}🔄 Step 3: Reloading Caddy...${NC}"
 sleep 2
 if $COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force; then
