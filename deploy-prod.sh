@@ -48,16 +48,10 @@ sleep 2
 if docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest test -f /srv/frontend/index.html; then
     echo -e "${GREEN}✅ Frontend index.html exists!${NC}"
     docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest ls -la /srv/frontend/
+    echo -e "${GREEN}✅ Frontend assets verified (deployed by CI/CD)${NC}"
 else
-    echo -e "${RED}❌ Frontend assets not found! Attempting to recreate...${NC}"
-    $COMPOSE_CMD up -d frontend
-    sleep 5
-    if docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest test -f /srv/frontend/index.html; then
-        echo -e "${GREEN}✅ Frontend assets created successfully!${NC}"
-    else
-        echo -e "${RED}❌ Failed to create frontend assets!${NC}"
-        exit 1
-    fi
+    echo -e "${YELLOW}⚠️  Frontend assets not found in volume - they should be deployed by CI/CD${NC}"
+    echo -e "${YELLOW}⚠️  If this is the first deployment, run: docker compose up -d frontend${NC}"
 fi
 echo ""
 

@@ -7,6 +7,9 @@ const allowedHosts = process.env.ALLOWED_HOSTS
   ? process.env.ALLOWED_HOSTS.split(',').map(h => h.trim()).filter(Boolean)
   : ['localhost', '127.0.0.1']
 
+// Deployment timestamp for cache busting and debugging
+const deploymentTime = new Date().toISOString()
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   test: {
@@ -24,6 +27,16 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    // Inject deployment timestamp into HTML for debugging
+    {
+      name: 'html-deployment-info',
+      transformIndexHtml(html) {
+        return html.replace(
+          '</head>',
+          `  <meta name="deployment-time" content="${deploymentTime}">\n  </head>`
+        )
+      }
+    },
     // PWA support with service worker for caching
     VitePWA({
       registerType: 'autoUpdate',
