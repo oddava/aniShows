@@ -166,9 +166,7 @@ class CustomUserAdmin(UserAdmin):
     def make_staff(self, request, queryset):
         """Promote users to staff."""
         if not request.user.is_superuser:
-            self.message_user(
-                request, "Only superusers can promote to staff.", level="error"
-            )
+            self.message_user(request, "Only superusers can promote to staff.", level="error")
             return
 
         count = queryset.update(is_staff=True)
@@ -178,9 +176,7 @@ class CustomUserAdmin(UserAdmin):
     def remove_staff(self, request, queryset):
         """Remove staff status from apps.users."""
         if not request.user.is_superuser:
-            self.message_user(
-                request, "Only superusers can remove staff status.", level="error"
-            )
+            self.message_user(request, "Only superusers can remove staff status.", level="error")
             return
 
         # Prevent removing your own staff status
@@ -367,9 +363,7 @@ class UserImportJobAdmin(admin.ModelAdmin):
                 process_import_job.delay(job.id)
                 retried += 1
             except Exception as e:
-                self.message_user(
-                    request, f"Failed to retry job {job.id}: {e}", level="error"
-                )
+                self.message_user(request, f"Failed to retry job {job.id}: {e}", level="error")
 
         if retried > 0:
             self.message_user(request, f"{retried} job(s) queued for retry.")
@@ -377,9 +371,7 @@ class UserImportJobAdmin(admin.ModelAdmin):
     @admin.action(description="Cancel selected pending jobs")
     def cancel_jobs(self, request, queryset):
         """Cancel pending import jobs."""
-        cancelled = queryset.filter(status__in=["pending", "processing"]).update(
-            status="failed"
-        )
+        cancelled = queryset.filter(status__in=["pending", "processing"]).update(status="failed")
         self.message_user(request, f"{cancelled} job(s) cancelled.")
 
     @admin.action(description="Delete jobs older than 30 days")
@@ -445,7 +437,14 @@ class UserFollowAdmin(admin.ModelAdmin):
 class UserStatsAdmin(admin.ModelAdmin):
     """Admin for user statistics (read-only materialized view)."""
 
-    list_display = ["user", "total_anime", "total_episodes", "mean_score", "reviews_count", "last_updated"]
+    list_display = [
+        "user",
+        "anime_count",
+        "episodes_watched",
+        "mean_score",
+        "reviews_count",
+        "last_updated",
+    ]
     search_fields = ["user__username"]
     raw_id_fields = ["user"]
     ordering = ["-last_updated"]

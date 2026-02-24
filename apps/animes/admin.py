@@ -40,11 +40,7 @@ class GenreAdmin(admin.ModelAdmin):
     def description_short(self, obj):
         """Shortened description."""
         if obj.description:
-            return (
-                obj.description[:100] + "..."
-                if len(obj.description) > 100
-                else obj.description
-            )
+            return obj.description[:100] + "..." if len(obj.description) > 100 else obj.description
         return "-"
 
     description_short.short_description = "Description"
@@ -78,9 +74,7 @@ class StudioAdmin(admin.ModelAdmin):
     def website_link(self, obj):
         """Display website as clickable link."""
         if obj.website:
-            return format_html(
-                '<a href="{}" target="_blank">{}</a>', obj.website, obj.website[:30]
-            )
+            return format_html('<a href="{}" target="_blank">{}</a>', obj.website, obj.website[:30])
         return "-"
 
     website_link.short_description = "Website"
@@ -228,9 +222,7 @@ class AnimeAdmin(admin.ModelAdmin):
         """Display rating with stars."""
         if obj.rating:
             stars = "★" * int(obj.rating / 2)
-            return format_html(
-                '<span title="{}">{} {:.1f}</span>', obj.rating, stars, obj.rating
-            )
+            return format_html('<span title="{}">{} {:.1f}</span>', obj.rating, stars, obj.rating)
         return "-"
 
     rating_display.short_description = "Rating"
@@ -321,9 +313,7 @@ class AnimeAdmin(admin.ModelAdmin):
                 level="success",
             )
         except Exception as e:
-            self.message_user(
-                request, f"Failed to trigger metadata task: {e}", level="error"
-            )
+            self.message_user(request, f"Failed to trigger metadata task: {e}", level="error")
 
     @admin.action(description="Update status to Airing")
     def bulk_update_status_airing(self, request, queryset):
@@ -404,9 +394,7 @@ class ReviewAdmin(admin.ModelAdmin):
         return format_html(
             '<a href="/admin/anime/anime/{}/change/">{}</a>',
             obj.anime.id,
-            obj.anime.title[:30] + "..."
-            if len(obj.anime.title) > 30
-            else obj.anime.title,
+            obj.anime.title[:30] + "..." if len(obj.anime.title) > 30 else obj.anime.title,
         )
 
     anime_link.short_description = "Anime"
@@ -438,9 +426,7 @@ class ReviewAdmin(admin.ModelAdmin):
     def mark_no_spoilers(self, request, queryset):
         """Bulk mark reviews as not having spoilers."""
         count = queryset.update(has_spoilers=False)
-        self.message_user(
-            request, f"{count} review(s) marked as not containing spoilers."
-        )
+        self.message_user(request, f"{count} review(s) marked as not containing spoilers.")
 
     def get_queryset(self, request):
         """Optimize queryset."""
@@ -461,6 +447,7 @@ class CharacterAdmin(admin.ModelAdmin):
                 '<img src="{}" style="max-height: 40px; max-width: 40px;" />', obj.image.url
             )
         return "-"
+
     image_preview.short_description = "Image"
 
 
@@ -478,6 +465,7 @@ class StaffAdmin(admin.ModelAdmin):
                 '<img src="{}" style="max-height: 40px; max-width: 40px;" />', obj.image.url
             )
         return "-"
+
     image_preview.short_description = "Image"
 
 
@@ -545,6 +533,7 @@ class ReviewCommentAdmin(admin.ModelAdmin):
         if obj.text:
             return obj.text[:80] + "..." if len(obj.text) > 80 else obj.text
         return "-"
+
     text_short.short_description = "Comment"
 
 
@@ -552,9 +541,8 @@ class ReviewCommentAdmin(admin.ModelAdmin):
 class UserRecommendationAdmin(admin.ModelAdmin):
     """Admin for user recommendations."""
 
-    list_display = ["user", "anime", "reason", "confidence_score", "is_dismissed", "created_at"]
+    list_display = ["user", "anime", "reason", "score", "is_dismissed", "created_at"]
     list_filter = ["reason", "is_dismissed"]
     search_fields = ["user__username", "anime__title"]
     raw_id_fields = ["user", "anime"]
     ordering = ["-created_at"]
-
