@@ -51,7 +51,12 @@ ARG BUILD_DATE
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Build production assets (always re-runs when BUILD_DATE changes)
-RUN npm run build
+RUN npm run build && \
+    echo "Build completed, checking output..." && \
+    ls -la /app/dist/ && \
+    test -f /app/dist/index.html || (echo "ERROR: index.html not found!" && exit 1) && \
+    test -d /app/dist/assets || (echo "ERROR: assets directory not found!" && exit 1) && \
+    echo "Build verification passed!"
 
 # ============================================================================
 # Production stage - Serve static files (optional, Caddy serves them directly)

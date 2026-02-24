@@ -275,6 +275,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
+          target: builder
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
