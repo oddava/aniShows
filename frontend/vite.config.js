@@ -138,6 +138,18 @@ export default defineConfig(({ mode }) => ({
         target: 'http://web:8000',
         changeOrigin: true,
       },
+      '/django-admin': {
+        target: 'http://web:8000',
+        changeOrigin: true,
+      },
+      '/static': {
+        target: 'http://web:8000',
+        changeOrigin: true,
+      },
+      '/accounts': {
+        target: 'http://web:8000',
+        changeOrigin: true,
+      },
     },
   },
   // Optimize dependencies

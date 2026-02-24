@@ -29,11 +29,10 @@ urlpatterns = [
 from django.views.static import serve
 from django.urls import re_path
 
-# Only serve media files if DEBUG is True
+# Serve media files in DEBUG mode (static files are served by whitenoise)
 if settings.DEBUG:
     from debug_toolbar.toolbar import debug_toolbar_urls
 
     urlpatterns += (
-        static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-        + debug_toolbar_urls()
+        static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + debug_toolbar_urls()
     )

@@ -12,6 +12,41 @@ import { ThreadListSkeleton, CategorySkeleton } from '../../components/forums/Fo
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 
+const PinnedThreadRow = memo(({ thread }) => {
+    const navigate = useNavigate();
+    return (
+        <div
+            onClick={() => navigate(`/forums/thread/${thread.id}`)}
+            tabIndex={0}
+            role="button"
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/forums/thread/${thread.id}`);
+                }
+            }}
+            className="group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-yellow-500/[0.04] transition-colors border-b border-yellow-500/10 last:border-b-0"
+        >
+            <Pin size={12} className="text-yellow-500 shrink-0" />
+            {thread.is_locked && <Lock size={12} className="text-gray-500 shrink-0" />}
+            <h3 className="text-sm font-semibold text-gray-300 group-hover:text-yellow-400 transition-colors truncate flex-1">
+                {thread.title}
+            </h3>
+            <div className="flex items-center gap-3 text-gray-500 shrink-0">
+                <div className="flex items-center gap-1" title={`${thread.reply_count} replies`}>
+                    <MessageSquare size={11} />
+                    <span className="text-[11px] font-bold">{thread.reply_count}</span>
+                </div>
+                <div className="flex items-center gap-1" title={`${thread.view_count} views`}>
+                    <Eye size={11} />
+                    <span className="text-[11px] font-bold">{thread.view_count}</span>
+                </div>
+            </div>
+        </div>
+    );
+});
+PinnedThreadRow.displayName = 'PinnedThreadRow';
+
 const ThreadCard = memo(({ thread, slug }) => {
     const navigate = useNavigate();
     return (
@@ -25,15 +60,11 @@ const ThreadCard = memo(({ thread, slug }) => {
                     navigate(`/forums/thread/${thread.id}`);
                 }
             }}
-            className={`group p-4 rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.99] ${thread.is_pinned
-                ? 'bg-yellow-500/[0.02] border-yellow-500/20 shadow-sm shadow-yellow-500/5'
-                : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.1] shadow-sm'
-                }`}
+            className="group p-4 rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.99] bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.1] shadow-sm"
         >
             <div className="flex flex-col gap-2">
                 {/* Title */}
                 <div className="flex items-center gap-2 min-w-0">
-                    {thread.is_pinned && <Pin size={12} className="text-yellow-500 shrink-0" />}
                     {thread.is_locked && <Lock size={12} className="text-gray-500 shrink-0" />}
                     <h3 className="text-[15px] sm:text-base font-semibold text-white group-hover:text-accent transition-colors truncate">
                         {thread.title}
@@ -273,7 +304,18 @@ const ForumThreadList = () => {
                                     </div>
                                 </div>
                             )}
-                            {threadsData?.results?.map((thread) => (
+
+                            {/* Pinned Threads — compact section at top, only page 1 */}
+                            {page === 1 && threadsData?.results?.filter(t => t.is_pinned).length > 0 && (
+                                <div className="mb-3 rounded-xl border border-yellow-500/15 bg-yellow-500/[0.02] overflow-hidden">
+                                    {threadsData.results.filter(t => t.is_pinned).map(thread => (
+                                        <PinnedThreadRow key={thread.id} thread={thread} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Regular Threads */}
+                            {threadsData?.results?.filter(t => !t.is_pinned).map((thread) => (
                                 <ThreadCard key={thread.id} thread={thread} slug={slug} />
                             ))}
 

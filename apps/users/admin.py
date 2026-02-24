@@ -3,7 +3,16 @@ from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
 from django.db.models import Count
 
-from apps.users.models import CustomUser, UserProfile, UserImportJob
+from apps.users.models import (
+    CustomUser,
+    UserProfile,
+    UserImportJob,
+    UserAnimeList,
+    UserActivity,
+    UserFollow,
+    UserStats,
+    SocialLinkChangeLog,
+)
 
 
 class UserProfileInline(admin.StackedInline):
@@ -384,6 +393,82 @@ class UserImportJobAdmin(admin.ModelAdmin):
         count = old_jobs.count()
         old_jobs.delete()
         self.message_user(request, f"{count} old job(s) deleted.")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(UserAnimeList)
+class UserAnimeListAdmin(admin.ModelAdmin):
+    """Admin for user anime lists."""
+
+    list_display = ["user", "anime", "status", "score", "episodes_watched", "updated_at"]
+    list_filter = ["status", "score", "is_rewatching"]
+    search_fields = ["user__username", "anime__title"]
+    raw_id_fields = ["user", "anime"]
+    ordering = ["-updated_at"]
+    date_hierarchy = "updated_at"
+
+
+@admin.register(UserActivity)
+class UserActivityAdmin(admin.ModelAdmin):
+    """Admin for user activity logs."""
+
+    list_display = ["user", "anime", "activity_type", "created_at"]
+    list_filter = ["activity_type", ("created_at", admin.DateFieldListFilter)]
+    search_fields = ["user__username", "anime__title"]
+    raw_id_fields = ["user", "anime"]
+    ordering = ["-created_at"]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(UserFollow)
+class UserFollowAdmin(admin.ModelAdmin):
+    """Admin for user follow relationships."""
+
+    list_display = ["follower", "following", "created_at"]
+    search_fields = ["follower__username", "following__username"]
+    raw_id_fields = ["follower", "following"]
+    ordering = ["-created_at"]
+
+
+@admin.register(UserStats)
+class UserStatsAdmin(admin.ModelAdmin):
+    """Admin for user statistics (read-only materialized view)."""
+
+    list_display = ["user", "total_anime", "total_episodes", "mean_score", "reviews_count", "last_updated"]
+    search_fields = ["user__username"]
+    raw_id_fields = ["user"]
+    ordering = ["-last_updated"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SocialLinkChangeLog)
+class SocialLinkChangeLogAdmin(admin.ModelAdmin):
+    """Admin for social link change audit logs."""
+
+    list_display = ["user", "action", "ip_address", "created_at"]
+    list_filter = ["action", ("created_at", admin.DateFieldListFilter)]
+    search_fields = ["user__username", "ip_address"]
+    raw_id_fields = ["user"]
+    ordering = ["-created_at"]
 
     def has_add_permission(self, request):
         return False

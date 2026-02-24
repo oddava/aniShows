@@ -206,6 +206,33 @@ const ForumThreadDetail = () => {
         }
     });
 
+    const togglePinMutation = useMutation({
+        mutationFn: () => forumsApi.togglePin(id),
+        onMutate: async () => {
+            await queryClient.cancelQueries({ queryKey: ['forumThread', id] });
+            const previous = queryClient.getQueryData(['forumThread', id]);
+            queryClient.setQueryData(['forumThread', id], old => {
+                if (!old) return old;
+                return { ...old, is_pinned: !old.is_pinned };
+            });
+            return { previous };
+        },
+        onSuccess: (data) => {
+            queryClient.setQueryData(['forumThread', id], old => {
+                if (!old) return old;
+                return { ...old, is_pinned: data.is_pinned };
+            });
+            queryClient.invalidateQueries({ queryKey: ['forumThreads'] });
+            toast.success(data.is_pinned ? 'Thread pinned' : 'Thread unpinned');
+        },
+        onError: (err, _vars, context) => {
+            if (context?.previous !== undefined) {
+                queryClient.setQueryData(['forumThread', id], context.previous);
+            }
+            toast.error('Failed to update pin status');
+        },
+    });
+
     // Cooldown refs to prevent rapid-fire like clicks
     const threadLikeCooldownRef = useRef(false);
     const postLikeCooldowns = useRef(new Set());
@@ -558,6 +585,24 @@ const ForumThreadDetail = () => {
                                     </div>
                                 </div>
                                 <div className="absolute top-4 right-4 sm:static flex items-center gap-2">
+                                    {(user?.is_staff || user?.is_superuser) && (
+                                        <button
+                                            onClick={() => {
+                                                const action = thread.is_pinned ? 'unpin' : 'pin';
+                                                if (window.confirm(`Are you sure you want to ${action} this thread?`)) {
+                                                    togglePinMutation.mutate();
+                                                }
+                                            }}
+                                            disabled={togglePinMutation.isPending}
+                                            className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${thread.is_pinned
+                                                ? 'text-yellow-500 hover:text-yellow-400'
+                                                : 'text-gray-500 hover:text-white'
+                                                }`}
+                                            title={thread.is_pinned ? 'Unpin Thread' : 'Pin Thread'}
+                                        >
+                                            <Pin size={14} />
+                                        </button>
+                                    )}
                                     {isOwner(thread.author.username) && (
                                         <div className="flex items-center gap-1 mr-1">
                                             <button

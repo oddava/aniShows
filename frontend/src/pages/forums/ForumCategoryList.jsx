@@ -36,17 +36,43 @@ const Avatar = memo(({ user, size = 'md' }) => {
 });
 Avatar.displayName = 'Avatar';
 
+const PinnedThreadRow = memo(({ thread }) => {
+    const navigate = useNavigate();
+    return (
+        <div
+            onClick={() => navigate(`/forums/thread/${thread.id}`)}
+            className="group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-yellow-500/[0.04] transition-colors border-b border-yellow-500/10 last:border-b-0"
+        >
+            <Pin size={12} className="text-yellow-500 shrink-0" />
+            {thread.is_locked && <Lock size={12} className="text-gray-500 shrink-0" />}
+            <h3 className="text-sm font-semibold text-gray-300 group-hover:text-yellow-400 transition-colors truncate flex-1">
+                {thread.title}
+            </h3>
+            <div className="flex items-center gap-3 text-gray-500 shrink-0">
+                <div className="flex items-center gap-1" title={`${thread.reply_count} replies`}>
+                    <MessageSquare size={11} />
+                    <span className="text-[11px] font-bold">{thread.reply_count}</span>
+                </div>
+                <div className="flex items-center gap-1" title={`${thread.view_count} views`}>
+                    <Eye size={11} />
+                    <span className="text-[11px] font-bold">{thread.view_count}</span>
+                </div>
+            </div>
+        </div>
+    );
+});
+PinnedThreadRow.displayName = 'PinnedThreadRow';
+
 const ThreadRow = memo(({ thread }) => {
     const navigate = useNavigate();
     return (
         <div
             onClick={() => navigate(`/forums/thread/${thread.id}`)}
-            className={`group p-4 hover:bg-white/[0.03] transition-colors border-b border-gray-800/50 last:border-b-0 cursor-pointer ${thread.is_pinned ? 'bg-accent/[0.03]' : ''}`}
+            className="group p-4 hover:bg-white/[0.03] transition-colors border-b border-gray-800/50 last:border-b-0 cursor-pointer"
         >
             <div className="flex flex-col gap-2">
                 {/* Title */}
                 <div className="flex items-center gap-2">
-                    {thread.is_pinned && <Pin size={12} className="text-accent shrink-0" />}
                     {thread.is_locked && <Lock size={12} className="text-gray-600 shrink-0" />}
                     <h3 className="text-[15px] sm:text-base font-semibold text-white group-hover:text-accent transition-colors truncate">
                         {thread.title}
@@ -312,9 +338,20 @@ const ForumCategoryList = () => {
                         ) : null}
 
                         {displayedData?.results?.length > 0 ? (
-                            displayedData.results.map(thread => (
-                                <ThreadRow key={thread.id} thread={thread} />
-                            ))
+                            <>
+                                {/* Pinned Threads — compact section at top, only page 1 */}
+                                {page === 1 && displayedData.results.filter(t => t.is_pinned).length > 0 && (
+                                    <div className="border-b border-yellow-500/10 bg-yellow-500/[0.02]">
+                                        {displayedData.results.filter(t => t.is_pinned).map(thread => (
+                                            <PinnedThreadRow key={thread.id} thread={thread} />
+                                        ))}
+                                    </div>
+                                )}
+                                {/* Regular Threads */}
+                                {displayedData.results.filter(t => !t.is_pinned).map(thread => (
+                                    <ThreadRow key={thread.id} thread={thread} />
+                                ))}
+                            </>
                         ) : !showContentLoading && (
                             <div className="py-20 text-center">
                                 <h3 className="text-base font-semibold text-gray-400">

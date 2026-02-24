@@ -283,6 +283,27 @@ class ThreadViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
+        permission_classes=[permissions.IsAdminUser],
+        url_path="toggle_pin",
+    )
+    def toggle_pin(self, request, pk=None):
+        """Toggle pin status of a thread. Staff only."""
+        thread = self.get_object()
+        thread.is_pinned = not thread.is_pinned
+        thread.save(update_fields=["is_pinned"])
+        invalidate_thread_caches(thread.id, thread.category.slug)
+        invalidate_thread_list_cache(thread.category.slug)
+        return Response(
+            {
+                "status": "pinned" if thread.is_pinned else "unpinned",
+                "is_pinned": thread.is_pinned,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
         permission_classes=[permissions.IsAuthenticated],
         throttle_classes=[ForumLikeRateThrottle],
     )

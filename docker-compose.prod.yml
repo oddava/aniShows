@@ -2,20 +2,6 @@
 # optimized for GHCR pre-built images
 
 services:
-  # Frontend - Init container to copy built artifacts to a shared volume
-  frontend:
-    image: ghcr.io/oddava/anishows-frontend:latest
-    command: >
-      sh -c "cp -r /app/dist/* /srv/frontend/ && echo 'Frontend copied successfully' && exit 0"
-    volumes:
-      - frontend_dist:/srv/frontend
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 64M
-
   # Web - Optimized Gunicorn settings for small EC2 (t2.micro - 1 vCPU)
   web:
     image: ghcr.io/oddava/anishows-backend:latest
@@ -75,8 +61,6 @@ services:
     depends_on:
       web:
         condition: service_started
-      frontend:
-        condition: service_completed_successfully
     deploy:
       resources:
         limits:

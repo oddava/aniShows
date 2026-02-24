@@ -15,8 +15,8 @@ export default function ActivityHeatmap({ activityData = [] }) {
         const today = new Date();
         const result = [];
 
-        // Create 26 weeks of data (approx 6 months)
-        for (let week = 25; week >= 0; week--) {
+        // Create 26 weeks of data (approx 6 months) - newest first
+        for (let week = 0; week < 26; week++) {
             const weekData = [];
             for (let day = 0; day < 7; day++) {
                 const date = new Date(today);
@@ -95,7 +95,7 @@ export default function ActivityHeatmap({ activityData = [] }) {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     return (
-        <div className="p-4 sm:p-6 relative w-fit mx-auto" ref={containerRef}>
+        <div className="p-4 sm:p-6 relative w-full max-w-full" ref={containerRef}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
                 <div>
                     <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
@@ -125,11 +125,11 @@ export default function ActivityHeatmap({ activityData = [] }) {
                 )}
             </div>
 
-            <div className="flex gap-3 min-h-[140px]">
+            <div className="flex gap-3 min-h-[140px] overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
 
                 {/* Overflown Content Area */}
-                <div className="overflow-x-auto scrollbar-hide py-1">
-                    <div className="inline-block">
+                <div className="py-1 min-w-full">
+                    <div className="inline-block min-w-max">
                         {/* Month labels */}
                         <div className="flex text-[10px] font-black uppercase tracking-[0.2em] text-gray-600 h-6 items-end mb-1 relative">
                             {weeks.map((week, i) => {

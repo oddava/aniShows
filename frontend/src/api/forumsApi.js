@@ -44,6 +44,12 @@ export const forumsApi = {
         await api.delete(`/forums/threads/${id}/`);
     },
 
+    // Thread Pin (Staff only)
+    togglePin: async (id) => {
+        const response = await api.post(`/forums/threads/${id}/toggle_pin/`);
+        return response.data;
+    },
+
     // Thread Likes (Idempotent)
     likeThread: async (id) => {
         const response = await api.post(`/forums/threads/${id}/like/`);

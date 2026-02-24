@@ -2,7 +2,21 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.db.models import Count
 
-from .models import Anime, Genre, Studio, Review
+from .models import (
+    Anime,
+    Genre,
+    Studio,
+    Review,
+    Character,
+    Staff,
+    AnimeCharacter,
+    AnimeStaff,
+    UserFavorite,
+    UserHistory,
+    ReviewVote,
+    ReviewComment,
+    UserRecommendation,
+)
 
 
 @admin.register(Genre)
@@ -431,3 +445,116 @@ class ReviewAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset."""
         return super().get_queryset(request).select_related("user", "anime")
+
+
+@admin.register(Character)
+class CharacterAdmin(admin.ModelAdmin):
+    """Admin for anime characters."""
+
+    list_display = ["name", "name_native", "image_preview"]
+    search_fields = ["name", "name_native"]
+    ordering = ["name"]
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-height: 40px; max-width: 40px;" />', obj.image.url
+            )
+        return "-"
+    image_preview.short_description = "Image"
+
+
+@admin.register(Staff)
+class StaffAdmin(admin.ModelAdmin):
+    """Admin for anime staff members."""
+
+    list_display = ["name", "name_native", "image_preview"]
+    search_fields = ["name", "name_native"]
+    ordering = ["name"]
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html(
+                '<img src="{}" style="max-height: 40px; max-width: 40px;" />', obj.image.url
+            )
+        return "-"
+    image_preview.short_description = "Image"
+
+
+@admin.register(AnimeCharacter)
+class AnimeCharacterAdmin(admin.ModelAdmin):
+    """Admin for anime-character relationships."""
+
+    list_display = ["anime", "character", "role", "voice_actor"]
+    list_filter = ["role"]
+    search_fields = ["anime__title", "character__name", "voice_actor__name"]
+    raw_id_fields = ["anime", "character", "voice_actor"]
+
+
+@admin.register(AnimeStaff)
+class AnimeStaffAdmin(admin.ModelAdmin):
+    """Admin for anime-staff relationships."""
+
+    list_display = ["anime", "staff", "role"]
+    search_fields = ["anime__title", "staff__name", "role"]
+    raw_id_fields = ["anime", "staff"]
+
+
+@admin.register(UserFavorite)
+class UserFavoriteAdmin(admin.ModelAdmin):
+    """Admin for user favorites."""
+
+    list_display = ["user", "anime", "added_at", "order"]
+    search_fields = ["user__username", "anime__title"]
+    raw_id_fields = ["user", "anime"]
+    ordering = ["-added_at"]
+
+
+@admin.register(UserHistory)
+class UserHistoryAdmin(admin.ModelAdmin):
+    """Admin for user viewing history."""
+
+    list_display = ["user", "anime", "viewed_at"]
+    search_fields = ["user__username", "anime__title"]
+    raw_id_fields = ["user", "anime"]
+    ordering = ["-viewed_at"]
+
+
+@admin.register(ReviewVote)
+class ReviewVoteAdmin(admin.ModelAdmin):
+    """Admin for review votes."""
+
+    list_display = ["user", "review", "is_helpful", "created_at"]
+    list_filter = ["is_helpful"]
+    search_fields = ["user__username"]
+    raw_id_fields = ["user", "review"]
+    ordering = ["-created_at"]
+
+
+@admin.register(ReviewComment)
+class ReviewCommentAdmin(admin.ModelAdmin):
+    """Admin for review comments."""
+
+    list_display = ["user", "review", "text_short", "is_deleted", "created_at"]
+    list_filter = ["is_deleted"]
+    search_fields = ["user__username", "text"]
+    raw_id_fields = ["user", "review"]
+    ordering = ["-created_at"]
+
+    def text_short(self, obj):
+        if obj.text:
+            return obj.text[:80] + "..." if len(obj.text) > 80 else obj.text
+        return "-"
+    text_short.short_description = "Comment"
+
+
+@admin.register(UserRecommendation)
+class UserRecommendationAdmin(admin.ModelAdmin):
+    """Admin for user recommendations."""
+
+    list_display = ["user", "anime", "reason", "confidence_score", "is_dismissed", "created_at"]
+    list_filter = ["reason", "is_dismissed"]
+    search_fields = ["user__username", "anime__title"]
+    raw_id_fields = ["user", "anime"]
+    ordering = ["-created_at"]
+

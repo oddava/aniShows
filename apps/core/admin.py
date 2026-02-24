@@ -4,7 +4,7 @@ from django.utils.html import format_html
 # Import celery admin to register models (registers automatically via @admin.register)
 from apps.core import celery_admin  # noqa: F401
 
-from apps.core.models import SystemLog, AuditLog
+from apps.core.models import SystemLog, AuditLog, Notification, PushSubscription
 
 # Admin site branding
 admin.site.site_header = "aniShows Administration"
@@ -295,4 +295,56 @@ class AuditLogAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    """Admin for user notifications."""
+
+    list_display = ["user", "notification_type", "title", "is_read", "priority", "created_at"]
+    list_filter = [
+        "notification_type",
+        "is_read",
+        "priority",
+        ("created_at", admin.DateFieldListFilter),
+    ]
+    search_fields = ["user__username", "title", "message"]
+    raw_id_fields = ["user"]
+    ordering = ["-created_at"]
+    date_hierarchy = "created_at"
+
+    actions = ["mark_as_read", "delete_old_notifications"]
+
+    @admin.action(description="Mark selected as read")
+    def mark_as_read(self, request, queryset):
+        count = queryset.filter(is_read=False).update(is_read=True)
+        self.message_user(request, f"{count} notification(s) marked as read.")
+
+    @admin.action(description="Delete notifications older than 90 days")
+    def delete_old_notifications(self, request, queryset):
+        from django.utils import timezone
+        from datetime import timedelta
+
+        cutoff = timezone.now() - timedelta(days=90)
+        old = Notification.objects.filter(created_at__lt=cutoff)
+        count = old.count()
+        old.delete()
+        self.message_user(request, f"Deleted {count} old notifications.")
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(PushSubscription)
+class PushSubscriptionAdmin(admin.ModelAdmin):
+    """Admin for web push subscriptions."""
+
+    list_display = ["user", "device_type", "is_active", "created_at", "last_used"]
+    list_filter = ["device_type", "is_active"]
+    search_fields = ["user__username"]
+    raw_id_fields = ["user"]
+    ordering = ["-created_at"]
+
+    def has_add_permission(self, request):
         return False

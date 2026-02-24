@@ -119,3 +119,31 @@ class TestForumsAPI:
         response = api_client.get(url, {"ordering": "-updated_at"})
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["results"]) >= 1
+
+    def test_toggle_pin_as_staff(self, api_client, thread, user):
+        user.is_staff = True
+        user.save()
+        api_client.force_authenticate(user=user)
+        url = reverse("forums:thread-toggle-pin", args=[thread.id])
+
+        # Pin
+        response = api_client.post(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["is_pinned"] is True
+        assert response.data["status"] == "pinned"
+
+        # Unpin
+        response = api_client.post(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["is_pinned"] is False
+        assert response.data["status"] == "unpinned"
+
+    def test_toggle_pin_as_non_staff(self, authenticated_client, thread):
+        url = reverse("forums:thread-toggle-pin", args=[thread.id])
+        response = authenticated_client.post(url)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_toggle_pin_unauthenticated(self, api_client, thread):
+        url = reverse("forums:thread-toggle-pin", args=[thread.id])
+        response = api_client.post(url)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED

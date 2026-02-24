@@ -247,8 +247,8 @@ if USE_S3:
     IMAGEKIT_CACHE_PREFIX = "CACHE/images"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
-    STATIC_LOCATION = "static"
-    STATIC_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/"
+    # Static files are always served by whitenoise locally, not from S3
+    STATIC_URL = "/static/"
     STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
     PUBLIC_MEDIA_LOCATION = "media"
@@ -257,7 +257,6 @@ if USE_S3:
 else:
     STATIC_URL = "/static/"
     STATIC_ROOT = os.path.join(BASE_DIR, "static")
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
@@ -268,6 +267,19 @@ else:
     IMAGEKIT_CACHE_BACKEND = "default"
     IMAGEKIT_CACHE_PREFIX = "CACHE/images"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
+
+# Always use whitenoise for static files (even when using S3 for media)
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Django 5.2+ uses STORAGES dict for storage backends
+STORAGES = {
+    "default": {
+        "BACKEND": DEFAULT_FILE_STORAGE,
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # =============================================================================
 # DEFAULT PRIMARY KEY
@@ -624,12 +636,26 @@ JAZZMIN_SETTINGS = {
         "users.CustomUser": "fas fa-user",
         "users.UserProfile": "fas fa-id-card",
         "users.UserImportJob": "fas fa-file-import",
+        "users.UserAnimeList": "fas fa-list",
+        "users.UserActivity": "fas fa-chart-line",
+        "users.UserFollow": "fas fa-user-friends",
+        "users.UserStats": "fas fa-chart-bar",
+        "users.SocialLinkChangeLog": "fas fa-link",
         # Anime app
-        "anime": "fas fa-film",
-        "anime.Anime": "fas fa-tv",
-        "anime.Genre": "fas fa-tags",
-        "anime.Studio": "fas fa-building",
-        "anime.Review": "fas fa-star",
+        "animes": "fas fa-film",
+        "animes.Anime": "fas fa-tv",
+        "animes.Genre": "fas fa-tags",
+        "animes.Studio": "fas fa-building",
+        "animes.Review": "fas fa-star",
+        "animes.Character": "fas fa-user-ninja",
+        "animes.Staff": "fas fa-user-tie",
+        "animes.AnimeCharacter": "fas fa-people-arrows",
+        "animes.AnimeStaff": "fas fa-user-cog",
+        "animes.UserFavorite": "fas fa-heart",
+        "animes.UserHistory": "fas fa-history",
+        "animes.ReviewVote": "fas fa-thumbs-up",
+        "animes.ReviewComment": "fas fa-comment",
+        "animes.UserRecommendation": "fas fa-magic",
         # Core app
         "core": "fas fa-cog",
         "core.SystemLog": "fas fa-clipboard-list",
@@ -637,6 +663,16 @@ JAZZMIN_SETTINGS = {
         "core.CeleryTaskResult": "fas fa-tasks",
         "core.CeleryWorkerStatus": "fas fa-server",
         "core.CeleryTaskSchedule": "fas fa-calendar-alt",
+        "core.Notification": "fas fa-bell",
+        "core.PushSubscription": "fas fa-satellite-dish",
+        # Forums app
+        "forums": "fas fa-comments",
+        "forums.Category": "fas fa-folder",
+        "forums.Tag": "fas fa-tag",
+        "forums.Thread": "fas fa-comment-dots",
+        "forums.Post": "fas fa-reply",
+        "forums.ThreadLike": "fas fa-thumbs-up",
+        "forums.PostLike": "fas fa-thumbs-up",
         # Celery Beat
         "django_celery_beat": "fas fa-clock",
         "django_celery_beat.PeriodicTask": "fas fa-clock",
