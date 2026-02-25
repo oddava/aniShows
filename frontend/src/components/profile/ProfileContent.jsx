@@ -1,16 +1,17 @@
 import React, { useMemo, lazy, Suspense } from 'react';
-import { Heart, List, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star, Plus } from 'lucide-react';
+import { Heart, List, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
 import ProfileAnimeCard, { ProfileAnimeCardSkeleton } from '../ProfileAnimeCard';
 import ReviewCard from '../ReviewCard';
 import DraggableFavoritesGrid from '../DraggableFavoritesGrid';
+import ProfileStats from './ProfileStats';
 import { listApi } from '../../api/client';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import logger from '../../utils/logger';
+import ProfileInsights from '../ProfileInsights';
 
-const ProfileInsights = lazy(() => import('../ProfileInsights'));
 const ActivityFeed = lazy(() => import('./ActivityFeed'));
 
 const STATUS_TABS = [
@@ -27,6 +28,8 @@ export default function ProfileContent({
     isPublicView,
     isOwnProfile,
     targetUsername,
+    displayUser,
+    profileLoading,
     favoritesData,
     favoritesLoading,
     isFetchingNextFavorites,
@@ -59,6 +62,9 @@ export default function ProfileContent({
     }
 
     switch (activeTab) {
+        case 'overview':
+            return null; // Overview is now handled directly in Profile.jsx
+
         case 'favorites':
             return (
                 <FavoritesContent
@@ -115,9 +121,7 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
-                        <ProfileInsights username={targetUsername} isPrivate={isPrivate} />
-                    </Suspense>
+                    <ProfileInsights username={targetUsername} isPrivate={isPrivate} />
                 </ProfileErrorBoundary>
             );
 
@@ -211,15 +215,6 @@ function AnimeListContent({
         );
     }, [currentListData, searchQuery]);
 
-    const handleQuickProgress = async (item) => {
-        try {
-            await listApi.update(item.id, { episodes_watched: (item.episodes_watched || 0) + 1 });
-            queryClient.invalidateQueries({ queryKey: ['lists', targetUsername] });
-        } catch (err) {
-            logger.error(err);
-        }
-    };
-
     return (
         <div className="space-y-6 animate-tab-content">
             <div className="flex flex-wrap gap-2">
@@ -282,7 +277,6 @@ function AnimeListContent({
                     isOwnProfile={isOwnProfile}
                     isPublicView={isPublicView}
                     searchQuery={searchQuery}
-                    handleQuickProgress={handleQuickProgress}
                 />
             </ProfileErrorBoundary>
         </div>
@@ -297,7 +291,6 @@ function AnimeListView({
     isOwnProfile,
     isPublicView,
     searchQuery,
-    handleQuickProgress,
 }) {
     if (listsLoading) {
         return (
@@ -327,7 +320,6 @@ function AnimeListView({
                         anime={item.anime}
                         episodesWatched={item.episodes_watched}
                         showProgress={listStatusFilter === 'Watching'}
-                        listEntryId={item.id}
                     />
                 ))}
             </div>
@@ -340,7 +332,7 @@ function AnimeListView({
                 <Link
                     key={item.id}
                     to={`/anime/${item.anime?.slug}`}
-                    className="flex items-center gap-4 bg-dark-100 hover:bg-dark-50 rounded-lg p-3 border border-gray-800 hover:border-accent/30 transition-all group"
+                    className="flex items-center gap-4 bg-dark-100 rounded-lg p-3 border border-gray-800/60"
                 >
                     <img
                         src={item.anime?.cover_image}
@@ -348,7 +340,7 @@ function AnimeListView({
                         className="w-12 h-16 rounded object-cover shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-white group-hover:text-accent transition-colors truncate">
+                        <h4 className="font-medium text-white truncate">
                             {item.anime?.title}
                         </h4>
                         <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
@@ -367,37 +359,16 @@ function AnimeListView({
                         </div>
                     </div>
                     {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
-                        <div className="flex items-center gap-4 shrink-0 px-2" onClick={(e) => e.preventDefault()}>
-                            <div className="hidden sm:flex flex-col items-end gap-1">
-                                <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden border border-white/5">
-                                    <div
-                                        className={`h-full transition-all duration-700 ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1
-                                            ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]'
-                                            : 'bg-accent shadow-[0_0_8px_rgba(139,92,246,0.4)]'}`}
-                                        style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
-                                    />
-                                </div>
-                                <span className="text-[11px] font-bold text-white tabular-nums">
-                                    <span className="text-accent">{item.episodes_watched || 0}</span>
-                                    <span className="mx-0.5 text-gray-500">/</span>
-                                    <span>{item.anime.episode_count}</span>
-                                    <span className="ml-1 text-gray-500 font-normal uppercase text-[9px]">eps</span>
-                                </span>
+                        <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
+                            <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent'}`}
+                                    style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
+                                />
                             </div>
-
-                            {isOwnProfile && (
-                                <button
-                                    onClick={async (e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        handleQuickProgress(item);
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-accent/20 text-accent hover:bg-accent hover:text-white transition-all border border-accent/30"
-                                    title="Mark next episode"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                </button>
-                            )}
+                            <span className="text-[11px] text-gray-400">
+                                {item.episodes_watched || 0}/{item.anime.episode_count}
+                            </span>
                         </div>
                     )}
                 </Link>

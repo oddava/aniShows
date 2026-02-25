@@ -362,7 +362,7 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = PublicUserSerializer
     permission_classes = [permissions.AllowAny]
-    throttle_classes = []
+    throttle_classes = [throttling.PublicUserProfileRateThrottle]
     lookup_field = "username"
 
     def get_queryset(self):
@@ -388,7 +388,9 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         is_own_profile = is_authenticated and request.user.username.lower() == username.lower()
 
         # Try cache first (fastest path - <10ms)
-        cache_key = f"public_profile:{username}:v0"
+        # Include viewer ID in cache key to prevent data leakage between users
+        viewer_id = request.user.id if is_authenticated else "anonymous"
+        cache_key = f"public_profile:{username}:v0:viewer:{viewer_id}"
         cached_data = cache.get(cache_key)
 
         if cached_data:
@@ -396,22 +398,10 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
             if cached_data.get("is_private") and not is_own_profile:
                 return Response({"error": "Profile not found"}, status=404)
 
-            data = cached_data.copy()
-
-            # Add viewer-specific data
-            if is_authenticated:
-                from apps.users.models import UserFollow
-
-                data["is_following"] = UserFollow.objects.filter(
-                    follower=request.user, following__username=username
-                ).exists()
-            else:
-                data["is_following"] = False
-
             logger.debug(
                 f"Profile cache hit for {username}: {(time.time() - start_time) * 1000:.2f}ms"
             )
-            return Response(data)
+            return Response(cached_data)
 
         # Try pre-calculated stats table (fast path - <50ms)
         try:

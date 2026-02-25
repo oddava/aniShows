@@ -8,6 +8,7 @@ import { Download, Upload } from 'lucide-react';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
 import SmartLinkInput from '../components/SmartLinkInput';
+import RichTextEditor from '../components/forums/RichTextEditor';
 
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile } = useAuth();
@@ -476,33 +477,30 @@ export default function Settings() {
                             {/* Bio */}
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm font-medium text-gray-300">Bio</label>
+                                    <label className="block text-sm font-medium text-gray-300">About (Bio)</label>
                                     <span className={`text-xs ${
-                                        bio.length > 160 ? 'text-red-400' : 
-                                        bio.length > 140 ? 'text-yellow-400' : 
+                                        bio.length > 4900 ? 'text-red-400' : 
+                                        bio.length > 4000 ? 'text-yellow-400' : 
                                         'text-gray-500'
                                     }`}>
-                                        {bio.length}/180
+                                        {bio.length}/5000
                                     </span>
                                 </div>
                                 
-                                <textarea
-                                    value={bio}
-                                    onChange={(e) => {
-                                        if (e.target.value.length <= 180) {
-                                            setBio(e.target.value);
-                                        }
-                                    }}
-                                    maxLength={180}
-                                    spellCheck="false"
-                                    placeholder="Tell us about yourself..."
-                                    className={`input min-h-[80px] resize-none w-full max-w-xl ${
-                                        bio.length > 160 ? 'border-red-500/50 focus:border-red-500' : ''
-                                    }`}
-                                />
-                                {bio.length > 160 && (
+                                <div className={`border rounded-2xl overflow-hidden ${bio.length > 5000 ? 'border-red-500/50' : 'border-gray-800'}`}>
+                                    <RichTextEditor
+                                        value={bio}
+                                        onChange={(newBio) => {
+                                            if (newBio.length <= 5000) {
+                                                setBio(newBio);
+                                            }
+                                        }}
+                                        placeholder="Tell us about yourself..."
+                                    />
+                                </div>
+                                {bio.length > 4900 && (
                                     <p className="text-xs text-red-400 mt-1">
-                                        {180 - bio.length} characters remaining
+                                        {5000 - bio.length} characters remaining
                                     </p>
                                 )}
                             </div>

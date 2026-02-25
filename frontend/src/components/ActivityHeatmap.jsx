@@ -1,5 +1,17 @@
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Flame } from 'lucide-react';
+
+// Tooltip Portal component
+function TooltipPortal({ children }) {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
+    if (!mounted) return null;
+    return createPortal(children, document.body);
+}
 
 /**
  * ActivityHeatmap - GitHub-style contribution/watching activity graph
@@ -8,7 +20,13 @@ import { Flame } from 'lucide-react';
 export default function ActivityHeatmap({ activityData = [] }) {
     const [hoveredDay, setHoveredDay] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+    const [persistedDay, setPersistedDay] = useState(null);
     const containerRef = useRef(null);
+
+    // Keep tooltip content stable during fade out
+    useEffect(() => {
+        if (hoveredDay) setPersistedDay(hoveredDay);
+    }, [hoveredDay]);
 
     // Generate the past 52 weeks of dates
     const weeks = useMemo(() => {
@@ -155,13 +173,11 @@ export default function ActivityHeatmap({ activityData = [] }) {
                                     {week.map((day) => (
                                         <div
                                             key={day.date}
-                                            onMouseEnter={(e) => {
-                                                const rect = e.target.getBoundingClientRect();
-                                                const containerRect = containerRef.current.getBoundingClientRect();
+                                            onMouseMove={(e) => {
                                                 setHoveredDay(day);
                                                 setTooltipPos({
-                                                    x: rect.left - containerRect.left + rect.width / 2,
-                                                    y: rect.top - containerRect.top
+                                                    x: e.clientX,
+                                                    y: e.clientY
                                                 });
                                             }}
                                             onMouseLeave={() => setHoveredDay(null)}
@@ -176,33 +192,43 @@ export default function ActivityHeatmap({ activityData = [] }) {
                 </div>
             </div>
 
-            {/* Custom AniList-style Tooltip - Moved outside overflow container */}
-            {hoveredDay && (
+            {/* Custom AniList-style Tooltip - Portal to body to avoid overflow clipping */}
+            <TooltipPortal>
                 <div
-                    className="absolute z-[100] pointer-events-none transform -translate-x-1/2 -translate-y-[calc(100%+8px)] animate-fade-in"
-                    style={{ left: `${tooltipPos.x}px`, top: `${tooltipPos.y}px` }}
+                    className="fixed z-[9999] pointer-events-none"
+                    style={{
+                        left: `${tooltipPos.x}px`,
+                        top: `${tooltipPos.y}px`,
+                        opacity: hoveredDay ? 1 : 0,
+                        transform: `translate(-50%, ${hoveredDay ? 'calc(-100% - 15px)' : 'calc(-100% - 10px)'}) scale(${hoveredDay ? 1 : 0.96})`,
+                        visibility: (hoveredDay || tooltipPos.x !== 0) ? 'visible' : 'hidden',
+                        transition: 'opacity 0.3s ease-out, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), left 0.15s cubic-bezier(0.22, 1, 0.36, 1), top 0.15s cubic-bezier(0.22, 1, 0.36, 1)',
+                        willChange: 'transform, left, top, opacity'
+                    }}
                 >
-                    <div className="bg-dark-200/95 backdrop-blur-xl border border-white/10 rounded-xl px-3 py-2.5 shadow-2xl min-w-[140px]">
-                        <p className="text-white font-black text-[10px] mb-1.5 whitespace-nowrap opacity-90">
-                            {new Date(hoveredDay.date).toLocaleDateString('en-US', {
-                                weekday: 'short',
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                            })}
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${getColorClass(hoveredDay.count)}`} />
-                            <p className="text-[11px] text-gray-300 font-bold">
-                                Amount: <span className="text-white">{hoveredDay.count}</span>
+                    {/* Inner wrapper to keep content during fade out */}
+                    {persistedDay && (
+                        <div className="bg-dark-200/95 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-w-[150px] ring-1 ring-white/5">
+                            <p className="text-white font-bold text-[11px] mb-1.5 whitespace-nowrap tracking-wide">
+                                {new Date(persistedDay.date).toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                })}
                             </p>
+                            <div className="flex items-center gap-2.5">
+                                <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(168,85,247,0.4)] ${getColorClass(persistedDay.count)}`} />
+                                <p className="text-[11px] text-gray-400 font-medium">
+                                    <span className="text-white font-bold">{persistedDay.count}</span> episodes
+                                </p>
+                            </div>
+                            {/* Arrow */}
+                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-dark-200 border-r border-b border-white/10 rotate-45" />
                         </div>
-
-                        {/* Arrow */}
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-dark-200/95 border-r border-b border-white/10 rotate-45" />
-                    </div>
+                    )}
                 </div>
-            )}
+            </TooltipPortal>
 
             {/* Legend */}
             <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 mt-4">

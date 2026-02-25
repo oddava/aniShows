@@ -1,17 +1,16 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { activityApi } from '../../api/client';
 import { Link } from 'react-router-dom';
-import { Check, Play, Pause, Trash2, Bookmark, Star, RotateCcw, TrendingUp, Clock, StickyNote } from 'lucide-react';
 
 const ACTIVITY_CONFIG = {
-    completed: { icon: Check, color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20' },
-    added: { icon: Bookmark, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-    progress: { icon: Play, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
-    status_change: { icon: TrendingUp, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
-    score: { icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-    removed: { icon: Trash2, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
-    rewatching: { icon: RotateCcw, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
-    notes_update: { icon: StickyNote, color: 'text-pink-400', bg: 'bg-pink-500/10', border: 'border-pink-500/20' },
+    completed: { borderColor: 'border-green-500', bgHover: 'hover:bg-green-500/5' },
+    added: { borderColor: 'border-blue-500', bgHover: 'hover:bg-blue-500/5' },
+    progress: { borderColor: 'border-accent', bgHover: 'hover:bg-accent/5' },
+    status_change: { borderColor: 'border-yellow-500', bgHover: 'hover:bg-yellow-500/5' },
+    score: { borderColor: 'border-amber-500', bgHover: 'hover:bg-amber-500/5' },
+    removed: { borderColor: 'border-red-500', bgHover: 'hover:bg-red-500/5' },
+    rewatching: { borderColor: 'border-cyan-500', bgHover: 'hover:bg-cyan-500/5' },
+    notes_update: { borderColor: 'border-pink-500', bgHover: 'hover:bg-pink-500/5' },
 };
 
 function timeAgo(dateStr) {
@@ -27,55 +26,59 @@ function timeAgo(dateStr) {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function groupActivitiesByDate(activities) {
+    const groups = {};
+    
+    activities.forEach(activity => {
+        const date = new Date(activity.created_at);
+        const dateKey = date.toLocaleDateString('en-US', { 
+            month: 'long', 
+            day: 'numeric',
+            year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+        });
+        
+        if (!groups[dateKey]) {
+            groups[dateKey] = [];
+        }
+        groups[dateKey].push(activity);
+    });
+    
+    return groups;
+}
+
 function ActivityCard({ activity }) {
     const config = ACTIVITY_CONFIG[activity.activity_type] || ACTIVITY_CONFIG.added;
-    const Icon = config.icon;
     const anime = activity.anime;
 
     return (
-        <div className={`${config.bg} border ${config.border} rounded-xl p-4 transition-all hover:border-opacity-40`}>
-            <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-lg ${config.bg} flex items-center justify-center shrink-0 mt-0.5`}>
-                    <Icon className={`w-4.5 h-4.5 ${config.color}`} />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 leading-relaxed">
-                        {activity.activity_description}
+        <div className={`flex gap-4 py-3 border-l-2 ${config.borderColor} pl-4 ${config.bgHover} transition-colors`}>
+            <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-200">
+                    {activity.activity_description}
+                </p>
+                
+                {activity.notes && (
+                    <p className="text-xs text-gray-500 mt-1 italic line-clamp-1">
+                        "{activity.notes}"
                     </p>
-
-                    {activity.notes && (
-                        <p className="text-xs text-gray-400 mt-1.5 italic border-l-2 border-gray-700 pl-2">
-                            "{activity.notes}"
-                        </p>
-                    )}
-
-                    <div className="flex items-center gap-3 mt-2">
-                        {anime && (
-                            <Link
-                                to={`/anime/${anime.slug}`}
-                                className="flex items-center gap-2 group"
-                            >
-                                {anime.cover_image_small && (
-                                    <img
-                                        src={anime.cover_image_small}
-                                        alt={anime.title}
-                                        className="w-6 h-8 rounded object-cover"
-                                    />
-                                )}
-                                <span className="text-xs text-gray-500 group-hover:text-accent transition-colors truncate max-w-[200px]">
-                                    {anime.title}
-                                </span>
-                            </Link>
-                        )}
-
-                        <div className="flex items-center gap-1 ml-auto shrink-0">
-                            <Clock className="w-3 h-3 text-gray-600" />
-                            <span className="text-[11px] text-gray-600">{timeAgo(activity.created_at)}</span>
-                        </div>
-                    </div>
-                </div>
+                )}
+                
+                <span className="text-[11px] text-gray-600 mt-1 block">
+                    {timeAgo(activity.created_at)}
+                </span>
             </div>
+
+            {anime && (
+                <Link to={`/anime/${anime.slug}`} className="shrink-0 group">
+                    {anime.cover_image_small && (
+                        <img
+                            src={anime.cover_image_small}
+                            alt={anime.title}
+                            className="w-10 h-14 rounded object-cover border border-gray-800 group-hover:border-accent/50 transition-colors"
+                        />
+                    )}
+                </Link>
+            )}
         </div>
     );
 }
@@ -108,8 +111,8 @@ export default function ActivityFeed({ username, isPrivate }) {
 
     if (isPrivate) {
         return (
-            <div className="text-center py-16 text-gray-400">
-                <p>Activity is not available for private profiles.</p>
+            <div className="text-center py-16 text-gray-400 text-sm">
+                Activity is not available for private profiles.
             </div>
         );
     }
@@ -128,7 +131,7 @@ export default function ActivityFeed({ username, isPrivate }) {
                 <p className="text-sm mb-3">Failed to load activity feed.</p>
                 <button
                     onClick={() => refetch()}
-                    className="px-4 py-2 rounded-xl bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-all"
+                    className="px-4 py-2 rounded-lg bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-all"
                 >
                     Try Again
                 </button>
@@ -141,17 +144,28 @@ export default function ActivityFeed({ username, isPrivate }) {
     if (activities.length === 0) {
         return (
             <div className="text-center py-16 text-gray-500">
-                <Play className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No activity yet.</p>
-                <p className="text-xs mt-1 text-gray-600">Start tracking anime to see activity here!</p>
+                <p className="text-sm">Nothing here yet</p>
+                <p className="text-xs mt-1 text-gray-600">Start tracking anime to see activity here</p>
             </div>
         );
     }
 
+    const groupedActivities = groupActivitiesByDate(activities);
+    const dateGroups = Object.entries(groupedActivities);
+
     return (
-        <div className="space-y-3">
-            {activities.map((activity) => (
-                <ActivityCard key={activity.id} activity={activity} />
+        <div className="space-y-6">
+            {dateGroups.map(([date, dateActivities]) => (
+                <div key={date}>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                        {date}
+                    </h4>
+                    <div className="space-y-1">
+                        {dateActivities.map((activity) => (
+                            <ActivityCard key={activity.id} activity={activity} />
+                        ))}
+                    </div>
+                </div>
             ))}
 
             {hasNextPage && (
@@ -159,7 +173,7 @@ export default function ActivityFeed({ username, isPrivate }) {
                     <button
                         onClick={() => fetchNextPage()}
                         disabled={isFetchingNextPage}
-                        className="px-6 py-2.5 rounded-xl bg-dark-100 border border-gray-700 text-sm text-gray-300 hover:text-white hover:border-accent transition-all disabled:opacity-50"
+                        className="px-6 py-2.5 rounded-lg bg-dark-100 border border-gray-700 text-sm text-gray-300 hover:text-white hover:border-accent transition-all disabled:opacity-50"
                     >
                         {isFetchingNextPage ? (
                             <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto" />

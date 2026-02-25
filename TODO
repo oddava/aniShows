@@ -29,8 +29,8 @@ Current "Recommended for You" just reverses trending. Implement:
 - Advanced search with Elasticsearch
 - Fuzzy matching for typos ✅
 6. Gamification (Fun Factor)
-- Achievement badges
-- Watch streaks
+- Achievement badges 
+- Watch streaks ✅
 - Review leaderboards
 - Themed marathon challenges
 

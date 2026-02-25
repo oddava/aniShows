@@ -30,7 +30,7 @@ ALLOWED_IMAGE_TYPES = getattr(
     "ALLOWED_IMAGE_TYPES",
     ["image/jpeg", "image/png", "image/webp", "image/gif"],
 )
-MAX_BIO_LENGTH = getattr(settings, "MAX_BIO_LENGTH", 1000)
+MAX_BIO_LENGTH = getattr(settings, "MAX_BIO_LENGTH", 5000)
 MAX_REVIEW_LENGTH = getattr(settings, "MAX_REVIEW_LENGTH", 5000)
 MAX_COMMENT_LENGTH = getattr(settings, "MAX_COMMENT_LENGTH", 2000)
 
@@ -887,8 +887,8 @@ class UserProfileUpdateSerializer(serializers.Serializer):
     def validate_bio(self, value):
         """Sanitize bio text to prevent XSS."""
         if value:
-            # Basic HTML escape for XSS prevention
-            return escape(value.strip())
+            # We use DOMPurify on the frontend, so we don't HTML escape here to allow markdown
+            return value.strip()
         return value
 
 

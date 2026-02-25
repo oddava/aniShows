@@ -308,7 +308,7 @@ ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 # TEXT FIELD LIMITS
 # =============================================================================
 
-MAX_BIO_LENGTH = 1000
+MAX_BIO_LENGTH = 5000
 MAX_REVIEW_LENGTH = 5000
 MAX_COMMENT_LENGTH = 2000
 

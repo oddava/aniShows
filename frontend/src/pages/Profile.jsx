@@ -17,11 +17,14 @@ import { setUserContext, initSentry } from '../sentry';
 
 initSentry();
 
+import MarkdownRenderer from '../components/common/MarkdownRenderer';
+import OverviewTab from '../components/profile/OverviewTab';
+
 export default function Profile({ forcedUsername }) {
     const { username: paramsUsername } = useParams();
     const username = forcedUsername || paramsUsername;
     const { user: currentUser, isAuthenticated, loading } = useAuth();
-    const [activeTab, setActiveTab] = useState('favorites');
+    const [activeTab, setActiveTab] = useState('overview');
     const [viewMode, setViewMode] = useState('grid');
     const [searchQuery, setSearchQuery] = useState('');
     const [listStatusFilter, setListStatusFilter] = useState('Watching');
@@ -134,12 +137,13 @@ export default function Profile({ forcedUsername }) {
         };
     }, [extractedColors]);
 
+    // Handle loading states first
     if (isPublicView && profileLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
+        return <ProfileSkeleton />;
+    }
+
+    if (!isPublicView && loading) {
+        return <ProfileSkeleton />;
     }
 
     if (!isPublicView && !isAuthenticated) {
@@ -178,22 +182,28 @@ export default function Profile({ forcedUsername }) {
                     onOpenFollowersModal={openFollowersModal}
                 />
 
-                <ProfileStats user={displayUser} isLoading={isPublicView && profileLoading} />
-
                 <ProfileTabs
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
                     counts={tabCounts}
                 />
 
-                <div className="max-w-7xl mx-auto px-4 pt-8">
-                    <div className="min-h-[400px]">
+                <div className="max-w-7xl mx-auto px-4 mt-8">
+                    {activeTab === 'overview' ? (
+                        <OverviewTab 
+                            displayUser={displayUser} 
+                            targetUsername={targetUsername} 
+                            isPrivate={isPrivate} 
+                        />
+                    ) : (
                         <ProfileContent
                             activeTab={activeTab}
                             isPrivate={isPrivate}
                             isPublicView={isPublicView}
                             isOwnProfile={isOwnProfile}
                             targetUsername={targetUsername}
+                            displayUser={displayUser}
+                            profileLoading={profileLoading}
                             favoritesData={favoritesData}
                             favoritesLoading={favoritesLoading}
                             isFetchingNextFavorites={isFetchingNextFavorites}
@@ -213,7 +223,7 @@ export default function Profile({ forcedUsername }) {
                             hasNextReviews={hasNextReviews}
                             fetchNextReviews={fetchNextReviews}
                         />
-                    </div>
+                    )}
                 </div>
 
                 <FollowersModal
@@ -235,15 +245,15 @@ function ProfileSkeleton() {
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark to-transparent" />
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 relative -mt-16 sm:-mt-20 md:-mt-24 lg:-mt-28 z-10">
-                <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6">
-                    <div className="relative shrink-0">
+            <div className="max-w-7xl mx-auto px-4 relative z-10">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 px-2 sm:px-4 pt-4">
+                    <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-24">
                         <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-2xl bg-dark-100 p-1.5 shadow-2xl">
                             <div className="w-full h-full rounded-xl bg-dark-200 animate-pulse" />
                         </div>
                     </div>
 
-                    <div className="flex-1 text-center md:text-left pb-2 w-full">
+                    <div className="flex-1 text-center md:text-left w-full mt-2">
                         <div className="h-8 sm:h-10 md:h-12 lg:h-14 w-48 bg-dark-200 rounded animate-pulse mb-3 mx-auto md:mx-0" />
                         <div className="h-4 w-32 bg-dark-200 rounded animate-pulse mb-4 mx-auto md:mx-0" />
                         <div className="h-4 w-64 bg-dark-200 rounded animate-pulse mx-auto md:mx-0" />

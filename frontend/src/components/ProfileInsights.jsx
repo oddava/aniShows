@@ -112,28 +112,46 @@ const ActivityHeatmapSection = ({ username, isPrivate }) => {
 
 export default function ProfileInsights({ username, isPrivate }) {
     // Fetch all anime lists
-    const { data: listsData, isLoading: listsLoading } = useQuery({
-        queryKey: ['insights-lists', username],
+    const {
+        data: listsData,
+        isLoading: listsLoading,
+        isError: listsError,
+        error: listsErrorDetails,
+        refetch: refetchLists
+    } = useQuery({
+        queryKey: ['profile-insights-lists', username],
         queryFn: async () => {
             const statuses = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
             const results = await Promise.all(
                 statuses.map(status =>
-                    listApi.getAll({ status, username }).then(res => ({
-                        status,
-                        items: res.data.results || res.data || []
-                    }))
+                    listApi.getAll({ status, username }).then(res => {
+                        const items = res.data?.results || res.data || [];
+                        return {
+                            status,
+                            items: Array.isArray(items) ? items : []
+                        };
+                    }).catch(err => {
+                        console.error(`Failed to fetch list for status ${status}:`, err);
+                        return { status, items: [] };
+                    })
                 )
             );
             return results;
         },
-        enabled: !isPrivate,
+        enabled: !isPrivate && !!username,
+        staleTime: 5 * 60 * 1000,
     });
 
     // Fetch reviews
-    const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
+    const { 
+        data: reviewsData, 
+        isLoading: reviewsLoading,
+        isError: reviewsError,
+        refetch: refetchReviews
+    } = useQuery({
         queryKey: ['insights-reviews', username],
         queryFn: () => reviewApi.getAll({ user: username }).then(res => res.data.results || res.data || []),
-        enabled: !isPrivate,
+        enabled: !isPrivate && !!username,
     });
 
     if (isPrivate) {
@@ -161,18 +179,48 @@ export default function ProfileInsights({ username, isPrivate }) {
         );
     }
 
-    const allItems = listsData?.flatMap(g => g.items) || [];
-    const totalAnime = allItems.length;
-    const totalEpisodes = allItems.reduce((sum, item) => sum + (item.episodes_watched || 0), 0);
-    const completedCount = listsData?.find(g => g.status === 'Completed')?.items.length || 0;
-    const watchingCount = listsData?.find(g => g.status === 'Watching')?.items.length || 0;
+    // Handle errors gracefully
+    if (listsError || reviewsError) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 bg-dark-100/40 backdrop-blur-xl rounded-3xl border border-white/5">
+                <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 font-bold mb-4">Failed to load insights.</p>
+                <button
+                    onClick={() => {
+                        if (listsError) refetchLists();
+                        if (reviewsError) refetchReviews();
+                    }}
+                    className="px-6 py-2.5 bg-accent text-white rounded-xl font-bold text-sm hover:scale-105 transition-transform"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
 
-    // Genre distribution
+    // Safely process list data with defensive checks
+    const allItems = Array.isArray(listsData) 
+        ? listsData.flatMap(g => Array.isArray(g?.items) ? g.items : []) 
+        : [];
+    const totalAnime = allItems.length;
+    const totalEpisodes = allItems.reduce((sum, item) => sum + (item?.episodes_watched || 0), 0);
+    const completedCount = Array.isArray(listsData) 
+        ? (listsData.find(g => g?.status === 'Completed')?.items?.length || 0)
+        : 0;
+    const watchingCount = Array.isArray(listsData) 
+        ? (listsData.find(g => g?.status === 'Watching')?.items?.length || 0)
+        : 0;
+
+    // Genre distribution - with safe access
     const genreCounts = {};
     allItems.forEach(item => {
-        item.anime?.genres?.forEach(genre => {
-            genreCounts[genre.name] = (genreCounts[genre.name] || 0) + 1;
-        });
+        if (item?.anime?.genres && Array.isArray(item.anime.genres)) {
+            item.anime.genres.forEach(genre => {
+                if (genre?.name) {
+                    genreCounts[genre.name] = (genreCounts[genre.name] || 0) + 1;
+                }
+            });
+        }
     });
 
     const genreData = Object.entries(genreCounts)
@@ -219,7 +267,7 @@ export default function ProfileInsights({ username, isPrivate }) {
             {/* Charts Row */}
             <div className="grid md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch w-full">
                 {/* Anime DNA - 5 cols on desktop, full on mobile, 1 col on tablet */}
-                <div className="lg:col-span-5 md:col-span-2 lg:md:col-span-5 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
+                <div className="lg:col-span-5 md:col-span-2 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
@@ -279,7 +327,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                 </div>
 
                 {/* Score Distribution - 7 cols on desktop, full on mobile, 1 col on tablet */}
-                <div className="lg:col-span-7 md:col-span-2 lg:md:col-span-7 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
+                <div className="lg:col-span-7 md:col-span-2 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
@@ -295,7 +343,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                         )}
                     </div>
                     {reviews.length > 0 ? (
-                        <div className="flex-1 min-h-[300px]">
+                        <div className="flex-1 h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={scoreData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                     <XAxis
@@ -342,19 +390,20 @@ export default function ProfileInsights({ username, isPrivate }) {
             {/* Bottom Row - Activity & Progress */}
             <div className="grid lg:grid-cols-12 md:grid-cols-2 gap-6 items-start w-full">
                 {/* Heatmap - 5 cols on desktop */}
-                <div className="lg:col-span-5 md:col-span-2 lg:md:col-span-5 min-w-0 relative z-10">
+                <div className="lg:col-span-5 md:col-span-2 min-w-0 relative z-10">
                     <ActivityHeatmapSection username={username} isPrivate={isPrivate} />
                 </div>
 
                 {/* Watching Progress - 7 cols on desktop */}
-                <div className="lg:col-span-7 md:col-span-2 lg:md:col-span-7 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
+                <div className="lg:col-span-7 md:col-span-2 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
                     <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-6">
                         <Activity className="w-3.5 h-3.5 text-cyan-500" />
                         Live Progress
                     </h3>
                     <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                         {watchingCount > 0 ? (
-                            listsData?.find(g => g.status === 'Watching')?.items.slice(0, 10).map((item) => {
+                            listsData?.find(g => g?.status === 'Watching')?.items?.slice(0, 10).map((item) => {
+                                if (!item || !item.anime) return null;
                                 const eps = item.episodes_watched || 0;
                                 const total = item.anime?.episode_count || 0;
                                 const progress = total > 0 ? (eps / total) * 100 : 0;
