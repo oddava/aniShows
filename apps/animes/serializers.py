@@ -823,6 +823,12 @@ class UserProfileUpdateSerializer(serializers.Serializer):
             return value.lower() in ("true", "1", "yes", "on")
         return value
 
+    def validate_bio(self, value):
+        # Escape HTML to prevent XSS
+        from django.utils.html import escape
+
+        return escape(value)
+
     # Dynamic social links
     social_links = serializers.JSONField(required=False)
 
@@ -883,13 +889,6 @@ class UserProfileUpdateSerializer(serializers.Serializer):
         if value is None:
             return value
         return validate_image_content(value, MAX_BANNER_SIZE, "Banner")
-
-    def validate_bio(self, value):
-        """Sanitize bio text to prevent XSS."""
-        if value:
-            # We use DOMPurify on the frontend, so we don't HTML escape here to allow markdown
-            return value.strip()
-        return value
 
 
 class RegisterSerializer(serializers.ModelSerializer):
