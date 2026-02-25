@@ -327,9 +327,31 @@ jobs:
           log-public-key: false
 
       - name: Add EC2 to known hosts
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
+          echo "🔐 Setting up known hosts for EC2..."
+          if [ -z "$EC2_HOST" ]; then
+            echo "❌ Error: EC2_HOST secret is not set!"
+            exit 1
+          fi
+          
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          
+          echo "📍 Scanning host key for: $EC2_HOST"
+          if ! ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>&1; then
+            echo "❌ Error: Failed to scan host key"
+            echo "Trying with -t rsa flag..."
+            ssh-keyscan -t rsa -H "$EC2_HOST" >> ~/.ssh/known_hosts || {
+              echo "❌ Error: ssh-keyscan failed completely"
+              exit 1
+            }
+          fi
+          
+          chmod 644 ~/.ssh/known_hosts
+          echo "✅ Host key added successfully"
+          ssh-keygen -l -f ~/.ssh/known_hosts | tail -5
 
       - name: Deploy to EC2
         env:
