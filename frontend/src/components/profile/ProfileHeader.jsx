@@ -14,7 +14,7 @@ export default function ProfileHeader({
     return (
         <div className="relative mb-8">
             {/* Banner */}
-            <div className="relative h-48 sm:h-56 md:h-72 w-full overflow-hidden bg-dark-200">
+            <div className="relative aspect-[3/1] w-full max-h-72 sm:max-h-64 md:max-h-72 overflow-hidden bg-dark-200">
                 {displayUser?.banner ? (
                     <>
                         <img
@@ -34,7 +34,7 @@ export default function ProfileHeader({
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 px-2 sm:px-4 pt-4">
                     {/* Avatar */}
                     <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-24">
-                        <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-xl shadow-2xl bg-dark overflow-hidden ring-4 ring-dark">
+                        <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-2xl shadow-2xl bg-dark overflow-hidden ring-4 ring-dark">
                             {displayUser?.avatar ? (
                                 <img
                                     src={displayUser.avatar}

@@ -240,7 +240,7 @@ export default function Profile({ forcedUsername }) {
 function ProfileSkeleton() {
     return (
         <div className="min-h-screen pb-20">
-            <div className="relative h-48 sm:h-64 md:h-80 lg:h-96 overflow-hidden">
+            <div className="relative aspect-[3/1] w-full max-h-72 sm:max-h-64 md:max-h-72 overflow-hidden">
                 <div className="w-full h-full bg-gradient-to-br from-accent/20 via-dark-200 to-dark animate-pulse" />
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-dark to-transparent" />
             </div>
@@ -249,7 +249,7 @@ function ProfileSkeleton() {
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 px-2 sm:px-4 pt-4">
                     <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-24">
                         <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-2xl bg-dark-100 p-1.5 shadow-2xl">
-                            <div className="w-full h-full rounded-xl bg-dark-200 animate-pulse" />
+                            <div className="w-full h-full rounded-[14px] bg-dark-200 animate-pulse" />
                         </div>
                     </div>
 

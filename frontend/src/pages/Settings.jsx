@@ -9,6 +9,7 @@ import SEO from '../components/SEO';
 import logger from '../utils/logger';
 import SmartLinkInput from '../components/SmartLinkInput';
 import RichTextEditor from '../components/forums/RichTextEditor';
+import ImageCropModal from '../components/ImageCropModal';
 
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile } = useAuth();
@@ -25,6 +26,16 @@ export default function Settings() {
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileSuccess, setProfileSuccess] = useState('');
+
+    // Image Crop Modal State
+    const [cropModal, setCropModal] = useState({
+        isOpen: false,
+        imageSrc: null,
+        type: 'avatar' // 'avatar' or 'banner'
+    });
+    // Temporary ObjectURLs for previewing without storing in memory permanently
+    const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
+    const [bannerPreviewUrl, setBannerPreviewUrl] = useState(null);
 
     // Account settings state
     const [oldPassword, setOldPassword] = useState('');
@@ -173,6 +184,8 @@ export default function Settings() {
             // Clear file inputs immediately for better UX
             setAvatarFile(null);
             setBannerFile(null);
+            setAvatarPreviewUrl(null);
+            setBannerPreviewUrl(null);
             setRemoveBanner(false);
             
             // Refresh profile data in background (don't block UI)
@@ -403,9 +416,9 @@ export default function Settings() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                    <div className="w-24 h-24 sm:w-20 sm:h-20 rounded-full bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
-                                        {avatarFile ? (
-                                            <img src={URL.createObjectURL(avatarFile)} alt="Preview" className="w-full h-full object-cover" />
+                                    <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
+                                        {avatarPreviewUrl ? (
+                                            <img src={avatarPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.avatar ? (
                                             <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
                                         ) : (
@@ -415,7 +428,19 @@ export default function Settings() {
                                     <input
                                         type="file"
                                         accept="image/*"
-                                        onChange={(e) => setAvatarFile(e.target.files[0])}
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                const file = e.target.files[0];
+                                                const url = URL.createObjectURL(file);
+                                                setCropModal({
+                                                    isOpen: true,
+                                                    imageSrc: url,
+                                                    type: 'avatar'
+                                                });
+                                            }
+                                            // Reset the input so selecting the same file triggers onChange
+                                            e.target.value = null;
+                                        }}
                                         className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
                                                    file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
                                     />
@@ -425,20 +450,21 @@ export default function Settings() {
                             {/* Banner */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                <div className="relative aspect-[3/1] sm:aspect-[4/1] max-w-2xl rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
-                                    {bannerFile ? (
-                                        <img src={URL.createObjectURL(bannerFile)} alt="Preview" className="w-full h-full object-cover" />
+                                <div className="relative aspect-[3/1] max-w-2xl max-h-48 rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
+                                    {bannerPreviewUrl ? (
+                                        <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                     ) : user?.banner && !removeBanner ? (
                                         <img src={user.banner} alt="Current" className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">No Banner</div>
                                     )}
-                                    {(user?.banner || bannerFile) && !removeBanner && (
+                                    {(user?.banner || bannerPreviewUrl) && !removeBanner && (
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setRemoveBanner(true);
                                                 setBannerFile(null);
+                                                setBannerPreviewUrl(null);
                                             }}
                                             className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 text-sm font-medium"
                                             title="Remove banner"
@@ -453,8 +479,17 @@ export default function Settings() {
                                         type="file"
                                         accept="image/*"
                                         onChange={(e) => {
-                                            setBannerFile(e.target.files[0]);
-                                            setRemoveBanner(false);
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                const file = e.target.files[0];
+                                                const url = URL.createObjectURL(file);
+                                                setCropModal({
+                                                    isOpen: true,
+                                                    imageSrc: url,
+                                                    type: 'banner'
+                                                });
+                                                setRemoveBanner(false);
+                                            }
+                                            e.target.value = null;
                                         }}
                                         className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
                                                    file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
@@ -1108,6 +1143,33 @@ export default function Settings() {
                 )}
             </div>
         </div>
+
+        <ImageCropModal
+            isOpen={cropModal.isOpen}
+            imageSrc={cropModal.imageSrc}
+            aspect={cropModal.type === 'banner' ? 3 : 1}
+            cropShape={cropModal.type === 'banner' ? 'rect' : 'rect'}
+            title={cropModal.type === 'banner' ? 'Edit banner' : 'Edit profile picture'}
+            onClose={() => {
+                setCropModal({ ...cropModal, isOpen: false });
+                if (cropModal.imageSrc) {
+                    URL.revokeObjectURL(cropModal.imageSrc);
+                }
+            }}
+            onApply={(file, previewUrl) => {
+                if (cropModal.type === 'banner') {
+                    setBannerFile(file);
+                    setBannerPreviewUrl(previewUrl);
+                } else {
+                    setAvatarFile(file);
+                    setAvatarPreviewUrl(previewUrl);
+                }
+                setCropModal({ ...cropModal, isOpen: false });
+                if (cropModal.imageSrc) {
+                    URL.revokeObjectURL(cropModal.imageSrc);
+                }
+            }}
+        />
         </>
     );
 }
