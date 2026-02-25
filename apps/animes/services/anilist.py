@@ -656,7 +656,7 @@ class AniListService:
             # Source Material
             "source_material": self._map_source_material(item.get("source")),
             # Season Information
-            "season": item.get("season", ""),
+            "season": item.get("season") or "",
             "season_year": item.get("seasonYear"),
             # External IDs
             "anilist_id": item.get("id"),
