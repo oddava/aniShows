@@ -347,8 +347,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/minute",
-        "user": "100/minute",
-        "user_profile_lookup": "60/minute",
+        "user": "150/minute",
+        "user_profile_lookup": "90/minute",
         "anime_list": "120/minute",
         "review_access": "60/minute",
         "login": "5/minute",

@@ -95,7 +95,7 @@ export default function Settings() {
     // Load notification preferences
     useEffect(() => {
         if (!user) return;
-        
+
         const fetchPreferences = async () => {
             try {
                 const response = await notificationApi.getPreferences();
@@ -126,12 +126,12 @@ export default function Settings() {
         setIsSavingProfile(true);
         setProfileError('');
         setProfileSuccess('');
-        
+
         // Validate social links before saving
-        const nonEmptyLinks = socialLinks.filter(link => 
+        const nonEmptyLinks = socialLinks.filter(link =>
             link.platform?.trim() || link.value?.trim()
         );
-        
+
         // Check for empty platform names
         const emptyPlatformLinks = nonEmptyLinks.filter(link => !link.platform?.trim());
         if (emptyPlatformLinks.length > 0) {
@@ -139,7 +139,7 @@ export default function Settings() {
             setIsSavingProfile(false);
             return;
         }
-        
+
         // Check for duplicate links
         const linkValues = nonEmptyLinks.map(link => link.value?.toLowerCase()?.trim()).filter(Boolean);
         const uniqueValues = new Set(linkValues);
@@ -148,7 +148,7 @@ export default function Settings() {
             setIsSavingProfile(false);
             return;
         }
-        
+
         // Check if anything actually changed
         const hasChanges = (
             bio !== user.bio ||
@@ -159,30 +159,30 @@ export default function Settings() {
             bannerFile !== null ||
             removeBanner
         );
-        
+
         if (!hasChanges) {
             setProfileSuccess('No changes to save');
             setIsSavingProfile(false);
             return;
         }
-        
+
         // Optimistic UI update - show success immediately
         setProfileSuccess('Saving...');
-        
+
         try {
             const formData = new FormData();
-            
+
             // Only append changed fields
             if (bio !== user.bio) formData.append('bio', bio);
             if (username.trim() !== user.username) formData.append('username', username.trim());
-            
+
             // Only send social links if they changed
             const currentLinks = user.social_links || [];
             const linksChanged = JSON.stringify(nonEmptyLinks) !== JSON.stringify(currentLinks);
             if (linksChanged) {
                 formData.append('social_links', JSON.stringify(nonEmptyLinks));
             }
-            
+
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
             if (avatarFile) formData.append('avatar', avatarFile);
             if (bannerFile) formData.append('banner', bannerFile);
@@ -190,17 +190,17 @@ export default function Settings() {
 
             await authApi.updateProfile(formData);
             setProfileSuccess('Profile updated successfully!');
-            
+
             // Clear file inputs immediately for better UX
             setAvatarFile(null);
             setBannerFile(null);
             setAvatarPreviewUrl(null);
             setBannerPreviewUrl(null);
             setRemoveBanner(false);
-            
+
             // Refresh profile data in background (don't block UI)
             refreshProfile();
-            
+
             // Invalidate React Query profile caches so Profile page shows fresh data
             // (avatar, banner, bio, username changes etc.)
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
@@ -370,843 +370,835 @@ export default function Settings() {
         <>
             <SEO page="settings" />
             <div className="min-h-screen py-20 px-4">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
-                    <p className="text-gray-400">Manage your profile and account settings</p>
-                </div>
+                <div className="max-w-4xl mx-auto">
+                    {/* Header */}
+                    <div className="mb-8">
+                        <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
+                        <p className="text-gray-400">Manage your profile and account settings</p>
+                    </div>
 
-                {/* Tabs */}
-                <div className="flex gap-4 mb-8 border-b border-gray-800">
-                    <button
-                        onClick={() => setActiveTab('profile')}
-                        className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
-                            ${activeTab === 'profile' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        <User className="w-4 h-4" />
-                        Profile
-                        <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
-                            ${activeTab === 'profile' ? 'scale-x-100' : 'scale-x-0'}`} />
-                    </button>
-                    {user?.total_badges_count > 0 && (
+                    {/* Tabs */}
+                    <div className="flex gap-1 sm:gap-4 mb-8 border-b border-gray-800 overflow-x-auto scrollbar-hide whitespace-nowrap touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
                         <button
-                            onClick={() => setActiveTab('badges')}
-                            className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
-                                ${activeTab === 'badges' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
+                            onClick={() => setActiveTab('profile')}
+                            className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
+                            ${activeTab === 'profile' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                         >
-                            <Award className="w-4 h-4" />
-                            Badges
-                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
-                                ${activeTab === 'badges' ? 'scale-x-100' : 'scale-x-0'}`} />
+                            <User className="w-4 h-4" />
+                            Profile
+                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
+                            ${activeTab === 'profile' ? 'scale-x-100' : 'scale-x-0'}`} />
                         </button>
-                    )}
-                    <button
-                        onClick={() => setActiveTab('account')}
-                        className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
+                        {user?.total_badges_count > 0 && (
+                            <button
+                                onClick={() => setActiveTab('badges')}
+                                className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
+                                ${activeTab === 'badges' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                <Award className="w-4 h-4" />
+                                Badges
+                                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
+                                ${activeTab === 'badges' ? 'scale-x-100' : 'scale-x-0'}`} />
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setActiveTab('account')}
+                            className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
                             ${activeTab === 'account' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        <Shield className="w-4 h-4" />
-                        Account
-                        <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
+                        >
+                            <Shield className="w-4 h-4" />
+                            Account
+                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
                             ${activeTab === 'account' ? 'scale-x-100' : 'scale-x-0'}`} />
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('notifications')}
-                        className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('notifications')}
+                            className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
                             ${activeTab === 'notifications' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        <Bell className="w-4 h-4" />
-                        Notifications
-                        <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
+                        >
+                            <Bell className="w-4 h-4" />
+                            Notifications
+                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
                             ${activeTab === 'notifications' ? 'scale-x-100' : 'scale-x-0'}`} />
-                    </button>
-                </div>
+                        </button>
+                    </div>
 
-                {/* Profile Tab */}
-                {activeTab === 'profile' && (
-                    <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800 animate-fade-in">
-                        <h2 className="text-xl font-semibold text-white mb-6">Profile Settings</h2>
+                    {/* Profile Tab */}
+                    {activeTab === 'profile' && (
+                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800 animate-fade-in">
+                            <h2 className="text-xl font-semibold text-white mb-6">Profile Settings</h2>
 
-                        <div className="space-y-6">
-                            {/* Username */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
-                                <input
-                                    type="text"
-                                    value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    className="input w-full max-w-md"
-                                    placeholder="Enter your username"
-                                />
-                                <p className="text-xs text-gray-500 mt-2">You can change your username once every 14 days.</p>
-                            </div>
-
-                            {/* Avatar */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                    <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
-                                        {avatarPreviewUrl ? (
-                                            <img src={avatarPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
-                                        ) : user?.avatar ? (
-                                            <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <User className="w-10 h-10 text-gray-500" />
-                                        )}
-                                    </div>
+                            <div className="space-y-6">
+                                {/* Username */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
                                     <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            if (e.target.files && e.target.files.length > 0) {
-                                                const file = e.target.files[0];
-                                                const url = URL.createObjectURL(file);
-                                                setCropModal({
-                                                    isOpen: true,
-                                                    imageSrc: url,
-                                                    type: 'avatar'
-                                                });
-                                            }
-                                            // Reset the input so selecting the same file triggers onChange
-                                            e.target.value = null;
-                                        }}
-                                        className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
-                                                   file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        className="input w-full max-w-md"
+                                        placeholder="Enter your username"
                                     />
+                                    <p className="text-xs text-gray-500 mt-2">You can change your username once every 14 days.</p>
                                 </div>
-                            </div>
 
-                            {/* Banner */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                <div className="relative aspect-[3/1] max-w-2xl max-h-48 rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
-                                    {bannerPreviewUrl ? (
-                                        <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
-                                    ) : user?.banner && !removeBanner ? (
-                                        <img src={user.banner} alt="Current" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">No Banner</div>
-                                    )}
-                                    {(user?.banner || bannerPreviewUrl) && !removeBanner && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setRemoveBanner(true);
-                                                setBannerFile(null);
-                                                setBannerPreviewUrl(null);
+                                {/* Avatar */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                        <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
+                                            {avatarPreviewUrl ? (
+                                                <img src={avatarPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                            ) : user?.avatar ? (
+                                                <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <User className="w-10 h-10 text-gray-500" />
+                                            )}
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files.length > 0) {
+                                                    const file = e.target.files[0];
+                                                    const url = URL.createObjectURL(file);
+                                                    setCropModal({
+                                                        isOpen: true,
+                                                        imageSrc: url,
+                                                        type: 'avatar'
+                                                    });
+                                                }
+                                                // Reset the input so selecting the same file triggers onChange
+                                                e.target.value = null;
                                             }}
-                                            className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 text-sm font-medium"
-                                            title="Remove banner"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                            <span className="hidden sm:inline">Remove</span>
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            if (e.target.files && e.target.files.length > 0) {
-                                                const file = e.target.files[0];
-                                                const url = URL.createObjectURL(file);
-                                                setCropModal({
-                                                    isOpen: true,
-                                                    imageSrc: url,
-                                                    type: 'banner'
-                                                });
-                                                setRemoveBanner(false);
-                                            }
-                                            e.target.value = null;
-                                        }}
-                                        className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
+                                            className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
                                                    file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
-                                    />
-                                    {removeBanner && (
-                                        <div className="flex items-center gap-3 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                            <span className="text-xs text-yellow-400">Banner will be removed on save</span>
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Banner */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
+                                <div className="relative aspect-[3/1] max-w-2xl max-h-48 rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
+                                        {bannerPreviewUrl ? (
+                                            <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                        ) : user?.banner && !removeBanner ? (
+                                            <img src={user.banner} alt="Current" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">No Banner</div>
+                                        )}
+                                        {(user?.banner || bannerPreviewUrl) && !removeBanner && (
                                             <button
                                                 type="button"
-                                                onClick={() => setRemoveBanner(false)}
-                                                className="text-xs text-accent hover:text-accent/80"
+                                                onClick={() => {
+                                                    setRemoveBanner(true);
+                                                    setBannerFile(null);
+                                                    setBannerPreviewUrl(null);
+                                                }}
+                                                className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 text-sm font-medium"
+                                                title="Remove banner"
                                             >
-                                                Undo
+                                                <Trash2 className="w-4 h-4" />
+                                                <span className="hidden sm:inline">Remove</span>
                                             </button>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                if (e.target.files && e.target.files.length > 0) {
+                                                    const file = e.target.files[0];
+                                                    const url = URL.createObjectURL(file);
+                                                    setCropModal({
+                                                        isOpen: true,
+                                                        imageSrc: url,
+                                                        type: 'banner'
+                                                    });
+                                                    setRemoveBanner(false);
+                                                }
+                                                e.target.value = null;
+                                            }}
+                                            className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
+                                                   file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
+                                        />
+                                        {removeBanner && (
+                                            <div className="flex items-center gap-3 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                                <span className="text-xs text-yellow-400">Banner will be removed on save</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setRemoveBanner(false)}
+                                                    className="text-xs text-accent hover:text-accent/80"
+                                                >
+                                                    Undo
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Bio */}
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm font-medium text-gray-300">About (Bio)</label>
-                                    <span className={`text-xs ${
-                                        bio.length > 4900 ? 'text-red-400' : 
-                                        bio.length > 4000 ? 'text-yellow-400' : 
-                                        'text-gray-500'
-                                    }`}>
-                                        {bio.length}/5000
-                                    </span>
-                                </div>
-                                
-                                <div className={`border rounded-2xl overflow-hidden ${bio.length > 5000 ? 'border-red-500/50' : 'border-gray-800'}`}>
-                                    <RichTextEditor
-                                        value={bio}
-                                        onChange={(newBio) => {
-                                            if (newBio.length <= 5000) {
-                                                setBio(newBio);
-                                            }
-                                        }}
-                                        placeholder="Tell us about yourself..."
-                                    />
-                                </div>
-                                {bio.length > 4900 && (
-                                    <p className="text-xs text-red-400 mt-1">
-                                        {5000 - bio.length} characters remaining
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Social Links */}
-                            <div className="pt-4 border-t border-gray-800">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <h3 className="text-lg font-medium text-white">Social Links</h3>
-                                        <span className={`text-sm font-medium ${
-                                            socialLinks.length >= 5 ? 'text-red-400' : 'text-gray-400'
-                                        }`}>
-                                            {socialLinks.length}/5
+                                {/* Bio */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-sm font-medium text-gray-300">About (Bio)</label>
+                                        <span className={`text-xs ${bio.length > 4900 ? 'text-red-400' :
+                                            bio.length > 4000 ? 'text-yellow-400' :
+                                                'text-gray-500'
+                                            }`}>
+                                            {bio.length}/5000
                                         </span>
                                     </div>
-                                    {socialLinks.length < 5 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
-                                            className="text-xs font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 rounded-lg hover:bg-accent/20"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            Add Link
-                                        </button>
+
+                                    <div className={`border rounded-2xl overflow-hidden ${bio.length > 5000 ? 'border-red-500/50' : 'border-gray-800'}`}>
+                                        <RichTextEditor
+                                            value={bio}
+                                            onChange={(newBio) => {
+                                                if (newBio.length <= 5000) {
+                                                    setBio(newBio);
+                                                }
+                                            }}
+                                            placeholder="Tell us about yourself..."
+                                        />
+                                    </div>
+                                    {bio.length > 4900 && (
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {5000 - bio.length} characters remaining
+                                        </p>
                                     )}
                                 </div>
 
-                                <div className="space-y-4 max-w-2xl">
-                                    {socialLinks.length === 0 ? (
-                                        <div className="p-6 bg-dark-200/30 rounded-xl border border-white/5 text-center">
-                                            <p className="text-gray-500 mb-2">No social links added yet.</p>
-                                            <p className="text-xs text-gray-600">Add up to 5 links to your profile</p>
+                                {/* Social Links */}
+                                <div className="pt-4 border-t border-gray-800">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <h3 className="text-lg font-medium text-white">Social Links</h3>
+                                            <span className={`text-sm font-medium ${socialLinks.length >= 5 ? 'text-red-400' : 'text-gray-400'
+                                                }`}>
+                                                {socialLinks.length}/5
+                                            </span>
                                         </div>
-                                    ) : (
-                                        <>
-                                            {socialLinks.map((link, index) => {
-                                                // Check for duplicates
-                                                const isDuplicate = socialLinks.some((l, i) => 
-                                                    i !== index && 
-                                                    l.value && 
-                                                    link.value && 
-                                                    l.value.toLowerCase() === link.value.toLowerCase()
-                                                );
-                                                
-                                                // Check for empty platform
-                                                const isEmptyPlatform = !link.platform?.trim();
-                                                
-                                                return (
-                                                    <div 
-                                                        key={index} 
-                                                        className={`relative bg-dark-200/50 p-4 rounded-xl border transition-all ${
-                                                            isDuplicate 
-                                                                ? 'border-red-500/30 bg-red-500/5' 
+                                        {socialLinks.length < 5 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
+                                                className="text-xs font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 rounded-lg hover:bg-accent/20"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                                Add Link
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-4 max-w-2xl">
+                                        {socialLinks.length === 0 ? (
+                                            <div className="p-6 bg-dark-200/30 rounded-xl border border-white/5 text-center">
+                                                <p className="text-gray-500 mb-2">No social links added yet.</p>
+                                                <p className="text-xs text-gray-600">Add up to 5 links to your profile</p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {socialLinks.map((link, index) => {
+                                                    // Check for duplicates
+                                                    const isDuplicate = socialLinks.some((l, i) =>
+                                                        i !== index &&
+                                                        l.value &&
+                                                        link.value &&
+                                                        l.value.toLowerCase() === link.value.toLowerCase()
+                                                    );
+
+                                                    // Check for empty platform
+                                                    const isEmptyPlatform = !link.platform?.trim();
+
+                                                    return (
+                                                        <div
+                                                            key={index}
+                                                            className={`relative bg-dark-200/50 p-4 rounded-xl border transition-all ${isDuplicate
+                                                                ? 'border-red-500/30 bg-red-500/5'
                                                                 : isEmptyPlatform
                                                                     ? 'border-yellow-500/30'
                                                                     : 'border-white/10'
-                                                        }`}
-                                                    >
-                                                        {/* Header with index and remove button */}
-                                                        <div className="flex items-center justify-between mb-3">
-                                                            <span className="text-xs font-medium text-gray-500">
-                                                                Link {index + 1}
-                                                            </span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    if (confirm('Remove this link?')) {
-                                                                        setSocialLinks(socialLinks.filter((_, i) => i !== index));
-                                                                    }
+                                                                }`}
+                                                        >
+                                                            {/* Header with index and remove button */}
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <span className="text-xs font-medium text-gray-500">
+                                                                    Link {index + 1}
+                                                                </span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (confirm('Remove this link?')) {
+                                                                            setSocialLinks(socialLinks.filter((_, i) => i !== index));
+                                                                        }
+                                                                    }}
+                                                                    className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                                                    title="Remove link"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+
+                                                            <SmartLinkInput
+                                                                platform={link.platform}
+                                                                value={link.value}
+                                                                onChange={(newValue) => {
+                                                                    const newLinks = [...socialLinks];
+                                                                    newLinks[index].value = newValue;
+                                                                    setSocialLinks(newLinks);
                                                                 }}
-                                                                className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                                                                title="Remove link"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                Remove
-                                                            </button>
+                                                                onPlatformChange={(newPlatform) => {
+                                                                    const newLinks = [...socialLinks];
+                                                                    newLinks[index].platform = newPlatform;
+                                                                    setSocialLinks(newLinks);
+                                                                }}
+                                                                disabled={isSavingProfile}
+                                                            />
+
+                                                            {/* Warnings */}
+                                                            {isDuplicate && (
+                                                                <div className="flex items-center gap-1.5 mt-2 text-red-400 text-xs">
+                                                                    <AlertCircle className="w-3.5 h-3.5" />
+                                                                    <span>Duplicate link detected</span>
+                                                                </div>
+                                                            )}
+                                                            {isEmptyPlatform && (
+                                                                <div className="flex items-center gap-1.5 mt-2 text-yellow-400 text-xs">
+                                                                    <AlertCircle className="w-3.5 h-3.5" />
+                                                                    <span>Platform name is required</span>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        
-                                                        <SmartLinkInput
-                                                            platform={link.platform}
-                                                            value={link.value}
-                                                            onChange={(newValue) => {
-                                                                const newLinks = [...socialLinks];
-                                                                newLinks[index].value = newValue;
-                                                                setSocialLinks(newLinks);
-                                                            }}
-                                                            onPlatformChange={(newPlatform) => {
-                                                                const newLinks = [...socialLinks];
-                                                                newLinks[index].platform = newPlatform;
-                                                                setSocialLinks(newLinks);
-                                                            }}
-                                                            disabled={isSavingProfile}
-                                                        />
-                                                        
-                                                        {/* Warnings */}
-                                                        {isDuplicate && (
-                                                            <div className="flex items-center gap-1.5 mt-2 text-red-400 text-xs">
-                                                                <AlertCircle className="w-3.5 h-3.5" />
-                                                                <span>Duplicate link detected</span>
-                                                            </div>
-                                                        )}
-                                                        {isEmptyPlatform && (
-                                                            <div className="flex items-center gap-1.5 mt-2 text-yellow-400 text-xs">
-                                                                <AlertCircle className="w-3.5 h-3.5" />
-                                                                <span>Platform name is required</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                            
-                                            {/* Help text */}
-                                            <div className="p-4 bg-dark-200/30 rounded-xl border border-white/5">
-                                                <h4 className="text-xs font-medium text-gray-400 mb-2">Tips:</h4>
-                                                <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
-                                                    <li>Enter @username for social platforms or paste a full URL</li>
-                                                    <li>Links are automatically normalized (e.g., @user → https://x.com/user)</li>
-                                                    <li>You can add up to 5 links to your profile</li>
-                                                </ul>
+                                                    );
+                                                })}
+
+                                                {/* Help text */}
+                                                <div className="p-4 bg-dark-200/30 rounded-xl border border-white/5">
+                                                    <h4 className="text-xs font-medium text-gray-400 mb-2">Tips:</h4>
+                                                    <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
+                                                        <li>Enter @username for social platforms or paste a full URL</li>
+                                                        <li>Links are automatically normalized (e.g., @user → https://x.com/user)</li>
+                                                        <li>You can add up to 5 links to your profile</li>
+                                                    </ul>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {socialLinks.length >= 5 && (
+                                            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                                <p className="text-xs text-yellow-400 text-center">
+                                                    Maximum of 5 links reached. Remove a link to add a new one.
+                                                </p>
                                             </div>
-                                        </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Error/Success */}
+                                {profileError && (
+                                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm">
+                                        <AlertCircle className="w-4 h-4 shrink-0" />
+                                        {profileError}
+                                    </div>
+                                )}
+                                {profileSuccess && (
+                                    <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2 text-green-400 text-sm">
+                                        <Check className="w-4 h-4 shrink-0" />
+                                        {profileSuccess}
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleSaveProfile}
+                                    disabled={isSavingProfile}
+                                    className="btn-primary"
+                                >
+                                    {isSavingProfile ? 'Saving...' : 'Save Profile'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Badges Tab */}
+                    {activeTab === 'badges' && (
+                        <div className="animate-fade-in">
+                            <BadgesSettings />
+                        </div>
+                    )}
+
+                    {/* Account Tab */}
+                    {activeTab === 'account' && (
+                        <div className="space-y-6 animate-fade-in">
+                            {/* Email & Security */}
+                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+                                    <Shield className="w-5 h-5 text-accent" />
+                                    Email & Security
+                                </h2>
+
+                                {/* Email Verification Status */}
+                                <div className="mb-8 p-4 bg-dark-50 rounded-xl border border-gray-700">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-gray-300">Email Status</span>
+                                        {user?.email_verified ? (
+                                            <span className="flex items-center gap-1.5 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-1 rounded-lg border border-green-400/20">
+                                                <Check className="w-3.5 h-3.5" /> Verified
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1.5 text-yellow-400 text-sm font-medium bg-yellow-400/10 px-2 py-1 rounded-lg border border-yellow-400/20">
+                                                <AlertCircle className="w-3.5 h-3.5" /> Unverified
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-sm text-gray-400 mb-3">{user?.email}</p>
+
+                                    {!user?.email_verified && (
+                                        <button
+                                            onClick={handleResendVerification}
+                                            disabled={isResending}
+                                            className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+                                        >
+                                            {isResending ? 'Sending...' : 'Resend Verification Email'}
+                                        </button>
                                     )}
-                                    
-                                    {socialLinks.length >= 5 && (
-                                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                            <p className="text-xs text-yellow-400 text-center">
-                                                Maximum of 5 links reached. Remove a link to add a new one.
-                                            </p>
+                                </div>
+
+                                {/* Change Email */}
+                                <div className="mb-8">
+                                    <h3 className="text-lg font-medium text-white mb-4">Change Email</h3>
+                                    <div className="space-y-4 max-w-md">
+                                        <input
+                                            type="email"
+                                            value={changeEmail}
+                                            onChange={(e) => setChangeEmail(e.target.value)}
+                                            className="input w-full"
+                                            placeholder="New Email Address"
+                                            required
+                                        />
+                                        {user.has_password && (
+                                            <input
+                                                type="password"
+                                                value={changeEmailPassword}
+                                                onChange={(e) => setChangeEmailPassword(e.target.value)}
+                                                className="input w-full"
+                                                placeholder="Confirm with Password"
+                                                required
+                                            />
+                                        )}
+                                        <button
+                                            onClick={handleChangeEmail}
+                                            disabled={isChangingEmail || !changeEmail || (user.has_password && !changeEmailPassword)}
+                                            className="btn-primary w-full sm:w-auto"
+                                        >
+                                            {isChangingEmail ? 'Sending Link...' : 'Update Email'}
+                                        </button>
+                                    </div>
+                                    {(accountError || accountSuccess) && (
+                                        <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 text-sm ${accountSuccess
+                                            ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                            }`}>
+                                            {accountSuccess ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                                            {accountSuccess || accountError}
                                         </div>
                                     )}
                                 </div>
-                            </div>
 
-                            {/* Error/Success */}
-                            {profileError && (
-                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm">
-                                    <AlertCircle className="w-4 h-4 shrink-0" />
-                                    {profileError}
-                                </div>
-                            )}
-                            {profileSuccess && (
-                                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2 text-green-400 text-sm">
-                                    <Check className="w-4 h-4 shrink-0" />
-                                    {profileSuccess}
-                                </div>
-                            )}
+                                <div className="h-px bg-gray-700 my-6" />
 
-                            <button
-                                onClick={handleSaveProfile}
-                                disabled={isSavingProfile}
-                                className="btn-primary"
-                            >
-                                {isSavingProfile ? 'Saving...' : 'Save Profile'}
-                            </button>
-                        </div>
-                    </div>
-                )}
+                                <h3 className="text-lg font-medium text-white mb-4">
+                                    {user.has_password ? 'Change Password' : 'Set Password'}
+                                </h3>
 
-                {/* Badges Tab */}
-                {activeTab === 'badges' && (
-                    <div className="animate-fade-in">
-                        <BadgesSettings />
-                    </div>
-                )}
-
-                {/* Account Tab */}
-                {activeTab === 'account' && (
-                    <div className="space-y-6 animate-fade-in">
-                        {/* Email & Security */}
-                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                <Shield className="w-5 h-5 text-accent" />
-                                Email & Security
-                            </h2>
-
-                            {/* Email Verification Status */}
-                            <div className="mb-8 p-4 bg-dark-50 rounded-xl border border-gray-700">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-300">Email Status</span>
-                                    {user?.email_verified ? (
-                                        <span className="flex items-center gap-1.5 text-green-400 text-sm font-medium bg-green-400/10 px-2 py-1 rounded-lg border border-green-400/20">
-                                            <Check className="w-3.5 h-3.5" /> Verified
-                                        </span>
-                                    ) : (
-                                        <span className="flex items-center gap-1.5 text-yellow-400 text-sm font-medium bg-yellow-400/10 px-2 py-1 rounded-lg border border-yellow-400/20">
-                                            <AlertCircle className="w-3.5 h-3.5" /> Unverified
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-sm text-gray-400 mb-3">{user?.email}</p>
-
-                                {!user?.email_verified && (
-                                    <button
-                                        onClick={handleResendVerification}
-                                        disabled={isResending}
-                                        className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
-                                    >
-                                        {isResending ? 'Sending...' : 'Resend Verification Email'}
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Change Email */}
-                            <div className="mb-8">
-                                <h3 className="text-lg font-medium text-white mb-4">Change Email</h3>
                                 <div className="space-y-4 max-w-md">
-                                    <input
-                                        type="email"
-                                        value={changeEmail}
-                                        onChange={(e) => setChangeEmail(e.target.value)}
-                                        className="input w-full"
-                                        placeholder="New Email Address"
-                                        required
-                                    />
                                     {user.has_password && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
+                                            <div className="relative">
+                                                <input
+                                                    type={showOldPassword ? 'text' : 'password'}
+                                                    value={oldPassword}
+                                                    onChange={(e) => setOldPassword(e.target.value)}
+                                                    className="input w-full pr-10"
+                                                    placeholder="Enter current password"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowOldPassword(!showOldPassword)}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                                >
+                                                    {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* New Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
+                                        <div className="relative">
+                                            <input
+                                                type={showNewPassword ? 'text' : 'password'}
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                                className="input w-full pr-10"
+                                                placeholder="Enter new password"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                            >
+                                                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Confirm Password */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
                                         <input
                                             type="password"
-                                            value={changeEmailPassword}
-                                            onChange={(e) => setChangeEmailPassword(e.target.value)}
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
                                             className="input w-full"
-                                            placeholder="Confirm with Password"
-                                            required
+                                            placeholder="Confirm new password"
                                         />
-                                    )}
+                                    </div>
+
                                     <button
-                                        onClick={handleChangeEmail}
-                                        disabled={isChangingEmail || !changeEmail || (user.has_password && !changeEmailPassword)}
-                                        className="btn-primary w-full sm:w-auto"
+                                        onClick={handleChangePassword}
+                                        disabled={isSavingAccount || (user.has_password && !oldPassword) || !newPassword || !confirmPassword}
+                                        className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {isChangingEmail ? 'Sending Link...' : 'Update Email'}
+                                        {isSavingAccount ? 'Saving...' : (user.has_password ? 'Change Password' : 'Set Password')}
                                     </button>
                                 </div>
-                                {(accountError || accountSuccess) && (
-                                    <div className={`mt-4 p-3 rounded-lg flex items-center gap-2 text-sm ${accountSuccess
-                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
-                                        }`}>
-                                        {accountSuccess ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                                        {accountSuccess || accountError}
+                            </div>
+
+                            {/* Privacy Settings */}
+                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+                                    <Shield className="w-5 h-5 text-accent" />
+                                    Privacy
+                                </h2>
+
+                                <div className="flex items-center justify-between max-w-md">
+                                    <div>
+                                        <p className="text-white font-medium">Private Profile</p>
+                                        <p className="text-gray-400 text-sm">Hide your profile from other users</p>
+                                    </div>
+                                    <button
+                                        onClick={handlePrivacyToggle}
+                                        className={`relative w-14 h-7 rounded-full transition-colors duration-200 
+                                                ${isPrivate ? 'bg-accent' : 'bg-dark-50 border border-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${isPrivate ? 'left-8' : 'left-1'}`} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Data Import/Export */}
+                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+                                    <Download className="w-5 h-5 text-accent" />
+                                    Data Import/Export
+                                </h2>
+
+                                <div className="space-y-4 max-w-md">
+                                    <Link
+                                        to="/import"
+                                        className="flex items-center justify-between p-4 bg-dark-50 hover:bg-dark-200 rounded-xl border border-gray-800 transition-colors group"
+                                    >
+                                        <div>
+                                            <p className="text-white font-medium">Import Data</p>
+                                            <p className="text-gray-400 text-sm">Import from MyAnimeList or AniList</p>
+                                        </div>
+                                        <Upload className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
+                                    </Link>
+
+                                    <Link
+                                        to="/export"
+                                        className="flex items-center justify-between p-4 bg-dark-50 hover:bg-dark-200 rounded-xl border border-gray-800 transition-colors group"
+                                    >
+                                        <div>
+                                            <p className="text-white font-medium">Export Data</p>
+                                            <p className="text-gray-400 text-sm">Download your anime list and reviews</p>
+                                        </div>
+                                        <Download className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
+                                    </Link>
+                                </div>
+                            </div>
+
+                            {/* Delete Account */}
+                            <div className="bg-red-500/5 p-6 rounded-2xl border border-red-500/20">
+                                <h2 className="text-xl font-semibold text-red-500 mb-2">Delete Account</h2>
+                                <p className="text-gray-400 text-sm mb-6">
+                                    Once you delete your account, there is no going back. Please be certain.
+                                </p>
+
+                                {!showDeleteConfirm ? (
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                        className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 rounded-lg transition-colors font-medium text-sm"
+                                    >
+                                        Delete Account
+                                    </button>
+                                ) : (
+                                    <div className="max-w-md animate-fade-in">
+                                        {user.has_password ? (
+                                            <>
+                                                <p className="text-sm text-gray-300 mb-3 block">Enter your password to confirm:</p>
+                                                <div className="flex gap-3">
+                                                    <input
+                                                        type="password"
+                                                        value={deleteAccountPassword}
+                                                        onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                                                        className="input flex-1 border-red-500/30 focus:border-red-500 focus:ring-red-500/20"
+                                                        placeholder="Your Password"
+                                                    />
+                                                    <button
+                                                        onClick={handleDeleteAccount}
+                                                        disabled={isDeleting || !deleteAccountPassword}
+                                                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowDeleteConfirm(false);
+                                                            setDeleteAccountPassword('');
+                                                        }}
+                                                        className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="flex flex-col gap-3">
+                                                <p className="text-sm text-gray-300 mb-2">Are you sure you want to delete your account? This action cannot be undone.</p>
+                                                <div className="flex gap-3">
+                                                    <button
+                                                        onClick={handleDeleteAccount}
+                                                        disabled={isDeleting}
+                                                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
+                                                    >
+                                                        {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setShowDeleteConfirm(false)}
+                                                        className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Notifications Tab */}
+                    {activeTab === 'notifications' && (
+                        <div className="space-y-6 animate-fade-in">
+                            {/* Success/Error Message */}
+                            {preferencesMessage && (
+                                <div className={`p-4 rounded-xl flex items-center gap-3 ${preferencesMessage.includes('success')
+                                    ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                    : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                    }`}>
+                                    {preferencesMessage.includes('success') ? (
+                                        <Check className="w-5 h-5" />
+                                    ) : (
+                                        <AlertCircle className="w-5 h-5" />
+                                    )}
+                                    <span className="font-medium">{preferencesMessage}</span>
+                                </div>
+                            )}
+
+                            {/* Email Notifications */}
+                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                        <Mail className="w-5 h-5 text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-white">Email Notifications</h2>
+                                        <p className="text-sm text-gray-500">Get notified via email</p>
+                                    </div>
+                                </div>
+
+                                {isLoadingPreferences ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* New Episode Alerts */}
+                                        <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${preferences.email_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                    <Tv className={`w-5 h-5 ${preferences.email_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-white">New Episode Alerts</p>
+                                                    <p className="text-xs text-gray-500">Notify me when a new episode airs for anime in my list</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleTogglePreference('email_new_episodes')}
+                                                disabled={isSavingPreferences}
+                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.email_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.email_new_episodes ? 'left-8' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
                                     </div>
                                 )}
                             </div>
 
-                            <div className="h-px bg-gray-700 my-6" />
-
-                            <h3 className="text-lg font-medium text-white mb-4">
-                                {user.has_password ? 'Change Password' : 'Set Password'}
-                            </h3>
-
-                            <div className="space-y-4 max-w-md">
-                                {user.has_password && (
+                            {/* Push Notifications */}
+                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                                        <Bell className="w-5 h-5 text-purple-400" />
+                                    </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
-                                        <div className="relative">
-                                            <input
-                                                type={showOldPassword ? 'text' : 'password'}
-                                                value={oldPassword}
-                                                onChange={(e) => setOldPassword(e.target.value)}
-                                                className="input w-full pr-10"
-                                                placeholder="Enter current password"
-                                            />
+                                        <h2 className="text-xl font-semibold text-white">Push Notifications</h2>
+                                        <p className="text-sm text-gray-500">Get notified in your browser</p>
+                                    </div>
+                                </div>
+
+                                {isLoadingPreferences ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* New Episode Alerts */}
+                                        <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${preferences.push_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                    <Tv className={`w-5 h-5 ${preferences.push_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-white">New Episode Alerts</p>
+                                                    <p className="text-xs text-gray-500">Send push notification when a new episode airs</p>
+                                                </div>
+                                            </div>
                                             <button
-                                                type="button"
-                                                onClick={() => setShowOldPassword(!showOldPassword)}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                                onClick={() => handleTogglePreference('push_new_episodes')}
+                                                disabled={isSavingPreferences}
+                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.push_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
-                                                {showOldPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.push_new_episodes ? 'left-8' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        {/* Review Replies */}
+                                        <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${preferences.push_review_replies ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                    <MessageCircle className={`w-5 h-5 ${preferences.push_review_replies ? 'text-accent' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-white">Review Replies</p>
+                                                    <p className="text-xs text-gray-500">Send push notification when someone replies to my reviews</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleTogglePreference('push_review_replies')}
+                                                disabled={isSavingPreferences}
+                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.push_review_replies ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.push_review_replies ? 'left-8' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+
+                                        {/* New Followers */}
+                                        <div className="flex items-center justify-between py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${preferences.push_new_follower ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
+                                                    <Users className={`w-5 h-5 ${preferences.push_new_follower ? 'text-accent' : 'text-gray-400'}`} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-white">New Followers</p>
+                                                    <p className="text-xs text-gray-500">Send push notification when someone follows me</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleTogglePreference('push_new_follower')}
+                                                disabled={isSavingPreferences}
+                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.push_new_follower ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
+                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                                                ${preferences.push_new_follower ? 'left-8' : 'left-1'}`} />
                                             </button>
                                         </div>
                                     </div>
                                 )}
+                            </div>
 
-                                {/* New Password */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showNewPassword ? 'text' : 'password'}
-                                            value={newPassword}
-                                            onChange={(e) => setNewPassword(e.target.value)}
-                                            className="input w-full pr-10"
-                                            placeholder="Enter new password"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowNewPassword(!showNewPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                        >
-                                            {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                        </button>
+                            {/* Info Section */}
+                            <div className="bg-dark-100/50 p-4 rounded-xl border border-gray-700/30">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 bg-gray-700/50 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <Bell className="w-4 h-4 text-gray-400" />
                                     </div>
-                                </div>
-
-                                {/* Confirm Password */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
-                                    <input
-                                        type="password"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        className="input w-full"
-                                        placeholder="Confirm new password"
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={handleChangePassword}
-                                    disabled={isSavingAccount || (user.has_password && !oldPassword) || !newPassword || !confirmPassword}
-                                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isSavingAccount ? 'Saving...' : (user.has_password ? 'Change Password' : 'Set Password')}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Privacy Settings */}
-                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                <Shield className="w-5 h-5 text-accent" />
-                                Privacy
-                            </h2>
-
-                            <div className="flex items-center justify-between max-w-md">
-                                <div>
-                                    <p className="text-white font-medium">Private Profile</p>
-                                    <p className="text-gray-400 text-sm">Hide your profile from other users</p>
-                                </div>
-                                <button
-                                    onClick={handlePrivacyToggle}
-                                    className={`relative w-14 h-7 rounded-full transition-colors duration-200 
-                                                ${isPrivate ? 'bg-accent' : 'bg-dark-50 border border-gray-700'}`}
-                                >
-                                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${isPrivate ? 'left-8' : 'left-1'}`} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Data Import/Export */}
-                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                <Download className="w-5 h-5 text-accent" />
-                                Data Import/Export
-                            </h2>
-
-                            <div className="space-y-4 max-w-md">
-                                <Link
-                                    to="/import"
-                                    className="flex items-center justify-between p-4 bg-dark-50 hover:bg-dark-200 rounded-xl border border-gray-800 transition-colors group"
-                                >
                                     <div>
-                                        <p className="text-white font-medium">Import Data</p>
-                                        <p className="text-gray-400 text-sm">Import from MyAnimeList or AniList</p>
+                                        <h3 className="text-sm font-medium text-white mb-1">About Notifications</h3>
+                                        <p className="text-sm text-gray-500">
+                                            Notifications help you stay up to date with your anime. You'll receive alerts for new episodes
+                                            of anime in your Watching or Plan to Watch lists, as well as replies to your reviews.
+                                        </p>
                                     </div>
-                                    <Upload className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
-                                </Link>
-
-                                <Link
-                                    to="/export"
-                                    className="flex items-center justify-between p-4 bg-dark-50 hover:bg-dark-200 rounded-xl border border-gray-800 transition-colors group"
-                                >
-                                    <div>
-                                        <p className="text-white font-medium">Export Data</p>
-                                        <p className="text-gray-400 text-sm">Download your anime list and reviews</p>
-                                    </div>
-                                    <Download className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
-                                </Link>
-                            </div>
-                        </div>
-
-                        {/* Delete Account */}
-                        <div className="bg-red-500/5 p-6 rounded-2xl border border-red-500/20">
-                            <h2 className="text-xl font-semibold text-red-500 mb-2">Delete Account</h2>
-                            <p className="text-gray-400 text-sm mb-6">
-                                Once you delete your account, there is no going back. Please be certain.
-                            </p>
-
-                            {!showDeleteConfirm ? (
-                                <button
-                                    onClick={() => setShowDeleteConfirm(true)}
-                                    className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/50 rounded-lg transition-colors font-medium text-sm"
-                                >
-                                    Delete Account
-                                </button>
-                            ) : (
-                                <div className="max-w-md animate-fade-in">
-                                    {user.has_password ? (
-                                        <>
-                                            <p className="text-sm text-gray-300 mb-3 block">Enter your password to confirm:</p>
-                                            <div className="flex gap-3">
-                                                <input
-                                                    type="password"
-                                                    value={deleteAccountPassword}
-                                                    onChange={(e) => setDeleteAccountPassword(e.target.value)}
-                                                    className="input flex-1 border-red-500/30 focus:border-red-500 focus:ring-red-500/20"
-                                                    placeholder="Your Password"
-                                                />
-                                                <button
-                                                    onClick={handleDeleteAccount}
-                                                    disabled={isDeleting || !deleteAccountPassword}
-                                                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    {isDeleting ? 'Deleting...' : 'Confirm Delete'}
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setShowDeleteConfirm(false);
-                                                        setDeleteAccountPassword('');
-                                                    }}
-                                                    className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="flex flex-col gap-3">
-                                            <p className="text-sm text-gray-300 mb-2">Are you sure you want to delete your account? This action cannot be undone.</p>
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={handleDeleteAccount}
-                                                    disabled={isDeleting}
-                                                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
-                                                >
-                                                    {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
-                                                </button>
-                                                <button
-                                                    onClick={() => setShowDeleteConfirm(false)}
-                                                    className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Notifications Tab */}
-                {activeTab === 'notifications' && (
-                    <div className="space-y-6 animate-fade-in">
-                        {/* Success/Error Message */}
-                        {preferencesMessage && (
-                            <div className={`p-4 rounded-xl flex items-center gap-3 ${
-                                preferencesMessage.includes('success') 
-                                    ? 'bg-green-500/10 border border-green-500/20 text-green-400' 
-                                    : 'bg-red-500/10 border border-red-500/20 text-red-400'
-                            }`}>
-                                {preferencesMessage.includes('success') ? (
-                                    <Check className="w-5 h-5" />
-                                ) : (
-                                    <AlertCircle className="w-5 h-5" />
-                                )}
-                                <span className="font-medium">{preferencesMessage}</span>
-                            </div>
-                        )}
-
-                        {/* Email Notifications */}
-                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                                    <Mail className="w-5 h-5 text-blue-400" />
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-semibold text-white">Email Notifications</h2>
-                                    <p className="text-sm text-gray-500">Get notified via email</p>
-                                </div>
-                            </div>
-                            
-                            {isLoadingPreferences ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {/* New Episode Alerts */}
-                                    <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${preferences.email_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                <Tv className={`w-5 h-5 ${preferences.email_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-white">New Episode Alerts</p>
-                                                <p className="text-xs text-gray-500">Notify me when a new episode airs for anime in my list</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleTogglePreference('email_new_episodes')}
-                                            disabled={isSavingPreferences}
-                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
-                                                preferences.email_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.email_new_episodes ? 'left-8' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Push Notifications */}
-                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                                    <Bell className="w-5 h-5 text-purple-400" />
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-semibold text-white">Push Notifications</h2>
-                                    <p className="text-sm text-gray-500">Get notified in your browser</p>
-                                </div>
-                            </div>
-                            
-                            {isLoadingPreferences ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {/* New Episode Alerts */}
-                                    <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${preferences.push_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                <Tv className={`w-5 h-5 ${preferences.push_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-white">New Episode Alerts</p>
-                                                <p className="text-xs text-gray-500">Send push notification when a new episode airs</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleTogglePreference('push_new_episodes')}
-                                            disabled={isSavingPreferences}
-                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
-                                                preferences.push_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.push_new_episodes ? 'left-8' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-
-                                    {/* Review Replies */}
-                                    <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${preferences.push_review_replies ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                <MessageCircle className={`w-5 h-5 ${preferences.push_review_replies ? 'text-accent' : 'text-gray-400'}`} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-white">Review Replies</p>
-                                                <p className="text-xs text-gray-500">Send push notification when someone replies to my reviews</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleTogglePreference('push_review_replies')}
-                                            disabled={isSavingPreferences}
-                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
-                                                preferences.push_review_replies ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.push_review_replies ? 'left-8' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-
-                                    {/* New Followers */}
-                                    <div className="flex items-center justify-between py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg ${preferences.push_new_follower ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                <Users className={`w-5 h-5 ${preferences.push_new_follower ? 'text-accent' : 'text-gray-400'}`} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-white">New Followers</p>
-                                                <p className="text-xs text-gray-500">Send push notification when someone follows me</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleTogglePreference('push_new_follower')}
-                                            disabled={isSavingPreferences}
-                                            className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${
-                                                preferences.push_new_follower ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                            } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.push_new_follower ? 'left-8' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Info Section */}
-                        <div className="bg-dark-100/50 p-4 rounded-xl border border-gray-700/30">
-                            <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 bg-gray-700/50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <Bell className="w-4 h-4 text-gray-400" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-medium text-white mb-1">About Notifications</h3>
-                                    <p className="text-sm text-gray-500">
-                                        Notifications help you stay up to date with your anime. You'll receive alerts for new episodes 
-                                        of anime in your Watching or Plan to Watch lists, as well as replies to your reviews.
-                                    </p>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
-        </div>
 
-        <ImageCropModal
-            isOpen={cropModal.isOpen}
-            imageSrc={cropModal.imageSrc}
-            aspect={cropModal.type === 'banner' ? 3 : 1}
-            cropShape={cropModal.type === 'banner' ? 'rect' : 'rect'}
-            title={cropModal.type === 'banner' ? 'Edit banner' : 'Edit profile picture'}
-            onClose={() => {
-                setCropModal({ ...cropModal, isOpen: false });
-                if (cropModal.imageSrc) {
-                    URL.revokeObjectURL(cropModal.imageSrc);
-                }
-            }}
-            onApply={(file, previewUrl) => {
-                if (cropModal.type === 'banner') {
-                    setBannerFile(file);
-                    setBannerPreviewUrl(previewUrl);
-                } else {
-                    setAvatarFile(file);
-                    setAvatarPreviewUrl(previewUrl);
-                }
-                setCropModal({ ...cropModal, isOpen: false });
-                if (cropModal.imageSrc) {
-                    URL.revokeObjectURL(cropModal.imageSrc);
-                }
-            }}
-        />
+            <ImageCropModal
+                isOpen={cropModal.isOpen}
+                imageSrc={cropModal.imageSrc}
+                aspect={cropModal.type === 'banner' ? 3 : 1}
+                cropShape={cropModal.type === 'banner' ? 'rect' : 'rect'}
+                title={cropModal.type === 'banner' ? 'Edit banner' : 'Edit profile picture'}
+                onClose={() => {
+                    setCropModal({ ...cropModal, isOpen: false });
+                    if (cropModal.imageSrc) {
+                        URL.revokeObjectURL(cropModal.imageSrc);
+                    }
+                }}
+                onApply={(file, previewUrl) => {
+                    if (cropModal.type === 'banner') {
+                        setBannerFile(file);
+                        setBannerPreviewUrl(previewUrl);
+                    } else {
+                        setAvatarFile(file);
+                        setAvatarPreviewUrl(previewUrl);
+                    }
+                    setCropModal({ ...cropModal, isOpen: false });
+                    if (cropModal.imageSrc) {
+                        URL.revokeObjectURL(cropModal.imageSrc);
+                    }
+                }}
+            />
         </>
     );
 }

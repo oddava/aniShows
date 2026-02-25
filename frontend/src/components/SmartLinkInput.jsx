@@ -77,7 +77,7 @@ const detectPlatform = (url) => {
     try {
         const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
         const domain = urlObj.hostname.toLowerCase().replace('www.', '');
-        
+
         const patterns = {
             twitter: ['x.com', 'twitter.com'],
             youtube: ['youtube.com', 'youtu.be'],
@@ -91,7 +91,7 @@ const detectPlatform = (url) => {
             reddit: ['reddit.com', 'redd.it'],
             telegram: ['t.me', 'telegram.me'],
         };
-        
+
         for (const [platform, domains] of Object.entries(patterns)) {
             for (const pattern of domains) {
                 if (domain.includes(pattern)) return platform;
@@ -118,19 +118,19 @@ const isValidUrl = (url) => {
 // Normalize username to URL based on platform
 const normalizeUrl = (platform, input) => {
     if (!input) return '';
-    
+
     let value = input.trim();
-    
+
     // If already a URL, return it
     if (value.startsWith('http://') || value.startsWith('https://')) {
         return value;
     }
-    
+
     // Remove @ prefix
     if (value.startsWith('@')) {
         value = value.slice(1);
     }
-    
+
     const p = platform?.toLowerCase();
     const normalizeMap = {
         twitter: () => `https://x.com/${value}`,
@@ -146,51 +146,51 @@ const normalizeUrl = (platform, input) => {
         facebook: () => `https://facebook.com/${value}`,
         discord: () => `https://discord.gg/${value}`,
     };
-    
+
     if (normalizeMap[p]) {
         return normalizeMap[p]();
     }
-    
+
     // Generic fallback
     if (value.includes('.') && !value.includes(' ')) {
         return `https://${value}`;
     }
-    
+
     return value;
 };
 
 /**
  * Smart Link Input Component - Clean Version
  */
-const SmartLinkInput = ({ 
-    platform, 
-    value, 
-    onChange, 
+const SmartLinkInput = ({
+    platform,
+    value,
+    onChange,
     onPlatformChange,
     placeholder = "Enter username or URL",
-    disabled = false 
+    disabled = false
 }) => {
     const [localValue, setLocalValue] = useState(value || '');
     const [localPlatform, setLocalPlatform] = useState(platform || '');
     const [isValidating, setIsValidating] = useState(false);
     const [error, setError] = useState(null);
-    
+
     // Update local values when props change
     useEffect(() => {
         setLocalValue(value || '');
     }, [value]);
-    
+
     useEffect(() => {
         setLocalPlatform(platform || '');
     }, [platform]);
-    
+
     // Simple validation
     useEffect(() => {
         if (!localValue) {
             setError(null);
             return;
         }
-        
+
         const normalized = normalizeUrl(localPlatform, localValue);
         if (normalized && !isValidUrl(normalized)) {
             setError('Invalid URL format');
@@ -198,14 +198,14 @@ const SmartLinkInput = ({
             setError(null);
         }
     }, [localValue, localPlatform]);
-    
+
     const handleValueChange = (e) => {
         const newValue = e.target.value;
         setLocalValue(newValue);
-        
+
         // Smart paste: auto-convert t.me/user, x.com/user, etc.
         const trimmed = newValue.trim();
-        
+
         if (trimmed.match(/^(t\.me|x\.com|github\.com|instagram\.com)\/\w+$/i)) {
             onChange(`https://${trimmed}`);
             // Auto-detect platform
@@ -215,25 +215,25 @@ const SmartLinkInput = ({
             }
             return;
         }
-        
+
         onChange(newValue);
     };
-    
+
     const handlePlatformChange = (e) => {
         const newPlatform = e.target.value;
         setLocalPlatform(newPlatform);
         onPlatformChange(newPlatform);
     };
-    
+
     const normalizedUrl = normalizeUrl(localPlatform, localValue);
     const detectedPlatform = detectPlatform(normalizedUrl) || localPlatform?.toLowerCase();
     const showPreview = normalizedUrl && isValidUrl(normalizedUrl);
-    
+
     return (
         <div className="space-y-3">
-            <div className="flex items-start gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3">
                 {/* Platform Selector */}
-                <div className="w-32 shrink-0">
+                <div className="w-full sm:w-32 shrink-0">
                     <label className="block text-xs font-medium text-gray-400 mb-1.5">
                         Platform
                     </label>
@@ -266,13 +266,12 @@ const SmartLinkInput = ({
                             onChange={handleValueChange}
                             spellCheck="false"
                             autoComplete="off"
-                            className={`input py-2 text-sm w-full pr-10 ${
-                                error ? 'border-red-500/50 focus:border-red-500' : ''
-                            }`}
+                            className={`input py-2 text-sm w-full pr-10 ${error ? 'border-red-500/50 focus:border-red-500' : ''
+                                }`}
                             placeholder={placeholder}
                             disabled={disabled}
                         />
-                        
+
                         {/* Validation icon */}
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             {isValidating ? (
@@ -284,7 +283,7 @@ const SmartLinkInput = ({
                             ) : null}
                         </div>
                     </div>
-                    
+
                     {/* Error message */}
                     {error && (
                         <div className="flex items-center gap-1.5 mt-1.5 text-red-400 text-xs">

@@ -20,5 +20,5 @@ export function captureMessage(message, level = 'info', context = {}) {
 }
 
 export function setUserContext(user) {
-    console.debug('[User]', user?.username || 'anonymous');
+    // setUserContext behavior removed to reduce console noise
 }
