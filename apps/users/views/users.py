@@ -127,6 +127,9 @@ class UserProfileView(APIView):
             }
             for ub in featured_badges
         ]
+        data["total_badges_count"] = UserBadge.objects.filter(
+            user=user, badge__is_active=True
+        ).count()
 
         # Cache for 5 minutes (300 seconds)
         # Short TTL ensures fresh data while reducing DB load
@@ -512,6 +515,9 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                     }
                     for ub in featured_badges
                 ]
+                data["total_badges_count"] = UserBadge.objects.filter(
+                    user=user, badge__is_active=True
+                ).count()
 
                 # Cache for 5 minutes — shorter TTL ensures fresh data after actions
                 cache.set(cache_key, data, timeout=300)

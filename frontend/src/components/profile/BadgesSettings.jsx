@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { badgeApi } from '../../api/client';
 import { Award, Shield, Star, Zap, Crown, Check } from 'lucide-react';
 import ErrorBoundary from '../ErrorBoundary';
+import { useAuth } from '../../context/AuthContext';
 
 const ICON_MAP = {
     'award': Award,
@@ -23,6 +24,7 @@ const COLOR_MAP = {
 
 export default function BadgesSettings() {
     const queryClient = useQueryClient();
+    const { refreshProfile } = useAuth();
     const [selectedIds, setSelectedIds] = useState([]);
 
     const { data, isLoading } = useQuery({
@@ -45,6 +47,8 @@ export default function BadgesSettings() {
         onSuccess: () => {
             queryClient.invalidateQueries(['myBadges']);
             queryClient.invalidateQueries(['userProfile']);
+            // Refresh AuthContext user so featured badges are up-to-date across the app
+            refreshProfile();
         }
     });
 

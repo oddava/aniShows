@@ -87,7 +87,7 @@ export default function Settings() {
 
     // Redirect from badges tab if user has no badges
     useEffect(() => {
-        if (activeTab === 'badges' && user && (!user.badges || user.badges.length === 0)) {
+        if (activeTab === 'badges' && user && !user.total_badges_count) {
             setActiveTab('profile');
         }
     }, [activeTab, user]);
@@ -389,7 +389,7 @@ export default function Settings() {
                         <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
                             ${activeTab === 'profile' ? 'scale-x-100' : 'scale-x-0'}`} />
                     </button>
-                    {user?.badges?.length > 0 && (
+                    {user?.total_badges_count > 0 && (
                         <button
                             onClick={() => setActiveTab('badges')}
                             className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
