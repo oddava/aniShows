@@ -229,3 +229,20 @@ class NotificationService:
             },
             priority="low",
         )
+
+    @classmethod
+    def create_badge_awarded_notification(cls, user, badge, granted_by):
+        """Create notification for badge award."""
+        return cls.create_notification(
+            user=user,
+            notification_type=Notification.NotificationType.BADGE_AWARDED,
+            title=f"New Badge: {badge.name}",
+            message=f"You've been awarded the '{badge.name}' badge!",
+            data={
+                "badge_id": badge.id,
+                "badge_name": badge.name,
+                "badge_slug": badge.slug,
+                "granted_by_username": granted_by.username if granted_by else "System",
+            },
+            priority="high",
+        )

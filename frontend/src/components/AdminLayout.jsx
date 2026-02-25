@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import '../admin.css';
 
@@ -35,6 +36,7 @@ const AdminLayout = () => {
             title: 'Users',
             items: [
                 { path: '/admin/users', icon: '👥', label: 'All Users' },
+                { path: '/admin/badges', icon: '🏆', label: 'Badges' },
                 { path: '/admin/user-lists', icon: '📋', label: 'List Entries' },
                 { path: '/admin/favorites', icon: '❤️', label: 'Favorites' },
                 { path: '/admin/import-jobs', icon: '📥', label: 'Import Jobs' },
@@ -135,8 +137,9 @@ const AdminLayout = () => {
                         <button
                             className="admin-mobile-toggle"
                             onClick={() => setSidebarOpen(!sidebarOpen)}
+                            aria-label="Toggle Sidebar"
                         >
-                            ☰
+                            {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>
                     </div>
                     <div className="admin-header-right">

@@ -4,6 +4,7 @@ export default function ProfileTabs({ activeTab, onTabChange, counts = {} }) {
     const tabs = [
         { id: 'overview', label: 'Overview', shortLabel: 'Overview', count: null },
         { id: 'anime_list', label: 'Anime List', shortLabel: 'List', count: counts.anime },
+        { id: 'friends', label: 'Friends', shortLabel: 'Friends', count: counts.friends },
         { id: 'favorites', label: 'Favorites', shortLabel: 'Favs', count: counts.favorites },
         { id: 'reviews', label: 'Reviews', shortLabel: 'Reviews', count: counts.reviews },
         { id: 'activity', label: 'Activity', shortLabel: 'Activity', count: null },

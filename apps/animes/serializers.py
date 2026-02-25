@@ -15,7 +15,7 @@ from apps.animes.models import (
     AnimeStaff,
     ThemeSong,
 )
-from apps.users.models import UserProfile, UserAnimeList, UserActivity
+from apps.users.models import UserProfile, UserAnimeList, UserActivity, Badge, UserBadge
 from apps.animes.serializers_mixins import ImageUrlMixin
 import logging
 
@@ -497,6 +497,40 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
         return UserAnimeList.objects.filter(anime=obj).count()
 
 
+class BadgeSerializer(serializers.ModelSerializer):
+    """Serializer for a badge definition."""
+
+    class Meta:
+        model = Badge
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "icon",
+            "image",
+            "color",
+            "priority",
+            "is_active",
+        ]
+        read_only_fields = ["slug"]
+
+
+class UserBadgeSerializer(serializers.ModelSerializer):
+    """Serializer for a badge held by a user."""
+
+    badge = BadgeSerializer(read_only=True)
+
+    class Meta:
+        model = UserBadge
+        fields = [
+            "id",
+            "badge",
+            "granted_at",
+            "is_featured",
+        ]
+
+
 class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
@@ -536,6 +570,8 @@ class UserSerializer(serializers.ModelSerializer):
     followers_count = serializers.IntegerField(read_only=True, source="_followers_count")
     following_count = serializers.IntegerField(read_only=True, source="_following_count")
 
+    badges = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -561,6 +597,7 @@ class UserSerializer(serializers.ModelSerializer):
             "points",
             "followers_count",
             "following_count",
+            "badges",
         ]
         read_only_fields = [
             "id",
@@ -601,6 +638,24 @@ class UserSerializer(serializers.ModelSerializer):
     def get_points(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.points if profile else 0
+
+    def get_badges(self, obj):
+        # Only return featured badges, ordered by granted_at desc
+        user_badges = obj.badges.filter(badge__is_active=True, is_featured=True).select_related(
+            "badge"
+        )[:3]
+        return [
+            {
+                "id": ub.badge.id,
+                "name": ub.badge.name,
+                "slug": ub.badge.slug,
+                "icon": ub.badge.icon,
+                "image": ub.badge.image.url if ub.badge.image else None,
+                "color": ub.badge.color,
+                "description": ub.badge.description,
+            }
+            for ub in user_badges
+        ]
 
 
 class UserLightweightSerializer(serializers.ModelSerializer):
@@ -706,6 +761,8 @@ class PublicUserSerializer(serializers.ModelSerializer):
     is_following = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
 
+    badges = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -728,6 +785,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
             "following_count",
             "is_following",
             "is_online",
+            "badges",
         ]
         read_only_fields = fields
 
@@ -754,6 +812,24 @@ class PublicUserSerializer(serializers.ModelSerializer):
     def get_points(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.points if profile else 0
+
+    def get_badges(self, obj):
+        # Only return featured badges, ordered by granted_at desc
+        user_badges = obj.badges.filter(badge__is_active=True, is_featured=True).select_related(
+            "badge"
+        )[:3]
+        return [
+            {
+                "id": ub.badge.id,
+                "name": ub.badge.name,
+                "slug": ub.badge.slug,
+                "icon": ub.badge.icon,
+                "image": ub.badge.image.url if ub.badge.image else None,
+                "color": ub.badge.color,
+                "description": ub.badge.description,
+            }
+            for ub in user_badges
+        ]
 
     def get_is_following(self, obj):
         """Check if the current user is following this user"""

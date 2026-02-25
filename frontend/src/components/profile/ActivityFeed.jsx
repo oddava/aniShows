@@ -94,10 +94,11 @@ export default function ActivityFeed({ username, isPrivate }) {
         refetch,
     } = useInfiniteQuery({
         queryKey: ['activity-feed', username],
-        queryFn: ({ pageParam = 1 }) =>
+        queryFn: ({ pageParam }) =>
             activityApi.getFeed({ username, page: pageParam }).then(res => res.data),
+        initialPageParam: 1,
         getNextPageParam: (lastPage) => {
-            if (lastPage.next) {
+            if (lastPage && lastPage.next) {
                 try {
                     const url = new URL(lastPage.next);
                     return url.searchParams.get('page');
@@ -139,7 +140,7 @@ export default function ActivityFeed({ username, isPrivate }) {
         );
     }
 
-    const activities = data?.pages.flatMap(page => page.results || page) || [];
+    const activities = data?.pages?.flatMap(page => page.results || page) || [];
 
     if (activities.length === 0) {
         return (

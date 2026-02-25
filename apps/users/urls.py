@@ -24,6 +24,7 @@ from .views import (
     DeleteAccountView,
     ChangeEmailView,
     ConfirmEmailChangeView,
+    UserBadgeViewSet,
 )
 from .views.google import GoogleLogin
 from .views.notifications import (
@@ -48,6 +49,7 @@ router.register(r"follows", FollowViewSet, basename="follows")
 router.register(r"lists", UserAnimeListViewSet, basename="lists")
 router.register(r"activity", UserActivityViewSet, basename="activity")
 router.register(r"notifications", NotificationViewSet, basename="notifications")
+router.register(r"badges", UserBadgeViewSet, basename="user-badges")
 
 urlpatterns = [
     # User profile - me endpoints must come before username lookup
@@ -117,7 +119,5 @@ urlpatterns = [
         name="import_job_cancel",
     ),
     path("export/", ExportUserDataView.as_view(), name="export_user_data"),
-    path(
-        "export/json/", ExportUserDataJSONView.as_view(), name="export_user_data_json"
-    ),
+    path("export/json/", ExportUserDataJSONView.as_view(), name="export_user_data_json"),
 ]

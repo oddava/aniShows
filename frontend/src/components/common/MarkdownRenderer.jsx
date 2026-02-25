@@ -86,12 +86,31 @@ const markdownComponents = {
                 <code {...props} />
             </pre>
         ),
-    img: ({ node, ...props }) => (
-        <img
-            className="max-w-full h-auto rounded-xl my-4 border border-gray-800"
-            {...props}
-        />
-    ),
+    img: ({ node, ...props }) => {
+        // Get align and width from data attributes
+        const alignValue = props['data-align'] || node?.properties?.dataAlign;
+        const widthValue = props['data-width'] || node?.properties?.dataWidth;
+
+        // Clean up props to avoid React warnings about rendering custom data attributes
+        const cleanProps = { ...props };
+        delete cleanProps['data-align'];
+        delete cleanProps['data-width'];
+
+        const alignmentClasses = {
+            left: 'mr-auto',
+            center: 'mx-auto',
+            right: 'ml-auto',
+            default: ''
+        };
+
+        return (
+            <img
+                className={`max-w-full h-auto rounded-xl my-4 block ${alignmentClasses[alignValue] || alignmentClasses.default}`}
+                style={widthValue ? { width: widthValue } : undefined}
+                {...cleanProps}
+            />
+        );
+    },
     hr: ({ node, ...props }) => (
         <hr className="border-gray-800 my-6" {...props} />
     ),
@@ -170,9 +189,29 @@ const MarkdownRenderer = ({ content, className = "" }) => {
         },
     );
 
+    // Process images with size and alignment: ![alt](url|220|L) -> <img src="url" data-width="220" data-align="left" />
+    // Format: ![alt](url) or ![alt](url|width) or ![alt](url|width|alignment)
+    // Alignment options: L/l (left), C/c (center), R/r (right)
+    processedContent = processedContent.replace(
+        /!\[([^\]]*)\]\(([^|)]+)(?:\|(\d+[px%]?))?(?:\|([LlCcRr]))?\)/g,
+        (match, alt, url, width, align) => {
+            const attrs = [`src="${url}"`, `alt="${alt}"`];
+            if (width) {
+                const widthValue = width.match(/\d+/) ? (width.includes('%') ? width : width + 'px') : width;
+                attrs.push(`data-width="${widthValue}"`);
+            }
+            if (align) {
+                const alignUpper = align.toUpperCase();
+                const alignMap = { 'L': 'left', 'C': 'center', 'R': 'right' };
+                attrs.push(`data-align="${alignMap[alignUpper] || 'center'}"`);
+            }
+            return `<img ${attrs.join(' ')} />`;
+        },
+    );
+
     const cleanContent = DOMPurify.sanitize(processedContent, {
         ADD_TAGS: ['youtube', 'mention'],
-        ADD_ATTR: ['src', 'username'],
+        ADD_ATTR: ['src', 'username', 'data-align', 'data-width'],
     });
 
     return (

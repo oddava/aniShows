@@ -11,6 +11,7 @@ import { listApi } from '../../api/client';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import logger from '../../utils/logger';
 import ProfileInsights from '../ProfileInsights';
+import FriendsTab from './FriendsTab';
 
 const ActivityFeed = lazy(() => import('./ActivityFeed'));
 
@@ -64,6 +65,9 @@ export default function ProfileContent({
     switch (activeTab) {
         case 'overview':
             return null; // Overview is now handled directly in Profile.jsx
+
+        case 'friends':
+            return <FriendsTab username={targetUsername} isPrivate={isPrivate} />;
 
         case 'favorites':
             return (
@@ -217,14 +221,14 @@ function AnimeListContent({
 
     return (
         <div className="space-y-6 animate-tab-content">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5 p-1 bg-dark-100/50 rounded-xl border border-gray-800/60 w-fit">
                 {STATUS_TABS.map((tab) => (
                     <button
                         key={tab.value}
                         onClick={() => setListStatusFilter(tab.value)}
-                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${listStatusFilter === tab.value
-                            ? 'bg-accent text-white shadow-lg shadow-accent/20'
-                            : 'bg-dark-100 text-gray-400 hover:text-white hover:bg-dark-50 border border-gray-800'
+                        className={`px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 ${listStatusFilter === tab.value
+                            ? 'bg-accent text-white shadow-md scale-105 z-10'
+                            : 'text-gray-500 hover:text-gray-200 hover:bg-dark-50'
                             }`}
                     >
                         {tab.label}
@@ -269,15 +273,17 @@ function AnimeListContent({
             )}
 
             <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Anime List">
-                <AnimeListView
-                    listsLoading={listsLoading}
-                    filteredListItems={filteredListItems}
-                    viewMode={viewMode}
-                    listStatusFilter={listStatusFilter}
-                    isOwnProfile={isOwnProfile}
-                    isPublicView={isPublicView}
-                    searchQuery={searchQuery}
-                />
+                <div key={`${listStatusFilter}-${viewMode}`} className="animate-tab-content">
+                    <AnimeListView
+                        listsLoading={listsLoading}
+                        filteredListItems={filteredListItems}
+                        viewMode={viewMode}
+                        listStatusFilter={listStatusFilter}
+                        isOwnProfile={isOwnProfile}
+                        isPublicView={isPublicView}
+                        searchQuery={searchQuery}
+                    />
+                </div>
             </ProfileErrorBoundary>
         </div>
     );
@@ -294,8 +300,8 @@ function AnimeListView({
 }) {
     if (listsLoading) {
         return (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3">
-                {Array(12).fill(0).map((_, i) => <ProfileAnimeCardSkeleton key={i} />)}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3 grid-stagger">
+                {Array(14).fill(0).map((_, i) => <ProfileAnimeCardSkeleton key={i} />)}
             </div>
         );
     }
@@ -313,7 +319,7 @@ function AnimeListView({
 
     if (viewMode === 'grid') {
         return (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3 grid-stagger">
                 {filteredListItems.map((item) => (
                     <ProfileAnimeCard
                         key={item.id}
@@ -327,7 +333,7 @@ function AnimeListView({
     }
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-2 grid-stagger">
             {filteredListItems.map((item) => (
                 <Link
                     key={item.id}

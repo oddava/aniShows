@@ -84,13 +84,15 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
+            queryClient.invalidateQueries({ queryKey: ['favorites'] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
             logger.error('Error toggling favorite:', error);
             setIsFavorite(previousFavorite);
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, isFavorite]);
+    }, [anime.id, isAuthenticated, isLoading, isFavorite, queryClient]);
 
     const handleStatusChange = useCallback(async (e, newStatus) => {
         e.preventDefault();
@@ -111,6 +113,8 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
             }
+            queryClient.invalidateQueries({ queryKey: ['lists'] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
             logger.error('Error updating list:', error);
             setListStatus(previousStatus);
@@ -118,7 +122,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, listId, listStatus]);
+    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, queryClient]);
 
     const handleRemoveFromList = useCallback(async (e) => {
         e.preventDefault();
@@ -135,6 +139,8 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         setIsLoading(true);
         try {
             await listApi.remove(previousId);
+            queryClient.invalidateQueries({ queryKey: ['lists'] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
             logger.error('Error removing from list:', error);
             setListStatus(previousStatus);
@@ -142,7 +148,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         } finally {
             setIsLoading(false);
         }
-    }, [listId, listStatus, isLoading]);
+    }, [listId, listStatus, isLoading, queryClient]);
 
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
@@ -159,6 +165,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
             await listApi.update(entryId, { episodes_watched: newEpisodes });
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             queryClient.invalidateQueries({ queryKey: ['anime'] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
             logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(previousEpisodes);

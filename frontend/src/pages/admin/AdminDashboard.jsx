@@ -118,7 +118,7 @@ const AdminDashboard = () => {
                             +{stats?.statistics?.users?.new_30d || 0} new
                         </span>
                     </div>
-                    <div style={{ height: '200px', display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '0 0.5rem' }}>
+                    <div style={{ height: '200px', display: 'flex', alignItems: 'flex-end', gap: '4px', padding: '0 0.5rem', overflowX: 'auto' }}>
                         {stats?.charts?.user_growth && stats.charts.user_growth.length > 0 ? (
                             stats.charts.user_growth.map((item, index) => {
                                 const maxCount = Math.max(...stats.charts.user_growth.map(d => d.count), 1);

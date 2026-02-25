@@ -56,6 +56,7 @@ const AdminLayout = lazy(() => import('./components/AdminLayout'));
 const AdminRoute = lazy(() => import('./components/AdminRoute'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminBadges = lazy(() => import('./pages/admin/AdminBadges'));
 const AdminAnime = lazy(() => import('./pages/admin/AdminAnime'));
 const AdminReviews = lazy(() => import('./pages/admin/AdminReviews'));
 const AdminGenres = lazy(() => import('./pages/admin/AdminGenres'));
@@ -138,6 +139,7 @@ function App() {
                   }>
                     <Route index element={<AdminDashboard />} />
                     <Route path="users" element={<AdminUsers />} />
+                    <Route path="badges" element={<AdminBadges />} />
                     <Route path="anime" element={<AdminAnime />} />
                     <Route path="reviews" element={<AdminReviews />} />
                     <Route path="genres" element={<AdminGenres />} />

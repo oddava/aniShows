@@ -52,7 +52,7 @@ const InformationBox = ({ anime, className, accentColor }) => {
     };
 
     return (
-        <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl ${className}`}>
+        <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl min-w-0 overflow-hidden ${className}`}>
             <h3
                 className="text-white font-bold uppercase text-[10px] tracking-[0.2em]"
                 style={{ color: accentColor ? `${accentColor}cc` : '#8b5cf6cc' }}
@@ -197,14 +197,14 @@ const InformationBox = ({ anime, className, accentColor }) => {
 };
 
 const InfoRow = ({ icon: Icon, label, value }) => (  // eslint-disable-line no-unused-vars
-    <div className="flex items-start justify-between gap-4 py-1">
+    <div className="flex items-start justify-between gap-4 py-1 min-w-0">
         <div className="flex items-center gap-2 pt-1 shrink-0">
             <Icon className="w-3.5 h-3.5 text-gray-500" />
             <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider">
                 {label}
             </p>
         </div>
-        <div className="text-white font-bold text-sm text-right leading-relaxed">
+        <div className="text-white font-bold text-sm text-right leading-relaxed break-words min-w-0 max-w-[60%]">
             {value}
         </div>
     </div>
@@ -243,14 +243,15 @@ export default function AnimeDetail() {
         refetch: refetchReviews
     } = useInfiniteQuery({
         queryKey: ['reviews', slug, reviewSort, ratingFilter],
-        queryFn: ({ pageParam = 1 }) => reviewApi.getAll({
+        queryFn: ({ pageParam }) => reviewApi.getAll({
             anime: slug,
             page: pageParam,
             sort: reviewSort,
             rating: ratingFilter
         }).then(res => res.data),
+        initialPageParam: 1,
         getNextPageParam: (lastPage) => {
-            if (lastPage.next) {
+            if (lastPage && lastPage.next) {
                 try {
                     const url = new URL(lastPage.next);
                     return url.searchParams.get('page');
@@ -295,7 +296,7 @@ export default function AnimeDetail() {
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.crossOrigin = 'anonymous';
-                
+
                 img.onload = () => {
                     try {
                         const canvas = document.createElement('canvas');
@@ -309,7 +310,7 @@ export default function AnimeDetail() {
                         reject(e);
                     }
                 };
-                
+
                 img.onerror = () => {
                     reject(new Error('Failed to load image'));
                 };
@@ -366,6 +367,7 @@ export default function AnimeDetail() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviews'] });
             queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (user?.username) {
                 queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
             }
@@ -387,6 +389,7 @@ export default function AnimeDetail() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviews'] });
             queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (user?.username) {
                 queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
             }
@@ -398,9 +401,11 @@ export default function AnimeDetail() {
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (user?.username) {
                 queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
                 queryClient.invalidateQueries({ queryKey: ['favorites', user.username] });
+                queryClient.invalidateQueries({ queryKey: ['favorites-overview', user.username] });
             }
         } catch (error) {
             logger.error('Error toggling favorite:', error);
@@ -409,6 +414,8 @@ export default function AnimeDetail() {
 
     const handleListUpdate = () => {
         queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
     };
 
     const handleReviewSubmit = async (data) => {
@@ -509,7 +516,7 @@ export default function AnimeDetail() {
             {/* Content Container */}
             <div className="relative -mt-32 px-4 sm:px-6 lg:px-8 pb-16">
                 <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <div className="flex flex-col gap-6">
                             <div className="flex-shrink-0 mx-auto lg:mx-0">
@@ -531,8 +538,8 @@ export default function AnimeDetail() {
                         {/* Column 2: Main Content */}
                         <div className="flex-1 min-w-0">
                             <div className="text-center lg:text-left mb-8">
-                                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2">
-                                    <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto">
+                                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2 min-w-0">
+                                    <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
                                         {anime.title}
                                     </h1>
 
@@ -857,7 +864,7 @@ export default function AnimeDetail() {
                                             </Link>
                                         ))}
                                     </div>
-                                    <div className="lg:hidden flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+                                    <div className="lg:hidden flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory pl-0 sm:pl-0">
                                         {related.slice(0, 6).map((anime) => (
                                             <Link
                                                 key={anime.id}

@@ -337,7 +337,7 @@ export default function Browse() {
     refetch,
   } = useInfiniteQuery({
     queryKey: ['anime', 'list', currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYearParam, currentMinRating, currentMaxRating],
-    queryFn: ({ pageParam = 1 }) =>
+    queryFn: ({ pageParam }) =>
       animeApi.getAll({
         page: pageParam,
         page_size: 12,
@@ -352,8 +352,9 @@ export default function Browse() {
         min_rating: currentMinRating || undefined,
         max_rating: currentMaxRating || undefined,
       }).then(res => res.data),
+    initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      if (lastPage.next) {
+      if (lastPage && lastPage.next) {
         const url = new URL(lastPage.next);
         return url.searchParams.get('page');
       }
@@ -401,10 +402,10 @@ export default function Browse() {
 
   // Flatten anime data
   const allAnime = useMemo(() =>
-    data?.pages.flatMap(page => page.results) || [],
+    data?.pages?.flatMap(page => page.results) || [],
     [data]
   );
-  const totalCount = data?.pages[0]?.count || 0;
+  const totalCount = data?.pages?.[0]?.count || 0;
 
   // Infinite scroll
   const observer = useRef(null);

@@ -41,7 +41,7 @@ export default function FranchiseSection({ relations, accentColor }) {
                 </h2>
             </div>
 
-            <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory pl-0 sm:pl-0">
                 {displayRelations.map((rel) => (
                     <div
                         key={rel.id}
@@ -49,27 +49,27 @@ export default function FranchiseSection({ relations, accentColor }) {
                     >
                         <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200">
                             {rel.cover ? (
-                                <img 
-                                    src={rel.cover} 
-                                    alt={rel.title} 
-                                    className="w-full h-full object-cover" 
+                                <img
+                                    src={rel.cover}
+                                    alt={rel.title}
+                                    className="w-full h-full object-cover"
                                 />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
                                     <Film className="w-8 h-8" />
                                 </div>
                             )}
-                            
+
                             {/* Relation type badge */}
                             <div className="absolute top-1.5 left-1.5">
-                                <span 
+                                <span
                                     className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-sm"
                                 >
                                     {relationLabels[rel.type] || 'Related'}
                                 </span>
                             </div>
                         </div>
-                        
+
                         <h4 className="text-xs font-bold text-gray-300 line-clamp-2 leading-tight mt-1.5">
                             {rel.title}
                         </h4>

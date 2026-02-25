@@ -4,17 +4,17 @@ import { useState } from 'react';
 export default function MusicSection({ anime, accentColor }) {
     const [showAllOpenings, setShowAllOpenings] = useState(false);
     const [showAllEndings, setShowAllEndings] = useState(false);
-    
+
     // Get themes from API data
     const themeSongs = anime?.theme_songs || [];
-    
+
     const themes = {
         openings: themeSongs.filter(t => t.song_type === 'opening'),
         endings: themeSongs.filter(t => t.song_type === 'ending'),
     };
 
     const hasThemes = themes.openings.length > 0 || themes.endings.length > 0;
-    
+
     const MAX_VISIBLE = 6;
 
     if (!hasThemes) {
@@ -28,10 +28,10 @@ export default function MusicSection({ anime, accentColor }) {
                 Themes
             </h2>
 
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-6 min-w-0">
                 {/* Openings */}
                 {themes.openings.length > 0 && (
-                    <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-6 border border-gray-800 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 mb-4">
                             <Disc className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
                             <h3 className="font-bold text-white">Opening Themes</h3>
@@ -65,7 +65,7 @@ export default function MusicSection({ anime, accentColor }) {
 
                 {/* Endings */}
                 {themes.endings.length > 0 && (
-                    <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-6 border border-gray-800 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 mb-4">
                             <Disc className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
                             <h3 className="font-bold text-white">Ending Themes</h3>
@@ -103,14 +103,14 @@ export default function MusicSection({ anime, accentColor }) {
 
 function ThemeItem({ theme, number }) {
     return (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-dark-100/50 hover:bg-dark-100 transition-colors group">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-dark-200 text-gray-500 font-bold text-sm">
+        <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl bg-dark-100/50 hover:bg-dark-100 transition-colors group min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-dark-200 text-gray-500 font-bold text-xs sm:text-sm flex-shrink-0">
                 #{number}
             </div>
 
-            <div className="flex-1 min-w-0">
-                <p className="font-medium text-white truncate">{theme.title}</p>
-                <p className="text-xs text-gray-500">
+            <div className="flex-1 min-w-0 overflow-hidden">
+                <p className="font-medium text-white text-sm sm:text-base truncate">{theme.title}</p>
+                <p className="text-xs text-gray-500 truncate">
                     {theme.artist}
                     {theme.episodes && <span className="ml-2 text-gray-600">({theme.episodes})</span>}
                 </p>

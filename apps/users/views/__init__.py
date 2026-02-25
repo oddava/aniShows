@@ -15,3 +15,5 @@ from .account_management import (
     ConfirmEmailChangeView,
     ChangePasswordView,
 )
+from .admin_badges import AdminBadgeViewSet
+from .badges import UserBadgeViewSet

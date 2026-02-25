@@ -22,7 +22,8 @@ from django.db.models.fields import (
 )
 from django.conf import settings
 from root.storage_backends import MediaStorage
-from apps.users.utils.file_security import user_avatar_path, user_banner_path
+from apps.users.utils.file_security import user_avatar_path, user_banner_path, badge_image_path
+from django.utils.text import slugify
 
 
 class CustomUser(AbstractUser):
@@ -287,3 +288,79 @@ class SocialLinkChangeLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.action} at {self.created_at}"
+
+
+class Badge(Model):
+    """Definition of available badges."""
+
+    name = CharField(max_length=100)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
+    description = TextField()
+    icon = CharField(
+        max_length=50, blank=True, help_text="Lucide icon name (e.g., 'award', 'shield')"
+    )
+    image = ImageField(upload_to=badge_image_path, blank=True, null=True, storage=MediaStorage())
+    color = CharField(
+        max_length=20, default="blue", help_text="Tailwind color key (e.g., 'yellow', 'purple')"
+    )
+    priority = IntegerField(
+        default=0, help_text="Higher = more prestigious, controls display ordering"
+    )
+    is_active = BooleanField(default=True, help_text="Whether this badge can still be granted")
+
+    created_at = DateTimeField(auto_now_add=True)
+    created_by = ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_badges",
+    )
+
+    class Meta:
+        ordering = ["-priority", "name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 2
+            while Badge.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+
+class UserBadge(Model):
+    """M2M through table tracking which user has which badge."""
+
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="badges")
+    badge = ForeignKey(Badge, on_delete=CASCADE, related_name="user_badges")
+
+    granted_by = ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="granted_badges",
+    )
+    granted_at = DateTimeField(auto_now_add=True)
+
+    is_featured = BooleanField(default=False, help_text="User chose to display this badge")
+    reason = CharField(
+        max_length=255, blank=True, help_text="Optional note for why this was granted"
+    )
+
+    class Meta:
+        unique_together = ("user", "badge")
+        ordering = ["-granted_at"]
+        indexes = [
+            Index(fields=["user", "is_featured"]),
+            Index(fields=["badge"]),
+            Index(fields=["user", "-granted_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.badge.name}"

@@ -35,8 +35,7 @@ def generate_secure_filename(filename, allowed_extensions=None):
     # Validate extension
     if allowed_extensions and ext not in allowed_extensions:
         raise ValidationError(
-            f"File extension '.{ext}' is not allowed. "
-            f"Allowed: {', '.join(allowed_extensions)}"
+            f"File extension '.{ext}' is not allowed. Allowed: {', '.join(allowed_extensions)}"
         )
 
     # Generate secure random filename
@@ -100,3 +99,15 @@ def anime_image_path(instance, filename, image_type="cover"):
     )
 
     return f"anime/{image_type}/{anime_id}/{secure_filename}"
+
+
+def badge_image_path(instance, filename):
+    """
+    Generate secure upload path for badge images.
+    Stores files in badges/<secure_filename>
+    """
+    secure_filename = generate_secure_filename(
+        filename, allowed_extensions=["jpg", "jpeg", "png", "webp", "svg", "gif"]
+    )
+
+    return f"badges/{secure_filename}"

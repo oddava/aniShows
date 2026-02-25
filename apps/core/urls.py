@@ -36,26 +36,25 @@ from apps.users.admin_views import (
 )
 from apps.core.views.admin_import_jobs import AdminImportJobViewSet
 
+from apps.users.views import AdminBadgeViewSet
+
 # Admin router
 admin_router = DefaultRouter()
 admin_router.register(r"users", AdminUserViewSet, basename="admin-users")
+admin_router.register(r"badges", AdminBadgeViewSet, basename="admin-badges")
 admin_router.register(r"anime", AdminAnimeViewSet, basename="admin-anime")
 admin_router.register(r"reviews", AdminReviewViewSet, basename="admin-reviews")
 admin_router.register(r"genres", AdminGenreViewSet, basename="admin-genres")
 admin_router.register(r"studios", AdminStudioViewSet, basename="admin-studios")
 admin_router.register(r"user-lists", AdminUserListViewSet, basename="admin-user-lists")
 admin_router.register(r"favorites", AdminFavoritesViewSet, basename="admin-favorites")
-admin_router.register(
-    r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs"
-)
+admin_router.register(r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs")
 admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
 admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
 
 # Celery admin router
 celery_router = DefaultRouter()
-celery_router.register(
-    r"tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
-)
+celery_router.register(r"tasks/results", CeleryTaskResultViewSet, basename="celery-task-results")
 celery_router.register(
     r"tasks/schedules", CeleryTaskScheduleViewSet, basename="celery-task-schedules"
 )
@@ -66,9 +65,7 @@ urlpatterns = [
     # Admin endpoints
     path("admin/", include(admin_router.urls)),
     path("admin/dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
-    path(
-        "admin/stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"
-    ),
+    path("admin/stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"),
     path("admin/bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
     path("admin/reports/", AdminReportsView.as_view(), name="admin-reports"),
     # Celery endpoints
@@ -88,7 +85,5 @@ urlpatterns = [
         CeleryTaskControlView.as_view(),
         name="celery-task-control",
     ),
-    path(
-        "admin/celery/workers/", CeleryWorkerStatusView.as_view(), name="celery-workers"
-    ),
+    path("admin/celery/workers/", CeleryWorkerStatusView.as_view(), name="celery-workers"),
 ]

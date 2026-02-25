@@ -152,11 +152,13 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                     setIsOpen(false);
                     setIsClosingDropdown(false);
                     queryClient.invalidateQueries({ queryKey: ['lists'] });
+                    queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
                     if (onUpdate) onUpdate(response.data);
                 }, 200);
             } else {
                 setCurrentStatus(newStatus);
                 queryClient.invalidateQueries({ queryKey: ['lists'] });
+                queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
                 if (onUpdate) onUpdate(response.data);
                 closeDropdown();
             }
@@ -184,6 +186,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 setScore(0);
                 setEpisodesWatched(0);
                 queryClient.invalidateQueries({ queryKey: ['lists'] });
+                queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
                 if (onUpdate) onUpdate(null);
             }, 200);
         } catch (error) {
@@ -229,6 +232,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             }
 
             queryClient.invalidateQueries({ queryKey: ['lists'] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (onUpdate) onUpdate(response.data);
         } catch (error) {
             logger.error('Failed to update episodes:', error);
@@ -558,6 +562,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                             is_rewatching: isRewatching,
                                         });
                                         queryClient.invalidateQueries({ queryKey: ['lists'] });
+                                        queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
                                         if (onUpdate) onUpdate(response.data);
                                         closeDetails();
                                     } catch (error) {

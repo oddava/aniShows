@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Lock, Shield, Eye, EyeOff, AlertCircle, Check, Plus, Trash2, Mail, Bell, Tv, MessageCircle, Users, Loader2 } from 'lucide-react';
+import { User, Lock, Shield, Award, Eye, EyeOff, AlertCircle, Check, Plus, Trash2, Mail, Bell, Tv, MessageCircle, Users, Loader2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { authApi, notificationApi } from '../api/client';
 import { Link } from 'react-router-dom';
@@ -10,9 +11,11 @@ import logger from '../utils/logger';
 import SmartLinkInput from '../components/SmartLinkInput';
 import RichTextEditor from '../components/forums/RichTextEditor';
 import ImageCropModal from '../components/ImageCropModal';
+import BadgesSettings from '../components/profile/BadgesSettings';
 
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile } = useAuth();
+    const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState('profile');
 
     // Profile settings state
@@ -81,6 +84,13 @@ export default function Settings() {
             setIsPrivate(user.is_private || false);
         }
     }, [user]);
+
+    // Redirect from badges tab if user has no badges
+    useEffect(() => {
+        if (activeTab === 'badges' && user && (!user.badges || user.badges.length === 0)) {
+            setActiveTab('profile');
+        }
+    }, [activeTab, user]);
 
     // Load notification preferences
     useEffect(() => {
@@ -190,6 +200,11 @@ export default function Settings() {
             
             // Refresh profile data in background (don't block UI)
             refreshProfile();
+            
+            // Invalidate React Query profile caches so Profile page shows fresh data
+            // (avatar, banner, bio, username changes etc.)
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: ['profile'] });
         } catch (err) {
             logger.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
@@ -259,6 +274,9 @@ export default function Settings() {
         setIsPrivate(newPrivacy);
         try {
             await authApi.updateProfile({ is_private: newPrivacy });
+            // Invalidate profile caches since privacy affects public profile visibility
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: ['profile'] });
         } catch (err) {
             logger.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure
@@ -371,6 +389,18 @@ export default function Settings() {
                         <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
                             ${activeTab === 'profile' ? 'scale-x-100' : 'scale-x-0'}`} />
                     </button>
+                    {user?.badges?.length > 0 && (
+                        <button
+                            onClick={() => setActiveTab('badges')}
+                            className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
+                                ${activeTab === 'badges' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            <Award className="w-4 h-4" />
+                            Badges
+                            <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left 
+                                ${activeTab === 'badges' ? 'scale-x-100' : 'scale-x-0'}`} />
+                        </button>
+                    )}
                     <button
                         onClick={() => setActiveTab('account')}
                         className={`flex items-center gap-2 pb-4 px-2 font-medium transition-all duration-200 relative
@@ -691,6 +721,13 @@ export default function Settings() {
                                 {isSavingProfile ? 'Saving...' : 'Save Profile'}
                             </button>
                         </div>
+                    </div>
+                )}
+
+                {/* Badges Tab */}
+                {activeTab === 'badges' && (
+                    <div className="animate-fade-in">
+                        <BadgesSettings />
                     </div>
                 )}
 

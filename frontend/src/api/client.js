@@ -342,6 +342,7 @@ export const followApi = {
     toggle: (username) => api.post('/follows/toggle/', { username }),
     getFollowers: (username, params) => api.get(`/follows/followers/${username}/`, { params }),
     getFollowing: (username, params) => api.get(`/follows/following/${username}/`, { params }),
+    getMutuals: (username, params) => api.get(`/follows/mutuals/${username}/`, { params }),
     check: (username) => api.get(`/follows/check/${username}/`),
     getFriendsWatching: (animeId) => api.get('/follows/friends/watching/', { params: { anime_id: animeId } }),
 };
@@ -357,4 +358,28 @@ export const notificationApi = {
     subscribe: (data) => api.post('/notifications/subscribe/', data),
     unsubscribe: (endpoint) => api.delete('/notifications/subscribe/', { data: { endpoint } }),
     getSubscriptions: () => api.get('/notifications/subscribe/'),
+};
+
+export const badgeApi = {
+    getMine: () => api.get('/badges/mine/'),
+    updateFeatured: (badgeIds) => api.put('/badges/featured/', { badge_ids: badgeIds }),
+};
+
+export const adminBadgeApi = {
+    getAll: (params) => api.get('/admin/badges/', { params }),
+    getById: (id) => api.get(`/admin/badges/${id}/`),
+    create: (data) => api.post('/admin/badges/', data, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    }),
+    update: (id, data) => api.patch(`/admin/badges/${id}/`, data, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    }),
+    delete: (id) => api.delete(`/admin/badges/${id}/`),
+    grant: (id, userIds, reason) => api.post(`/admin/badges/${id}/grant/`, { user_ids: userIds, reason }),
+    revoke: (id, userIds) => api.post(`/admin/badges/${id}/revoke/`, { user_ids: userIds }),
+    getHolders: (id, params) => api.get(`/admin/badges/${id}/holders/`, { params }),
 };

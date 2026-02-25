@@ -33,9 +33,17 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
     cache.delete(f"user_profile:{user_id}:full")
     cache.delete(f"user_stats:{user_id}")
 
-    # Delete public profile cache if username provided
+    # Delete public profile caches if username provided
     if username:
-        cache.delete(f"public_profile:{username}:v0")
+        # Use pattern deletion to clear all viewer-specific cache keys
+        # Pattern: public_profile:{username}:*  (covers all versions and all viewers)
+        try:
+            cache.delete_pattern(f"public_profile:{username}:*")
+            logger.debug(f"Deleted public profile cache pattern for {username}")
+        except (AttributeError, Exception) as e:
+            # Fallback: delete the base key if pattern deletion is not available
+            cache.delete(f"public_profile:{username}:v0")
+            logger.debug(f"Fallback: deleted base public profile cache for {username}: {e}")
 
         # Increment cache version to invalidate all authenticated views
         version_key = f"profile_cache_version:{username}"
@@ -89,9 +97,9 @@ def get_user_stats_cache_key(user_id):
     return f"user_stats:{user_id}"
 
 
-def get_public_profile_cache_key(username, version=0):
+def get_public_profile_cache_key(username, viewer_id="anonymous"):
     """Get the cache key for a public profile."""
-    return f"public_profile:{username}:v{version}"
+    return f"public_profile:{username}:v0:viewer:{viewer_id}"
 
 
 def get_profile_cache_version(username):

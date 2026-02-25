@@ -24,12 +24,8 @@ class SystemLog(models.Model):
         SECURITY = "SECURITY", "Security"
 
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    level = models.CharField(
-        max_length=10, choices=LogLevel.choices, default=LogLevel.INFO
-    )
-    log_type = models.CharField(
-        max_length=20, choices=LogType.choices, default=LogType.SYSTEM
-    )
+    level = models.CharField(max_length=10, choices=LogLevel.choices, default=LogLevel.INFO)
+    log_type = models.CharField(max_length=20, choices=LogType.choices, default=LogType.SYSTEM)
 
     # User information
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -78,9 +74,7 @@ class AuditLog(models.Model):
     action = models.CharField(max_length=20, choices=ActionType.choices)
     entity_type = models.CharField(max_length=50)  # e.g., 'Anime', 'User', 'Review'
     entity_id = models.CharField(max_length=50, blank=True)
-    entity_repr = models.CharField(
-        max_length=200, blank=True
-    )  # Human-readable representation
+    entity_repr = models.CharField(max_length=200, blank=True)  # Human-readable representation
 
     # Change details
     previous_state = models.JSONField(default=dict, blank=True)
@@ -316,9 +310,7 @@ class CeleryTaskSchedule(models.Model):
     queue = models.CharField(max_length=100, default="default", blank=True)
 
     # Status and tracking
-    status = models.CharField(
-        max_length=20, choices=TaskStatus.choices, default=TaskStatus.ENABLED
-    )
+    status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.ENABLED)
     total_run_count = models.PositiveIntegerField(default=0)
     last_run_at = models.DateTimeField(null=True, blank=True)
     next_run_at = models.DateTimeField(null=True, blank=True)
@@ -358,9 +350,7 @@ class CeleryTaskSchedule(models.Model):
                 "seconds": datetime.timedelta(seconds=self.interval_every),
                 "microseconds": datetime.timedelta(microseconds=self.interval_every),
             }
-            return schedule(
-                period_map.get(self.interval_period, datetime.timedelta(hours=1))
-            )
+            return schedule(period_map.get(self.interval_period, datetime.timedelta(hours=1)))
         return None
 
 
@@ -374,6 +364,7 @@ class Notification(models.Model):
         FORUM_REPLY = "forum_reply", "Forum Reply"
         FORUM_MENTION = "forum_mention", "Forum Mention"
         FORUM_LIKE = "forum_like", "Forum Like"
+        BADGE_AWARDED = "badge_awarded", "Badge Awarded"
         SYSTEM = "system", "System"
 
     class Priority(models.TextChoices):
@@ -381,12 +372,8 @@ class Notification(models.Model):
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"
 
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="notifications"
-    )
-    notification_type = models.CharField(
-        max_length=20, choices=NotificationType.choices
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    notification_type = models.CharField(max_length=20, choices=NotificationType.choices)
 
     # Content
     title = models.CharField(max_length=200)
@@ -404,9 +391,7 @@ class Notification(models.Model):
     is_push_sent = models.BooleanField(default=False)
 
     # Priority for delivery ordering
-    priority = models.CharField(
-        max_length=10, choices=Priority.choices, default=Priority.MEDIUM
-    )
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -439,9 +424,7 @@ class PushSubscription(models.Model):
         BROWSER = "browser", "Browser"
         MOBILE = "mobile", "Mobile"
 
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="push_subscriptions"
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="push_subscriptions")
     endpoint = models.URLField()
     p256dh = models.CharField(max_length=255)
     auth = models.CharField(max_length=255)

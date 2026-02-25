@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { Users } from 'lucide-react';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
 import HorizontalCarousel from '../common/HorizontalCarousel';
-import { activityApi, listApi, favoriteApi } from '../../api/client';
+import { activityApi, listApi, favoriteApi, followApi } from '../../api/client';
 
 function TopStatsRow({ user }) {
     if (!user) return null;
@@ -143,6 +144,88 @@ function FavoritesGrid({ favoritesData }) {
     );
 }
 
+function FriendsGrid({ username, isPrivate, onTabChange }) {
+    const { data: friendsData, isLoading } = useQuery({
+        queryKey: ['friends', username],
+        queryFn: () => followApi.getMutuals(username, { page_size: 12 }).then(res => res.data),
+        enabled: !isPrivate && !!username,
+        staleTime: 2 * 60 * 1000,
+        refetchOnMount: true,
+    });
+
+    const friends = friendsData?.results || [];
+
+    if (isPrivate || isLoading) return null;
+
+    const MAX_DISPLAYED = 10;
+    const displayedFriends = friends.slice(0, MAX_DISPLAYED);
+    const totalCount = friendsData?.count || friends.length;
+    const remainingCount = totalCount - MAX_DISPLAYED;
+
+    return (
+        <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-5 border border-gray-800/30">
+            <div className="flex items-center justify-between mb-4">
+                <button 
+                    onClick={() => onTabChange && onTabChange('friends')}
+                    className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-wider flex items-center gap-2"
+                >
+                    <Users className="w-3.5 h-3.5" />
+                    Friends
+                </button>
+                {totalCount > 0 && (
+                    <span className="text-[10px] text-gray-500">{totalCount}</span>
+                )}
+            </div>
+
+            {friends.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                    <p className="text-xs">No friends yet</p>
+                </div>
+            ) : (
+                <div className="flex flex-wrap gap-3">
+                    {displayedFriends.map((item) => (
+                        <Link
+                            key={item.user.id}
+                            to={`/profile/${item.user.username}`}
+                            className="group flex flex-col items-center gap-1.5 w-14"
+                            title={item.user.username}
+                        >
+                            {item.user.avatar ? (
+                                <img
+                                    src={item.user.avatar}
+                                    alt={item.user.username}
+                                    className="w-11 h-11 rounded-full object-cover border-2 border-gray-700/50 group-hover:border-accent/50 transition-colors"
+                                    loading="lazy"
+                                />
+                            ) : (
+                                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent/30 to-pink-500/30 flex items-center justify-center border-2 border-gray-700/50 group-hover:border-accent/50 transition-colors">
+                                    <span className="text-sm font-bold text-white">
+                                        {item.user.username[0].toUpperCase()}
+                                    </span>
+                                </div>
+                            )}
+                            <span className="text-[10px] text-gray-500 group-hover:text-white truncate w-full text-center transition-colors">
+                                {item.user.username}
+                            </span>
+                        </Link>
+                    ))}
+                    {remainingCount > 0 && (
+                        <button 
+                            onClick={() => onTabChange && onTabChange('friends')}
+                            className="flex flex-col items-center gap-1.5 w-14 hover:opacity-80 transition-opacity"
+                        >
+                            <div className="w-11 h-11 rounded-full bg-dark-200 border-2 border-gray-700/50 flex items-center justify-center">
+                                <span className="text-xs font-medium text-gray-400">+{remainingCount}</span>
+                            </div>
+                            <span className="text-[10px] text-gray-500 truncate w-full text-center mt-auto">View All</span>
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function GenreOverviewSidebar({ username, isPrivate }) {
     const { data: listsData, isLoading } = useQuery({
         queryKey: ['insights-lists', username],
@@ -156,7 +239,8 @@ function GenreOverviewSidebar({ username, isPrivate }) {
             return results.flat();
         },
         enabled: !isPrivate && !!username,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 2 * 60 * 1000, // 2 minutes
+        refetchOnMount: true,
     });
 
     if (isPrivate || isLoading || !listsData || listsData.length === 0) return null;
@@ -231,7 +315,8 @@ function ActivityHistorySidebar({ username, isPrivate }) {
         queryKey: ['activity-heatmap', username],
         queryFn: () => activityApi.getHeatmap({ username }).then(res => res.data),
         enabled: !isPrivate && !!username,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 2 * 60 * 1000, // 2 minutes
+        refetchOnMount: true,
     });
 
     if (isPrivate || isLoading || isError || !heatmapData || heatmapData.length === 0) return null;
@@ -246,20 +331,23 @@ function ActivityHistorySidebar({ username, isPrivate }) {
 export default function OverviewTab({
     displayUser,
     targetUsername,
-    isPrivate
+    isPrivate,
+    onTabChange
 }) {
     const { data: watchingItemsData } = useQuery({
         queryKey: ['lists', targetUsername, 'Watching'],
         queryFn: () => listApi.getAll({ status: 'Watching', username: targetUsername }).then(res => res.data.results || res.data || []),
         enabled: !!displayUser && !isPrivate,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 60 * 1000, // 1 minute
+        refetchOnMount: true,
     });
 
     const { data: favsData } = useQuery({
         queryKey: ['favorites-overview', targetUsername],
         queryFn: () => favoriteApi.getAll({ username: targetUsername, page: 1, page_size: 100 }).then(res => res.data),
         enabled: !!displayUser && !isPrivate,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 60 * 1000, // 1 minute
+        refetchOnMount: true,
     });
 
     const watchingItems = watchingItemsData || [];
@@ -298,6 +386,8 @@ export default function OverviewTab({
                             </div>
                         </div>
                     ) : null}
+
+                    <FriendsGrid username={targetUsername} isPrivate={isPrivate} onTabChange={onTabChange} />
 
                     <ActivityHistorySidebar username={targetUsername} isPrivate={isPrivate} />
 

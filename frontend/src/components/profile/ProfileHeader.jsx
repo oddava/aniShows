@@ -1,6 +1,7 @@
 import { User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FollowButton from '../FollowButton';
+import UserBadges from './UserBadges';
 
 export default function ProfileHeader({
     displayUser,
@@ -57,10 +58,13 @@ export default function ProfileHeader({
                     {/* Username and Actions */}
                     <div className="flex-1 flex flex-col md:flex-row md:items-start justify-between w-full gap-4 mt-2">
                         <div className="text-center md:text-left flex flex-col gap-1">
-                            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-md">
-                                {displayUser?.username}
-                            </h1>
-                            
+                            <div className="flex flex-col md:flex-row items-center md:items-center gap-2 md:gap-4">
+                                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-md">
+                                    {displayUser?.username}
+                                </h1>
+                                <UserBadges user={displayUser} />
+                            </div>
+
                             <div className="flex items-center justify-center md:justify-start gap-4 text-sm font-medium mt-1">
                                 <button
                                     onClick={() => onOpenFollowersModal('followers')}
@@ -96,7 +100,7 @@ export default function ProfileHeader({
                                 <FollowButton
                                     username={targetUsername}
                                     initialIsFollowing={displayUser?.is_following}
-                                    onSuccess={() => isPublicView && onRefetchProfile()}
+                                    initialIsFollower={displayUser?.is_follower}
                                     className="px-6 py-2.5 font-semibold transition-colors duration-200"
                                 />
                             )}

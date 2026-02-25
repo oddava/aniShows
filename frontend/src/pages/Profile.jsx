@@ -1,6 +1,6 @@
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { User } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
@@ -24,6 +24,7 @@ export default function Profile({ forcedUsername }) {
     const { username: paramsUsername } = useParams();
     const username = forcedUsername || paramsUsername;
     const { user: currentUser, isAuthenticated, loading } = useAuth();
+    const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState('overview');
     const [viewMode, setViewMode] = useState('grid');
     const [searchQuery, setSearchQuery] = useState('');
@@ -35,17 +36,49 @@ export default function Profile({ forcedUsername }) {
     const isOwnProfile = !isPublicView;
     const targetUsername = isPublicView ? username : currentUser?.username;
 
+    // Track previous targetUsername to detect profile navigation changes
+    const prevTargetUsernameRef = useRef(targetUsername);
+
+    // Reset tab state and refetch when navigating between different profiles
+    useEffect(() => {
+        if (prevTargetUsernameRef.current !== targetUsername) {
+            setActiveTab('overview');
+            setSearchQuery('');
+            setListStatusFilter('Watching');
+            prevTargetUsernameRef.current = targetUsername;
+
+            // When switching back to own profile, force a refetch since refetchOnMount
+            // won't trigger (component doesn't unmount between /profile/:username and /profile)
+            if (isOwnProfile && currentUser) {
+                queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            }
+        }
+    }, [targetUsername, isOwnProfile, currentUser, queryClient]);
+
     const { data: publicProfile, isLoading: profileLoading, isError, refetch: refetchProfile } = useQuery({
         queryKey: ['profile', targetUsername],
         queryFn: () => authApi.getByUsername(targetUsername).then(res => res.data),
         enabled: isPublicView,
         retry: 2,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 30 * 1000, // 30 seconds — allow quick revisits to use cache, but refetch often
         gcTime: 10 * 60 * 1000,
-        refetchOnMount: false,
+        refetchOnMount: true,
+        refetchOnWindowFocus: true,
     });
 
-    const displayUser = isPublicView ? publicProfile : currentUser;
+    // For own profile, also fetch fresh data to get badges and other updates
+    const { data: ownProfile, isLoading: ownProfileLoading } = useQuery({
+        queryKey: ['ownProfile'],
+        queryFn: () => authApi.getProfile(true).then(res => res.data),
+        enabled: isOwnProfile && !!currentUser,
+        retry: 2,
+        staleTime: 0, // Always get fresh data for own profile
+        gcTime: 5 * 60 * 1000,
+        refetchOnMount: 'always', // Always refetch, even if data exists in cache
+        refetchOnWindowFocus: true,
+    });
+
+    const displayUser = isPublicView ? publicProfile : (ownProfile || currentUser);
     const isPrivate = isPublicView && displayUser?.is_private;
 
     const openFollowersModal = (type) => {
@@ -61,10 +94,11 @@ export default function Profile({ forcedUsername }) {
         isLoading: favoritesLoading
     } = useInfiniteQuery({
         queryKey: ['favorites', targetUsername],
-        queryFn: ({ pageParam = 1 }) =>
+        queryFn: ({ pageParam }) =>
             favoriteApi.getAll({ username: targetUsername, page: pageParam }).then(res => res.data),
+        initialPageParam: 1,
         getNextPageParam: (lastPage) => {
-            if (lastPage.next) {
+            if (lastPage && lastPage.next) {
                 try {
                     const url = new URL(lastPage.next);
                     return url.searchParams.get('page');
@@ -73,18 +107,18 @@ export default function Profile({ forcedUsername }) {
             return undefined;
         },
         enabled: !!displayUser && activeTab === 'favorites' && !isPrivate,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 60 * 1000, // 1 minute
         gcTime: 10 * 60 * 1000,
-        refetchOnMount: false,
+        refetchOnMount: true,
     });
 
     const { data: currentListData, isLoading: listsLoading } = useQuery({
         queryKey: ['lists', targetUsername, listStatusFilter],
         queryFn: () => listApi.getAll({ status: listStatusFilter, username: targetUsername }).then(res => res.data.results || res.data || []),
         enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 60 * 1000, // 1 minute
         gcTime: 10 * 60 * 1000,
-        refetchOnMount: false,
+        refetchOnMount: true,
     });
 
     const {
@@ -95,10 +129,11 @@ export default function Profile({ forcedUsername }) {
         isLoading: reviewsLoading
     } = useInfiniteQuery({
         queryKey: ['reviews', targetUsername],
-        queryFn: ({ pageParam = 1 }) =>
+        queryFn: ({ pageParam }) =>
             reviewApi.getAll({ mine: !isPublicView, user: targetUsername, page: pageParam }).then(res => res.data),
+        initialPageParam: 1,
         getNextPageParam: (lastPage) => {
-            if (lastPage.next) {
+            if (lastPage && lastPage.next) {
                 try {
                     const url = new URL(lastPage.next);
                     return url.searchParams.get('page');
@@ -107,9 +142,9 @@ export default function Profile({ forcedUsername }) {
             return undefined;
         },
         enabled: !!displayUser && activeTab === 'reviews' && !isPrivate,
-        staleTime: 5 * 60 * 1000,
+        staleTime: 60 * 1000, // 1 minute
         gcTime: 10 * 60 * 1000,
-        refetchOnMount: false,
+        refetchOnMount: true,
     });
 
     useEffect(() => {
@@ -194,6 +229,7 @@ export default function Profile({ forcedUsername }) {
                             displayUser={displayUser} 
                             targetUsername={targetUsername} 
                             isPrivate={isPrivate} 
+                            onTabChange={setActiveTab}
                         />
                     ) : (
                         <ProfileContent
@@ -229,6 +265,8 @@ export default function Profile({ forcedUsername }) {
                 <FollowersModal
                     username={targetUsername}
                     type={followersModalType}
+                    followersCount={displayUser?.followers_count ?? 0}
+                    followingCount={displayUser?.following_count ?? 0}
                     isOpen={showFollowersModal}
                     onClose={() => setShowFollowersModal(false)}
                 />

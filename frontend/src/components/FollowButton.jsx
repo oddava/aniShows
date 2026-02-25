@@ -38,12 +38,14 @@ export default function FollowButton({
             await queryClient.cancelQueries({ queryKey: ['user', username] });
             await queryClient.cancelQueries({ queryKey: ['profile', username] });
             await queryClient.cancelQueries({ queryKey: ['follows'] });
+            await queryClient.cancelQueries({ queryKey: ['ownProfile'] });
 
             // Snapshot previous values
             const previousTargetProfile = queryClient.getQueryData(['profile', username]);
             const previousTargetUser = queryClient.getQueryData(['user', username]);
             const previousMyProfile = queryClient.getQueryData(['profile', 'me']);
             const previousMyUser = queryClient.getQueryData(['user', 'me']);
+            const previousOwnProfile = queryClient.getQueryData(['ownProfile']);
 
             // Calculate new values
             const newIsFollowing = !isFollowing;
@@ -51,40 +53,44 @@ export default function FollowButton({
 
             // Optimistically update target user's profile (followers_count)
             if (previousTargetProfile) {
-                const updatedTargetProfile = {
+                queryClient.setQueryData(['profile', username], {
                     ...previousTargetProfile,
-                    followers_count: (previousTargetProfile.followers_count || 0) + followerDelta,
+                    followers_count: Math.max(0, (previousTargetProfile.followers_count || 0) + followerDelta),
                     is_following: newIsFollowing
-                };
-                queryClient.setQueryData(['profile', username], updatedTargetProfile);
+                });
             }
 
             // Optimistically update target user's data
             if (previousTargetUser) {
-                const updatedTargetUser = {
+                queryClient.setQueryData(['user', username], {
                     ...previousTargetUser,
-                    followers_count: (previousTargetUser.followers_count || 0) + followerDelta,
+                    followers_count: Math.max(0, (previousTargetUser.followers_count || 0) + followerDelta),
                     is_following: newIsFollowing
-                };
-                queryClient.setQueryData(['user', username], updatedTargetUser);
+                });
             }
 
             // Optimistically update current user's profile (following_count)
             if (previousMyProfile) {
-                const updatedMyProfile = {
+                queryClient.setQueryData(['profile', 'me'], {
                     ...previousMyProfile,
-                    following_count: (previousMyProfile.following_count || 0) + followerDelta
-                };
-                queryClient.setQueryData(['profile', 'me'], updatedMyProfile);
+                    following_count: Math.max(0, (previousMyProfile.following_count || 0) + followerDelta)
+                });
             }
 
             // Optimistically update current user's data
             if (previousMyUser) {
-                const updatedMyUser = {
+                queryClient.setQueryData(['user', 'me'], {
                     ...previousMyUser,
-                    following_count: (previousMyUser.following_count || 0) + followerDelta
-                };
-                queryClient.setQueryData(['user', 'me'], updatedMyUser);
+                    following_count: Math.max(0, (previousMyUser.following_count || 0) + followerDelta)
+                });
+            }
+
+            // Optimistically update own profile query (used by Profile page for own profile)
+            if (previousOwnProfile) {
+                queryClient.setQueryData(['ownProfile'], {
+                    ...previousOwnProfile,
+                    following_count: Math.max(0, (previousOwnProfile.following_count || 0) + followerDelta)
+                });
             }
 
             // Optimistically update local state
@@ -96,17 +102,19 @@ export default function FollowButton({
                 previousTargetUser,
                 previousMyProfile,
                 previousMyUser,
+                previousOwnProfile,
                 previousIsFollowing: isFollowing
             };
         },
         onSuccess: (response, variables, context) => {
             const newIsFollowing = response.data?.is_following ?? !context.previousIsFollowing;
             const followerCount = response.data?.followers_count;
+            const followingCount = response.data?.following_count;
             
             // Update with server response (in case it differs from optimistic)
             setIsFollowing(newIsFollowing);
 
-            // Update caches with exact server data
+            // Update target user caches with exact server data
             if (followerCount !== undefined) {
                 queryClient.setQueryData(['profile', username], (old) => 
                     old ? { ...old, followers_count: followerCount, is_following: newIsFollowing } : old
@@ -116,16 +124,27 @@ export default function FollowButton({
                 );
             }
 
-            // Only invalidate follows list query if we're NOT in the modal
-            if (!onUnfollow) {
-                queryClient.invalidateQueries({ queryKey: ['follows'] });
+            // Update current user's following_count with exact server data
+            if (followingCount !== undefined) {
+                queryClient.setQueryData(['ownProfile'], (old) => 
+                    old ? { ...old, following_count: followingCount } : old
+                );
+                queryClient.setQueryData(['profile', 'me'], (old) => 
+                    old ? { ...old, following_count: followingCount } : old
+                );
+                queryClient.setQueryData(['user', 'me'], (old) => 
+                    old ? { ...old, following_count: followingCount } : old
+                );
             }
+
+            // Invalidate follows list queries so modal data refreshes
+            queryClient.invalidateQueries({ queryKey: ['follows'] });
 
             if (onFollowChange) {
                 onFollowChange(newIsFollowing, followerCount);
             }
 
-            // Call onSuccess callback for parent component refetch
+            // Call onSuccess callback for parent component
             if (onSuccess) {
                 onSuccess();
             }
@@ -148,6 +167,9 @@ export default function FollowButton({
             }
             if (context?.previousMyUser) {
                 queryClient.setQueryData(['user', 'me'], context.previousMyUser);
+            }
+            if (context?.previousOwnProfile) {
+                queryClient.setQueryData(['ownProfile'], context.previousOwnProfile);
             }
             
             // Revert local state

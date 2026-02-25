@@ -18,7 +18,7 @@ from apps.animes.serializers import (
     UserProfileUpdateSerializer,
     UserLightweightSerializer,
 )
-from apps.users.models import UserProfile, UserStats
+from apps.users.models import UserProfile, UserStats, UserBadge
 from apps.users.services.cache import invalidate_user_caches
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,25 @@ class UserProfileView(APIView):
         # Add stats
         if stats_data:
             data.update(stats_data)
+
+        # Add featured badges
+        featured_badges = (
+            UserBadge.objects.filter(user=user, badge__is_active=True, is_featured=True)
+            .select_related("badge")
+            .order_by("-granted_at")[:3]
+        )
+        data["badges"] = [
+            {
+                "id": ub.badge.id,
+                "name": ub.badge.name,
+                "slug": ub.badge.slug,
+                "icon": ub.badge.icon,
+                "image": ub.badge.image.url if ub.badge.image else None,
+                "color": ub.badge.color,
+                "description": ub.badge.description,
+            }
+            for ub in featured_badges
+        ]
 
         # Cache for 5 minutes (300 seconds)
         # Short TTL ensures fresh data while reducing DB load
@@ -415,8 +434,30 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                 return Response({"error": "Profile not found"}, status=404)
 
             if hasattr(user, "stats"):
-                # Use pre-calculated stats
                 stats = user.stats
+
+                # Validate stats aren't stale/zero-filled.
+                # If anime_count is 0 but user actually has anime entries,
+                # the UserStats row was created with defaults and never
+                # properly populated (e.g. Celery task failed mid-way).
+                # Fall through to the annotation-based serializer path which
+                # computes correct live data, and trigger async stats rebuild.
+                if stats.anime_count == 0:
+                    from apps.users.models import UserAnimeList
+
+                    has_anime = UserAnimeList.objects.filter(user=user).exists()
+                    if has_anime:
+                        logger.warning(
+                            f"UserStats for {username} has anime_count=0 but user has anime entries — "
+                            "falling through to live query"
+                        )
+                        from apps.users.tasks import update_user_stats
+
+                        update_user_stats.delay(user.id)
+                        # Raise to break out of the try block into the fallback path
+                        raise ValueError("Stale UserStats detected")
+
+                # Use pre-calculated stats
                 data = {
                     "id": user.id,
                     "username": user.username,
@@ -453,8 +494,27 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
                 else:
                     data["is_following"] = False
 
-                # Cache for 30 minutes (longer since we have stats table)
-                cache.set(cache_key, data, timeout=1800)
+                # Add featured badges
+                featured_badges = (
+                    UserBadge.objects.filter(user=user, badge__is_active=True, is_featured=True)
+                    .select_related("badge")
+                    .order_by("-granted_at")[:3]
+                )
+                data["badges"] = [
+                    {
+                        "id": ub.badge.id,
+                        "name": ub.badge.name,
+                        "slug": ub.badge.slug,
+                        "icon": ub.badge.icon,
+                        "image": ub.badge.image.url if ub.badge.image else None,
+                        "color": ub.badge.color,
+                        "description": ub.badge.description,
+                    }
+                    for ub in featured_badges
+                ]
+
+                # Cache for 5 minutes — shorter TTL ensures fresh data after actions
+                cache.set(cache_key, data, timeout=300)
 
                 duration = (time.time() - start_time) * 1000
                 logger.info(f"Profile stats hit for {username}: {duration:.2f}ms")
@@ -486,8 +546,8 @@ class PublicUserProfileViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(user)
         data = serializer.data
 
-        # Cache the result
-        cache.set(cache_key, data, timeout=1800)
+        # Cache the result for 5 minutes
+        cache.set(cache_key, data, timeout=300)
 
         # Trigger async stats update for this user
         from apps.users.tasks import update_user_stats

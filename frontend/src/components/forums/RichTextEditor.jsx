@@ -13,10 +13,14 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
     const inputRef = useRef(null);
 
     useEffect(() => {
-        if (isOpen && inputRef.current) {
-            setTimeout(() => inputRef.current.focus(), 50);
+        if (isOpen) {
+            setUrl('');
+            setText('');
+            if (inputRef.current) {
+                setTimeout(() => inputRef.current.focus(), 50);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, type]);
 
     if (!isOpen) return null;
 
@@ -47,7 +51,7 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">{type === 'youtube' ? 'YouTube URL' : 'URL'}</label>
+                        <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">{type === 'youtube' ? 'YouTube URL' : type === 'image' ? 'Image URL' : 'URL'}</label>
                         <input
                             ref={inputRef}
                             type="url"
@@ -58,18 +62,21 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
                             required
                         />
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
-                            {type === 'link' ? 'Link Text (Optional)' : type === 'youtube' ? 'Video Title (Optional)' : 'Alt Text (Optional)'}
-                        </label>
-                        <input
-                            type="text"
-                            value={text}
-                            onChange={(e) => setText(e.target.value)}
-                            placeholder={type === 'link' ? "Click here" : "Image description"}
-                            className="w-full px-4 py-2.5 bg-dark border border-gray-700 rounded-xl focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/50 text-white text-sm transition-all"
-                        />
-                    </div>
+                    {type !== 'image' && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
+                                {type === 'link' ? 'Link Text (Optional)' : 'Video Title (Optional)'}
+                            </label>
+                            <input
+                                type="text"
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                                placeholder={type === 'link' ? "Click here" : "Video title"}
+                                className="w-full px-4 py-2.5 bg-dark border border-gray-700 rounded-xl focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/50 text-white text-sm transition-all"
+                            />
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-end gap-3 pt-4 mt-2">
                         <button type="button" onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">
                             Cancel
@@ -110,13 +117,14 @@ const RichTextEditor = ({ value, onChange, placeholder = "Write something...", c
         const type = modalConfig.type;
         setModalConfig({ isOpen: false, type: 'link' });
 
-        const display = text.trim() || url;
+        const display = text.trim();
         if (type === 'link') {
-            insertText(`[${display}](`, `${url})`);
+            insertText(`[${display || url}](`, `${url})`);
         } else if (type === 'youtube') {
             insertText(`@[youtube](`, `${url})`);
         } else {
-            insertText(`![${display}](`, `${url})`);
+            // For images, auto-insert with default size|alignment (left aligned)
+            insertText(`![](${url}|200|l)`);
         }
     };
 

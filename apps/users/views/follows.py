@@ -73,6 +73,7 @@ class FollowViewSet(viewsets.GenericViewSet):
                     "status": "unfollowed",
                     "is_following": False,
                     "followers_count": target_user.followers.count(),
+                    "following_count": request.user.following.count(),
                 }
             )
 
@@ -87,6 +88,7 @@ class FollowViewSet(viewsets.GenericViewSet):
                 "status": "followed",
                 "is_following": True,
                 "followers_count": target_user.followers.count(),
+                "following_count": request.user.following.count(),
             },
             status=status.HTTP_201_CREATED,
         )
@@ -123,14 +125,10 @@ class FollowViewSet(viewsets.GenericViewSet):
         if request.user.is_authenticated:
             queryset = queryset.annotate(
                 _is_following=Exists(
-                    UserFollow.objects.filter(
-                        follower=request.user, following=OuterRef("follower")
-                    )
+                    UserFollow.objects.filter(follower=request.user, following=OuterRef("follower"))
                 ),
                 _is_follower=Exists(
-                    UserFollow.objects.filter(
-                        follower=OuterRef("follower"), following=request.user
-                    )
+                    UserFollow.objects.filter(follower=OuterRef("follower"), following=request.user)
                 ),
             )
 
@@ -140,14 +138,10 @@ class FollowViewSet(viewsets.GenericViewSet):
 
         page = self.paginate_queryset(queryset)
         if page is not None:
-            serializer = UserFollowListSerializer(
-                page, many=True, context={"request": request}
-            )
+            serializer = UserFollowListSerializer(page, many=True, context={"request": request})
             return self.get_paginated_response(serializer.data)
 
-        serializer = UserFollowListSerializer(
-            queryset, many=True, context={"request": request}
-        )
+        serializer = UserFollowListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
     @action(
@@ -197,14 +191,71 @@ class FollowViewSet(viewsets.GenericViewSet):
 
         page = self.paginate_queryset(queryset)
         if page is not None:
-            serializer = UserFollowListSerializer(
-                page, many=True, context={"request": request}
-            )
+            serializer = UserFollowListSerializer(page, many=True, context={"request": request})
             return self.get_paginated_response(serializer.data)
 
-        serializer = UserFollowListSerializer(
-            queryset, many=True, context={"request": request}
+        serializer = UserFollowListSerializer(queryset, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["GET"],
+        url_path="mutuals/(?P<username>[^/.]+)",
+        permission_classes=[permissions.AllowAny],
+    )
+    def mutuals(self, request, username=None):
+        """Get list of a user's mutual follows (friends)"""
+        from django.db.models import Exists, OuterRef
+
+        target_user = get_object_or_404(User, username=username)
+
+        # Check if profile is private
+        profile = getattr(target_user, "userprofile", None)
+        if (
+            profile
+            and profile.is_private
+            and (not request.user.is_authenticated or target_user != request.user)
+        ):
+            return Response(
+                {"detail": "This profile is private."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Find users where both directions of follow exist:
+        # target_user follows them AND they follow target_user
+        queryset = (
+            UserFollow.objects.filter(
+                follower=target_user,
+                following__following__following=target_user,
+            )
+            .select_related("following__userprofile")
+            .order_by("-created_at")
         )
+
+        # Annotate is_following and is_follower relative to the requesting user
+        if request.user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_following=Exists(
+                    UserFollow.objects.filter(
+                        follower=request.user, following=OuterRef("following")
+                    )
+                ),
+                _is_follower=Exists(
+                    UserFollow.objects.filter(
+                        follower=OuterRef("following"), following=request.user
+                    )
+                ),
+            )
+
+        for follow in queryset:
+            follow._display_user = follow.following
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = UserFollowListSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = UserFollowListSerializer(queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
     @action(
@@ -249,9 +300,7 @@ class FollowViewSet(viewsets.GenericViewSet):
             UserAnimeList.objects.filter(
                 anime=anime,
                 # User must be someone I follow
-                user__in=UserFollow.objects.filter(follower=request.user).values(
-                    "following"
-                ),
+                user__followers__follower=request.user,
                 # User must also follow me back (mutual)
                 user__following__following=request.user,
             )
