@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+from django.db import transaction
 import logging
 
 from apps.users import throttling
@@ -53,8 +54,64 @@ class DeleteAccountView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        # Delete user and all related data (cascades via ForeignKey)
-        user.delete()
+        # Delete user and all related data
+        # Pre-delete related records using raw SQL deletes (bypassing signals)
+        # to avoid post_delete signals that try to update stats/create activity
+        # for the user being deleted, which causes IntegrityErrors.
+        with transaction.atomic():
+            from apps.users.models import (
+                UserAnimeList,
+                UserActivity,
+                UserStats,
+                UserFollow,
+                UserBadge,
+                SocialLinkChangeLog,
+            )
+            from apps.animes.models import (
+                UserFavorite,
+                UserHistory,
+                Review,
+                ReviewVote,
+                ReviewComment,
+                UserRecommendation,
+            )
+            from apps.forums.models import Thread, Post, ThreadLike, PostLike
+            from apps.core.models import Notification, PushSubscription
+
+            db = user._state.db or "default"
+
+            # Delete forum-related data (deep cascades)
+            PostLike.objects.filter(post__author=user)._raw_delete(db)
+            PostLike.objects.filter(user=user)._raw_delete(db)
+            ThreadLike.objects.filter(thread__author=user)._raw_delete(db)
+            ThreadLike.objects.filter(user=user)._raw_delete(db)
+            Post.objects.filter(thread__author=user)._raw_delete(db)
+            Post.objects.filter(author=user)._raw_delete(db)
+            Thread.objects.filter(author=user)._raw_delete(db)
+
+            # Delete review-related data
+            ReviewComment.objects.filter(review__user=user)._raw_delete(db)
+            ReviewComment.objects.filter(user=user)._raw_delete(db)
+            ReviewVote.objects.filter(review__user=user)._raw_delete(db)
+            ReviewVote.objects.filter(user=user)._raw_delete(db)
+            Review.objects.filter(user=user)._raw_delete(db)
+
+            # Delete anime list, activity, stats, and other user data
+            UserActivity.objects.filter(user=user)._raw_delete(db)
+            UserAnimeList.objects.filter(user=user)._raw_delete(db)
+            UserFavorite.objects.filter(user=user)._raw_delete(db)
+            UserHistory.objects.filter(user=user)._raw_delete(db)
+            UserRecommendation.objects.filter(user=user)._raw_delete(db)
+            UserStats.objects.filter(user=user)._raw_delete(db)
+            UserFollow.objects.filter(follower=user)._raw_delete(db)
+            UserFollow.objects.filter(following=user)._raw_delete(db)
+            UserBadge.objects.filter(user=user)._raw_delete(db)
+            SocialLinkChangeLog.objects.filter(user=user)._raw_delete(db)
+            Notification.objects.filter(user=user)._raw_delete(db)
+            PushSubscription.objects.filter(user=user)._raw_delete(db)
+
+            # Now delete the user itself (remaining cascades are minimal)
+            user.delete()
 
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
 

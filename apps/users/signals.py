@@ -13,6 +13,13 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def _user_exists(user):
+    """Check if a user still exists in the database (not mid-cascade-delete)."""
+    if not user or not user.pk:
+        return False
+    return User.objects.filter(pk=user.pk).exists()
+
+
 def invalidate_profile_cache(username):
     """Invalidate all cached versions of a user's public profile."""
     from django.conf import settings
@@ -41,9 +48,7 @@ def verify_social_email(request, sociallogin, **kwargs):
     Automatically verify email for users who register or link social accounts.
     """
     user = sociallogin.user
-    logger.info(
-        f"Social account added/linked for user: {user.username}. Auto-verifying email."
-    )
+    logger.info(f"Social account added/linked for user: {user.username}. Auto-verifying email.")
     _verify_user_profile(user, sociallogin)
 
 
@@ -90,9 +95,7 @@ def handle_new_follower(sender, instance, created, **kwargs):
 
     # Don't notify if user follows themselves
     if instance.follower == instance.following:
-        logger.debug(
-            f"Skipping self-follow notification for user {instance.follower.id}"
-        )
+        logger.debug(f"Skipping self-follow notification for user {instance.follower.id}")
         return
 
     try:
@@ -110,6 +113,10 @@ def handle_new_follower(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=UserFollow)
 def handle_unfollow(sender, instance, **kwargs):
     """Invalidate cache when a follow relationship is deleted."""
+    # Skip if users are being deleted (cascade deletion)
+    if not _user_exists(instance.follower) or not _user_exists(instance.following):
+        return
+
     # Invalidate cache for both users
     invalidate_profile_cache(instance.follower.username)
     invalidate_profile_cache(instance.following.username)
@@ -124,9 +131,7 @@ def handle_profile_update(sender, instance, created, **kwargs):
     """Invalidate cache when profile is updated (avatar, banner, bio, etc.)."""
     if not created:  # Only invalidate on updates, not initial creation
         invalidate_profile_cache(instance.user.username)
-        logger.debug(
-            f"Cache invalidated due to profile update for user: {instance.user.username}"
-        )
+        logger.debug(f"Cache invalidated due to profile update for user: {instance.user.username}")
 
 
 # =============================================================================
@@ -161,6 +166,11 @@ def update_points_on_vote_save(sender, instance, created, **kwargs):
 def update_points_on_vote_delete(sender, instance, **kwargs):
     """Update author's points when a vote is removed."""
     review_author = instance.review.user
+
+    # Skip if user is being deleted (cascade deletion)
+    if not _user_exists(review_author):
+        return
+
     profile, _ = UserProfile.objects.get_or_create(user=review_author)
 
     if instance.is_helpful:
@@ -196,4 +206,3 @@ def recalculate_user_points(user):
 
     profile.points = result["total_points"] or 0
     profile.save(update_fields=["points"])
-

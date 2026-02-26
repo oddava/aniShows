@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def _user_exists(user):
+    """Check if a user still exists in the database (not mid-cascade-delete)."""
+    if not user or not user.pk:
+        return False
+    return User.objects.filter(pk=user.pk).exists()
+
+
 def update_user_stats_and_cache(user):
     """
     Update user stats and invalidate caches immediately.
@@ -215,6 +222,10 @@ def log_user_activity_on_delete(sender, instance, **kwargs):
     if getattr(instance, "_skip_activity", False):
         return
 
+    # Skip if user is being deleted (cascade deletion)
+    if not _user_exists(instance.user):
+        return
+
     try:
         activity_kwargs = {
             "user": instance.user,
@@ -235,6 +246,10 @@ def handle_user_anime_list_change(sender, instance, **kwargs):
     Update stats and regenerate recommendations when a user updates their anime list.
     """
     if instance and instance.user:
+        # Skip if user is being deleted (cascade deletion)
+        if not _user_exists(instance.user):
+            return
+
         logger.info(
             f"User {instance.user.username} updated anime list. Updating stats and triggering recommendations."
         )
@@ -255,6 +270,10 @@ def handle_user_favorite_change(sender, instance, **kwargs):
     Update stats and regenerate recommendations when a user adds/removes favorites.
     """
     if instance and instance.user:
+        # Skip if user is being deleted (cascade deletion)
+        if not _user_exists(instance.user):
+            return
+
         logger.info(
             f"User {instance.user.username} updated favorites. Updating stats and triggering recommendations."
         )
@@ -275,6 +294,10 @@ def handle_review_change(sender, instance, **kwargs):
     Update stats when a user creates/updates/deletes a review.
     """
     if instance and instance.user:
+        # Skip if user is being deleted (cascade deletion)
+        if not _user_exists(instance.user):
+            return
+
         logger.info(f"User {instance.user.username} updated reviews. Updating stats.")
 
         # Update stats immediately for real-time feedback
