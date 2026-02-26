@@ -267,7 +267,7 @@ export const authApi = {
     resendVerification: (email) => api.post('/auth/resend-verification/', { email }),
     changeEmail: (data) => api.post('/auth/change-email/', data),
     confirmEmailChange: (uid, token, newEmail) => api.get(`/confirm-email-change/${uid}/${token}/${newEmail}/`),
-    deleteAccount: (data) => api.post('/auth/delete-account/', data),
+    deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),
 };
 
 export const favoriteApi = {
