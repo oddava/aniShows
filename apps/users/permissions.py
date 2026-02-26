@@ -1,7 +1,4 @@
 from rest_framework.exceptions import PermissionDenied
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
 
 
 class EmailVerificationMixin:

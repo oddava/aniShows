@@ -6,11 +6,11 @@ No heavy ML libraries - optimized for free tier hosting.
 """
 
 import logging
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Q, Count, Avg, F
+from django.db.models import Q, Count
 from django.contrib.auth import get_user_model
 
 from apps.animes.models import Anime, UserFavorite, UserHistory, UserRecommendation
@@ -56,10 +56,7 @@ class ContentBasedRecommender:
             weight = entry.score / 10.0 if entry.score > 0 else 0.5
 
             # If user rated it highly or favorited it
-            if (
-                entry.score >= 7
-                or UserFavorite.objects.filter(user=user, anime=anime).exists()
-            ):
+            if entry.score >= 7 or UserFavorite.objects.filter(user=user, anime=anime).exists():
                 preferences["highly_rated_anime"].append(anime)
 
                 # Count genres
@@ -105,16 +102,12 @@ class ContentBasedRecommender:
             return 0.0
 
         # Weight by user's preference strength
-        weighted_intersection = sum(
-            preferences["liked_genres"][g] for g in intersection
-        )
+        weighted_intersection = sum(preferences["liked_genres"][g] for g in intersection)
         union = anime_genres | liked_genres
 
         return weighted_intersection / len(union)
 
-    def calculate_content_score(
-        self, anime: Anime, preferences: Dict
-    ) -> Tuple[float, Dict]:
+    def calculate_content_score(self, anime: Anime, preferences: Dict) -> Tuple[float, Dict]:
         """
         Calculate content-based recommendation score.
         Returns (score, metadata) tuple.
@@ -237,9 +230,9 @@ class ContentBasedRecommender:
         recommendations = []
 
         # Get trending
-        trending = Anime.objects.filter(trending_rank__isnull=False).order_by(
-            "trending_rank"
-        )[: limit // 2]
+        trending = Anime.objects.filter(trending_rank__isnull=False).order_by("trending_rank")[
+            : limit // 2
+        ]
 
         for anime in trending:
             recommendations.append(
@@ -252,9 +245,9 @@ class ContentBasedRecommender:
             )
 
         # Get top rated
-        top_rated = Anime.objects.filter(
-            rating__isnull=False, site_rank__isnull=False
-        ).order_by("site_rank")[: limit // 2]
+        top_rated = Anime.objects.filter(rating__isnull=False, site_rank__isnull=False).order_by(
+            "site_rank"
+        )[: limit // 2]
 
         for anime in top_rated:
             if anime not in [r["anime"] for r in recommendations]:
@@ -303,24 +296,20 @@ class RecommendationService:
                 except Exception as e:
                     # Skip duplicates that might occur from race conditions
                     if "unique constraint" in str(e).lower() or "already exists" in str(e).lower():
-                        logger.warning(f"Skipping duplicate recommendation for anime {rec_data['anime'].id}")
+                        logger.warning(
+                            f"Skipping duplicate recommendation for anime {rec_data['anime'].id}"
+                        )
                         continue
                     raise
 
-            logger.info(
-                f"Generated {len(saved_recs)} recommendations for user {user.username}"
-            )
+            logger.info(f"Generated {len(saved_recs)} recommendations for user {user.username}")
             return saved_recs
 
         except Exception as e:
-            logger.exception(
-                f"Error generating recommendations for user {user.username}"
-            )
+            logger.exception(f"Error generating recommendations for user {user.username}")
             return []
 
-    def get_recommendations_for_user(
-        self, user, limit: int = 12
-    ) -> List[UserRecommendation]:
+    def get_recommendations_for_user(self, user, limit: int = 12) -> List[UserRecommendation]:
         """Get cached recommendations for a user"""
         # Check if we have recent recommendations
         recs = (
@@ -363,9 +352,7 @@ class RecommendationService:
                 stats["total_recommendations"] += len(recs)
             except Exception as e:
                 stats["failed"] += 1
-                logger.error(
-                    f"Failed to generate recommendations for user {user.username}: {e}"
-                )
+                logger.error(f"Failed to generate recommendations for user {user.username}: {e}")
 
         logger.info(f"Recommendation generation complete: {stats}")
         return stats

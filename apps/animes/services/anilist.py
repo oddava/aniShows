@@ -59,6 +59,59 @@ class AniListService:
     BASE_URL = "https://graphql.anilist.co/"
     MAX_PER_PAGE = 50
 
+    # Common GraphQL fields for anime media queries.
+    # Used across anime_query(), search_anime(), get_anime_by_id(), search_by_mal_id().
+    MEDIA_FIELDS = """
+        id
+        idMal
+        title { romaji english native }
+        format status episodes averageScore popularity duration
+        startDate { year month day }
+        endDate { year month day }
+        season seasonYear
+        source
+        genres
+        studios(isMain: true) { nodes { name } }
+        description
+        coverImage { large extraLarge }
+        bannerImage
+        trailer { id site }
+        rankings { rank type allTime context }
+        stats { statusDistribution { status amount } }
+        externalLinks { site url icon }
+        nextAiringEpisode { episode airingAt }
+        relations {
+            edges {
+                relationType
+                node { id title { romaji english native } type format status coverImage { large } }
+            }
+        }
+        characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
+            edges {
+                role
+                node { id name { full native } image { large } description }
+                voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
+                    id name { full native } image { large } description
+                }
+            }
+        }
+        staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
+            edges {
+                role
+                node { id name { full native } image { large } description }
+            }
+        }
+    """
+
+    # Extended fields that include theme song data (openings/endings).
+    MEDIA_FIELDS_WITH_THEMES = (
+        MEDIA_FIELDS
+        + """
+        openings
+        endings
+    """
+    )
+
     def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
         self.client = httpx.AsyncClient(headers={"Content-Type": "application/json"}, timeout=15.0)
         self.rate_limiter = AniListRateLimiter() if enable_rate_limiting else None
@@ -242,48 +295,7 @@ class AniListService:
 
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
-        # Common fields to avoid duplication
-        media_fields = """
-                        id
-                        idMal
-                        title { romaji english native }
-                        format status episodes averageScore popularity duration
-                        startDate { year month day }
-                        endDate { year month day }
-                        season seasonYear
-                        source
-                        genres
-                        studios(isMain: true) { nodes { name } }
-                        description
-                        coverImage { large extraLarge }
-                        bannerImage
-                        trailer { id site }
-                        rankings { rank type allTime context }
-                        stats { statusDistribution { status amount } }
-                        externalLinks { site url icon }
-                        nextAiringEpisode { episode airingAt }
-                        relations {
-                            edges {
-                                relationType
-                                node { id title { romaji english native } type format status coverImage { large } }
-                            }
-                        }
-                        characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
-                            edges {
-                                role
-                                node { id name { full native } image { large } description }
-                                voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                                    id name { full native } image { large } description
-                                }
-                            }
-                        }
-                        staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
-                            edges {
-                                role
-                                node { id name { full native } image { large } description }
-                            }
-                        }
-        """
+        media_fields = AniListService.MEDIA_FIELDS
 
         if include_season:
             return f"""
@@ -379,53 +391,11 @@ class AniListService:
 
     async def search_anime(self, query_string: str) -> List[dict]:
         """Search for a single anime by title to get detailed info"""
-        # We construct a query that allows searching
-        media_fields_search = """
-                        id
-                        idMal
-                        title { romaji english native }
-                        format status episodes averageScore popularity duration
-                        startDate { year month day }
-                        endDate { year month day }
-                        season seasonYear
-                        source
-                        genres
-                        studios(isMain: true) { nodes { name } }
-                        description
-                        coverImage { large extraLarge }
-                        bannerImage
-                        trailer { id site }
-                        rankings { rank type allTime context }
-                        externalLinks { site url icon }
-                        nextAiringEpisode { episode airingAt }
-                        relations {
-                            edges {
-                                relationType
-                                node { id title { romaji english native } type format status coverImage { large } }
-                            }
-                        }
-                        characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
-                            edges {
-                                role
-                                node { id name { full native } image { large } description }
-                                voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                                    id name { full native } image { large } description
-                                }
-                            }
-                        }
-                        staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
-                            edges {
-                                role
-                                node { id name { full native } image { large } description }
-                            }
-                        }
-        """
-
         query = f"""
             query SearchAnime($search: String) {{
                 Page(page: 1, perPage: 1) {{
                     media(type: ANIME, search: $search, isAdult: false) {{
-                        {media_fields_search}
+                        {self.MEDIA_FIELDS}
                     }}
                 }}
             }}
@@ -947,51 +917,10 @@ class AniListService:
 
     async def get_anime_by_id(self, anilist_id: int) -> Optional[dict]:
         """Fetch a single anime by AniList ID"""
-        media_fields = """
-            id
-            idMal
-            title { romaji english native }
-            format status episodes averageScore popularity duration
-            startDate { year month day }
-            endDate { year month day }
-            season seasonYear
-            genres
-            studios(isMain: true) { nodes { name } }
-            description
-            coverImage { large extraLarge }
-            bannerImage
-            trailer { id site }
-            rankings { rank type allTime context }
-            stats { statusDistribution { status amount } }
-            externalLinks { site url icon }
-            nextAiringEpisode { episode airingAt }
-            relations {
-                edges {
-                    relationType
-                    node { id title { romaji english native } type format status coverImage { large } }
-                }
-            }
-            characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
-                edges {
-                    role
-                    node { id name { full native } image { large } description }
-                    voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                        id name { full native } image { large } description
-                    }
-                }
-            }
-            staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
-                edges {
-                    role
-                    node { id name { full native } image { large } description }
-                }
-            }
-        """
-
         query = f"""
             query GetAnimeById($id: Int) {{
                 Media(id: $id, type: ANIME) {{
-                    {media_fields}
+                    {self.MEDIA_FIELDS}
                 }}
             }}
         """
@@ -1005,53 +934,10 @@ class AniListService:
 
     async def search_by_mal_id(self, mal_id: int) -> Optional[dict]:
         """Search for anime by MyAnimeList ID"""
-        media_fields = """
-            id
-            idMal
-            title { romaji english native }
-            format status episodes averageScore popularity duration
-            startDate { year month day }
-            endDate { year month day }
-            season seasonYear
-            genres
-            studios(isMain: true) { nodes { name } }
-            description
-            coverImage { large extraLarge }
-            bannerImage
-            trailer { id site }
-            rankings { rank type allTime context }
-            stats { statusDistribution { status amount } }
-            externalLinks { site url icon }
-            nextAiringEpisode { episode airingAt }
-            relations {
-                edges {
-                    relationType
-                    node { id title { romaji english native } type format status coverImage { large } }
-                }
-            }
-            characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
-                edges {
-                    role
-                    node { id name { full native } image { large } description }
-                    voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                        id name { full native } image { large } description
-                    }
-                }
-            }
-            staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
-                edges {
-                    role
-                    node { id name { full native } image { large } description }
-                }
-            }
-            openings
-            endings
-        """
-
         query = f"""
             query SearchByMalId($idMal: Int) {{
                 Media(idMal: $idMal, type: ANIME) {{
-                    {media_fields}
+                    {self.MEDIA_FIELDS_WITH_THEMES}
                 }}
             }}
         """

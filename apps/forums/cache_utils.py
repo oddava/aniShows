@@ -3,7 +3,6 @@ Forum caching utilities for high-performance thread/post retrieval.
 """
 
 from django.core.cache import cache
-from django.conf import settings
 
 
 # Cache key templates

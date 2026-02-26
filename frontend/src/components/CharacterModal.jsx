@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 // Spoiler component that hides content until clicked
 function Spoiler({ children }) {
     const [revealed, setRevealed] = useState(false);
-    
+
     if (revealed) {
         return <span className="bg-yellow-500/20 px-1 rounded">{children}</span>;
     }
-    
+
     return (
         <button
             onClick={() => setRevealed(true)}
@@ -23,17 +23,17 @@ function Spoiler({ children }) {
 // Parse markdown text into readable format with bold/italic labels - links shown as plain text
 function parseMarkdownText(text) {
     if (!text) return null;
-    
+
     // First clean up HTML tags
     const cleanText = text.replace(/<[^>]*>/g, '');
-    
+
     // Split by newlines to process each paragraph
     const paragraphs = cleanText.split(/\n+/).filter(p => p.trim());
-    
+
     return paragraphs.map((paragraph, pIndex) => {
         // Split by spoiler tags first (~!content!~)
         const spoilerParts = paragraph.split(/(~!.+?!~)/g);
-        
+
         const processedSpoilers = spoilerParts.map((part, sIndex) => {
             // Check for spoiler syntax ~!content!~
             const spoilerMatch = part.match(/~!(.+?)!~/);
@@ -43,11 +43,11 @@ function parseMarkdownText(text) {
                 const parsedSpoilerContent = parseInlineMarkdown(spoilerContent);
                 return <Spoiler key={`spoiler-${pIndex}-${sIndex}`}>{parsedSpoilerContent}</Spoiler>;
             }
-            
+
             // Parse regular markdown
             return parseInlineMarkdown(part, `text-${pIndex}-${sIndex}`);
         });
-        
+
         return (
             <p key={pIndex} className="mb-3 last:mb-0">
                 {processedSpoilers}
@@ -61,10 +61,10 @@ function parseInlineMarkdown(text, keyPrefix = '') {
     // Split by markdown patterns
     // Order matters: check bold (**) and (__) before italic (*) and (_) to avoid conflicts
     const parts = text.split(/(\[.*?\]\(.*?\)|\*\*.+?\*\*|__.+?__|_.+?_|\*.+?\*)/g);
-    
+
     return parts.map((part, index) => {
         const key = `${keyPrefix}-${index}`;
-        
+
         // Check for markdown links [text](url) - show as plain text
         const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
         if (linkMatch) {
@@ -75,7 +75,7 @@ function parseInlineMarkdown(text, keyPrefix = '') {
                 </span>
             );
         }
-        
+
         // Check for bold text **text** or __text__
         const boldMatch = part.match(/\*\*(.+?)\*\*/);
         if (boldMatch) {
@@ -85,7 +85,7 @@ function parseInlineMarkdown(text, keyPrefix = '') {
                 </span>
             );
         }
-        
+
         // Check for bold text __text__
         const boldMatch2 = part.match(/__(.+?)__/);
         if (boldMatch2) {
@@ -95,7 +95,7 @@ function parseInlineMarkdown(text, keyPrefix = '') {
                 </span>
             );
         }
-        
+
         // Check for italic text *text* or _text_
         const italicMatch = part.match(/\*(.+?)\*/);
         if (italicMatch) {
@@ -105,7 +105,7 @@ function parseInlineMarkdown(text, keyPrefix = '') {
                 </span>
             );
         }
-        
+
         // Check for italic text _text_
         const italicMatch2 = part.match(/_(.+?)_/);
         if (italicMatch2) {
@@ -115,7 +115,7 @@ function parseInlineMarkdown(text, keyPrefix = '') {
                 </span>
             );
         }
-        
+
         // Regular text
         return <span key={key}>{part}</span>;
     });
@@ -150,19 +150,19 @@ export default function CharacterModal({ role, onClose, accentColor }) {
     if (!role) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-            <div 
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4">
+            <div
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                 onClick={onClose}
             />
-            <div 
+            <div
                 className="relative w-full max-w-2xl max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl animate-modal-in flex flex-col"
                 style={{ boxShadow: `0 0 50px -10px ${accentColor || '#8b5cf6'}30` }}
             >
                 {/* Header */}
                 <div className="relative h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 border-b border-white/5 flex-shrink-0"
                     style={{
-                        background: accentColor 
+                        background: accentColor
                             ? `linear-gradient(135deg, ${accentColor}20 0%, transparent 100%)`
                             : 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, transparent 100%)'
                     }}
@@ -181,7 +181,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                     <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
                         {/* Character Image */}
                         <div className="flex-shrink-0 mx-auto sm:mx-0">
-                            <div 
+                            <div
                                 className="w-28 h-40 sm:w-32 sm:h-44 rounded-xl sm:rounded-2xl overflow-hidden border-2 sm:border-4 border-dark-100 shadow-xl"
                                 style={{ borderColor: accentColor ? `${accentColor}40` : undefined }}
                             >
@@ -193,7 +193,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                             </div>
                             <span
                                 className="inline-block mt-2 sm:mt-3 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full text-center w-full"
-                                style={{ 
+                                style={{
                                     backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.2)',
                                     color: accentColor || '#8b5cf6'
                                 }}
@@ -212,7 +212,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                                     {character.name_native}
                                 </p>
                             )}
-                            
+
                             {/* Description */}
                             {character.description && (
                                 <div className="mb-4 sm:mb-6">

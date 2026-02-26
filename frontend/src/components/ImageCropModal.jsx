@@ -44,7 +44,7 @@ export default function ImageCropModal({
 
     const handleApply = async () => {
         if (!croppedAreaPixels || !imageSrc) return;
-        
+
         try {
             setIsProcessing(true);
             const croppedBlob = await getCroppedImg(
@@ -54,7 +54,7 @@ export default function ImageCropModal({
                 { horizontal: false, vertical: false },
                 aspect === 3 ? 1500 : 400 // Max width: 1500 for banner, 400 for avatar
             );
-            
+
             if (croppedBlob) {
                 // Convert to File
                 const fileName = aspect === 3 ? 'banner.webp' : 'avatar.webp';
@@ -72,17 +72,17 @@ export default function ImageCropModal({
     if (!isOpen || !imageSrc) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center sm:p-4">
-            <div 
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center sm:p-4">
+            <div
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                 onClick={() => !isProcessing && onClose()}
             />
-            
-            <div className="relative w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[90vh] bg-dark-100 sm:rounded-2xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col animate-modal-in">
-                
+
+            <div className="relative w-full h-svh sm:h-auto max-h-full sm:max-w-2xl sm:max-h-[90vh] bg-dark-100 sm:rounded-2xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col animate-modal-in">
+
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-dark-200 shrink-0 z-10">
-                    <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between px-4 py-2 sm:py-3 border-b border-white/10 bg-dark-200 shrink-0 z-10">
+                    <div className="flex items-center gap-2 sm:gap-4">
                         <button
                             onClick={onClose}
                             disabled={isProcessing}
@@ -90,7 +90,7 @@ export default function ImageCropModal({
                         >
                             <X className="w-5 h-5 text-white" />
                         </button>
-                        <h2 className="text-lg font-bold text-white">{title}</h2>
+                        <h2 className="text-base sm:text-lg font-bold text-white truncate">{title}</h2>
                     </div>
                     <button
                         onClick={handleApply}
@@ -102,7 +102,7 @@ export default function ImageCropModal({
                 </div>
 
                 {/* Cropper Container */}
-                <div className="relative flex-1 sm:h-[60vh] min-h-[300px] bg-black">
+                <div className="relative flex-1 min-h-[200px] sm:min-h-[300px] sm:h-[60vh] bg-black">
                     <Cropper
                         image={imageSrc}
                         crop={crop}
@@ -121,15 +121,15 @@ export default function ImageCropModal({
                 </div>
 
                 {/* Controls */}
-                <div className="px-6 py-4 bg-dark-200 border-t border-white/10 shrink-0 z-10">
+                <div className="px-6 py-3 sm:py-4 bg-dark-200 border-t border-white/10 shrink-0 z-10">
                     <div className="flex items-center gap-4 max-w-md mx-auto">
-                        <button 
+                        <button
                             onClick={() => setZoom(z => Math.max(1, z - 0.1))}
                             className="p-2 text-gray-400 hover:text-white transition-colors"
                         >
                             <ZoomOut className="w-5 h-5" />
                         </button>
-                        
+
                         <input
                             type="range"
                             value={zoom}
@@ -140,8 +140,8 @@ export default function ImageCropModal({
                             onChange={(e) => setZoom(Number(e.target.value))}
                             className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accent"
                         />
-                        
-                        <button 
+
+                        <button
                             onClick={() => setZoom(z => Math.min(3, z + 0.1))}
                             className="p-2 text-gray-400 hover:text-white transition-colors"
                         >

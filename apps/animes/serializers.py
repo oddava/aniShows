@@ -16,7 +16,12 @@ from apps.animes.models import (
     ThemeSong,
 )
 from apps.users.models import UserProfile, UserAnimeList, UserActivity, Badge, UserBadge
-from apps.animes.serializers_mixins import ImageUrlMixin
+from apps.animes.serializers_mixins import (
+    ImageUrlMixin,
+    UserStatusMixin,
+    UserProfileMixin,
+    BadgesMixin,
+)
 import logging
 
 User = get_user_model()
@@ -171,7 +176,7 @@ class ThemeSongSerializer(serializers.ModelSerializer):
         ]
 
 
-class AnimeMinimalSerializer(ImageUrlMixin, serializers.ModelSerializer):
+class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSerializer):
     """Minimal serializer for list views - excludes synopsis for smaller payload"""
 
     genres = GenreSerializer(many=True, read_only=True)
@@ -214,33 +219,8 @@ class AnimeMinimalSerializer(ImageUrlMixin, serializers.ModelSerializer):
             obj, "cover_image_medium", "cover_image", "cover_image_external_url"
         )
 
-    def get_is_favorite(self, obj):
-        # Use prefetched annotation only - no fallback to avoid N+1
-        if hasattr(obj, "_is_favorite"):
-            return obj._is_favorite
-        return False
 
-    def get_user_list_status(self, obj):
-        # Use prefetched list entries only - no fallback to avoid N+1
-        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
-            entry = obj._user_list_entries[0]
-            return {
-                "id": entry.id,
-                "status": entry.status,
-                "score": entry.score,
-                "episodes_watched": entry.episodes_watched,
-                "notes": entry.notes,
-                "started_at": entry.started_at,
-                "finished_at": entry.finished_at,
-                "is_rewatching": entry.is_rewatching,
-                "progress": (entry.episodes_watched / obj.episode_count * 100)
-                if obj.episode_count and obj.episode_count > 0
-                else 0,
-            }
-        return None
-
-
-class AnimeListSerializer(ImageUrlMixin, serializers.ModelSerializer):
+class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSerializer):
     """Lightweight serializer for lists with synopsis"""
 
     genres = GenreSerializer(many=True, read_only=True)
@@ -299,33 +279,8 @@ class AnimeListSerializer(ImageUrlMixin, serializers.ModelSerializer):
             obj, "banner_image_medium", "banner_image", "banner_image_external_url"
         )
 
-    def get_is_favorite(self, obj):
-        # Use prefetched annotation only - no fallback to avoid N+1
-        if hasattr(obj, "_is_favorite"):
-            return obj._is_favorite
-        return False
 
-    def get_user_list_status(self, obj):
-        # Use prefetched list entries only - no fallback to avoid N+1
-        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
-            entry = obj._user_list_entries[0]
-            return {
-                "id": entry.id,
-                "status": entry.status,
-                "score": entry.score,
-                "episodes_watched": entry.episodes_watched,
-                "notes": entry.notes,
-                "started_at": entry.started_at,
-                "finished_at": entry.finished_at,
-                "is_rewatching": entry.is_rewatching,
-                "progress": (entry.episodes_watched / obj.episode_count * 100)
-                if obj.episode_count and obj.episode_count > 0
-                else 0,
-            }
-        return None
-
-
-class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
+class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSerializer):
     """Full serializer for detail page"""
 
     genres = GenreSerializer(many=True, read_only=True)
@@ -425,31 +380,6 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
             obj, "banner_image_large", "banner_image", "banner_image_external_url"
         )
 
-    def get_is_favorite(self, obj):
-        # Use prefetched annotation only - no fallback to avoid N+1
-        if hasattr(obj, "_is_favorite"):
-            return obj._is_favorite
-        return False
-
-    def get_user_list_status(self, obj):
-        # Use prefetched list entries only - no fallback to avoid N+1
-        if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
-            entry = obj._user_list_entries[0]
-            return {
-                "id": entry.id,
-                "status": entry.status,
-                "score": entry.score,
-                "episodes_watched": entry.episodes_watched,
-                "notes": entry.notes,
-                "started_at": entry.started_at,
-                "finished_at": entry.finished_at,
-                "is_rewatching": entry.is_rewatching,
-                "progress": (entry.episodes_watched / obj.episode_count * 100)
-                if obj.episode_count and obj.episode_count > 0
-                else 0,
-            }
-        return None
-
     def get_user_review(self, obj):
         # Use prefetched annotation if available
         if hasattr(obj, "_user_review"):
@@ -480,21 +410,6 @@ class AnimeDetailSerializer(ImageUrlMixin, serializers.ModelSerializer):
                     distribution[status_key] += 1
 
         return distribution
-
-    def get_member_count(self, obj):
-        """Get total number of users who have this anime in their list."""
-        from apps.users.models import UserAnimeList
-
-        # Use prefetched data if available
-        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get("user_lists") or getattr(
-            obj, "user_lists", None
-        )
-
-        if user_lists is not None:
-            return user_lists.count()
-
-        # Fallback to querying
-        return UserAnimeList.objects.filter(anime=obj).count()
 
 
 class BadgeSerializer(serializers.ModelSerializer):
@@ -531,7 +446,7 @@ class UserBadgeSerializer(serializers.ModelSerializer):
         ]
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
     bio = serializers.SerializerMethodField()
@@ -608,57 +523,8 @@ class UserSerializer(serializers.ModelSerializer):
             "is_superuser",
         ]
 
-    def get_avatar(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.avatar.url if profile and profile.avatar else None
 
-    def get_banner(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.banner.url if profile and profile.banner else None
-
-    def get_bio(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.bio if profile else None
-
-    def get_is_private(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.is_private if profile else False
-
-    def get_email_verified(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.email_verified if profile else False
-
-    def get_has_password(self, obj):
-        return obj.has_usable_password()
-
-    def get_social_links(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.social_links if profile else []
-
-    def get_points(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.points if profile else 0
-
-    def get_badges(self, obj):
-        # Only return featured badges, ordered by granted_at desc
-        user_badges = obj.badges.filter(badge__is_active=True, is_featured=True).select_related(
-            "badge"
-        )[:3]
-        return [
-            {
-                "id": ub.badge.id,
-                "name": ub.badge.name,
-                "slug": ub.badge.slug,
-                "icon": ub.badge.icon,
-                "image": ub.badge.image.url if ub.badge.image else None,
-                "color": ub.badge.color,
-                "description": ub.badge.description,
-            }
-            for ub in user_badges
-        ]
-
-
-class UserLightweightSerializer(serializers.ModelSerializer):
+class UserLightweightSerializer(UserProfileMixin, serializers.ModelSerializer):
     """Lightweight serializer for navbar/quick profile view - no expensive calculations"""
 
     avatar = serializers.SerializerMethodField()
@@ -697,31 +563,8 @@ class UserLightweightSerializer(serializers.ModelSerializer):
             "has_password",
         ]
 
-    def get_avatar(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.avatar.url if profile and profile.avatar else None
 
-    def get_bio(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.bio if profile else None
-
-    def get_is_private(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.is_private if profile else False
-
-    def get_email_verified(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.email_verified if profile else False
-
-    def get_has_password(self, obj):
-        return obj.has_usable_password()
-
-    def get_social_links(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.social_links if profile else []
-
-
-class PublicUserSerializer(serializers.ModelSerializer):
+class PublicUserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSerializer):
     """Limited serializer for public profile view"""
 
     avatar = serializers.SerializerMethodField()
@@ -788,48 +631,6 @@ class PublicUserSerializer(serializers.ModelSerializer):
             "badges",
         ]
         read_only_fields = fields
-
-    def get_avatar(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.avatar.url if profile and profile.avatar else None
-
-    def get_banner(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.banner.url if profile and profile.banner else None
-
-    def get_bio(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.bio if profile else None
-
-    def get_is_private(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.is_private if profile else False
-
-    def get_social_links(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.social_links if profile else []
-
-    def get_points(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.points if profile else 0
-
-    def get_badges(self, obj):
-        # Only return featured badges, ordered by granted_at desc
-        user_badges = obj.badges.filter(badge__is_active=True, is_featured=True).select_related(
-            "badge"
-        )[:3]
-        return [
-            {
-                "id": ub.badge.id,
-                "name": ub.badge.name,
-                "slug": ub.badge.slug,
-                "icon": ub.badge.icon,
-                "image": ub.badge.image.url if ub.badge.image else None,
-                "color": ub.badge.color,
-                "description": ub.badge.description,
-            }
-            for ub in user_badges
-        ]
 
     def get_is_following(self, obj):
         """Check if the current user is following this user"""

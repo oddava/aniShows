@@ -14,35 +14,18 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.pagination import PageNumberPagination
 
 from apps.animes.models import Anime, Genre, Studio, UserFavorite, UserHistory, Review
 from apps.users.models import UserProfile, UserAnimeList
 from apps.core.models import SystemLog, AuditLog
+from apps.core.permissions import IsAdminUser, AdminPagination
 from datetime import datetime
 
 User = get_user_model()
-
-
-class AdminPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
-
-class IsAdminUser(permissions.BasePermission):
-    """Custom permission to only allow admin/staff users."""
-
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and (request.user.is_staff or request.user.is_superuser)
-        )
 
 
 class AdminDashboardView(APIView):
@@ -88,9 +71,7 @@ class AdminDashboardView(APIView):
         )
 
         # Recent reviews
-        recent_reviews = Review.objects.select_related("user", "anime").order_by(
-            "-created_at"
-        )[:5]
+        recent_reviews = Review.objects.select_related("user", "anime").order_by("-created_at")[:5]
 
         recent_reviews_data = [
             {
@@ -164,9 +145,7 @@ class AdminUserViewSet(viewsets.ViewSet):
         # Search
         search = request.query_params.get("search", "")
         if search:
-            queryset = queryset.filter(
-                Q(username__icontains=search) | Q(email__icontains=search)
-            )
+            queryset = queryset.filter(Q(username__icontains=search) | Q(email__icontains=search))
 
         # Filters
         is_staff = request.query_params.get("is_staff")
@@ -203,16 +182,12 @@ class AdminUserViewSet(viewsets.ViewSet):
                     "username": user.username,
                     "email": user.email,
                     "date_joined": user.date_joined.isoformat(),
-                    "last_login": user.last_login.isoformat()
-                    if user.last_login
-                    else None,
+                    "last_login": user.last_login.isoformat() if user.last_login else None,
                     "is_active": user.is_active,
                     "is_staff": user.is_staff,
                     "is_superuser": user.is_superuser,
                     "email_verified": profile.email_verified if profile else False,
-                    "avatar": profile.avatar.url
-                    if profile and profile.avatar
-                    else None,
+                    "avatar": profile.avatar.url if profile and profile.avatar else None,
                 }
             )
 
@@ -233,9 +208,7 @@ class AdminUserViewSet(viewsets.ViewSet):
                 .get(pk=pk)
             )
         except User.DoesNotExist:
-            return Response(
-                {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         profile = getattr(user, "userprofile", None)
 
@@ -268,9 +241,7 @@ class AdminUserViewSet(viewsets.ViewSet):
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
-            return Response(
-                {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Prevent self-deactivation
         if user.id == request.user.id:
@@ -310,9 +281,7 @@ class AdminUserViewSet(viewsets.ViewSet):
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
-            return Response(
-                {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Prevent self-modification
         if user.id == request.user.id:
@@ -344,9 +313,7 @@ class AdminUserViewSet(viewsets.ViewSet):
         try:
             user = User.objects.get(pk=pk)
         except User.DoesNotExist:
-            return Response(
-                {"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Prevent self-deletion
         if user.id == request.user.id:
@@ -381,9 +348,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
         # Search
         search = request.query_params.get("search", "")
         if search:
-            queryset = queryset.filter(
-                Q(title__icontains=search) | Q(title_jp__icontains=search)
-            )
+            queryset = queryset.filter(Q(title__icontains=search) | Q(title_jp__icontains=search))
 
         # Filters
         anime_status = request.query_params.get("status")
@@ -430,9 +395,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
                     "anime_type": anime.anime_type,
                     "rating": float(anime.rating) if anime.rating else None,
                     "episode_count": anime.episode_count,
-                    "release_date": anime.release_date.isoformat()
-                    if anime.release_date
-                    else None,
+                    "release_date": anime.release_date.isoformat() if anime.release_date else None,
                     "cover_image": anime.cover_image.url if anime.cover_image else None,
                     "studio": anime.studio.name if anime.studio else None,
                     "genres": [g.name for g in anime.genres.all()],
@@ -447,15 +410,9 @@ class AdminAnimeViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         """Get detailed anime information."""
         try:
-            anime = (
-                Anime.objects.prefetch_related("genres")
-                .select_related("studio")
-                .get(pk=pk)
-            )
+            anime = Anime.objects.prefetch_related("genres").select_related("studio").get(pk=pk)
         except Anime.DoesNotExist:
-            return Response(
-                {"detail": "Anime not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Anime not found."}, status=status.HTTP_404_NOT_FOUND)
 
         favorites_count = anime.favorites.count()
         reviews_count = anime.reviews.count()
@@ -473,9 +430,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
                 "rating": float(anime.rating) if anime.rating else None,
                 "episode_count": anime.episode_count,
                 "duration_minutes": anime.duration_minutes,
-                "release_date": anime.release_date.isoformat()
-                if anime.release_date
-                else None,
+                "release_date": anime.release_date.isoformat() if anime.release_date else None,
                 "end_date": anime.end_date.isoformat() if anime.end_date else None,
                 "cover_image": anime.cover_image.url if anime.cover_image else None,
                 "banner_image": anime.banner_image.url if anime.banner_image else None,
@@ -504,9 +459,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
         try:
             anime = Anime.objects.get(pk=pk)
         except Anime.DoesNotExist:
-            return Response(
-                {"detail": "Anime not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Anime not found."}, status=status.HTTP_404_NOT_FOUND)
 
         title = anime.title
         anime.delete()
@@ -571,9 +524,7 @@ class AdminReviewViewSet(viewsets.ViewSet):
                         "slug": review.anime.slug,
                     },
                     "rating": review.rating,
-                    "text": review.text[:200] + "..."
-                    if len(review.text) > 200
-                    else review.text,
+                    "text": review.text[:200] + "..." if len(review.text) > 200 else review.text,
                     "has_spoilers": review.has_spoilers,
                     "created_at": review.created_at.isoformat(),
                 }
@@ -586,9 +537,7 @@ class AdminReviewViewSet(viewsets.ViewSet):
         try:
             review = Review.objects.select_related("user", "anime").get(pk=pk)
         except Review.DoesNotExist:
-            return Response(
-                {"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
@@ -615,9 +564,7 @@ class AdminReviewViewSet(viewsets.ViewSet):
         try:
             review = Review.objects.get(pk=pk)
         except Review.DoesNotExist:
-            return Response(
-                {"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Review not found."}, status=status.HTTP_404_NOT_FOUND)
 
         review.delete()
 
@@ -649,9 +596,7 @@ class AdminStatsExportView(APIView):
                         Anime.objects.values_list("status").annotate(count=Count("id"))
                     ),
                     "by_type": dict(
-                        Anime.objects.values_list("anime_type").annotate(
-                            count=Count("id")
-                        )
+                        Anime.objects.values_list("anime_type").annotate(count=Count("id"))
                     ),
                 },
                 "genres": Genre.objects.count(),
@@ -707,9 +652,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
         description = request.data.get("description", "")
 
         if not name:
-            return Response(
-                {"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         if Genre.objects.filter(name__iexact=name).exists():
             return Response(
@@ -739,9 +682,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
         try:
             genre = Genre.objects.annotate(anime_count=Count("anime")).get(pk=pk)
         except Genre.DoesNotExist:
-            return Response(
-                {"detail": "Genre not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Genre not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
@@ -758,9 +699,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
         try:
             genre = Genre.objects.get(pk=pk)
         except Genre.DoesNotExist:
-            return Response(
-                {"detail": "Genre not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Genre not found."}, status=status.HTTP_404_NOT_FOUND)
 
         genre.name = request.data.get("name", genre.name)
         genre.slug = request.data.get("slug", genre.slug)
@@ -782,9 +721,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
         try:
             genre = Genre.objects.annotate(anime_count=Count("anime")).get(pk=pk)
         except Genre.DoesNotExist:
-            return Response(
-                {"detail": "Genre not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Genre not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if genre.anime_count > 0 and not request.query_params.get("force"):
             return Response(
@@ -840,9 +777,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
         website = request.data.get("website", "")
 
         if not name:
-            return Response(
-                {"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         if Studio.objects.filter(name__iexact=name).exists():
             return Response(
@@ -858,9 +793,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
             {
                 "id": studio.id,
                 "name": studio.name,
-                "founded_date": studio.founded_date.isoformat()
-                if studio.founded_date
-                else None,
+                "founded_date": studio.founded_date.isoformat() if studio.founded_date else None,
                 "website": studio.website,
                 "message": "Studio created successfully.",
             },
@@ -872,9 +805,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
         try:
             studio = Studio.objects.annotate(anime_count=Count("anime")).get(pk=pk)
         except Studio.DoesNotExist:
-            return Response(
-                {"detail": "Studio not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Studio not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Get recent anime by this studio
         recent_anime = studio.anime_set.order_by("-release_date")[:10].values(
@@ -885,9 +816,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
             {
                 "id": studio.id,
                 "name": studio.name,
-                "founded_date": studio.founded_date.isoformat()
-                if studio.founded_date
-                else None,
+                "founded_date": studio.founded_date.isoformat() if studio.founded_date else None,
                 "website": studio.website,
                 "anime_count": studio.anime_count,
                 "recent_anime": list(recent_anime),
@@ -899,9 +828,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
         try:
             studio = Studio.objects.get(pk=pk)
         except Studio.DoesNotExist:
-            return Response(
-                {"detail": "Studio not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Studio not found."}, status=status.HTTP_404_NOT_FOUND)
 
         studio.name = request.data.get("name", studio.name)
         studio.founded_date = request.data.get("founded_date", studio.founded_date)
@@ -912,9 +839,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
             {
                 "id": studio.id,
                 "name": studio.name,
-                "founded_date": studio.founded_date.isoformat()
-                if studio.founded_date
-                else None,
+                "founded_date": studio.founded_date.isoformat() if studio.founded_date else None,
                 "website": studio.website,
                 "message": "Studio updated successfully.",
             }
@@ -925,9 +850,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
         try:
             studio = Studio.objects.annotate(anime_count=Count("anime")).get(pk=pk)
         except Studio.DoesNotExist:
-            return Response(
-                {"detail": "Studio not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Studio not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if studio.anime_count > 0 and not request.query_params.get("force"):
             return Response(
@@ -952,9 +875,7 @@ class AdminUserListViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """List all user list entries."""
-        queryset = UserAnimeList.objects.select_related("user", "anime").order_by(
-            "-updated_at"
-        )
+        queryset = UserAnimeList.objects.select_related("user", "anime").order_by("-updated_at")
 
         # Filters
         user_id = request.query_params.get("user")
@@ -1000,9 +921,7 @@ class AdminUserListViewSet(viewsets.ViewSet):
         try:
             entry = UserAnimeList.objects.get(pk=pk)
         except UserAnimeList.DoesNotExist:
-            return Response(
-                {"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND)
 
         entry.delete()
 
@@ -1013,15 +932,11 @@ class AdminUserListViewSet(viewsets.ViewSet):
         """Bulk delete list entries."""
         ids = request.data.get("ids", [])
         if not ids:
-            return Response(
-                {"detail": "No IDs provided."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "No IDs provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         deleted_count = UserAnimeList.objects.filter(id__in=ids).delete()[0]
 
-        return Response(
-            {"message": f"{deleted_count} list entries deleted successfully."}
-        )
+        return Response({"message": f"{deleted_count} list entries deleted successfully."})
 
 
 class AdminFavoritesViewSet(viewsets.ViewSet):
@@ -1032,9 +947,7 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """List all user favorites."""
-        queryset = UserFavorite.objects.select_related("user", "anime").order_by(
-            "-added_at"
-        )
+        queryset = UserFavorite.objects.select_related("user", "anime").order_by("-added_at")
 
         # Filters
         user_id = request.query_params.get("user")
@@ -1073,9 +986,7 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
         try:
             favorite = UserFavorite.objects.get(pk=pk)
         except UserFavorite.DoesNotExist:
-            return Response(
-                {"detail": "Favorite not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Favorite not found."}, status=status.HTTP_404_NOT_FOUND)
 
         favorite.delete()
 
@@ -1086,9 +997,7 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
         """Bulk delete favorites."""
         ids = request.data.get("ids", [])
         if not ids:
-            return Response(
-                {"detail": "No IDs provided."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "No IDs provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         deleted_count = UserFavorite.objects.filter(id__in=ids).delete()[0]
 
@@ -1107,9 +1016,7 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
         )
 
         # Recent favorites
-        recent = UserFavorite.objects.select_related("user", "anime").order_by(
-            "-added_at"
-        )[:5]
+        recent = UserFavorite.objects.select_related("user", "anime").order_by("-added_at")[:5]
         recent_data = [
             {
                 "id": f.id,
@@ -1127,7 +1034,6 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
                 "recent": recent_data,
             }
         )
-
 
 
 class AdminBulkOperationsView(APIView):
@@ -1200,9 +1106,7 @@ class AdminBulkOperationsView(APIView):
                 )
 
         except Exception as e:
-            return Response(
-                {"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AdminReportsView(APIView):
@@ -1224,9 +1128,7 @@ class AdminReportsView(APIView):
         elif report_type == "engagement":
             return self._get_engagement_report(start_date, days)
         else:
-            return Response(
-                {"detail": "Unknown report type."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Unknown report type."}, status=status.HTTP_400_BAD_REQUEST)
 
     def _get_overview_report(self, start_date, days):
         """Get overall platform statistics."""
@@ -1305,14 +1207,10 @@ class AdminReportsView(APIView):
     def _get_content_report(self, start_date, days):
         """Get content statistics report."""
         # Anime by status
-        anime_by_status = dict(
-            Anime.objects.values_list("status").annotate(count=Count("id"))
-        )
+        anime_by_status = dict(Anime.objects.values_list("status").annotate(count=Count("id")))
 
         # Anime by type
-        anime_by_type = dict(
-            Anime.objects.values_list("anime_type").annotate(count=Count("id"))
-        )
+        anime_by_type = dict(Anime.objects.values_list("anime_type").annotate(count=Count("id")))
 
         # Top genres
         from apps.animes.models import Genre
@@ -1347,9 +1245,7 @@ class AdminReportsView(APIView):
     def _get_engagement_report(self, start_date, days):
         """Get user engagement report."""
         # Reviews by rating
-        reviews_by_rating = dict(
-            Review.objects.values_list("rating").annotate(count=Count("id"))
-        )
+        reviews_by_rating = dict(Review.objects.values_list("rating").annotate(count=Count("id")))
 
         # List status distribution
         list_by_status = dict(
@@ -1374,9 +1270,7 @@ class AdminReportsView(APIView):
             {
                 "period_days": days,
                 "total_reviews": Review.objects.count(),
-                "new_reviews": Review.objects.filter(
-                    created_at__gte=start_date
-                ).count(),
+                "new_reviews": Review.objects.filter(created_at__gte=start_date).count(),
                 "reviews_by_rating": reviews_by_rating,
                 "list_by_status": list_by_status,
                 "most_reviewed": list(most_reviewed),
@@ -1431,9 +1325,7 @@ class AdminSystemLogViewSet(viewsets.ViewSet):
         # Search in message
         search = request.query_params.get("search", "")
         if search:
-            queryset = queryset.filter(
-                Q(message__icontains=search) | Q(details__icontains=search)
-            )
+            queryset = queryset.filter(Q(message__icontains=search) | Q(details__icontains=search))
 
         # Filter by path
         path = request.query_params.get("path")
@@ -1486,9 +1378,7 @@ class AdminSystemLogViewSet(viewsets.ViewSet):
         try:
             log = SystemLog.objects.select_related("user").get(pk=pk)
         except SystemLog.DoesNotExist:
-            return Response(
-                {"detail": "Log entry not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Log entry not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
@@ -1521,14 +1411,10 @@ class AdminSystemLogViewSet(viewsets.ViewSet):
         total = SystemLog.objects.count()
 
         # Count by level
-        by_level = dict(
-            SystemLog.objects.values_list("level").annotate(count=Count("id"))
-        )
+        by_level = dict(SystemLog.objects.values_list("level").annotate(count=Count("id")))
 
         # Count by type
-        by_type = dict(
-            SystemLog.objects.values_list("log_type").annotate(count=Count("id"))
-        )
+        by_type = dict(SystemLog.objects.values_list("log_type").annotate(count=Count("id")))
 
         # Recent counts (last 24 hours, 7 days, 30 days)
         now = timezone.now()
@@ -1716,9 +1602,7 @@ class AdminAuditLogViewSet(viewsets.ViewSet):
         total = AuditLog.objects.count()
 
         # Count by action
-        by_action = dict(
-            AuditLog.objects.values_list("action").annotate(count=Count("id"))
-        )
+        by_action = dict(AuditLog.objects.values_list("action").annotate(count=Count("id")))
 
         # Count by entity type
         by_entity_type = dict(

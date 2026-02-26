@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 from apps.users.models import Badge, UserBadge
 from apps.animes.serializers import BadgeSerializer
-from apps.users.admin_views import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser, AdminPagination
 from apps.core.models import AuditLog
 from apps.core.services.notification_service import NotificationService
 

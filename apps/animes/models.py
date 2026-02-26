@@ -21,7 +21,7 @@ from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
 from django.utils import timezone
 from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFit, ResizeToFill
+from imagekit.processors import ResizeToFit
 from django.conf import settings
 
 from root.storage_backends import MediaStorage
@@ -51,9 +51,7 @@ class Studio(Model):
 class Character(Model):
     name = CharField(max_length=200)
     name_native = CharField(max_length=200, blank=True)
-    image = ImageField(
-        upload_to="characters/", blank=True, null=True, storage=MediaStorage()
-    )
+    image = ImageField(upload_to="characters/", blank=True, null=True, storage=MediaStorage())
     image_small = ImageSpecField(
         source="image",
         processors=[ResizeToFit(60, 90)],
@@ -79,9 +77,7 @@ class Character(Model):
 class Staff(Model):
     name = CharField(max_length=200)
     name_native = CharField(max_length=200, blank=True)
-    image = ImageField(
-        upload_to="staff/", blank=True, null=True, storage=MediaStorage()
-    )
+    image = ImageField(upload_to="staff/", blank=True, null=True, storage=MediaStorage())
     image_small = ImageSpecField(
         source="image",
         processors=[ResizeToFit(60, 90)],
@@ -135,12 +131,8 @@ class Anime(Model):
     slug = SlugField(max_length=200, unique=True)
 
     synopsis = TextField()
-    anime_type = CharField(
-        max_length=20, choices=AnimeType.choices, default=AnimeType.tv
-    )
-    status = CharField(
-        max_length=20, choices=AnimeStatus.choices, default=AnimeStatus.airing
-    )
+    anime_type = CharField(max_length=20, choices=AnimeType.choices, default=AnimeType.tv)
+    status = CharField(max_length=20, choices=AnimeStatus.choices, default=AnimeStatus.airing)
     episode_count = IntegerField(default=0)
     duration_minutes = IntegerField(default=24)
     member_count = IntegerField(default=0)  # AniList popularity/planning count
@@ -192,12 +184,8 @@ class Anime(Model):
     )
 
     # External image URLs (fallback to CDN when local images not available)
-    cover_image_external_url = URLField(
-        blank=True, help_text="External AniList cover image URL"
-    )
-    banner_image_external_url = URLField(
-        blank=True, help_text="External AniList banner image URL"
-    )
+    cover_image_external_url = URLField(blank=True, help_text="External AniList cover image URL")
+    banner_image_external_url = URLField(blank=True, help_text="External AniList banner image URL")
 
     trailer_url = URLField(blank=True)
 
@@ -211,9 +199,7 @@ class Anime(Model):
 
     # Relationships
     genres = ManyToManyField("anime.Genre", related_name="anime")
-    studio = ForeignKey(
-        "anime.Studio", on_delete=SET_NULL, null=True, related_name="anime"
-    )
+    studio = ForeignKey("anime.Studio", on_delete=SET_NULL, null=True, related_name="anime")
 
     characters = ManyToManyField(
         "anime.Character",
@@ -226,9 +212,7 @@ class Anime(Model):
     )
 
     # Extended Info
-    external_links = JSONField(
-        default=list, blank=True
-    )  # List of {site: str, url: str, icon: str}
+    external_links = JSONField(default=list, blank=True)  # List of {site: str, url: str, icon: str}
     relations = JSONField(
         default=list, blank=True
     )  # List of related media {id: int, type: str, title: str}
@@ -239,9 +223,7 @@ class Anime(Model):
     # Ranks
     site_rank = IntegerField(null=True, blank=True)  # e.g #115 highest rated
     popularity_rank = IntegerField(null=True, blank=True)  # e.g #50 most popular
-    trending_rank = IntegerField(
-        null=True, blank=True
-    )  # Current trending rank (1 = most trending)
+    trending_rank = IntegerField(null=True, blank=True)  # Current trending rank (1 = most trending)
 
     # Timestamps
     created_at = DateTimeField(auto_now_add=True)
@@ -335,9 +317,7 @@ class AnimeStaff(Model):
 
 
 class UserFavorite(Model):
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="favorites"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="favorites")
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="favorites")
     added_at = DateTimeField(auto_now_add=True)
     order = IntegerField(default=0)  # User-defined order for display
@@ -356,9 +336,7 @@ class UserFavorite(Model):
 
 
 class UserHistory(Model):
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="history"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="history")
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="history")
     viewed_at = DateTimeField(default=timezone.now)
 
@@ -372,9 +350,7 @@ class UserHistory(Model):
 
 
 class Review(Model):
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="reviews"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="reviews")
     anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="reviews")
     rating = IntegerField(validators=[MinValueValidator(1), MaxValueValidator(10)])
     rating_story = IntegerField(
@@ -412,9 +388,7 @@ class Review(Model):
 class ReviewVote(Model):
     """Track helpful votes on reviews"""
 
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="review_votes"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="review_votes")
     review = ForeignKey(Review, on_delete=CASCADE, related_name="votes")
     is_helpful = BooleanField(default=True)  # True = helpful, False = not helpful
     created_at = DateTimeField(auto_now_add=True)
@@ -434,9 +408,7 @@ class ReviewVote(Model):
 class ReviewComment(Model):
     """Comments on reviews with soft delete support"""
 
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="review_comments"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="review_comments")
     review = ForeignKey(Review, on_delete=CASCADE, related_name="comments")
     text = TextField(max_length=2000)
     is_deleted = BooleanField(default=False)
@@ -472,12 +444,8 @@ class UserRecommendation(Model):
         TOP_RATED = "top_rated", "Top Rated"
         BECAUSE_YOU_LIKED = "because_you_liked", "Because You Liked"
 
-    user = ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="recommendations"
-    )
-    anime = ForeignKey(
-        "anime.Anime", on_delete=CASCADE, related_name="user_recommendations"
-    )
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="recommendations")
+    anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="user_recommendations")
     score = DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -562,9 +530,7 @@ class ThemeSong(Model):
 
     # Metadata
     last_synced = DateTimeField(null=True, blank=True)  # Last Jikan sync time
-    sync_source = CharField(
-        max_length=20, blank=True, default=""
-    )  # 'jikan', 'anilist', etc.
+    sync_source = CharField(max_length=20, blank=True, default="")  # 'jikan', 'anilist', etc.
 
     created_at = DateTimeField(auto_now_add=True)
     updated_at = DateTimeField(auto_now=True)

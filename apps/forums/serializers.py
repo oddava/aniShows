@@ -6,6 +6,27 @@ from .models import Category, Thread, Post, Tag
 User = get_user_model()
 
 
+class LikedByUserMixin:
+    """Mixin for serializers that need is_liked_by_user field."""
+
+    def get_is_liked_by_user(self, obj):
+        # Prefer the annotated attribute if it exists
+        if hasattr(obj, "is_liked_by_user"):
+            return obj.is_liked_by_user
+
+        user = self.context["request"].user
+        if user and user.is_authenticated:
+            return obj.likes.filter(user=user).exists()
+        return False
+
+
+class ContentSanitizationMixin:
+    """Mixin for serializers that sanitize content with bleach."""
+
+    def validate_content(self, value):
+        return bleach.clean(value, tags=[], strip=True)
+
+
 class CustomUserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
 
@@ -52,7 +73,7 @@ class CategorySerializer(serializers.ModelSerializer):
         return None
 
 
-class ThreadListSerializer(serializers.ModelSerializer):
+class ThreadListSerializer(LikedByUserMixin, serializers.ModelSerializer):
     """Lightweight serializer for thread lists - excludes content for faster loading"""
 
     author = CustomUserSerializer(read_only=True)
@@ -92,18 +113,8 @@ class ThreadListSerializer(serializers.ModelSerializer):
             "reply_count",
         ]
 
-    def get_is_liked_by_user(self, obj):
-        # Prefer the annotated attribute if it exists
-        if hasattr(obj, "is_liked_by_user"):
-            return obj.is_liked_by_user
 
-        user = self.context["request"].user
-        if user and user.is_authenticated:
-            return obj.likes.filter(user=user).exists()
-        return False
-
-
-class ThreadSerializer(serializers.ModelSerializer):
+class ThreadSerializer(ContentSanitizationMixin, LikedByUserMixin, serializers.ModelSerializer):
     """Full serializer for thread detail view"""
 
     author = CustomUserSerializer(read_only=True)
@@ -147,21 +158,8 @@ class ThreadSerializer(serializers.ModelSerializer):
             "reply_count",
         ]
 
-    def validate_content(self, value):
-        return bleach.clean(value, tags=[], strip=True)
 
-    def get_is_liked_by_user(self, obj):
-        # Prefer the annotated attribute if it exists
-        if hasattr(obj, "is_liked_by_user"):
-            return obj.is_liked_by_user
-
-        user = self.context["request"].user
-        if user and user.is_authenticated:
-            return obj.likes.filter(user=user).exists()
-        return False
-
-
-class PostSerializer(serializers.ModelSerializer):
+class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, serializers.ModelSerializer):
     author = CustomUserSerializer(read_only=True)
     like_count = serializers.IntegerField(read_only=True)
     is_liked_by_user = serializers.SerializerMethodField()
@@ -197,19 +195,6 @@ class PostSerializer(serializers.ModelSerializer):
             "reply_count",
         ]
         read_only_fields = ["author", "created_at", "updated_at", "like_count", "depth"]
-
-    def validate_content(self, value):
-        return bleach.clean(value, tags=[], strip=True)
-
-    def get_is_liked_by_user(self, obj):
-        # Prefer the annotated attribute if it exists
-        if hasattr(obj, "is_liked_by_user"):
-            return obj.is_liked_by_user
-
-        user = self.context["request"].user
-        if user and user.is_authenticated:
-            return obj.likes.filter(user=user).exists()
-        return False
 
     def get_reply_count(self, obj):
         """Get the number of direct replies to this post"""

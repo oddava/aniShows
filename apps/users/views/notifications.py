@@ -5,7 +5,6 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
-from django.utils import timezone
 
 from apps.core.models import Notification, PushSubscription
 from apps.core.services.notification_service import NotificationService
@@ -106,9 +105,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
         success = NotificationService.mark_as_read(pk, request.user)
         if success:
             return Response({"status": "marked as read"})
-        return Response(
-            {"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
@@ -123,9 +120,7 @@ class NotificationViewSet(viewsets.GenericViewSet):
             notification.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Notification.DoesNotExist:
-            return Response(
-                {"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class NotificationPreferenceView(APIView):
@@ -142,9 +137,7 @@ class NotificationPreferenceView(APIView):
                 {
                     "email_new_episodes": getattr(profile, "email_new_episodes", True),
                     "push_new_episodes": getattr(profile, "push_new_episodes", True),
-                    "push_review_replies": getattr(
-                        profile, "push_review_replies", True
-                    ),
+                    "push_review_replies": getattr(profile, "push_review_replies", True),
                     "push_new_follower": getattr(profile, "push_new_follower", True),
                 }
             )
@@ -172,17 +165,13 @@ class NotificationPreferenceView(APIView):
                     "email_new_episodes", profile.email_new_episodes
                 )
             if hasattr(profile, "push_new_episodes"):
-                profile.push_new_episodes = data.get(
-                    "push_new_episodes", profile.push_new_episodes
-                )
+                profile.push_new_episodes = data.get("push_new_episodes", profile.push_new_episodes)
             if hasattr(profile, "push_review_replies"):
                 profile.push_review_replies = data.get(
                     "push_review_replies", profile.push_review_replies
                 )
             if hasattr(profile, "push_new_follower"):
-                profile.push_new_follower = data.get(
-                    "push_new_follower", profile.push_new_follower
-                )
+                profile.push_new_follower = data.get("push_new_follower", profile.push_new_follower)
 
             # Only save fields that actually exist
             update_fields = []
@@ -243,20 +232,16 @@ class PushSubscriptionView(APIView):
         """Unsubscribe from push notifications."""
         endpoint = request.data.get("endpoint")
         if not endpoint:
-            return Response(
-                {"error": "endpoint is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "endpoint is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         success = PushService.unsubscribe_user(request.user, endpoint)
         if success:
             return Response({"status": "unsubscribed"})
-        return Response(
-            {"error": "Subscription not found"}, status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "Subscription not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def get(self, request):
         """Get user's active push subscriptions."""
-        subscriptions = PushSubscription.objects.filter(
-            user=request.user, is_active=True
-        ).values("id", "device_type", "device_info", "created_at")
+        subscriptions = PushSubscription.objects.filter(user=request.user, is_active=True).values(
+            "id", "device_type", "device_info", "created_at"
+        )
         return Response(list(subscriptions))

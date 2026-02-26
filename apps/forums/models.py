@@ -6,7 +6,7 @@ from django.db.models import F
 class Category(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    slug = models.SlugField(unique=True, db_index=True)
+    slug = models.SlugField(unique=True)
     order = models.IntegerField(default=0)
     thread_count = models.PositiveIntegerField(default=0)
 
@@ -90,9 +90,7 @@ class Thread(models.Model):
 
 
 class Post(models.Model):
-    thread = models.ForeignKey(
-        Thread, related_name="posts", on_delete=models.CASCADE, db_index=True
-    )
+    thread = models.ForeignKey(Thread, related_name="posts", on_delete=models.CASCADE)
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL, related_name="forum_posts", on_delete=models.CASCADE
     )
@@ -106,7 +104,6 @@ class Post(models.Model):
         null=True,
         blank=True,
         on_delete=models.CASCADE,
-        db_index=True,
     )
     depth = models.PositiveSmallIntegerField(default=0)
 
@@ -122,10 +119,15 @@ class Post(models.Model):
 
     def update_like_count(self):
         """Update denormalized like count"""
-        # Refresh from DB to ensure we see the latest likes
-        self.refresh_from_db()
-        self.like_count = self.likes.count()
-        self.save(update_fields=["like_count"])
+        from django.db import transaction
+
+        def _update():
+            # Refresh from DB to ensure we see the latest likes
+            self.refresh_from_db()
+            self.like_count = self.likes.count()
+            self.save(update_fields=["like_count"])
+
+        transaction.on_commit(_update)
 
 
 class ThreadLike(models.Model):

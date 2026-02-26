@@ -60,18 +60,16 @@ def cleanup_old_task_results(self, days=7, batch_size=1000):
         while True:
             # Get IDs for this batch
             batch_ids = list(
-                CeleryTaskResult.objects.filter(
-                    date_created__lt=cutoff_date
-                ).values_list("id", flat=True)[:batch_size]
+                CeleryTaskResult.objects.filter(date_created__lt=cutoff_date).values_list(
+                    "id", flat=True
+                )[:batch_size]
             )
 
             if not batch_ids:
                 break
 
             # Delete this batch
-            deleted_count = CeleryTaskResult.objects.filter(id__in=batch_ids).delete()[
-                0
-            ]
+            deleted_count = CeleryTaskResult.objects.filter(id__in=batch_ids).delete()[0]
             deleted_total += deleted_count
             batches += 1
 
@@ -81,9 +79,7 @@ def cleanup_old_task_results(self, days=7, batch_size=1000):
             if len(batch_ids) < batch_size:
                 break
 
-        logger.info(
-            f"Cleanup complete. Deleted {deleted_total} task results in {batches} batches"
-        )
+        logger.info(f"Cleanup complete. Deleted {deleted_total} task results in {batches} batches")
 
         return {
             "deleted": deleted_total,
@@ -113,9 +109,7 @@ def cleanup_celery_backend(days=1):
     """
     # Redis results are automatically expired by Celery
     # This task serves as a placeholder for custom backend cleanup if needed
-    logger.info(
-        "Redis result backend cleanup skipped - handled automatically by Celery"
-    )
+    logger.info("Redis result backend cleanup skipped - handled automatically by Celery")
     return {"status": "skipped", "reason": "automatic_cleanup_enabled"}
 
 
@@ -147,9 +141,7 @@ def health_check_workers(self):
         }
 
         for worker in workers:
-            is_healthy = (
-                worker.last_heartbeat and worker.last_heartbeat > timeout_threshold
-            )
+            is_healthy = worker.last_heartbeat and worker.last_heartbeat > timeout_threshold
 
             worker_info = {
                 "name": worker.worker_name,
@@ -158,8 +150,8 @@ def health_check_workers(self):
                 "last_heartbeat": worker.last_heartbeat.isoformat()
                 if worker.last_heartbeat
                 else None,
-                "processed_count": worker.processed_count,
-                "failed_count": worker.failed_count,
+                "processed_count": worker.processed_tasks,
+                "failed_count": worker.failed_tasks,
             }
 
             status_report["details"].append(worker_info)
@@ -171,9 +163,7 @@ def health_check_workers(self):
                 logger.warning(f"Worker {worker.worker_name} appears unhealthy")
 
         if status_report["unhealthy"] > 0:
-            logger.warning(
-                f"Health check found {status_report['unhealthy']} unhealthy workers"
-            )
+            logger.warning(f"Health check found {status_report['unhealthy']} unhealthy workers")
         else:
             logger.info(f"All {status_report['healthy']} workers are healthy")
 

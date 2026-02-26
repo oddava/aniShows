@@ -1,6 +1,5 @@
 from typing import Optional, List, Dict, Any
-from django.db.models import QuerySet, Count, Avg, Q, Prefetch, Exists, OuterRef, F
-from django.db.models.functions import Coalesce
+from django.db.models import QuerySet, Count, Avg, Q, Prefetch, Exists, OuterRef
 from django.contrib.auth.models import User
 from datetime import date
 

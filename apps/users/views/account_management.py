@@ -1,11 +1,10 @@
 from rest_framework import status, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 import logging
 
 from apps.users import throttling
@@ -20,15 +19,11 @@ class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        serializer = ChangePasswordSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             request.user.set_password(serializer.validated_data["new_password"])
             request.user.save()
-            return Response(
-                {"message": "Password changed successfully"}, status=status.HTTP_200_OK
-            )
+            return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -49,9 +44,7 @@ class DeleteAccountView(APIView):
         if user.has_usable_password():
             if not password:
                 return Response(
-                    {
-                        "error": "Your current password is required to delete your account."
-                    },
+                    {"error": "Your current password is required to delete your account."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if not user.check_password(password):
@@ -63,9 +56,7 @@ class DeleteAccountView(APIView):
         # Delete user and all related data (cascades via ForeignKey)
         user.delete()
 
-        return Response(
-            {"message": "Account deleted successfully"}, status=status.HTTP_200_OK
-        )
+        return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
 
 
 class ChangeEmailView(APIView):
@@ -87,9 +78,7 @@ class ChangeEmailView(APIView):
         if user.has_usable_password():
             if not password:
                 return Response(
-                    {
-                        "error": "Your current password is required to change your email."
-                    },
+                    {"error": "Your current password is required to change your email."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             if not user.check_password(password):
@@ -138,9 +127,7 @@ class ConfirmEmailChangeView(APIView):
             user = User.objects.get(pk=uid)
             new_email = force_str(urlsafe_base64_decode(new_email_encoded))
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return Response(
-                {"error": "Invalid link"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Invalid link"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not default_token_generator.check_token(user, token):
             return Response(
@@ -163,6 +150,4 @@ class ConfirmEmailChangeView(APIView):
             profile.email_verified = True
             profile.save()
 
-        return Response(
-            {"message": "Email changed successfully!"}, status=status.HTTP_200_OK
-        )
+        return Response({"message": "Email changed successfully!"}, status=status.HTTP_200_OK)

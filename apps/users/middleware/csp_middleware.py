@@ -46,33 +46,6 @@ class CSPMiddleware(MiddlewareMixin):
         else:
             response["Content-Security-Policy"] = csp_header
 
-        # Base CSP directives
-        csp_directives = {
-            "default-src": ["'self'"],
-            "script-src": [
-                "'self'",
-                "'unsafe-inline'",
-                "https://www.googletagmanager.com",
-                "https://www.google-analytics.com",
-            ],
-            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            "font-src": ["'self'", "https://fonts.gstatic.com"],
-            "img-src": ["'self'", "data:", "https:", "http:", "blob:"],
-            "connect-src": ["'self'", "https://www.google-analytics.com"],
-            "media-src": ["'self'", "https:", "http:"],
-            "frame-src": ["'self'", "https://www.youtube.com", "https://youtube.com"],
-            "frame-ancestors": ["'none'"],
-            "base-uri": ["'self'"],
-            "form-action": ["'self'"],
-        }
-
-        # Build CSP header
-        csp_header = "; ".join(
-            f"{key} {' '.join(values)}" for key, values in csp_directives.items()
-        )
-
-        response["Content-Security-Policy"] = csp_header
-
         # Additional security headers
         response["X-Content-Type-Options"] = "nosniff"
         response["Referrer-Policy"] = "strict-origin-when-cross-origin"

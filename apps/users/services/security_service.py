@@ -1,7 +1,6 @@
 """Security validation utilities."""
 
 import re
-from typing import Optional
 from django.core.exceptions import ValidationError
 
 
@@ -74,9 +73,7 @@ class SecurityService:
 
         for pattern in common_patterns:
             if re.search(pattern, password.lower()):
-                raise ValidationError(
-                    "Password contains common patterns that are easily guessed."
-                )
+                raise ValidationError("Password contains common patterns that are easily guessed.")
 
         # Require variety
         has_upper = bool(re.search(r"[A-Z]", password))

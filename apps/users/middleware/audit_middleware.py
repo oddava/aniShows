@@ -3,6 +3,7 @@
 import logging
 import time
 from django.utils.deprecation import MiddlewareMixin
+from apps.core.utils import get_client_ip
 
 audit_logger = logging.getLogger("api.audit")
 
@@ -32,9 +33,7 @@ class AuditMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         # Only log sensitive endpoints
-        if not any(
-            request.path.endswith(endpoint) for endpoint in self.SENSITIVE_ENDPOINTS
-        ):
+        if not any(request.path.endswith(endpoint) for endpoint in self.SENSITIVE_ENDPOINTS):
             return response
 
         duration = time.time() - getattr(request, "_audit_start_time", time.time())
@@ -46,7 +45,7 @@ class AuditMiddleware(MiddlewareMixin):
                 "path": request.path,
                 "method": request.method,
                 "user_id": request.user.id if request.user.is_authenticated else None,
-                "ip": self._get_client_ip(request),
+                "ip": get_client_ip(request),
                 "status_code": response.status_code,
                 "duration_ms": int(duration * 1000),
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
@@ -54,10 +53,3 @@ class AuditMiddleware(MiddlewareMixin):
         )
 
         return response
-
-    def _get_client_ip(self, request):
-        """Extract client IP from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")

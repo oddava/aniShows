@@ -5,7 +5,7 @@ from django.utils import timezone
 from celery import current_app
 
 from apps.core.models import CeleryTaskResult
-from apps.users.admin_views import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser, AdminPagination
 
 IMPORT_TASKS = ["apps.animes.tasks.sync.sync_anime_catalog"]
 

@@ -134,9 +134,7 @@ class ImageResizeView(View):
                 if output_format == "WEBP":
                     save_kwargs["method"] = 6  # Best compression
 
-                image.save(
-                    buffer, format=IMAGE_FORMATS[output_format]["format"], **save_kwargs
-                )
+                image.save(buffer, format=IMAGE_FORMATS[output_format]["format"], **save_kwargs)
                 buffer.seek(0)
 
                 # Build response with caching headers
@@ -181,44 +179,3 @@ class ImageResizeView(View):
         except Exception as e:
             logger.error(f"Error serving original image {filepath}: {str(e)}")
             return HttpResponseNotFound("Image not found")
-
-
-@require_http_methods(["GET"])
-def optimized_image_view(request, image_type, size, filepath):
-    """
-    Serve pre-defined optimized image sizes.
-
-    URL pattern: /media/opt/<str:image_type>/<str:size>/<path:filepath>
-
-    Example: /media/opt/cover/medium/anime/covers/image.jpg
-    """
-    try:
-        # Validate image type and size
-        if image_type not in VALID_DIMENSIONS:
-            return HttpResponse("Invalid image type", status=400)
-
-        if size not in VALID_DIMENSIONS[image_type]:
-            return HttpResponse("Invalid size", status=400)
-
-        width, height = VALID_DIMENSIONS[image_type][size]
-
-        # Construct full filepath
-        full_path = f"{filepath}"
-
-        # Check cache first (could use Django cache here)
-        # For now, we'll process on each request
-        # In production, consider caching processed images to disk
-
-        return ImageResizeView().get(
-            request,
-            full_path,
-            # Override GET parameters
-            w=width,
-            h=height,
-            format="webp",
-            quality=85 if size == "medium" else 80,
-        )
-
-    except Exception as e:
-        logger.error(f"Error in optimized_image_view: {str(e)}")
-        return HttpResponse("Error processing image", status=500)

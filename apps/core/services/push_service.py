@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 from pywebpush import webpush, WebPushException
 from django.conf import settings
+from django.utils import timezone
 from apps.core.models import PushSubscription
 
 logger = logging.getLogger(__name__)

@@ -1,8 +1,6 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Prefetch
-
 from apps.users.models import UserBadge
 from apps.animes.serializers import UserBadgeSerializer
 

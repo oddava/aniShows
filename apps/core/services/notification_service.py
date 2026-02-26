@@ -94,7 +94,9 @@ class NotificationService:
     @classmethod
     def cleanup_old_notifications(cls, days: int = 90) -> int:
         """Delete read notifications older than specified days."""
-        cutoff_date = timezone.now() - timezone.timedelta(days=days)
+        from datetime import timedelta
+
+        cutoff_date = timezone.now() - timedelta(days=days)
         deleted, _ = Notification.objects.filter(is_read=True, created_at__lt=cutoff_date).delete()
         logger.info(f"Cleaned up {deleted} old notifications")
         return deleted

@@ -7,7 +7,6 @@ import defusedxml.ElementTree as ET
 import requests
 import asyncio
 from typing import List, Dict, Optional, Tuple
-from django.db import transaction
 from apps.animes.models import Anime
 from apps.users.models import UserAnimeList, UserImportJob
 from django.utils import timezone
@@ -204,9 +203,7 @@ class MyAnimeListAPIImporter(BaseImporter):
 
     BASE_URL = "https://api.myanimelist.net/v2"
 
-    def __init__(
-        self, job: UserImportJob, username: str, client_id: Optional[str] = None
-    ):
+    def __init__(self, job: UserImportJob, username: str, client_id: Optional[str] = None):
         super().__init__(job)
         self.username = username
         # Get client_id from parameter, env var, or raise error - no hardcoded fallback
@@ -254,9 +251,7 @@ class MyAnimeListAPIImporter(BaseImporter):
                             "title": item["node"]["title"],
                             "status": item["list_status"]["status"],
                             "score": item["list_status"]["score"],
-                            "episodes_watched": item["list_status"][
-                                "num_episodes_watched"
-                            ],
+                            "episodes_watched": item["list_status"]["num_episodes_watched"],
                         }
                     )
 
@@ -310,9 +305,7 @@ class MyAnimeListAPIImporter(BaseImporter):
             self.job.total_entries = len(entries)
             self.job.save(update_fields=["total_entries"])
 
-            logger.info(
-                f"Starting import of {len(entries)} entries for user {self.user.username}"
-            )
+            logger.info(f"Starting import of {len(entries)} entries for user {self.user.username}")
 
             # Import each entry
             for entry in entries:
@@ -329,9 +322,7 @@ class MyAnimeListAPIImporter(BaseImporter):
                         self.skipped_count += 1
                     else:
                         self.failed_count += 1
-                        self.errors.append(
-                            f"{entry.get('title', 'Unknown')}: {message}"
-                        )
+                        self.errors.append(f"{entry.get('title', 'Unknown')}: {message}")
 
                 except Exception as e:
                     self.failed_count += 1
@@ -379,9 +370,7 @@ class MyAnimeListXMLImporter(BaseImporter):
                     "title": self._get_text(anime_elem, "series_title"),
                     "status": self._get_text(anime_elem, "my_status"),
                     "score": self._get_int(anime_elem, "my_score"),
-                    "episodes_watched": self._get_int(
-                        anime_elem, "my_watched_episodes"
-                    ),
+                    "episodes_watched": self._get_int(anime_elem, "my_watched_episodes"),
                 }
                 entries.append(entry)
 
@@ -454,9 +443,7 @@ class MyAnimeListXMLImporter(BaseImporter):
                         self.skipped_count += 1
                     else:
                         self.failed_count += 1
-                        self.errors.append(
-                            f"{entry.get('title', 'Unknown')}: {message}"
-                        )
+                        self.errors.append(f"{entry.get('title', 'Unknown')}: {message}")
 
                 except Exception as e:
                     self.failed_count += 1
@@ -517,9 +504,7 @@ class AniListImporter(BaseImporter):
     }
     """
 
-    def __init__(
-        self, job: UserImportJob, username: str, access_token: Optional[str] = None
-    ):
+    def __init__(self, job: UserImportJob, username: str, access_token: Optional[str] = None):
         super().__init__(job)
         self.username = username
         self.access_token = access_token
@@ -605,9 +590,7 @@ class AniListImporter(BaseImporter):
         episodes_watched = entry_data.get("episodes_watched", 0)
 
         # Try to get or fetch anime (SYNCHRONOUS)
-        anime = self.get_or_fetch_anime_sync(
-            mal_id=mal_id, anilist_id=anilist_id, title=title
-        )
+        anime = self.get_or_fetch_anime_sync(mal_id=mal_id, anilist_id=anilist_id, title=title)
 
         if not anime:
             return (
@@ -645,9 +628,7 @@ class AniListImporter(BaseImporter):
                         self.skipped_count += 1
                     else:
                         self.failed_count += 1
-                        self.errors.append(
-                            f"{entry.get('title', 'Unknown')}: {message}"
-                        )
+                        self.errors.append(f"{entry.get('title', 'Unknown')}: {message}")
 
                 except Exception as e:
                     self.failed_count += 1
@@ -688,9 +669,7 @@ class ImportService:
                 client_id=kwargs.get("client_id"),
             )
         elif job.source == UserImportJob.ImportSource.myanimelist_xml:
-            return MyAnimeListXMLImporter(
-                job=job, xml_content=kwargs.get("xml_content")
-            )
+            return MyAnimeListXMLImporter(job=job, xml_content=kwargs.get("xml_content"))
         elif job.source == UserImportJob.ImportSource.anilist:
             return AniListImporter(
                 job=job,

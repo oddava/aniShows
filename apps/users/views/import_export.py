@@ -9,8 +9,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
-from django.core.validators import RegexValidator
-from django.core.exceptions import ValidationError
 import logging
 import re
 
@@ -39,9 +37,7 @@ class ImportMALView(APIView):
         username = request.data.get("username")
 
         if not username:
-            return Response(
-                {"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate username format to prevent injection
         if not USERNAME_PATTERN.match(username):
@@ -77,9 +73,7 @@ class ImportMALXMLView(APIView):
     def post(self, request):
         """Upload and import MAL XML file"""
         if "file" not in request.FILES:
-            return Response(
-                {"error": "XML file is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "XML file is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         file = request.FILES["file"]
 
@@ -132,9 +126,7 @@ class ImportAniListView(APIView):
         access_token = request.data.get("access_token")  # Optional
 
         if not username:
-            return Response(
-                {"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate username format to prevent injection
         if not USERNAME_PATTERN.match(username):
@@ -160,9 +152,7 @@ class ImportAniListView(APIView):
         )
 
         # Start async import with validated username
-        process_import_job.delay(
-            job_id=job.id, username=username, access_token=access_token
-        )
+        process_import_job.delay(job_id=job.id, username=username, access_token=access_token)
 
         return Response(
             {"message": "Import started", "job_id": job.id, "status": "pending"},
@@ -190,9 +180,7 @@ class ImportJobListView(APIView):
 
     def get(self, request):
         """Get list of import jobs"""
-        jobs = UserImportJob.objects.filter(user=request.user).order_by("-created_at")[
-            :10
-        ]
+        jobs = UserImportJob.objects.filter(user=request.user).order_by("-created_at")[:10]
         serializer = UserImportJobSerializer(jobs, many=True)
         return Response(serializer.data)
 

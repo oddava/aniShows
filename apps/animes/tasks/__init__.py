@@ -54,15 +54,3 @@ __all__ = [
     "sync_franchises",
     "update_relation_slugs",
 ]
-
-
-# Explicitly register franchise tasks to ensure they're available
-# This is important for Celery autodiscover_tasks()
-def _register_franchise_tasks():
-    """Ensure franchise tasks are registered with Celery."""
-    # Tasks are already registered via @shared_task decorator
-    # This function exists to force import of the module
-    pass
-
-
-_register_franchise_tasks()

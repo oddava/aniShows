@@ -4,10 +4,10 @@ import { useEffect, useMemo } from 'react';
 // Parse markdown-style links [text](url) into React elements
 function parseMarkdownLinks(text) {
     if (!text) return null;
-    
+
     // Split by markdown link pattern
     const parts = text.split(/(\[.*?\]\(.*?\))/g);
-    
+
     return parts.map((part, index) => {
         const match = part.match(/\[(.*?)\]\((.*?)\)/);
         if (match) {
@@ -59,7 +59,7 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
     if (!staffRole) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4">
             <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                 onClick={onClose}
@@ -71,7 +71,7 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
                 {/* Header */}
                 <div className="relative h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 border-b border-white/5 flex-shrink-0"
                     style={{
-                        background: accentColor 
+                        background: accentColor
                             ? `linear-gradient(135deg, ${accentColor}20 0%, transparent 100%)`
                             : 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, transparent 100%)'
                     }}

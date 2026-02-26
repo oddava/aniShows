@@ -6,7 +6,6 @@ import json
 from datetime import datetime
 from typing import Dict, Any
 from django.contrib.auth import get_user_model
-from apps.animes.models import Anime, UserFavorite, Review
 from apps.users.models import UserAnimeList, UserProfile
 import logging
 
@@ -70,9 +69,7 @@ class UserDataExporter:
                     "status": entry.status,
                     "score": entry.score,
                     "episodes_watched": entry.episodes_watched,
-                    "updated_at": entry.updated_at.isoformat()
-                    if entry.updated_at
-                    else None,
+                    "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
                 }
             )
 
@@ -120,12 +117,8 @@ class UserDataExporter:
                     "rating_characters": review.rating_characters,
                     "text": review.text,
                     "has_spoilers": review.has_spoilers,
-                    "created_at": review.created_at.isoformat()
-                    if review.created_at
-                    else None,
-                    "updated_at": review.updated_at.isoformat()
-                    if review.updated_at
-                    else None,
+                    "created_at": review.created_at.isoformat() if review.created_at else None,
+                    "updated_at": review.updated_at.isoformat() if review.updated_at else None,
                 }
             )
 
@@ -231,5 +224,5 @@ class ExportService:
     @staticmethod
     def get_export_filename(user: User, format: str) -> str:
         """Generate export filename"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"anishows_export_{user.username}_{timestamp}.{format}"

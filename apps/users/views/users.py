@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from apps.users import throttling
 from django.contrib.auth import get_user_model
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.cache import cache
 from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
@@ -16,9 +15,9 @@ from apps.animes.serializers import (
     UserSerializer,
     PublicUserSerializer,
     UserProfileUpdateSerializer,
-    UserLightweightSerializer,
 )
 from apps.users.models import UserProfile, UserStats, UserBadge
+from apps.core.utils import get_client_ip
 from apps.users.services.cache import invalidate_user_caches
 
 logger = logging.getLogger(__name__)
@@ -203,7 +202,7 @@ class UserProfileView(APIView):
             # Only process if links actually changed
             if hash_links(old_links) != hash_links(new_links):
                 # Get IP address
-                ip_address = self._get_client_ip(request)
+                ip_address = get_client_ip(request)
 
                 # Log the changes
                 from apps.core.services.social_links_service import SocialLinksService
@@ -226,15 +225,6 @@ class UserProfileView(APIView):
     def _invalidate_user_caches(self, user_id, username):
         """Invalidate all user-related caches."""
         invalidate_user_caches(user_id, username)
-
-    def _get_client_ip(self, request):
-        """Get the client's IP address from the request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
-        return ip or "0.0.0.0"
 
 
 class UserStatsView(APIView):

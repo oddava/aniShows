@@ -222,7 +222,6 @@ class ThreadViewSet(viewsets.ModelViewSet):
             cache.set(view_cache_key, True, timeout=3600)
             # Atomically increment in DB
             instance.increment_view_count()
-            instance.refresh_from_db(fields=["view_count"])
 
         # 4. Handle standard response caching
         # Skip cache for authenticated users to avoid leaking user-specific data

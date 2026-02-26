@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 def send_pending_notifications():
     """Send pending notifications via email and push."""
     # Get unsent notifications (last 24 hours only)
-    cutoff = timezone.now() - timezone.timedelta(hours=24)
+    from datetime import timedelta
+
+    cutoff = timezone.now() - timedelta(hours=24)
 
     notifications = Notification.objects.filter(
         is_email_sent=False, created_at__gte=cutoff
@@ -128,13 +130,16 @@ def _build_new_episode_email(notification):
     </html>
     """
 
+
 @shared_task
 def check_new_episodes():
     """Check for newly aired episodes and create notifications."""
     logger.info("Checking for new episodes...")
 
     # Find anime that have aired recently (in the last 24 hours)
-    yesterday = timezone.now() - timezone.timedelta(hours=24)
+    from datetime import timedelta as td
+
+    yesterday = timezone.now() - td(hours=24)
 
     recently_aired = Anime.objects.filter(
         status=Anime.AnimeStatus.airing,

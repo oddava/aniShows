@@ -12,7 +12,6 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Avg, Q
 from django.utils import timezone
 from datetime import timedelta
@@ -21,7 +20,7 @@ from celery import current_app
 from celery.result import AsyncResult
 
 from apps.core.models import CeleryTaskResult, CeleryWorkerStatus, CeleryTaskSchedule
-from apps.users.admin_views import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser, AdminPagination
 
 
 class CeleryTaskResultViewSet(viewsets.ViewSet):
@@ -124,9 +123,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
                     "worker": result.worker,
                     "queue": result.queue,
                     "retries": result.retries,
-                    "error_message": result.error_message[:200]
-                    if result.error_message
-                    else None,
+                    "error_message": result.error_message[:200] if result.error_message else None,
                     "triggered_by": {
                         "id": result.triggered_by.id,
                         "username": result.triggered_by.username,
@@ -143,9 +140,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
         try:
             result = CeleryTaskResult.objects.get(pk=pk)
         except CeleryTaskResult.DoesNotExist:
-            return Response(
-                {"detail": "Task result not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Task result not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
@@ -156,9 +151,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
                 "status": result.status,
                 "status_display": result.get_status_display(),
                 "date_created": result.date_created.isoformat(),
-                "date_started": result.date_started.isoformat()
-                if result.date_started
-                else None,
+                "date_started": result.date_started.isoformat() if result.date_started else None,
                 "date_completed": result.date_completed.isoformat()
                 if result.date_completed
                 else None,
@@ -192,9 +185,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
         try:
             result = CeleryTaskResult.objects.get(pk=pk)
         except CeleryTaskResult.DoesNotExist:
-            return Response(
-                {"detail": "Task result not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Task result not found."}, status=status.HTTP_404_NOT_FOUND)
 
         result.delete()
         return Response({"message": "Task result deleted successfully."})
@@ -215,18 +206,16 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
             deleted_count = CeleryTaskResult.objects.filter(id__in=ids).delete()[0]
         elif days:
             cutoff_date = timezone.now() - timedelta(days=days)
-            deleted_count = CeleryTaskResult.objects.filter(
-                date_created__lt=cutoff_date
-            ).delete()[0]
+            deleted_count = CeleryTaskResult.objects.filter(date_created__lt=cutoff_date).delete()[
+                0
+            ]
         else:
             return Response(
                 {"detail": "Provide either ids or days parameter."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(
-            {"message": f"{deleted_count} task results deleted successfully."}
-        )
+        return Response({"message": f"{deleted_count} task results deleted successfully."})
 
     @action(detail=False, methods=["get"])
     def stats(self, request):
@@ -240,9 +229,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
         total_tasks = CeleryTaskResult.objects.count()
 
         # Status breakdown
-        by_status = dict(
-            CeleryTaskResult.objects.values_list("status").annotate(count=Count("id"))
-        )
+        by_status = dict(CeleryTaskResult.objects.values_list("status").annotate(count=Count("id")))
 
         # Task name breakdown (top 10)
         by_task = dict(
@@ -253,9 +240,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
 
         # Time-based stats
         stats_24h = {
-            "total": CeleryTaskResult.objects.filter(
-                date_created__gte=last_24h
-            ).count(),
+            "total": CeleryTaskResult.objects.filter(date_created__gte=last_24h).count(),
             "success": CeleryTaskResult.objects.filter(
                 date_created__gte=last_24h, status="SUCCESS"
             ).count(),
@@ -296,9 +281,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
                 "by_task": by_task,
                 "last_24h": stats_24h,
                 "last_7d": stats_7d,
-                "average_execution_time": round(avg_execution, 2)
-                if avg_execution
-                else None,
+                "average_execution_time": round(avg_execution, 2) if avg_execution else None,
             }
         )
 
@@ -459,9 +442,7 @@ class CeleryTaskTriggerView(APIView):
 
         try:
             # Send the task
-            result = current_app.send_task(
-                task_path, args=args, kwargs=kwargs, queue=queue
-            )
+            result = current_app.send_task(task_path, args=args, kwargs=kwargs, queue=queue)
 
             # Create task result record
             task_result = CeleryTaskResult.objects.create(
@@ -503,9 +484,7 @@ class CeleryTaskControlView(APIView):
         terminate = request.data.get("terminate", False)
 
         if not task_id:
-            return Response(
-                {"detail": "Task ID is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Task ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             if action == "revoke":
@@ -609,16 +588,12 @@ class CeleryWorkerStatusView(APIView):
         worker = request.data.get("worker")  # Specific worker or None for all
 
         if not action:
-            return Response(
-                {"detail": "Action is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Action is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             if action == "ping":
                 # Ping workers
-                result = current_app.control.ping(
-                    destination=[worker] if worker else None
-                )
+                result = current_app.control.ping(destination=[worker] if worker else None)
                 return Response({"pong": result})
 
             elif action == "shutdown":
@@ -746,9 +721,7 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         try:
             schedule = CeleryTaskSchedule.objects.get(pk=pk)
         except CeleryTaskSchedule.DoesNotExist:
-            return Response(
-                {"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
@@ -772,12 +745,8 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
                 "queue": schedule.queue,
                 "status": schedule.status,
                 "total_run_count": schedule.total_run_count,
-                "last_run_at": schedule.last_run_at.isoformat()
-                if schedule.last_run_at
-                else None,
-                "next_run_at": schedule.next_run_at.isoformat()
-                if schedule.next_run_at
-                else None,
+                "last_run_at": schedule.last_run_at.isoformat() if schedule.last_run_at else None,
+                "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
                 "created_at": schedule.created_at.isoformat(),
                 "updated_at": schedule.updated_at.isoformat(),
             }
@@ -788,19 +757,13 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         try:
             schedule = CeleryTaskSchedule.objects.get(pk=pk)
         except CeleryTaskSchedule.DoesNotExist:
-            return Response(
-                {"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
 
         schedule.name = request.data.get("name", schedule.name)
         schedule.task_name = request.data.get("task_name", schedule.task_name)
         schedule.description = request.data.get("description", schedule.description)
-        schedule.schedule_type = request.data.get(
-            "schedule_type", schedule.schedule_type
-        )
-        schedule.crontab_minute = request.data.get(
-            "crontab_minute", schedule.crontab_minute
-        )
+        schedule.schedule_type = request.data.get("schedule_type", schedule.schedule_type)
+        schedule.crontab_minute = request.data.get("crontab_minute", schedule.crontab_minute)
         schedule.crontab_hour = request.data.get("crontab_hour", schedule.crontab_hour)
         schedule.crontab_day_of_week = request.data.get(
             "crontab_day_of_week", schedule.crontab_day_of_week
@@ -811,12 +774,8 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         schedule.crontab_month_of_year = request.data.get(
             "crontab_month_of_year", schedule.crontab_month_of_year
         )
-        schedule.interval_every = request.data.get(
-            "interval_every", schedule.interval_every
-        )
-        schedule.interval_period = request.data.get(
-            "interval_period", schedule.interval_period
-        )
+        schedule.interval_every = request.data.get("interval_every", schedule.interval_every)
+        schedule.interval_period = request.data.get("interval_period", schedule.interval_period)
         schedule.one_time_datetime = request.data.get(
             "one_time_datetime", schedule.one_time_datetime
         )
@@ -839,14 +798,10 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         try:
             schedule = CeleryTaskSchedule.objects.get(pk=pk)
         except CeleryTaskSchedule.DoesNotExist:
-            return Response(
-                {"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
 
         schedule.delete()
-        return Response(
-            {"message": f'Schedule "{schedule.name}" deleted successfully.'}
-        )
+        return Response({"message": f'Schedule "{schedule.name}" deleted successfully.'})
 
     @action(detail=True, methods=["post"])
     def enable(self, request, pk=None):
@@ -854,9 +809,7 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         try:
             schedule = CeleryTaskSchedule.objects.get(pk=pk)
         except CeleryTaskSchedule.DoesNotExist:
-            return Response(
-                {"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
 
         schedule.status = CeleryTaskSchedule.TaskStatus.ENABLED
         schedule.save()
@@ -876,9 +829,7 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         try:
             schedule = CeleryTaskSchedule.objects.get(pk=pk)
         except CeleryTaskSchedule.DoesNotExist:
-            return Response(
-                {"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
 
         schedule.status = CeleryTaskSchedule.TaskStatus.DISABLED
         schedule.save()
@@ -898,9 +849,7 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
         try:
             schedule = CeleryTaskSchedule.objects.get(pk=pk)
         except CeleryTaskSchedule.DoesNotExist:
-            return Response(
-                {"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
 
         if schedule.status != CeleryTaskSchedule.TaskStatus.ENABLED:
             return Response(
@@ -983,12 +932,8 @@ class CeleryDashboardView(APIView):
         # Task statistics
         task_stats = {
             "total": CeleryTaskResult.objects.count(),
-            "last_24h": CeleryTaskResult.objects.filter(
-                date_created__gte=last_24h
-            ).count(),
-            "last_7d": CeleryTaskResult.objects.filter(
-                date_created__gte=last_7d
-            ).count(),
+            "last_24h": CeleryTaskResult.objects.filter(date_created__gte=last_24h).count(),
+            "last_7d": CeleryTaskResult.objects.filter(date_created__gte=last_7d).count(),
             "pending": CeleryTaskResult.objects.filter(status="PENDING").count(),
             "running": CeleryTaskResult.objects.filter(status="STARTED").count(),
             "success_today": CeleryTaskResult.objects.filter(
@@ -1022,9 +967,7 @@ class CeleryDashboardView(APIView):
                     "status": task.status,
                     "date_created": task.date_created.isoformat(),
                     "execution_time": task.execution_time,
-                    "triggered_by": task.triggered_by.username
-                    if task.triggered_by
-                    else None,
+                    "triggered_by": task.triggered_by.username if task.triggered_by else None,
                 }
             )
 
@@ -1034,9 +977,7 @@ class CeleryDashboardView(APIView):
         ).count()
 
         # Workers
-        workers = CeleryWorkerStatus.objects.filter(
-            last_heartbeat__gte=now - timedelta(minutes=5)
-        )
+        workers = CeleryWorkerStatus.objects.filter(last_heartbeat__gte=now - timedelta(minutes=5))
         workers_data = []
         for worker in workers:
             workers_data.append(

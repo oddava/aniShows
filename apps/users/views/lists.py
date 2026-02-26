@@ -4,7 +4,6 @@ from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 
-from apps.animes.models import UserFavorite
 from apps.users.models import UserAnimeList
 from apps.animes.serializers import UserAnimeListSerializer
 from apps.users.permissions import EmailVerificationMixin

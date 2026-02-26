@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from apps.core.models import SystemLog, AuditLog
 from apps.core.tasks.logging_tasks import log_request_async
+from apps.core.utils import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +30,7 @@ class LoggingMiddleware:
         start_time = time.time()
 
         # Get user info before response
-        user = (
-            request.user
-            if hasattr(request, "user") and request.user.is_authenticated
-            else None
-        )
+        user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
         user_id = user.id if user else None
 
         # Process the request
@@ -59,11 +56,7 @@ class LoggingMiddleware:
             log_type = SystemLog.LogType.REQUEST
 
         # Get client IP
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
+        ip = get_client_ip(request)
 
         # Fire and forget - log asynchronously via Celery
         try:
@@ -109,20 +102,12 @@ class AdminAuditMiddleware:
             return self.get_response(request)
 
         # Get user info
-        user = (
-            request.user
-            if hasattr(request, "user") and request.user.is_authenticated
-            else None
-        )
+        user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
         if not user or not (user.is_staff or user.is_superuser):
             return self.get_response(request)
 
         # Get client IP
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
+        ip = get_client_ip(request)
 
         # Determine action type
         action_map = {
@@ -198,18 +183,10 @@ class ExceptionLoggingMiddleware:
 
     def process_exception(self, request, exception):
         """Log unhandled exceptions."""
-        user = (
-            request.user
-            if hasattr(request, "user") and request.user.is_authenticated
-            else None
-        )
+        user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
 
         # Get client IP
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = request.META.get("REMOTE_ADDR")
+        ip = get_client_ip(request)
 
         try:
             SystemLog.objects.create(

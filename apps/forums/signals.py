@@ -26,7 +26,6 @@ def update_thread_on_post_create(sender, instance, created, **kwargs):
     """Update thread reply count and invalidate caches when a post is created"""
     if created:
         instance.thread.update_reply_count()
-        instance.thread.category.update_thread_count()
         # Invalidate caches AFTER transaction commits to prevent race conditions
         invalidate_after_commit(
             lambda: invalidate_thread_caches(instance.thread.id, instance.thread.category.slug)

@@ -6,14 +6,12 @@ from django.db.models import (
     Model,
     ForeignKey,
     TextChoices,
-    EmailField,
     ImageField,
     BooleanField,
     Index,
 )
 from django.db.models.fields import (
     TextField,
-    URLField,
     CharField,
     IntegerField,
     FloatField,

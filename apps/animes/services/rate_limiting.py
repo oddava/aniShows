@@ -7,7 +7,7 @@ import asyncio
 import time
 import logging
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Callable, Any
 from django.core.cache import cache
 
@@ -71,9 +71,7 @@ class AniListRateLimiter:
                     return
 
                 # Rate limit hit, wait until next window
-                logger.warning(
-                    f"Rate limit approaching: {count}/{self.RATE_LIMIT} requests"
-                )
+                logger.warning(f"Rate limit approaching: {count}/{self.RATE_LIMIT} requests")
                 await asyncio.sleep(1)
 
             except Exception as e:
@@ -132,15 +130,9 @@ class CircuitBreaker:
                     elapsed = (datetime.now() - last_failure).total_seconds()
                     if elapsed >= self.recovery_timeout:
                         # Try half-open state
-                        cache.set(
-                            self._get_state_key(), "HALF_OPEN", self.recovery_timeout
-                        )
-                        cache.set(
-                            self._get_half_open_calls_key(), 0, self.recovery_timeout
-                        )
-                        logger.info(
-                            f"Circuit breaker {self.name} entering HALF_OPEN state"
-                        )
+                        cache.set(self._get_state_key(), "HALF_OPEN", self.recovery_timeout)
+                        cache.set(self._get_half_open_calls_key(), 0, self.recovery_timeout)
+                        logger.info(f"Circuit breaker {self.name} entering HALF_OPEN state")
                         return False
                 return True
 
@@ -182,9 +174,7 @@ class CircuitBreaker:
         try:
             failures = (cache.get(self._get_failures_key()) or 0) + 1
             cache.set(self._get_failures_key(), failures, self.recovery_timeout)
-            cache.set(
-                self._get_last_failure_key(), datetime.now(), self.recovery_timeout
-            )
+            cache.set(self._get_last_failure_key(), datetime.now(), self.recovery_timeout)
 
             state = cache.get(self._get_state_key())
 
