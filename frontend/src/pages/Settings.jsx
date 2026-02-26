@@ -286,7 +286,7 @@ export default function Settings() {
     const handleResendVerification = async () => {
         setIsResending(true);
         try {
-            await authApi.resendVerification({ email: user.email });
+            await authApi.resendVerification(user.email);
             setAccountSuccess('Verification email sent!');
         } catch (err) {
             setAccountError('Failed to send verification email');

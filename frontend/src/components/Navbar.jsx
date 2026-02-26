@@ -1,8 +1,8 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { Search, Menu, X, User, LogOut, ChevronDown, AlertCircle, RefreshCw, CheckCircle, Star, Loader2, Play, Calendar, Heart, Tv, Bell, Clock, Command, Sparkles, MessageSquare } from 'lucide-react';
+import { Search, Menu, X, User, LogOut, ChevronDown, Star, Loader2, Play, Calendar, Heart, Tv, Bell, Clock, Command, Sparkles, MessageSquare } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { authApi, animeApi } from '../api/client';
+import { animeApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
 import logger from '../utils/logger';
 
@@ -395,25 +395,6 @@ export default function Navbar() {
         }
     };
 
-    const [isResending, setIsResending] = useState(false);
-    const [resendSuccess, setResendSuccess] = useState(false);
-
-    const handleResendVerification = async () => {
-        if (!user?.email) return;
-        setIsResending(true);
-        try {
-            await authApi.resendVerification({ email: user.email });
-            setResendSuccess(true);
-            setTimeout(() => setResendSuccess(false), 5000);
-        } catch (err) {
-            logger.error('Failed to resend verification:', err);
-        } finally {
-            setIsResending(false);
-        }
-    };
-
-    const showVerificationBanner = isAuthenticated && user && user.email_verified === false;
-
     // Calculate user stats from API response
     const userStats = {
         animeWatched: user?.anime_count || 0,
@@ -441,43 +422,9 @@ export default function Navbar() {
     };
 
     return (
-        <>
-            {showVerificationBanner && (
-                <div className="bg-yellow-500/10 border-b border-yellow-500/20 backdrop-blur-sm relative z-[60]">
-                    <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-4 text-sm">
-                        <div className="flex items-center gap-2 text-yellow-500">
-                            <AlertCircle className="w-4 h-4 shrink-0" />
-                            <span>
-                                Please verify your email address to access all features.
-                                <span className="hidden sm:inline"> Check your inbox for the verification link.</span>
-                            </span>
-                        </div>
-                        {resendSuccess ? (
-                            <div className="flex items-center gap-2 text-green-400 font-medium whitespace-nowrap">
-                                <CheckCircle className="w-4 h-4" />
-                                <span>Sent!</span>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={handleResendVerification}
-                                disabled={isResending}
-                                className="flex items-center gap-2 text-yellow-500 hover:text-yellow-400 font-medium whitespace-nowrap disabled:opacity-50 transition-colors"
-                            >
-                                {isResending ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <RefreshCw className="w-4 h-4" />
-                                )}
-                                Resend Email
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
-            <nav
-                className={`fixed top-0 left-0 right-0 z-[1000] bg-dark/80 backdrop-blur-xl border-b border-gray-800 ${showVerificationBanner ? 'top-[40px]' : 'top-0'
-                    } transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
-            >
+        <nav
+            className={`fixed top-0 left-0 right-0 z-[1000] bg-dark/80 backdrop-blur-xl border-b border-gray-800 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
+        >
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16">
                         {/* Logo */}
@@ -969,6 +916,5 @@ export default function Navbar() {
                     </div>
                 )}
             </nav>
-        </>
     );
 }

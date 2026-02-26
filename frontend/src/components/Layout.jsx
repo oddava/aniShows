@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import React, { Suspense } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import VerificationBanner from './VerificationBanner';
 
 const PageLoader = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
@@ -15,7 +16,9 @@ export default function Layout() {
             <Suspense fallback={<PageLoader />}>
                 <Navbar />
             </Suspense>
-            <main className="pt-16 flex-grow">
+            <div className="h-16" /> {/* Spacer for fixed navbar */}
+            <VerificationBanner />
+            <main className="flex-grow">
                 <Outlet />
             </main>
             <Footer />
