@@ -921,7 +921,7 @@ function OverviewTab({ anime, accentColor }) {  // eslint-disable-line no-unused
 
     return (
         <div key="overview" className="animate-tab-content space-y-12">
-            <FranchiseSection relations={anime.relations} accentColor={accentColor} />
+            <FranchiseSection relations={anime.relations} accentColor={accentColor} sourceSlug={anime.slug} />
 
             <MusicSection anime={anime} accentColor={accentColor} />
 

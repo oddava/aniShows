@@ -1,9 +1,34 @@
-import { Film } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Film, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { animeApi } from '../api/client';
 
-export default function FranchiseSection({ relations, accentColor }) {
+export default function FranchiseSection({ relations, accentColor, sourceSlug }) {
+    const navigate = useNavigate();
+    const [loadingId, setLoadingId] = useState(null);
+    const [showAll, setShowAll] = useState(false);
+
+    const handleFetchAndNavigate = useCallback(async (rel) => {
+        if (loadingId) return;
+        setLoadingId(rel.id);
+
+        try {
+            const response = await animeApi.fetchFranchise(rel.id, sourceSlug);
+            const { slug } = response.data;
+            if (slug) {
+                navigate(`/anime/${slug}`);
+            }
+        } catch {
+            // Silently fail - user can just click again
+            // The loading state will clear and they can retry
+        } finally {
+            setLoadingId(null);
+        }
+    }, [loadingId, sourceSlug, navigate]);
+
     if (!relations || relations.length === 0) return null;
 
-    // Sort relations: show sequels/prequels first, then others
+    // Sort: sequels/prequels first, then side stories, then rest
     const priorityOrder = ['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY'];
     const sortedRelations = [...relations].sort((a, b) => {
         const aPriority = priorityOrder.indexOf(a.type);
@@ -14,8 +39,8 @@ export default function FranchiseSection({ relations, accentColor }) {
         return aPriority - bPriority;
     });
 
-    // Take only first 6 most relevant
-    const displayRelations = sortedRelations.slice(0, 6);
+    const displayRelations = showAll ? sortedRelations : sortedRelations.slice(0, 6);
+    const hasMore = sortedRelations.length > 6;
 
     const relationLabels = {
         PREQUEL: 'Prequel',
@@ -31,51 +56,111 @@ export default function FranchiseSection({ relations, accentColor }) {
 
     return (
         <div className="mb-8">
+            {/* Full-page loading overlay when fetching a franchise anime */}
+            {loadingId && (
+                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 text-white animate-spin" />
+                        <p className="text-sm text-gray-300">Loading anime...</p>
+                    </div>
+                </div>
+            )}
+
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
                     <div className="w-1 h-5 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
                     Franchise
-                    {relations.length > 6 && (
-                        <span className="text-xs font-normal text-gray-500">({relations.length} total)</span>
-                    )}
+                    <span className="text-xs font-normal text-gray-500">({relations.length} total)</span>
                 </h2>
+                {hasMore && (
+                    <button
+                        onClick={() => setShowAll(!showAll)}
+                        className="text-xs font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                    >
+                        {showAll ? (
+                            <>
+                                Show less
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                            </>
+                        ) : (
+                            <>
+                                View all
+                                <ChevronRight className="w-3.5 h-3.5" />
+                            </>
+                        )}
+                    </button>
+                )}
             </div>
 
-            <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory pl-0 sm:pl-0">
+            <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory">
                 {displayRelations.map((rel) => (
-                    <div
+                    <FranchiseCard
                         key={rel.id}
-                        className="relative flex-shrink-0 w-28 snap-start cursor-default"
-                    >
-                        <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200">
-                            {rel.cover ? (
-                                <img
-                                    src={rel.cover}
-                                    alt={rel.title}
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
-                                    <Film className="w-8 h-8" />
-                                </div>
-                            )}
-
-                            {/* Relation type badge */}
-                            <div className="absolute top-1.5 left-1.5">
-                                <span
-                                    className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-sm"
-                                >
-                                    {relationLabels[rel.type] || 'Related'}
-                                </span>
-                            </div>
-                        </div>
-
-                        <h4 className="text-xs font-bold text-gray-300 line-clamp-2 leading-tight mt-1.5">
-                            {rel.title}
-                        </h4>
-                    </div>
+                        rel={rel}
+                        label={relationLabels[rel.type] || 'Related'}
+                        onFetch={handleFetchAndNavigate}
+                    />
                 ))}
             </div>
         </div>
+    );
+}
+
+function FranchiseCard({ rel, label, onFetch }) {
+    const cardContent = (
+        <>
+            <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200 relative">
+                {rel.cover ? (
+                    <img
+                        src={rel.cover}
+                        alt={rel.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
+                        <Film className="w-8 h-8" />
+                    </div>
+                )}
+
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+
+                {/* Relation type badge */}
+                <div className="absolute top-1.5 left-1.5">
+                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-sm">
+                        {label}
+                    </span>
+                </div>
+            </div>
+
+            <h4 className="text-xs font-bold text-gray-300 line-clamp-2 leading-tight mt-1.5 group-hover:text-white transition-colors duration-200">
+                {rel.title}
+            </h4>
+        </>
+    );
+
+    // Anime exists in DB - render as direct Link
+    if (rel.slug) {
+        return (
+            <Link
+                to={`/anime/${rel.slug}`}
+                className="relative flex-shrink-0 w-28 snap-start cursor-pointer group"
+                title={rel.title}
+            >
+                {cardContent}
+            </Link>
+        );
+    }
+
+    // Anime not in DB yet - fetch on click, then navigate
+    return (
+        <button
+            onClick={() => onFetch(rel)}
+            className="relative flex-shrink-0 w-28 snap-start cursor-pointer group text-left"
+            title={rel.title}
+        >
+            {cardContent}
+        </button>
     );
 }

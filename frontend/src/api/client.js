@@ -232,6 +232,10 @@ export const animeApi = {
     getTopRated: (signal) => api.get('/anime/top_rated/', { signal }),
     getRelated: (slug, signal) => api.get(`/anime/${slug}/related/`, { signal }),
     getReviews: (slug, signal) => api.get(`/anime/${slug}/reviews/`, { signal }),
+    fetchFranchise: (anilistId, sourceSlug) => api.post('/anime/franchise/fetch/', {
+        anilist_id: anilistId,
+        source_slug: sourceSlug,
+    }),
 };
 
 export const genreApi = {

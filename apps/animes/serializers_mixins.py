@@ -2,6 +2,12 @@
 Serializer mixins for common functionality.
 """
 
+import logging
+
+from imagekit.cachefiles import ImageCacheFile
+
+logger = logging.getLogger(__name__)
+
 
 class ImageUrlMixin:
     """
@@ -11,7 +17,40 @@ class ImageUrlMixin:
     1. Check if a local image exists
     2. Generate absolute URL if request context is available
     3. Fall back to external URLs if local image doesn't exist
+
+    Handles ImageKit's Optimistic strategy with S3/MinIO storage, where
+    thumbnails may not be generated until explicitly triggered.
     """
+
+    def _build_url(self, field):
+        """Build absolute URL from an image field using request context."""
+        url = field.url
+        # S3 storage returns full absolute URLs already — don't double-prefix
+        if url and url.startswith(("http://", "https://")):
+            return url
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def _ensure_thumbnail(self, thumbnail_field):
+        """
+        Ensure an ImageKit thumbnail is generated and return its URL.
+
+        ImageKit's Optimistic strategy returns a URL without guaranteeing the
+        file exists in storage. This method calls .generate() to ensure the
+        thumbnail is actually created in S3/MinIO before returning the URL.
+
+        .generate() is idempotent — it checks the Redis-cached state first
+        and only processes the image if state != EXISTS. So for already-
+        generated thumbnails this is just a Redis GET (sub-millisecond).
+        """
+        if not isinstance(thumbnail_field, ImageCacheFile):
+            return self._build_url(thumbnail_field)
+
+        # Generate (idempotent: skips if Redis state is already EXISTS)
+        thumbnail_field.generate()
+        return self._build_url(thumbnail_field)
 
     def get_image_url(self, obj, field_name, fallback_field_name=None):
         """
@@ -28,10 +67,10 @@ class ImageUrlMixin:
         image_field = getattr(obj, field_name, None)
 
         if image_field:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(image_field.url)
-            return image_field.url
+            try:
+                return self._build_url(image_field)
+            except Exception:
+                pass
 
         if fallback_field_name:
             return getattr(obj, fallback_field_name, None)
@@ -44,6 +83,9 @@ class ImageUrlMixin:
         """
         Generate URL for a thumbnail with fallback to original image.
 
+        Fallback chain: thumbnail → original image → external URL → None.
+        Thumbnails are generated on-demand if they don't exist in storage.
+
         Args:
             obj: The model instance
             thumbnail_field_name: Name of the thumbnail field (e.g., 'image_small')
@@ -53,33 +95,25 @@ class ImageUrlMixin:
         Returns:
             str: Absolute URL or external URL or None
         """
+        # Try thumbnail (ImageKit ImageSpecField)
         thumbnail_field = getattr(obj, thumbnail_field_name, None)
-
         if thumbnail_field:
             try:
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(thumbnail_field.url)
-                return thumbnail_field.url
+                return self._ensure_thumbnail(thumbnail_field)
             except Exception:
-                # Fallback to original image if thumbnail fails
                 pass
 
         # Try original image
         original_field = getattr(obj, original_field_name, None)
         if original_field:
             try:
-                request = self.context.get("request")
-                if request:
-                    return request.build_absolute_uri(original_field.url)
-                return original_field.url
+                return self._build_url(original_field)
             except Exception:
                 pass
 
         # Fallback to external URL
         if fallback_field_name:
             return getattr(obj, fallback_field_name, None)
-
         return None
 
 
