@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { Pencil, Trash2, MoreVertical } from 'lucide-react';
+import { Pencil, Trash2, MoreVertical, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const CommentItem = ({
@@ -20,19 +20,22 @@ const CommentItem = ({
   // Don't render deleted comments
   if (comment.is_deleted) return null;
 
-  const avatarUrl = comment.user?.avatar ||
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${comment.user?.username}`;
-
   return (
     <div className="flex gap-3 py-3">
       {/* Avatar */}
       <div className="flex-shrink-0">
         <Link to={`/profile/${comment.user?.username}`}>
-          <img
-            src={avatarUrl}
-            alt={comment.user?.username}
-            className="w-8 h-8 rounded-full object-cover border border-gray-700 hover:border-accent transition-colors"
-          />
+          {comment.user?.avatar ? (
+            <img
+              src={comment.user.avatar}
+              alt={comment.user.username}
+              className="w-8 h-8 rounded-full object-cover border border-gray-700 hover:border-accent transition-colors"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full border border-gray-700 bg-dark-200 flex items-center justify-center hover:border-accent transition-colors">
+              <User className="w-5 h-5 text-gray-600" />
+            </div>
+          )}
         </Link>
       </div>
 

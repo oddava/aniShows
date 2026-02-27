@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send } from 'lucide-react';
+import { Send, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
 
@@ -7,9 +7,6 @@ const CommentForm = ({ onSubmit, placeholder = "Write a comment...", initialText
   const { user } = useAuth();
   const [text, setText] = useState(initialText);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const avatarUrl = user?.avatar || 
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,11 +30,17 @@ const CommentForm = ({ onSubmit, placeholder = "Write a comment...", initialText
     <form onSubmit={handleSubmit} className="flex gap-3">
       {/* Avatar */}
       <div className="flex-shrink-0">
-        <img
-          src={avatarUrl}
-          alt={user?.username}
-          className="w-8 h-8 rounded-full object-cover border border-gray-700"
-        />
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt={user.username}
+            className="w-8 h-8 rounded-full object-cover border border-gray-700"
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full border border-gray-700 bg-dark-200 flex items-center justify-center">
+            <User className="w-5 h-5 text-gray-600" />
+          </div>
+        )}
       </div>
 
       {/* Input */}
