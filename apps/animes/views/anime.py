@@ -9,7 +9,16 @@ import logging
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 
-from apps.animes.models import Anime, Genre, Studio, UserFavorite, AnimeCharacter, AnimeStaff
+from apps.animes.models import (
+    Anime,
+    Genre,
+    Studio,
+    UserFavorite,
+    AnimeCharacter,
+    AnimeStaff,
+    Character,
+    Staff,
+)
 from apps.users.models import UserAnimeList
 from apps.animes.serializers import (
     AnimeListSerializer,
@@ -240,11 +249,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             queryset = queryset.filter(status="Upcoming")
         elif sort == "popular":
             # For popular sort, filter out anime without popularity_rank so they don't clutter results
-            # BUT: when filtering by season/year, include all anime so seasonal views work correctly
-            if not season and not year:
+            # BUT: when filtering by season/year or searching, include all anime so views work correctly
+            if not season and not year and not search:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             else:
-                # For seasonal views, sort by member_count (descending) which is a better
+                # For seasonal/search views, sort by member_count (descending) which is a better
                 # indicator of popularity - more members = more popular
                 # This ensures popular anime like Frieren appear first even if they
                 # don't have a popularity_rank set yet
@@ -657,6 +666,14 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             if source_material not in valid_sources:
                 source_material = ""
 
+            # Grab external image URLs for immediate fallback (before Celery downloads)
+            cover_url_external = (
+                item.get("coverImage", {}).get("extraLarge")
+                or item.get("coverImage", {}).get("large")
+                or ""
+            )
+            banner_url_external = item.get("bannerImage") or ""
+
             # Handle title uniqueness: append format/year if title conflicts
             final_title = title
             if Anime.objects.filter(title=title).exists():
@@ -719,6 +736,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     season_year=item.get("seasonYear"),
                     anilist_id=item.get("id"),
                     mal_id=incoming_mal_id,
+                    cover_image_external_url=cover_url_external,
+                    banner_image_external_url=banner_url_external,
                 )
             except IntegrityError:
                 # Race condition: another request created this anime between our checks
@@ -782,6 +801,94 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if trailer_url:
                     anime.trailer_url = trailer_url
                     anime.save(update_fields=["trailer_url"])
+
+            # Handle characters and voice actors
+            try:
+                characters_data = item.get("characterPreview", {}).get("edges", [])
+                for edge in characters_data:
+                    node = edge.get("node", {})
+                    role = edge.get("role", "SUPPORTING")
+
+                    char_name = node.get("name", {}).get("full")
+                    if not char_name:
+                        continue
+
+                    char_native = node.get("name", {}).get("native") or ""
+                    char_desc = node.get("description") or ""
+                    char_img = node.get("image", {}).get("large")
+
+                    character, _ = Character.objects.update_or_create(
+                        name=char_name,
+                        defaults={
+                            "name_native": char_native,
+                            "description": char_desc,
+                            "image_url": char_img,
+                        },
+                    )
+
+                    # Handle voice actor (Japanese)
+                    voice_actors = edge.get("voiceActors", [])
+                    voice_actor = None
+                    if voice_actors:
+                        va_node = voice_actors[0]
+                        va_name = va_node.get("name", {}).get("full")
+                        if va_name:
+                            va_native = va_node.get("name", {}).get("native") or ""
+                            va_img = va_node.get("image", {}).get("large")
+                            voice_actor, _ = Staff.objects.update_or_create(
+                                name=va_name,
+                                defaults={"name_native": va_native, "image_url": va_img},
+                            )
+
+                    role_map = {
+                        "MAIN": AnimeCharacter.Role.MAIN,
+                        "SUPPORTING": AnimeCharacter.Role.SUPPORTING,
+                        "BACKGROUND": AnimeCharacter.Role.BACKGROUND,
+                    }
+                    AnimeCharacter.objects.update_or_create(
+                        anime=anime,
+                        character=character,
+                        voice_actor=voice_actor,
+                        defaults={"role": role_map.get(role, AnimeCharacter.Role.SUPPORTING)},
+                    )
+            except Exception as char_err:
+                logger.warning(f"Failed to import characters for {title}: {char_err}")
+
+            # Handle staff
+            try:
+                staff_data = item.get("staffPreview", {}).get("edges", [])
+                for edge in staff_data:
+                    node = edge.get("node", {})
+                    role = edge.get("role", "")
+
+                    staff_name = node.get("name", {}).get("full")
+                    if not staff_name:
+                        continue
+
+                    staff_native = node.get("name", {}).get("native") or ""
+                    staff_img = node.get("image", {}).get("large")
+
+                    staff_member, _ = Staff.objects.update_or_create(
+                        name=staff_name,
+                        defaults={"name_native": staff_native, "image_url": staff_img},
+                    )
+
+                    AnimeStaff.objects.update_or_create(
+                        anime=anime,
+                        staff=staff_member,
+                        role=role,
+                    )
+            except Exception as staff_err:
+                logger.warning(f"Failed to import staff for {title}: {staff_err}")
+
+            # Queue theme song sync (requires mal_id)
+            if anime.mal_id:
+                try:
+                    from apps.animes.tasks.themes import sync_theme_songs
+
+                    sync_theme_songs.delay(anime_id=anime.id)
+                except Exception as theme_err:
+                    logger.warning(f"Failed to queue theme sync for {title}: {theme_err}")
 
             # Update the source anime's relation slug so future visits are instant
             source_slug = request.data.get("source_slug")

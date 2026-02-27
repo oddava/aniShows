@@ -249,9 +249,10 @@ export default function Browse() {
     else if (currentSort === 'rating') setActiveTab('top');
     else if (currentSort === 'newest') setActiveTab('newest');
     else if (currentSort === 'title') setActiveTab('title');
+    else if (currentSearch && !searchParams.get('sort') && !currentSeason) setActiveTab('search');
     else if (currentSort === 'popular') setActiveTab('popular');
     else setActiveTab(null);
-  }, [currentSort, currentSeason, currentYearParam]);
+  }, [currentSort, currentSeason, currentYearParam, currentSearch, searchParams]);
 
   const handleTabChange = useCallback((key) => {
     const newParams = new URLSearchParams(searchParams);
@@ -470,8 +471,16 @@ export default function Browse() {
         const newParams = new URLSearchParams(searchParams);
         if (searchInput) {
           newParams.set('q', searchInput);
+          if (!currentSearch) {
+            newParams.delete('sort');
+            newParams.delete('season');
+            newParams.delete('year');
+          }
         } else {
           newParams.delete('q');
+          if (!newParams.get('sort') && !newParams.get('season') && !newParams.get('type') && !newParams.get('status')) {
+            newParams.set('sort', 'popular');
+          }
         }
         setSearchParams(newParams);
       }
@@ -618,6 +627,26 @@ export default function Browse() {
           {/* Browse Tabs */}
           <div className="mb-6 -mx-3 sm:-mx-4 px-3 sm:px-4 overflow-x-auto scrollbar-hide">
             <div className="flex gap-2 animate-fade-in min-w-max sm:justify-center">
+              {currentSearch && (
+                <button
+                  onClick={() => {
+                    const newParams = new URLSearchParams(searchParams);
+                    newParams.delete('sort');
+                    newParams.delete('season');
+                    newParams.delete('year');
+                    setSearchParams(newParams);
+                    setActiveTab('search');
+                  }}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all whitespace-nowrap
+                    ${activeTab === 'search'
+                      ? 'bg-accent text-white shadow-lg shadow-accent/25 scale-105'
+                      : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
+                    }`}
+                >
+                  <Search className={`w-4 h-4 ${activeTab === 'search' ? 'text-white' : 'text-gray-500'}`} />
+                  All Results
+                </button>
+              )}
               {BROWSE_TABS.map((tab) => {
                 const isActive = activeTab === tab.key;
                 const Icon = tab.icon;
