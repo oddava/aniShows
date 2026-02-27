@@ -62,7 +62,7 @@ class Character(Model):
         source="image",
         processors=[ResizeToFit(150, 225)],
         format="WEBP",
-        options={"quality": 85},
+        options={"quality": 75},
     )
     image_url = URLField(blank=True, null=True)
     description = TextField(blank=True)
@@ -88,7 +88,7 @@ class Staff(Model):
         source="image",
         processors=[ResizeToFit(150, 225)],
         format="WEBP",
-        options={"quality": 85},
+        options={"quality": 75},
     )
     image_url = URLField(blank=True, null=True)
     description = TextField(blank=True)
@@ -147,13 +147,13 @@ class Anime(Model):
         source="cover_image",
         processors=[ResizeToFit(150, 225)],
         format="WEBP",
-        options={"quality": 85},
+        options={"quality": 75},
     )
     cover_image_medium = ImageSpecField(
         source="cover_image",
         processors=[ResizeToFit(230, 345)],
         format="WEBP",
-        options={"quality": 85},
+        options={"quality": 75},
     )
     cover_image_large = ImageSpecField(
         source="cover_image",
@@ -174,7 +174,7 @@ class Anime(Model):
         source="banner_image",
         processors=[ResizeToFit(800, 450)],
         format="WEBP",
-        options={"quality": 85},
+        options={"quality": 75},
     )
     banner_image_large = ImageSpecField(
         source="banner_image",

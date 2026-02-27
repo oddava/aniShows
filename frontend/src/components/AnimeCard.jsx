@@ -192,7 +192,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 <img
                     src={imageUrl}
                     srcSet={imageSrcSet}
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
+                    sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                     alt={anime.title}
                     loading={loadingStrategy.loading}
                     decoding={loadingStrategy.decoding}
@@ -221,7 +221,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                         <img
                             src={imageUrl}
                             srcSet={imageSrcSet}
-                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 200px"
+                            sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                             alt={anime.title}
                             loading={loadingStrategy.loading}
                             decoding={loadingStrategy.decoding}
@@ -321,19 +321,19 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 {/* Title/Info Footer */}
                 <Link to={`/anime/${anime.slug}`} className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl"
                 >
-                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent transition-colors"
+                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent-light transition-colors"
                     >
                         {displayTitle}
                     </h3>
                     <div className="flex items-center justify-between text-[11px] text-gray-400"
                     >
-                        <span className="font-medium text-accent"
+                        <span className="font-medium text-accent-light"
                         >{anime.anime_type || 'TV'}</span>
                         <div className="flex items-center gap-1 text-gray-400"
                         >
                             {listStatus === 'Watching' ? (
                                 <>
-                                    <span className="text-accent font-bold">{episodesWatched}</span>
+                                    <span className="text-accent-light font-bold">{episodesWatched}</span>
                                     <span className="text-gray-500">/</span>
                                     <span>{anime.episode_count || '?'}</span>
                                     <span className="text-[10px] text-gray-500 ml-0.5">eps</span>

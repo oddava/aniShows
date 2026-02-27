@@ -106,10 +106,14 @@ export default defineConfig(({ mode }) => ({
         sourcemap: false,
       },
     },
-    // Minification options - use esbuild (faster than terser)
-    minify: 'esbuild',
-    esbuildOptions: {
-      drop: ['console', 'debugger'],
+    // Minification options - use terser for better compression
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      }
     },
     // Optimize bundle size
     target: 'es2015',
