@@ -1,14 +1,16 @@
 import django_filters
 from django.db.models import Q
+from django_filters import FilterSet, CharFilter, OrderingFilter
+
 from .models import Anime
 
 
-class AnimeFilter(django_filters.FilterSet):
-    genre = django_filters.CharFilter(method='filter_genre', label='Genre')
+class AnimeFilter(FilterSet):
+    genre = CharFilter(method='filter_genre', label='Genre')
 
-    q = django_filters.CharFilter(method='search_filter', label='Search')
+    q = CharFilter(method='search_filter', label='Search')
 
-    sort = django_filters.OrderingFilter(
+    sort = OrderingFilter(
         fields=(
             ('favorite_count', 'popular'),
             ('avg_rating', 'rating'),

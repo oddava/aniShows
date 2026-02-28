@@ -29,7 +29,6 @@ def invalidate_profile_cache(username):
         cache.incr(version_key)
         logger.debug(f"Invalidated profile cache for user: {username}")
     except ValueError:
-        # Version doesn't exist yet, set it to 1
         cache.set(version_key, 1, timeout=settings.PROFILE_CACHE_VERSION_TTL)
         logger.debug(f"Created new cache version for user: {username}")
 
@@ -66,19 +65,14 @@ def verify_oauth_signup(request, user, **kwargs):
 
 def _verify_user_profile(user, sociallogin):
     """Helper to verify profile and allauth email addresses."""
-    # Get or create profile
     profile, created = UserProfile.objects.get_or_create(user=user)
 
-    # Set email_verified to True
     profile.email_verified = True
     profile.save()
 
-    # Also mark as verified in allauth
     if sociallogin:
         for email_address in sociallogin.email_addresses:
             email_address.verified = True
-            # Only save if it already exists in the DB.
-            # If it's a new signup, allauth will save it later with the user linked.
             if email_address.pk:
                 email_address.save()
 
@@ -89,11 +83,9 @@ def handle_new_follower(sender, instance, created, **kwargs):
     if not created:
         return
 
-    # Invalidate cache for both users
     invalidate_profile_cache(instance.follower.username)
     invalidate_profile_cache(instance.following.username)
 
-    # Don't notify if user follows themselves
     if instance.follower == instance.following:
         logger.debug(f"Skipping self-follow notification for user {instance.follower.id}")
         return
@@ -113,7 +105,6 @@ def handle_new_follower(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=UserFollow)
 def handle_unfollow(sender, instance, **kwargs):
     """Invalidate cache when a follow relationship is deleted."""
-    # Skip if users are being deleted (cascade deletion)
     if not _user_exists(instance.follower) or not _user_exists(instance.following):
         return
 
@@ -145,12 +136,9 @@ from apps.animes.models import ReviewVote
 def update_points_on_vote_save(sender, instance, created, **kwargs):
     """Update author's points when a vote is added or changed."""
     if not created:
-        # Vote was updated - we need to recalculate
-        # This is rare but handle it by doing a full recalc for this user
         recalculate_user_points(instance.review.user)
         return
 
-    # New vote created
     review_author = instance.review.user
     profile, _ = UserProfile.objects.get_or_create(user=review_author)
 
@@ -167,17 +155,14 @@ def update_points_on_vote_delete(sender, instance, **kwargs):
     """Update author's points when a vote is removed."""
     review_author = instance.review.user
 
-    # Skip if user is being deleted (cascade deletion)
     if not _user_exists(review_author):
         return
 
     profile, _ = UserProfile.objects.get_or_create(user=review_author)
 
     if instance.is_helpful:
-        # Removing a helpful vote decreases points
         profile.points = profile.points - 1
     else:
-        # Removing an unhelpful vote increases points
         profile.points = profile.points + 1
 
     profile.save(update_fields=["points"])
@@ -192,7 +177,6 @@ def recalculate_user_points(user):
 
     profile, _ = UserProfile.objects.get_or_create(user=user)
 
-    # Count helpful votes as +1, unhelpful as -1
     result = ReviewVote.objects.filter(review__user=user).aggregate(
         total_points=Sum(
             Case(

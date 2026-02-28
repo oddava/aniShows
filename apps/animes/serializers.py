@@ -1,7 +1,12 @@
-from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils.html import escape
 from django.conf import settings
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import SerializerMethodField, CharField, IntegerField, BooleanField, ChoiceField, ImageField, \
+    FloatField, JSONField, DecimalField
+from rest_framework.relations import SlugRelatedField, PrimaryKeyRelatedField
+from rest_framework.serializers import ModelSerializer, Serializer
+
 from apps.animes.models import (
     Anime,
     Genre,
@@ -50,7 +55,7 @@ def validate_image_content(file, max_size, field_name):
 
     # Check file size
     if file.size > max_size:
-        raise serializers.ValidationError(
+        raise ValidationError(
             f"{field_name} file too large. Maximum size is {max_size // (1024 * 1024)}MB."
         )
 
@@ -61,7 +66,7 @@ def validate_image_content(file, max_size, field_name):
 
     mime = magic.from_buffer(magic_bytes, mime=True)
     if mime not in ALLOWED_IMAGE_TYPES:
-        raise serializers.ValidationError(
+        raise ValidationError(
             f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
         )
 
@@ -71,27 +76,27 @@ def validate_image_content(file, max_size, field_name):
         img.verify()  # Verify it's a valid image
         file.seek(0)
     except Exception:
-        raise serializers.ValidationError(f"Invalid or corrupted image file for {field_name}.")
+        raise ValidationError(f"Invalid or corrupted image file for {field_name}.")
 
     return file
 
 
-class GenreSerializer(serializers.ModelSerializer):
+class GenreSerializer(ModelSerializer):
     class Meta:
         model = Genre
         fields = ["id", "name", "slug"]
 
 
-class StudioSerializer(serializers.ModelSerializer):
+class StudioSerializer(ModelSerializer):
     class Meta:
         model = Studio
         fields = ["id", "name", "website"]
 
 
-class CharacterSerializer(ImageUrlMixin, serializers.ModelSerializer):
-    image = serializers.SerializerMethodField()
-    image_small = serializers.SerializerMethodField()
-    image_medium = serializers.SerializerMethodField()
+class CharacterSerializer(ImageUrlMixin, ModelSerializer):
+    image = SerializerMethodField()
+    image_small = SerializerMethodField()
+    image_medium = SerializerMethodField()
 
     class Meta:
         model = Character
@@ -115,10 +120,10 @@ class CharacterSerializer(ImageUrlMixin, serializers.ModelSerializer):
         return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
 
 
-class StaffSerializer(ImageUrlMixin, serializers.ModelSerializer):
-    image = serializers.SerializerMethodField()
-    image_small = serializers.SerializerMethodField()
-    image_medium = serializers.SerializerMethodField()
+class StaffSerializer(ImageUrlMixin, ModelSerializer):
+    image = SerializerMethodField()
+    image_small = SerializerMethodField()
+    image_medium = SerializerMethodField()
 
     class Meta:
         model = Staff
@@ -142,7 +147,7 @@ class StaffSerializer(ImageUrlMixin, serializers.ModelSerializer):
         return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
 
 
-class AnimeCharacterSerializer(serializers.ModelSerializer):
+class AnimeCharacterSerializer(ModelSerializer):
     character = CharacterSerializer(read_only=True)
     voice_actor = StaffSerializer(read_only=True)
 
@@ -151,7 +156,7 @@ class AnimeCharacterSerializer(serializers.ModelSerializer):
         fields = ["id", "character", "role", "voice_actor"]
 
 
-class AnimeStaffSerializer(serializers.ModelSerializer):
+class AnimeStaffSerializer(ModelSerializer):
     staff = StaffSerializer(read_only=True)
 
     class Meta:
@@ -159,7 +164,7 @@ class AnimeStaffSerializer(serializers.ModelSerializer):
         fields = ["id", "staff", "role"]
 
 
-class ThemeSongSerializer(serializers.ModelSerializer):
+class ThemeSongSerializer(ModelSerializer):
     """Serializer for anime theme songs (openings and endings)"""
 
     class Meta:
@@ -176,15 +181,15 @@ class ThemeSongSerializer(serializers.ModelSerializer):
         ]
 
 
-class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSerializer):
+class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Minimal serializer for list views - excludes synopsis for smaller payload"""
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio_name = serializers.CharField(source="studio.name", read_only=True, default=None)
-    is_favorite = serializers.SerializerMethodField()
-    user_list_status = serializers.SerializerMethodField()
-    cover_image_small = serializers.SerializerMethodField()
-    cover_image_medium = serializers.SerializerMethodField()
+    studio_name = CharField(source="studio.name", read_only=True, default=None)
+    is_favorite = SerializerMethodField()
+    user_list_status = SerializerMethodField()
+    cover_image_small = SerializerMethodField()
+    cover_image_medium = SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -220,17 +225,17 @@ class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSe
         )
 
 
-class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSerializer):
+class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Lightweight serializer for lists with synopsis"""
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio_name = serializers.CharField(source="studio.name", read_only=True, default=None)
-    is_favorite = serializers.SerializerMethodField()
-    user_list_status = serializers.SerializerMethodField()
-    cover_image_small = serializers.SerializerMethodField()
-    cover_image_medium = serializers.SerializerMethodField()
-    banner_image_small = serializers.SerializerMethodField()
-    banner_image_medium = serializers.SerializerMethodField()
+    studio_name = CharField(source="studio.name", read_only=True, default=None)
+    is_favorite = SerializerMethodField()
+    user_list_status = SerializerMethodField()
+    cover_image_small = SerializerMethodField()
+    cover_image_medium = SerializerMethodField()
+    banner_image_small = SerializerMethodField()
+    banner_image_medium = SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -280,7 +285,7 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSeria
         )
 
 
-class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSerializer):
+class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Full serializer for detail page"""
 
     genres = GenreSerializer(many=True, read_only=True)
@@ -289,18 +294,18 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSer
     staff = AnimeStaffSerializer(source="production_staff", many=True, read_only=True)
     theme_songs = ThemeSongSerializer(many=True, read_only=True)
 
-    is_favorite = serializers.SerializerMethodField()
-    user_list_status = serializers.SerializerMethodField()
-    user_review = serializers.SerializerMethodField()
-    review_count = serializers.IntegerField(read_only=True)
-    avg_rating = serializers.DecimalField(max_digits=3, decimal_places=1, read_only=True)
-    status_distribution = serializers.SerializerMethodField()
-    cover_image_small = serializers.SerializerMethodField()
-    cover_image_medium = serializers.SerializerMethodField()
-    cover_image_large = serializers.SerializerMethodField()
-    banner_image_small = serializers.SerializerMethodField()
-    banner_image_medium = serializers.SerializerMethodField()
-    banner_image_large = serializers.SerializerMethodField()
+    is_favorite = SerializerMethodField()
+    user_list_status = SerializerMethodField()
+    user_review = SerializerMethodField()
+    review_count = IntegerField(read_only=True)
+    avg_rating = DecimalField(max_digits=3, decimal_places=1, read_only=True)
+    status_distribution = SerializerMethodField()
+    cover_image_small = SerializerMethodField()
+    cover_image_medium = SerializerMethodField()
+    cover_image_large = SerializerMethodField()
+    banner_image_small = SerializerMethodField()
+    banner_image_medium = SerializerMethodField()
+    banner_image_large = SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -412,7 +417,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, serializers.ModelSer
         return distribution
 
 
-class BadgeSerializer(serializers.ModelSerializer):
+class BadgeSerializer(ModelSerializer):
     """Serializer for a badge definition."""
 
     class Meta:
@@ -431,7 +436,7 @@ class BadgeSerializer(serializers.ModelSerializer):
         read_only_fields = ["slug"]
 
 
-class UserBadgeSerializer(serializers.ModelSerializer):
+class UserBadgeSerializer(ModelSerializer):
     """Serializer for a badge held by a user."""
 
     badge = BadgeSerializer(read_only=True)
@@ -446,19 +451,19 @@ class UserBadgeSerializer(serializers.ModelSerializer):
         ]
 
 
-class UserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSerializer):
-    avatar = serializers.SerializerMethodField()
-    banner = serializers.SerializerMethodField()
-    bio = serializers.SerializerMethodField()
-    is_private = serializers.SerializerMethodField()
-    favorites_count = serializers.IntegerField(read_only=True, source="_favorites_count")
-    reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
+class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
+    avatar = SerializerMethodField()
+    banner = SerializerMethodField()
+    bio = SerializerMethodField()
+    is_private = SerializerMethodField()
+    favorites_count = IntegerField(read_only=True, source="_favorites_count")
+    reviews_count = IntegerField(read_only=True, source="_reviews_count")
 
     # Computed stats
-    days_watched = serializers.SerializerMethodField()
-    mean_score = serializers.SerializerMethodField()
-    anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
-    episodes_watched = serializers.IntegerField(read_only=True, source="_episodes_watched")
+    days_watched = SerializerMethodField()
+    mean_score = SerializerMethodField()
+    anime_count = IntegerField(read_only=True, source="_anime_count")
+    episodes_watched = IntegerField(read_only=True, source="_episodes_watched")
 
     def get_days_watched(self, obj):
         """Return days watched rounded to 1 decimal place"""
@@ -475,17 +480,17 @@ class UserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSerializer)
         return None
 
     # Social links
-    social_links = serializers.SerializerMethodField()
+    social_links = SerializerMethodField()
 
-    email_verified = serializers.SerializerMethodField()
-    has_password = serializers.SerializerMethodField()
+    email_verified = SerializerMethodField()
+    has_password = SerializerMethodField()
 
     # Social features
-    points = serializers.SerializerMethodField()
-    followers_count = serializers.IntegerField(read_only=True, source="_followers_count")
-    following_count = serializers.IntegerField(read_only=True, source="_following_count")
+    points = SerializerMethodField()
+    followers_count = IntegerField(read_only=True, source="_followers_count")
+    following_count = IntegerField(read_only=True, source="_following_count")
 
-    badges = serializers.SerializerMethodField()
+    badges = SerializerMethodField()
 
     class Meta:
         model = User
@@ -524,20 +529,20 @@ class UserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSerializer)
         ]
 
 
-class UserLightweightSerializer(UserProfileMixin, serializers.ModelSerializer):
+class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
     """Lightweight serializer for navbar/quick profile view - no expensive calculations"""
 
-    avatar = serializers.SerializerMethodField()
-    bio = serializers.SerializerMethodField()
-    is_private = serializers.SerializerMethodField()
-    email_verified = serializers.SerializerMethodField()
-    has_password = serializers.SerializerMethodField()
-    social_links = serializers.SerializerMethodField()
+    avatar = SerializerMethodField()
+    bio = SerializerMethodField()
+    is_private = SerializerMethodField()
+    email_verified = SerializerMethodField()
+    has_password = SerializerMethodField()
+    social_links = SerializerMethodField()
 
     # Use default values for stats (0) - will be fetched separately when needed
-    anime_count = serializers.IntegerField(default=0)
-    episodes_watched = serializers.IntegerField(default=0)
-    days_watched = serializers.FloatField(default=0.0)
+    anime_count = IntegerField(default=0)
+    episodes_watched = IntegerField(default=0)
+    days_watched = FloatField(default=0.0)
 
     class Meta:
         model = User
@@ -564,21 +569,21 @@ class UserLightweightSerializer(UserProfileMixin, serializers.ModelSerializer):
         ]
 
 
-class PublicUserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSerializer):
+class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     """Limited serializer for public profile view"""
 
-    avatar = serializers.SerializerMethodField()
-    banner = serializers.SerializerMethodField()
-    bio = serializers.SerializerMethodField()
-    favorites_count = serializers.IntegerField(read_only=True, source="_favorites_count")
-    reviews_count = serializers.IntegerField(read_only=True, source="_reviews_count")
-    is_private = serializers.SerializerMethodField()
+    avatar = SerializerMethodField()
+    banner = SerializerMethodField()
+    bio = SerializerMethodField()
+    favorites_count = IntegerField(read_only=True, source="_favorites_count")
+    reviews_count = IntegerField(read_only=True, source="_reviews_count")
+    is_private = SerializerMethodField()
 
     # Computed stats
-    days_watched = serializers.SerializerMethodField()
-    mean_score = serializers.SerializerMethodField()
-    anime_count = serializers.IntegerField(read_only=True, source="_anime_count")
-    episodes_watched = serializers.IntegerField(read_only=True, source="_episodes_watched")
+    days_watched = SerializerMethodField()
+    mean_score = SerializerMethodField()
+    anime_count = IntegerField(read_only=True, source="_anime_count")
+    episodes_watched = IntegerField(read_only=True, source="_episodes_watched")
 
     def get_days_watched(self, obj):
         """Return days watched rounded to 1 decimal place"""
@@ -595,16 +600,16 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSeria
         return None
 
     # Dynamic Social links
-    social_links = serializers.SerializerMethodField()
+    social_links = SerializerMethodField()
 
     # Social features
-    points = serializers.SerializerMethodField()
-    followers_count = serializers.SerializerMethodField()
-    following_count = serializers.SerializerMethodField()
-    is_following = serializers.SerializerMethodField()
-    is_online = serializers.SerializerMethodField()
+    points = SerializerMethodField()
+    followers_count = SerializerMethodField()
+    following_count = SerializerMethodField()
+    is_following = SerializerMethodField()
+    is_online = SerializerMethodField()
 
-    badges = serializers.SerializerMethodField()
+    badges = SerializerMethodField()
 
     class Meta:
         model = User
@@ -680,13 +685,13 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, serializers.ModelSeria
         return False
 
 
-class UserProfileUpdateSerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=150, required=False)
-    avatar = serializers.ImageField(required=False, allow_null=True)
-    banner = serializers.ImageField(required=False, allow_null=True)
-    remove_banner = serializers.BooleanField(required=False, default=False)
-    bio = serializers.CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
-    is_private = serializers.BooleanField(required=False, default=False)
+class UserProfileUpdateSerializer(Serializer):
+    username = CharField(max_length=150, required=False)
+    avatar = ImageField(required=False, allow_null=True)
+    banner = ImageField(required=False, allow_null=True)
+    remove_banner = BooleanField(required=False, default=False)
+    bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
+    is_private = BooleanField(required=False, default=False)
 
     def validate_is_private(self, value):
         # Handle string values from FormData
@@ -707,7 +712,7 @@ class UserProfileUpdateSerializer(serializers.Serializer):
         return escape(value)
 
     # Dynamic social links
-    social_links = serializers.JSONField(required=False)
+    social_links = JSONField(required=False)
 
     def validate_social_links(self, value):
         from apps.core.services.social_links_service import (
@@ -721,13 +726,13 @@ class UserProfileUpdateSerializer(serializers.Serializer):
             try:
                 value = json.loads(value)
             except json.JSONDecodeError:
-                raise serializers.ValidationError("Social links must be valid JSON.")
+                raise ValidationError("Social links must be valid JSON.")
 
         if not isinstance(value, list):
-            raise serializers.ValidationError("Social links must be a list.")
+            raise ValidationError("Social links must be a list.")
 
         if len(value) > 5:
-            raise serializers.ValidationError("Maximum 5 social links allowed.")
+            raise ValidationError("Maximum 5 social links allowed.")
 
         # Clean up empty entries
         cleaned_links = []
@@ -753,7 +758,7 @@ class UserProfileUpdateSerializer(serializers.Serializer):
             processed_links = service.validate_and_process(cleaned_links, user)
             return processed_links
         except SocialLinkValidationError as e:
-            raise serializers.ValidationError(str(e))
+            raise ValidationError(str(e))
 
     def validate_avatar(self, value):
         """Validate avatar file size, type, and content."""
@@ -768,8 +773,8 @@ class UserProfileUpdateSerializer(serializers.Serializer):
         return validate_image_content(value, MAX_BANNER_SIZE, "Banner")
 
 
-class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+class RegisterSerializer(ModelSerializer):
+    password = CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
@@ -782,7 +787,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Check for existing email to prevent duplicates
         # This provides defense in depth even if DB doesn't enforce uniqueness
         if User.objects.filter(email=normalized_email).exists():
-            raise serializers.ValidationError(
+            raise ValidationError(
                 "Unable to create account. The email or username may already be in use."
             )
 
@@ -800,7 +805,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             return user
         except IntegrityError:
             # Don't reveal if email/username exists - return generic error
-            raise serializers.ValidationError(
+            raise ValidationError(
                 {
                     "non_field_errors": [
                         "Unable to create account. The email or username may already be in use."
@@ -809,9 +814,9 @@ class RegisterSerializer(serializers.ModelSerializer):
             )
 
 
-class FavoriteSerializer(serializers.ModelSerializer):
+class FavoriteSerializer(ModelSerializer):
     anime = AnimeListSerializer(read_only=True)
-    anime_id = serializers.PrimaryKeyRelatedField(
+    anime_id = PrimaryKeyRelatedField(
         queryset=Anime.objects.all(), source="anime", write_only=True
     )
 
@@ -821,16 +826,16 @@ class FavoriteSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "added_at"]
 
 
-class UserAnimeListSerializer(serializers.ModelSerializer):
+class UserAnimeListSerializer(ModelSerializer):
     anime = AnimeListSerializer(read_only=True)
-    anime_id = serializers.PrimaryKeyRelatedField(
+    anime_id = PrimaryKeyRelatedField(
         queryset=Anime.objects.all(),
         source="anime",
         write_only=True,
         required=False,  # Not required for updates
     )
-    status = serializers.ChoiceField(choices=UserAnimeList.UserAnimeStatus.choices, required=False)
-    progress = serializers.SerializerMethodField()
+    status = ChoiceField(choices=UserAnimeList.UserAnimeStatus.choices, required=False)
+    progress = SerializerMethodField()
 
     class Meta:
         model = UserAnimeList
@@ -857,7 +862,7 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         # For creation, anime_id is required
         if not self.instance and "anime" not in attrs:
-            raise serializers.ValidationError({"anime_id": "This field is required."})
+            raise ValidationError({"anime_id": "This field is required."})
 
         episodes_watched = attrs.get("episodes_watched")
         anime = attrs.get("anime")
@@ -869,7 +874,7 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
 
         if episodes_watched is not None and anime and anime.episode_count > 0:
             if episodes_watched > anime.episode_count:
-                raise serializers.ValidationError(
+                raise ValidationError(
                     {
                         "episodes_watched": f"Episodes watched cannot exceed total episodes ({anime.episode_count})."
                     }
@@ -886,11 +891,11 @@ class UserAnimeListSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class UserActivitySerializer(serializers.ModelSerializer):
+class UserActivitySerializer(ModelSerializer):
     """Serializer for user activity feed entries."""
 
     anime = AnimeMinimalSerializer(read_only=True)
-    activity_description = serializers.SerializerMethodField()
+    activity_description = SerializerMethodField()
 
     class Meta:
         model = UserActivity
@@ -950,20 +955,20 @@ class UserActivitySerializer(serializers.ModelSerializer):
         return f"Updated {title}"
 
 
-class ReviewSerializer(serializers.ModelSerializer):
+class ReviewSerializer(ModelSerializer):
     user = UserSerializer(read_only=True)
     anime = AnimeListSerializer(read_only=True)
-    anime_slug = serializers.SlugRelatedField(
+    anime_slug = SlugRelatedField(
         slug_field="slug", queryset=Anime.objects.all(), source="anime", write_only=True
     )
-    has_spoilers = serializers.BooleanField(default=False, required=False)
-    text = serializers.CharField(required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH)
+    has_spoilers = BooleanField(default=False, required=False)
+    text = CharField(required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH)
 
     # Use annotated fields from the view to avoid N+1 queries
-    is_completed = serializers.BooleanField(read_only=True, source="_is_completed")
-    helpful_count = serializers.IntegerField(read_only=True, source="_helpful_count")
-    user_vote = serializers.SerializerMethodField()
-    comment_count = serializers.IntegerField(read_only=True, source="_comment_count")
+    is_completed = BooleanField(read_only=True, source="_is_completed")
+    helpful_count = IntegerField(read_only=True, source="_helpful_count")
+    user_vote = SerializerMethodField()
+    comment_count = IntegerField(read_only=True, source="_comment_count")
 
     class Meta:
         model = Review
@@ -1009,13 +1014,13 @@ class ReviewSerializer(serializers.ModelSerializer):
         return None
 
 
-class ReviewCommentSerializer(serializers.ModelSerializer):
+class ReviewCommentSerializer(ModelSerializer):
     """Serializer for review comments with soft delete support"""
 
     user = UserSerializer(read_only=True)
-    text = serializers.CharField(required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH)
-    is_owner = serializers.SerializerMethodField()
-    can_delete = serializers.SerializerMethodField()
+    text = CharField(required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH)
+    is_owner = SerializerMethodField()
+    can_delete = SerializerMethodField()
 
     class Meta:
         model = ReviewComment
@@ -1065,11 +1070,11 @@ class ReviewCommentSerializer(serializers.ModelSerializer):
         return False
 
 
-class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(
+class ChangePasswordSerializer(Serializer):
+    old_password = CharField(
         required=False, allow_blank=True, allow_null=True, write_only=True
     )
-    new_password = serializers.CharField(required=True, write_only=True, min_length=8)
+    new_password = CharField(required=True, write_only=True, min_length=8)
 
     def validate(self, attrs):
         user = self.context["request"].user
@@ -1081,22 +1086,22 @@ class ChangePasswordSerializer(serializers.Serializer):
         # If user has a password, old_password is REQUIRED
         if user.has_usable_password():
             if not old_password:
-                raise serializers.ValidationError(
+                raise ValidationError(
                     {"old_password": "Current password is required to set a new one."}
                 )
             if not user.check_password(old_password):
-                raise serializers.ValidationError(
+                raise ValidationError(
                     {"old_password": "The current password you entered is incorrect."}
                 )
 
         return attrs
 
 
-class UserRecommendationSerializer(serializers.ModelSerializer):
+class UserRecommendationSerializer(ModelSerializer):
     """Serializer for user recommendations with anime details and reason"""
 
     anime = AnimeListSerializer(read_only=True)
-    reason_text = serializers.CharField(source="get_reason_display_text", read_only=True)
+    reason_text = CharField(source="get_reason_display_text", read_only=True)
 
     class Meta:
         from apps.animes.models import UserRecommendation
@@ -1114,12 +1119,12 @@ class UserRecommendationSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class UserImportJobSerializer(serializers.ModelSerializer):
+class UserImportJobSerializer(ModelSerializer):
     """Serializer for import jobs"""
 
-    source_display = serializers.CharField(source="get_source_display", read_only=True)
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
-    progress_percentage = serializers.IntegerField(read_only=True)
+    source_display = CharField(source="get_source_display", read_only=True)
+    status_display = CharField(source="get_status_display", read_only=True)
+    progress_percentage = IntegerField(read_only=True)
 
     class Meta:
         from apps.users.models import UserImportJob
@@ -1147,18 +1152,18 @@ class UserImportJobSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class FollowSerializer(serializers.Serializer):
+class FollowSerializer(Serializer):
     """Serializer for follow/unfollow actions"""
 
-    username = serializers.CharField()
+    username = CharField()
 
 
-class UserFollowListSerializer(serializers.ModelSerializer):
+class UserFollowListSerializer(ModelSerializer):
     """Serializer for displaying followers/following lists"""
 
-    user = serializers.SerializerMethodField()
-    is_following = serializers.SerializerMethodField()
-    is_follower = serializers.SerializerMethodField()
+    user = SerializerMethodField()
+    is_following = SerializerMethodField()
+    is_follower = SerializerMethodField()
 
     class Meta:
         from apps.users.models import UserFollow
@@ -1192,11 +1197,11 @@ class UserFollowListSerializer(serializers.ModelSerializer):
         return False
 
 
-class FriendWatchingSerializer(serializers.ModelSerializer):
+class FriendWatchingSerializer(ModelSerializer):
     """Serializer for displaying friends watching a specific anime"""
 
-    user = serializers.SerializerMethodField()
-    anime = serializers.SerializerMethodField()
+    user = SerializerMethodField()
+    anime = SerializerMethodField()
 
     class Meta:
         model = UserAnimeList

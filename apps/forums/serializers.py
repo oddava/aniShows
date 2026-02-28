@@ -1,6 +1,10 @@
 import bleach
-from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import SerializerMethodField, IntegerField, CharField
+from rest_framework.relations import PrimaryKeyRelatedField
+from rest_framework.serializers import ModelSerializer
+
 from .models import Category, Thread, Post, Tag
 
 User = get_user_model()
@@ -27,8 +31,8 @@ class ContentSanitizationMixin:
         return bleach.clean(value, tags=[], strip=True)
 
 
-class CustomUserSerializer(serializers.ModelSerializer):
-    avatar = serializers.SerializerMethodField()
+class CustomUserSerializer(ModelSerializer):
+    avatar = SerializerMethodField()
 
     class Meta:
         model = User
@@ -42,22 +46,20 @@ class CustomUserSerializer(serializers.ModelSerializer):
             return None
 
 
-class TagSerializer(serializers.ModelSerializer):
+class TagSerializer(ModelSerializer):
     class Meta:
         model = Tag
         fields = ["id", "name", "slug", "color"]
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    latest_thread = serializers.SerializerMethodField()
+class CategorySerializer(ModelSerializer):
+    latest_thread = SerializerMethodField()
 
     class Meta:
         model = Category
         fields = ["id", "name", "description", "slug", "order", "thread_count", "latest_thread"]
 
     def get_latest_thread(self, obj):
-        # We can prefetch this using a Prefetch object in the view, but since categories are few, it's okay for now.
-        # Alternatively, if prefetched, it will be in obj.prefetched_latest_thread
         if hasattr(obj, "prefetched_latest_thread"):
             latest = obj.prefetched_latest_thread[0] if obj.prefetched_latest_thread else None
         else:
@@ -73,15 +75,15 @@ class CategorySerializer(serializers.ModelSerializer):
         return None
 
 
-class ThreadListSerializer(LikedByUserMixin, serializers.ModelSerializer):
+class ThreadListSerializer(LikedByUserMixin, ModelSerializer):
     """Lightweight serializer for thread lists - excludes content for faster loading"""
 
     author = CustomUserSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
-    like_count = serializers.IntegerField(read_only=True)
-    is_liked_by_user = serializers.SerializerMethodField()
-    category_name = serializers.CharField(source="category.name", read_only=True)
-    category_slug = serializers.CharField(source="category.slug", read_only=True)
+    like_count = IntegerField(read_only=True)
+    is_liked_by_user = SerializerMethodField()
+    category_name = CharField(source="category.name", read_only=True)
+    category_slug = CharField(source="category.slug", read_only=True)
 
     class Meta:
         model = Thread
@@ -114,18 +116,18 @@ class ThreadListSerializer(LikedByUserMixin, serializers.ModelSerializer):
         ]
 
 
-class ThreadSerializer(ContentSanitizationMixin, LikedByUserMixin, serializers.ModelSerializer):
+class ThreadSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer):
     """Full serializer for thread detail view"""
 
     author = CustomUserSerializer(read_only=True)
     tags = TagSerializer(many=True, read_only=True)
-    tag_ids = serializers.PrimaryKeyRelatedField(
+    tag_ids = PrimaryKeyRelatedField(
         queryset=Tag.objects.all(), source="tags", many=True, write_only=True, required=False
     )
-    like_count = serializers.IntegerField(read_only=True)
-    is_liked_by_user = serializers.SerializerMethodField()
-    category_name = serializers.CharField(source="category.name", read_only=True)
-    category_slug = serializers.CharField(source="category.slug", read_only=True)
+    like_count = IntegerField(read_only=True)
+    is_liked_by_user = SerializerMethodField()
+    category_name = CharField(source="category.name", read_only=True)
+    category_slug = CharField(source="category.slug", read_only=True)
 
     class Meta:
         model = Thread
@@ -159,22 +161,22 @@ class ThreadSerializer(ContentSanitizationMixin, LikedByUserMixin, serializers.M
         ]
 
 
-class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, serializers.ModelSerializer):
+class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer):
     author = CustomUserSerializer(read_only=True)
-    like_count = serializers.IntegerField(read_only=True)
-    is_liked_by_user = serializers.SerializerMethodField()
-    parent = serializers.PrimaryKeyRelatedField(
+    like_count = IntegerField(read_only=True)
+    is_liked_by_user = SerializerMethodField()
+    parent = PrimaryKeyRelatedField(
         queryset=Post.objects.all(), required=False, allow_null=True
     )
-    depth = serializers.IntegerField(read_only=True)
-    reply_count = serializers.SerializerMethodField()
+    depth = IntegerField(read_only=True)
+    reply_count = SerializerMethodField()
 
     def validate(self, attrs):
         # Ensure parent post belongs to the same thread
         parent = attrs.get("parent")
         thread = attrs.get("thread")
         if parent and thread and parent.thread_id != thread.id:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 {"parent": "Parent post must belong to the same thread."}
             )
         return attrs

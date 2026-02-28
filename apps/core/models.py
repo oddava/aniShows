@@ -1,21 +1,23 @@
-from django.db import models
 from django.contrib.auth import get_user_model
+from django.db.models import Model, TextChoices, DateTimeField, CharField, ForeignKey, SET_NULL, GenericIPAddressField, \
+    PositiveIntegerField, TextField, JSONField, FloatField, CASCADE, BooleanField, URLField
+from django.db.models.indexes import Index
 from django.utils import timezone
 
 User = get_user_model()
 
 
-class SystemLog(models.Model):
+class SystemLog(Model):
     """System logs for audit trail and monitoring."""
 
-    class LogLevel(models.TextChoices):
+    class LogLevel(TextChoices):
         DEBUG = "DEBUG", "Debug"
         INFO = "INFO", "Info"
         WARNING = "WARNING", "Warning"
         ERROR = "ERROR", "Error"
         CRITICAL = "CRITICAL", "Critical"
 
-    class LogType(models.TextChoices):
+    class LogType(TextChoices):
         SYSTEM = "SYSTEM", "System"
         REQUEST = "REQUEST", "Request"
         AUTH = "AUTH", "Authentication"
@@ -23,42 +25,42 @@ class SystemLog(models.Model):
         ERROR = "ERROR", "Error"
         SECURITY = "SECURITY", "Security"
 
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    level = models.CharField(max_length=10, choices=LogLevel.choices, default=LogLevel.INFO)
-    log_type = models.CharField(max_length=20, choices=LogType.choices, default=LogType.SYSTEM)
+    timestamp = DateTimeField(auto_now_add=True, db_index=True)
+    level = CharField(max_length=10, choices=LogLevel.choices, default=LogLevel.INFO)
+    log_type = CharField(max_length=20, choices=LogType.choices, default=LogType.SYSTEM)
 
     # User information
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    user_ip = models.GenericIPAddressField(null=True, blank=True)
+    user = ForeignKey(User, on_delete=SET_NULL, null=True, blank=True)
+    user_ip = GenericIPAddressField(null=True, blank=True)
 
     # Request information
-    method = models.CharField(max_length=10, blank=True)
-    path = models.CharField(max_length=500, blank=True)
-    status_code = models.PositiveIntegerField(null=True, blank=True)
+    method = CharField(max_length=10, blank=True)
+    path = CharField(max_length=500, blank=True)
+    status_code = PositiveIntegerField(null=True, blank=True)
 
     # Log content
-    message = models.TextField()
-    details = models.JSONField(default=dict, blank=True)
+    message = TextField()
+    details = JSONField(default=dict, blank=True)
 
     # Performance metrics
-    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    duration_ms = PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["-timestamp"]
         indexes = [
-            models.Index(fields=["level", "timestamp"]),
-            models.Index(fields=["log_type", "timestamp"]),
-            models.Index(fields=["user", "timestamp"]),
+            Index(fields=["level", "timestamp"]),
+            Index(fields=["log_type", "timestamp"]),
+            Index(fields=["user", "timestamp"]),
         ]
 
     def __str__(self):
         return f"[{self.timestamp}] {self.level}: {self.message[:50]}"
 
 
-class AuditLog(models.Model):
+class AuditLog(Model):
     """Detailed audit trail for important actions."""
 
-    class ActionType(models.TextChoices):
+    class ActionType(TextChoices):
         CREATE = "CREATE", "Create"
         UPDATE = "UPDATE", "Update"
         DELETE = "DELETE", "Delete"
@@ -67,29 +69,29 @@ class AuditLog(models.Model):
         EXPORT = "EXPORT", "Export"
         BULK_ACTION = "BULK_ACTION", "Bulk Action"
 
-    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    user_ip = models.GenericIPAddressField(null=True, blank=True)
+    timestamp = DateTimeField(auto_now_add=True, db_index=True)
+    user = ForeignKey(User, on_delete=SET_NULL, null=True, blank=True)
+    user_ip = GenericIPAddressField(null=True, blank=True)
 
-    action = models.CharField(max_length=20, choices=ActionType.choices)
-    entity_type = models.CharField(max_length=50)  # e.g., 'Anime', 'User', 'Review'
-    entity_id = models.CharField(max_length=50, blank=True)
-    entity_repr = models.CharField(max_length=200, blank=True)  # Human-readable representation
+    action = CharField(max_length=20, choices=ActionType.choices)
+    entity_type = CharField(max_length=50)  # e.g., 'Anime', 'User', 'Review'
+    entity_id = CharField(max_length=50, blank=True)
+    entity_repr = CharField(max_length=200, blank=True)  # Human-readable representation
 
     # Change details
-    previous_state = models.JSONField(default=dict, blank=True)
-    new_state = models.JSONField(default=dict, blank=True)
-    changes = models.JSONField(default=dict, blank=True)  # Computed diff
+    previous_state = JSONField(default=dict, blank=True)
+    new_state = JSONField(default=dict, blank=True)
+    changes = JSONField(default=dict, blank=True)  # Computed diff
 
     # Additional context
-    metadata = models.JSONField(default=dict, blank=True)
+    metadata = JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-timestamp"]
         indexes = [
-            models.Index(fields=["action", "timestamp"]),
-            models.Index(fields=["entity_type", "timestamp"]),
-            models.Index(fields=["user", "timestamp"]),
+            Index(fields=["action", "timestamp"]),
+            Index(fields=["entity_type", "timestamp"]),
+            Index(fields=["user", "timestamp"]),
         ]
 
     def __str__(self):
@@ -115,10 +117,10 @@ class AuditLog(models.Model):
         return changes
 
 
-class CeleryTaskResult(models.Model):
+class CeleryTaskResult(Model):
     """Store and track Celery task execution results."""
 
-    class TaskStatus(models.TextChoices):
+    class TaskStatus(TextChoices):
         PENDING = "PENDING", "Pending"
         STARTED = "STARTED", "Started"
         SUCCESS = "SUCCESS", "Success"
@@ -127,12 +129,12 @@ class CeleryTaskResult(models.Model):
         REVOKED = "REVOKED", "Revoked"
 
     # Task identification
-    task_id = models.CharField(max_length=255, unique=True, db_index=True)
-    task_name = models.CharField(max_length=255, db_index=True)
-    task_module = models.CharField(max_length=255, blank=True)
+    task_id = CharField(max_length=255, unique=True, db_index=True)
+    task_name = CharField(max_length=255, db_index=True)
+    task_module = CharField(max_length=255, blank=True)
 
     # Status tracking
-    status = models.CharField(
+    status = CharField(
         max_length=20,
         choices=TaskStatus.choices,
         default=TaskStatus.PENDING,
@@ -140,32 +142,32 @@ class CeleryTaskResult(models.Model):
     )
 
     # Timing
-    date_created = models.DateTimeField(auto_now_add=True, db_index=True)
-    date_started = models.DateTimeField(null=True, blank=True)
-    date_completed = models.DateTimeField(null=True, blank=True)
+    date_created = DateTimeField(auto_now_add=True, db_index=True)
+    date_started = DateTimeField(null=True, blank=True)
+    date_completed = DateTimeField(null=True, blank=True)
 
     # Execution details
-    worker = models.CharField(max_length=255, blank=True)
-    queue = models.CharField(max_length=100, blank=True)
+    worker = CharField(max_length=255, blank=True)
+    queue = CharField(max_length=100, blank=True)
 
     # Task arguments and result
-    task_args = models.JSONField(default=list, blank=True)
-    task_kwargs = models.JSONField(default=dict, blank=True)
-    result_data = models.JSONField(default=dict, blank=True, null=True)
-    result_summary = models.TextField(blank=True)
+    task_args = JSONField(default=list, blank=True)
+    task_kwargs = JSONField(default=dict, blank=True)
+    result_data = JSONField(default=dict, blank=True, null=True)
+    result_summary = TextField(blank=True)
 
     # Error information
-    traceback = models.TextField(blank=True)
-    error_message = models.TextField(blank=True)
+    traceback = TextField(blank=True)
+    error_message = TextField(blank=True)
 
     # Execution metrics
-    execution_time = models.FloatField(null=True, blank=True)  # in seconds
-    retries = models.PositiveIntegerField(default=0)
+    execution_time = FloatField(null=True, blank=True)  # in seconds
+    retries = PositiveIntegerField(default=0)
 
     # User who triggered the task (if applicable)
-    triggered_by = models.ForeignKey(
+    triggered_by = ForeignKey(
         User,
-        on_delete=models.SET_NULL,
+        on_delete=SET_NULL,
         null=True,
         blank=True,
         related_name="triggered_tasks",
@@ -174,9 +176,9 @@ class CeleryTaskResult(models.Model):
     class Meta:
         ordering = ["-date_created"]
         indexes = [
-            models.Index(fields=["task_name", "status", "date_created"]),
-            models.Index(fields=["status", "date_created"]),
-            models.Index(fields=["worker", "date_created"]),
+            Index(fields=["task_name", "status", "date_created"]),
+            Index(fields=["status", "date_created"]),
+            Index(fields=["worker", "date_created"]),
         ]
         verbose_name = "Celery Task Result"
         verbose_name_plural = "Celery Task Results"
@@ -212,34 +214,34 @@ class CeleryTaskResult(models.Model):
         return "N/A"
 
 
-class CeleryWorkerStatus(models.Model):
+class CeleryWorkerStatus(Model):
     """Track Celery worker status and health."""
 
-    class WorkerStatus(models.TextChoices):
+    class WorkerStatus(TextChoices):
         ONLINE = "ONLINE", "Online"
         OFFLINE = "OFFLINE", "Offline"
         BUSY = "BUSY", "Busy"
         ERROR = "ERROR", "Error"
 
-    worker_name = models.CharField(max_length=255, unique=True, db_index=True)
-    status = models.CharField(
+    worker_name = CharField(max_length=255, unique=True, db_index=True)
+    status = CharField(
         max_length=20, choices=WorkerStatus.choices, default=WorkerStatus.OFFLINE
     )
 
     # Worker info
-    hostname = models.CharField(max_length=255, blank=True)
-    pid = models.PositiveIntegerField(null=True, blank=True)
-    queues = models.JSONField(default=list, blank=True)
+    hostname = CharField(max_length=255, blank=True)
+    pid = PositiveIntegerField(null=True, blank=True)
+    queues = JSONField(default=list, blank=True)
 
     # Task statistics
-    processed_tasks = models.PositiveIntegerField(default=0)
-    active_tasks = models.PositiveIntegerField(default=0)
-    failed_tasks = models.PositiveIntegerField(default=0)
+    processed_tasks = PositiveIntegerField(default=0)
+    active_tasks = PositiveIntegerField(default=0)
+    failed_tasks = PositiveIntegerField(default=0)
 
     # Timestamps
-    last_heartbeat = models.DateTimeField(null=True, blank=True)
-    last_checked = models.DateTimeField(auto_now=True)
-    first_seen = models.DateTimeField(auto_now_add=True)
+    last_heartbeat = DateTimeField(null=True, blank=True)
+    last_checked = DateTimeField(auto_now=True)
+    first_seen = DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-last_heartbeat"]
@@ -250,41 +252,41 @@ class CeleryWorkerStatus(models.Model):
         return f"{self.worker_name} ({self.status})"
 
 
-class CeleryTaskSchedule(models.Model):
+class CeleryTaskSchedule(Model):
     """Custom scheduled tasks managed via admin."""
 
-    class ScheduleType(models.TextChoices):
+    class ScheduleType(TextChoices):
         CRONTAB = "CRONTAB", "Crontab"
         INTERVAL = "INTERVAL", "Interval"
         DATETIME = "DATETIME", "One-time"
 
-    class TaskStatus(models.TextChoices):
+    class TaskStatus(TextChoices):
         ENABLED = "ENABLED", "Enabled"
         DISABLED = "DISABLED", "Disabled"
         RUNNING = "RUNNING", "Running"
 
-    name = models.CharField(max_length=255, unique=True)
-    task_name = models.CharField(
+    name = CharField(max_length=255, unique=True)
+    task_name = CharField(
         max_length=255,
         help_text="Full task path, e.g., anime.tasks.sync.sync_anime_catalog",
     )
-    description = models.TextField(blank=True)
+    description = TextField(blank=True)
 
     # Schedule configuration
-    schedule_type = models.CharField(
+    schedule_type = CharField(
         max_length=20, choices=ScheduleType.choices, default=ScheduleType.CRONTAB
     )
 
     # Crontab schedule
-    crontab_minute = models.CharField(max_length=20, default="*", blank=True)
-    crontab_hour = models.CharField(max_length=20, default="*", blank=True)
-    crontab_day_of_week = models.CharField(max_length=20, default="*", blank=True)
-    crontab_day_of_month = models.CharField(max_length=20, default="*", blank=True)
-    crontab_month_of_year = models.CharField(max_length=20, default="*", blank=True)
+    crontab_minute = CharField(max_length=20, default="*", blank=True)
+    crontab_hour = CharField(max_length=20, default="*", blank=True)
+    crontab_day_of_week = CharField(max_length=20, default="*", blank=True)
+    crontab_day_of_month = CharField(max_length=20, default="*", blank=True)
+    crontab_month_of_year = CharField(max_length=20, default="*", blank=True)
 
     # Interval schedule
-    interval_every = models.PositiveIntegerField(default=1, null=True, blank=True)
-    interval_period = models.CharField(
+    interval_every = PositiveIntegerField(default=1, null=True, blank=True)
+    interval_period = CharField(
         max_length=20,
         choices=[
             ("days", "Days"),
@@ -298,26 +300,26 @@ class CeleryTaskSchedule(models.Model):
     )
 
     # One-time schedule
-    one_time_datetime = models.DateTimeField(null=True, blank=True)
+    one_time_datetime = DateTimeField(null=True, blank=True)
 
     # Task arguments
-    task_args = models.JSONField(
+    task_args = JSONField(
         default=list, blank=True, help_text="Positional arguments as JSON list"
     )
-    task_kwargs = models.JSONField(
+    task_kwargs = JSONField(
         default=dict, blank=True, help_text="Keyword arguments as JSON dict"
     )
-    queue = models.CharField(max_length=100, default="default", blank=True)
+    queue = CharField(max_length=100, default="default", blank=True)
 
     # Status and tracking
-    status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.ENABLED)
-    total_run_count = models.PositiveIntegerField(default=0)
-    last_run_at = models.DateTimeField(null=True, blank=True)
-    next_run_at = models.DateTimeField(null=True, blank=True)
+    status = CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.ENABLED)
+    total_run_count = PositiveIntegerField(default=0)
+    last_run_at = DateTimeField(null=True, blank=True)
+    next_run_at = DateTimeField(null=True, blank=True)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
@@ -354,10 +356,10 @@ class CeleryTaskSchedule(models.Model):
         return None
 
 
-class Notification(models.Model):
+class Notification(Model):
     """User notifications for various events."""
 
-    class NotificationType(models.TextChoices):
+    class NotificationType(TextChoices):
         NEW_EPISODE = "new_episode", "New Episode"
         REVIEW_REPLY = "review_reply", "Review Reply"
         NEW_FOLLOWER = "new_follower", "New Follower"
@@ -367,43 +369,43 @@ class Notification(models.Model):
         BADGE_AWARDED = "badge_awarded", "Badge Awarded"
         SYSTEM = "system", "System"
 
-    class Priority(models.TextChoices):
+    class Priority(TextChoices):
         LOW = "low", "Low"
         MEDIUM = "medium", "Medium"
         HIGH = "high", "High"
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
-    notification_type = models.CharField(max_length=20, choices=NotificationType.choices)
+    user = ForeignKey(User, on_delete=CASCADE, related_name="notifications")
+    notification_type = CharField(max_length=20, choices=NotificationType.choices)
 
     # Content
-    title = models.CharField(max_length=200)
-    message = models.TextField()
-    data = models.JSONField(
+    title = CharField(max_length=200)
+    message = TextField()
+    data = JSONField(
         default=dict,
         blank=True,
         help_text="Additional data (anime_id, review_id, etc.)",
     )
 
     # Status tracking
-    is_read = models.BooleanField(default=False, db_index=True)
-    read_at = models.DateTimeField(null=True, blank=True)
-    is_email_sent = models.BooleanField(default=False)
-    is_push_sent = models.BooleanField(default=False)
+    is_read = BooleanField(default=False, db_index=True)
+    read_at = DateTimeField(null=True, blank=True)
+    is_email_sent = BooleanField(default=False)
+    is_push_sent = BooleanField(default=False)
 
     # Priority for delivery ordering
-    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    priority = CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
 
     # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["user", "-created_at"]),
-            models.Index(fields=["user", "is_read", "-created_at"]),
-            models.Index(fields=["notification_type", "-created_at"]),
-            models.Index(fields=["is_email_sent", "created_at"]),
-            models.Index(fields=["is_push_sent", "created_at"]),
+            Index(fields=["user", "-created_at"]),
+            Index(fields=["user", "is_read", "-created_at"]),
+            Index(fields=["notification_type", "-created_at"]),
+            Index(fields=["is_email_sent", "created_at"]),
+            Index(fields=["is_push_sent", "created_at"]),
         ]
 
     def __str__(self):
@@ -417,34 +419,34 @@ class Notification(models.Model):
             self.save(update_fields=["is_read", "read_at"])
 
 
-class PushSubscription(models.Model):
+class PushSubscription(Model):
     """Web Push subscription data for users."""
 
-    class DeviceType(models.TextChoices):
+    class DeviceType(TextChoices):
         BROWSER = "browser", "Browser"
         MOBILE = "mobile", "Mobile"
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="push_subscriptions")
-    endpoint = models.URLField()
-    p256dh = models.CharField(max_length=255)
-    auth = models.CharField(max_length=255)
+    user = ForeignKey(User, on_delete=CASCADE, related_name="push_subscriptions")
+    endpoint = URLField()
+    p256dh = CharField(max_length=255)
+    auth = CharField(max_length=255)
 
-    device_type = models.CharField(
+    device_type = CharField(
         max_length=20, choices=DeviceType.choices, default=DeviceType.BROWSER
     )
-    device_info = models.JSONField(
+    device_info = JSONField(
         default=dict, blank=True, help_text="Browser, OS, device details"
     )
 
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_used = models.DateTimeField(null=True, blank=True)
+    is_active = BooleanField(default=True)
+    created_at = DateTimeField(auto_now_add=True)
+    last_used = DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["user", "is_active"]),
-            models.Index(fields=["endpoint"]),
+            Index(fields=["user", "is_active"]),
+            Index(fields=["endpoint"]),
         ]
 
     def __str__(self):

@@ -34,21 +34,9 @@ class ImageUrlMixin:
         return url
 
     def _ensure_thumbnail(self, thumbnail_field):
-        """
-        Ensure an ImageKit thumbnail is generated and return its URL.
-
-        ImageKit's Optimistic strategy returns a URL without guaranteeing the
-        file exists in storage. This method calls .generate() to ensure the
-        thumbnail is actually created in S3/MinIO before returning the URL.
-
-        .generate() is idempotent — it checks the Redis-cached state first
-        and only processes the image if state != EXISTS. So for already-
-        generated thumbnails this is just a Redis GET (sub-millisecond).
-        """
         if not isinstance(thumbnail_field, ImageCacheFile):
             return self._build_url(thumbnail_field)
 
-        # Generate (idempotent: skips if Redis state is already EXISTS)
         thumbnail_field.generate()
         return self._build_url(thumbnail_field)
 

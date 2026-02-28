@@ -43,7 +43,6 @@ def cleanup_unverified_accounts(self, days: int = 7):
     try:
         threshold_date = timezone.now() - timedelta(days=days)
 
-        # Find unverified users older than threshold
         users_to_delete = User.objects.filter(
             userprofile__email_verified=False, date_joined__lt=threshold_date
         )
@@ -51,7 +50,6 @@ def cleanup_unverified_accounts(self, days: int = 7):
         count = users_to_delete.count()
 
         if count > 0:
-            # Log usernames before deletion for audit
             usernames = list(users_to_delete.values_list("username", flat=True))
             users_to_delete.delete()
 
@@ -252,8 +250,6 @@ def run_user_maintenance_workflow(
 
     task_ids = {}
 
-    # Run tasks asynchronously without blocking
-    # Use .delay() instead of .get() to avoid blocking the worker
     if cleanup_unverified:
         task = cleanup_unverified_accounts.delay(days=unverified_days)
         task_ids["unverified_cleanup"] = task.id
@@ -391,7 +387,6 @@ def warm_profile_cache(usernames: list = None):
     from django.core.cache import cache
 
     if not usernames:
-        # Get users with most activity (most follows + anime watched)
         from django.db.models import Count
 
         popular_users = User.objects.annotate(
@@ -403,16 +398,13 @@ def warm_profile_cache(usernames: list = None):
     warmed_count = 0
     for username in usernames:
         try:
-            # Get user with annotations
             user = get_annotated_user_queryset().filter(username=username).first()
             if not user:
                 continue
 
-            # Serialize and cache
             serializer = PublicUserSerializer(user)
             data = serializer.data
 
-            # Use simple cache key (no viewer_id for public data)
             cache_key = f"public_profile:{username}:v0"
             cache.set(cache_key, data, timeout=1800)  # 30 minutes
 

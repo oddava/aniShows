@@ -17,7 +17,6 @@ class AdminImportJobViewSet(viewsets.ViewSet):
     pagination_class = AdminPagination
 
     def _format_task_result(self, result):
-        # Determine source and source_type
         source = "System Auto-Sync"
         source_type = "unknown"
         total_items = 0
