@@ -536,7 +536,7 @@ export default function AnimeDetail() {
                         <div className="flex-1 min-w-0">
                             <div className="text-center lg:text-left mb-8">
                                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2 min-w-0">
-                                    <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
+                                    <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
                                         {anime.title}
                                     </h1>
 
