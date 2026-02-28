@@ -3,12 +3,12 @@ import { TrendingUp, ChevronRight, Star } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { getOptimizedImageUrl } from '../../utils/imageUtils';
 
-export default function TrendingCarousel({ 
-  anime = [], 
+export default function TrendingCarousel({
+  anime = [],
   onSeeAll,
   titleLanguage = 'en',
   isLoading = false,
-  isError = false 
+  isError = false
 }) {
   if (isError) {
     return (
@@ -27,22 +27,18 @@ export default function TrendingCarousel({
   return (
     <div className="mb-8 animate-fade-in">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-accent/10 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-accent" />
-          </div>
-          <h2 className="text-base font-semibold text-white">Trending Now</h2>
+        <div>
+          <h2 className="text-xl font-bold text-white tracking-tight">Trending Now</h2>
         </div>
-        
+
         <button
           onClick={onSeeAll}
-          className="text-xs font-medium text-accent hover:text-white transition-colors flex items-center gap-0.5 group"
+          className="text-xs font-medium text-accent hover:text-white transition-colors group"
         >
           See all
-          <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
         </button>
       </div>
-      
+
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
         {displayAnime.map((item, index) => (
           <Link
@@ -58,13 +54,13 @@ export default function TrendingCarousel({
                 loading={index < 3 ? "eager" : "lazy"}
                 className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
               />
-              
+
               {/* Hover Overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-2">
                 <h4 className="font-semibold text-[11px] text-white mb-1 line-clamp-2">
                   {item.title}
                 </h4>
-                
+
                 <div className="flex items-center gap-1.5 text-[10px] text-gray-300 mb-1">
                   {item.rating && (
                     <span className="flex items-center gap-0.5 text-yellow-400">
@@ -73,12 +69,12 @@ export default function TrendingCarousel({
                     </span>
                   )}
                   <span>{item.anime_type}</span>
-                  
+
                   {item.episode_count && (
                     <span>{item.episode_count} eps</span>
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-1 text-[9px] text-accent truncate">
                   {item.genres?.slice(0, 2).map((genre, idx) => (
                     <span key={genre.id} className="truncate">
@@ -97,18 +93,18 @@ export default function TrendingCarousel({
               {item.user_list_status?.status === 'Watching' && item.episode_count > 0 && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/60 z-10">
                   <div
-                    style={{ 
-                      width: `${Math.min((item.user_list_status.episodes_watched / item.episode_count) * 100, 100)}%` 
+                    style={{
+                      width: `${Math.min((item.user_list_status.episodes_watched / item.episode_count) * 100, 100)}%`
                     }}
                     className="h-full bg-accent"
                   />
                 </div>
               )}
             </div>
-            
+
             <h3 className="text-xs font-medium text-white line-clamp-2 group-hover:text-accent transition-colors">
-              {titleLanguage === 'jp' && item.title_jp 
-                ? item.title_jp 
+              {titleLanguage === 'jp' && item.title_jp
+                ? item.title_jp
                 : item.title
               }
             </h3>
