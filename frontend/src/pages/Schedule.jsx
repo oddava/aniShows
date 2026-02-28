@@ -47,7 +47,7 @@ const getTimeRemaining = (dateString) => {
   const target = new Date(dateString);
   // Check if date is valid
   if (isNaN(target.getTime())) return 'Unknown';
-  
+
   const now = new Date();
   const diff = target - now;
 
@@ -69,7 +69,7 @@ const isWithin24Hours = (dateString) => {
   const target = new Date(dateString);
   // Check if date is valid
   if (isNaN(target.getTime())) return false;
-  
+
   const now = new Date();
   const diff = target - now;
   return diff > 0 && diff < 24 * 60 * 60 * 1000;
@@ -125,7 +125,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
   const { isAuthenticated } = useAuth();
   const timeRemaining = getTimeRemaining(anime.next_airing_date);
   const isUrgent = isWithin24Hours(anime.next_airing_date);
-  
+
   // Safely check if anime has aired
   const hasAired = (() => {
     if (!anime.next_airing_date) return false;
@@ -134,98 +134,102 @@ const ScheduleCard = ({ anime, onUpdate }) => {
   })();
 
   return (
-    <div
-      className={`
-        group relative bg-dark-100 rounded-xl border overflow-hidden transition-all duration-300
-        ${isUrgent
-          ? 'border-green-500/30 shadow-lg shadow-green-500/5'
-          : 'border-gray-800 hover:border-gray-700'
-        }
-      `}
-    >
-      {/* Cover Image */}
-      <Link to={`/anime/${anime.slug}`} className="block relative aspect-[2/3] overflow-hidden">
-        <img
-          src={getImageUrl(anime.cover_image)}
-          alt={anime.title}
-          className="w-full h-full object-cover"
-        />
+    <div className="group relative block h-full overflow-visible hover:z-[150]">
+      <div
+        className={`
+          bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300 card-hover-glow
+          ${isUrgent
+            ? 'border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.15)] hover:border-green-500'
+            : 'border-gray-800 hover:border-accent/40'
+          }
+        `}
+      >
+        {/* Cover Image */}
+        <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
+          <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
+            <img
+              src={getImageUrl(anime.cover_image)}
+              alt={anime.title}
+              className="w-full h-full object-cover"
+            />
 
-        {/* Episode Badge - Top Right */}
-        <div className="absolute top-2 right-2">
-          <div className={`
-            px-2 py-1 rounded-md text-xs font-bold shadow-lg
-            ${isUrgent
-              ? 'bg-green-500 text-white'
-              : 'bg-dark/90 backdrop-blur-sm text-white border border-white/30'
-            }
-          `}>
-            EP {anime.next_airing_episode}
-          </div>
+            {/* Episode Badge - Top Right */}
+            <div className="absolute top-2 right-2">
+              <div className={`
+                px-2 py-1 rounded-md text-xs font-bold shadow-lg
+                ${isUrgent
+                  ? 'bg-green-500 text-white'
+                  : 'bg-dark/90 backdrop-blur-sm text-white border border-white/30'
+                }
+              `}>
+                EP {anime.next_airing_episode}
+              </div>
+            </div>
+
+            {/* Airing Info Overlay - Bottom */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8 pb-3 px-3">
+              {hasAired ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500/20">
+                    <CheckCircle2 className="w-3 h-3 text-green-400" />
+                  </div>
+                  <span className="text-sm font-semibold text-green-400">Aired</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className={`
+                    flex items-center justify-center w-5 h-5 rounded-full
+                    ${isUrgent ? 'bg-green-500/20' : 'bg-white/10'}
+                  `}>
+                    <Clock className={`w-3 h-3 ${isUrgent ? 'text-green-400' : 'text-white'}`} />
+                  </div>
+                  <span className={`
+                    text-sm font-semibold
+                    ${isUrgent ? 'text-green-400' : 'text-white'}
+                  `}>
+                    {timeRemaining}
+                  </span>
+                </div>
+              )}
+            </div>
+          </Link>
         </div>
 
-        {/* Airing Info Overlay - Bottom */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8 pb-3 px-3">
-          {hasAired ? (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500/20">
-                <CheckCircle2 className="w-3 h-3 text-green-400" />
-              </div>
-              <span className="text-sm font-semibold text-green-400">Aired</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className={`
-                flex items-center justify-center w-5 h-5 rounded-full
-                ${isUrgent ? 'bg-green-500/20' : 'bg-white/10'}
+        {/* Content */}
+        <div className="p-3 flex-grow flex flex-col bg-dark-100 rounded-b-xl">
+          <Link to={`/anime/${anime.slug}`}>
+            <h3 className="text-xs font-semibold text-white line-clamp-2 group-hover:text-accent transition-colors mb-1.5 leading-relaxed">
+              {anime.title}
+            </h3>
+          </Link>
+
+          <div className="text-[11px] text-gray-400">
+            {anime.anime_type} • {anime.episode_count} eps
+          </div>
+
+          {/* User Actions */}
+          {isAuthenticated && anime.user_list_status && (
+            <div className="mt-2.5 pt-2 border-t border-gray-800/50">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className={`
+                px-2 py-0.5 rounded font-medium
+                ${anime.user_list_status.status === 'watching'
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-gray-700/50 text-gray-400'
+                  }
               `}>
-                <Clock className={`w-3 h-3 ${isUrgent ? 'text-green-400' : 'text-white'}`} />
+                  {anime.user_list_status.status}
+                </span>
+
+                {anime.user_list_status.status === 'watching' && (
+                  <span className="text-gray-500 text-[11px]">
+                    EP {anime.user_list_status.episodes_watched}/{anime.episode_count}
+                  </span>
+                )}
               </div>
-              <span className={`
-                text-sm font-semibold
-                ${isUrgent ? 'text-green-400' : 'text-white'}
-              `}>
-                {timeRemaining}
-              </span>
             </div>
           )}
         </div>
-      </Link>
-
-      {/* Content */}
-      <div className="p-3">
-        <Link to={`/anime/${anime.slug}`}>
-          <h3 className="text-xs font-semibold text-white line-clamp-2 group-hover:text-accent transition-colors mb-1.5 leading-relaxed">
-            {anime.title}
-          </h3>
-        </Link>
-
-        <div className="text-[11px] text-gray-400">
-          {anime.anime_type} • {anime.episode_count} eps
-        </div>
-
-        {/* User Actions */}
-        {isAuthenticated && anime.user_list_status && (
-          <div className="mt-2.5 pt-2 border-t border-gray-800/50">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className={`
-                px-2 py-0.5 rounded font-medium
-                ${anime.user_list_status.status === 'watching'
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-gray-700/50 text-gray-400'
-                }
-              `}>
-                {anime.user_list_status.status}
-              </span>
-
-              {anime.user_list_status.status === 'watching' && (
-                <span className="text-gray-500 text-[11px]">
-                  EP {anime.user_list_status.episodes_watched}/{anime.episode_count}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -247,8 +251,7 @@ const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday }) => {
         </button>
 
         <div className="text-center">
-          <div className="flex items-center gap-2 text-white font-semibold">
-            <Calendar className="w-5 h-5 text-accent" />
+          <div className="text-white font-semibold">
             <span>
               {formatDate(currentWeek)} - {formatDate(weekEnd)}
             </span>
@@ -370,11 +373,11 @@ export default function Schedule() {
         dayAnime.sort((a, b) => {
           const dateA = a.next_airing_date ? new Date(a.next_airing_date) : null;
           const dateB = b.next_airing_date ? new Date(b.next_airing_date) : null;
-          
+
           // Handle null/invalid dates
           if (!dateA || isNaN(dateA.getTime())) return 1;
           if (!dateB || isNaN(dateB.getTime())) return -1;
-          
+
           return dateA - dateB;
         });
       });
@@ -449,10 +452,7 @@ export default function Schedule() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center">
-                    <Tv className="w-5 h-5 text-accent" />
-                  </div>
+                <div className="mb-2">
                   <h1 className="text-3xl font-bold text-white">Anime Schedule</h1>
                 </div>
                 <p className="text-gray-400">
