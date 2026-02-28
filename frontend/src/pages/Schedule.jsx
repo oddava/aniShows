@@ -453,7 +453,7 @@ export default function Schedule() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <div className="mb-2">
-                  <h1 className="text-3xl font-bold text-white">Anime Schedule</h1>
+                  <h1 className="text-2xl font-bold text-white/90">Anime Schedule</h1>
                 </div>
                 <p className="text-gray-400">
                   Track your weekly anime releases and never miss an episode
@@ -485,7 +485,7 @@ export default function Schedule() {
 
           {/* Selected Day Header */}
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">
+            <h2 className="text-lg font-bold text-white/90">
               {DAY_NAMES[selectedDay]}
               <span className="text-gray-500 font-normal ml-2">
                 {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}

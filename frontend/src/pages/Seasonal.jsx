@@ -190,7 +190,7 @@ export default function Seasonal() {
                             </button>
 
                             <div className="text-center">
-                                <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight drop-shadow-xl">
+                                <h1 className="text-3xl md:text-4xl font-extrabold text-white/90 tracking-tight drop-shadow-xl">
                                     {currentSeasonData?.label} {selectedYear}
                                 </h1>
                                 <p className="text-accent text-xs font-bold uppercase tracking-[0.2em] mt-2">{currentSeasonData?.months}</p>

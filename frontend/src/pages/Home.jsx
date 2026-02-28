@@ -139,7 +139,7 @@ export default function Home() {
                     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
                         {heroAnime && (
                             <div className="max-w-2xl animate-fade-in transition-all duration-500">
-                                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-3 sm:mb-4 leading-tight text-white drop-shadow-2xl tracking-tight">
+                                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 leading-tight text-white/90 drop-shadow-2xl tracking-tight">
                                     {heroAnime.title}
                                 </h1>
 
@@ -218,7 +218,7 @@ export default function Home() {
                             <div className="max-w-7xl mx-auto">
                                 <div className="flex items-center justify-between mb-6 md:mb-8">
                                     <div>
-                                        <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Trending Now</h2>
+                                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Trending Now</h2>
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Most discussed this week</p>
                                     </div>
                                     <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-accent/40 group">
@@ -251,7 +251,7 @@ export default function Home() {
                             <div className="max-w-7xl mx-auto">
                                 <div className="flex items-center justify-between mb-6 md:mb-8">
                                     <div>
-                                        <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Top Rated</h2>
+                                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Top Rated</h2>
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Highest rated by community</p>
                                     </div>
                                     <Link to="/browse?sort=rating" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-yellow-400/40 group">
@@ -288,7 +288,7 @@ export default function Home() {
                         <section ref={setRevealRef} className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800 reveal">
                             <div className="absolute inset-0 bg-accent/5 blur-[100px] pointer-events-none" />
                             <div className="max-w-4xl mx-auto text-center relative z-10 glass border-white/5 py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl">
-                                <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold text-white mb-4 sm:mb-6 tracking-tight">
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white/90 mb-4 tracking-tight">
                                     Start Tracking Your Journey
                                 </h2>
                                 <p className="text-gray-400 mb-6 sm:mb-10 text-base sm:text-lg max-w-2xl mx-auto px-2">
@@ -328,7 +328,7 @@ function CurrentlyWatchingSection() {
             <div className="max-w-7xl mx-auto">
                 <div className="flex items-center justify-between mb-4 md:mb-6">
                     <div>
-                        <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Currently Watching</h2>
+                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Currently Watching</h2>
                     </div>
                     <Link to="/profile?tab=animelist&status=Watching" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
                         View All <ChevronRight className="w-4 h-4" />
@@ -392,7 +392,7 @@ function RecommendedForYouSection({ revealRef }) {
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col gap-1 mb-4 md:mb-6">
                     <div>
-                        <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Recommended for You</h2>
+                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Recommended for You</h2>
                     </div>
                     <p className="text-sm md:text-base text-gray-500 mt-0.5">{subtitle}</p>
                 </div>
