@@ -26,14 +26,15 @@ export default function TrendingCarousel({
 
   return (
     <div className="mb-8 animate-fade-in">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-end justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-white tracking-tight">Trending Now</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">Trending Now</h2>
+          <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 uppercase tracking-wider font-bold">Community Favorites</p>
         </div>
 
         <button
           onClick={onSeeAll}
-          className="text-xs font-medium text-accent hover:text-white transition-colors group"
+          className="text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1 group pb-1"
         >
           See all
         </button>

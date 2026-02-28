@@ -218,11 +218,10 @@ export default function Home() {
                             <div className="max-w-7xl mx-auto">
                                 <div className="flex items-center justify-between mb-6 md:mb-8">
                                     <div>
-                                        <h2 className="text-2xl md:text-4xl font-black text-white tracking-tighter uppercase">Trending Now</h2>
-                                        <div className="h-1 w-12 bg-accent mt-2 rounded-full" />
-                                        <p className="text-xs md:text-sm text-gray-500 mt-2 font-medium">Most discussed this week</p>
+                                        <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Trending Now</h2>
+                                        <p className="text-xs md:text-sm text-gray-500 mt-0.5">Most discussed this week</p>
                                     </div>
-                                    <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs hover:border-accent/40 group font-bold">
+                                    <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-accent/40 group">
                                         View All
                                     </Link>
                                 </div>
@@ -255,8 +254,8 @@ export default function Home() {
                                         <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Top Rated</h2>
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Highest rated by community</p>
                                     </div>
-                                    <Link to="/browse?sort=rating" className="btn-secondary py-1.5 px-4 text-xs hover:border-yellow-400/40 group font-bold">
-                                        View All
+                                    <Link to="/browse?sort=rating" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-yellow-400/40 group">
+                                        View All <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                                     </Link>
                                 </div>
 
@@ -331,8 +330,8 @@ function CurrentlyWatchingSection() {
                     <div>
                         <h2 className="text-xl md:text-3xl font-bold text-white tracking-tight">Currently Watching</h2>
                     </div>
-                    <Link to="/profile?tab=animelist&status=Watching" className="text-sm font-bold text-gray-400 hover:text-white transition-colors">
-                        View All
+                    <Link to="/profile?tab=animelist&status=Watching" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+                        View All <ChevronRight className="w-4 h-4" />
                     </Link>
                 </div>
 
