@@ -211,7 +211,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
     return (
         <div className="group relative block h-full overflow-visible hover:z-[150]"
         >
-            <div className="bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative transition-all duration-300 hover:border-accent/40 card-hover-glow">
+            <div className="bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative transition-all duration-300 hover:border-accent/40">
                 {/* Image Container */}
                 <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
                     <Link to={`/anime/${anime.slug}`} className="block w-full h-full">

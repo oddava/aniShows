@@ -222,7 +222,7 @@ export default function Home() {
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Most discussed this week</p>
                                     </div>
                                     <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-accent/40 group">
-                                        View All <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                        View All
                                     </Link>
                                 </div>
 

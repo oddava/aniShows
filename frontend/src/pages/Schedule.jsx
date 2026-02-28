@@ -137,7 +137,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
     <div className="group relative block h-full overflow-visible hover:z-[150]">
       <div
         className={`
-          bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300 card-hover-glow
+          bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300
           ${isUrgent
             ? 'border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.15)] hover:border-green-500'
             : 'border-gray-800 hover:border-accent/40'
