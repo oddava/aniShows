@@ -460,7 +460,13 @@ class ThemeSongSyncTask(BaseTask):
         query = " ".join(query_parts)
         encoded_query = quote_plus(query)
 
-        return f"https://www.youtube.com/results?search_query={encoded_query}"
+        url = f"https://www.youtube.com/results?search_query={encoded_query}"
+
+        # Truncate to fit database URLField(max_length=500)
+        if len(url) > 500:
+            url = url[:500]
+
+        return url
 
     @sync_to_async
     def _backfill_missing_youtube_urls(self, anime: Anime) -> int:

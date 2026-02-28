@@ -523,10 +523,10 @@ class ThemeSong(Model):
     year = IntegerField(null=True, blank=True)  # Release year
 
     # External links (populated via enrichment)
-    spotify_url = URLField(blank=True)
-    youtube_url = URLField(blank=True)
-    apple_music_url = URLField(blank=True)
-    anisong_db_url = URLField(blank=True)  # Anime song database link
+    spotify_url = URLField(max_length=500, blank=True)
+    youtube_url = URLField(max_length=500, blank=True)
+    apple_music_url = URLField(max_length=500, blank=True)
+    anisong_db_url = URLField(max_length=500, blank=True)  # Anime song database link
 
     # Metadata
     last_synced = DateTimeField(null=True, blank=True)  # Last Jikan sync time
