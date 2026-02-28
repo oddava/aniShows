@@ -7,10 +7,10 @@ import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import SEO from '../components/SEO';
 
 const SEASONS = [
-    { value: 'winter', label: 'Winter', months: 'Jan - Mar', color: 'bg-blue-500' },
-    { value: 'spring', label: 'Spring', months: 'Apr - Jun', color: 'bg-pink-500' },
-    { value: 'summer', label: 'Summer', months: 'Jul - Sep', color: 'bg-yellow-500' },
-    { value: 'fall', label: 'Fall', months: 'Oct - Dec', color: 'bg-amber-600' },
+    { value: 'winter', label: 'Winter', months: 'Jan - Mar', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+    { value: 'spring', label: 'Spring', months: 'Apr - Jun', color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
+    { value: 'summer', label: 'Summer', months: 'Jul - Sep', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
+    { value: 'fall', label: 'Fall', months: 'Oct - Dec', color: 'bg-amber-600/10 text-amber-500 border-amber-500/20' },
 ];
 
 // Get current season
@@ -40,7 +40,7 @@ export default function Seasonal() {
     const queryClient = useQueryClient();
     const { trackEvent } = useAnalytics();
     const seasonTabsRef = useRef(null);
-    
+
     const selectedSeason = searchParams.get('season') || getCurrentSeason();
     const selectedYear = parseInt(searchParams.get('year')) || currentYear;
 
@@ -51,12 +51,12 @@ export default function Seasonal() {
     // Prefetch adjacent seasons
     const prefetchAdjacentSeasons = useCallback(() => {
         const currentIndex = SEASONS.findIndex(s => s.value === selectedSeason);
-        
+
         // Prefetch next season
         const nextIndex = (currentIndex + 1) % 4;
         const nextSeason = SEASONS[nextIndex];
         const nextYear = nextIndex === 0 ? selectedYear + 1 : selectedYear;
-        
+
         queryClient.prefetchQuery({
             queryKey: ['seasonal', nextSeason.value, nextYear],
             queryFn: () => animeApi.getAll({
@@ -72,7 +72,7 @@ export default function Seasonal() {
         const prevIndex = currentIndex === 0 ? 3 : currentIndex - 1;
         const prevSeason = SEASONS[prevIndex];
         const prevYear = prevIndex === 3 ? selectedYear - 1 : selectedYear;
-        
+
         queryClient.prefetchQuery({
             queryKey: ['seasonal', prevSeason.value, prevYear],
             queryFn: () => animeApi.getAll({
@@ -104,10 +104,10 @@ export default function Seasonal() {
     const animeList = animeData?.results || [];
 
     const updateSeason = useCallback((season) => {
-        trackEvent('season_change', { 
-            from_season: selectedSeason, 
+        trackEvent('season_change', {
+            from_season: selectedSeason,
             to_season: season,
-            year: selectedYear 
+            year: selectedYear
         });
         const params = new URLSearchParams(searchParams);
         params.set('season', season);
@@ -115,10 +115,10 @@ export default function Seasonal() {
     }, [searchParams, setSearchParams, selectedSeason, selectedYear, trackEvent]);
 
     const updateYear = useCallback((year) => {
-        trackEvent('year_change', { 
-            from_year: selectedYear, 
+        trackEvent('year_change', {
+            from_year: selectedYear,
             to_year: year,
-            season: selectedSeason 
+            season: selectedSeason
         });
         const params = new URLSearchParams(searchParams);
         params.set('year', year.toString());
@@ -138,7 +138,7 @@ export default function Seasonal() {
             newYear += 1;
         }
 
-        trackEvent('season_navigate', { 
+        trackEvent('season_navigate', {
             direction: direction > 0 ? 'next' : 'previous',
             season: SEASONS[newIndex].value,
             year: newYear
@@ -171,8 +171,8 @@ export default function Seasonal() {
 
     return (
         <>
-            <SEO 
-                page="seasonal" 
+            <SEO
+                page="seasonal"
                 customTitle={`${currentSeasonData?.label} ${selectedYear} Anime - AniShows`}
                 customDescription={`Discover anime airing in ${currentSeasonData?.label} ${selectedYear}. Browse the seasonal anime lineup with ratings, reviews, and community favorites.`}
             />
@@ -180,45 +180,42 @@ export default function Seasonal() {
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
                     <header className="text-center mb-12">
-                        <div className="flex items-center justify-center gap-4 mb-4">
+                        <div className="flex items-center justify-center gap-6 mb-4">
                             <button
                                 onClick={() => navigateSeason(-1)}
-                                className="p-2 rounded-full bg-dark-100 border border-gray-700 hover:border-accent transition-colors"
+                                className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-accent transition-colors pb-1"
                                 aria-label="Previous season"
                             >
-                                <ChevronLeft className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                                Prev
                             </button>
 
                             <div className="text-center">
-                                <h1 className="text-3xl md:text-4xl font-bold text-white">
+                                <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight drop-shadow-xl">
                                     {currentSeasonData?.label} {selectedYear}
                                 </h1>
-                                <p className="text-gray-400 text-sm">{currentSeasonData?.months}</p>
+                                <p className="text-accent text-xs font-bold uppercase tracking-[0.2em] mt-2">{currentSeasonData?.months}</p>
                             </div>
 
                             <button
                                 onClick={() => navigateSeason(1)}
-                                className="p-2 rounded-full bg-dark-100 border border-gray-700 hover:border-accent transition-colors"
+                                className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-accent transition-colors pb-1"
                                 aria-label="Next season"
                             >
-                                <ChevronRight className="w-5 h-5 text-gray-400" aria-hidden="true" />
+                                Next
                             </button>
                         </div>
 
-                        <p className="text-gray-400 max-w-xl mx-auto">
-                            Discover anime airing in {currentSeasonData?.label} {selectedYear}
-                        </p>
                     </header>
 
                     {/* Season/Year Selector */}
-                    <nav 
+                    <nav
                         className="flex flex-wrap items-center justify-center gap-4 mb-10"
                         aria-label="Season and Year Selector"
                     >
                         {/* Season Pills */}
-                        <div 
+                        <div
                             ref={seasonTabsRef}
-                            className="flex items-center bg-dark-100 rounded-xl p-1 border border-gray-800"
+                            className="flex items-center bg-dark-100/50 backdrop-blur-sm rounded-full p-1.5 border border-gray-800/50"
                             role="tablist"
                             aria-label="Select Season"
                         >
@@ -230,9 +227,9 @@ export default function Seasonal() {
                                     aria-selected={selectedSeason === season.value}
                                     aria-label={`${season.label} season`}
                                     tabIndex={selectedSeason === season.value ? 0 : -1}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedSeason === season.value
-                                        ? `${season.color} text-white shadow-lg`
-                                        : 'text-gray-400 hover:text-white'
+                                    className={`px-5 py-2 rounded-full text-xs font-bold tracking-wide transition-all border ${selectedSeason === season.value
+                                        ? `${season.color} shadow-lg shadow-black/20`
+                                        : 'text-gray-500 border-transparent hover:text-gray-300 hover:bg-white/5'
                                         }`}
                                 >
                                     {season.label}
@@ -246,42 +243,37 @@ export default function Seasonal() {
                             id="year-select"
                             value={selectedYear}
                             onChange={(e) => updateYear(parseInt(e.target.value))}
-                            className="px-4 py-2.5 bg-dark-100 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-accent cursor-pointer"
+                            className="px-5 py-2.5 bg-dark-100/50 backdrop-blur-sm border border-gray-800/50 rounded-full text-sm font-bold text-gray-300 focus:outline-none focus:border-accent/50 cursor-pointer appearance-none text-center"
                             aria-label="Select year"
                         >
                             {YEAR_OPTIONS.map((year) => (
-                                <option key={year} value={year}>{year}</option>
+                                <option key={year} value={year} className="bg-dark-100 text-white">{year}</option>
                             ))}
                         </select>
                     </nav>
 
                     {/* Stats Bar */}
                     {animeList.length > 0 && !isLoading && (
-                        <div 
-                            className="flex items-center justify-center gap-6 mb-10 py-4 px-6 bg-dark-100/50 rounded-2xl border border-gray-800"
+                        <div
+                            className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mb-10"
                             role="status"
                             aria-live="polite"
                             aria-label="Season statistics"
                         >
-                            <div className="flex items-center gap-2">
-                                <Users className="w-5 h-5 text-accent" aria-hidden="true" />
-                                <span className="text-white font-bold">{animeList.length}</span>
-                                <span className="text-gray-400">anime this season</span>
+                            <div className="flex items-center gap-1.5 px-4 py-1.5 bg-dark-100/30 rounded-full border border-gray-800/50">
+                                <span className="text-white font-black text-sm">{animeList.length}</span>
+                                <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Entries</span>
                             </div>
-                            <div className="w-px h-6 bg-gray-700" aria-hidden="true" />
-                            <div className="flex items-center gap-2">
-                                <Star className="w-5 h-5 text-yellow-500" aria-hidden="true" />
-                                <span className="text-white font-bold">
-                                    {highlyRatedCount}
-                                </span>
-                                <span className="text-gray-400">rated 8+</span>
+                            <div className="flex items-center gap-1.5 px-4 py-1.5 bg-dark-100/30 rounded-full border border-gray-800/50">
+                                <span className="text-white font-black text-sm">{highlyRatedCount}</span>
+                                <span className="text-gray-500 text-[10px] uppercase font-bold tracking-wider">Highly Rated</span>
                             </div>
                         </div>
                     )}
 
                     {/* Content */}
                     {isLoading ? (
-                        <div 
+                        <div
                             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
                             role="status"
                             aria-label="Loading anime"
@@ -291,8 +283,8 @@ export default function Seasonal() {
                     ) : isError ? (
                         <div className="text-center py-16" role="alert" aria-live="assertive">
                             <p className="text-red-400 mb-4">Failed to load seasonal anime</p>
-                            <button 
-                                onClick={() => refetch()} 
+                            <button
+                                onClick={() => refetch()}
                                 className="btn-primary"
                                 aria-label="Retry loading anime"
                             >
@@ -307,7 +299,7 @@ export default function Seasonal() {
                             </Link>
                         </div>
                     ) : (
-                        <div 
+                        <div
                             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
                             role="list"
                             aria-label={`${animeList.length} anime in ${currentSeasonData?.label} ${selectedYear}`}
