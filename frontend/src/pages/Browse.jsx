@@ -778,10 +778,10 @@ export default function Browse() {
       return (
         <div>
           {isLoading || isTabSwitching ? (
-            <>
+            <div className="skeleton-fade-in">
               <GridSkeleton count={skeletonCount} />
               <div ref={loadMoreRef} className="h-0 overflow-hidden" />
-            </>
+            </div>
           ) : isError ? (
             <div className="text-center py-16">
               <p className="text-red-400 mb-4">Failed to load anime</p>
@@ -830,10 +830,10 @@ export default function Browse() {
       return (
         <div className="space-y-3">
           {isLoading || isTabSwitching ? (
-            <>
+            <div className="skeleton-fade-in">
               <ListSkeleton count={skeletonCount} />
               <div ref={loadMoreRef} className="h-0 overflow-hidden" />
-            </>
+            </div>
           ) : allAnime.length === 0 ? (
             <EmptyState
               onClearFilters={clearAllFilters}
@@ -876,10 +876,10 @@ export default function Browse() {
     return (
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2">
         {isLoading || isTabSwitching ? (
-          <>
+          <div className="col-span-full grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2 skeleton-fade-in">
             <MinimalSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />
-          </>
+          </div>
         ) : allAnime.length === 0 ? (
           <div className="col-span-full">
             <EmptyState

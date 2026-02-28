@@ -6,14 +6,14 @@ import { AnimeCardSkeleton } from './AnimeCardSkeleton';
  * Dynamically adjusts columns based on screen size like the real grid
  */
 export function GridSkeleton({ count = 12, compact = false }) {
-    // Calculate stagger delay - faster for compact mode
-    const getDelay = (index) => compact ? index * 30 : index * 50;
+    // Calculate stagger delay - faster for compact mode, and overall faster for smoother feel
+    const getDelay = (index) => compact ? index * 20 : index * 35;
 
     return (
         <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5">
             {Array.from({ length: count }).map((_, i) => (
-                <AnimeCardSkeleton 
-                    key={i} 
+                <AnimeCardSkeleton
+                    key={i}
                     delay={getDelay(i)}
                 />
             ))}
@@ -28,8 +28,8 @@ export function GridSkeletonCompact({ count = 6 }) {
     return (
         <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 opacity-70">
             {Array.from({ length: count }).map((_, i) => (
-                <AnimeCardSkeleton 
-                    key={i} 
+                <AnimeCardSkeleton
+                    key={i}
                     delay={i * 30}
                     className="scale-95"
                 />

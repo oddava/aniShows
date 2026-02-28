@@ -16,6 +16,7 @@ import FranchiseSection from '../components/FranchiseSection';
 import FriendsWatching from '../components/FriendsWatching';
 import MusicSection from '../components/MusicSection';
 import SEOHelmet from '../components/SEOHelmet';
+import { AnimeDetailSkeleton } from '../components/skeletons';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
 import logger from '../utils/logger';
@@ -430,11 +431,7 @@ export default function AnimeDetail() {
     const canReview = isAuthenticated && anime?.user_list_status != null;
 
     if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
+        return <AnimeDetailSkeleton />;
     }
 
     if (isError || !anime) {
