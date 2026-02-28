@@ -1,8 +1,6 @@
-# Production Docker Compose Configuration for EC2
-# optimized for GHCR pre-built images
+# Production Docker Compose Configuration
 
 services:
-  # Web - Optimized Gunicorn settings for small EC2 (t2.micro - 1 vCPU)
   web:
     image: ghcr.io/oddava/anishows-backend:latest
     command: >
@@ -15,8 +13,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=5).close()" ]
       interval: 30s
@@ -30,7 +28,6 @@ services:
         reservations:
           memory: 512M
 
-  # Redis - Optimized for profile caching with 512MB and persistence
   redis:
     command: >
       redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory 512mb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000
@@ -40,7 +37,6 @@ services:
       timeout: 3s
       retries: 3
 
-  # Celery - Reduced concurrency for EC2
   celery:
     image: ghcr.io/oddava/anishows-backend:latest
     command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,low_priority,notifications", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000" ]
@@ -51,7 +47,6 @@ services:
         reservations:
           memory: 256M
 
-  # Caddy - Production configuration
   caddy:
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile
@@ -68,7 +63,6 @@ services:
         reservations:
           memory: 64M
 
-  # MinIO - Required for production media storage
   minio:
     image: minio/minio:latest
     restart: always
@@ -76,6 +70,9 @@ services:
       - "9000"
     env_file:
       - .env
+    environment:
+      MINIO_ROOT_USER: "${AWS_ACCESS_KEY_ID:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -86,12 +83,28 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      test: [ "CMD", "mc", "ready", "local" ]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Celery Beat - Required for scheduled tasks (user stats updates, cache warming)
+  createbuckets:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_USER: "${AWS_ACCESS_KEY_ID:-minioadmin}"
+      MINIO_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
+      BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD};
+      mc mb myminio/$${BUCKET_NAME} --ignore-existing;
+      mc anonymous set download myminio/$${BUCKET_NAME}/media;
+      exit 0;
+      "
+
   beat:
     image: ghcr.io/oddava/anishows-backend:latest
     command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
@@ -118,7 +131,6 @@ services:
         reservations:
           memory: 64M
 
-  # Disable Grafana in production (not needed)
   grafana:
     deploy:
       replicas: 0

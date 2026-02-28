@@ -32,7 +32,18 @@ from django.urls import re_path
 # Serve media files in DEBUG mode (static files are served by whitenoise)
 if settings.DEBUG:
     from debug_toolbar.toolbar import debug_toolbar_urls
+    from drf_spectacular.views import (
+        SpectacularAPIView,
+        SpectacularSwaggerView,
+        SpectacularRedocView,
+    )
 
     urlpatterns += (
         static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + debug_toolbar_urls()
     )
+    # Swagger/OpenAPI documentation
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+        path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+    ]

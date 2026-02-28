@@ -51,6 +51,7 @@ dependencies = [
     "idna>=3.6",
     "google-api-python-client>=2.100.0",
     "pydantic>=2.5.0",
+    "drf-spectacular>=0.29.0",
 ]
 
 [project.optional-dependencies]

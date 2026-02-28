@@ -22,9 +22,7 @@ INTERNAL_IPS = [
 # EMAIL BACKEND
 # =============================================================================
 
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
-)
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 
 # =============================================================================
 # CORS SETTINGS
@@ -53,7 +51,21 @@ CSRF_TRUSTED_ORIGINS = [
 # =============================================================================
 
 INSTALLED_APPS.append("debug_toolbar")
+INSTALLED_APPS.append("drf_spectacular")
 MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+
+# =============================================================================
+# DRF SPECTACULAR (Swagger/OpenAPI)
+# =============================================================================
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "aniShows API",
+    "DESCRIPTION": "Anime tracking and discovery platform API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": r"/api/v1",
+}
 
 # =============================================================================
 # LOGGING
