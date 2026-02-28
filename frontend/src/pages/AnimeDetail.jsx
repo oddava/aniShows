@@ -19,7 +19,6 @@ import SEOHelmet from '../components/SEOHelmet';
 import { AnimeDetailSkeleton } from '../components/skeletons';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
-import useDelayedLoading from '../hooks/useDelayedLoading';
 import logger from '../utils/logger';
 
 const InformationBox = ({ anime, className, accentColor }) => {
@@ -264,8 +263,6 @@ export default function AnimeDetail() {
         enabled: !!slug
     });
 
-    const showSkeleton = useDelayedLoading(isLoading, 200);
-
     const { data: reviewStats } = useQuery({
         queryKey: ['reviewStats', slug],
         queryFn: () => reviewApi.getStats(slug).then(res => res.data),
@@ -434,10 +431,7 @@ export default function AnimeDetail() {
     const canReview = isAuthenticated && anime?.user_list_status != null;
 
     if (isLoading) {
-        if (showSkeleton) {
-            return <AnimeDetailSkeleton />;
-        }
-        return <div className="min-h-screen bg-dark" />; // Prevent flash before skeleton shows
+        return <AnimeDetailSkeleton />;
     }
 
     if (isError || !anime) {
