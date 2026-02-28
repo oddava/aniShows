@@ -115,7 +115,7 @@ export default function Home() {
             <SEO page="home" />
             <div className="min-h-screen">
                 {/* Hero Section */}
-                <section className="relative h-[65vh] sm:h-[75vh] min-h-[500px] sm:min-h-[600px] flex items-center overflow-hidden">
+                <section className="relative h-[55vh] sm:h-[65vh] min-h-[450px] sm:min-h-[550px] flex items-center overflow-hidden">
                     <div className="absolute inset-0 bg-dark">
                         {trending?.slice(0, 5).map((anime, index) => (
                             <div
@@ -132,26 +132,26 @@ export default function Home() {
                                 />
                             </div>
                         ))}
-                        <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/50 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/40 to-transparent" />
                         <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent h-full" />
                     </div>
 
-                    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-16 sm:mt-24">
+                    <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
                         {heroAnime && (
-                            <div className="max-w-3xl animate-fade-in transition-all duration-500">
-                                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black mb-4 sm:mb-6 leading-tight text-white drop-shadow-2xl tracking-tighter">
+                            <div className="max-w-2xl animate-fade-in transition-all duration-500">
+                                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black mb-3 sm:mb-4 leading-tight text-white drop-shadow-2xl tracking-tight">
                                     {heroAnime.title}
                                 </h1>
 
-                                <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm sm:text-base md:text-lg font-semibold text-gray-300 mb-6 drop-shadow-md">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base font-medium text-gray-300 mb-4 sm:mb-5 drop-shadow-md">
                                     {heroAnime.rating && (
-                                        <span className="flex items-center gap-1.5 text-yellow-400">
-                                            <Star className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                                        <span className="flex items-center gap-1.5 text-yellow-400 font-bold">
+                                            <Star className="w-4 h-4 fill-current" />
                                             {heroAnime.rating}
                                         </span>
                                     )}
                                     {heroAnime.rating && <span className="text-gray-600">•</span>}
-                                    <span className="text-white uppercase tracking-wider">{heroAnime.anime_type}</span>
+                                    <span className="text-gray-100 uppercase tracking-widest text-[11px] sm:text-xs font-bold">{heroAnime.anime_type}</span>
                                     {(heroAnime.start_date || heroAnime.release_date) && (
                                         <>
                                             <span className="text-gray-600">•</span>
@@ -166,33 +166,33 @@ export default function Home() {
                                     )}
                                 </div>
 
-                                <p className="text-base sm:text-lg md:text-xl text-gray-300 mb-8 sm:mb-10 max-w-2xl line-clamp-3 sm:line-clamp-4 font-normal leading-relaxed drop-shadow-md">
+                                <p className="text-sm sm:text-base md:text-lg text-gray-300 mb-6 sm:mb-8 max-w-2xl line-clamp-2 md:line-clamp-3 font-normal leading-relaxed drop-shadow-md">
                                     {heroAnime.synopsis}
                                 </p>
 
                                 <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                                     <Link
                                         to={`/anime/${heroAnime.slug}`}
-                                        className="bg-accent hover:bg-accent-light text-white flex items-center justify-center gap-2 py-3 sm:py-3.5 px-8 sm:px-10 rounded-full font-bold text-base sm:text-lg min-w-[160px] transition-all duration-300 hover:scale-[1.03] shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.5)]"
+                                        className="bg-accent hover:bg-accent-light text-white flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base min-w-[140px] transition-all duration-300 hover:scale-[1.03] shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.5)]"
                                     >
-                                        <Play className="w-5 h-5 fill-current" />
+                                        <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                                         Play Now
                                     </Link>
                                     {isAuthenticated && (
                                         <button
                                             onClick={handleAddToList}
                                             disabled={heroListLoading || isHeroInList}
-                                            className={`flex items-center justify-center gap-2 py-3 sm:py-3.5 px-8 sm:px-10 rounded-full font-bold text-base sm:text-lg transition-all duration-300 min-w-[160px] ${isHeroInList
+                                            className={`flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base transition-all duration-300 min-w-[140px] ${isHeroInList
                                                 ? 'bg-white/10 text-white cursor-default backdrop-blur-md border border-white/5'
                                                 : 'bg-dark-100/50 hover:bg-white/10 text-white backdrop-blur-md border border-white/10 hover:border-white/20'
                                                 }`}
                                         >
                                             {heroListLoading ? (
-                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                                             ) : isHeroInList ? (
-                                                <Check className="w-5 h-5" />
+                                                <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                                             ) : (
-                                                <Plus className="w-5 h-5" />
+                                                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                                             )}
                                             {isHeroInList ? 'In List' : 'Add to List'}
                                         </button>
