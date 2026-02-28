@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { TrendingUp, ChevronRight, Star } from 'lucide-react';
 import PropTypes from 'prop-types';
+import { getOptimizedImageUrl } from '../../utils/imageUtils';
 
 export default function TrendingCarousel({ 
   anime = [], 
@@ -52,7 +53,7 @@ export default function TrendingCarousel({
           >
             <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-dark-100 mb-2 ring-1 ring-transparent group-hover:ring-accent/30 transition-all duration-300">
               <img
-                src={item.cover_image}
+                src={getOptimizedImageUrl(item, 'cover', 'medium')}
                 alt={item.title}
                 loading={index < 3 ? "eager" : "lazy"}
                 className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
