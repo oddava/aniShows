@@ -21,6 +21,18 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 
+# Collect static files for whitenoise to serve in production
+RUN DJANGO_SETTINGS_MODULE=root.settings.production \
+    DJANGO_SECRET_KEY=collectstatic-placeholder \
+    CORS_ALLOWED_ORIGINS=https://placeholder.com \
+    CSRF_TRUSTED_ORIGINS=https://placeholder.com \
+    DB_NAME=placeholder \
+    DB_USER=placeholder \
+    DB_PASSWORD=placeholder \
+    DB_HOST=localhost \
+    DB_PORT=5432 \
+    uv run python manage.py collectstatic --noinput
+
 RUN chown -R aniuser:aniuser /app
 
 USER aniuser

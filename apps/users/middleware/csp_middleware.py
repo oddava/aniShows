@@ -15,19 +15,36 @@ class CSPMiddleware(MiddlewareMixin):
         # Always add CSP headers for security
         from django.conf import settings
 
+        is_admin = request.path.startswith("/django-admin/")
+
         # Base CSP directives - stricter without unsafe-inline
         csp_directives = {
             "default-src": ["'self'"],
             "script-src": [
                 "'self'",
                 "'unsafe-inline'",  # Note: Consider removing after refactoring inline scripts
+                "'unsafe-eval'",  # Required by Jazzmin admin theme
                 "https://www.googletagmanager.com",
                 "https://www.google-analytics.com",
             ],
-            "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "style-src": [
+                "'self'",
+                "'unsafe-inline'",
+                "https://fonts.googleapis.com",
+                "https://cdnjs.cloudflare.com",
+            ],
+            "font-src": [
+                "'self'",
+                "https://fonts.gstatic.com",
+                "https://cdnjs.cloudflare.com",
+            ],
             "img-src": ["'self'", "data:", "https:", "http:", "blob:"],
-            "connect-src": ["'self'", "https://www.google-analytics.com"],
+            "connect-src": [
+                "'self'",
+                "https://www.google-analytics.com",
+                "https://fonts.googleapis.com",
+                "https://fonts.gstatic.com",
+            ],
             "media-src": ["'self'", "https:", "http:"],
             "frame-src": ["'self'", "https://www.youtube.com", "https://youtube.com"],
             "frame-ancestors": ["'none'"],

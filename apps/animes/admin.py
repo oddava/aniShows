@@ -55,12 +55,12 @@ class StudioAdmin(admin.ModelAdmin):
     """Admin for anime studios."""
 
     list_display = ["name", "founded_date", "anime_count", "website_link"]
-    search_fields = ["name", "description"]
+    search_fields = ["name"]
     ordering = ["name"]
     date_hierarchy = "founded_date"
 
     fieldsets = (
-        ("Basic Information", {"fields": ("name", "description")}),
+        ("Basic Information", {"fields": ("name",)}),
         ("Details", {"fields": ("founded_date", "website"), "classes": ("collapse",)}),
     )
 
@@ -338,8 +338,12 @@ class AnimeAdmin(admin.ModelAdmin):
         return (
             super()
             .get_queryset(request)
-            .prefetch_related("genres", "favorites", "reviews")
+            .prefetch_related("genres")
             .select_related("studio")
+            .annotate(
+                favorites_count=Count("favorites", distinct=True),
+                reviews_count=Count("reviews", distinct=True),
+            )
         )
 
 
