@@ -97,6 +97,20 @@ def update_post_like_count_on_delete(sender, instance, **kwargs):
     invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
 
 
+@receiver(post_save, sender=Category)
+def invalidate_cache_on_category_save(sender, instance, **kwargs):
+    """Invalidate category caches when a category is created or updated."""
+    invalidate_after_commit(invalidate_category_list_cache)
+    invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.slug))
+
+
+@receiver(post_delete, sender=Category)
+def invalidate_cache_on_category_delete(sender, instance, **kwargs):
+    """Invalidate category caches when a category is deleted."""
+    invalidate_after_commit(invalidate_category_list_cache)
+    invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.slug))
+
+
 @receiver(post_save, sender=Thread)
 def update_category_on_thread_create(sender, instance, created, **kwargs):
     """Update category thread count and invalidate caches when a thread is created"""
