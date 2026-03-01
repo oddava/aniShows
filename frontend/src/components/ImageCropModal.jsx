@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import { X, ZoomIn, ZoomOut } from 'lucide-react';
 import getCroppedImg from '../utils/cropImage';
@@ -71,7 +72,7 @@ export default function ImageCropModal({
 
     if (!isOpen || !imageSrc) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[2000] flex items-center justify-center sm:p-4">
             <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-sm"
@@ -150,6 +151,7 @@ export default function ImageCropModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

@@ -1,5 +1,6 @@
 import { X, Users, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 // Spoiler component that hides content until clicked
 function Spoiler({ children }) {
@@ -148,14 +149,14 @@ export default function CharacterModal({ role, onClose, accentColor }) {
 
     if (!role) return null;
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4">
             <div
                 className="absolute inset-0 bg-black/80 backdrop-blur-sm"
                 onClick={onClose}
             />
             <div
-                className="relative w-full max-w-2xl max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl animate-modal-in flex flex-col"
+                className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl animate-modal-in flex flex-col"
                 style={{ boxShadow: `0 0 50px -10px ${accentColor || '#8b5cf6'}30` }}
             >
                 {/* Header */}
@@ -256,6 +257,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
