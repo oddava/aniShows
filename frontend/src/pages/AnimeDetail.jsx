@@ -474,7 +474,7 @@ export default function AnimeDetail() {
     return (
         <div
             ref={containerRef}
-            className="min-h-screen"
+            className="min-h-screen animate-fade-in"
             style={accentColor ? { '--anime-accent': accentColor } : {}}
         >
             <SEOHelmet anime={anime} />
@@ -498,7 +498,7 @@ export default function AnimeDetail() {
             )}
 
             {/* Banner */}
-            <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
+            <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200">
                 <img
                     src={bannerUrl}
                     srcSet={bannerSrcSet}
@@ -522,7 +522,7 @@ export default function AnimeDetail() {
                                     srcSet={coverSrcSet}
                                     sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
                                     alt={anime.title}
-                                    className="w-48 md:w-64 lg:w-full rounded-2xl shadow-2xl border border-gray-800"
+                                    className="w-48 md:w-64 lg:w-full aspect-[2/3] object-cover rounded-2xl shadow-2xl border border-gray-800 bg-dark-200"
                                 />
                             </div>
 
