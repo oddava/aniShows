@@ -1,4 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import {
+    Search, Filter, MoreVertical, Shield, ShieldCheck, ShieldOff,
+    UserX, UserCheck, Trash2, ChevronLeft, ChevronRight,
+    Mail, Calendar, Clock, CheckCircle2, XCircle
+} from 'lucide-react';
 import api from '../../api/client';
 import logger from '../../utils/logger';
 
@@ -79,186 +84,219 @@ const AdminUsers = () => {
 
     if (error && !loading) {
         return (
-            <div className="admin-empty">
-                <div className="admin-empty-icon">⚠️</div>
-                <h3 className="admin-empty-title">Error</h3>
-                <p className="admin-empty-text">{error}</p>
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mb-4">
+                    <XCircle size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Error Loading Users</h3>
+                <p className="text-gray-400">{error}</p>
             </div>
         );
     }
 
     return (
-        <div>
-            <h1 className="admin-page-title" style={{ marginBottom: '1.5rem' }}>
-                User Management
-            </h1>
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-white tracking-tight">User Management</h1>
+                    <p className="text-gray-400 mt-1">View, filter, and manage platform users.</p>
+                </div>
+            </div>
 
-            <div className="admin-table-container">
-                <div className="admin-table-header">
-                    <div className="admin-table-actions" style={{ width: '100%', justifyContent: 'space-between' }}>
-                        <form onSubmit={handleSearch} className="admin-search">
-                            <span className="admin-search-icon">🔍</span>
-                            <input
-                                type="text"
-                                placeholder="Search users..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </form>
+            {/* Table Controls (Search & Filters) */}
+            <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
+                <form onSubmit={handleSearch} className="relative w-full md:w-96 group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-400 transition-colors" size={18} />
+                    <input
+                        type="text"
+                        placeholder="Search users by name or email..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
+                    />
+                </form>
 
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <select
-                                value={filters.is_active}
-                                onChange={(e) => setFilters(f => ({ ...f, is_active: e.target.value }))}
-                                className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'rgba(30,30,30,0.8)' }}
-                            >
-                                <option value="">All Status</option>
-                                <option value="true">Active</option>
-                                <option value="false">Inactive</option>
-                            </select>
+                <div className="flex w-full md:w-auto gap-3">
+                    <div className="relative group flex-1 md:flex-none">
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                        <select
+                            value={filters.is_active}
+                            onChange={(e) => setFilters(f => ({ ...f, is_active: e.target.value }))}
+                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
+                        >
+                            <option value="" className="bg-[#1a1a1a]">All Status</option>
+                            <option value="true" className="bg-[#1a1a1a]">Active Only</option>
+                            <option value="false" className="bg-[#1a1a1a]">Banned/Inactive</option>
+                        </select>
+                    </div>
 
-                            <select
-                                value={filters.is_staff}
-                                onChange={(e) => setFilters(f => ({ ...f, is_staff: e.target.value }))}
-                                className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'rgba(30,30,30,0.8)' }}
-                            >
-                                <option value="">All Roles</option>
-                                <option value="true">Staff</option>
-                                <option value="false">Regular</option>
-                            </select>
-                        </div>
+                    <div className="relative group flex-1 md:flex-none">
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                        <select
+                            value={filters.is_staff}
+                            onChange={(e) => setFilters(f => ({ ...f, is_staff: e.target.value }))}
+                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
+                        >
+                            <option value="" className="bg-[#1a1a1a]">All Roles</option>
+                            <option value="true" className="bg-[#1a1a1a]">Staff & Admins</option>
+                            <option value="false" className="bg-[#1a1a1a]">Regular Users</option>
+                        </select>
                     </div>
                 </div>
+            </div>
 
-                {loading ? (
-                    <div className="admin-loading">
-                        <div className="admin-spinner"></div>
-                        <p>Loading users...</p>
+            {/* Main Table */}
+            <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative min-h-[400px]">
+                {loading && (
+                    <div className="absolute inset-0 z-10 bg-[#111111]/50 backdrop-blur-sm flex items-center justify-center">
+                        <div className="flex flex-col items-center">
+                            <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-3" />
+                            <p className="text-sm font-medium text-purple-400">Loading Users...</p>
+                        </div>
                     </div>
-                ) : (
-                    <>
-                        <table className="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Status</th>
-                                    <th>Role</th>
-                                    <th>Verified</th>
-                                    <th>Joined</th>
-                                    <th>Last Login</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.map((user) => (
-                                    <tr key={user.id}>
-                                        <td>
-                                            <div className="admin-table-user">
-                                                <div className="admin-table-avatar">
-                                                    {user.avatar ? (
-                                                        <img src={user.avatar} alt={user.username} />
-                                                    ) : (
-                                                        user.username.charAt(0).toUpperCase()
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontWeight: '500' }}>{user.username}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
-                                                        {user.email}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span className={`admin-badge ${user.is_active ? 'success' : 'danger'}`}>
-                                                {user.is_active ? '✓ Active' : '✕ Banned'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className={`admin-badge ${user.is_superuser ? 'info' : user.is_staff ? 'warning' : 'neutral'}`}>
-                                                {user.is_superuser ? '👑 Super' : user.is_staff ? '⚙️ Staff' : '👤 User'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className={`admin-badge ${user.email_verified ? 'success' : 'neutral'}`}>
-                                                {user.email_verified ? '✓' : '✕'}
-                                            </span>
-                                        </td>
-                                        <td style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>
-                                            {new Date(user.date_joined).toLocaleDateString()}
-                                        </td>
-                                        <td style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>
-                                            {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                <button
-                                                    onClick={() => toggleUserActive(user.id)}
-                                                    className="admin-btn admin-btn-icon"
-                                                    title={user.is_active ? 'Ban User' : 'Unban User'}
-                                                    disabled={user.is_superuser}
-                                                >
-                                                    {user.is_active ? '🚫' : '✅'}
-                                                </button>
-                                                <button
-                                                    onClick={() => toggleUserStaff(user.id)}
-                                                    className="admin-btn admin-btn-icon"
-                                                    title={user.is_staff ? 'Remove Staff' : 'Make Staff'}
-                                                    disabled={user.is_superuser}
-                                                >
-                                                    {user.is_staff ? '👤' : '⚙️'}
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteUser(user.id, user.username)}
-                                                    className="admin-btn admin-btn-icon"
-                                                    title="Delete User"
-                                                    disabled={user.is_superuser}
-                                                    style={{ color: user.is_superuser ? 'rgba(255,255,255,0.2)' : '#ef4444' }}
-                                                >
-                                                    🗑️
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {users.length === 0 && (
-                                    <tr>
-                                        <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>
-                                            No users found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                )}
 
-                        {totalPages > 1 && (
-                            <div className="admin-pagination">
-                                <div className="admin-pagination-info">
-                                    Page {page} of {totalPages}
-                                </div>
-                                <div className="admin-pagination-buttons">
-                                    <button
-                                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                                        disabled={page === 1}
-                                        className="admin-btn admin-btn-secondary"
-                                        style={{ padding: '0.4rem 0.75rem' }}
-                                    >
-                                        ← Prev
-                                    </button>
-                                    <button
-                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={page === totalPages}
-                                        className="admin-btn admin-btn-secondary"
-                                        style={{ padding: '0.4rem 0.75rem' }}
-                                    >
-                                        Next →
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </>
+                <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
+                        <thead>
+                            <tr className="bg-white/[0.02] border-b border-white/5">
+                                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">User Details</th>
+                                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Status</th>
+                                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Role</th>
+                                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400">Account Intel</th>
+                                <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-gray-400 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {users.map((user) => (
+                                <tr key={user.id} className="hover:bg-white/5 transition-colors group">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-sm font-bold text-gray-400 overflow-hidden flex-shrink-0">
+                                                {user.avatar ? (
+                                                    <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    user.username.charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-semibold text-white group-hover:text-purple-400 transition-colors">
+                                                    {user.username}
+                                                </span>
+                                                <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                                    <Mail size={10} />
+                                                    {user.email}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] tracking-wide uppercase font-bold ${user.is_active
+                                            ? 'border border-emerald-500/20 text-emerald-400'
+                                            : 'border border-red-500/20 text-red-400'
+                                            }`}>
+                                            {user.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                                            {user.is_active ? 'Active' : 'Banned'}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1.5 items-start">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] tracking-wide uppercase font-bold ${user.is_superuser
+                                                ? 'border border-amber-500/30 text-amber-400'
+                                                : user.is_staff
+                                                    ? 'border border-blue-500/30 text-blue-400'
+                                                    : 'border border-white/10 text-gray-400'
+                                                }`}>
+                                                {user.is_superuser ? <Shield size={12} /> : user.is_staff ? <ShieldCheck size={12} /> : <UserCheck size={12} />}
+                                                {user.is_superuser ? 'Superadmin' : user.is_staff ? 'Staff' : 'User'}
+                                            </span>
+                                            {user.email_verified && (
+                                                <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-500/70 border border-emerald-500/20 px-1.5 rounded">Verified Email</span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-1 text-xs text-gray-400">
+                                            <div className="flex items-center gap-2" title="Date Joined">
+                                                <Calendar size={12} className="text-gray-500" />
+                                                {new Date(user.date_joined).toLocaleDateString()}
+                                            </div>
+                                            <div className="flex items-center gap-2" title="Last Login">
+                                                <Clock size={12} className="text-gray-500" />
+                                                {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => toggleUserActive(user.id)}
+                                                disabled={user.is_superuser}
+                                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed group/btn"
+                                                title={user.is_active ? 'Ban User' : 'Unban User'}
+                                            >
+                                                {user.is_active ? <UserX size={16} className="group-hover/btn:text-red-400" /> : <UserCheck size={16} className="group-hover/btn:text-emerald-400" />}
+                                            </button>
+
+                                            <button
+                                                onClick={() => toggleUserStaff(user.id)}
+                                                disabled={user.is_superuser}
+                                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed group/btn"
+                                                title={user.is_staff ? 'Remove Staff Role' : 'Promote to Staff'}
+                                            >
+                                                {user.is_staff ? <ShieldOff size={16} className="group-hover/btn:text-orange-400" /> : <Shield size={16} className="group-hover/btn:text-blue-400" />}
+                                            </button>
+
+                                            <button
+                                                onClick={() => deleteUser(user.id, user.username)}
+                                                disabled={user.is_superuser}
+                                                className="p-1.5 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title="Delete User"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {users.length === 0 && !loading && (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-12 text-center text-gray-400">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Search size={32} className="opacity-20 mb-2" />
+                                            <p className="text-sm">No users found matching your criteria.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="px-6 py-4 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
+                        <span className="text-sm text-gray-400">
+                            Showing page <span className="font-semibold text-white">{page}</span> of <span className="font-semibold text-white">{totalPages}</span>
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                                <ChevronLeft size={16} /> Prev
+                            </button>
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                                Next <ChevronRight size={16} />
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

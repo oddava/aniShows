@@ -279,10 +279,13 @@
 
 /* Data Tables */
 .admin-table-container {
-  background: rgba(20, 20, 20, 0.5);
+  background: rgba(17, 17, 17, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 16px;
   overflow-x: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 .admin-table-header {
@@ -310,16 +313,17 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(30, 30, 30, 0.8);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 0 1rem;
   transition: all 0.2s ease;
 }
 
 .admin-search:focus-within {
-  border-color: rgba(139, 92, 246, 0.5);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .admin-search input {
@@ -457,13 +461,14 @@
 }
 
 .admin-btn-secondary {
-  background: rgba(30, 30, 30, 0.8);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
 }
 
 .admin-btn-secondary:hover {
-  background: rgba(40, 40, 40, 0.8);
+  background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
@@ -784,4 +789,21 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

@@ -9,8 +9,8 @@ Provides secure admin-only endpoints for:
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Avg, Q
-from django.db.models.functions import TruncDate
+from django.db.models import Count, Avg, Q, Sum, F
+from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 from datetime import timedelta
 
@@ -1114,26 +1114,68 @@ class AdminReportsView(APIView):
 
     permission_classes = [IsAdminUser]
 
+    def _calc_growth(self, current, previous):
+        """Calculate percentage growth between two periods."""
+        if previous == 0:
+            return 100.0 if current > 0 else 0.0
+        return round(((current - previous) / previous) * 100, 1)
+
     def get(self, request):
         report_type = request.query_params.get("type", "overview")
         days = int(request.query_params.get("days", 30))
-        start_date = timezone.now() - timedelta(days=days)
+        now = timezone.now()
+        start_date = now - timedelta(days=days)
+        prev_start_date = start_date - timedelta(days=days)
 
         if report_type == "overview":
-            return self._get_overview_report(start_date, days)
+            return self._get_overview_report(start_date, prev_start_date, days, now)
         elif report_type == "users":
-            return self._get_user_report(start_date, days)
+            return self._get_user_report(start_date, prev_start_date, days, now)
         elif report_type == "content":
-            return self._get_content_report(start_date, days)
+            return self._get_content_report(start_date, prev_start_date, days, now)
         elif report_type == "engagement":
-            return self._get_engagement_report(start_date, days)
+            return self._get_engagement_report(start_date, prev_start_date, days, now)
         else:
             return Response({"detail": "Unknown report type."}, status=status.HTTP_400_BAD_REQUEST)
 
-    def _get_overview_report(self, start_date, days):
-        """Get overall platform statistics."""
-        # User growth
-        user_growth = (
+    def _get_overview_report(self, start_date, prev_start_date, days, now):
+        """Get overall platform statistics with period-over-period comparisons."""
+        # Current period counts
+        total_users = User.objects.count()
+        new_users = User.objects.filter(date_joined__gte=start_date).count()
+        active_users = User.objects.filter(last_login__gte=start_date).count()
+        prev_new_users = User.objects.filter(
+            date_joined__gte=prev_start_date, date_joined__lt=start_date
+        ).count()
+        prev_active_users = User.objects.filter(
+            last_login__gte=prev_start_date, last_login__lt=start_date
+        ).count()
+
+        # Retention: users from previous period who were also active in current period
+        prev_period_users = User.objects.filter(
+            date_joined__gte=prev_start_date, date_joined__lt=start_date
+        )
+        retained_users = prev_period_users.filter(last_login__gte=start_date).count()
+        prev_period_total = prev_period_users.count()
+        retention = (
+            round((retained_users / prev_period_total * 100), 1) if prev_period_total > 0 else 0.0
+        )
+
+        # Previous retention for comparison
+        older_start = prev_start_date - timedelta(days=days)
+        older_period_users = User.objects.filter(
+            date_joined__gte=older_start, date_joined__lt=prev_start_date
+        )
+        older_retained = older_period_users.filter(
+            last_login__gte=prev_start_date, last_login__lt=start_date
+        ).count()
+        older_period_total = older_period_users.count()
+        prev_retention = (
+            round((older_retained / older_period_total * 100), 1) if older_period_total > 0 else 0.0
+        )
+
+        # User growth by day
+        user_growth = list(
             User.objects.filter(date_joined__gte=start_date)
             .annotate(date=TruncDate("date_joined"))
             .values("date")
@@ -1141,37 +1183,89 @@ class AdminReportsView(APIView):
             .order_by("date")
         )
 
-        # Daily active users (users who logged in)
-        active_users = User.objects.filter(last_login__gte=start_date).count()
+        # Content stats
+        anime_total = Anime.objects.count()
+        episodes_total = Anime.objects.aggregate(total=Sum("episode_count"))["total"] or 0
+        studios_total = Studio.objects.count()
+        genres_total = Genre.objects.count()
 
-        # Content added
-        anime_added = Anime.objects.filter(created_at__gte=start_date).count()
-        reviews_added = Review.objects.filter(created_at__gte=start_date).count()
+        # Engagement stats
+        favorites_current = UserFavorite.objects.filter(added_at__gte=start_date).count()
+        favorites_prev = UserFavorite.objects.filter(
+            added_at__gte=prev_start_date, added_at__lt=start_date
+        ).count()
+        reviews_current = Review.objects.filter(created_at__gte=start_date).count()
+        reviews_prev = Review.objects.filter(
+            created_at__gte=prev_start_date, created_at__lt=start_date
+        ).count()
+        watchlists_current = UserAnimeList.objects.filter(updated_at__gte=start_date).count()
+        watchlists_prev = UserAnimeList.objects.filter(
+            updated_at__gte=prev_start_date, updated_at__lt=start_date
+        ).count()
+        avg_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"] or 0.0
+        total_favorites = UserFavorite.objects.count()
+        total_reviews = Review.objects.count()
+        total_watchlists = UserAnimeList.objects.count()
+
+        # Recent activity log
+        from apps.core.models import AuditLog as AuditLogModel
+
+        recent_activity_qs = AuditLogModel.objects.select_related("user").order_by("-timestamp")[
+            :10
+        ]
+        recent_activity = [
+            {
+                "text": f"{a.user.username if a.user else 'System'} {a.action.lower()} {a.entity_type} {a.entity_repr or ''}".strip(),
+                "time": a.timestamp.isoformat(),
+                "type": a.action,
+            }
+            for a in recent_activity_qs
+        ]
+
+        # Daily signups for bar chart (last 7 days from period)
+        daily_signups = list(
+            User.objects.filter(date_joined__gte=now - timedelta(days=7))
+            .annotate(date=TruncDate("date_joined"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
 
         return Response(
             {
                 "period_days": days,
                 "users": {
-                    "new": User.objects.filter(date_joined__gte=start_date).count(),
+                    "total": total_users,
+                    "new": new_users,
                     "active": active_users,
-                    "growth_by_day": list(user_growth),
+                    "retention": retention,
+                    "growth": self._calc_growth(new_users, prev_new_users),
+                    "new_growth": self._calc_growth(new_users, prev_new_users),
+                    "active_growth": self._calc_growth(active_users, prev_active_users),
+                    "retention_change": round(retention - prev_retention, 1),
+                    "growth_by_day": user_growth,
+                    "daily_signups": daily_signups,
                 },
                 "content": {
-                    "anime_added": anime_added,
-                    "reviews_added": reviews_added,
+                    "anime_total": anime_total,
+                    "episodes_total": episodes_total,
+                    "studios_total": studios_total,
+                    "genres_total": genres_total,
                 },
                 "engagement": {
-                    "favorites_added": UserFavorite.objects.filter(
-                        added_at__gte=start_date
-                    ).count(),
-                    "list_updates": UserAnimeList.objects.filter(
-                        updated_at__gte=start_date
-                    ).count(),
+                    "favorites": total_favorites,
+                    "reviews": total_reviews,
+                    "watchlists": total_watchlists,
+                    "avg_rating": round(avg_rating, 2),
+                    "favorites_growth": self._calc_growth(favorites_current, favorites_prev),
+                    "reviews_growth": self._calc_growth(reviews_current, reviews_prev),
+                    "watchlists_growth": self._calc_growth(watchlists_current, watchlists_prev),
                 },
+                "recent_activity": recent_activity,
             }
         )
 
-    def _get_user_report(self, start_date, days):
+    def _get_user_report(self, start_date, prev_start_date, days, now):
         """Get detailed user activity report."""
         # Most active users
         active_users = User.objects.annotate(
@@ -1188,93 +1282,204 @@ class AdminReportsView(APIView):
                 "reviews": u.review_count,
                 "favorites": u.favorite_count,
                 "date_joined": u.date_joined.isoformat(),
+                "is_active": u.is_active,
             }
             for u in active_users
         ]
 
-        # Registration sources (if tracked)
-        # This would require additional tracking in your user model
+        # Registration trend by day
+        registration_trend = list(
+            User.objects.filter(date_joined__gte=start_date)
+            .annotate(date=TruncDate("date_joined"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+
+        # New vs returning users
+        new_users_count = User.objects.filter(date_joined__gte=start_date).count()
+        returning_users_count = User.objects.filter(
+            date_joined__lt=start_date, last_login__gte=start_date
+        ).count()
+
+        # User status breakdown
+        total = User.objects.count()
+        active_count = User.objects.filter(is_active=True).count()
+        staff_count = User.objects.filter(Q(is_staff=True) | Q(is_superuser=True)).count()
+        verified_count = UserProfile.objects.filter(email_verified=True).count()
 
         return Response(
             {
                 "period_days": days,
-                "total_users": User.objects.count(),
-                "new_users": User.objects.filter(date_joined__gte=start_date).count(),
+                "total_users": total,
+                "new_users": new_users_count,
+                "returning_users": returning_users_count,
                 "active_users": active_users_data,
-            }
-        )
-
-    def _get_content_report(self, start_date, days):
-        """Get content statistics report."""
-        # Anime by status
-        anime_by_status = dict(Anime.objects.values_list("status").annotate(count=Count("id")))
-
-        # Anime by type
-        anime_by_type = dict(Anime.objects.values_list("anime_type").annotate(count=Count("id")))
-
-        # Top genres
-        from apps.animes.models import Genre
-
-        top_genres = (
-            Genre.objects.annotate(anime_count=Count("anime"))
-            .order_by("-anime_count")[:10]
-            .values("name", "anime_count")
-        )
-
-        # Missing metadata
-        missing_cover = Anime.objects.filter(cover_image="").count()
-        missing_synopsis = Anime.objects.filter(synopsis="").count()
-        missing_studio = Anime.objects.filter(studio__isnull=True).count()
-
-        return Response(
-            {
-                "period_days": days,
-                "total_anime": Anime.objects.count(),
-                "new_anime": Anime.objects.filter(created_at__gte=start_date).count(),
-                "by_status": anime_by_status,
-                "by_type": anime_by_type,
-                "top_genres": list(top_genres),
-                "missing_metadata": {
-                    "cover_image": missing_cover,
-                    "synopsis": missing_synopsis,
-                    "studio": missing_studio,
+                "registration_trend": registration_trend,
+                "user_breakdown": {
+                    "active": active_count,
+                    "inactive": total - active_count,
+                    "staff": staff_count,
+                    "verified": verified_count,
+                    "unverified": total - verified_count,
                 },
             }
         )
 
-    def _get_engagement_report(self, start_date, days):
-        """Get user engagement report."""
-        # Reviews by rating
-        reviews_by_rating = dict(Review.objects.values_list("rating").annotate(count=Count("id")))
-
-        # List status distribution
-        list_by_status = dict(
-            UserAnimeList.objects.values_list("status").annotate(count=Count("id"))
+    def _get_content_report(self, start_date, prev_start_date, days, now):
+        """Get content statistics report."""
+        # Anime by status
+        anime_by_status = list(
+            Anime.objects.values("status").annotate(count=Count("id")).order_by("-count")
         )
 
-        # Most reviewed anime
-        most_reviewed = (
-            Anime.objects.annotate(review_count=Count("reviews"))
-            .order_by("-review_count")[:10]
-            .values("title", "slug", "review_count")
+        # Anime by type
+        anime_by_type = list(
+            Anime.objects.values("anime_type").annotate(count=Count("id")).order_by("-count")
         )
 
-        # Most favorited anime
-        most_favorited = (
-            Anime.objects.annotate(favorite_count=Count("favorites"))
-            .order_by("-favorite_count")[:10]
-            .values("title", "slug", "favorite_count")
+        # Top genres
+        top_genres = list(
+            Genre.objects.annotate(anime_count=Count("anime"))
+            .order_by("-anime_count")[:15]
+            .values("name", "anime_count")
+        )
+
+        # Top studios
+        top_studios = list(
+            Studio.objects.annotate(anime_count=Count("anime"))
+            .order_by("-anime_count")[:10]
+            .values("name", "anime_count")
+        )
+
+        # Content added over time
+        content_trend = list(
+            Anime.objects.filter(created_at__gte=start_date)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+
+        # Missing metadata
+        total_anime = Anime.objects.count()
+        missing_cover = Anime.objects.filter(cover_image="").count()
+        missing_synopsis = Anime.objects.filter(synopsis="").count()
+        missing_studio = Anime.objects.filter(studio__isnull=True).count()
+        missing_rating = Anime.objects.filter(Q(rating__isnull=True) | Q(rating=0)).count()
+
+        # Rating distribution of anime
+        from django.db.models.functions import Floor
+
+        rating_distribution = list(
+            Anime.objects.filter(rating__isnull=False, rating__gt=0)
+            .annotate(rating_bucket=Floor("rating"))
+            .values("rating_bucket")
+            .annotate(count=Count("id"))
+            .order_by("rating_bucket")
         )
 
         return Response(
             {
                 "period_days": days,
-                "total_reviews": Review.objects.count(),
-                "new_reviews": Review.objects.filter(created_at__gte=start_date).count(),
+                "total_anime": total_anime,
+                "new_anime": Anime.objects.filter(created_at__gte=start_date).count(),
+                "by_status": anime_by_status,
+                "by_type": anime_by_type,
+                "top_genres": top_genres,
+                "top_studios": top_studios,
+                "content_trend": content_trend,
+                "rating_distribution": rating_distribution,
+                "missing_metadata": {
+                    "cover_image": missing_cover,
+                    "synopsis": missing_synopsis,
+                    "studio": missing_studio,
+                    "rating": missing_rating,
+                    "total": total_anime,
+                    "completeness": round(
+                        (
+                            (total_anime - missing_cover - missing_synopsis - missing_studio)
+                            / max(total_anime, 1)
+                        )
+                        * 100
+                        / 3,
+                        1,
+                    ),
+                },
+            }
+        )
+
+    def _get_engagement_report(self, start_date, prev_start_date, days, now):
+        """Get user engagement report."""
+        # Reviews by rating
+        reviews_by_rating = list(
+            Review.objects.values("rating").annotate(count=Count("id")).order_by("rating")
+        )
+
+        # List status distribution
+        list_by_status = list(
+            UserAnimeList.objects.values("status").annotate(count=Count("id")).order_by("-count")
+        )
+
+        # Most reviewed anime
+        most_reviewed = list(
+            Anime.objects.annotate(review_count=Count("reviews"))
+            .filter(review_count__gt=0)
+            .order_by("-review_count")[:10]
+            .values("title", "slug", "review_count", "rating")
+        )
+
+        # Most favorited anime
+        most_favorited = list(
+            Anime.objects.annotate(favorite_count=Count("favorites"))
+            .filter(favorite_count__gt=0)
+            .order_by("-favorite_count")[:10]
+            .values("title", "slug", "favorite_count", "rating")
+        )
+
+        # Engagement trend (reviews + favorites over time)
+        reviews_trend = list(
+            Review.objects.filter(created_at__gte=start_date)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+        favorites_trend = list(
+            UserFavorite.objects.filter(added_at__gte=start_date)
+            .annotate(date=TruncDate("added_at"))
+            .values("date")
+            .annotate(count=Count("id"))
+            .order_by("date")
+        )
+
+        # Average rating trend
+        avg_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"] or 0.0
+        total_reviews = Review.objects.count()
+        new_reviews = Review.objects.filter(created_at__gte=start_date).count()
+
+        # Review sentiment (helpful vs not helpful)
+        from apps.animes.models import ReviewVote
+
+        helpful_votes = ReviewVote.objects.filter(is_helpful=True).count()
+        unhelpful_votes = ReviewVote.objects.filter(is_helpful=False).count()
+
+        return Response(
+            {
+                "period_days": days,
+                "total_reviews": total_reviews,
+                "new_reviews": new_reviews,
+                "avg_rating": round(avg_rating, 2),
                 "reviews_by_rating": reviews_by_rating,
                 "list_by_status": list_by_status,
-                "most_reviewed": list(most_reviewed),
-                "most_favorited": list(most_favorited),
+                "most_reviewed": most_reviewed,
+                "most_favorited": most_favorited,
+                "reviews_trend": reviews_trend,
+                "favorites_trend": favorites_trend,
+                "review_votes": {
+                    "helpful": helpful_votes,
+                    "unhelpful": unhelpful_votes,
+                },
             }
         )
 
