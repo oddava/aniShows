@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -18,6 +19,95 @@
 @layer base {
   body {
     @apply bg-dark text-gray-200 selection:bg-accent/30;
+  }
+
+  /* -------------------------------
+     THEME OVERRIDES
+  ------------------------------- */
+  [data-theme="retro-crt"] {
+    --color-dark: #1e1e1e;
+    --color-dark-50: #333333;
+    --color-dark-100: #2a2a2a;
+    --color-dark-200: #222222;
+    --color-dark-300: #1a1a1a;
+    --color-dark-400: #121212;
+
+    --color-accent: #aaaaaa;
+    --color-accent-light: #cccccc;
+    --color-accent-dark: #777777;
+
+    --font-sans: 'VT323', monospace;
+  }
+
+  [data-theme="retro-anime"] {
+    --color-dark: #f0f0f0;
+    --color-dark-50: #ffffff;
+    --color-dark-100: #e0e0e0;
+    --color-dark-200: #c8c8c8;
+    --color-dark-300: #b0b0b0;
+    --color-dark-400: #999999;
+
+    --color-accent: #ffb7b2;
+    --color-accent-light: #ffdac1;
+    --color-accent-dark: #e2848e;
+
+    --font-sans: 'VT323', monospace;
+  }
+
+  [data-theme="retro-crt"] *,
+  [data-theme="retro-anime"] * {
+    border-radius: 0 !important;
+  }
+
+  [data-theme="retro-crt"] body {
+    color: #ffffff;
+    background-image: url('https://i.pinimg.com/736x/89/65/57/8965578051a80ad23bcba861dbba6ad6.jpg');
+    background-size: cover;
+    background-attachment: fixed;
+    background-blend-mode: multiply;
+    background-color: #555;
+  }
+
+  [data-theme="retro-anime"] body {
+    color: #000000;
+    background-image: url('https://i.pinimg.com/736x/21/df/b8/21dfb85844a4b41b711200faadba5e7d.jpg');
+    background-size: cover;
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+
+  /* Common Window styling for retro modes */
+  .retro-window {
+    border: 2px solid;
+    border-color: #ffffff #808080 #808080 #ffffff !important;
+    background: var(--color-dark-100);
+    position: relative;
+    padding-top: 24px;
+    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  }
+
+  .retro-window::before {
+    content: attr(data-title);
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    height: 18px;
+    background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+    color: white;
+    font-size: 12px;
+    font-family: 'VT323', monospace;
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    z-index: 10;
+  }
+
+  [data-theme="retro-anime"] .retro-window::before {
+    background: linear-gradient(90deg, #e3a9dc 0%, #b2d6ef 100%);
+    color: black;
   }
 }
 

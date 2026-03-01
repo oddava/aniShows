@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { TrendingUp, ChevronRight, Star } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { getOptimizedImageUrl } from '../../utils/imageUtils';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function TrendingCarousel({
   anime = [],
@@ -10,6 +11,9 @@ export default function TrendingCarousel({
   isLoading = false,
   isError = false
 }) {
+  const { theme } = useTheme();
+  const isRetro = theme && theme.startsWith('retro-');
+
   if (isError) {
     return (
       <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
@@ -25,20 +29,31 @@ export default function TrendingCarousel({
   const displayAnime = anime.slice(0, 6);
 
   return (
-    <div className="mb-8 animate-fade-in">
-      <div className="flex items-end justify-between mb-6">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Trending Now</h2>
-          <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 uppercase tracking-wider font-bold">Community Favorites</p>
-        </div>
+    <div className={`mb-8 animate-fade-in ${isRetro ? 'retro-window p-4 pb-2' : ''}`} data-title="Trending Now">
+      {!isRetro ? (
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Trending Now</h2>
+            <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 uppercase tracking-wider font-bold">Community Favorites</p>
+          </div>
 
-        <button
-          onClick={onSeeAll}
-          className="text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1 group pb-1"
-        >
-          See all
-        </button>
-      </div>
+          <button
+            onClick={onSeeAll}
+            className="text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1 group pb-1"
+          >
+            See all
+          </button>
+        </div>
+      ) : (
+        <div className="flex justify-end mb-3 border-b border-gray-600 pb-1">
+          <button
+            onClick={onSeeAll}
+            className="bg-[#d4d0c8] text-black px-2 py-0.5 text-xs border-2 border-white border-r-gray-500 border-b-gray-500 active:border-gray-500 active:border-r-white active:border-b-white"
+          >
+            See all &gt;
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
         {displayAnime.map((item, index) => (

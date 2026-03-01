@@ -2,9 +2,12 @@ import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Film, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { animeApi } from '../api/client';
+import { useTheme } from '../context/ThemeContext';
 
 export default function FranchiseSection({ relations, accentColor, sourceSlug }) {
     const navigate = useNavigate();
+    const { theme } = useTheme();
+    const isRetro = theme && theme.startsWith('retro-');
     const [loadingId, setLoadingId] = useState(null);
     const [showAll, setShowAll] = useState(false);
 
@@ -55,7 +58,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
     };
 
     return (
-        <div className="mb-8">
+        <div className={`mb-8 ${isRetro ? 'retro-window p-4 pb-2' : ''}`} data-title={`Franchise (${relations.length} total)`}>
             {/* Full-page loading overlay when fetching a franchise anime */}
             {loadingId && (
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center">
@@ -66,31 +69,44 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
                 </div>
             )}
 
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <div className="w-1 h-5 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
-                    Franchise
-                    <span className="text-xs font-normal text-gray-500">({relations.length} total)</span>
-                </h2>
-                {hasMore && (
-                    <button
-                        onClick={() => setShowAll(!showAll)}
-                        className="text-xs font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1"
-                    >
-                        {showAll ? (
-                            <>
-                                Show less
-                                <ChevronLeft className="w-3.5 h-3.5" />
-                            </>
-                        ) : (
-                            <>
-                                View all
-                                <ChevronRight className="w-3.5 h-3.5" />
-                            </>
-                        )}
-                    </button>
-                )}
-            </div>
+            {!isRetro ? (
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        <div className="w-1 h-5 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
+                        Franchise
+                        <span className="text-xs font-normal text-gray-500">({relations.length} total)</span>
+                    </h2>
+                    {hasMore && (
+                        <button
+                            onClick={() => setShowAll(!showAll)}
+                            className="text-xs font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                        >
+                            {showAll ? (
+                                <>
+                                    Show less
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                </>
+                            ) : (
+                                <>
+                                    View all
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                </>
+                            )}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className={`flex justify-end mb-3 pb-1 ${hasMore ? 'border-b border-gray-600' : ''}`}>
+                    {hasMore && (
+                        <button
+                            onClick={() => setShowAll(!showAll)}
+                            className="bg-[#d4d0c8] text-black px-2 py-0.5 text-xs border-2 border-white border-r-gray-500 border-b-gray-500 active:border-gray-500 active:border-r-white active:border-b-white"
+                        >
+                            {showAll ? 'Show less' : 'View all'}
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory">
                 {displayRelations.map((rel) => (

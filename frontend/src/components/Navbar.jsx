@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { animeApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
+import ThemeSwitcher from './ThemeSwitcher';
 import logger from '../utils/logger';
 
 import Fuse from 'fuse.js';
@@ -425,497 +426,502 @@ export default function Navbar() {
         <nav
             className={`fixed top-0 left-0 right-0 z-[1000] bg-dark/80 backdrop-blur-xl border-b border-gray-800 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
         >
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-16">
-                        {/* Logo */}
-                        <Link to="/" className="flex items-center gap-2.5 group">
-                            <svg
-                                viewBox="0 0 120 120"
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="w-10 h-10 transition-all duration-300"
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center justify-between h-16">
+                    {/* Logo */}
+                    <Link to="/" className="flex items-center gap-2.5 group">
+                        <svg
+                            viewBox="0 0 120 120"
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-10 h-10 transition-all duration-300"
+                        >
+                            <defs>
+                                <linearGradient id="neonPurple" x1="0%" y1="100%" x2="100%" y2="0%">
+                                    <stop offset="0%" stopColor="#7B1FA2" />
+                                    <stop offset="50%" stopColor="#B388FF" />
+                                    <stop offset="100%" stopColor="#EA80FC" />
+                                </linearGradient>
+
+                                <linearGradient id="darkPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stopColor="#4A148C" />
+                                    <stop offset="100%" stopColor="#210F40" />
+                                </linearGradient>
+                            </defs>
+
+                            <g transform="translate(10, 5)">
+                                <path d="M48 25 L22 85 L42 85 L68 25 Z" fill="url(#darkPurple)" />
+
+                                <path d="M48 25 L88 85 L68 85 L36 40 Z" fill="url(#neonPurple)" />
+
+                                <rect x="30" y="62" width="45" height="8" rx="4" fill="#311B92" />
+                                <rect x="30" y="62" width="28" height="8" rx="4" fill="#EA80FC" />
+                            </g>
+                        </svg>
+                        <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                            AniShows
+                        </span>
+                    </Link>
+
+                    {/* Desktop Nav */}
+                    <div className="hidden md:flex items-center gap-1 flex-1 ml-4 lg:ml-6">
+                        <NavItem to="/browse" icon={Search} label="Browse" />
+                        <NavItem to="/seasonal" icon={Calendar} label="Seasonal" />
+                        <NavItem to="/schedule" icon={Tv} label="Schedule" />
+                        <NavItem to="/forums" icon={MessageSquare} label="Forums" />
+                        {(isAuthenticated || authLoading) && (
+                            <NavItem to="/profile" icon={Heart} label="My List" />
+                        )}
+
+                        {/* Search - Always Extended with Fuzzy Search */}
+                        <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
+                            <div
+                                className={`relative transition-all duration-300 ease-out w-full max-w-[200px] lg:max-w-md ${hideSearch
+                                    ? 'opacity-0 pointer-events-none'
+                                    : 'opacity-100'
+                                    }`}
                             >
-                                <defs>
-                                    <linearGradient id="neonPurple" x1="0%" y1="100%" x2="100%" y2="0%">
-                                        <stop offset="0%" stopColor="#7B1FA2" />
-                                        <stop offset="50%" stopColor="#B388FF" />
-                                        <stop offset="100%" stopColor="#EA80FC" />
-                                    </linearGradient>
-
-                                    <linearGradient id="darkPurple" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stopColor="#4A148C" />
-                                        <stop offset="100%" stopColor="#210F40" />
-                                    </linearGradient>
-                                </defs>
-
-                                <g transform="translate(10, 5)">
-                                    <path d="M48 25 L22 85 L42 85 L68 25 Z" fill="url(#darkPurple)" />
-
-                                    <path d="M48 25 L88 85 L68 85 L36 40 Z" fill="url(#neonPurple)" />
-
-                                    <rect x="30" y="62" width="45" height="8" rx="4" fill="#311B92" />
-                                    <rect x="30" y="62" width="28" height="8" rx="4" fill="#EA80FC" />
-                                </g>
-                            </svg>
-                            <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                AniShows
-                            </span>
-                        </Link>
-
-                        {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-1 flex-1 ml-4 lg:ml-6">
-                            <NavItem to="/browse" icon={Search} label="Browse" />
-                            <NavItem to="/seasonal" icon={Calendar} label="Seasonal" />
-                            <NavItem to="/schedule" icon={Tv} label="Schedule" />
-                            <NavItem to="/forums" icon={MessageSquare} label="Forums" />
-                            {(isAuthenticated || authLoading) && (
-                                <NavItem to="/profile" icon={Heart} label="My List" />
-                            )}
-
-                            {/* Search - Always Extended with Fuzzy Search */}
-                            <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
-                                <div
-                                    className={`relative transition-all duration-300 ease-out w-full max-w-[200px] lg:max-w-md ${hideSearch
-                                        ? 'opacity-0 pointer-events-none'
-                                        : 'opacity-100'
-                                        }`}
-                                >
-                                    <form onSubmit={handleSearch} className="relative">
-                                        <input
-                                            ref={searchInputRef}
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) => {
-                                                setSearchQuery(e.target.value);
-                                                setSelectedIndex(-1);
-                                            }}
-                                            onFocus={() => {
-                                                if (searchQuery.trim().length >= 1) {
-                                                    setShowSuggestions(true);
-                                                }
-                                            }}
-                                            placeholder="Search anime..."
-                                            className="w-full pl-11 pr-4 py-2.5 bg-dark-100 border border-gray-700/50 rounded-xl text-sm text-white
+                                <form onSubmit={handleSearch} className="relative">
+                                    <input
+                                        ref={searchInputRef}
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            setSelectedIndex(-1);
+                                        }}
+                                        onFocus={() => {
+                                            if (searchQuery.trim().length >= 1) {
+                                                setShowSuggestions(true);
+                                            }
+                                        }}
+                                        placeholder="Search anime..."
+                                        className="w-full pl-11 pr-4 py-2.5 bg-dark-100 border border-gray-700/50 rounded-xl text-sm text-white
                                              placeholder:text-gray-400 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all shadow-sm"
-                                        />
-                                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4">
-                                            {isSearching ? (
-                                                <Loader2 className="w-4 h-4 text-accent animate-spin" />
-                                            ) : (
-                                                <Search className="w-4 h-4 text-gray-400" />
-                                            )}
-                                        </div>
-
-                                        {/* Clear button */}
-                                        {searchQuery && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setSearchQuery('');
-                                                    setShowSuggestions(false);
-                                                    setSelectedIndex(-1);
-                                                    searchInputRef.current?.focus();
-                                                }}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
+                                    />
+                                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4">
+                                        {isSearching ? (
+                                            <Loader2 className="w-4 h-4 text-accent animate-spin" />
+                                        ) : (
+                                            <Search className="w-4 h-4 text-gray-400" />
                                         )}
-
-                                        {/* Keyboard shortcut hint */}
-                                        {!searchQuery && (
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
-                                                <kbd className="px-1.5 py-0.5 bg-dark-50 rounded text-[10px] text-gray-500 border border-gray-700">/</kbd>
-                                            </div>
-                                        )}
-                                    </form>
-
-                                    {/* Enhanced Search Suggestions Dropdown - Always visible when active */}
-                                    <div
-                                        className={`absolute left-0 right-0 top-full mt-2 bg-dark-100 border border-gray-700/50 rounded-xl shadow-2xl overflow-hidden z-50 max-h-[70vh] overflow-y-auto transition-all duration-200 ${showSuggestions ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
-                                            }`}
-                                    >
-                                        {isSearching && searchSuggestions.length === 0 ? (
-                                            // Loading state - show previous results or skeleton
-                                            <div className="py-6 text-center text-gray-400">
-                                                <Loader2 className="w-6 h-6 mx-auto mb-2 text-accent animate-spin" />
-                                                <p className="text-sm">Searching...</p>
-                                            </div>
-                                        ) : searchSuggestions.length > 0 ? (
-                                            <>
-                                                {searchSuggestions.map((anime, index) => (
-                                                    <button
-                                                        key={anime.id}
-                                                        onClick={() => handleSuggestionClick(anime.slug)}
-                                                        onMouseEnter={() => setSelectedIndex(index)}
-                                                        className={`w-full flex items-center gap-3 p-3 transition-all text-left border-l-2 ${selectedIndex === index
-                                                            ? 'bg-accent/10 border-accent'
-                                                            : 'hover:bg-dark-50/50 border-transparent'
-                                                            }`}
-                                                    >
-                                                        <img
-                                                            src={anime.cover_image}
-                                                            alt={anime.title}
-                                                            className="w-10 h-14 object-cover rounded-md flex-shrink-0 shadow-sm"
-                                                        />
-                                                        <div className="flex-1 min-w-0">
-                                                            <h4 className="text-sm font-semibold text-white line-clamp-1">
-                                                                {highlightMatch(anime.title, searchQuery)}
-                                                            </h4>
-                                                            <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
-                                                                <span className="text-gray-500">{anime.anime_type}</span>
-                                                                {anime.episode_count && (
-                                                                    <>
-                                                                        <span className="text-gray-600">•</span>
-                                                                        <span>{anime.episode_count} eps</span>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        {anime.rating && (
-                                                            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-md flex-shrink-0">
-                                                                <Star className="w-3 h-3 text-yellow-500 fill-current" />
-                                                                <span className="text-xs font-semibold text-yellow-500">{anime.rating}</span>
-                                                            </div>
-                                                        )}
-                                                        {anime.isExactMatch && (
-                                                            <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">
-                                                                Exact
-                                                            </span>
-                                                        )}
-                                                    </button>
-                                                ))}
-
-                                                <button
-                                                    onClick={handleSearch}
-                                                    className="w-full py-3 px-4 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors border-t border-gray-700/50 flex items-center justify-center gap-2"
-                                                >
-                                                    <Search className="w-4 h-4" />
-                                                    View all results for "{searchQuery}"
-                                                </button>
-                                            </>
-                                        ) : searchQuery.trim().length >= 2 ? (
-                                            <div className="py-8 text-center text-gray-400">
-                                                <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                                                <p className="text-sm font-medium text-gray-300">No results found</p>
-                                                <p className="text-xs mt-1 text-gray-500">Try different keywords</p>
-                                            </div>
-                                        ) : null}
                                     </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Right Section: Notifications + Auth */}
-                        <div className="hidden md:flex items-center gap-2">
-                            {/* Notifications */}
-                            {isAuthenticated && !authLoading && <NotificationBell />}
+                                    {/* Clear button */}
+                                    {searchQuery && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSearchQuery('');
+                                                setShowSuggestions(false);
+                                                setSelectedIndex(-1);
+                                                searchInputRef.current?.focus();
+                                            }}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
 
-                            {authLoading ? (
-                                // Loading state - show skeleton instead of "Sign In" buttons
-                                <div className="flex items-center gap-2">
-                                    <div className="w-20 h-8 bg-dark-100 rounded-lg animate-pulse" />
-                                    <div className="w-8 h-8 bg-dark-100 rounded-lg animate-pulse" />
-                                </div>
-                            ) : isAuthenticated ? (
-                                <div className="relative" ref={profileRef}>
-                                    {/* Profile Button */}
-                                    <button
-                                        onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                        className="flex items-center gap-2.5 px-3 py-1.5 bg-dark-100 hover:bg-dark-50 rounded-xl
-                                               border border-gray-700/50 hover:border-accent/50 transition-all duration-200 group ml-2"
-                                    >
-                                        {/* Avatar */}
-                                        <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-accent/50 transition-colors">
-                                            {user?.avatar ? (
-                                                <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
-                                                    <User className="w-4 h-4 text-white" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
-                                            {user?.username}
-                                        </span>
-                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
-                                    </button>
-
-                                    {/* Enhanced Dropdown Menu */}
-                                    {isProfileOpen && (
-                                        <div className="absolute right-0 top-full mt-2 w-72 py-2 bg-dark-100/95 backdrop-blur-xl 
-                                                    rounded-xl border border-gray-700/50 shadow-xl shadow-black/20 animate-fade-in">
-                                            {/* User Info Header */}
-                                            <div className="px-4 py-3 border-b border-gray-700/50">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-accent/30">
-                                                        {user?.avatar ? (
-                                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
-                                                                <User className="w-5 h-5 text-white" />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-white truncate">{user?.username}</p>
-                                                        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* User Stats */}
-                                            <div className="px-4 py-3 border-b border-gray-700/50">
-                                                <div className="grid grid-cols-3 gap-2 text-center">
-                                                    <div className="p-2 bg-dark-50/50 rounded-lg">
-                                                        <p className="text-lg font-bold text-white">{userStats.animeWatched}</p>
-                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Anime</p>
-                                                    </div>
-                                                    <div className="p-2 bg-dark-50/50 rounded-lg">
-                                                        <p className="text-lg font-bold text-white">{userStats.episodesWatched}</p>
-                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Episodes</p>
-                                                    </div>
-                                                    <div className="p-2 bg-dark-50/50 rounded-lg">
-                                                        <p className="text-lg font-bold text-white">{formatHours(userStats.hoursWatched)}h</p>
-                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Hours</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Menu Items */}
-                                            <div className="py-1">
-                                                <Link
-                                                    to="/profile"
-                                                    onClick={() => setIsProfileOpen(false)}
-                                                    className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
-                                                           hover:bg-accent/10 transition-colors"
-                                                >
-                                                    <User className="w-4 h-4" />
-                                                    <span className="text-sm font-medium">Profile</span>
-                                                </Link>
-                                                <Link
-                                                    to="/settings"
-                                                    onClick={() => setIsProfileOpen(false)}
-                                                    className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
-                                                           hover:bg-accent/10 transition-colors"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                    <span className="text-sm font-medium">Settings</span>
-                                                </Link>
-                                                <div className="border-t border-gray-700/50 my-1" />
-                                                <button
-                                                    onClick={() => { logout(); setIsProfileOpen(false); }}
-                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-red-400 
-                                                           hover:bg-red-500/10 transition-colors"
-                                                >
-                                                    <LogOut className="w-4 h-4" />
-                                                    <span className="text-sm font-medium">Sign Out</span>
-                                                </button>
-                                            </div>
+                                    {/* Keyboard shortcut hint */}
+                                    {!searchQuery && (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
+                                            <kbd className="px-1.5 py-0.5 bg-dark-50 rounded text-[10px] text-gray-500 border border-gray-700">/</kbd>
                                         </div>
                                     )}
+                                </form>
+
+                                {/* Enhanced Search Suggestions Dropdown - Always visible when active */}
+                                <div
+                                    className={`absolute left-0 right-0 top-full mt-2 bg-dark-100 border border-gray-700/50 rounded-xl shadow-2xl overflow-hidden z-50 max-h-[70vh] overflow-y-auto transition-all duration-200 ${showSuggestions ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+                                        }`}
+                                >
+                                    {isSearching && searchSuggestions.length === 0 ? (
+                                        // Loading state - show previous results or skeleton
+                                        <div className="py-6 text-center text-gray-400">
+                                            <Loader2 className="w-6 h-6 mx-auto mb-2 text-accent animate-spin" />
+                                            <p className="text-sm">Searching...</p>
+                                        </div>
+                                    ) : searchSuggestions.length > 0 ? (
+                                        <>
+                                            {searchSuggestions.map((anime, index) => (
+                                                <button
+                                                    key={anime.id}
+                                                    onClick={() => handleSuggestionClick(anime.slug)}
+                                                    onMouseEnter={() => setSelectedIndex(index)}
+                                                    className={`w-full flex items-center gap-3 p-3 transition-all text-left border-l-2 ${selectedIndex === index
+                                                        ? 'bg-accent/10 border-accent'
+                                                        : 'hover:bg-dark-50/50 border-transparent'
+                                                        }`}
+                                                >
+                                                    <img
+                                                        src={anime.cover_image}
+                                                        alt={anime.title}
+                                                        className="w-10 h-14 object-cover rounded-md flex-shrink-0 shadow-sm"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <h4 className="text-sm font-semibold text-white line-clamp-1">
+                                                            {highlightMatch(anime.title, searchQuery)}
+                                                        </h4>
+                                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
+                                                            <span className="text-gray-500">{anime.anime_type}</span>
+                                                            {anime.episode_count && (
+                                                                <>
+                                                                    <span className="text-gray-600">•</span>
+                                                                    <span>{anime.episode_count} eps</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {anime.rating && (
+                                                        <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-md flex-shrink-0">
+                                                            <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                                            <span className="text-xs font-semibold text-yellow-500">{anime.rating}</span>
+                                                        </div>
+                                                    )}
+                                                    {anime.isExactMatch && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">
+                                                            Exact
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            ))}
+
+                                            <button
+                                                onClick={handleSearch}
+                                                className="w-full py-3 px-4 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors border-t border-gray-700/50 flex items-center justify-center gap-2"
+                                            >
+                                                <Search className="w-4 h-4" />
+                                                View all results for "{searchQuery}"
+                                            </button>
+                                        </>
+                                    ) : searchQuery.trim().length >= 2 ? (
+                                        <div className="py-8 text-center text-gray-400">
+                                            <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                                            <p className="text-sm font-medium text-gray-300">No results found</p>
+                                            <p className="text-xs mt-1 text-gray-500">Try different keywords</p>
+                                        </div>
+                                    ) : null}
                                 </div>
-                            ) : (
-                                <>
-                                    <Link to="/login" className="text-gray-300 hover:text-white transition-colors font-medium px-3 py-2">
-                                        Sign In
-                                    </Link>
-                                    <Link to="/register" className="btn-primary text-sm py-2 px-4">
-                                        Get Started
-                                    </Link>
-                                </>
-                            )}
+                            </div>
                         </div>
-
-                        {/* Mobile Menu Button */}
-                        <button
-                            onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            aria-label="Toggle mobile menu"
-                            className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
-                        >
-                            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                        </button>
                     </div>
-                </div>
 
-                {/* Mobile Menu - Enhanced */}
-                {isMenuOpen && (
-                    <div className="md:hidden bg-dark-100 border-t border-gray-800 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                        <div className="px-4 py-4 space-y-4">
-                            {/* Mobile Search with Fuzzy */}
-                            <form onSubmit={handleSearch} className="relative">
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search anime..."
-                                    className="w-full pl-11 pr-4 py-3 bg-dark-50 border border-gray-700 rounded-xl text-sm text-white
-                                     placeholder:text-gray-400 focus:outline-none focus:border-accent transition-all"
-                                />
-                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            </form>
+                    {/* Right Section: Notifications + Auth */}
+                    <div className="hidden md:flex items-center gap-2">
+                        <ThemeSwitcher />
+                        {/* Notifications */}
+                        {isAuthenticated && !authLoading && <NotificationBell />}
 
-                            {/* Mobile Search Suggestions */}
-                            {searchSuggestions.length > 0 && searchQuery.trim().length >= 1 && (
-                                <div className="space-y-1 max-h-48 overflow-y-auto">
-                                    {searchSuggestions.slice(0, 5).map((anime) => (
-                                        <button
-                                            key={anime.id}
-                                            onClick={() => {
-                                                handleSuggestionClick(anime.slug);
-                                                setIsMenuOpen(false);
-                                            }}
-                                            className="w-full flex items-center gap-3 p-2 hover:bg-dark-50 rounded-lg transition-colors text-left"
-                                        >
-                                            <img
-                                                src={anime.cover_image}
-                                                alt={anime.title}
-                                                className="w-8 h-12 object-cover rounded-lg flex-shrink-0"
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="text-sm font-medium text-white line-clamp-1">{anime.title}</h4>
-                                                <p className="text-xs text-gray-400">{anime.anime_type}</p>
+                        {authLoading ? (
+                            // Loading state - show skeleton instead of "Sign In" buttons
+                            <div className="flex items-center gap-2">
+                                <div className="w-20 h-8 bg-dark-100 rounded-lg animate-pulse" />
+                                <div className="w-8 h-8 bg-dark-100 rounded-lg animate-pulse" />
+                            </div>
+                        ) : isAuthenticated ? (
+                            <div className="relative" ref={profileRef}>
+                                {/* Profile Button */}
+                                <button
+                                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                    className="flex items-center gap-2.5 px-3 py-1.5 bg-dark-100 hover:bg-dark-50 rounded-xl
+                                               border border-gray-700/50 hover:border-accent/50 transition-all duration-200 group ml-2"
+                                >
+                                    {/* Avatar */}
+                                    <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-accent/50 transition-colors">
+                                        {user?.avatar ? (
+                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                                                <User className="w-4 h-4 text-white" />
                                             </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
+                                        )}
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
+                                        {user?.username}
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
+                                </button>
 
-                            {/* Mobile Nav Links */}
-                            <div className="space-y-1">
-                                <Link
-                                    to="/browse"
-                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/browse'
-                                        ? 'bg-accent/10 text-white'
-                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                        }`}
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <Search className="w-5 h-5" />
-                                    Browse
-                                </Link>
-                                <Link
-                                    to="/seasonal"
-                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/seasonal'
-                                        ? 'bg-accent/10 text-white'
-                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                        }`}
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <Calendar className="w-5 h-5" />
-                                    Seasonal
-                                </Link>
-                                <Link
-                                    to="/schedule"
-                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/schedule'
-                                        ? 'bg-accent/10 text-white'
-                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                        }`}
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <Tv className="w-5 h-5" />
-                                    Schedule
-                                </Link>
-                                <Link
-                                    to="/forums"
-                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname.startsWith('/forums')
-                                        ? 'bg-accent/10 text-white'
-                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                        }`}
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <MessageSquare className="w-5 h-5" />
-                                    Forums
-                                </Link>
-                                {(isAuthenticated || authLoading) && (
-                                    <Link
-                                        to="/profile"
-                                        className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/profile'
-                                            ? 'bg-accent/10 text-white'
-                                            : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                            }`}
-                                        onClick={() => setIsMenuOpen(false)}
-                                    >
-                                        <Heart className="w-5 h-5" />
-                                        My List
-                                    </Link>
+                                {/* Enhanced Dropdown Menu */}
+                                {isProfileOpen && (
+                                    <div className="absolute right-0 top-full mt-2 w-72 py-2 bg-dark-100/95 backdrop-blur-xl 
+                                                    rounded-xl border border-gray-700/50 shadow-xl shadow-black/20 animate-fade-in">
+                                        {/* User Info Header */}
+                                        <div className="px-4 py-3 border-b border-gray-700/50">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-accent/30">
+                                                    {user?.avatar ? (
+                                                        <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                                                            <User className="w-5 h-5 text-white" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-semibold text-white truncate">{user?.username}</p>
+                                                    <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* User Stats */}
+                                        <div className="px-4 py-3 border-b border-gray-700/50">
+                                            <div className="grid grid-cols-3 gap-2 text-center">
+                                                <div className="p-2 bg-dark-50/50 rounded-lg">
+                                                    <p className="text-lg font-bold text-white">{userStats.animeWatched}</p>
+                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Anime</p>
+                                                </div>
+                                                <div className="p-2 bg-dark-50/50 rounded-lg">
+                                                    <p className="text-lg font-bold text-white">{userStats.episodesWatched}</p>
+                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Episodes</p>
+                                                </div>
+                                                <div className="p-2 bg-dark-50/50 rounded-lg">
+                                                    <p className="text-lg font-bold text-white">{formatHours(userStats.hoursWatched)}h</p>
+                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Hours</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Menu Items */}
+                                        <div className="py-1">
+                                            <Link
+                                                to="/profile"
+                                                onClick={() => setIsProfileOpen(false)}
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
+                                                           hover:bg-accent/10 transition-colors"
+                                            >
+                                                <User className="w-4 h-4" />
+                                                <span className="text-sm font-medium">Profile</span>
+                                            </Link>
+                                            <Link
+                                                to="/settings"
+                                                onClick={() => setIsProfileOpen(false)}
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
+                                                           hover:bg-accent/10 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                </svg>
+                                                <span className="text-sm font-medium">Settings</span>
+                                            </Link>
+                                            <div className="border-t border-gray-700/50 my-1" />
+                                            <button
+                                                onClick={() => { logout(); setIsProfileOpen(false); }}
+                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-red-400 
+                                                           hover:bg-red-500/10 transition-colors"
+                                            >
+                                                <LogOut className="w-4 h-4" />
+                                                <span className="text-sm font-medium">Sign Out</span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
+                        ) : (
+                            <>
+                                <Link to="/login" className="text-gray-300 hover:text-white transition-colors font-medium px-3 py-2">
+                                    Sign In
+                                </Link>
+                                <Link to="/register" className="btn-primary text-sm py-2 px-4">
+                                    Get Started
+                                </Link>
+                            </>
+                        )}
+                    </div>
 
-                            {authLoading ? (
-                                // Loading state for mobile
-                                <div className="space-y-2 pt-4 border-t border-gray-700/50">
-                                    <div className="flex items-center gap-3 py-3 px-3">
-                                        <div className="w-12 h-12 rounded-xl bg-dark-50 animate-pulse" />
-                                        <div className="space-y-2">
-                                            <div className="w-24 h-4 bg-dark-50 rounded animate-pulse" />
-                                            <div className="w-32 h-3 bg-dark-50 rounded animate-pulse" />
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : isAuthenticated ? (
-                                <div className="space-y-1 pt-4 border-t border-gray-700/50">
-                                    {/* Mobile Profile Header with Stats */}
-                                    <Link to="/profile" className="flex items-center gap-3 py-3 px-3 hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                        <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-accent/30 shrink-0">
-                                            {user?.avatar ? (
-                                                <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
-                                                    <User className="w-6 h-6 text-white" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-semibold text-white">{user?.username}</p>
-                                            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-                                        </div>
-                                    </Link>
+                    {/* Mobile Menu Button */}
+                    <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        aria-label="Toggle mobile menu"
+                        className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                    >
+                        {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                    </button>
+                </div>
+            </div>
 
-                                    {/* Mobile User Stats */}
-                                    <div className="grid grid-cols-3 gap-2 px-3 py-2">
-                                        <div className="text-center p-2 bg-dark-50 rounded-lg">
-                                            <p className="text-base font-bold text-white">{userStats.animeWatched}</p>
-                                            <p className="text-[10px] text-gray-500">Anime</p>
-                                        </div>
-                                        <div className="text-center p-2 bg-dark-50 rounded-lg">
-                                            <p className="text-base font-bold text-white">{userStats.episodesWatched}</p>
-                                            <p className="text-[10px] text-gray-500">Eps</p>
-                                        </div>
-                                        <div className="text-center p-2 bg-dark-50 rounded-lg">
-                                            <p className="text-base font-bold text-white">{formatHours(userStats.hoursWatched)}h</p>
-                                            <p className="text-[10px] text-gray-500">Hours</p>
-                                        </div>
-                                    </div>
+            {/* Mobile Menu - Enhanced */}
+            {isMenuOpen && (
+                <div className="md:hidden bg-dark-100 border-t border-gray-800 max-h-[calc(100vh-4rem)] overflow-y-auto">
+                    <div className="px-4 py-4 space-y-4">
+                        {/* Mobile Search with Fuzzy */}
+                        <form onSubmit={handleSearch} className="relative">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search anime..."
+                                className="w-full pl-11 pr-4 py-3 bg-dark-50 border border-gray-700 rounded-xl text-sm text-white
+                                     placeholder:text-gray-400 focus:outline-none focus:border-accent transition-all"
+                            />
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        </form>
 
-                                    <Link to="/settings" className="flex items-center gap-3 py-3 px-3 text-gray-300 hover:text-white hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                        Settings
-                                    </Link>
-                                    <button onClick={() => { logout(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
-                                        <LogOut className="w-5 h-5" />
-                                        Sign Out
+                        {/* Mobile Search Suggestions */}
+                        {searchSuggestions.length > 0 && searchQuery.trim().length >= 1 && (
+                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                                {searchSuggestions.slice(0, 5).map((anime) => (
+                                    <button
+                                        key={anime.id}
+                                        onClick={() => {
+                                            handleSuggestionClick(anime.slug);
+                                            setIsMenuOpen(false);
+                                        }}
+                                        className="w-full flex items-center gap-3 p-2 hover:bg-dark-50 rounded-lg transition-colors text-left"
+                                    >
+                                        <img
+                                            src={anime.cover_image}
+                                            alt={anime.title}
+                                            className="w-8 h-12 object-cover rounded-lg flex-shrink-0"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-sm font-medium text-white line-clamp-1">{anime.title}</h4>
+                                            <p className="text-xs text-gray-400">{anime.anime_type}</p>
+                                        </div>
                                     </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-2 pt-4 border-t border-gray-700/50">
-                                    <Link to="/login" className="flex items-center gap-3 py-3 px-3 text-gray-300 hover:text-white hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                        <LogOut className="w-5 h-5 rotate-180" />
-                                        Sign In
-                                    </Link>
-                                    <Link to="/register" className="flex items-center justify-center gap-2 py-3 px-3 bg-accent text-dark font-semibold rounded-xl hover:bg-accent/90 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                        Get Started
-                                    </Link>
-                                </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Mobile Nav Links */}
+                        <div className="space-y-1">
+                            <div className="px-3 py-2 flex justify-between items-center border-b border-gray-800 mb-2">
+                                <span className="text-sm text-gray-400 font-medium">Theme</span>
+                                <ThemeSwitcher />
+                            </div>
+                            <Link
+                                to="/browse"
+                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/browse'
+                                    ? 'bg-accent/10 text-white'
+                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
+                                    }`}
+                                onClick={() => setIsMenuOpen(false)}
+                            >
+                                <Search className="w-5 h-5" />
+                                Browse
+                            </Link>
+                            <Link
+                                to="/seasonal"
+                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/seasonal'
+                                    ? 'bg-accent/10 text-white'
+                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
+                                    }`}
+                                onClick={() => setIsMenuOpen(false)}
+                            >
+                                <Calendar className="w-5 h-5" />
+                                Seasonal
+                            </Link>
+                            <Link
+                                to="/schedule"
+                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/schedule'
+                                    ? 'bg-accent/10 text-white'
+                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
+                                    }`}
+                                onClick={() => setIsMenuOpen(false)}
+                            >
+                                <Tv className="w-5 h-5" />
+                                Schedule
+                            </Link>
+                            <Link
+                                to="/forums"
+                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname.startsWith('/forums')
+                                    ? 'bg-accent/10 text-white'
+                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
+                                    }`}
+                                onClick={() => setIsMenuOpen(false)}
+                            >
+                                <MessageSquare className="w-5 h-5" />
+                                Forums
+                            </Link>
+                            {(isAuthenticated || authLoading) && (
+                                <Link
+                                    to="/profile"
+                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/profile'
+                                        ? 'bg-accent/10 text-white'
+                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
+                                        }`}
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    <Heart className="w-5 h-5" />
+                                    My List
+                                </Link>
                             )}
                         </div>
+
+                        {authLoading ? (
+                            // Loading state for mobile
+                            <div className="space-y-2 pt-4 border-t border-gray-700/50">
+                                <div className="flex items-center gap-3 py-3 px-3">
+                                    <div className="w-12 h-12 rounded-xl bg-dark-50 animate-pulse" />
+                                    <div className="space-y-2">
+                                        <div className="w-24 h-4 bg-dark-50 rounded animate-pulse" />
+                                        <div className="w-32 h-3 bg-dark-50 rounded animate-pulse" />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : isAuthenticated ? (
+                            <div className="space-y-1 pt-4 border-t border-gray-700/50">
+                                {/* Mobile Profile Header with Stats */}
+                                <Link to="/profile" className="flex items-center gap-3 py-3 px-3 hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
+                                    <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-accent/30 shrink-0">
+                                        {user?.avatar ? (
+                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-accent to-purple-600 flex items-center justify-center">
+                                                <User className="w-6 h-6 text-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-semibold text-white">{user?.username}</p>
+                                        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                    </div>
+                                </Link>
+
+                                {/* Mobile User Stats */}
+                                <div className="grid grid-cols-3 gap-2 px-3 py-2">
+                                    <div className="text-center p-2 bg-dark-50 rounded-lg">
+                                        <p className="text-base font-bold text-white">{userStats.animeWatched}</p>
+                                        <p className="text-[10px] text-gray-500">Anime</p>
+                                    </div>
+                                    <div className="text-center p-2 bg-dark-50 rounded-lg">
+                                        <p className="text-base font-bold text-white">{userStats.episodesWatched}</p>
+                                        <p className="text-[10px] text-gray-500">Eps</p>
+                                    </div>
+                                    <div className="text-center p-2 bg-dark-50 rounded-lg">
+                                        <p className="text-base font-bold text-white">{formatHours(userStats.hoursWatched)}h</p>
+                                        <p className="text-[10px] text-gray-500">Hours</p>
+                                    </div>
+                                </div>
+
+                                <Link to="/settings" className="flex items-center gap-3 py-3 px-3 text-gray-300 hover:text-white hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    Settings
+                                </Link>
+                                <button onClick={() => { logout(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
+                                    <LogOut className="w-5 h-5" />
+                                    Sign Out
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-2 pt-4 border-t border-gray-700/50">
+                                <Link to="/login" className="flex items-center gap-3 py-3 px-3 text-gray-300 hover:text-white hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
+                                    <LogOut className="w-5 h-5 rotate-180" />
+                                    Sign In
+                                </Link>
+                                <Link to="/register" className="flex items-center justify-center gap-2 py-3 px-3 bg-accent text-dark font-semibold rounded-xl hover:bg-accent/90 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                                    Get Started
+                                </Link>
+                            </div>
+                        )}
                     </div>
-                )}
-            </nav>
+                </div>
+            )}
+        </nav>
     );
 }

@@ -474,7 +474,7 @@ export default function AnimeDetail() {
     return (
         <div
             ref={containerRef}
-            className="min-h-screen animate-fade-in"
+            className="min-h-screen"
             style={accentColor ? { '--anime-accent': accentColor } : {}}
         >
             <SEOHelmet anime={anime} />
