@@ -97,15 +97,7 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}🎨 Step 7: Collecting static files...${NC}"
-if $COMPOSE_CMD exec -T web uv run python manage.py collectstatic --noinput --clear; then
-    echo -e "${GREEN}✅ Static files collected!${NC}"
-else
-    echo -e "${RED}❌ Failed to collect static files!${NC}"
-fi
-echo ""
-
-echo -e "${BLUE}🧹 Step 8: Pruning old images...${NC}"
+echo -e "${BLUE}🧹 Step 7: Pruning old images...${NC}"
 docker image prune -a -f --filter "until=24h"
 echo -e "${GREEN}✅ Old images pruned!${NC}"
 echo ""

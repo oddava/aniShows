@@ -54,6 +54,9 @@ INSTALLED_APPS.append("debug_toolbar")
 INSTALLED_APPS.append("drf_spectacular")
 MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
 
+# Set DRF schema class for API docs (only available in development)
+REST_FRAMEWORK["DEFAULT_SCHEMA_CLASS"] = "drf_spectacular.openapi.AutoSchema"
+
 # =============================================================================
 # DRF SPECTACULAR (Swagger/OpenAPI)
 # =============================================================================

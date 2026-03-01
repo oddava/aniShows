@@ -156,6 +156,7 @@ TEMPLATES = [
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
+                "django.template.context_processors.debug",
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
@@ -268,10 +269,7 @@ else:
     IMAGEKIT_CACHE_PREFIX = "CACHE/images"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
-# Always use whitenoise for static files (even when using S3 for media)
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-
-# Django 5.2+ uses STORAGES dict for storage backends
+# Django 5.x uses STORAGES dict for storage backends
 STORAGES = {
     "default": {
         "BACKEND": DEFAULT_FILE_STORAGE,
@@ -280,6 +278,10 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# Don't crash on missing static files in the manifest — serve the unhashed URL instead.
+# This prevents 500 errors when a template references a static file not in staticfiles.json.
+WHITENOISE_MANIFEST_STRICT = False
 
 # =============================================================================
 # DEFAULT PRIMARY KEY
@@ -329,7 +331,6 @@ DEFAULT_FROM_EMAIL = os.getenv("EMAIL_HOST_USER", "webmaster@localhost")
 # =============================================================================
 
 REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
@@ -592,7 +593,7 @@ JAZZMIN_SETTINGS = {
     "site_icon": "fas fa-tv",
     "welcome_sign": "Welcome to aniShows Administration",
     "copyright": "aniShows",
-    "search_model": ["auth.User", "users.CustomUser", "anime.Anime"],
+    "search_model": ["users.CustomUser", "anime.Anime"],
     "user_avatar": None,
     "topmenu_links": [
         {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
@@ -603,7 +604,7 @@ JAZZMIN_SETTINGS = {
     ],
     "usermenu_links": [
         {"name": "API Admin", "url": "/api/v1/admin/dashboard/", "new_window": True},
-        {"model": "auth.user"},
+        {"model": "users.CustomUser"},
     ],
     "show_sidebar": True,
     "navigation_expanded": True,

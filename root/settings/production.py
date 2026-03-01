@@ -33,18 +33,14 @@ SECURE_HSTS_PRELOAD = True
 # EMAIL BACKEND
 # =============================================================================
 
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
-)
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
 # =============================================================================
 # CORS SETTINGS
 # =============================================================================
 
 cors_origins = [
-    origin.strip()
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
-    if origin.strip()
+    origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if origin.strip()
 ]
 
 if not cors_origins:
@@ -60,9 +56,7 @@ CORS_ALLOW_CREDENTIALS = True
 # CSRF SETTINGS
 # =============================================================================
 
-csrf_origins = [
-    origin for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin
-]
+csrf_origins = [origin for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin]
 
 if not csrf_origins:
     raise ValueError(
@@ -111,6 +105,11 @@ LOGGING = {
         "django": {
             "handlers": ["console"],
             "level": "WARNING",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
             "propagate": False,
         },
         "apps.animes": {
