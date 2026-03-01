@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
-import { Star, Heart, Play, Calendar, Clock, Tv, MessageSquare, Loader, Plus, Trophy, TrendingUp, ExternalLink, Users, Mic, Film, ChevronDown, Hash, Building2, Bell, BookOpen, BarChart3, Music } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import AnimeCard from '../components/AnimeCard';
 import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
@@ -12,215 +13,201 @@ import ReviewSummary from '../components/ReviewSummary';
 import CharacterModal from '../components/CharacterModal';
 import StaffModal from '../components/StaffModal';
 import StatsTab from '../components/StatsTab';
-import FranchiseSection from '../components/FranchiseSection';
+import InformationBox from '../components/InformationBox';
 import FriendsWatching from '../components/FriendsWatching';
-import MusicSection from '../components/MusicSection';
 import SEOHelmet from '../components/SEOHelmet';
+import { OverviewTab, CharactersTab, StaffTab } from '../components/DetailTabs';
 import { AnimeDetailSkeleton } from '../components/skeletons';
-import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
 import logger from '../utils/logger';
 
-const InformationBox = ({ anime, className, accentColor }) => {
-    const formatDateRange = () => {
-        if (!anime.release_date) return 'Unknown';
-        const options = { month: 'short', day: 'numeric', year: 'numeric' };
-        const startStr = new Date(anime.release_date).toLocaleDateString('en-US', options);
+// Memoized tab configuration to prevent re-renders
+const TABS = [
+    { id: 'overview', label: 'Overview', icon: Film },
+    { id: 'stats', label: 'Stats', icon: BarChart3 },
+    { id: 'characters', label: 'Characters', icon: Users },
+    { id: 'staff', label: 'Staff', icon: Mic },
+];
 
-        if (anime.status === 'Airing' && !anime.end_date) {
-            return (
-                <div className="flex flex-col items-end leading-tight">
-                    <span>{startStr}</span>
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest my-1">to</span>
-                    <span style={{ color: accentColor || '#8b5cf6' }}>Present</span>
-                </div>
-            );
-        }
+// Extract and memoize color from image
+const useAccentColor = (coverImage, bannerImage) => {
+    const [accentColor, setAccentColor] = useState(null);
 
-        if (anime.end_date) {
-            const endStr = new Date(anime.end_date).toLocaleDateString('en-US', options);
-            if (startStr === endStr) return startStr;
-            return (
-                <div className="flex flex-col items-end leading-tight">
-                    <span>{startStr}</span>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest my-1">to</span>
-                    <span>{endStr}</span>
-                </div>
-            );
-        }
+    useEffect(() => {
+        if (!coverImage) return;
 
-        return startStr;
-    };
+        const extractColor = (imageUrl) => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
 
-    return (
-        <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl min-w-0 overflow-hidden ${className}`}>
-            <h3
-                className="text-white font-bold uppercase text-[10px] tracking-[0.2em]"
-                style={{ color: accentColor ? `${accentColor}cc` : '#8b5cf6cc' }}
-            >
-                Information
-            </h3>
-            <div className="space-y-4">
-                <InfoRow icon={Tv} label="Type" value={anime.anime_type} />
-                <InfoRow icon={Hash} label="Episodes" value={anime.episode_count || 'Unknown'} />
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 1;
+                        canvas.height = 1;
+                        ctx.drawImage(img, 0, 0, 1, 1);
+                        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+                        resolve({ r, g, b });
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
 
-                {/* Duration */}
-                {anime.duration_minutes > 0 && (
-                    <InfoRow icon={Clock} label="Duration" value={`${anime.duration_minutes} min`} />
-                )}
+                img.onerror = () => reject(new Error('Failed to load image'));
+                img.src = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+            });
+        };
 
-                {/* Aired Date */}
-                {anime.release_date && (
-                    <InfoRow icon={Calendar} label="Aired" value={formatDateRange()} />
-                )}
+        const processColor = ({ r, g, b }) => {
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            if (luminance > 0.85) {
+                setAccentColor(null);
+                return;
+            }
 
-                {/* Season */}
-                {(anime.season || anime.season_year) && (
-                    <InfoRow
-                        icon={Calendar}
-                        label="Season"
-                        value={`${anime.season || ''} ${anime.season_year || ''}`.trim()}
-                    />
-                )}
+            let finalR = r, finalG = g, finalB = b;
+            if (luminance < 0.25) {
+                const lightenFactor = 0.25 / Math.max(luminance, 0.01);
+                finalR = Math.min(255, Math.round(r * lightenFactor));
+                finalG = Math.min(255, Math.round(g * lightenFactor));
+                finalB = Math.min(255, Math.round(b * lightenFactor));
+            }
 
-                {/* Source Material */}
-                {anime.source_material && (
-                    <InfoRow icon={BookOpen} label="Source" value={anime.source_material} />
-                )}
+            const toHex = (c) => c.toString(16).padStart(2, '0');
+            setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
+        };
 
-                {/* Studio */}
-                {anime.studio && (
-                    <InfoRow icon={Building2} label="Studio" value={anime.studio.name} />
-                )}
+        extractColor(coverImage)
+            .then(processColor)
+            .catch(() => {
+                if (bannerImage) {
+                    extractColor(bannerImage)
+                        .then(processColor)
+                        .catch(() => setAccentColor(null));
+                } else {
+                    setAccentColor(null);
+                }
+            });
+    }, [coverImage, bannerImage]);
 
-                {/* Member Count */}
-                {anime.member_count > 0 && (
-                    <InfoRow icon={Users} label="Members" value={anime.member_count.toLocaleString()} />
-                )}
-
-                {/* Next Episode Section - for airing anime */}
-                {anime.status === 'Airing' && anime.next_airing_episode && anime.next_airing_date && (
-                    <div className="pt-4 mt-4 border-t border-white/10">
-                        <div
-                            className="p-4 rounded-xl border"
-                            style={{
-                                backgroundColor: isWithin24Hours(anime.next_airing_date)
-                                    ? 'rgba(34, 197, 94, 0.1)'
-                                    : (accentColor ? `${accentColor}15` : 'rgba(139, 92, 246, 0.1)'),
-                                borderColor: isWithin24Hours(anime.next_airing_date)
-                                    ? 'rgba(34, 197, 94, 0.3)'
-                                    : (accentColor ? `${accentColor}30` : 'rgba(139, 92, 246, 0.2)')
-                            }}
-                        >
-                            <div className="flex items-center gap-2 mb-3">
-                                <Bell
-                                    className="w-4 h-4"
-                                    style={{
-                                        color: isWithin24Hours(anime.next_airing_date)
-                                            ? '#22c55e'
-                                            : (accentColor || '#8b5cf6')
-                                    }}
-                                />
-                                <span
-                                    className="text-[10px] font-black uppercase tracking-widest"
-                                    style={{
-                                        color: isWithin24Hours(anime.next_airing_date)
-                                            ? '#22c55e'
-                                            : (accentColor || '#8b5cf6')
-                                    }}
-                                >
-                                    Next Episode
-                                </span>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-white font-bold text-lg">
-                                    Episode {anime.next_airing_episode}
-                                </p>
-                                <p
-                                    className="text-sm font-semibold"
-                                    style={{
-                                        color: isWithin24Hours(anime.next_airing_date)
-                                            ? '#22c55e'
-                                            : (accentColor || '#8b5cf6')
-                                    }}
-                                >
-                                    {formatRelativeTime(anime.next_airing_date)}
-                                </p>
-                                <p className="text-gray-400 text-xs">
-                                    {formatAiringTime(anime.next_airing_date)}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* External Links */}
-                {anime.external_links && anime.external_links.length > 0 && (
-                    <div className="pt-6 mt-8 border-t border-white/5">
-                        <p className="text-gray-300 text-xs font-bold uppercase tracking-wider mb-3">External Links</p>
-                        <div className="flex flex-wrap gap-2">
-                            {anime.external_links.map((link, i) => (
-                                <a
-                                    key={i}
-                                    href={link.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 border ${['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site)
-                                        ? 'bg-transparent hover:text-white'
-                                        : 'bg-dark-200 hover:bg-white text-gray-300 hover:text-black border-gray-700/50 hover:border-white'
-                                        }`}
-                                    style={['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site) ? {
-                                        color: accentColor || '#8b5cf6',
-                                        borderColor: accentColor ? `${accentColor}80` : 'rgba(139,92,246,0.5)'
-                                    } : {}}
-                                    onMouseEnter={(e) => {
-                                        if (['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site)) {
-                                            e.currentTarget.style.backgroundColor = accentColor || '#8b5cf6';
-                                            e.currentTarget.style.color = 'white';
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site)) {
-                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                            e.currentTarget.style.color = accentColor || '#8b5cf6';
-                                        }
-                                    }}
-                                >
-                                    {link.site} <ExternalLink className="w-3 h-3" />
-                                </a>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
+    return accentColor;
 };
 
-const InfoRow = ({ icon: Icon, label, value }) => (  // eslint-disable-line no-unused-vars
-    <div className="flex items-start justify-between gap-4 py-1 min-w-0">
-        <div className="flex items-center gap-2 pt-1 shrink-0">
-            <Icon className="w-3.5 h-3.5 text-gray-500" />
-            <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider">
-                {label}
-            </p>
+// Memoized share button handler
+const useShare = () => {
+    return useMemo(() => () => {
+        navigator.clipboard.writeText(window.location.href);
+        // Could use a toast notification here instead of alert
+        const toast = document.createElement('div');
+        toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
+        toast.textContent = 'Link copied!';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2000);
+    }, []);
+};
+
+// Memoized related anime card component
+const RelatedAnimeCard = memo(({ anime, getImageUrl, accentColor }) => (
+    <Link
+        to={`/anime/${anime.slug}`}
+        className="flex gap-4 group bg-dark-100/30 p-2 rounded-xl border border-transparent hover:border-gray-800 hover:bg-dark-100/50 transition-all"
+    >
+        <div className="w-20 h-28 flex-shrink-0 overflow-hidden rounded-lg">
+            <img
+                src={getImageUrl(anime.cover_image)}
+                alt={anime.title}
+                className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                loading="lazy"
+            />
         </div>
-        <div className="text-white font-bold text-sm text-right leading-relaxed break-words min-w-0 max-w-[60%]">
-            {value}
+        <div className="flex-1 py-1 min-w-0">
+            <h3 className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
+                {anime.title}
+            </h3>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>{anime.anime_type}</span>
+                <span>•</span>
+                <div className="flex items-center gap-1 bg-yellow-500/10 px-1.5 py-0.5 rounded text-yellow-500 font-bold">
+                    <Star className="w-3 h-3 fill-current" />
+                    <span>{anime.rating || 'N/A'}</span>
+                </div>
+            </div>
         </div>
-    </div>
-);
+    </Link>
+));
+
+RelatedAnimeCard.displayName = 'RelatedAnimeCard';
+
+// Memoized mobile related anime card
+const MobileRelatedCard = memo(({ anime, getImageUrl }) => (
+    <Link
+        to={`/anime/${anime.slug}`}
+        className="flex-shrink-0 w-28 sm:w-32 snap-start group"
+    >
+        <div className="aspect-[2/3] rounded-lg overflow-hidden mb-2 border border-gray-800 bg-dark-200">
+            <img
+                src={getImageUrl(anime.cover_image)}
+                alt={anime.title}
+                className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                loading="lazy"
+            />
+        </div>
+        <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
+            {anime.title}
+        </h3>
+        <div className="flex items-center gap-1 text-[10px] text-gray-500">
+            <span>{anime.anime_type}</span>
+            <span>•</span>
+            <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1 py-0.5 rounded text-yellow-500 font-bold">
+                <Star className="w-2.5 h-2.5 fill-current" />
+                <span>{anime.rating || 'N/A'}</span>
+            </div>
+        </div>
+    </Link>
+));
+
+MobileRelatedCard.displayName = 'MobileRelatedCard';
+
+// Memoized tab button component
+const TabButton = memo(({ tab, isActive, onClick, accentColor, count }) => {
+    const Icon = tab.icon;
+    return (
+        <button
+            onClick={onClick}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
+                ${isActive
+                    ? 'text-white shadow-lg'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            style={isActive ? {
+                backgroundColor: accentColor || '#8b5cf6',
+                boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+            } : {}}
+        >
+            <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            {tab.label}
+            {count > 0 && (
+                <span className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20' : 'bg-white/5'}`}>
+                    {count}
+                </span>
+            )}
+        </button>
+    );
+});
+
+TabButton.displayName = 'TabButton';
 
 export default function AnimeDetail() {
     const { slug } = useParams();
     const { isAuthenticated, user } = useAuth();
+    const { theme } = useTheme();
+    const isRetro = theme && theme.startsWith('retro-');
     const queryClient = useQueryClient();
     const [isFavorite, setIsFavorite] = useState(false);
     const [isWritingReview, setIsWritingReview] = useState(false);
     const [editingReview, setEditingReview] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
-    const [accentColor, setAccentColor] = useState(null);
-    const [synopsisExpanded, setSynopsisExpanded] = useState(false);
     const [reviewSort, setReviewSort] = useState('helpful');
     const [ratingFilter, setRatingFilter] = useState(null);
     const [hideSpoilersGlobal, setHideSpoilersGlobal] = useState(false);
@@ -228,6 +215,7 @@ export default function AnimeDetail() {
     const [selectedStaff, setSelectedStaff] = useState(null);
     const containerRef = useRef(null);
 
+    // Queries
     const { data: anime, isLoading, isError } = useQuery({
         queryKey: ['anime', slug, user?.id],
         queryFn: () => animeApi.getBySlug(slug).then(res => res.data),
@@ -235,14 +223,7 @@ export default function AnimeDetail() {
         staleTime: 0,
     });
 
-    const {
-        data: reviewsData,
-        fetchNextPage,
-        hasNextPage,
-        isFetchingNextPage,
-        isLoading: reviewsLoading,
-        refetch: refetchReviews
-    } = useInfiniteQuery({
+    const { data: reviewsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading: reviewsLoading } = useInfiniteQuery({
         queryKey: ['reviews', slug, reviewSort, ratingFilter],
         queryFn: ({ pageParam }) => reviewApi.getAll({
             anime: slug,
@@ -252,7 +233,7 @@ export default function AnimeDetail() {
         }).then(res => res.data),
         initialPageParam: 1,
         getNextPageParam: (lastPage) => {
-            if (lastPage && lastPage.next) {
+            if (lastPage?.next) {
                 try {
                     const url = new URL(lastPage.next);
                     return url.searchParams.get('page');
@@ -275,94 +256,36 @@ export default function AnimeDetail() {
         enabled: !!anime,
     });
 
-    const allReviews = reviewsData?.pages.flatMap(page => {
-        if (Array.isArray(page)) return page;
-        return page.results || [];
-    }) || [];
+    // Derived state
+    const accentColor = useAccentColor(anime?.cover_image, anime?.banner_image);
+    const handleShare = useShare();
 
-    const textReviews = allReviews.filter(r => r.text && r.text.trim().length > 0);
-    const ratingOnlyReviews = allReviews.filter(r => !r.text || r.text.trim().length === 0);
-    const reviewCount = reviewsData?.pages[0]?.count ?? anime?.review_count ?? allReviews.length;
+    const allReviews = useMemo(() =>
+        reviewsData?.pages.flatMap(page => Array.isArray(page) ? page : (page.results || [])) || [],
+        [reviewsData]
+    );
 
+    const { textReviews, ratingOnlyReviews, reviewCount } = useMemo(() => ({
+        textReviews: allReviews.filter(r => r.text?.trim().length > 0),
+        ratingOnlyReviews: allReviews.filter(r => !r.text?.trim()),
+        reviewCount: reviewsData?.pages[0]?.count ?? anime?.review_count ?? allReviews.length
+    }), [allReviews, reviewsData, anime]);
+
+    const userReview = useMemo(() =>
+        anime?.user_review || allReviews.find(r => r.user?.username === user?.username),
+        [anime, allReviews, user]
+    );
+
+    const canReview = isAuthenticated && anime?.user_list_status != null;
+
+    // Effects
     useEffect(() => {
         if (anime) {
             setIsFavorite(anime.is_favorite || false);
         }
     }, [anime]);
 
-    useEffect(() => {
-        if (!anime?.cover_image) return;
-
-        const extractColor = (imageUrl) => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-
-                img.onload = () => {
-                    try {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = 1;
-                        canvas.height = 1;
-                        ctx.drawImage(img, 0, 0, 1, 1);
-                        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-                        resolve({ r, g, b });
-                    } catch (e) {
-                        reject(e);
-                    }
-                };
-
-                img.onerror = () => {
-                    reject(new Error('Failed to load image'));
-                };
-
-                // Add cache buster to avoid cached images without CORS headers
-                img.src = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_cb=' + Date.now();
-            });
-        };
-
-        const processColor = ({ r, g, b }) => {
-            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-            if (luminance > 0.85) {
-                setAccentColor(null);
-                return;
-            }
-
-            let finalR = r, finalG = g, finalB = b;
-
-            if (luminance < 0.25) {
-                const lightenFactor = 0.25 / Math.max(luminance, 0.01);
-                finalR = Math.min(255, Math.round(r * lightenFactor));
-                finalG = Math.min(255, Math.round(g * lightenFactor));
-                finalB = Math.min(255, Math.round(b * lightenFactor));
-            }
-
-            const toHex = (c) => {
-                const hex = c.toString(16);
-                return hex.length === 1 ? '0' + hex : hex;
-            };
-            setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
-        };
-
-        // Try cover image first, then banner as fallback
-        extractColor(anime.cover_image)
-            .then(processColor)
-            .catch((err) => {
-                logger.warn('Cover image color extraction failed:', err);
-                if (anime.banner_image) {
-                    extractColor(anime.banner_image)
-                        .then(processColor)
-                        .catch((err2) => {
-                            logger.warn('Banner image color extraction failed:', err2);
-                            setAccentColor(null);
-                        });
-                } else {
-                    setAccentColor(null);
-                }
-            });
-    }, [anime?.cover_image, anime?.banner_image]);
-
+    // Mutations
     const createReviewMutation = useMutation({
         mutationFn: (data) => reviewApi.create({ ...data, anime_slug: slug }),
         onSuccess: () => {
@@ -393,11 +316,14 @@ export default function AnimeDetail() {
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (user?.username) {
                 queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
+                queryClient.invalidateQueries({ queryKey: ['favorites', user.username] });
+                queryClient.invalidateQueries({ queryKey: ['favorites-overview', user.username] });
             }
         },
     });
 
-    const handleFavorite = async () => {
+    // Handlers
+    const handleFavorite = useCallback(async () => {
         if (!isAuthenticated) return;
         try {
             const response = await favoriteApi.toggle(anime.id);
@@ -411,39 +337,28 @@ export default function AnimeDetail() {
         } catch (error) {
             logger.error('Error toggling favorite:', error);
         }
-    };
+    }, [isAuthenticated, anime?.id, user, queryClient]);
 
-    const handleListUpdate = () => {
+    const handleListUpdate = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ['anime', slug] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-    };
+    }, [queryClient, slug]);
 
-    const handleReviewSubmit = async (data) => {
+    const handleReviewSubmit = useCallback(async (data) => {
         if (editingReview) {
             await updateReviewMutation.mutateAsync({ id: editingReview.id, data });
         } else {
             await createReviewMutation.mutateAsync(data);
         }
-    };
+    }, [editingReview, updateReviewMutation, createReviewMutation]);
 
-    const userReview = anime?.user_review || allReviews.find(r => r.user?.username === user?.username);
-    const canReview = isAuthenticated && anime?.user_list_status != null;
+    const handleTabClick = useCallback((tabId) => {
+        setActiveTab(tabId);
+    }, []);
 
-    if (isLoading) {
-        return <AnimeDetailSkeleton />;
-    }
-
-    if (isError || !anime) {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center">
-                <p className="text-gray-400 mb-4">Anime not found</p>
-                <Link to="/browse" className="btn-primary">Browse Anime</Link>
-            </div>
-        );
-    }
-
-    const getImageUrl = (url) => {
+    // Helpers
+    const getImageUrl = useCallback((url) => {
         if (!url) return null;
         let cleanUrl = url;
         if (cleanUrl.includes('localhost:8000')) {
@@ -457,29 +372,45 @@ export default function AnimeDetail() {
             cleanUrl = `/${cleanUrl}`;
         }
         return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
-    };
+    }, []);
 
-    const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') || getOptimizedImageUrl(anime, 'cover', 'large') || `https://placehold.co/1920x600/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
-    const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') || `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+    // Loading & Error states
+    if (isLoading) return <AnimeDetailSkeleton />;
+
+    if (isError || !anime) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center">
+                <p className="text-gray-400 mb-4">Anime not found</p>
+                <Link to="/browse" className="btn-primary">Browse Anime</Link>
+            </div>
+        );
+    }
+
+    const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
+        getOptimizedImageUrl(anime, 'cover', 'large') ||
+        `https://placehold.co/1920x600/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+    const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') ||
+        `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');
 
-    const tabs = [
-        { id: 'overview', label: 'Overview', icon: Film },
-        { id: 'stats', label: 'Stats', icon: BarChart3 },
-        { id: 'characters', label: 'Characters', icon: Users, count: anime.characters?.length },
-        { id: 'staff', label: 'Staff', icon: Mic, count: anime.staff?.length },
-    ];
+    const tabsWithCounts = TABS.map(tab => ({
+        ...tab,
+        count: tab.id === 'characters' ? anime.characters?.length :
+            tab.id === 'staff' ? anime.staff?.length : 0
+    }));
+
+    const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
 
     return (
         <div
             ref={containerRef}
             className="min-h-screen"
-            style={accentColor ? { '--anime-accent': accentColor } : {}}
+            style={accentColor && !isRetro ? { '--anime-accent': accentColor } : { '--anime-accent': 'var(--color-accent)' }}
         >
             <SEOHelmet anime={anime} />
 
-            {/* Character Modal */}
+            {/* Modals */}
             {selectedCharacter && (
                 <CharacterModal
                     role={selectedCharacter}
@@ -487,8 +418,6 @@ export default function AnimeDetail() {
                     accentColor={accentColor}
                 />
             )}
-
-            {/* Staff Modal */}
             {selectedStaff && (
                 <StaffModal
                     staffRole={selectedStaff}
@@ -539,24 +468,22 @@ export default function AnimeDetail() {
                                     <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
                                         {anime.title}
                                     </h1>
-
                                 </div>
                                 {anime.title_jp && (
                                     <p className="text-gray-400 text-lg mb-6 font-medium tracking-wide">{anime.title_jp}</p>
                                 )}
 
+                                {/* Genres */}
                                 <div className="flex flex-wrap justify-center lg:justify-start gap-1.5 sm:gap-2 mb-6 sm:mb-8">
                                     {anime.genres?.map((genre) => (
                                         <Link
                                             key={genre.id}
                                             to={`/browse?genre=${genre.slug}`}
                                             className="px-4 py-1.5 bg-dark-100 text-gray-300 rounded-full text-xs font-bold border border-gray-700 hover:text-white transition-all shadow-sm"
-                                            style={{
-                                                '--hover-bg': accentColor || '#8b5cf6',
-                                            }}
+                                            style={{ '--hover-bg': mappedAccent }}
                                             onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = accentColor || '#8b5cf6';
-                                                e.currentTarget.style.borderColor = accentColor || '#8b5cf6';
+                                                e.currentTarget.style.backgroundColor = mappedAccent;
+                                                e.currentTarget.style.borderColor = mappedAccent;
                                             }}
                                             onMouseLeave={(e) => {
                                                 e.currentTarget.style.backgroundColor = '';
@@ -569,7 +496,9 @@ export default function AnimeDetail() {
                                 </div>
 
                                 {/* Main Actions */}
-                                <div className="flex flex-col gap-3 sm:gap-4 md:gap-5 bg-dark-100/40 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border border-gray-800/50 shadow-2xl backdrop-blur-md relative z-20">
+                                <div className={`flex flex-col gap-3 sm:gap-4 md:gap-5 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border shadow-2xl relative z-20 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none border-t-0 pb-6' : 'bg-dark-100/40 border-gray-800/50 backdrop-blur-md'}`}
+                                    data-title="Tracking Actions"
+                                >
                                     {isAuthenticated ? (
                                         <>
                                             {/* Top Row: Watch Time & Actions */}
@@ -599,10 +528,7 @@ export default function AnimeDetail() {
                                                     </button>
 
                                                     <button
-                                                        onClick={() => {
-                                                            navigator.clipboard.writeText(window.location.href);
-                                                            alert('Link copied to clipboard!');
-                                                        }}
+                                                        onClick={handleShare}
                                                         title="Share Anime"
                                                         className="p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300 active:scale-95 flex-shrink-0"
                                                     >
@@ -613,7 +539,7 @@ export default function AnimeDetail() {
                                                 </div>
                                             </div>
 
-                                            {/* Bottom Row: Progress Tracker - Full Width */}
+                                            {/* Bottom Row: Progress Tracker */}
                                             <div className="w-full border-t border-gray-800/50 pt-3 sm:pt-4">
                                                 <StatusSelector
                                                     animeId={anime.id}
@@ -631,34 +557,25 @@ export default function AnimeDetail() {
                                         </div>
                                     )}
                                 </div>
+
                                 <div className="lg:hidden mt-6 sm:mt-8 mb-8 sm:mb-12 space-y-4 sm:space-y-6">
                                     <InformationBox anime={anime} accentColor={accentColor} />
                                 </div>
                             </div>
 
                             {/* Tab Navigation */}
-                            <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 bg-dark-100/60 backdrop-blur-md rounded-xl sm:rounded-2xl border border-white/5 overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5">
-                                {tabs.map((tab) => (
-                                    <button
+                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100/60 backdrop-blur-md border-white/5'}`}
+                                data-title="Navigation"
+                            >
+                                {tabsWithCounts.map((tab) => (
+                                    <TabButton
                                         key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
-                                            ${activeTab === tab.id
-                                                ? 'text-white shadow-lg'
-                                                : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                        style={activeTab === tab.id ? {
-                                            backgroundColor: accentColor || '#8b5cf6',
-                                            boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
-                                        } : {}}
-                                    >
-                                        <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                        {tab.label}
-                                        {tab.count > 0 && (
-                                            <span className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md ${activeTab === tab.id ? 'bg-white/20' : 'bg-white/5'}`}>
-                                                {tab.count}
-                                            </span>
-                                        )}
-                                    </button>
+                                        tab={tab}
+                                        isActive={activeTab === tab.id}
+                                        onClick={() => handleTabClick(tab.id)}
+                                        accentColor={mappedAccent}
+                                        count={tab.count}
+                                    />
                                 ))}
                             </div>
 
@@ -667,15 +584,12 @@ export default function AnimeDetail() {
                                 {activeTab === 'overview' && (
                                     <OverviewTab
                                         anime={anime}
-                                        related={related}
                                         accentColor={accentColor}
                                     />
                                 )}
-
                                 {activeTab === 'stats' && (
                                     <StatsTab anime={anime} accentColor={accentColor} />
                                 )}
-
                                 {activeTab === 'characters' && (
                                     <CharactersTab
                                         anime={anime}
@@ -683,7 +597,6 @@ export default function AnimeDetail() {
                                         onCharacterClick={setSelectedCharacter}
                                     />
                                 )}
-
                                 {activeTab === 'staff' && (
                                     <StaffTab
                                         anime={anime}
@@ -832,61 +745,22 @@ export default function AnimeDetail() {
                                         Recommendations
                                     </h2>
                                     <div className="hidden lg:grid grid-cols-1 gap-4">
-                                        {related.slice(0, 5).map((anime) => (
-                                            <Link
-                                                key={anime.id}
-                                                to={`/anime/${anime.slug}`}
-                                                className="flex gap-4 group bg-dark-100/30 p-2 rounded-xl border border-transparent hover:border-gray-800 hover:bg-dark-100/50 transition-all"
-                                            >
-                                                <div className="w-20 h-28 flex-shrink-0 overflow-hidden rounded-lg">
-                                                    <img
-                                                        src={getImageUrl(anime.cover_image)}
-                                                        alt={anime.title}
-                                                        className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 py-1 min-w-0">
-                                                    <h3 className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
-                                                        {anime.title}
-                                                    </h3>
-                                                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                                                        <span>{anime.anime_type}</span>
-                                                        <span>•</span>
-                                                        <div className="flex items-center gap-1 bg-yellow-500/10 px-1.5 py-0.5 rounded text-yellow-500 font-bold">
-                                                            <Star className="w-3 h-3 fill-current" />
-                                                            <span>{anime.rating || 'N/A'}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </Link>
+                                        {related.slice(0, 5).map((rel) => (
+                                            <RelatedAnimeCard
+                                                key={rel.id}
+                                                anime={rel}
+                                                getImageUrl={getImageUrl}
+                                                accentColor={accentColor}
+                                            />
                                         ))}
                                     </div>
                                     <div className="lg:hidden flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory pl-0 sm:pl-0">
-                                        {related.slice(0, 6).map((anime) => (
-                                            <Link
-                                                key={anime.id}
-                                                to={`/anime/${anime.slug}`}
-                                                className="flex-shrink-0 w-28 sm:w-32 snap-start group"
-                                            >
-                                                <div className="aspect-[2/3] rounded-lg overflow-hidden mb-2 border border-gray-800 bg-dark-200">
-                                                    <img
-                                                        src={getImageUrl(anime.cover_image)}
-                                                        alt={anime.title}
-                                                        className="w-full h-full object-cover transition-transform group-hover:scale-110"
-                                                    />
-                                                </div>
-                                                <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
-                                                    {anime.title}
-                                                </h3>
-                                                <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                                                    <span>{anime.anime_type}</span>
-                                                    <span>•</span>
-                                                    <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1 py-0.5 rounded text-yellow-500 font-bold">
-                                                        <Star className="w-2.5 h-2.5 fill-current" />
-                                                        <span>{anime.rating || 'N/A'}</span>
-                                                    </div>
-                                                </div>
-                                            </Link>
+                                        {related.slice(0, 6).map((rel) => (
+                                            <MobileRelatedCard
+                                                key={rel.id}
+                                                anime={rel}
+                                                getImageUrl={getImageUrl}
+                                            />
                                         ))}
                                     </div>
                                     {related.length > 5 && (
@@ -908,183 +782,6 @@ export default function AnimeDetail() {
                     </div>
                 </div>
             </div>
-        </div>
-    );
-}
-
-// Tab Components
-function OverviewTab({ anime, accentColor }) {  // eslint-disable-line no-unused-vars
-    const [synopsisExpanded, setSynopsisExpanded] = useState(false);
-
-    return (
-        <div key="overview" className="animate-tab-content space-y-12">
-            <FranchiseSection relations={anime.relations} accentColor={accentColor} sourceSlug={anime.slug} />
-
-            <MusicSection anime={anime} accentColor={accentColor} />
-
-            <div className="mb-12">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
-                    Synopsis
-                </h2>
-                <div className="relative">
-                    <p className={`text-gray-300 leading-loose text-lg font-normal max-w-4xl transition-all duration-300 ${!synopsisExpanded ? 'line-clamp-4' : ''}`}>
-                        {anime.synopsis}
-                    </p>
-                    {anime.synopsis && anime.synopsis.length > 400 && (
-                        <>
-                            {!synopsisExpanded && (
-                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-dark to-transparent pointer-events-none" />
-                            )}
-                            <button
-                                onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                                className="mt-2 flex items-center gap-1 text-sm font-bold transition-colors"
-                                style={{ color: accentColor || '#8b5cf6' }}
-                            >
-                                {synopsisExpanded ? 'Show Less' : 'Read More'}
-                                <ChevronDown className={`w-4 h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {anime.trailer_url && (() => {
-                const getYouTubeId = (url) => {
-                    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
-                    return match ? match[1] : null;
-                };
-                const videoId = getYouTubeId(anime.trailer_url);
-                if (!videoId) return null;
-                return (
-                    <div className="mb-12">
-                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                            <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
-                            Trailer
-                        </h2>
-                        <div className="relative rounded-2xl overflow-hidden border border-gray-800 aspect-video shadow-2xl">
-                            <iframe
-                                src={`https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1`}
-                                title="Trailer"
-                                frameBorder="0"
-                                allow="fullscreen"
-                                allowFullScreen
-                                sandbox="allow-scripts allow-same-origin allow-presentation"
-                                loading="lazy"
-                                className="absolute inset-0 w-full h-full"
-                            />
-                        </div>
-                    </div>
-                );
-            })()}
-        </div>
-    );
-}
-
-function CharactersTab({ anime, accentColor, onCharacterClick }) {
-    if (!anime.characters || anime.characters.length === 0) {
-        return (
-            <div className="text-center py-16 animate-tab-content">
-                <Users className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-400">No character information available.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 animate-tab-content">
-            {anime.characters.map((role) => (
-                <div
-                    key={role.id}
-                    onClick={() => onCharacterClick(role)}
-                    className="group relative h-40 sm:h-48 md:h-56 lg:h-64 overflow-hidden rounded-lg sm:rounded-xl lg:rounded-2xl border border-white/5 bg-dark-200/40 cursor-pointer hover:border-gray-600 transition-colors"
-                >
-                    <div className="absolute inset-0">
-                        <img
-                            src={role.character.image || '/placeholder-avatar.png'}
-                            alt={role.character.name}
-                            loading="lazy"
-                            className="h-full w-full object-cover opacity-70"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent" />
-                    </div>
-                    <div className="relative h-full flex flex-col justify-end p-4 z-10">
-                        <div className="absolute top-3 right-3">
-                            <span
-                                className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border backdrop-blur-md
-                                    ${role.role === 'MAIN'
-                                        ? 'text-white'
-                                        : 'bg-white/5 border-white/10 text-gray-400'}`}
-                                style={role.role === 'MAIN' ? {
-                                    backgroundColor: accentColor ? `${accentColor}30` : 'rgba(139,92,246,0.2)',
-                                    borderColor: accentColor ? `${accentColor}50` : 'rgba(139,92,246,0.3)',
-                                    color: accentColor || '#8b5cf6'
-                                } : {}}
-                            >
-                                {role.role}
-                            </span>
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-black text-white leading-tight mb-1">
-                                {role.character.name}
-                            </h3>
-                            {role.voice_actor && (
-                                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/10">
-                                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 lg:w-9 lg:h-9 shrink-0">
-                                        <img
-                                            src={role.voice_actor.image || '/placeholder-avatar.png'}
-                                            alt={role.voice_actor.name}
-                                            loading="lazy"
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-bold text-gray-300 leading-tight">
-                                            {role.voice_actor.name}
-                                        </p>
-                                        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mt-0.5">
-                                            Japanese
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-function StaffTab({ anime, accentColor, onStaffClick }) {
-    if (!anime.staff || anime.staff.length === 0) {
-        return (
-            <div className="text-center py-16 animate-tab-content">
-                <Mic className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-400">No staff information available.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-tab-content">
-            {anime.staff.map((staffRole) => (
-                <div
-                    key={staffRole.id}
-                    onClick={() => onStaffClick(staffRole)}
-                    className="flex flex-col items-center text-center p-6 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors cursor-pointer group"
-                >
-                    <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4 shadow-lg group-hover:border-gray-600 transition-colors">
-                        <img
-                            src={staffRole.staff.image || '/placeholder-avatar.png'}
-                            alt={staffRole.staff.name}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                    <h4 className="font-bold text-white text-sm line-clamp-2 mb-1">{staffRole.staff.name}</h4>
-                    <p className="text-xs text-gray-500 line-clamp-1">{staffRole.role}</p>
-                </div>
-            ))}
         </div>
     );
 }

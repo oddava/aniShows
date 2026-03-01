@@ -182,7 +182,7 @@ const RichTextEditor = ({ value, onChange, placeholder = "Write something...", c
     };
 
     return (
-        <div className={`flex flex-col rounded-2xl overflow-hidden bg-[#141414] transition-all ${className}`}>
+        <div className={`flex flex-col rounded-2xl overflow-hidden bg-dark-200 transition-all ${className}`}>
             <UrlModal
                 isOpen={modalConfig.isOpen}
                 type={modalConfig.type}
@@ -190,7 +190,6 @@ const RichTextEditor = ({ value, onChange, placeholder = "Write something...", c
                 onSubmit={handleModalSubmit}
             />
 
-            {/* Mobile Tabs & Toolbar Wrapper */}
             <div className="bg-dark/50">
                 {/* Mobile Tabs (hidden on md+) */}
                 <div className="flex md:hidden px-4 pt-3 gap-6">
