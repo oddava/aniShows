@@ -189,3 +189,6 @@ anime/covers/
 .last-deploy-commit
 static/
 
+# Docker Compose local dev overrides
+docker-compose.override.yml
+

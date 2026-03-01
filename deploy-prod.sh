@@ -98,9 +98,6 @@ fi
 echo ""
 
 echo -e "${BLUE}🎨 Step 7: Collecting static files...${NC}"
-mkdir -p static
-docker run --rm -v "$(pwd)/static:/static" alpine:latest chown -R 1000:1000 /static 2>/dev/null || true
-
 if $COMPOSE_CMD exec -T web uv run python manage.py collectstatic --noinput --clear; then
     echo -e "${GREEN}✅ Static files collected!${NC}"
 else

@@ -53,8 +53,6 @@ services:
       # Prometheus multi-process metrics
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
     volumes:
-      - .:/app
-      - /app/.venv
       - prometheus_multiproc:/tmp/prometheus
     user: "1000:1000"
     deploy:
@@ -81,9 +79,6 @@ services:
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
     depends_on:
       - web
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     deploy:
       resources:
         limits:
@@ -167,8 +162,6 @@ services:
       # Prometheus multi-process metrics
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
     volumes:
-      - .:/app
-      - /app/.venv
       - prometheus_multiproc:/tmp/prometheus
     user: "0:0"
     depends_on:
@@ -206,9 +199,6 @@ services:
     depends_on:
       - web
       - redis
-    volumes:
-      - .:/app
-      - /app/.venv
     deploy:
       resources:
         limits:
