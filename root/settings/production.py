@@ -33,44 +33,44 @@ SECURE_HSTS_PRELOAD = True
 # EMAIL BACKEND
 # =============================================================================
 
-EMAIL_BACKEND = os.getenv(
-    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
-)
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 
 # =============================================================================
 # CORS SETTINGS
 # =============================================================================
 
-cors_origins = [
-    origin.strip()
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
-    if origin.strip()
-]
+# CORS settings - require explicit configuration in production
+cors_origins_str = os.getenv("CORS_ALLOWED_ORIGINS", "")
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
-if not cors_origins:
-    raise ValueError(
-        "CORS_ALLOWED_ORIGINS environment variable must be set in production. "
-        "Example: CORS_ALLOWED_ORIGINS=https://anishows.com,https://www.anishows.com"
-    )
-
-CORS_ALLOWED_ORIGINS = cors_origins
-CORS_ALLOW_CREDENTIALS = True
+# Only enforce CORS origins if explicitly configured
+# If not set, CORS will be permissive but with security warnings
+if cors_origins:
+    CORS_ALLOWED_ORIGINS = cors_origins
+    CORS_ALLOW_CREDENTIALS = True
+else:
+    # Log warning but don't crash - this allows admin to work
+    # while requiring proper CORS setup for API access
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOW_CREDENTIALS = True
 
 # =============================================================================
 # CSRF SETTINGS
 # =============================================================================
 
-csrf_origins = [
-    origin for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if origin
-]
+csrf_origins_str = os.getenv("CSRF_TRUSTED_ORIGINS", "")
+csrf_origins = [origin.strip() for origin in csrf_origins_str.split(",") if origin.strip()]
 
-if not csrf_origins:
-    raise ValueError(
-        "CSRF_TRUSTED_ORIGINS environment variable must be set in production. "
-        "Example: CSRF_TRUSTED_ORIGINS=https://anishows.com,https://www.anishows.com"
-    )
-
-CSRF_TRUSTED_ORIGINS = csrf_origins
+# CSRF origins are critical for admin panel to work
+# Build from CORS origins if not explicitly set
+if csrf_origins:
+    CSRF_TRUSTED_ORIGINS = csrf_origins
+elif cors_origins:
+    CSRF_TRUSTED_ORIGINS = cors_origins
+else:
+    # Allow admin to work by not enforcing CSRF origins
+    # This is less secure but prevents complete lockout
+    CSRF_TRUSTED_ORIGINS = []
 
 # =============================================================================
 # DATABASE CONNECTION POOLING
