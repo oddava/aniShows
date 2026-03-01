@@ -590,7 +590,7 @@ JAZZMIN_SETTINGS = {
     "login_logo": None,
     "login_logo_dark": None,
     "site_logo_classes": "img-circle",
-    "site_icon": "fas fa-tv",
+    "site_icon": None,
     "welcome_sign": "Welcome to aniShows Administration",
     "copyright": "aniShows",
     "search_model": ["users.CustomUser", "anime.Anime"],
