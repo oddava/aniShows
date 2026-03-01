@@ -675,7 +675,7 @@ export default function Browse() {
               <div className="sticky top-24 bg-dark-100/50 backdrop-blur-sm rounded-2xl border border-gray-800 p-5 h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar">
                 <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-800">
                   <Filter className="w-5 h-5 text-accent" />
-                  <h2 className="text-base font-bold text-white/90">Filters</h2>
+                  <h2 className="text-base font-bold text-accent">Filters</h2>
                 </div>
                 <FilterSidebar {...filterSidebarProps} />
               </div>

@@ -64,69 +64,50 @@ export function OverviewTab({ anime, accentColor }) {
 export function CharactersTab({ anime, accentColor, onCharacterClick }) {
     if (!anime.characters || anime.characters.length === 0) {
         return (
-            <div className="text-center py-16 animate-tab-content">
-                <Users className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-400">No character information available.</p>
+            <div className="text-center py-12 animate-tab-content">
+                <Users className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">No character information available.</p>
             </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 animate-tab-content">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 animate-tab-content">
             {anime.characters.map((role) => (
                 <div
                     key={role.id}
                     onClick={() => onCharacterClick(role)}
-                    className="group relative h-40 sm:h-48 md:h-56 lg:h-64 overflow-hidden rounded-lg sm:rounded-xl lg:rounded-2xl border border-white/5 bg-dark-200/40 cursor-pointer hover:border-gray-600 transition-colors"
+                    className="group relative overflow-hidden rounded-xl border border-white/5 bg-dark-200/40 cursor-pointer hover:border-gray-600"
                 >
-                    <div className="absolute inset-0">
+                    <div className="aspect-[3/4] relative">
                         <img
                             src={role.character.image || '/placeholder-avatar.png'}
                             alt={role.character.name}
                             loading="lazy"
-                            className="h-full w-full object-cover opacity-70"
+                            className="absolute inset-0 w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent" />
-                    </div>
-                    <div className="relative h-full flex flex-col justify-end p-4 z-10">
-                        <div className="absolute top-3 right-3">
-                            <span
-                                className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border backdrop-blur-md
-                                    ${role.role === 'MAIN'
-                                        ? 'text-white'
-                                        : 'bg-white/5 border-white/10 text-gray-400'}`}
-                                style={role.role === 'MAIN' ? {
-                                    backgroundColor: accentColor ? `${accentColor}30` : 'rgba(139,92,246,0.2)',
-                                    borderColor: accentColor ? `${accentColor}50` : 'rgba(139,92,246,0.3)',
-                                    color: accentColor || '#8b5cf6'
-                                } : {}}
-                            >
-                                {role.role}
-                            </span>
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-black text-white leading-tight mb-1">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
+                        
+                        <span
+                            className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] font-bold uppercase rounded"
+                            style={{
+                                backgroundColor: role.role === 'MAIN' 
+                                    ? (accentColor || '#8b5cf6')
+                                    : 'rgba(255,255,255,0.2)',
+                                color: 'white'
+                            }}
+                        >
+                            {role.role}
+                        </span>
+
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                            <h3 className="text-sm font-bold text-white truncate drop-shadow-lg">
                                 {role.character.name}
                             </h3>
                             {role.voice_actor && (
-                                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/10">
-                                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/10 lg:w-9 lg:h-9 shrink-0">
-                                        <img
-                                            src={role.voice_actor.image || '/placeholder-avatar.png'}
-                                            alt={role.voice_actor.name}
-                                            loading="lazy"
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-bold text-gray-300 leading-tight">
-                                            {role.voice_actor.name}
-                                        </p>
-                                        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mt-0.5">
-                                            Japanese
-                                        </p>
-                                    </div>
-                                </div>
+                                <p className="text-xs text-white/70 mt-0.5 truncate drop-shadow-md">
+                                    {role.voice_actor.name}
+                                </p>
                             )}
                         </div>
                     </div>

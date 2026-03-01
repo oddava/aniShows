@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Palette, Monitor, Laptop, Sparkles } from 'lucide-react';
+import { Palette } from 'lucide-react';
 
 export default function ThemeSwitcher() {
     const { theme, setTheme } = useTheme();
@@ -8,13 +8,10 @@ export default function ThemeSwitcher() {
     const dropdownRef = useRef(null);
 
     const themes = [
-        { id: 'default', name: 'Default Dark', icon: Monitor },
-        { id: 'retro-crt', name: 'Retro CRT', icon: Laptop },
-        { id: 'retro-anime', name: 'Pastel Anime', icon: Sparkles },
+        { id: 'default', name: 'Default Dark' },
+        { id: 'retro-crt', name: 'Retro CRT' },
+        { id: 'retro-anime', name: 'Pastel Anime' },
     ];
-
-    const currentThemeInfo = themes.find(t => t.id === theme) || themes[0];
-    const Icon = currentThemeInfo.icon;
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -30,11 +27,10 @@ export default function ThemeSwitcher() {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent rounded-full border border-accent/20 transition-all text-sm font-medium"
+                className="p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all"
                 title="Switch Theme"
             >
-                <Palette className="w-4 h-4" />
-                <span className="hidden md:inline">Theme</span>
+                <Palette className="w-5 h-5" />
             </button>
 
             {isOpen && (
@@ -43,7 +39,6 @@ export default function ThemeSwitcher() {
                         Select Theme
                     </div>
                     {themes.map((t) => {
-                        const ThemeIcon = t.icon;
                         const isActive = theme === t.id;
                         return (
                             <button
@@ -52,15 +47,14 @@ export default function ThemeSwitcher() {
                                     setTheme(t.id);
                                     setIsOpen(false);
                                 }}
-                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${isActive
+                                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${isActive
                                         ? 'bg-accent/10 text-accent font-medium'
                                         : 'text-gray-300 hover:bg-dark-50 hover:text-white'
                                     }`}
                             >
-                                <ThemeIcon className="w-4 h-4" />
                                 {t.name}
                                 {isActive && (
-                                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-accent" />
+                                    <div className="w-1.5 h-1.5 rounded-full bg-accent" />
                                 )}
                             </button>
                         );

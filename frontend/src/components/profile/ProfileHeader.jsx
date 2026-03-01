@@ -13,7 +13,7 @@ export default function ProfileHeader({
     if (!displayUser) return null;
 
     return (
-        <div className="relative mb-8">
+        <div className="relative mb-8 profile-header">
             {/* Banner */}
             <div className="relative aspect-[3/1] w-full max-h-72 sm:max-h-64 md:max-h-72 overflow-hidden bg-dark-200">
                 {displayUser?.banner ? (
@@ -35,7 +35,7 @@ export default function ProfileHeader({
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 px-2 sm:px-4 pt-4">
                     {/* Avatar */}
                     <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-24">
-                        <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-2xl shadow-2xl bg-dark overflow-hidden ring-4 ring-dark">
+                        <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-2xl bg-dark overflow-hidden">
                             {displayUser?.avatar ? (
                                 <img
                                     src={displayUser.avatar}
@@ -66,30 +66,30 @@ export default function ProfileHeader({
                             </div>
 
                             <div className="flex items-center justify-center md:justify-start gap-4 text-sm font-medium mt-1">
-                                <button
-                                    onClick={() => onOpenFollowersModal('followers')}
-                                    className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-                                >
-                                    <span className="text-white font-bold">{(displayUser?.followers_count ?? 0).toLocaleString()}</span>
-                                    <span>Followers</span>
-                                </button>
-                                <span className="text-gray-700">•</span>
-                                <button
-                                    onClick={() => onOpenFollowersModal('following')}
-                                    className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-                                >
-                                    <span className="text-white font-bold">{(displayUser?.following_count ?? 0).toLocaleString()}</span>
-                                    <span>Following</span>
-                                </button>
+                            <button
+                                onClick={() => onOpenFollowersModal('followers')}
+                                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+                            >
+                                <span className="text-white font-bold">{(displayUser?.followers_count ?? 0).toLocaleString()}</span>
+                                <span>Followers</span>
+                            </button>
+                            <span className="text-gray-600">•</span>
+                            <button
+                                onClick={() => onOpenFollowersModal('following')}
+                                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+                            >
+                                <span className="text-white font-bold">{(displayUser?.following_count ?? 0).toLocaleString()}</span>
+                                <span>Following</span>
+                            </button>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-center md:justify-end gap-3 shrink-0 mt-4 md:mt-0">
                             {!isPublicView ? (
-                                <Link
-                                    to="/settings"
-                                    className="px-5 py-2.5 bg-dark-100/80 hover:bg-dark-100 border border-gray-700/50 hover:border-gray-600 text-gray-300 hover:text-white rounded-xl transition-all duration-200 text-sm font-medium flex items-center gap-2 backdrop-blur-sm"
-                                >
+                            <Link
+                                to="/settings"
+                                className="px-5 py-2.5 bg-dark-100 hover:bg-dark-50 border border-gray-700 hover:border-accent text-gray-300 hover:text-white rounded-xl transition-all duration-200 text-sm font-medium flex items-center gap-2"
+                            >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c-.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c.94-1.543-.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

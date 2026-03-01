@@ -228,7 +228,7 @@ export default function Seasonal() {
                                     aria-label={`${season.label} season`}
                                     tabIndex={selectedSeason === season.value ? 0 : -1}
                                     className={`px-5 py-2 rounded-full text-xs font-bold tracking-wide transition-all border ${selectedSeason === season.value
-                                        ? `${season.color} shadow-lg shadow-black/20`
+                                        ? `${season.color}`
                                         : 'text-gray-500 border-transparent hover:text-gray-300 hover:bg-white/5'
                                         }`}
                                 >

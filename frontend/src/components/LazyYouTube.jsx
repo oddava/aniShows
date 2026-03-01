@@ -16,7 +16,7 @@ const LazyYouTube = memo(function LazyYouTube({ videoId, title = 'Trailer', acce
     const fallbackThumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
     return (
-        <div className="relative rounded-2xl overflow-hidden border border-gray-800/50 aspect-video shadow-2xl bg-dark-200">
+        <div className="relative rounded-2xl overflow-hidden border border-gray-800/50 aspect-video bg-dark-200">
             {!isPlaying ? (
                 <>
                     {/* Thumbnail */}

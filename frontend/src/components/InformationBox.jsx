@@ -47,7 +47,7 @@ export default function InformationBox({ anime, className, accentColor }) {
     };
 
     return (
-        <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 shadow-xl min-w-0 overflow-hidden ${className}`}>
+        <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 min-w-0 overflow-hidden ${className}`}>
             <h3
                 className="text-white font-bold uppercase text-[10px] tracking-[0.2em]"
                 style={{ color: accentColor ? `${accentColor}cc` : '#8b5cf6cc' }}

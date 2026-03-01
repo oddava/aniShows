@@ -645,9 +645,9 @@ export default function Navbar() {
                                 {/* Enhanced Dropdown Menu */}
                                 {isProfileOpen && (
                                     <div className="absolute right-0 top-full mt-2 w-72 py-2 bg-dark-100/95 backdrop-blur-xl 
-                                                    rounded-xl border border-gray-700/50 shadow-xl shadow-black/20 animate-fade-in">
+                                                    rounded-xl border border-accent/30 shadow-xl shadow-black/20 animate-fade-in">
                                         {/* User Info Header */}
-                                        <div className="px-4 py-3 border-b border-gray-700/50">
+                                        <div className="px-4 py-3 border-b border-accent/20">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-accent/30">
                                                     {user?.avatar ? (
@@ -659,26 +659,26 @@ export default function Navbar() {
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-semibold text-white truncate">{user?.username}</p>
+                                                    <p className="text-sm font-semibold text-accent truncate">{user?.username}</p>
                                                     <p className="text-xs text-gray-400 truncate">{user?.email}</p>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* User Stats */}
-                                        <div className="px-4 py-3 border-b border-gray-700/50">
+                                        <div className="px-4 py-3 border-b border-accent/20">
                                             <div className="grid grid-cols-3 gap-2 text-center">
-                                                <div className="p-2 bg-dark-50/50 rounded-lg">
-                                                    <p className="text-lg font-bold text-white">{userStats.animeWatched}</p>
-                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Anime</p>
+                                                <div className="p-2 bg-accent/10 rounded-lg">
+                                                    <p className="text-lg font-bold text-accent">{userStats.animeWatched}</p>
+                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Anime</p>
                                                 </div>
-                                                <div className="p-2 bg-dark-50/50 rounded-lg">
-                                                    <p className="text-lg font-bold text-white">{userStats.episodesWatched}</p>
-                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Episodes</p>
+                                                <div className="p-2 bg-accent/10 rounded-lg">
+                                                    <p className="text-lg font-bold text-accent">{userStats.episodesWatched}</p>
+                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Episodes</p>
                                                 </div>
-                                                <div className="p-2 bg-dark-50/50 rounded-lg">
-                                                    <p className="text-lg font-bold text-white">{formatHours(userStats.hoursWatched)}h</p>
-                                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Hours</p>
+                                                <div className="p-2 bg-accent/10 rounded-lg">
+                                                    <p className="text-lg font-bold text-accent">{formatHours(userStats.hoursWatched)}h</p>
+                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Hours</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -689,7 +689,7 @@ export default function Navbar() {
                                                 to="/profile"
                                                 onClick={() => setIsProfileOpen(false)}
                                                 className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
-                                                           hover:bg-accent/10 transition-colors"
+                                                           hover:bg-white/5 transition-colors"
                                             >
                                                 <User className="w-4 h-4" />
                                                 <span className="text-sm font-medium">Profile</span>
@@ -698,7 +698,7 @@ export default function Navbar() {
                                                 to="/settings"
                                                 onClick={() => setIsProfileOpen(false)}
                                                 className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
-                                                           hover:bg-accent/10 transition-colors"
+                                                           hover:bg-white/5 transition-colors"
                                             >
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -706,7 +706,7 @@ export default function Navbar() {
                                                 </svg>
                                                 <span className="text-sm font-medium">Settings</span>
                                             </Link>
-                                            <div className="border-t border-gray-700/50 my-1" />
+                                            <div className="border-t border-white/10 my-1" />
                                             <button
                                                 onClick={() => { logout(); setIsProfileOpen(false); }}
                                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-red-400 

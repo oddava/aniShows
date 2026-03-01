@@ -113,7 +113,7 @@ export default function Home() {
     return (
         <>
             <SEO page="home" />
-            <div className="min-h-screen">
+            <div className="min-h-screen home-page">
                 {/* Hero Section */}
                 <section className="relative h-[55vh] sm:h-[65vh] min-h-[450px] sm:min-h-[550px] flex items-center overflow-hidden">
                     <div className="absolute inset-0 bg-dark">

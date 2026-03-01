@@ -405,7 +405,7 @@ export default function AnimeDetail() {
     return (
         <div
             ref={containerRef}
-            className="min-h-screen"
+            className="min-h-screen anime-detail-page"
             style={accentColor && !isRetro ? { '--anime-accent': accentColor } : { '--anime-accent': 'var(--color-accent)' }}
         >
             <SEOHelmet anime={anime} />
@@ -451,7 +451,7 @@ export default function AnimeDetail() {
                                     srcSet={coverSrcSet}
                                     sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
                                     alt={anime.title}
-                                    className="w-48 md:w-64 lg:w-full aspect-[2/3] object-cover rounded-2xl shadow-2xl border border-gray-800 bg-dark-200"
+                                    className="w-48 md:w-64 lg:w-full aspect-[2/3] object-cover rounded-2xl border border-gray-800 bg-dark-200"
                                 />
                             </div>
 
@@ -496,7 +496,7 @@ export default function AnimeDetail() {
                                 </div>
 
                                 {/* Main Actions */}
-                                <div className={`flex flex-col gap-3 sm:gap-4 md:gap-5 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border shadow-2xl relative z-20 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none border-t-0 pb-6' : 'bg-dark-100/40 border-gray-800/50 backdrop-blur-md'}`}
+                                <div className={`flex flex-col gap-3 sm:gap-4 md:gap-5 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border relative z-20 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none border-t-0 pb-6' : 'bg-dark-100/40 border-gray-800/50 backdrop-blur-md'}`}
                                     data-title="Tracking Actions"
                                 >
                                     {isAuthenticated ? (

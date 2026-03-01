@@ -76,18 +76,7 @@
     background-attachment: fixed;
   }
 
-  /* Fix text visibility and borders in retro-anime theme */
-  [data-theme="retro-anime"] .text-white,
-  [data-theme="retro-anime"] .text-gray-100,
-  [data-theme="retro-anime"] .text-gray-200,
-  [data-theme="retro-anime"] .text-gray-300,
-  [data-theme="retro-anime"] .text-gray-400,
-  [data-theme="retro-anime"] .text-gray-500,
-  [data-theme="retro-anime"] .text-gray-600,
-  [data-theme="retro-anime"] .text-gray-700 {
-    color: #1a1a1a !important;
-  }
-
+  /* Fix placeholder text in retro-anime theme */
   [data-theme="retro-anime"] .placeholder-gray-500::placeholder,
   [data-theme="retro-anime"] .placeholder-gray-700::placeholder {
     color: #4a4a4a !important;
@@ -146,48 +135,48 @@
   }
 
   /* Pastel theme anime detail page fixes */
-  [data-theme="retro-anime"] .text-gray-400 {
+  [data-theme="retro-anime"] .anime-detail-page .text-gray-400 {
     color: #6b5a7d !important;
   }
 
   /* Japanese title and subtitles */
-  [data-theme="retro-anime"] .text-gray-400.font-medium,
-  [data-theme="retro-anime"] .tracking-wide {
+  [data-theme="retro-anime"] .anime-detail-page .text-gray-400.font-medium,
+  [data-theme="retro-anime"] .anime-detail-page .tracking-wide {
     color: #6b5a7d !important;
   }
 
   /* Heart icon fix - but NOT for the filled favorite button */
-  [data-theme="retro-anime"] .text-red-500:not(.bg-red-500 *),
-  [data-theme="retro-anime"] svg.text-red-500:not(.bg-red-500 svg),
-  [data-theme="retro-anime"] [class*="text-red-500"]:not(.bg-red-500 *) {
+  [data-theme="retro-anime"] .anime-detail-page .text-red-500:not(.bg-red-500 *),
+  [data-theme="retro-anime"] .anime-detail-page svg.text-red-500:not(.bg-red-500 svg),
+  [data-theme="retro-anime"] .anime-detail-page [class*="text-red-500"]:not(.bg-red-500 *) {
     color: #e85a9c !important;
   }
 
-  [data-theme="retro-anime"] .fill-current.text-red-500:not(.bg-red-500 *),
-  [data-theme="retro-anime"] .fill-red-500:not(.bg-red-500 *) {
+  [data-theme="retro-anime"] .anime-detail-page .fill-current.text-red-500:not(.bg-red-500 *),
+  [data-theme="retro-anime"] .anime-detail-page .fill-red-500:not(.bg-red-500 *) {
     fill: #e85a9c !important;
   }
 
   /* Favorite button heart - keep it white when filled */
-  [data-theme="retro-anime"] .bg-red-500 svg,
-  [data-theme="retro-anime"] button[class*="bg-red-500"] svg {
+  [data-theme="retro-anime"] .anime-detail-page .bg-red-500 svg,
+  [data-theme="retro-anime"] .anime-detail-page button[class*="bg-red-500"] svg {
     color: white !important;
     fill: white !important;
   }
 
-  /* Tab buttons */
-  [data-theme="retro-anime"] button[class*="text-gray-400"] {
+  /* Tab buttons - anime detail page only */
+  [data-theme="retro-anime"] .anime-detail-page button[class*="text-gray-400"] {
     color: #6b5a7d !important;
   }
 
-  /* Info labels */
-  [data-theme="retro-anime"] .text-gray-400.text-\[10px\],
-  [data-theme="retro-anime"] .uppercase.tracking-wider {
+  /* Info labels - anime detail page only */
+  [data-theme="retro-anime"] .anime-detail-page .text-gray-400.text-\[10px\],
+  [data-theme="retro-anime"] .anime-detail-page .uppercase.tracking-wider {
     color: #7a6a8c !important;
   }
 
-  /* Synposis text */
-  [data-theme="retro-anime"] .text-gray-300.leading-loose {
+  /* Synposis text - anime detail page only */
+  [data-theme="retro-anime"] .anime-detail-page .text-gray-300.leading-loose {
     color: #4a3a5c !important;
   }
 
@@ -235,6 +224,919 @@
   [data-theme="retro-anime"] h4.text-gray-300.group-hover\:text-white:hover {
     color: #e85a9c !important;
   }
+
+  /* Anime detail page - comprehensive text color fixes */
+  /* Watch time values, information section values */
+  [data-theme="retro-anime"] .anime-detail-page .text-white,
+  [data-theme="retro-anime"] .anime-detail-page .text-gray-100,
+  [data-theme="retro-anime"] .anime-detail-page .text-gray-200 {
+    color: #4a3a5c !important;
+  }
+
+  /* Opening/Ending theme titles */
+  [data-theme="retro-anime"] .anime-detail-page h3,
+  [data-theme="retro-anime"] .anime-detail-page h4,
+  [data-theme="retro-anime"] .anime-detail-page [class*="font-bold"] {
+    color: #4a3a5c !important;
+  }
+
+  /* External links text */
+  [data-theme="retro-anime"] .anime-detail-page a:not([class*="bg-"]):not([class*="btn-"]) {
+    color: #4a3a5c !important;
+  }
+
+  /* Synopsis and descriptions */
+  [data-theme="retro-anime"] .anime-detail-page p:not([class*="text-accent"]):not([class*="text-green"]):not([class*="text-red"]):not([class*="text-yellow"]):not([class*="text-blue"]) {
+    color: #4a3a5c !important;
+  }
+
+  /* Tab buttons and navigation */
+  [data-theme="retro-anime"] .anime-detail-page nav button,
+  [data-theme="retro-anime"] .anime-detail-page [role="tab"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .anime-detail-page nav button[aria-selected="true"],
+  [data-theme="retro-anime"] .anime-detail-page [role="tab"][aria-selected="true"] {
+    color: #e85a9c !important;
+  }
+
+  /* Most helpful button and similar buttons */
+  [data-theme="retro-anime"] .anime-detail-page button:not([class*="bg-accent"]):not([class*="bg-red"]):not([class*="bg-green"]):not([class*="bg-blue"]) {
+    color: #6b5a7d !important;
+  }
+
+  /* Labels and small text */
+  [data-theme="retro-anime"] .anime-detail-page span:not([class*="text-accent"]):not([class*="bg-"]) {
+    color: #6b5a7d !important;
+  }
+
+  /* Watch time and stats values */
+  [data-theme="retro-anime"] .anime-detail-page [class*="font-black"],
+  [data-theme="retro-anime"] .anime-detail-page [class*="font-bold"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Recommendations section */
+  [data-theme="retro-anime"] .anime-detail-page .text-xs,
+  [data-theme="retro-anime"] .anime-detail-page .text-sm {
+    color: #6b5a7d !important;
+  }
+
+  /* ============================================
+     HOME PAGE - PASTEL ANIME THEME FIXES
+     ============================================ */
+
+  /* Hero section titles and text */
+  [data-theme="retro-anime"] h1[class*="text-white"],
+  [data-theme="retro-anime"] h2[class*="text-white"],
+  [data-theme="retro-anime"] h3[class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .text-white\/90,
+  [data-theme="retro-anime"] [class*="text-white/90"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Section titles (Trending Now, Top Rated, etc.) */
+  [data-theme="retro-anime"] .tracking-tight[class*="font-bold"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Hero section metadata */
+  [data-theme="retro-anime"] .text-gray-300[class*="drop-shadow-md"],
+  [data-theme="retro-anime"] .text-gray-200 {
+    color: #6b5a7d !important;
+  }
+
+  /* Hero section description */
+  [data-theme="retro-anime"] p[class*="text-gray-300"][class*="line-clamp"] {
+    color: #6b5a7d !important;
+  }
+
+  /* AnimeCard titles and text */
+  [data-theme="retro-anime"] h3[class*="font-semibold"][class*="text-white"],
+  [data-theme="retro-anime"] h3[class*="font-bold"][class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  /* AnimeCard episode count and info */
+  [data-theme="retro-anime"] .text-gray-400,
+  [data-theme="retro-anime"] .text-gray-500 {
+    color: #6b5a7d !important;
+  }
+
+  /* AnimeCard type label (TV, Movie, etc.) */
+  [data-theme="retro-anime"] .text-accent-light {
+    color: #e85a9c !important;
+  }
+
+  /* AnimeCard footer background */
+  [data-theme="retro-anime"] [class*="bg-dark-100"][class*="rounded-b-xl"] {
+    background-color: rgba(255, 255, 255, 0.7) !important;
+  }
+
+  /* AnimeCard border */
+  [data-theme="retro-anime"] [class*="border-gray-800"] {
+    border-color: rgba(181, 154, 201, 0.4) !important;
+  }
+
+  /* View All link */
+  [data-theme="retro-anime"] a[class*="text-gray-400"][class*="hover:text-white"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] a[class*="text-gray-400"][class*="hover:text-white"]:hover {
+    color: #e85a9c !important;
+  }
+
+  /* Hero section buttons */
+  [data-theme="retro-anime"] .home-page button[class*="bg-white/10"],
+  [data-theme="retro-anime"] .home-page button[class*="bg-dark-100/50"] {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    border-color: rgba(181, 154, 201, 0.5) !important;
+  }
+
+  [data-theme="retro-anime"] .home-page button[class*="backdrop-blur"] {
+    backdrop-filter: blur(8px) !important;
+  }
+
+  /* CTA Section */
+  [data-theme="retro-anime"] .home-page [class*="text-white/90"] span {
+    color: #4a3a5c !important;
+  }
+
+  /* Default theme - Anime card quick action buttons - Dark glassmorphism */
+  :root:not([data-theme="retro-anime"]):not([data-theme="retro-pc"]) button[class*="bg-accent/90"][class*="hover:bg-accent"],
+  :root:not([data-theme="retro-anime"]):not([data-theme="retro-pc"]) button[class*="bg-accent/90"][class*="hover:bg-red-500"] {
+    background-color: rgba(30, 30, 35, 0.85) !important;
+    backdrop-filter: blur(8px) !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+  }
+
+  :root:not([data-theme="retro-anime"]):not([data-theme="retro-pc"]) button[class*="bg-accent/90"][class*="hover:bg-accent"]:hover,
+  :root:not([data-theme="retro-anime"]):not([data-theme="retro-pc"]) button[class*="bg-accent/90"][class*="hover:bg-red-500"]:hover {
+    background-color: rgba(50, 50, 60, 0.9) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    color: #ffffff !important;
+  }
+
+  /* Anime card status menu trigger button - pastel theme */
+  /* Target specifically the + button (not the favorite button which has hover:bg-red-500) */
+  [data-theme="retro-anime"] button[class*="bg-accent/90"][class*="hover:bg-accent"] {
+    background-color: #e85a9c !important;
+    border-color: #e85a9c !important;
+    color: #ffffff !important;
+  }
+
+  [data-theme="retro-anime"] button[class*="bg-accent/90"][class*="hover:bg-accent"]:hover {
+    background-color: #ff85b8 !important;
+    border-color: #ff85b8 !important;
+    color: #ffffff !important;
+  }
+
+  /* Favorite button (not favorited) - keep it matching the theme */
+  [data-theme="retro-anime"] button[class*="bg-accent/90"][class*="hover:bg-red-500"] {
+    background-color: #e85a9c !important;
+    border-color: #e85a9c !important;
+    color: #ffffff !important;
+  }
+
+  [data-theme="retro-anime"] button[class*="bg-accent/90"][class*="hover:bg-red-500"]:hover {
+    background-color: #ff85b8 !important;
+    border-color: #ff85b8 !important;
+    color: #ffffff !important;
+  }
+
+  /* ============================================
+     SEASONAL PAGE - PASTEL ANIME THEME FIXES
+     ============================================ */
+
+  /* Stats badges (Entries, Highly Rated) */
+  [data-theme="retro-anime"] [class*="bg-dark-100/30"] [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] [class*="bg-dark-100/30"] [class*="text-gray-500"] {
+    color: #6b5a7d !important;
+  }
+
+  /* Season selector tabs (Winter, Spring, Summer, Fall) */
+  [data-theme="retro-anime"] button[class*="bg-dark-100"][class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] button[class*="bg-accent"][class*="text-white"] {
+    color: #ffffff !important;
+  }
+
+  /* Year selector */
+  [data-theme="retro-anime"] [class*="border-gray-800"] [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Season dates (JAN - MAR) */
+  [data-theme="retro-anime"] [class*="tracking-[0.3em]"][class*="text-accent"] {
+    color: #e85a9c !important;
+  }
+
+  /* Page title */
+  [data-theme="retro-anime"] h1[class*="text-white/90"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Prev/Next buttons */
+  [data-theme="retro-anime"] [class*="rounded-full"] [class*="text-gray-400"] {
+    color: #6b5a5d !important;
+  }
+
+  [data-theme="retro-anime"] [class*="rounded-full"] [class*="text-gray-400"]:hover {
+    color: #e85a9c !important;
+  }
+
+  /* ============================================
+     SCHEDULE PAGE - PASTEL ANIME THEME FIXES
+     ============================================ */
+
+  /* Week date range (Mar 2 - Mar 8) */
+  [data-theme="retro-anime"] [class*="text-white"][class*="font-semibold"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Page title */
+  [data-theme="retro-anime"] h1[class*="text-white/90"],
+  [data-theme="retro-anime"] h2[class*="text-white/90"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Day selector buttons */
+  [data-theme="retro-anime"] [class*="bg-dark-100"] [class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] [class*="bg-accent"] [class*="text-white"] {
+    color: #ffffff !important;
+  }
+
+  /* Selected day header */
+  [data-theme="retro-anime"] h2 [class*="text-gray-500"] {
+    color: #6b5a7d !important;
+  }
+
+  /* Navigation arrows */
+  [data-theme="retro-anime"] button[class*="bg-dark-100"][class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] button[class*="bg-dark-100"][class*="text-gray-400"]:hover {
+    color: #e85a9c !important;
+  }
+
+  /* Today button */
+  [data-theme="retro-anime"] button[class*="text-accent"] {
+    color: #e85a9c !important;
+  }
+
+  /* Episode info text */
+  [data-theme="retro-anime"] [class*="text-white"][class*="line-clamp-2"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] [class*="text-white/90"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] [class*="text-white"][class*="text-xs"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Time display */
+  [data-theme="retro-anime"] [class*="text-green-400"],
+  [data-theme="retro-anime"] [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Favorite button (favorited state) */
+  [data-theme="retro-anime"] button.bg-red-500 {
+    background-color: #e85a9c !important;
+    border-color: #e85a9c !important;
+    color: white !important;
+  }
+
+  [data-theme="retro-anime"] button.bg-red-500 svg {
+    color: white !important;
+    fill: white !important;
+  }
+
+  [data-theme="retro-anime"] button.bg-red-500:hover {
+    background-color: #fce7f3 !important;
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] button.bg-red-500:hover svg {
+    color: #e85a9c !important;
+    fill: #e85a9c !important;
+  }
+
+  /* Status dropdown menu - pastel theme */
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in {
+    background-color: #ffffff !important;
+    border-color: rgba(232, 90, 156, 0.3) !important;
+    box-shadow: 0 10px 25px -5px rgba(232, 90, 156, 0.15) !important;
+  }
+
+  /* All buttons in the status menu - default white background */
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button {
+    background-color: #ffffff !important;
+    color: #4a3a5c !important;
+  }
+
+  /* Hover state for status menu buttons */
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button:hover,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button:hover {
+    background-color: #fce7f3 !important;
+  }
+
+  /* Active/selected status menu item (has bg-accent class) */
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button.bg-accent,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button.bg-accent {
+    background-color: #fce7f3 !important;
+    color: #e85a9c !important;
+    font-weight: 600 !important;
+  }
+
+  /* Keep status icons their distinctive colors */
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button .text-blue-400,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button .text-blue-400 {
+    color: #60a5fa !important;
+  }
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button .text-yellow-400,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button .text-yellow-400 {
+    color: #facc15 !important;
+  }
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button .text-green-400,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button .text-green-400 {
+    color: #4ade80 !important;
+  }
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button .text-orange-400,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button .text-orange-400 {
+    color: #fb923c !important;
+  }
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 button .text-red-400,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in button .text-red-400 {
+    color: #f87171 !important;
+  }
+
+  /* Remove button styling */
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 .border-t.border-gray-800,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in .border-t.border-gray-800 {
+    border-top-color: rgba(232, 90, 156, 0.2) !important;
+    background-color: transparent !important;
+  }
+
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 .border-t button,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in .border-t button {
+    background-color: #ffffff !important;
+  }
+
+  [data-theme="retro-anime"] .animate-fade-in.w-44.bg-dark-100 .border-t button:hover,
+  [data-theme="retro-anime"] div.w-44.bg-dark-100.animate-fade-in .border-t button:hover {
+    background-color: #fce7f3 !important;
+  }
+
+  /* Synopsis gradient fade - use pastel colors instead of dark */
+  [data-theme="retro-anime"] .bg-gradient-to-t.from-dark {
+    background: linear-gradient(to top, #f0e6f5 0%, transparent 100%) !important;
+  }
+
+  /* Status Selector Dropdown - pastel theme fixes */
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] {
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    border-color: rgba(181, 154, 201, 0.3) !important;
+  }
+
+  /* Status icons in colored squares - only within the dropdown */
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] .text-green-500,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] .text-blue-500,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] .text-yellow-500,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] .text-red-500,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] .text-gray-500,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-green-500"],
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-blue-500"],
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-yellow-500"],
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-red-500"],
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-gray-500"] {
+    color: white !important;
+    opacity: 1 !important;
+  }
+
+  /* Status dropdown item text */
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] span,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-gray-300"],
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] [class*="text-gray-400"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Status dropdown hover */
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] button:hover span,
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] button:hover [class*="text-gray-300"],
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] button:hover [class*="text-gray-400"] {
+    color: #e85a9c !important;
+  }
+
+  /* Status dropdown item hover background */
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] button:hover {
+    background-color: rgba(181, 154, 201, 0.15) !important;
+  }
+
+  /* Active/selected status item */
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] button[class*="bg-white/10"] {
+    background-color: rgba(181, 154, 201, 0.25) !important;
+  }
+
+  [data-theme="retro-anime"] [class*="bg-dark-100/95"] button[class*="bg-white/10"] span {
+    color: #4a3a5c !important;
+    font-weight: 600;
+  }
+
+  /* Status Selector control section - remove border and shadow on pastel theme */
+  [data-theme="retro-anime"] div[class*="bg-dark-200"][class*="backdrop-blur-2xl"][class*="rounded-2xl"] {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Episode counter container - remove border on pastel theme */
+  [data-theme="retro-anime"] div[class*="bg-dark-100/50"][class*="rounded-xl"] {
+    border: none !important;
+  }
+
+  /* Review form - make text dark for readability */
+  [data-theme="retro-anime"] textarea.input,
+  [data-theme="retro-anime"] textarea {
+    color: #1a1a1a !important;
+    background-color: #ffffff !important;
+    border-color: #b59ac9 !important;
+  }
+
+  [data-theme="retro-anime"] textarea.input::placeholder,
+  [data-theme="retro-anime"] textarea::placeholder {
+    color: #8a7a9c !important;
+  }
+
+  /* All input fields in pastel theme - make text dark for readability */
+  [data-theme="retro-anime"] .input,
+  [data-theme="retro-anime"] input[type="email"],
+  [data-theme="retro-anime"] input[type="password"],
+  [data-theme="retro-anime"] input[type="text"],
+  [data-theme="retro-anime"] input:not([type]) {
+    color: #1a1a1a !important;
+    background-color: #ffffff !important;
+    border-color: #b59ac9 !important;
+  }
+
+  [data-theme="retro-anime"] .input::placeholder,
+  [data-theme="retro-anime"] input::placeholder {
+    color: #8a7a9c !important;
+  }
+
+  /* Review form labels */
+  [data-theme="retro-anime"] label.block.text-sm,
+  [data-theme="retro-anime"] label.text-gray-300 {
+    color: #4a3a5c !important;
+  }
+
+  /* RichTextEditor - pastel theme fixes */
+  /* Target the editor container */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"][class*="overflow-hidden"] {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid rgba(181, 154, 201, 0.3) !important;
+  }
+
+  /* Toolbar background */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] > div[class*="bg-dark/50"] {
+    background-color: rgba(227, 209, 234, 0.8) !important;
+  }
+
+  /* Preview area background */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] div[class*="bg-dark-100/20"] {
+    background-color: rgba(240, 230, 245, 0.5) !important;
+    border-color: rgba(181, 154, 201, 0.2) !important;
+  }
+
+  /* Toolbar buttons */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] button[class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] button[class*="text-gray-400"]:hover {
+    color: #e85a9c !important;
+    background-color: rgba(181, 154, 201, 0.2) !important;
+  }
+
+  /* Mobile tabs */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] button[class*="text-gray-400"][class*="hover:text-gray-200"] {
+    color: #6b5a7d !important;
+  }
+
+  /* Active tab (accent color) */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] button[class*="text-accent"] {
+    color: #e85a9c !important;
+  }
+
+  /* Textarea */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] textarea {
+    color: #1a1a1a !important;
+  }
+
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] textarea::placeholder {
+    color: #8a7a9c !important;
+  }
+
+  /* Footer char count */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] div[class*="text-gray-500"] {
+    color: #6b5a7d !important;
+  }
+
+  /* Preview placeholder text */
+  [data-theme="retro-anime"] div[class*="rounded-2xl"][class*="bg-dark-200"] div[class*="text-gray-500"].italic {
+    color: #8a7a9c !important;
+  }
+
+  /* Review form character count - only in review forms */
+  [data-theme="retro-anime"] textarea[class*="input"] ~ div [class*="text-gray-500"] {
+    color: #6b5a7d !important;
+  }
+
+  /* Review form spoiler checkbox text - only in review forms */
+  [data-theme="retro-anime"] form span.text-gray-300 {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] form span.text-gray-300:hover {
+    color: #e85a9c !important;
+  }
+
+  /* Schedule Page - pastel theme fixes */
+  [data-theme="retro-anime"] .bg-dark-100\/50 {
+    background-color: rgba(240, 230, 245, 0.7) !important;
+  }
+
+  /* Schedule day selector buttons - ensure proper text colors */
+  [data-theme="retro-anime"] button[class*="bg-dark-100"] [class*="uppercase"],
+  [data-theme="retro-anime"] button[class*="bg-accent"] [class*="uppercase"] {
+    color: inherit !important;
+  }
+
+  [data-theme="retro-anime"] button[class*="bg-dark-100"] {
+    color: #4a3a5c !important;
+    background-color: rgba(255, 255, 255, 0.5) !important;
+    border-color: rgba(181, 154, 201, 0.5) !important;
+  }
+
+  [data-theme="retro-anime"] button[class*="bg-dark-100"]:hover {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    border-color: rgba(181, 154, 201, 0.8) !important;
+  }
+
+  /* Schedule page selected day header */
+  [data-theme="retro-anime"] h2 [class*="text-gray-500"] {
+    color: #6b5a7d !important;
+  }
+
+  /* Profile anime card rating badge - pastel theme */
+  [data-theme="retro-anime"] [class*="bg-black/70"][class*="rounded"][class*="text-[10px]"] {
+    background-color: rgba(0, 0, 0, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  }
+
+  [data-theme="retro-anime"] [class*="bg-black/70"] [class*="text-white"] {
+    color: #ffffff !important;
+  }
+
+  [data-theme="retro-anime"] [class*="bg-black/70"] svg[class*="text-yellow-400"] {
+    color: #fbbf24 !important;
+    fill: #fbbf24 !important;
+  }
+
+  /* Footer styling for pastel theme */
+  [data-theme="retro-anime"] footer {
+    background-color: rgba(227, 209, 234, 0.95) !important;
+    border-color: rgba(181, 154, 201, 0.5) !important;
+  }
+
+  [data-theme="retro-anime"] footer a:not([class*="hover:"]) {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] footer [class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] footer [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] footer h3[class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] footer [class*="border-gray-800"] {
+    border-color: rgba(181, 154, 201, 0.5) !important;
+  }
+
+  [data-theme="retro-anime"] footer [class*="bg-dark-50"] {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    border-color: rgba(181, 154, 201, 0.4) !important;
+  }
+
+  [data-theme="retro-anime"] footer a:hover [class*="text-gray-400"],
+  [data-theme="retro-anime"] footer [class*="hover:text-accent"]:hover {
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] footer a[class*="hover:text-white"]:hover {
+    color: #4a3a5c !important;
+    background-color: rgba(181, 154, 201, 0.3) !important;
+  }
+
+  /* ============================================
+     PROFILE PAGE - PASTEL ANIME THEME FIXES
+     ============================================ */
+
+  /* Only apply pastel styles to OverviewTab when in retro-anime theme */
+  [data-theme="retro-anime"] .overview-tab [class*="bg-dark-100/30"] {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+    border-color: rgba(181, 154, 201, 0.4) !important;
+  }
+
+  /* Overview Tab - pastel theme text colors */
+  [data-theme="retro-anime"] .overview-tab [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-300"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-500"] {
+    color: #8a7a9c !important;
+  }
+
+  /* Overview Tab - pastel theme accent colors */
+  [data-theme="retro-anime"] .overview-tab [class*="text-accent"] {
+    color: #e85a9c !important;
+  }
+
+  /* Only target solid bg-accent, not opacity variants like bg-accent/5 or hover:bg-accent/5 */
+  [data-theme="retro-anime"] .overview-tab [class*="bg-accent"]:not([class*="/"]) {
+    background-color: #e85a9c !important;
+  }
+
+  /* Overview Tab - pastel theme borders */
+  [data-theme="retro-anime"] .overview-tab [class*="border-gray-800/30"] {
+    border-color: rgba(181, 154, 201, 0.4) !important;
+  }
+
+  /* Overview Tab - pastel theme progress bars (excluding ActivityHeatmap) */
+  [data-theme="retro-anime"] .overview-tab [class*="bg-gray-600"] {
+    background-color: #b59ac9 !important;
+  }
+
+  /* Overview Tab - pastel theme hover states */
+  [data-theme="retro-anime"] .overview-tab [class*="hover:bg-dark-100/20"]:hover {
+    background-color: rgba(255, 255, 255, 0.4) !important;
+  }
+
+  /* Activity Feed - only in OverviewTab */
+  [data-theme="retro-anime"] .overview-tab [class*="border-green-500"] {
+    border-color: #22c55e !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-blue-500"] {
+    border-color: #3b82f6 !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-yellow-500"] {
+    border-color: #eab308 !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-amber-500"] {
+    border-color: #f59e0b !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-red-500"] {
+    border-color: #ef4444 !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-cyan-500"] {
+    border-color: #06b6d4 !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-pink-500"] {
+    border-color: #ec4899 !important;
+  }
+
+  /* Activity card text - only in OverviewTab */
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-200"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-600"] {
+    color: #8a7a9c !important;
+  }
+
+  /* Genre Overview - only in OverviewTab */
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-300"][class*="font-medium"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Progress bar glow removal - only in OverviewTab */
+  [data-theme="retro-anime"] .overview-tab [class*="shadow-\[0_0_8px"] {
+    box-shadow: none !important;
+  }
+
+  /* Friends section */
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-500"][class*="truncate"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-500"][class*="truncate"]:hover {
+    color: #e85a9c !important;
+  }
+
+  /* Currently watching grid overlay - pastel theme */
+  [data-theme="retro-anime"] .overview-tab [class*="from-dark\/95"] {
+    background: linear-gradient(to top, rgba(40, 35, 50, 0.95), rgba(40, 35, 50, 0.2)) !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="from-dark\/95"] [class*="text-white"] {
+    color: #ffffff !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="from-dark\/95"] [class*="text-gray-400"] {
+    color: #d0c0d0 !important;
+  }
+
+  [data-theme="retro-anime"] .drop-shadow-md {
+    filter: none !important;
+  }
+
+  /* Followers/Following buttons - only in OverviewTab */
+  [data-theme="retro-anime"] .overview-tab button[class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab button[class*="text-gray-400"]:hover {
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab button [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Profile Tabs - pastel theme */
+  [data-theme="retro-anime"] .profile-tabs [class*="font-semibold"][class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .profile-tabs [class*="font-semibold"][class*="text-gray-400"]:hover {
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-tabs [class*="font-semibold"][class*="text-white"] {
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-tabs [class*="bg-accent"] {
+    background-color: #e85a9c !important;
+    box-shadow: none !important;
+  }
+
+  /* Stats Section - Top Stats Row */
+  [data-theme="retro-anime"] .overview-tab [class*="text-xl"][class*="text-white"],
+  [data-theme="retro-anime"] .overview-tab [class*="text-2xl"][class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="text-gray-500"][class*="uppercase"] {
+    color: #8a7a9c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab [class*="border-gray-800/60"] {
+    border-color: rgba(181, 154, 201, 0.4) !important;
+  }
+
+  /* Profile Stats Cards */
+  [data-theme="retro-anime"] .glass {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    border-color: rgba(181, 154, 201, 0.4) !important;
+    box-shadow: none !important;
+  }
+
+  [data-theme="retro-anime"] [class*="text-gray-400"][class*="uppercase"] {
+    color: #7a6a8c !important;
+  }
+
+  [data-theme="retro-anime"] [class*="text-white"][class*="group-hover"] {
+    color: #4a3a5c !important;
+  }
+
+  /* Stats card backgrounds and borders - solid colors instead of gradients */
+  [data-theme="retro-anime"] [class*="from-yellow-500\/10"] {
+    background-color: rgba(251, 191, 36, 0.15) !important;
+    border-color: rgba(251, 191, 36, 0.3) !important;
+  }
+
+  [data-theme="retro-anime"] [class*="from-emerald-500\/10"] {
+    background-color: rgba(52, 211, 153, 0.15) !important;
+    border-color: rgba(52, 211, 153, 0.3) !important;
+  }
+
+  [data-theme="retro-anime"] [class*="from-pink-500\/10"] {
+    background-color: rgba(236, 72, 153, 0.15) !important;
+    border-color: rgba(236, 72, 153, 0.3) !important;
+  }
+
+  [data-theme="retro-anime"] [class*="from-blue-500\/10"] {
+    background-color: rgba(59, 130, 246, 0.15) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+  }
+
+  /* ActivityHeatmap tooltip - pastel theme */
+  [data-theme="retro-anime"] .overview-tab div[class*="bg-dark-100/95"] {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(181, 154, 201, 0.3) !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab div[class*="bg-dark-100/95"] p[class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab div[class*="bg-dark-100/95"] p[class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .overview-tab div[class*="bg-dark-100/95"] span[class*="text-accent"] {
+    color: #e85a9c !important;
+  }
+
+  /* Section titles */
+  [data-theme="retro-anime"] .overview-tab h3[class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  /* ProfileHeader - pastel theme styles */
+  [data-theme="retro-anime"] .profile-header [class*="text-gray-400"] {
+    color: #6b5a7d !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="text-gray-400"]:hover {
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="text-white"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="text-gray-600"] {
+    color: #b59ac9 !important;
+  }
+
+  /* ProfileHeader Edit Profile button - pastel theme */
+  [data-theme="retro-anime"] .profile-header [class*="bg-dark-100"] {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    border-color: rgba(181, 154, 201, 0.5) !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="bg-dark-100"]:hover {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    border-color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="bg-dark-100"] [class*="text-gray-300"] {
+    color: #4a3a5c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="bg-dark-100"]:hover [class*="text-gray-300"] {
+    color: #e85a9c !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="border-gray-700"] {
+    border-color: rgba(181, 154, 201, 0.5) !important;
+  }
+
+  [data-theme="retro-anime"] .profile-header [class*="border-gray-700"]:hover {
+    border-color: #e85a9c !important;
+  }
 }
 
 @layer components {
@@ -256,7 +1158,7 @@
     left: 2px;
     right: 2px;
     height: 18px;
-    background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+    background: #000080;
     color: white !important;
     font-size: 12px;
     font-family: 'VT323', monospace;
@@ -267,7 +1169,7 @@
   }
 
   [data-theme="retro-anime"] .retro-window::before {
-    background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+    background: #000080;
     color: white !important;
   }
 }
@@ -686,17 +1588,17 @@ input[type=number] {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
-/* Stats card gradients */
+/* Stats card backgrounds - solid colors instead of gradients */
 .stat-card-gradient-yellow {
-  background: linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, rgba(180, 83, 9, 0.05) 100%);
+  background-color: rgba(234, 179, 8, 0.1);
 }
 
 .stat-card-gradient-green {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 78, 59, 0.05) 100%);
+  background-color: rgba(16, 185, 129, 0.1);
 }
 
 .stat-card-gradient-blue {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(30, 64, 175, 0.05) 100%);
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 /* Hover reveal animation */

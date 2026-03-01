@@ -100,13 +100,21 @@ export default function ActivityHeatmap({ activityData = [] }) {
         return { totalActivity, activeDays, currentStreak };
     }, [activityData]);
 
-    // Get color intensity based on count
-    const getColorClass = (count) => {
-        if (count === 0) return 'bg-white/[0.03] hover:bg-white/[0.08]';
-        if (count <= 2) return 'bg-purple-900/40 hover:bg-purple-900/60';
-        if (count <= 4) return 'bg-purple-700/60 hover:bg-purple-700/80';
-        if (count <= 6) return 'bg-purple-500/80 hover:bg-purple-500/100 shadow-[0_0_10px_rgba(168,85,247,0.2)]';
-        return 'bg-accent shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:brightness-110';
+    // Get color intensity based on count - using inline styles for better theme support
+    const getColorStyle = (count) => {
+        if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.25)' };
+        if (count <= 2) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
+        if (count <= 4) return { backgroundColor: 'rgba(139, 92, 246, 0.6)' };
+        if (count <= 6) return { backgroundColor: 'rgba(139, 92, 246, 0.85)' };
+        return { backgroundColor: 'rgb(139, 92, 246)' };
+    };
+
+    const getHoverStyle = (count) => {
+        if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
+        if (count <= 2) return { backgroundColor: 'rgba(100, 100, 110, 0.65)' };
+        if (count <= 4) return { backgroundColor: 'rgba(139, 92, 246, 0.8)' };
+        if (count <= 6) return { backgroundColor: 'rgba(139, 92, 246, 1)' };
+        return { backgroundColor: 'rgba(167, 139, 250, 1)' };
     };
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -116,8 +124,8 @@ export default function ActivityHeatmap({ activityData = [] }) {
         <div className="p-4 sm:p-6 relative w-full max-w-full" ref={containerRef}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
                 <div>
-                    <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
-                        <Flame className="w-3.5 h-3.5 text-orange-500" />
+                    <h3 className="text-gray-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
+                        <Flame className="w-3.5 h-3.5 text-accent" />
                         Watching Activity
                     </h3>
                     <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Consistency over the past year</p>
@@ -127,19 +135,19 @@ export default function ActivityHeatmap({ activityData = [] }) {
                     <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
                             <span className="text-white font-black text-sm">{stats.totalActivity}</span>
-                            <span className="text-[8px] text-gray-400 font-black uppercase tracking-widest">Episodes</span>
+                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Episodes</span>
                         </div>
-                        <div className="w-px h-6 bg-white/10" />
+                        <div className="w-px h-6 bg-gray-700/30" />
                         <div className="flex flex-col items-end">
                             <div className="flex items-center gap-1">
-                                <Flame className="w-3 h-3 text-orange-400" />
-                                <span className="text-orange-400 font-black text-sm">{stats.currentStreak}</span>
+                                <Flame className="w-3 h-3 text-accent" />
+                                <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
                             </div>
-                            <span className="text-[8px] text-gray-400 font-black uppercase tracking-widest">Day Streak</span>
+                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Day Streak</span>
                         </div>
                     </div>
                 ) : (
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 bg-white/5 px-3 py-1 rounded-full border border-white/5">No activity yet</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 bg-dark-100/50 px-3 py-1 rounded-full border border-gray-700/30">No activity yet</span>
                 )}
             </div>
 
@@ -149,7 +157,7 @@ export default function ActivityHeatmap({ activityData = [] }) {
                 <div className="py-1 min-w-full">
                     <div className="inline-block min-w-max">
                         {/* Month labels */}
-                        <div className="flex text-[10px] font-black uppercase tracking-[0.2em] text-gray-600 h-6 items-end mb-1 relative">
+                        <div className="flex text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 h-6 items-end mb-1 relative">
                             {weeks.map((week, i) => {
                                 const firstDay = new Date(week[0].date);
                                 const isNewMonth = firstDay.getDate() <= 7;
@@ -170,20 +178,28 @@ export default function ActivityHeatmap({ activityData = [] }) {
                         <div className="flex gap-[4px]">
                             {weeks.map((week, weekIndex) => (
                                 <div key={weekIndex} className="flex flex-col gap-[4px]">
-                                    {week.map((day) => (
-                                        <div
-                                            key={day.date}
-                                            onMouseMove={(e) => {
-                                                setHoveredDay(day);
-                                                setTooltipPos({
-                                                    x: e.clientX,
-                                                    y: e.clientY
-                                                });
-                                            }}
-                                            onMouseLeave={() => setHoveredDay(null)}
-                                            className={`w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer ${getColorClass(day.count)}`}
-                                        />
-                                    ))}
+                                    {week.map((day) => {
+                                        const [isHovered, setIsHovered] = useState(false);
+                                        return (
+                                            <div
+                                                key={day.date}
+                                                onMouseMove={(e) => {
+                                                    setHoveredDay(day);
+                                                    setTooltipPos({
+                                                        x: e.clientX,
+                                                        y: e.clientY
+                                                    });
+                                                }}
+                                                onMouseEnter={() => setIsHovered(true)}
+                                                onMouseLeave={() => {
+                                                    setHoveredDay(null);
+                                                    setIsHovered(false);
+                                                }}
+                                                className="w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer"
+                                                style={isHovered ? getHoverStyle(day.count) : getColorStyle(day.count)}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             ))}
                         </div>
@@ -208,7 +224,7 @@ export default function ActivityHeatmap({ activityData = [] }) {
                 >
                     {/* Inner wrapper to keep content during fade out */}
                     {persistedDay && (
-                        <div className="bg-dark-200/95 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] min-w-[150px] ring-1 ring-white/5">
+                        <div className="bg-dark-100/95 backdrop-blur-md border border-gray-700/30 rounded-xl px-4 py-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.1)] min-w-[150px] ring-1 ring-gray-700/10">
                             <p className="text-white font-bold text-[11px] mb-1.5 whitespace-nowrap tracking-wide">
                                 {new Date(persistedDay.date).toLocaleDateString('en-US', {
                                     weekday: 'long',
@@ -218,13 +234,16 @@ export default function ActivityHeatmap({ activityData = [] }) {
                                 })}
                             </p>
                             <div className="flex items-center gap-2.5">
-                                <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(168,85,247,0.4)] ${getColorClass(persistedDay.count)}`} />
+                                <div 
+                                    className="w-2 h-2 rounded-full" 
+                                    style={getColorStyle(persistedDay.count)} 
+                                />
                                 <p className="text-[11px] text-gray-400 font-medium">
-                                    <span className="text-white font-bold">{persistedDay.count}</span> episodes
+                                    <span className="text-accent font-bold">{persistedDay.count}</span> episodes
                                 </p>
                             </div>
                             {/* Arrow */}
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-dark-200 border-r border-b border-white/10 rotate-45" />
+                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-dark-100 border-r border-b border-gray-700/30 rotate-45" />
                         </div>
                     )}
                 </div>
@@ -235,11 +254,11 @@ export default function ActivityHeatmap({ activityData = [] }) {
                 <div className="flex items-center gap-3">
                     <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Less</span>
                     <div className="flex gap-1">
-                        <div className="w-[10px] h-[10px] rounded-[2px] bg-white/[0.03]" />
-                        <div className="w-[10px] h-[10px] rounded-[2px] bg-purple-900/40" />
-                        <div className="w-[10px] h-[10px] rounded-[2px] bg-purple-700/60" />
-                        <div className="w-[10px] h-[10px] rounded-[2px] bg-purple-500/80" />
-                        <div className="w-[10px] h-[10px] rounded-[2px] bg-accent shadow-[0_0_10px_rgba(139,92,246,0.3)]" />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.25)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.45)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(139, 92, 246, 0.6)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(139, 92, 246, 0.85)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgb(139, 92, 246)' }} />
                     </div>
                     <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
                 </div>

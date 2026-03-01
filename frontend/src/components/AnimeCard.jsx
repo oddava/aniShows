@@ -242,7 +242,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                                     className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-lg border transition-all duration-200 touch-manipulation
                                         ${listStatus && currentStatusOption
                                             ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                            : 'bg-dark-100 text-gray-200 border-gray-700 hover:bg-accent hover:border-accent opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
+                                            : 'bg-accent/90 text-white border-accent hover:bg-accent hover:border-accent-dark opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
                                     title={listStatus ? currentStatusOption?.label : 'Add to List'}
                                 >
                                     {isLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> :
@@ -311,7 +311,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                         <button
                             onClick={handleFavorite}
                             className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-lg border transition-all duration-200 hover:scale-110 touch-manipulation
-                                ${isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-dark-100 text-gray-200 border-gray-700 hover:bg-red-500 hover:border-red-400'}`}
+                                ${isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-accent/90 text-white border-accent hover:bg-red-500 hover:border-red-400'}`}
                         >
                             <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-current' : ''}`} />
                         </button>

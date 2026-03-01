@@ -354,7 +354,7 @@ export default function OverviewTab({
     const favoritesData = favsData || [];
 
     return (
-        <div className="animate-tab-content pb-8">
+        <div className="animate-tab-content pb-8 overview-tab">
             <TopStatsRow user={displayUser} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
