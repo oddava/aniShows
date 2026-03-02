@@ -68,7 +68,7 @@ const ThreadRow = memo(({ thread }) => {
     return (
         <div
             onClick={() => navigate(`/forums/thread/${thread.id}`)}
-            className="group p-4 hover:bg-white/[0.03] transition-colors border-b border-gray-800/50 last:border-b-0 cursor-pointer"
+            className="group p-4 hover:bg-white/[0.03] transition-colors border-b border-white/10 cursor-pointer"
         >
             <div className="flex flex-col gap-2">
                 {/* Title */}

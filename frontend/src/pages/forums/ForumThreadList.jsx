@@ -60,7 +60,7 @@ const ThreadCard = memo(({ thread, slug }) => {
                     navigate(`/forums/thread/${thread.id}`);
                 }
             }}
-            className="group p-4 rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.99] bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.1] shadow-sm"
+            className="group p-4 rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.99] bg-white/[0.02] border-white/10 hover:bg-white/[0.04] hover:border-white/20 shadow-sm"
         >
             <div className="flex flex-col gap-2">
                 {/* Title */}

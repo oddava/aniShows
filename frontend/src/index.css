@@ -115,8 +115,9 @@
     }
 
     .border-gray-700,
-    .border-gray-800 {
-      border-color: #b59ac9 !important;
+    .border-gray-800,
+    .border-white\/10 {
+      border-color: rgba(181, 154, 201, 0.4) !important;
     }
 
     /* Pastel theme navbar styling */
@@ -210,8 +211,70 @@
     h3[class*="text-white"],
     label.text-gray-300,
     nav .text-gray-200,
-    nav .text-gray-300 {
+    nav .text-gray-300,
+    /* Forum Thread Title & Breadcrumbs */
+    .container h1[class*="text-gray-300"],
+    .container div[class*="text-gray-500"],
+    .container div[class*="text-gray-400"],
+    .container span[class*="text-gray-400"],
+    .container a[class*="text-gray-500"],
+    .container a[class*="text-gray-200"],
+    /* Forum list pages specifically */
+    h1[class*="text-white"],
+    h3[class*="text-white"],
+    p[class*="text-gray-500"],
+    p[class*="text-gray-400"],
+    span[class*="text-white"],
+    div[class*="text-gray-500"],
+    /* Post content and usernames */
+    [class*="bg-accent/[0.02]"] [class*="text-gray-200"],
+    [class*="bg-accent/[0.05]"] [class*="text-gray-200"],
+    [class*="bg-white/[0.02]"] [class*="text-gray-200"],
+    [class*="bg-accent/[0.02]"] [class*="text-gray-400"],
+    [class*="bg-accent/[0.05]"] [class*="text-gray-400"],
+    [class*="bg-white/[0.02]"] [class*="text-gray-400"],
+    [class*="bg-accent/[0.02]"] [class*="text-gray-500"],
+    [class*="bg-accent/[0.05]"] [class*="text-gray-500"],
+    [class*="bg-white/[0.02]"] [class*="text-gray-500"],
+    /* Explicit white text in forum cards and modals */
+    [class*="bg-white/[0.02]"] h3[class*="text-white"],
+    [class*="bg-white/[0.02]"] [class*="text-white"],
+    [class*="bg-dark-100"] input,
+    [class*="bg-dark-100"] textarea,
+    input[class*="text-white"],
+    textarea[class*="text-white"],
+    /* Cancel / Action buttons text */
+    button[class*="text-gray-400"],
+    button[class*="text-gray-400"]:hover,
+    [class*="text-gray-400"][class*="hover:text-white"]:hover {
       color: #4a3a5c !important;
+    }
+
+    /* Action icons in forums */
+    .container button[class*="text-gray-500"] svg,
+    .container button[class*="text-gray-500"],
+    .container [class*="text-gray-500"] svg,
+    .container [class*="text-gray-400"] svg,
+    /* Forum list icons */
+    [class*="text-gray-400"] svg,
+    [class*="text-gray-500"] svg {
+      color: #6b5a7d !important;
+    }
+
+    [class*="bg-accent/[0.02]"],
+    [class*="bg-accent/[0.05]"],
+
+    [class*="bg-white/[0.02]"],
+    [class*="bg-white/[0.04]"] {
+      background-color: rgba(181, 154, 201, 0.08) !important;
+      border-color: rgba(181, 154, 201, 0.3) !important;
+    }
+
+    /* Author badges */
+    [class*="bg-accent/10"] {
+      background-color: rgba(232, 90, 156, 0.15) !important;
+      color: #e85a9c !important;
+      font-weight: 800 !important;
     }
 
     .anime-detail-page .text-sm,
@@ -550,8 +613,7 @@
     /* Character cards shadow/gradient fix for pastel theme */
     /* Replace the dark gradient with a soft pastel one - high specificity to override Tailwind */
     .group.relative .aspect-\[3\/4\] div.absolute.inset-0.bg-gradient-to-t,
-    div[class*="bg-gradient-to-t"][class*="from-black"][class*="via-black/70"],
-    .animate-tab-content div[class*="bg-gradient-to-t"][class*="from-black"] {
+    div[class*="bg-gradient-to-t"][class*="from-black"][class*="via-black/70"] {
       background: linear-gradient(to top, rgba(232, 90, 156, 0.7) 0%, rgba(232, 90, 156, 0.4) 40%, transparent 100%) !important;
     }
 
@@ -800,6 +862,27 @@
       border: none !important;
     }
 
+    /* Settings Page Contrast Fixes */
+    [class*="bg-dark-100"] label[class*="text-gray-300"],
+    [class*="bg-dark-100"] span[class*="text-gray-300"],
+    [class*="bg-dark-100"] p[class*="text-gray-300"],
+    [class*="bg-dark-50"] span[class*="text-gray-300"],
+    [class*="bg-dark-50"] p[class*="text-gray-300"],
+    [class*="bg-dark-50"] p[class*="text-gray-400"],
+    [class*="bg-dark-100"] p[class*="text-gray-400"],
+    [class*="bg-dark-100"] h2[class*="text-white"],
+    [class*="bg-dark-100"] h3[class*="text-white"],
+    /* Delete account section specifically */
+    [class*="bg-red-500/5"] p[class*="text-gray-400"],
+    [class*="bg-red-500/5"] p[class*="text-gray-300"] {
+      color: #4a3a5c !important;
+    }
+
+    [class*="bg-dark-50"] span[class*="text-gray-300"] {
+      color: #6b5a7d !important;
+      opacity: 0.9;
+    }
+
     /* All input fields in pastel theme - make text dark for readability */
     .input,
     /* Review form - make text dark for readability */
@@ -862,6 +945,48 @@
     button[class*="bg-dark-100"]:hover {
       background-color: rgba(255, 255, 255, 0.8) !important;
       border-color: rgba(181, 154, 201, 0.8) !important;
+    }
+
+    /* Schedule Card Fixes */
+    /* Dark gradient overlay removal/fix */
+    [class*="bg-gradient-to-t"][class*="from-black"][class*="via-black/80"] {
+      background: linear-gradient(to top, rgba(232, 90, 156, 0.9) 0%, rgba(232, 90, 156, 0.4) 50%, transparent 100%) !important;
+    }
+
+    /* Episode badges and prominent tags */
+    div[class*="bg-dark/90"].backdrop-blur-sm,
+    div[class*="bg-green-500"].text-white {
+      background-color: #3d2f4d !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      opacity: 1 !important;
+    }
+
+    /* Status tags (watching, etc) */
+    [class*="bg-green-500/20"],
+    [class*="bg-gray-700/50"] {
+      background-color: rgba(107, 90, 125, 0.15) !important;
+      color: #4a3a5c !important;
+      font-weight: 700 !important;
+    }
+
+    /* Green airing/aired text */
+    .text-green-400,
+    [class*="text-green-400"] {
+      color: #15803d !important;
+    }
+
+    /* Card titles and metadata */
+    h3[class*="text-white"].line-clamp-2,
+    div[class*="text-gray-400"] {
+      color: #4a3a5c !important;
+    }
+
+    /* Ensure white text inside the pink overlay is actually white and has a soft shadow if needed */
+    [class*="bg-gradient-to-t"][class*="from-black"] [class*="text-white"],
+    [class*="bg-gradient-to-t"][class*="from-black"] .text-white {
+      color: #ffffff !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
     }
 
     /* Profile anime card rating badge - pastel theme */

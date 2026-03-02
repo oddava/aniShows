@@ -23,8 +23,6 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
                         decoding="async"
                     />
 
-                    {/* Simple dark overlay at bottom */}
-                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent" />
 
                     {/* Rating badge - simplified */}
                     {anime.rating && (

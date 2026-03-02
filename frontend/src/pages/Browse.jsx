@@ -592,7 +592,7 @@ export default function Browse() {
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search anime, genres, studios..."
+              placeholder="Search anime..."
               className="w-full bg-dark-100 border border-gray-700 rounded-2xl pl-12 pr-12 py-4 text-white placeholder:text-gray-600 focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
             />
             {searchInput && (
