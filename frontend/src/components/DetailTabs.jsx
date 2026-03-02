@@ -87,11 +87,11 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
                             className="absolute inset-0 w-full h-full object-cover"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
-                        
+
                         <span
                             className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] font-bold uppercase rounded"
                             style={{
-                                backgroundColor: role.role === 'MAIN' 
+                                backgroundColor: role.role === 'MAIN'
                                     ? (accentColor || '#8b5cf6')
                                     : 'rgba(255,255,255,0.2)',
                                 color: 'white'

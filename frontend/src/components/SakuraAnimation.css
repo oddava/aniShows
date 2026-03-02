@@ -1,0 +1,64 @@
+.sakura-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.sakura-petal {
+    position: absolute;
+    top: -10vh;
+    /* Add a soft glow behind each petal */
+    filter: drop-shadow(0 0 6px rgba(255, 183, 197, 0.4));
+    animation-timing-function: linear, ease-in-out;
+    animation-iteration-count: infinite, infinite;
+    animation-direction: normal, alternate;
+    transform-origin: center center;
+}
+
+@keyframes fall {
+    0% {
+        top: -10vh;
+        /* Prevent initial jank by ensuring 3D acceleration is active early */
+        transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateZ(0);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    80% {
+        opacity: 1;
+    }
+
+    100% {
+        top: 110vh;
+        transform: rotateX(360deg) rotateY(180deg) rotateZ(90deg) translateZ(0);
+        opacity: 0;
+    }
+}
+
+@keyframes sway-left {
+    0% {
+        margin-left: 0px;
+    }
+
+    100% {
+        margin-left: 60px;
+    }
+}
+
+@keyframes sway-right {
+    0% {
+        margin-left: 0px;
+    }
+
+    100% {
+        margin-left: -60px;
+    }
+}

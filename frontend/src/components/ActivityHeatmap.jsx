@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Flame } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 // Tooltip Portal component
 function TooltipPortal({ children }) {
@@ -18,6 +19,9 @@ function TooltipPortal({ children }) {
  * Shows user's anime watching activity over the past year
  */
 export default function ActivityHeatmap({ activityData = [] }) {
+    const { theme } = useTheme();
+    const isPastel = theme === 'retro-anime';
+    
     const [hoveredDay, setHoveredDay] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
     const [persistedDay, setPersistedDay] = useState(null);
@@ -104,6 +108,11 @@ export default function ActivityHeatmap({ activityData = [] }) {
     const getColorStyle = (count) => {
         if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.25)' };
         if (count <= 2) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
+        if (isPastel) {
+            if (count <= 4) return { backgroundColor: 'rgba(232, 90, 156, 0.6)' };
+            if (count <= 6) return { backgroundColor: 'rgba(232, 90, 156, 0.85)' };
+            return { backgroundColor: 'rgb(232, 90, 156)' };
+        }
         if (count <= 4) return { backgroundColor: 'rgba(139, 92, 246, 0.6)' };
         if (count <= 6) return { backgroundColor: 'rgba(139, 92, 246, 0.85)' };
         return { backgroundColor: 'rgb(139, 92, 246)' };
@@ -112,6 +121,11 @@ export default function ActivityHeatmap({ activityData = [] }) {
     const getHoverStyle = (count) => {
         if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
         if (count <= 2) return { backgroundColor: 'rgba(100, 100, 110, 0.65)' };
+        if (isPastel) {
+            if (count <= 4) return { backgroundColor: 'rgba(232, 90, 156, 0.8)' };
+            if (count <= 6) return { backgroundColor: 'rgba(232, 90, 156, 1)' };
+            return { backgroundColor: 'rgba(255, 133, 184, 1)' };
+        }
         if (count <= 4) return { backgroundColor: 'rgba(139, 92, 246, 0.8)' };
         if (count <= 6) return { backgroundColor: 'rgba(139, 92, 246, 1)' };
         return { backgroundColor: 'rgba(167, 139, 250, 1)' };
@@ -256,9 +270,9 @@ export default function ActivityHeatmap({ activityData = [] }) {
                     <div className="flex gap-1">
                         <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.25)' }} />
                         <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.45)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(139, 92, 246, 0.6)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(139, 92, 246, 0.85)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgb(139, 92, 246)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : 'rgba(139, 92, 246, 0.6)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.85)' : 'rgba(139, 92, 246, 0.85)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : 'rgb(139, 92, 246)' }} />
                     </div>
                     <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
                 </div>

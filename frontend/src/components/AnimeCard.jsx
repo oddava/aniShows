@@ -234,7 +234,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
 
                     {/* Status Icon */}
                     {isAuthenticated && (
-                        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-[100]">
+                        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-[200]">
                             <div className="relative" ref={statusMenuRef}>
                                 <button
                                     onClick={toggleStatusMenu}
@@ -250,7 +250,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                                 </button>
 
                                 {showStatusMenu && (
-                                    <div className="absolute left-0 top-full mt-2 w-44 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[110] animate-fade-in overflow-hidden">
+                                    <div className="absolute left-0 top-full mt-2 w-44 bg-dark-100 border border-gray-700 rounded-xl shadow-2xl z-[210] animate-fade-in overflow-hidden">
                                         <div className="p-1.5">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button

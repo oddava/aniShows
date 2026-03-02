@@ -288,7 +288,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     }
 
     return (
-        <div className="w-full relative">
+        <div className="w-full relative status-selector-container">
             {/* Sleek Main Controls Bar */}
             <div className="relative flex items-center justify-between p-1.5 sm:p-2 bg-dark-200/60 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-lg shadow-black/20 z-10">
 
@@ -549,28 +549,28 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                     Cancel
                                 </button>
                                 <button
-                                onClick={async () => {
-                                    if (!listId) return;
-                                    setIsLoading(true);
-                                    try {
-                                        const response = await listApi.update(listId, {
-                                            status: currentStatus,
-                                            score,
-                                            notes,
-                                            started_at: startedAt || null,
-                                            finished_at: finishedAt || null,
-                                            is_rewatching: isRewatching,
-                                        });
-                                        queryClient.invalidateQueries({ queryKey: ['lists'] });
-                                        queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-                                        if (onUpdate) onUpdate(response.data);
-                                        closeDetails();
-                                    } catch (error) {
-                                        logger.error('Failed to save details:', error);
-                                    } finally {
-                                        setIsLoading(false);
-                                    }
-                                }}
+                                    onClick={async () => {
+                                        if (!listId) return;
+                                        setIsLoading(true);
+                                        try {
+                                            const response = await listApi.update(listId, {
+                                                status: currentStatus,
+                                                score,
+                                                notes,
+                                                started_at: startedAt || null,
+                                                finished_at: finishedAt || null,
+                                                is_rewatching: isRewatching,
+                                            });
+                                            queryClient.invalidateQueries({ queryKey: ['lists'] });
+                                            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+                                            if (onUpdate) onUpdate(response.data);
+                                            closeDetails();
+                                        } catch (error) {
+                                            logger.error('Failed to save details:', error);
+                                        } finally {
+                                            setIsLoading(false);
+                                        }
+                                    }}
                                     disabled={isLoading}
                                     className="flex-[2] py-3.5 rounded-xl bg-accent text-white font-bold text-sm hover:brightness-110 transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center"
                                 >

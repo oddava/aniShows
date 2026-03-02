@@ -632,7 +632,7 @@ export default function AnimeDetail() {
                                             canReview ? (
                                                 <button
                                                     onClick={() => setIsWritingReview(true)}
-                                                    className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl shadow-lg text-white font-bold"
+                                                    className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl shadow-lg text-white font-bold bg-accent"
                                                     style={{
                                                         backgroundColor: accentColor || '#8b5cf6',
                                                         boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`

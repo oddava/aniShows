@@ -22,6 +22,8 @@ import { useAnalytics } from '../hooks/useAnalytics';
 import { usePerformanceMonitoring } from '../hooks/usePerformanceMonitoring';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import SEO from '../components/SEO';
+import SakuraAnimation from '../components/SakuraAnimation';
+import { useTheme } from '../context/ThemeContext';
 
 const BROWSE_TABS = [
   { key: 'popular', label: 'Most Popular', icon: Users },
@@ -126,6 +128,7 @@ export default function Browse() {
   const skeletonCount = useSkeletonCount(viewMode);
   const { prefetchNextPage } = usePrefetchAnime();
   const { trackTabChange, trackViewModeChange, trackSearch } = useAnalytics();
+  const { theme } = useTheme();
   usePerformanceMonitoring('Browse');
 
   // Keyboard shortcuts
@@ -567,6 +570,7 @@ export default function Browse() {
     <>
       <SEO page="browse" />
       <LoadingBar isLoading={isLoading || isTabSwitching} />
+      {theme === 'retro-anime' && <SakuraAnimation />}
 
       <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4 lg:px-6">
         <div className="max-w-[1600px] mx-auto">
