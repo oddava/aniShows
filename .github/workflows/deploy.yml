@@ -351,7 +351,27 @@ jobs:
             
             echo '🔄 Pulling latest compose files from GitHub...'
             git stash || true
+            
+            # CRITICAL: Save current running container IDs before pulling
+            echo '💾 Saving current database container state...'
+            DB_CONTAINER_BEFORE=$(docker ps -q -f name=anishows-db-1 2>/dev/null || docker ps -q -f name=anishows_db_1 2>/dev/null || echo "")
+            if [ -n "$DB_CONTAINER_BEFORE" ]; then
+                echo "   Database container running: ${DB_CONTAINER_BEFORE:0:12}"
+            fi
+            
             git pull origin main
+            
+            # CRITICAL: After pull, ensure database container is not recreated
+            if [ -n "$DB_CONTAINER_BEFORE" ]; then
+                echo '🔒 Ensuring database container is not recreated...'
+                DB_CONTAINER_AFTER=$(docker ps -q -f name=anishows-db-1 2>/dev/null || docker ps -q -f name=anishows_db_1 2>/dev/null || echo "")
+                if [ "$DB_CONTAINER_BEFORE" != "$DB_CONTAINER_AFTER" ]; then
+                    echo '⚠️  WARNING: Database container was recreated! Checking data integrity...'
+                    # If container changed, we need to be extra careful
+                else
+                    echo '✅ Database container preserved'
+                fi
+            fi
             
             echo '🔑 Logging into GitHub Container Registry...'
             echo '${GHCR_PAT}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin

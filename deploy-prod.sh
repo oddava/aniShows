@@ -81,10 +81,28 @@ echo ""
 # RUN MIGRATIONS BEFORE RESTARTING (new code must handle old+new schema)
 # =========================================================================
 echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
-# Ensure DB and Redis are up before running migrations
-# Use --no-recreate to prevent destroying existing database data
-echo -e "${BLUE}  Starting db and redis (if not already running)...${NC}"
-$COMPOSE_CMD up -d --no-deps --no-recreate db redis 2>/dev/null || $COMPOSE_CMD up -d --no-deps db redis
+
+# CRITICAL: Check if database is already running - NEVER recreate db container
+echo -e "${BLUE}  Checking if database is running...${NC}"
+DB_CONTAINER=$($COMPOSE_CMD ps -q db 2>/dev/null)
+if [ -z "$DB_CONTAINER" ]; then
+    echo -e "${RED}  ERROR: Database container is not running!${NC}"
+    echo -e "${RED}  Database must be running before deployment to prevent data loss.${NC}"
+    echo -e "${YELLOW}  Please start the database manually with: $COMPOSE_CMD up -d db${NC}"
+    exit 1
+fi
+
+DB_RUNNING=$(docker inspect -f '{{.State.Running}}' "$DB_CONTAINER" 2>/dev/null || echo "false")
+if [ "$DB_RUNNING" != "true" ]; then
+    echo -e "${RED}  ERROR: Database container exists but is not running!${NC}"
+    echo -e "${YELLOW}  Attempting to start existing container...${NC}"
+    docker start "$DB_CONTAINER" || {
+        echo -e "${RED}  Failed to start database container!${NC}"
+        exit 1
+    }
+fi
+
+echo -e "${GREEN}  Database container is running (container ID: ${DB_CONTAINER:0:12})${NC}"
 echo -e "${BLUE}  Waiting for database to be ready...${NC}"
 for i in $(seq 1 30); do
     if $COMPOSE_CMD exec -T db pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
