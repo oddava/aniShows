@@ -6,6 +6,13 @@
 
 set -e
 
+# Load environment variables from .env file (used by pg_isready check below)
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -74,16 +81,24 @@ echo ""
 # RUN MIGRATIONS BEFORE RESTARTING (new code must handle old+new schema)
 # =========================================================================
 echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
-# Run migrations using the NEW image but against the existing DB
-# This ensures schema is ready before new code starts serving traffic
-docker run --rm \
-    --env-file .env \
-    --network "$(docker network ls --filter name=anishows -q | head -1)" \
-    ghcr.io/oddava/anishows-backend:latest \
-    python manage.py migrate --noinput 2>&1 || {
-    echo -e "${YELLOW}Migration via docker run failed, trying via compose...${NC}"
-    $COMPOSE_CMD run --rm web python manage.py migrate --noinput
-}
+# Ensure DB and Redis are up before running migrations
+$COMPOSE_CMD up -d --no-deps db redis
+echo -e "${BLUE}  Waiting for database to be ready...${NC}"
+for i in $(seq 1 30); do
+    if $COMPOSE_CMD exec -T db pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
+        echo -e "${GREEN}  Database is ready!${NC}"
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo -e "${RED}  Database failed to become ready after 30 attempts!${NC}"
+        $COMPOSE_CMD logs --tail=20 db
+        exit 1
+    fi
+    sleep 2
+done
+
+# Run migrations using compose run with --no-deps to avoid recreating other services
+$COMPOSE_CMD run --rm --no-deps -e DB_HOST="${DB_HOST:-db}" web python manage.py migrate --noinput
 echo -e "${GREEN}Migrations complete!${NC}"
 echo ""
 
