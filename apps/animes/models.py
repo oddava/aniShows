@@ -19,6 +19,7 @@ from django.db.models import (
 )
 from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
+from django.contrib.postgres.indexes import GinIndex
 from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
@@ -276,6 +277,14 @@ class Anime(Model):
             Index(fields=["anime_type", "status", "-rating"]),
             Index(fields=["title", "status"]),
             Index(fields=["title_jp", "status"]),
+            # GIN trigram indexes for fast icontains/LIKE search
+            GinIndex(fields=["title"], name="anime_title_trgm_gin", opclasses=["gin_trgm_ops"]),
+            GinIndex(
+                fields=["title_jp"], name="anime_title_jp_trgm_gin", opclasses=["gin_trgm_ops"]
+            ),
+            GinIndex(
+                fields=["synopsis"], name="anime_synopsis_trgm_gin", opclasses=["gin_trgm_ops"]
+            ),
         ]
 
     def __str__(self):

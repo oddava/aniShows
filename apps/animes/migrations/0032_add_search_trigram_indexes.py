@@ -6,8 +6,9 @@ These indexes dramatically speed up `icontains` / `LIKE '%query%'` lookups that 
 search filter uses, from sequential scans to index-assisted scans.
 """
 
+from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.operations import TrigramExtension
-from django.db import migrations, models
+from django.db import migrations
 
 
 class Migration(migrations.Migration):
@@ -21,7 +22,7 @@ class Migration(migrations.Migration):
         # GIN trigram index on title for fast icontains search
         migrations.AddIndex(
             model_name="anime",
-            index=models.Index(
+            index=GinIndex(
                 fields=["title"],
                 name="anime_title_trgm_gin",
                 opclasses=["gin_trgm_ops"],
@@ -30,7 +31,7 @@ class Migration(migrations.Migration):
         # GIN trigram index on title_jp for Japanese title search
         migrations.AddIndex(
             model_name="anime",
-            index=models.Index(
+            index=GinIndex(
                 fields=["title_jp"],
                 name="anime_title_jp_trgm_gin",
                 opclasses=["gin_trgm_ops"],
@@ -39,7 +40,7 @@ class Migration(migrations.Migration):
         # GIN trigram index on synopsis for full-text-like search
         migrations.AddIndex(
             model_name="anime",
-            index=models.Index(
+            index=GinIndex(
                 fields=["synopsis"],
                 name="anime_synopsis_trgm_gin",
                 opclasses=["gin_trgm_ops"],
