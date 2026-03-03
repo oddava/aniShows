@@ -2,7 +2,7 @@ import time
 import logging
 from django.conf import settings
 from apps.core.models import SystemLog, AuditLog
-from apps.core.tasks.logging_tasks import log_request_async
+from apps.core.tasks.logging_tasks import log_request_async, log_audit_async, log_exception_async
 from apps.core.utils import get_client_ip
 
 logger = logging.getLogger(__name__)
@@ -124,24 +124,25 @@ class AdminAuditMiddleware:
         # Process the request
         response = self.get_response(request)
 
-        # Log the audit entry
+        # Log the audit entry asynchronously
         if response.status_code < 400:  # Only log successful actions
             try:
-                AuditLog.objects.create(
-                    user=user,
-                    user_ip=ip,
-                    action=action,
-                    entity_type=entity_type,
-                    entity_id=self._extract_entity_id(path),
-                    entity_repr=f"{method} {path}",
-                    metadata={
+                log_data = {
+                    "user_id": user.id,
+                    "user_ip": ip,
+                    "action": action,
+                    "entity_type": entity_type,
+                    "entity_id": self._extract_entity_id(path),
+                    "entity_repr": f"{method} {path}",
+                    "metadata": {
                         "status_code": response.status_code,
                         "method": method,
                         "path": path,
                     },
-                )
+                }
+                log_audit_async.delay(log_data)
             except Exception as e:
-                logger.error(f"Failed to create audit log: {e}")
+                logger.error(f"Failed to queue audit log: {e}")
 
         return response
 
@@ -182,28 +183,33 @@ class ExceptionLoggingMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
-        """Log unhandled exceptions."""
+        """Log unhandled exceptions asynchronously."""
         user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
 
         # Get client IP
         ip = get_client_ip(request)
 
         try:
-            SystemLog.objects.create(
-                level=SystemLog.LogLevel.ERROR,
-                log_type=SystemLog.LogType.ERROR,
-                user=user,
-                user_ip=ip,
-                method=request.method,
-                path=request.path[:500],
-                message=str(exception),
-                details={
+            log_data = {
+                "level": SystemLog.LogLevel.ERROR,
+                "log_type": SystemLog.LogType.ERROR,
+                "user_id": user.id if user else None,
+                "user_ip": ip,
+                "method": request.method,
+                "path": request.path[:500],
+                "message": str(exception),
+                "details": {
                     "exception_type": type(exception).__name__,
                     "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 },
-            )
+            }
+            log_exception_async.delay(log_data)
         except Exception as e:
-            logger.error(f"Failed to log exception: {e}")
+            # Fallback to Python logger if Celery is unavailable
+            logger.error(
+                f"Unhandled exception at {request.method} {request.path}: "
+                f"{type(exception).__name__}: {exception}"
+            )
 
         # Return None to let Django handle the exception normally
         return None

@@ -133,7 +133,7 @@ class MALXMLExporter:
 
     def export(self) -> str:
         """Export anime list as MAL-compatible XML"""
-        entries = self.user.anime_lists.select_related("anime").all()
+        entries = list(self.user.anime_lists.select_related("anime").all())
 
         # Build XML
         xml_parts = [
@@ -143,7 +143,7 @@ class MALXMLExporter:
             f"    <user_id>{self.user.id}</user_id>",
             f"    <user_name>{self.user.username}</user_name>",
             f"    <user_export_type>1</user_export_type>",
-            f"    <user_total_anime>{entries.count()}</user_total_anime>",
+            f"    <user_total_anime>{len(entries)}</user_total_anime>",
             "  </myinfo>",
         ]
 

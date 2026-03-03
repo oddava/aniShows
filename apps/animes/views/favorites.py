@@ -36,9 +36,7 @@ class FavoriteViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         else:
             return UserFavorite.objects.none()
 
-        return queryset.select_related("anime__studio").prefetch_related(
-            "anime__genres"
-        )
+        return queryset.select_related("anime__studio").prefetch_related("anime__genres")
 
     def perform_destroy(self, instance):
         """Ensure users can only delete their own favorites."""
@@ -61,9 +59,7 @@ class FavoriteViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         # Check email verification
         self.check_email_verified(request.user)
 
-        favorite, created = UserFavorite.objects.get_or_create(
-            user=request.user, anime=anime
-        )
+        favorite, created = UserFavorite.objects.get_or_create(user=request.user, anime=anime)
 
         if not created:
             favorite.delete()
@@ -82,13 +78,19 @@ class FavoriteViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         if not items:
             return Response({"error": "items required"}, status=400)
 
-        # Update the order for each favorite
+        # Batch update: 1 SELECT + 1 bulk UPDATE instead of N*2 individual queries
+        item_ids = [item["id"] for item in items if "id" in item]
+        favorites = UserFavorite.objects.filter(id__in=item_ids, user=request.user)
+        fav_map = {f.id: f for f in favorites}
+
+        to_update = []
         for item in items:
-            try:
-                favorite = UserFavorite.objects.get(id=item["id"], user=request.user)
-                favorite.order = item.get("order", 0)
-                favorite.save(update_fields=["order"])
-            except UserFavorite.DoesNotExist:
-                continue
+            fav = fav_map.get(item.get("id"))
+            if fav:
+                fav.order = item.get("order", 0)
+                to_update.append(fav)
+
+        if to_update:
+            UserFavorite.objects.bulk_update(to_update, ["order"])
 
         return Response({"message": "Order saved successfully"})

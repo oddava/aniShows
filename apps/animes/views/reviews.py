@@ -2,7 +2,7 @@ from rest_framework import viewsets, serializers, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
-from django.db.models import Count, Q, Exists, OuterRef, Avg
+from django.db.models import Count, Q, Exists, OuterRef, Avg, Case, When, Value, IntegerField
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 import logging
@@ -27,12 +27,8 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
         # Always annotate helpful_count and comment_count to avoid N+1 queries
         queryset = queryset.annotate(
-            _helpful_count=Count(
-                "votes", filter=Q(votes__is_helpful=True), distinct=True
-            ),
-            _comment_count=Count(
-                "comments", filter=Q(comments__is_deleted=False), distinct=True
-            ),
+            _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
+            _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
         )
 
         # Annotate is_completed to avoid N+1 queries
@@ -52,9 +48,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         if user.is_authenticated:
             queryset = queryset.annotate(
                 _user_vote=Exists(
-                    ReviewVote.objects.filter(
-                        user=user, review=OuterRef("pk"), is_helpful=True
-                    )
+                    ReviewVote.objects.filter(user=user, review=OuterRef("pk"), is_helpful=True)
                 )
             )
 
@@ -69,10 +63,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(user__username=target_username)
 
         # Filter by user (mine)
-        if (
-            self.request.query_params.get("mine") == "true"
-            and self.request.user.is_authenticated
-        ):
+        if self.request.query_params.get("mine") == "true" and self.request.user.is_authenticated:
             queryset = queryset.filter(user=self.request.user)
 
         # Filter by rating (1-5 stars = 2-10 internal rating)
@@ -83,9 +74,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
                 # Convert 5-star to 10-point scale: 5 stars = 9-10, 4 stars = 7-8, etc.
                 min_rating = (stars - 1) * 2 + 1
                 max_rating = stars * 2
-                queryset = queryset.filter(
-                    rating__gte=min_rating, rating__lte=max_rating
-                )
+                queryset = queryset.filter(rating__gte=min_rating, rating__lte=max_rating)
             except ValueError:
                 pass
 
@@ -113,7 +102,23 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             )
 
         reviews = Review.objects.filter(anime__slug=anime_slug)
-        total = reviews.count()
+
+        # Single aggregate query replaces 3 separate queries (count + values loop + aggregate)
+        stats = reviews.aggregate(
+            total=Count("id"),
+            avg_overall=Avg("rating"),
+            avg_story=Avg("rating_story"),
+            avg_animation=Avg("rating_animation"),
+            avg_music=Avg("rating_music"),
+            avg_characters=Avg("rating_characters"),
+            stars_1=Count("id", filter=Q(rating__gte=1, rating__lte=2)),
+            stars_2=Count("id", filter=Q(rating__gte=3, rating__lte=4)),
+            stars_3=Count("id", filter=Q(rating__gte=5, rating__lte=6)),
+            stars_4=Count("id", filter=Q(rating__gte=7, rating__lte=8)),
+            stars_5=Count("id", filter=Q(rating__gte=9, rating__lte=10)),
+        )
+
+        total = stats["total"]
 
         if total == 0:
             return Response(
@@ -130,33 +135,22 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
                 }
             )
 
-        # Rating distribution (convert 10-point to 5-star)
-        distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        for review in reviews.values("rating"):
-            rating = review["rating"] or 0
-            stars = min(5, max(1, (rating + 1) // 2))
-            distribution[stars] += 1
-
-        # Average calculations
-        averages = reviews.aggregate(
-            overall=Avg("rating"),
-            story=Avg("rating_story"),
-            animation=Avg("rating_animation"),
-            music=Avg("rating_music"),
-            characters=Avg("rating_characters"),
-        )
+        distribution = {
+            1: stats["stars_1"],
+            2: stats["stars_2"],
+            3: stats["stars_3"],
+            4: stats["stars_4"],
+            5: stats["stars_5"],
+        }
 
         # Convert to 5-point scale
-        if averages["overall"]:
-            averages["overall"] = averages["overall"] / 2
-        if averages["story"]:
-            averages["story"] = averages["story"] / 2
-        if averages["animation"]:
-            averages["animation"] = averages["animation"] / 2
-        if averages["music"]:
-            averages["music"] = averages["music"] / 2
-        if averages["characters"]:
-            averages["characters"] = averages["characters"] / 2
+        averages = {
+            "overall": stats["avg_overall"] / 2 if stats["avg_overall"] else 0,
+            "story": stats["avg_story"] / 2 if stats["avg_story"] else None,
+            "animation": stats["avg_animation"] / 2 if stats["avg_animation"] else None,
+            "music": stats["avg_music"] / 2 if stats["avg_music"] else None,
+            "characters": stats["avg_characters"] / 2 if stats["avg_characters"] else None,
+        }
 
         return Response(
             {"total_reviews": total, "distribution": distribution, "averages": averages}
@@ -166,9 +160,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         user = self.request.user
         anime = serializer.validated_data.get("anime")
         if not anime:
-            raise serializers.ValidationError(
-                {"non_field_errors": ["Anime not found."]}
-            )
+            raise serializers.ValidationError({"non_field_errors": ["Anime not found."]})
 
         # Check if user has anime on their list
         if not UserAnimeList.objects.filter(user=user, anime=anime).exists():
@@ -205,9 +197,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         # Invalidate user caches - reviews count changed
         invalidate_user_caches(self.request.user.id, self.request.user.username)
 
-    @action(
-        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def vote(self, request, pk=None):
         """Toggle helpful vote on a review"""
         review = self.get_object()
@@ -252,7 +242,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         # Filter out soft-deleted comments
         comments = (
             review.comments.filter(is_deleted=False)
-            .select_related("user", "user__userprofile")
+            .select_related("user", "user__userprofile", "review__user")
             .order_by("-created_at")
         )
 
@@ -276,9 +266,7 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             }
         )
 
-    @action(
-        detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
-    )
+    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def add_comment(self, request, pk=None):
         """Add a comment to a review"""
         review = self.get_object()

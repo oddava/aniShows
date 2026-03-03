@@ -359,28 +359,35 @@ class PostViewSet(viewsets.ModelViewSet):
 
             page_obj = self.paginate_queryset(top_level_queryset)
             if page_obj is not None:
-                # We have a page of top-level posts. Now we need to fetch all their descendants
+                # We have a page of top-level posts. Now fetch only their descendants
+                # instead of loading ALL child posts for the entire thread.
                 top_level_posts = list(page_obj)
                 top_level_ids = [post.id for post in top_level_posts]
 
-                all_other_posts = list(queryset.filter(parent__isnull=False, thread_id=thread_id))
+                # Iteratively collect descendant IDs up to max depth (10)
+                # to avoid loading the entire thread's replies into memory.
+                ancestor_ids = set(top_level_ids)
+                all_descendant_ids = set()
+                current_parent_ids = top_level_ids
 
-                children_map = {}
-                for p in all_other_posts:
-                    if p.parent_id not in children_map:
-                        children_map[p.parent_id] = []
-                    children_map[p.parent_id].append(p)
+                for _depth in range(10):
+                    if not current_parent_ids:
+                        break
+                    child_ids = list(
+                        queryset.filter(
+                            parent_id__in=current_parent_ids, thread_id=thread_id
+                        ).values_list("id", flat=True)
+                    )
+                    if not child_ids:
+                        break
+                    all_descendant_ids.update(child_ids)
+                    current_parent_ids = child_ids
 
-                descendants = []
-
-                def get_descendants(parent_id):
-                    if parent_id in children_map:
-                        for child in children_map[parent_id]:
-                            descendants.append(child)
-                            get_descendants(child.id)
-
-                for post_id in top_level_ids:
-                    get_descendants(post_id)
+                # Fetch the actual descendant post objects in a single query
+                if all_descendant_ids:
+                    descendants = list(queryset.filter(id__in=all_descendant_ids))
+                else:
+                    descendants = []
 
                 final_posts = top_level_posts + descendants
 
@@ -453,7 +460,7 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "already_liked",
-                    "like_count": post.likes.count(),
+                    "like_count": post.like_count,
                     "is_liked": True,
                 },
                 status=status.HTTP_200_OK,
@@ -464,9 +471,11 @@ class PostViewSet(viewsets.ModelViewSet):
                 user=post.author, author=request.user, instance=post, is_thread=False
             )
 
-        post.update_like_count()
-
+        # Update denormalized count inline — avoids extra count() query
         new_count = post.likes.count()
+        post.like_count = new_count
+        post.save(update_fields=["like_count"])
+
         return Response(
             {
                 "status": "liked",
@@ -489,8 +498,10 @@ class PostViewSet(viewsets.ModelViewSet):
         try:
             like = PostLike.objects.get(post=post, user=request.user)
             like.delete()
-            post.update_like_count()
+            # Update denormalized count inline — avoids extra count() query
             new_count = post.likes.count()
+            post.like_count = new_count
+            post.save(update_fields=["like_count"])
             return Response(
                 {
                     "status": "unliked",
@@ -503,7 +514,7 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "not_liked",
-                    "like_count": post.likes.count(),
+                    "like_count": post.like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,

@@ -18,30 +18,31 @@ class RecommendationsViewSet(viewsets.ViewSet):
         """Get personalized recommendations for the current user"""
         from apps.animes.services.recommendations import RecommendationService
 
-        # Check cache first
+        # Get limit parameter
+        limit = int(request.query_params.get("limit", 12))
+
+        # Always cache a generous set and slice to requested limit in Python,
+        # so different ?limit= values share one cache entry per user.
         cache_key = f"user_recommendations:{request.user.id}"
         cached_data = cache.get(cache_key)
 
         if cached_data:
-            return Response(cached_data)
-
-        # Get limit parameter
-        limit = int(request.query_params.get("limit", 12))
+            return Response(cached_data[:limit])
 
         try:
+            # Fetch a large batch to cache (covers most limit values)
+            max_cache_limit = max(limit, 30)
             service = RecommendationService()
-            recs = service.get_recommendations_for_user(request.user, limit=limit)
+            recs = service.get_recommendations_for_user(request.user, limit=max_cache_limit)
 
-            serializer = UserRecommendationSerializer(
-                recs, many=True, context={"request": request}
-            )
+            serializer = UserRecommendationSerializer(recs, many=True, context={"request": request})
 
             data = serializer.data
 
             # Cache for 1 hour
             cache.set(cache_key, data, 60 * 60)
 
-            return Response(data)
+            return Response(data[:limit])
 
         except Exception as e:
             logger.exception("Error fetching recommendations")

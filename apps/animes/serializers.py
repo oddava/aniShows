@@ -2,8 +2,17 @@ from django.contrib.auth import get_user_model
 from django.utils.html import escape
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import SerializerMethodField, CharField, IntegerField, BooleanField, ChoiceField, ImageField, \
-    FloatField, JSONField, DecimalField
+from rest_framework.fields import (
+    SerializerMethodField,
+    CharField,
+    IntegerField,
+    BooleanField,
+    ChoiceField,
+    ImageField,
+    FloatField,
+    JSONField,
+    DecimalField,
+)
 from rest_framework.relations import SlugRelatedField, PrimaryKeyRelatedField
 from rest_framework.serializers import ModelSerializer, Serializer
 
@@ -816,9 +825,7 @@ class RegisterSerializer(ModelSerializer):
 
 class FavoriteSerializer(ModelSerializer):
     anime = AnimeListSerializer(read_only=True)
-    anime_id = PrimaryKeyRelatedField(
-        queryset=Anime.objects.all(), source="anime", write_only=True
-    )
+    anime_id = PrimaryKeyRelatedField(queryset=Anime.objects.all(), source="anime", write_only=True)
 
     class Meta:
         model = UserFavorite
@@ -955,8 +962,22 @@ class UserActivitySerializer(ModelSerializer):
         return f"Updated {title}"
 
 
+class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
+    """Lightweight user serializer for reviews — avoids the N+1 badge/stats
+    queries that the full UserSerializer would trigger when user objects
+    are not annotated with _followers_count, _anime_count, etc."""
+
+    avatar = SerializerMethodField()
+    points = SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "avatar", "points"]
+        read_only_fields = fields
+
+
 class ReviewSerializer(ModelSerializer):
-    user = UserSerializer(read_only=True)
+    user = ReviewUserSerializer(read_only=True)
     anime = AnimeListSerializer(read_only=True)
     anime_slug = SlugRelatedField(
         slug_field="slug", queryset=Anime.objects.all(), source="anime", write_only=True
@@ -1017,7 +1038,7 @@ class ReviewSerializer(ModelSerializer):
 class ReviewCommentSerializer(ModelSerializer):
     """Serializer for review comments with soft delete support"""
 
-    user = UserSerializer(read_only=True)
+    user = ReviewUserSerializer(read_only=True)
     text = CharField(required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH)
     is_owner = SerializerMethodField()
     can_delete = SerializerMethodField()
@@ -1071,9 +1092,7 @@ class ReviewCommentSerializer(ModelSerializer):
 
 
 class ChangePasswordSerializer(Serializer):
-    old_password = CharField(
-        required=False, allow_blank=True, allow_null=True, write_only=True
-    )
+    old_password = CharField(required=False, allow_blank=True, allow_null=True, write_only=True)
     new_password = CharField(required=True, write_only=True, min_length=8)
 
     def validate(self, attrs):

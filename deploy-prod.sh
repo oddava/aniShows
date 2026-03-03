@@ -82,7 +82,9 @@ echo ""
 # =========================================================================
 echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
 # Ensure DB and Redis are up before running migrations
-$COMPOSE_CMD up -d --no-deps db redis
+# Use --no-recreate to prevent destroying existing database data
+echo -e "${BLUE}  Starting db and redis (if not already running)...${NC}"
+$COMPOSE_CMD up -d --no-deps --no-recreate db redis 2>/dev/null || $COMPOSE_CMD up -d --no-deps db redis
 echo -e "${BLUE}  Waiting for database to be ready...${NC}"
 for i in $(seq 1 30); do
     if $COMPOSE_CMD exec -T db pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
