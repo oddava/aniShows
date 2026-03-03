@@ -33,8 +33,6 @@ services:
   redis:
     command: >
       redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory 200mb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000 --tcp-backlog 511 --hz 10
-    volumes:
-      - redis_data:/data
     healthcheck:
       test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "ping" ]
       interval: 10s
@@ -141,12 +139,5 @@ services:
     deploy:
       replicas: 0
 
-  # Database service - explicitly defined to ensure volume persistence
-  db:
-    volumes:
-      - db_data:/var/lib/postgresql/data
-
 volumes:
   frontend_dist:
-  db_data:
-  redis_data:
