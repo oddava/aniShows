@@ -12,7 +12,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("animes", "0031_increase_themesong_url_max_length"),
+        ("anime", "0031_increase_themesong_url_max_length"),
     ]
 
     operations = [
