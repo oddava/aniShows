@@ -82,43 +82,69 @@ echo ""
 # =========================================================================
 echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
 
-# CRITICAL: Check if database is already running - NEVER recreate db container
+# CRITICAL: Database must already be running - we NEVER start/recreate it in deployment
 echo -e "${BLUE}  Checking if database is running...${NC}"
 DB_CONTAINER=$($COMPOSE_CMD ps -q db 2>/dev/null)
 if [ -z "$DB_CONTAINER" ]; then
     echo -e "${RED}  ERROR: Database container is not running!${NC}"
-    echo -e "${RED}  Database must be running before deployment to prevent data loss.${NC}"
-    echo -e "${YELLOW}  Please start the database manually with: $COMPOSE_CMD up -d db${NC}"
+    echo -e "${RED}  Database must be running before deployment.${NC}"
+    echo -e "${YELLOW}  Start it manually: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d db${NC}"
     exit 1
 fi
 
+# Verify container is actually running
 DB_RUNNING=$(docker inspect -f '{{.State.Running}}' "$DB_CONTAINER" 2>/dev/null || echo "false")
 if [ "$DB_RUNNING" != "true" ]; then
     echo -e "${RED}  ERROR: Database container exists but is not running!${NC}"
-    echo -e "${YELLOW}  Attempting to start existing container...${NC}"
+    echo -e "${YELLOW}  Attempting to start existing container: docker start $DB_CONTAINER${NC}"
     docker start "$DB_CONTAINER" || {
         echo -e "${RED}  Failed to start database container!${NC}"
         exit 1
     }
 fi
 
-echo -e "${GREEN}  Database container is running (container ID: ${DB_CONTAINER:0:12})${NC}"
+echo -e "${GREEN}  Database container verified (ID: ${DB_CONTAINER:0:12})${NC}"
 echo -e "${BLUE}  Waiting for database to be ready...${NC}"
 for i in $(seq 1 30); do
-    if $COMPOSE_CMD exec -T db pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
+    if docker exec -i "$DB_CONTAINER" pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
         echo -e "${GREEN}  Database is ready!${NC}"
         break
     fi
     if [ "$i" -eq 30 ]; then
         echo -e "${RED}  Database failed to become ready after 30 attempts!${NC}"
-        $COMPOSE_CMD logs --tail=20 db
+        docker logs --tail=30 "$DB_CONTAINER"
         exit 1
     fi
     sleep 2
 done
 
-# Run migrations using compose run with --no-deps to avoid recreating other services
-$COMPOSE_CMD run --rm --no-deps -e DB_HOST="${DB_HOST:-db}" web python manage.py migrate --noinput
+# Run migrations using the existing container directly
+echo -e "${BLUE}  Running migrations...${NC}"
+WEB_CONTAINER=$($COMPOSE_CMD ps -q web 2>/dev/null)
+if [ -n "$WEB_CONTAINER" ]; then
+    # Use existing web container if running
+    docker exec -i "$WEB_CONTAINER" python manage.py migrate --noinput
+else
+    # Run new container just for migrations, but don't affect other services
+    docker run --rm --network anishows_default \
+        -e DB_HOST="${DB_HOST:-db}" \
+        -e DB_NAME="${DB_NAME}" \
+        -e DB_USER="${DB_USER}" \
+        -e DB_PASSWORD="${DB_PASSWORD}" \
+        -e DB_PORT="${DB_PORT:-5432}" \
+        -e REDIS_HOST="${REDIS_HOST:-redis}" \
+        -e REDIS_PORT="${REDIS_PORT:-6379}" \
+        -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+        -e DJANGO_SETTINGS_MODULE="root.settings" \
+        -e DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY}" \
+        -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}" \
+        -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}" \
+        -e AWS_STORAGE_BUCKET_NAME="${AWS_STORAGE_BUCKET_NAME}" \
+        -e AWS_S3_ENDPOINT_URL="${AWS_S3_ENDPOINT_URL}" \
+        -e MINIO_PUBLIC_DOMAIN="${MINIO_PUBLIC_DOMAIN}" \
+        ghcr.io/oddava/anishows-backend:latest \
+        python manage.py migrate --noinput
+fi
 echo -e "${GREEN}Migrations complete!${NC}"
 echo ""
 
