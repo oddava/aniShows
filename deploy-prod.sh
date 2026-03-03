@@ -48,15 +48,11 @@ else
 fi
 
 if [ "$SKIP_FRONTEND" != "true" ]; then
-    echo -e "${BLUE}  Copying new frontend files from image (atomic swap)...${NC}"
-    # Use a temp directory approach to minimize downtime
+    echo -e "${BLUE}  Deploying new frontend files...${NC}"
+    # Clean out old files and copy new ones
     docker run --rm -v ${FRONTEND_VOLUME}:/srv/frontend $FRONTEND_IMAGE sh -c '
-        mkdir -p /srv/frontend_new &&
-        cp -r /app/dist/* /srv/frontend_new/ &&
-        rm -rf /srv/frontend_old &&
-        mv /srv/frontend /srv/frontend_old 2>/dev/null || true &&
-        mv /srv/frontend_new /srv/frontend &&
-        rm -rf /srv/frontend_old &&
+        rm -rf /srv/frontend/* &&
+        cp -r /app/dist/* /srv/frontend/ &&
         echo DONE
     '
 
