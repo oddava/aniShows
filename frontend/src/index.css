@@ -47,12 +47,10 @@
     }
 
     body {
-      color: #ffffff;
-      background-image: url('https://i.pinimg.com/736x/89/65/57/8965578051a80ad23bcba861dbba6ad6.jpg');
-      background-size: cover;
-      background-attachment: fixed;
-      background-blend-mode: multiply;
-      background-color: #555;
+      color: #1a1a1a;
+      background-color: #fcf9fc;
+      background-image: radial-gradient(#ffdfec 1px, transparent 1px);
+      background-size: 20px 20px;
     }
 
   }
@@ -65,23 +63,23 @@
 
     & {
       /* Soft Vaporwave Pastel Colors - Lighter palette */
-      --color-dark: #3d2f4d;
-      --color-dark-50: #f8f0fa;
-      --color-dark-100: #f0e6f5;
-      --color-dark-200: #e8d9f0;
-      --color-dark-300: #dcc9e6;
-      --color-dark-400: #d0b9dc;
-      --color-accent: #e85a9c;
-      --color-accent-light: #ff85b8;
-      --color-accent-dark: #c73d7d;
+      --color-dark: #3a3045;
+      --color-dark-50: #f4ecf5;
+      --color-dark-100: #ffffff;
+      --color-dark-200: #f7eff7;
+      --color-dark-300: #ece1ed;
+      --color-dark-400: #e0d5e1;
+      --color-accent: #ff75a6;
+      --color-accent-light: #ff8fb9;
+      --color-accent-dark: #e6558b;
       --font-sans: 'VT323', monospace;
     }
 
     body {
       color: #1a1a1a;
-      background-image: url('https://i.pinimg.com/736x/21/df/b8/21dfb85844a4b41b711200faadba5e7d.jpg');
-      background-size: cover;
-      background-attachment: fixed;
+      background-color: #fcf9fc;
+      background-image: radial-gradient(#ffdfec 1px, transparent 1px);
+      background-size: 20px 20px;
     }
 
     .placeholder-gray-700::placeholder,
@@ -142,6 +140,32 @@
      ============================================ */
 
     /* Hero section titles and text */
+
+    /* Hero section with white gradient overlay for pastel theme */
+    .home-page h1[class*="text-white/90"] {
+      color: #4a3a5c !important;
+    }
+
+    .home-page .text-gray-300[class*="drop-shadow-md"] {
+      color: #6b5a7d !important;
+    }
+
+    .home-page .text-gray-100 {
+      color: #5a4a6c !important;
+    }
+
+    .home-page .text-gray-200 {
+      color: #6b5a7d !important;
+    }
+
+    .home-page .text-gray-400 {
+      color: #7a6a8c !important;
+    }
+
+    .home-page .text-gray-600 {
+      color: #8a7a9c !important;
+    }
+
     h1[class*="text-white"],
     /* ============================================
      SCHEDULE PAGE - PASTEL ANIME THEME FIXES
@@ -261,7 +285,13 @@
       color: #6b5a7d !important;
     }
 
-    [class*="bg-accent/[0.02]"],
+    /* Anime detail page active tab buttons - force white text (overrides the pastel text-white override) */
+    .anime-detail-page button[class*="text-white"][style*="backgroundColor"],
+    .anime-detail-page button[class*="text-white"][style*="background-color"] {
+      color: #ffffff !important;
+    }
+
+    [class*="bg-accent/[0.02"],
     [class*="bg-accent/[0.05]"],
 
     [class*="bg-white/[0.02]"],
@@ -425,6 +455,52 @@
       stroke: #ffffff !important;
     }
 
+    /* Active navigation tab with pink bg-accent - ensure white text and icons */
+    .anime-detail-page [role="tab"][aria-selected="true"][class*="bg-accent"],
+    .anime-detail-page nav button[aria-selected="true"][class*="bg-accent"] {
+      color: #ffffff !important;
+    }
+
+    .anime-detail-page [role="tab"][aria-selected="true"][class*="bg-accent"] span,
+    .anime-detail-page nav button[aria-selected="true"][class*="bg-accent"] span {
+      color: #ffffff !important;
+    }
+
+    .anime-detail-page [role="tab"][aria-selected="true"][class*="bg-accent"] svg,
+    .anime-detail-page nav button[aria-selected="true"][class*="bg-accent"] svg {
+      color: #ffffff !important;
+      stroke: #ffffff !important;
+    }
+
+    /* Active navigation tabs with inline pink background style - pastel theme fix */
+    .anime-detail-page button[style*="#e85a9c"],
+    .anime-detail-page button[style*="rgb(232, 90, 156)"],
+    .anime-detail-page button[class*="text-white"][style*="background"],
+    .anime-detail-page button.shadow-lg {
+      color: #ffffff !important;
+    }
+
+    .anime-detail-page button[style*="#e85a9c"] svg,
+    .anime-detail-page button[style*="rgb(232, 90, 156)"] svg,
+    .anime-detail-page button[class*="text-white"][style*="background"] svg,
+    .anime-detail-page button.shadow-lg svg {
+      color: #ffffff !important;
+      stroke: #ffffff !important;
+    }
+
+    .anime-detail-page button[style*="#e85a9c"] span,
+    .anime-detail-page button[style*="rgb(232, 90, 156)"] span,
+    .anime-detail-page button[class*="text-white"][style*="background"] span,
+    .anime-detail-page button.shadow-lg span {
+      color: #ffffff !important;
+    }
+
+    /* Force white text on any button in anime detail page with pink background */
+    .anime-detail-page div[style*="backgroundColor"] button,
+    .anime-detail-page div[style*="background-color"] button {
+      color: #ffffff !important;
+    }
+
     .anime-detail-page button[class*="bg-red-500"] svg,
     /* Favorite button heart - keep it white when filled */
     .anime-detail-page .bg-red-500 svg,
@@ -474,16 +550,35 @@
     }
 
     .home-page button[class*="bg-dark-100/50"],
-    /* Hero section buttons */
+    /* Hero section buttons - styled for white background */
     .home-page button[class*="bg-white/10"],
     /* ProfileHeader Edit Profile button - pastel theme */
     .profile-header [class*="bg-dark-100"] {
-      background-color: rgba(255, 255, 255, 0.6) !important;
-      border-color: rgba(181, 154, 201, 0.5) !important;
+      background-color: rgba(255, 255, 255, 0.7) !important;
+      border: 1px solid rgba(181, 154, 201, 0.5) !important;
+      color: #4a3a5c !important;
+    }
+
+    .home-page button[class*="bg-dark-100/50"]:hover,
+    .home-page button[class*="bg-white/10"]:hover {
+      background-color: rgba(255, 255, 255, 0.9) !important;
+      border-color: rgba(181, 154, 201, 0.7) !important;
     }
 
     .home-page button[class*="backdrop-blur"] {
-      backdrop-filter: blur(8px) !important;
+      backdrop-filter: none !important;
+    }
+
+    /* Hero "Play Now" button styling for pastel theme - simple flat design */
+    .home-page a.bg-accent {
+      background-color: #e85a9c !important;
+      color: #ffffff !important;
+      box-shadow: none !important;
+    }
+
+    .home-page a.bg-accent:hover {
+      background-color: #ff75a6 !important;
+      box-shadow: none !important;
     }
 
     /* Default theme - Anime card quick action buttons - Dark glassmorphism */
@@ -584,7 +679,7 @@
     div.w-44.bg-dark-100.animate-fade-in {
       background-color: #ffffff !important;
       border-color: rgba(232, 90, 156, 0.3) !important;
-      box-shadow: 0 10px 25px -5px rgba(232, 90, 156, 0.15) !important;
+      
     }
 
     /* All buttons in the status menu - default white background */
@@ -625,7 +720,7 @@
       color: #ffffff !important;
       border: 1px solid rgba(255, 255, 255, 0.15) !important;
       opacity: 1 !important;
-      text-shadow: none !important;
+      
     }
 
     /* Character card text shadows - softer but ensure white text */
@@ -633,7 +728,7 @@
     .aspect-\[3\/4\] .drop-shadow-md,
     [class*="aspect-[3/4]"] [class*="drop-shadow"],
     .animate-tab-content [class*="drop-shadow"] {
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+      
       color: #ffffff !important;
     }
 
@@ -826,21 +921,42 @@
       background-color: rgba(232, 90, 156, 0.1) !important;
     }
 
-    /* Status Selector main button background - pastel theme */
+    /* Status Selector main button background - pastel theme (transparent bg, dynamic icon colors) */
     /* Target the button with dynamic status classes inside the detail page controls */
     .status-selector-container button[class*="bg-blue-500"],
     .status-selector-container button[class*="bg-green-500"],
     .status-selector-container button[class*="bg-yellow-500"],
     .status-selector-container button[class*="bg-red-500"],
     .status-selector-container button[class*="bg-gray-500"] {
-      background-color: #e85a9c !important;
+      background-color: transparent !important;
+      border: 1px solid #b59ac9 !important;
       color: #ffffff !important;
-      box-shadow: 0 4px 12px rgba(232, 90, 156, 0.3) !important;
     }
 
-    /* Force the text label span to be white */
+    /* Force the text label span to be dark for contrast on light bg */
     .status-selector-container button[class*="bg-"] span {
-      color: #ffffff !important;
+      color: #4a3a5c !important;
+    }
+
+    /* Dynamic icon colors for status selector - pastel theme */
+    .status-selector-container button[class*="bg-green-500"] svg {
+      color: #22c55e !important;
+    }
+
+    .status-selector-container button[class*="bg-blue-500"] svg {
+      color: #3b82f6 !important;
+    }
+
+    .status-selector-container button[class*="bg-yellow-500"] svg {
+      color: #eab308 !important;
+    }
+
+    .status-selector-container button[class*="bg-red-500"] svg {
+      color: #ef4444 !important;
+    }
+
+    .status-selector-container button[class*="bg-gray-500"] svg {
+      color: #6b7280 !important;
     }
 
     .status-selector-container button[class*="bg-blue-500"]:hover,
@@ -848,12 +964,31 @@
     .status-selector-container button[class*="bg-yellow-500"]:hover,
     .status-selector-container button[class*="bg-red-500"]:hover,
     .status-selector-container button[class*="bg-gray-500"]:hover {
-      background-color: #ff85b8 !important;
+      background-color: rgba(181, 154, 201, 0.15) !important;
     }
 
-    /* Status Selector control section - remove border and shadow on pastel theme */
+    /* Status Selector control section - transparent bg, remove border and shadow on pastel theme */
     div[class*="bg-dark-200"][class*="backdrop-blur-2xl"][class*="rounded-2xl"] {
-      border: none !important;
+      background-color: transparent !important;
+      border: 1px solid rgba(181, 154, 201, 0.3) !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+    }
+
+    /* Tracking actions section - remove all shadows */
+    .status-selector-container,
+    .status-selector-container *,
+    .status-selector-container [class*="shadow-lg"],
+    .status-selector-container [class*="shadow-black"],
+    .status-selector-container [class*="shadow-inner"],
+    .status-selector-container [class*="shadow-md"],
+    .status-selector-container [class*="shadow-"] {
+      box-shadow: none !important;
+    }
+
+    /* Status dropdown menu - remove shadows */
+    [class*="animate-fade-in"][class*="w-44"][class*="bg-dark-100"],
+    div[class*="w-44"][class*="bg-dark-100"][class*="animate-fade-in"] {
       box-shadow: none !important;
     }
 
@@ -948,9 +1083,20 @@
     }
 
     /* Schedule Card Fixes */
-    /* Dark gradient overlay removal/fix */
+    /* Remove dark gradient overlay from schedule anime cards */
     [class*="bg-gradient-to-t"][class*="from-black"][class*="via-black/80"] {
-      background: linear-gradient(to top, rgba(232, 90, 156, 0.9) 0%, rgba(232, 90, 156, 0.4) 50%, transparent 100%) !important;
+      background: transparent !important;
+    }
+
+    /* Trailer section - remove overlays and text in pastel theme */
+    .anime-detail-page [class*="bg-gradient-to-t"][class*="from-dark/60"],
+    .anime-detail-page [class*="bg-gradient-to-t"][class*="from-dark"] {
+      background: transparent !important;
+    }
+
+    .anime-detail-page .absolute.bottom-0 [class*="text-white/80"],
+    .anime-detail-page [class*="absolute"][class*="bottom-0"] p[class*="truncate"] {
+      display: none !important;
     }
 
     /* Episode badges and prominent tags */
@@ -970,10 +1116,60 @@
       font-weight: 700 !important;
     }
 
-    /* Green airing/aired text */
+    /* Green airing/aired text - brighter for pastel theme */
     .text-green-400,
     [class*="text-green-400"] {
-      color: #15803d !important;
+      color: #16a34a !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+      font-weight: 700 !important;
+    }
+
+    /* Schedule page time remaining text - make more visible */
+    /* Target the airing info overlay text in schedule cards */
+    [class*="absolute"][class*="bottom-0"] span[class*="text-white"][class*="font-semibold"],
+    [class*="absolute"][class*="bottom-0"] [class*="text-white"][class*="font-semibold"] {
+      color: #ffffff !important;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 0, 0, 0.5) !important;
+      font-weight: 800 !important;
+      background-color: rgba(0, 0, 0, 0.4) !important;
+      padding: 3px 8px !important;
+      border-radius: 6px !important;
+      font-size: 14px !important;
+      letter-spacing: 0.5px !important;
+    }
+
+    /* Schedule card time remaining - green variant (urgent) */
+    [class*="absolute"][class*="bottom-0"] span[class*="text-green-400"][class*="font-semibold"] {
+      color: #22c55e !important;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 0, 0, 0.5) !important;
+      font-weight: 800 !important;
+      background-color: rgba(0, 0, 0, 0.5) !important;
+      padding: 3px 8px !important;
+      border-radius: 6px !important;
+      font-size: 14px !important;
+      letter-spacing: 0.5px !important;
+    }
+
+    /* Schedule card "Aired" text */
+    [class*="absolute"][class*="bottom-0"] span[class*="text-green-400"]:not([class*="font-semibold"]) {
+      color: #22c55e !important;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+      font-weight: 700 !important;
+      background-color: rgba(0, 0, 0, 0.4) !important;
+      padding: 2px 6px !important;
+      border-radius: 4px !important;
+    }
+
+    /* Clock and check icons in schedule cards */
+    [class*="absolute"][class*="bottom-0"] svg[class*="text-white"],
+    [class*="absolute"][class*="bottom-0"] svg[class*="text-green-400"] {
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8)) !important;
+    }
+
+    /* Icon containers in schedule cards */
+    [class*="absolute"][class*="bottom-0"] div[class*="rounded-full"] {
+      background-color: rgba(0, 0, 0, 0.5) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
 
     /* Card titles and metadata */
@@ -986,7 +1182,7 @@
     [class*="bg-gradient-to-t"][class*="from-black"] [class*="text-white"],
     [class*="bg-gradient-to-t"][class*="from-black"] .text-white {
       color: #ffffff !important;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+      
     }
 
     /* Profile anime card rating badge - pastel theme */
@@ -1073,7 +1269,7 @@
 
     /* Progress bar glow removal - only in OverviewTab */
     .overview-tab [class*="shadow-\[0_0_8px"] {
-      box-shadow: none !important;
+      
     }
 
     /* Currently watching grid overlay - pastel theme */
@@ -1091,14 +1287,14 @@
 
     .profile-tabs [class*="bg-accent"] {
       background-color: #e85a9c !important;
-      box-shadow: none !important;
+      
     }
 
     /* Profile Stats Cards */
     .glass {
       background-color: rgba(255, 255, 255, 0.6) !important;
       border-color: rgba(181, 154, 201, 0.4) !important;
-      box-shadow: none !important;
+      
     }
 
     /* Stats card backgrounds and borders - solid colors instead of gradients */
@@ -1155,7 +1351,7 @@
     background: var(--color-dark-100);
     position: relative;
     padding-top: 24px;
-    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+    
   }
 
   .retro-window::before {
@@ -1360,21 +1556,21 @@ input[type=number] {
 }
 
 .animate-gradient-shift {
-  background-size: 200% 200%;
+  
   animation: gradient-shift 15s ease infinite;
 }
 
 @keyframes avatar-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+    
   }
 
   70% {
-    box-shadow: 0 0 0 15px rgba(139, 92, 246, 0);
+    
   }
 
   100% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+    
   }
 }
 
@@ -1483,12 +1679,12 @@ input[type=number] {
 
 /* Enhanced Card Hover */
 .card-hover-glow:hover {
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+  
 }
 
 /* Rank Podium Styles */
 .rank-1 {
-  background: linear-gradient(135deg, #fbbf24 0%, #b45309 100%);
+  
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1496,14 +1692,14 @@ input[type=number] {
 }
 
 .rank-2 {
-  background: linear-gradient(135deg, #e5e7eb 0%, #6b7280 100%);
+  
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .rank-3 {
-  background: linear-gradient(135deg, #f59e0b 0%, #78350f 100%);
+  
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1559,12 +1755,12 @@ input[type=number] {
   backdrop-filter: blur(20px);
   background: rgba(26, 26, 26, 0.8);
   border-color: rgba(139, 92, 246, 0.3);
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
+  
 }
 
 /* Sticky Navigation Glow */
 .sticky-glow {
-  box-shadow: 0 -10px 40px rgba(139, 92, 246, 0.1);
+  
 }
 
 /* Tab Active Glow */
@@ -1592,7 +1788,7 @@ input[type=number] {
 /* Avatar overlap effect */
 .avatar-overlap {
   transform: translateY(25%);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  
 }
 
 /* Stats card backgrounds - solid colors instead of gradients */
@@ -1676,10 +1872,7 @@ a:focus-visible {
 
 /* Shimmer background for skeleton loaders */
 .shimmer-bg {
-  background: linear-gradient(90deg,
-      #1a1a1a 25%,
-      #262626 50%,
-      #1a1a1a 75%);
+  
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite linear;
 }
@@ -1719,12 +1912,12 @@ a:focus-visible {
 
 /* Badge glow effects */
 .badge-glow {
-  box-shadow: 0 0 15px currentColor;
+  
 }
 
 /* Text gradient utility */
 .text-gradient {
-  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1880,7 +2073,7 @@ a:focus-visible {
 
 .animate-progress-bar {
   animation: progress-bar 1.5s ease-in-out forwards;
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa, #8b5cf6);
+  
   background-size: 200% 100%;
 }
 
@@ -2034,11 +2227,11 @@ a:focus-visible {
 
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+    
   }
 
   50% {
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+    
   }
 }
 
@@ -2105,7 +2298,7 @@ a:focus-visible {
 
 /* Sticky header shadow on scroll */
 .sticky-shadow {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  
 }
 
 /* Quick filter hover lift */
@@ -2115,7 +2308,7 @@ a:focus-visible {
 
 .quick-filter-hover:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+  
 }
 
 /* Loading spinner pulse */
@@ -2203,11 +2396,11 @@ a:focus-visible {
 
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+    
   }
 
   50% {
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0);
+    
   }
 }
 

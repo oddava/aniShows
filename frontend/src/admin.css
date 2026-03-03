@@ -4,12 +4,12 @@
 .admin-layout {
   display: flex;
   min-height: 100vh;
-  background: #0a0a0a;
+  background: var(--color-dark);
 }
 
 .admin-sidebar {
   width: 260px;
-  background: linear-gradient(180deg, #111111 0%, #0a0a0a 100%);
+  background: var(--color-dark-100);
   border-right: 1px solid rgba(139, 92, 246, 0.1);
   position: fixed;
   height: 100vh;
@@ -40,7 +40,7 @@
 .admin-brand-icon {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  background: var(--color-dark-100);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -103,13 +103,13 @@
   flex: 1;
   margin-left: 260px;
   min-height: 100vh;
-  background: #0a0a0a;
+  background: var(--color-dark);
 }
 
 .admin-header {
   height: 70px;
-  background: rgba(17, 17, 17, 0.8);
-  backdrop-filter: blur(10px);
+  background: var(--color-dark-50);
+
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
@@ -163,7 +163,7 @@
 .admin-stat-card:hover {
   border-color: rgba(139, 92, 246, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 10px 40px rgba(139, 92, 246, 0.1);
+  box-shadow: none;
 }
 
 .admin-stat-card::before {
@@ -279,13 +279,11 @@
 
 /* Data Tables */
 .admin-table-container {
-  background: rgba(17, 17, 17, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: var(--color-dark-50);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 16px;
   overflow-x: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
 }
 
 .admin-table-header {
@@ -322,7 +320,7 @@
 
 .admin-search:focus-within {
   border-color: rgba(168, 85, 247, 0.5);
-  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+  box-shadow: none;
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -383,7 +381,7 @@
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  background: var(--color-dark-100);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -451,13 +449,13 @@
 }
 
 .admin-btn-primary {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  background: var(--color-dark-100);
   color: white;
 }
 
 .admin-btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+  box-shadow: none;
 }
 
 .admin-btn-secondary {
@@ -724,7 +722,6 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -733,7 +730,7 @@
 }
 
 .admin-modal {
-  background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+  background: var(--color-dark-100);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   width: 90%;

@@ -120,7 +120,7 @@ export default function Home() {
                         {trending?.slice(0, 5).map((anime, index) => (
                             <div
                                 key={anime.id}
-                                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-80' : 'opacity-0'}`}
+                                className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`}
                             >
                                 <img
                                     src={getImageUrl(anime.banner_image || anime.cover_image)}
@@ -132,8 +132,8 @@ export default function Home() {
                                 />
                             </div>
                         ))}
-                        <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/40 to-transparent" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent h-full" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/60 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/70 to-transparent h-full" />
                     </div>
 
                     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">

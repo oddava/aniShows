@@ -62,3 +62,10 @@
         margin-left: -60px;
     }
 }
+
+/* Disable sakura animation on mobile for performance */
+@media (max-width: 768px) {
+    .sakura-container {
+        display: none !important;
+    }
+}
