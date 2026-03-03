@@ -130,7 +130,7 @@ services:
   # Celery Worker - Optimized for small EC2 (reduced concurrency)
   celery:
     image: anishows_web:latest
-    command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,default,batch,images,notifications,analytics,low_priority", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,default,batch,images,notifications,analytics,low_priority", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000" ]
     env_file:
       - .env
     environment:
@@ -167,7 +167,7 @@ services:
   # Celery Beat - Reuses web image
   beat:
     image: anishows_web:latest
-    command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
+    command: [ "celery", "-A", "root", "beat", "--loglevel=info" ]
     env_file:
       - .env
     environment:
