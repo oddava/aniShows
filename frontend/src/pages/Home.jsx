@@ -132,8 +132,8 @@ export default function Home() {
                                 />
                             </div>
                         ))}
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/60 to-transparent" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-white via-white/70 to-transparent h-full" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-dark/95 via-dark/70 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent h-full" />
                     </div>
 
                     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
