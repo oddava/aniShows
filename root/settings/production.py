@@ -70,7 +70,7 @@ CSRF_TRUSTED_ORIGINS = csrf_origins
 # DATABASE CONNECTION POOLING
 # =============================================================================
 
-DATABASES["default"]["CONN_MAX_AGE"] = 600  # Keep connections for 10 minutes
+# CONN_MAX_AGE is set in base.py (600s). Only add production-specific overrides here.
 
 # Connection health check to prevent stale connections
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True

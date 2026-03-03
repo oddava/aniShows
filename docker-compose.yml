@@ -14,21 +14,7 @@ services:
         condition: service_healthy
       createbuckets:
         condition: service_completed_successfully
-    command: >
-      uv run gunicorn root.wsgi:application
-      --bind 0.0.0.0:8000
-      --workers 2
-      --worker-class gthread
-      --threads 4
-      --worker-connections 1000
-      --max-requests 10000
-      --max-requests-jitter 100
-      --timeout 60
-      --keep-alive 5
-      --access-logfile -
-      --error-logfile -
-      --log-level warning
-      --preload
+    command: gunicorn root.wsgi:application -c gunicorn.conf.py
     environment:
       DEBUG: "${DEBUG:-False}"
       DJANGO_ENV: "${DJANGO_ENV:-production}"
@@ -97,7 +83,7 @@ services:
       POSTGRES_PASSWORD: "${DB_PASSWORD:-1}"
       POSTGRES_DB: "${DB_NAME:-anishows_db}"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 5

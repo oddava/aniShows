@@ -329,7 +329,7 @@ class FollowViewSet(viewsets.GenericViewSet):
                 user__following__following=request.user,
             )
             .select_related("user__userprofile", "anime")
-            .order_by("-updated_at")
+            .order_by("-updated_at")[:50]  # Cap to prevent unbounded results
         )
 
         serializer = FriendWatchingSerializer(

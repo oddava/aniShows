@@ -328,41 +328,82 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         return response
 
-    @action(detail=False, methods=["get"])
-    def trending(self, request):
-        """Get trending anime (most favorited recently)"""
-        user_id = request.user.id if request.user.is_authenticated else "anon"
-        cache_key = f"anime_trending_{user_id}"
+    def _get_cached_shelf(self, request, cache_key, queryset_fn):
+        """
+        Shared helper for trending/top_rated shelves.
+
+        Caches the base anime data under a single shared key (not per-user)
+        and overlays lightweight user-specific fields for authenticated users.
+        This avoids 100k duplicate cache entries for identical data.
+        """
         data = cache.get(cache_key)
 
         if not data:
-            queryset = (
-                self.get_queryset()
-                .filter(trending_rank__isnull=False)
-                .order_by("trending_rank")[:12]
+            # Use a lightweight queryset — only fields needed by AnimeListSerializer
+            queryset = queryset_fn(
+                Anime.objects.select_related("studio").prefetch_related("genres")
             )
             serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
-            cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
-            cache.set(cache_key, data, cache_time)
+            cache.set(cache_key, data, 60 * 10)  # 10 min shared cache
+
+        # Overlay user-specific fields for authenticated users
+        if request.user.is_authenticated and data:
+            anime_ids = [item["id"] for item in data]
+            favorite_ids = set(
+                UserFavorite.objects.filter(user=request.user, anime_id__in=anime_ids).values_list(
+                    "anime_id", flat=True
+                )
+            )
+            list_entries = {
+                entry.anime_id: entry
+                for entry in UserAnimeList.objects.filter(user=request.user, anime_id__in=anime_ids)
+            }
+            # Return a new list so we don't mutate the cached data
+            data = [
+                {
+                    **item,
+                    "is_favorite": item["id"] in favorite_ids,
+                    "user_list_status": {
+                        "id": entry.id,
+                        "status": entry.status,
+                        "score": entry.score,
+                        "episodes_watched": entry.episodes_watched,
+                        "notes": entry.notes,
+                        "started_at": str(entry.started_at) if entry.started_at else None,
+                        "finished_at": str(entry.finished_at) if entry.finished_at else None,
+                        "is_rewatching": entry.is_rewatching,
+                        "progress": (
+                            entry.episodes_watched / item["episode_count"] * 100
+                            if item.get("episode_count") and item["episode_count"] > 0
+                            else 0
+                        ),
+                    }
+                    if (entry := list_entries.get(item["id"]))
+                    else None,
+                }
+                for item in data
+            ]
 
         return Response(data)
+
+    @action(detail=False, methods=["get"])
+    def trending(self, request):
+        """Get trending anime (most favorited recently)"""
+        return self._get_cached_shelf(
+            request,
+            "anime_trending",
+            lambda qs: qs.filter(trending_rank__isnull=False).order_by("trending_rank")[:12],
+        )
 
     @action(detail=False, methods=["get"])
     def top_rated(self, request):
         """Get top rated anime"""
-        user_id = request.user.id if request.user.is_authenticated else "anon"
-        cache_key = f"anime_top_rated_{user_id}"
-        data = cache.get(cache_key)
-
-        if not data:
-            queryset = self.get_queryset().filter(rating__isnull=False).order_by("-rating")[:12]
-            serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
-            data = serializer.data
-            cache_time = 60 * 5 if request.user.is_authenticated else 60 * 15
-            cache.set(cache_key, data, cache_time)
-
-        return Response(data)
+        return self._get_cached_shelf(
+            request,
+            "anime_top_rated",
+            lambda qs: qs.filter(rating__isnull=False).order_by("-rating")[:12],
+        )
 
     @action(detail=True, methods=["get"])
     def reviews(self, request, slug=None):
@@ -384,8 +425,14 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         """Get related anime based on genres"""
         anime = self.get_object()
         genre_ids = anime.genres.values_list("id", flat=True)
-        related = Anime.objects.filter(genres__in=genre_ids).exclude(id=anime.id)
-        related = related.annotate(shared_genres=Count("genres")).order_by("-shared_genres")[:8]
+        related = (
+            Anime.objects.filter(genres__in=genre_ids)
+            .exclude(id=anime.id)
+            .select_related("studio")
+            .prefetch_related("genres")
+            .annotate(shared_genres=Count("genres"))
+            .order_by("-shared_genres")[:8]
+        )
         serializer = AnimeListSerializer(related, many=True, context={"request": request})
         return Response(serializer.data)
 

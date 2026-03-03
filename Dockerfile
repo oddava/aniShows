@@ -62,17 +62,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
 
-CMD ["gunicorn", "root.wsgi:application", \
-    "--bind", "0.0.0.0:8000", \
-    "--workers", "4", \
-    "--worker-class", "gthread", \
-    "--threads", "4", \
-    "--worker-connections", "1000", \
-    "--max-requests", "1000", \
-    "--max-requests-jitter", "50", \
-    "--timeout", "60", \
-    "--keep-alive", "5", \
-    "--access-logfile", "-", \
-    "--error-logfile", "-", \
-    "--log-level", "info", \
-    "--preload"]
+CMD ["gunicorn", "root.wsgi:application", "-c", "gunicorn.conf.py"]

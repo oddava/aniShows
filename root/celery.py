@@ -40,6 +40,7 @@ try:
     import apps.core.celery_signals
 except ImportError as e:
     import logging
+
     logging.getLogger(__name__).warning(f"Failed to import celery_signals: {e}")
 
 # ============================================================================
@@ -98,9 +99,7 @@ app.conf.task_routes = {
     "apps.animes.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
     # Cleanup tasks
     "apps.animes.tasks.airing.cleanup_old_airing_data": {"queue": "low_priority"},
-    "apps.core.tasks.notifications.cleanup_old_notifications": {
-        "queue": "low_priority"
-    },
+    "apps.core.tasks.notifications.cleanup_old_notifications": {"queue": "low_priority"},
     "apps.core.tasks.cleanup_old_task_results": {"queue": "low_priority"},
     # User maintenance
     "apps.users.tasks.warm_profile_cache": {"queue": "low_priority"},
@@ -142,8 +141,9 @@ app.conf.result_expires = 86400
 app.conf.worker_disable_rate_limits = False  # Enable for better control
 
 # Task execution timeout settings
-app.conf.task_time_limit = 7200  # 2 hours hard limit
-app.conf.task_soft_time_limit = 6600  # 1h 50m soft limit
+# Short default — long-running tasks (sync, import, metadata) declare their own limits
+app.conf.task_time_limit = 600  # 10 minutes hard limit (default)
+app.conf.task_soft_time_limit = 540  # 9 minutes soft limit (default)
 
 # Worker settings
 app.conf.worker_max_tasks_per_child = 1000  # Restart worker after 1000 tasks
@@ -161,8 +161,8 @@ app.conf.task_track_started = True
 # MONITORING AND LOGGING
 # ============================================================================
 
-# Task events for monitoring
-app.conf.task_send_sent_event = True
+# Task events for monitoring (worker events only — sent events add overhead)
+app.conf.task_send_sent_event = False
 app.conf.worker_send_task_events = True
 
 # ============================================================================
