@@ -502,7 +502,7 @@ export default function AnimeDetail() {
                                     {isAuthenticated ? (
                                         <>
                                             {/* Top Row: Watch Time & Actions */}
-                                            <div className="flex items-center justify-between gap-3 sm:gap-4">
+                                            <div className={`flex items-center justify-between gap-3 sm:gap-4 ${isRetro ? 'mt-4' : ''}`}>
                                                 <div className="flex flex-col">
                                                     <span className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-0.5 sm:mb-1">Watch Time</span>
                                                     <span className="text-xs sm:text-sm md:text-base font-black text-white whitespace-nowrap">
