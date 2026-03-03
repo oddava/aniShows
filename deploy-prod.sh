@@ -80,9 +80,9 @@ docker run --rm \
     --env-file .env \
     --network "$(docker network ls --filter name=anishows -q | head -1)" \
     ghcr.io/oddava/anishows-backend:latest \
-    uv run python manage.py migrate --noinput 2>&1 || {
+    python manage.py migrate --noinput 2>&1 || {
     echo -e "${YELLOW}Migration via docker run failed, trying via compose...${NC}"
-    $COMPOSE_CMD run --rm web uv run python manage.py migrate --noinput
+    $COMPOSE_CMD run --rm web python manage.py migrate --noinput
 }
 echo -e "${GREEN}Migrations complete!${NC}"
 echo ""
@@ -104,7 +104,7 @@ echo ""
 echo -e "${BLUE}Step 5: Clearing application cache...${NC}"
 # Use Django's cache.clear() via management shell instead of FLUSHALL
 # This only clears the cache, preserving Celery broker state and pending tasks
-if $COMPOSE_CMD exec -T web uv run python -c "
+if $COMPOSE_CMD exec -T web python -c "
 from django.core.cache import cache
 cache.clear()
 print('Cache cleared successfully')
@@ -131,7 +131,7 @@ echo -e "${BLUE}Step 7: Verifying deployment health...${NC}"
 sleep 5
 HEALTH_OK=false
 for i in 1 2 3; do
-    if $COMPOSE_CMD exec -T web uv run python -c "
+    if $COMPOSE_CMD exec -T web python -c "
 import urllib.request
 response = urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)
 print(response.read().decode())

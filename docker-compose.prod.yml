@@ -5,7 +5,7 @@ services:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
     command: >
-      uv run gunicorn root.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gthread --threads 4 --max-requests 1000 --max-requests-jitter 100 --timeout 30 --graceful-timeout 15 --keep-alive 5 --access-logfile - --error-logfile - --log-level warning --preload
+      gunicorn root.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gthread --threads 4 --max-requests 1000 --max-requests-jitter 100 --timeout 30 --graceful-timeout 15 --keep-alive 5 --access-logfile - --error-logfile - --log-level warning --preload
     volumes:
       - prometheus_multiproc:/tmp/prometheus
     environment:
