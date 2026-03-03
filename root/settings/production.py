@@ -75,8 +75,10 @@ DATABASES["default"]["CONN_MAX_AGE"] = 600  # Keep connections for 10 minutes
 # Connection health check to prevent stale connections
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
-# Disable server-side cursors to prevent connection issues with pgbouncer/pooling
-DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+# Note: DISABLE_SERVER_SIDE_CURSORS is intentionally NOT set.
+# It's only needed with PgBouncer in transaction/statement pooling mode.
+# Without PgBouncer, server-side cursors provide better memory efficiency
+# for large querysets (e.g. paginated anime lists, export queries).
 
 # =============================================================================
 # LOGGING

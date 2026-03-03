@@ -27,21 +27,34 @@ def _user_exists(user):
 
 def update_user_stats_and_cache(user):
     """
-    Update user stats and invalidate caches immediately.
-    Called synchronously for real-time updates.
+    Update user stats asynchronously and invalidate caches immediately.
+    Stats are offloaded to Celery to avoid blocking the request.
+    Cache invalidation happens synchronously so stale data is never served.
     """
     if not user:
         return
 
     try:
-        # Update stats immediately (synchronous for real-time feedback)
-        create_or_update_user_stats(user)
-
-        # Invalidate caches so fresh data is served
+        # Invalidate caches immediately so stale data is never served
         invalidate_user_caches(user)
 
-        logger.debug(f"Updated stats and cleared cache for user {user.username}")
+        # Offload stats computation to Celery (non-blocking)
+        from apps.users.tasks import update_user_stats
+
+        update_user_stats.apply_async(
+            kwargs={"user_id": user.id},
+            countdown=2,  # Small delay to batch rapid updates
+            queue="default",
+        )
+
+        logger.debug(f"Invalidated cache and queued stats update for user {user.username}")
     except Exception as e:
+        # Fallback: try synchronous update if Celery is unavailable
+        try:
+            create_or_update_user_stats(user)
+            invalidate_user_caches(user)
+        except Exception:
+            pass
         logger.exception(f"Failed to update stats for user {user.username}: {e}")
 
 
@@ -240,6 +253,31 @@ def log_user_activity_on_delete(sender, instance, **kwargs):
         logger.exception(f"Failed to log removal activity for user {instance.user.username}: {e}")
 
 
+def _schedule_recommendations_debounced(user_id, countdown=300):
+    """Schedule recommendation generation with cache-based deduplication.
+
+    Prevents duplicate Celery tasks when a user rapidly updates their list
+    (e.g., bulk imports). Uses a cache key with TTL matching the countdown
+    so only one task runs per window.
+    """
+    cache_key = f"reco_pending:{user_id}"
+    if cache.get(cache_key):
+        logger.debug(
+            f"Skipping duplicate recommendation task for user {user_id} "
+            f"(already scheduled within {countdown}s window)"
+        )
+        return
+
+    # Set the dedup key with TTL = countdown + small buffer
+    cache.set(cache_key, True, timeout=countdown + 30)
+
+    generate_recommendations.apply_async(
+        kwargs={"user_id": user_id},
+        countdown=countdown,
+    )
+    logger.debug(f"Scheduled recommendation generation for user {user_id} in {countdown}s")
+
+
 @receiver([post_save, post_delete], sender=UserAnimeList)
 def handle_user_anime_list_change(sender, instance, **kwargs):
     """
@@ -257,11 +295,8 @@ def handle_user_anime_list_change(sender, instance, **kwargs):
         # Update stats immediately for real-time feedback
         update_user_stats_and_cache(instance.user)
 
-        # Use countdown to batch rapid updates (e.g., if user updates multiple entries quickly)
-        generate_recommendations.apply_async(
-            kwargs={"user_id": instance.user.id},
-            countdown=300,  # Wait 5 minutes for potential batch updates
-        )
+        # Schedule recommendations with dedup (5-minute window)
+        _schedule_recommendations_debounced(instance.user.id, countdown=300)
 
 
 @receiver([post_save, post_delete], sender=UserFavorite)
@@ -281,11 +316,8 @@ def handle_user_favorite_change(sender, instance, **kwargs):
         # Update stats immediately for real-time feedback
         update_user_stats_and_cache(instance.user)
 
-        # Wait 2 minutes for potential batch updates
-        generate_recommendations.apply_async(
-            kwargs={"user_id": instance.user.id},
-            countdown=120,
-        )
+        # Schedule recommendations with dedup (2-minute window)
+        _schedule_recommendations_debounced(instance.user.id, countdown=120)
 
 
 @receiver([post_save, post_delete], sender=Review)

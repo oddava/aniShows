@@ -7,6 +7,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import get_user_model
+from django.db import models
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 import logging
 
@@ -68,12 +70,18 @@ class FollowViewSet(viewsets.GenericViewSet):
             invalidate_user_caches(target_user.id, target_user.username)
             invalidate_user_caches(request.user.id, request.user.username)
 
+            # Get both counts in a single query instead of two separate count() calls
+            counts = User.objects.filter(pk__in=[target_user.pk, request.user.pk]).aggregate(
+                target_followers=Count("followers", filter=models.Q(pk=target_user.pk)),
+                user_following=Count("following", filter=models.Q(pk=request.user.pk)),
+            )
+
             return Response(
                 {
                     "status": "unfollowed",
                     "is_following": False,
-                    "followers_count": target_user.followers.count(),
-                    "following_count": request.user.following.count(),
+                    "followers_count": counts["target_followers"],
+                    "following_count": counts["user_following"],
                 }
             )
 
@@ -83,12 +91,18 @@ class FollowViewSet(viewsets.GenericViewSet):
         invalidate_user_caches(target_user.id, target_user.username)
         invalidate_user_caches(request.user.id, request.user.username)
 
+        # Get both counts in a single query instead of two separate count() calls
+        counts = User.objects.filter(pk__in=[target_user.pk, request.user.pk]).aggregate(
+            target_followers=Count("followers", filter=models.Q(pk=target_user.pk)),
+            user_following=Count("following", filter=models.Q(pk=request.user.pk)),
+        )
+
         return Response(
             {
                 "status": "followed",
                 "is_following": True,
-                "followers_count": target_user.followers.count(),
-                "following_count": request.user.following.count(),
+                "followers_count": counts["target_followers"],
+                "following_count": counts["user_following"],
             },
             status=status.HTTP_201_CREATED,
         )
@@ -132,16 +146,20 @@ class FollowViewSet(viewsets.GenericViewSet):
                 ),
             )
 
-        # Annotate the user to display
-        for follow in queryset:
-            follow._display_user = follow.follower
-
+        # Paginate FIRST, then set _display_user only on the page
+        # (avoids evaluating the entire queryset just to set an attribute)
         page = self.paginate_queryset(queryset)
         if page is not None:
+            for follow in page:
+                follow._display_user = follow.follower
             serializer = UserFollowListSerializer(page, many=True, context={"request": request})
             return self.get_paginated_response(serializer.data)
 
-        serializer = UserFollowListSerializer(queryset, many=True, context={"request": request})
+        # Fallback for non-paginated response
+        results = list(queryset)
+        for follow in results:
+            follow._display_user = follow.follower
+        serializer = UserFollowListSerializer(results, many=True, context={"request": request})
         return Response(serializer.data)
 
     @action(
@@ -186,15 +204,18 @@ class FollowViewSet(viewsets.GenericViewSet):
                 ),
             )
 
-        for follow in queryset:
-            follow._display_user = follow.following
-
+        # Paginate FIRST, then set _display_user only on the page
         page = self.paginate_queryset(queryset)
         if page is not None:
+            for follow in page:
+                follow._display_user = follow.following
             serializer = UserFollowListSerializer(page, many=True, context={"request": request})
             return self.get_paginated_response(serializer.data)
 
-        serializer = UserFollowListSerializer(queryset, many=True, context={"request": request})
+        results = list(queryset)
+        for follow in results:
+            follow._display_user = follow.following
+        serializer = UserFollowListSerializer(results, many=True, context={"request": request})
         return Response(serializer.data)
 
     @action(
@@ -247,15 +268,18 @@ class FollowViewSet(viewsets.GenericViewSet):
                 ),
             )
 
-        for follow in queryset:
-            follow._display_user = follow.following
-
+        # Paginate FIRST, then set _display_user only on the page
         page = self.paginate_queryset(queryset)
         if page is not None:
+            for follow in page:
+                follow._display_user = follow.following
             serializer = UserFollowListSerializer(page, many=True, context={"request": request})
             return self.get_paginated_response(serializer.data)
 
-        serializer = UserFollowListSerializer(queryset, many=True, context={"request": request})
+        results = list(queryset)
+        for follow in results:
+            follow._display_user = follow.following
+        serializer = UserFollowListSerializer(results, many=True, context={"request": request})
         return Response(serializer.data)
 
     @action(

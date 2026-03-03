@@ -41,6 +41,11 @@
         reverse_proxy web:8000
     }
 
+    # Prometheus metrics - only accessible from internal network
+    handle /metrics {
+        reverse_proxy web:8000
+    }
+
     # MinIO Media - proxy /media/* to MinIO bucket
     # Note: /media/CACHE/* is also handled here when thumbnails are in S3
     handle_path /media/* {

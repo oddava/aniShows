@@ -3,8 +3,9 @@
 services:
   web:
     image: ghcr.io/oddava/anishows-backend:latest
+    restart: always
     command: >
-      uv run gunicorn root.wsgi:application --bind 0.0.0.0:8000 --workers 1 --worker-class gthread --threads 4 --worker-connections 1000 --max-requests 1000 --max-requests-jitter 100 --timeout 30 --keep-alive 5 --access-logfile - --error-logfile - --log-level warning
+      uv run gunicorn root.wsgi:application --bind 0.0.0.0:8000 --workers 3 --worker-class gthread --threads 4 --max-requests 1000 --max-requests-jitter 100 --timeout 30 --graceful-timeout 15 --keep-alive 5 --access-logfile - --error-logfile - --log-level warning --preload
     volumes:
       - prometheus_multiproc:/tmp/prometheus
     environment:
@@ -18,7 +19,7 @@ services:
       createbuckets:
         condition: service_completed_successfully
     healthcheck:
-      test: [ "CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=5).close()" ]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -32,16 +33,17 @@ services:
 
   redis:
     command: >
-      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory 512mb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000
+      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory 200mb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000 --tcp-backlog 511 --hz 10
     healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 3
 
   celery:
     image: ghcr.io/oddava/anishows-backend:latest
-    command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,low_priority,notifications", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000" ]
+    restart: always
+    command: [ "uv", "run", "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,default,batch,images,notifications,analytics,low_priority", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
     deploy:
       resources:
         limits:
@@ -57,7 +59,7 @@ services:
       - caddy_config:/config
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -109,6 +111,7 @@ services:
 
   beat:
     image: ghcr.io/oddava/anishows-backend:latest
+    restart: always
     command: [ "uv", "run", "celery", "-A", "root", "beat", "--loglevel=info" ]
     env_file:
       - .env

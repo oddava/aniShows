@@ -31,12 +31,18 @@ def calculate_user_stats(user):
     # Episodes watched
     episodes_watched = lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
 
-    # Calculate total minutes watched
-    # Join with anime to get episode duration (default to 24 minutes)
-    total_minutes = 0
-    for item in lists.select_related("anime").iterator():
-        duration = item.anime.duration_minutes if item.anime and item.anime.duration_minutes else 24
-        total_minutes += item.episodes_watched * duration
+    # Calculate total minutes watched using DB aggregation (no Python loop)
+    from django.db.models import F, Value
+    from django.db.models.functions import Coalesce
+
+    total_minutes = (
+        lists.select_related("anime")
+        .annotate(
+            duration=Coalesce(F("anime__duration_minutes"), Value(24)),
+        )
+        .aggregate(total=Sum(F("episodes_watched") * F("duration")))["total"]
+        or 0
+    )
 
     days_watched = round(total_minutes / 1440, 1)  # 1440 minutes in a day
 

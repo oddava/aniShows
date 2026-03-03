@@ -1,13 +1,13 @@
-FROM python:3.12-slim
-
-RUN useradd -m -u 1000 aniuser
+# =============================================================================
+# Stage 1: Builder - install dependencies and compile assets
+# =============================================================================
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    libmagic1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -16,6 +16,26 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-dev
+
+# =============================================================================
+# Stage 2: Runtime - lean production image
+# =============================================================================
+FROM python:3.12-slim AS runtime
+
+RUN useradd -m -u 1000 aniuser
+
+WORKDIR /app
+
+# Only install runtime dependencies (no gcc/build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libmagic1 \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH"
 
@@ -31,7 +51,7 @@ RUN DJANGO_SETTINGS_MODULE=root.settings.production \
     DB_PASSWORD=placeholder \
     DB_HOST=localhost \
     DB_PORT=5432 \
-    uv run python manage.py collectstatic --noinput
+    python manage.py collectstatic --noinput
 
 RUN chown -R aniuser:aniuser /app
 
@@ -39,7 +59,10 @@ USER aniuser
 
 EXPOSE 8000
 
-CMD ["uv", "run", "gunicorn", "root.wsgi:application", \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
+
+CMD ["gunicorn", "root.wsgi:application", \
     "--bind", "0.0.0.0:8000", \
     "--workers", "4", \
     "--worker-class", "gthread", \

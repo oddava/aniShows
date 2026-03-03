@@ -179,13 +179,22 @@ class BadgesMixin:
     """
     Mixin for serializers that display user badges.
     Used by UserSerializer and PublicUserSerializer.
+
+    Expects the queryset to prefetch badges via:
+        Prefetch("badges", queryset=..., to_attr="_prefetched_badges")
+    Falls back to a DB query if prefetch is not available (e.g. single object lookups).
     """
 
     def get_badges(self, obj):
-        # Only return featured badges, ordered by granted_at desc
-        user_badges = obj.badges.filter(badge__is_active=True, is_featured=True).select_related(
-            "badge"
-        )[:3]
+        # Use prefetched badges if available (no DB query)
+        if hasattr(obj, "_prefetched_badges"):
+            user_badges = obj._prefetched_badges
+        else:
+            # Fallback for non-prefetched paths (e.g. single user serialization in auth views)
+            user_badges = obj.badges.filter(badge__is_active=True, is_featured=True).select_related(
+                "badge"
+            )[:3]
+
         return [
             {
                 "id": ub.badge.id,

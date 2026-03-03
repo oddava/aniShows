@@ -330,14 +330,10 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          cat >> ~/.ssh/config <<EOF
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            LogLevel ERROR
-          EOF
-          chmod 600 ~/.ssh/config
-          echo "✅ SSH configured"
+          # Add the host key to known_hosts for secure verification
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 644 ~/.ssh/known_hosts
+          echo "SSH configured with host key verification"
 
       - name: Deploy to EC2
         env:
@@ -382,11 +378,11 @@ jobs:
             echo '🐳 Running deployment script for remaining services...'
             ./deploy-prod.sh
             
-            echo '🔍 Verifying deployment health...'
+            echo 'Verifying deployment health...'
             sleep 5
             
-            echo '🌐 Testing website accessibility...'
-            curl -sf http://localhost:80/health || curl -sf http://localhost:80/api/v1/health || echo '⚠️ Health endpoint not available'
+            echo 'Testing website accessibility...'
+            curl -sf --retry 3 --retry-delay 5 http://localhost:80/api/v1/health/ || { echo 'Health check FAILED'; exit 1; }
             
             echo '📊 Checking container status...'
             docker compose -f docker-compose.yml -f docker-compose.prod.yml ps

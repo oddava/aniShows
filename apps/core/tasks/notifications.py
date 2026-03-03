@@ -133,53 +133,78 @@ def _build_new_episode_email(notification):
 
 @shared_task
 def check_new_episodes():
-    """Check for newly aired episodes and create notifications."""
+    """Check for newly aired episodes and create notifications.
+
+    Optimized to avoid O(anime × users) individual queries by:
+    1. Pre-fetching all recently-aired anime IDs in one query
+    2. Batch-fetching all interested users across all anime in one query
+    3. Batch-fetching all existing notifications to build a set for dedup
+    """
     logger.info("Checking for new episodes...")
 
-    # Find anime that have aired recently (in the last 24 hours)
     from datetime import timedelta as td
+    from apps.users.models import UserAnimeList
 
     yesterday = timezone.now() - td(hours=24)
 
-    recently_aired = Anime.objects.filter(
-        status=Anime.AnimeStatus.airing,
-        next_airing_date__lte=timezone.now(),
-        next_airing_date__gte=yesterday,
-        next_airing_episode__isnull=False,
+    recently_aired = list(
+        Anime.objects.filter(
+            status=Anime.AnimeStatus.airing,
+            next_airing_date__lte=timezone.now(),
+            next_airing_date__gte=yesterday,
+            next_airing_episode__isnull=False,
+        )
     )
+
+    if not recently_aired:
+        logger.info("No recently aired episodes found")
+        return 0
+
+    # Build a map of anime_id -> anime for quick lookup
+    anime_map = {anime.id: anime for anime in recently_aired}
+    anime_ids = list(anime_map.keys())
+
+    # Single query: all interested users across all recently-aired anime
+    interested_entries = UserAnimeList.objects.filter(
+        anime_id__in=anime_ids,
+        status__in=[
+            UserAnimeList.UserAnimeStatus.watching,
+            UserAnimeList.UserAnimeStatus.plan_to_watch,
+        ],
+    ).select_related("user")
+
+    if not interested_entries.exists():
+        logger.info("No users interested in recently aired anime")
+        return 0
+
+    # Build a set of (user_id, anime_id, episode_number) for existing notifications
+    # This replaces O(anime × users) individual .exists() queries with ONE query
+    existing_notification_qs = Notification.objects.filter(
+        notification_type=Notification.NotificationType.NEW_EPISODE,
+        created_at__gte=yesterday,
+    ).values_list("user_id", "data")
+
+    existing_notifications = set()
+    for user_id, data in existing_notification_qs:
+        if data and data.get("anime_id") in anime_ids:
+            existing_notifications.add((user_id, data["anime_id"], data.get("episode_number")))
 
     notifications_created = 0
 
-    for anime in recently_aired:
-        # Find users with this anime in their list (watching or plan_to_watch)
-        from apps.users.models import UserAnimeList
+    for user_anime in interested_entries:
+        anime = anime_map[user_anime.anime_id]
+        dedup_key = (user_anime.user_id, anime.id, anime.next_airing_episode)
 
-        interested_users = UserAnimeList.objects.filter(
-            anime=anime,
-            status__in=[
-                UserAnimeList.UserAnimeStatus.watching,
-                UserAnimeList.UserAnimeStatus.plan_to_watch,
-            ],
-        ).select_related("user")
-
-        for user_anime in interested_users:
-            # Check if we already sent a notification for this episode
-            existing = Notification.objects.filter(
+        if dedup_key not in existing_notifications:
+            notification = NotificationService.create_new_episode_notification(
                 user=user_anime.user,
-                notification_type=Notification.NotificationType.NEW_EPISODE,
-                data__anime_id=anime.id,
-                data__episode_number=anime.next_airing_episode,
-                created_at__gte=yesterday,
-            ).exists()
-
-            if not existing:
-                notification = NotificationService.create_new_episode_notification(
-                    user=user_anime.user,
-                    anime=anime,
-                    episode_number=anime.next_airing_episode,
-                )
-                if notification:
-                    notifications_created += 1
+                anime=anime,
+                episode_number=anime.next_airing_episode,
+            )
+            if notification:
+                notifications_created += 1
+                # Add to set to prevent duplicates within this batch
+                existing_notifications.add(dedup_key)
 
     logger.info(f"Created {notifications_created} new episode notifications")
     return notifications_created

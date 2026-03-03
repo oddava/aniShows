@@ -93,48 +93,49 @@ class UserActivityViewSet(viewsets.ReadOnlyModelViewSet):
             UserActivity.ActivityType.COMPLETED,
         ]
 
-        # Fetch activities and aggregate in Python for reliability
-        activities = UserActivity.objects.filter(
-            user=user_filter,
-            created_at__gte=one_year_ago,
-            activity_type__in=episode_types,
+        # Use DB-level aggregation instead of loading all activities into Python
+        from django.db.models import F, Value, Case, When, IntegerField, Sum
+        from django.db.models.functions import TruncDate, Coalesce, Greatest
+
+        # Calculate episode diff at the DB level, clamped to >= 0
+        activities = (
+            UserActivity.objects.filter(
+                user=user_filter,
+                created_at__gte=one_year_ago,
+                activity_type__in=episode_types,
+            )
+            .annotate(
+                activity_date=TruncDate("created_at"),
+                ep_count=Greatest(
+                    Case(
+                        # When both old and new episodes exist, use the diff
+                        When(
+                            old_episodes__isnull=False,
+                            new_episodes__isnull=False,
+                            then=F("new_episodes") - F("old_episodes"),
+                        ),
+                        # When only new_episodes exists, use it directly
+                        When(
+                            new_episodes__isnull=False,
+                            then=F("new_episodes"),
+                        ),
+                        # Default: count as 1 episode
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    ),
+                    Value(0),  # Clamp negative diffs to 0
+                    output_field=IntegerField(),
+                ),
+            )
+            .values("activity_date")
+            .annotate(total_count=Sum("ep_count"))
+            .filter(total_count__gt=0)
+            .order_by("activity_date")
         )
 
-        # Aggregate by date
-        from collections import defaultdict
-        from datetime import date
-
-        daily_counts = defaultdict(int)
-
-        for activity in activities:
-            activity_date = activity.created_at.date()
-
-            if activity.activity_type == UserActivity.ActivityType.PROGRESS:
-                # For progress: count episodes watched (diff)
-                if activity.old_episodes is not None and activity.new_episodes is not None:
-                    count = activity.new_episodes - activity.old_episodes
-                elif activity.new_episodes is not None:
-                    count = activity.new_episodes
-                else:
-                    count = 1
-            elif activity.activity_type == UserActivity.ActivityType.COMPLETED:
-                # For completed: use diff if old_episodes exists, otherwise use total
-                if activity.old_episodes is not None and activity.new_episodes is not None:
-                    count = activity.new_episodes - activity.old_episodes
-                elif activity.new_episodes is not None:
-                    count = activity.new_episodes
-                else:
-                    count = 1
-            else:
-                count = 1
-
-            # Clamp negative diffs to 0
-            if count > 0:
-                daily_counts[activity_date] += count
-
-        # Convert to sorted list
         result = [
-            {"date": d.isoformat(), "count": c} for d, c in sorted(daily_counts.items()) if c > 0
+            {"date": entry["activity_date"].isoformat(), "count": entry["total_count"]}
+            for entry in activities
         ]
 
         # Cache result for 5 minutes

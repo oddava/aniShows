@@ -1100,23 +1100,40 @@ class AniListService:
         def update_slugs():
             from apps.animes.models import Anime
 
+            # Step 1: Collect all anilist_ids referenced in relations that need slug lookup
+            anime_list = list(Anime.objects.filter(id__in=anime_ids))
+            needed_anilist_ids = set()
+            for anime in anime_list:
+                relations = anime.relations or []
+                for rel in relations:
+                    rel_anilist_id = rel.get("id")
+                    if rel_anilist_id and not rel.get("slug"):
+                        needed_anilist_ids.add(rel_anilist_id)
+
+            if not needed_anilist_ids:
+                return 0
+
+            # Step 2: Single batch query to resolve anilist_id -> slug
+            anilist_to_slug = dict(
+                Anime.objects.filter(anilist_id__in=needed_anilist_ids).values_list(
+                    "anilist_id", "slug"
+                )
+            )
+
+            # Step 3: Update relations with resolved slugs
             updated_count = 0
-            for anime in Anime.objects.filter(id__in=anime_ids):
+            for anime in anime_list:
                 relations = anime.relations or []
                 needs_save = False
 
                 for rel in relations:
                     rel_anilist_id = rel.get("id")
                     if rel_anilist_id and not rel.get("slug"):
-                        try:
-                            related_anime = Anime.objects.get(anilist_id=rel_anilist_id)
-                            rel["slug"] = related_anime.slug
+                        slug = anilist_to_slug.get(rel_anilist_id)
+                        if slug:
+                            rel["slug"] = slug
                             needs_save = True
-                            logger.debug(
-                                f"Linked relation {rel_anilist_id} -> {related_anime.slug}"
-                            )
-                        except Anime.DoesNotExist:
-                            pass  # Related anime not in DB yet
+                            logger.debug(f"Linked relation {rel_anilist_id} -> {slug}")
 
                 if needs_save:
                     anime.relations = relations

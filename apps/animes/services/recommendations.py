@@ -45,8 +45,17 @@ class ContentBasedRecommender:
             "watched_anime_ids": set(),
         }
 
-        # Get all user's anime lists
-        user_lists = UserAnimeList.objects.filter(user=user).select_related("anime")
+        # Pre-fetch all favorite anime IDs in a single query to avoid N+1
+        favorite_anime_ids = set(
+            UserFavorite.objects.filter(user=user).values_list("anime_id", flat=True)
+        )
+
+        # Get all user's anime lists with prefetched genres (avoids N+1 on anime.genres.all())
+        user_lists = (
+            UserAnimeList.objects.filter(user=user)
+            .select_related("anime", "anime__studio")
+            .prefetch_related("anime__genres")
+        )
 
         for entry in user_lists:
             anime = entry.anime
@@ -55,11 +64,11 @@ class ContentBasedRecommender:
             # Weight by user score (0-10 scale)
             weight = entry.score / 10.0 if entry.score > 0 else 0.5
 
-            # If user rated it highly or favorited it
-            if entry.score >= 7 or UserFavorite.objects.filter(user=user, anime=anime).exists():
+            # If user rated it highly or favorited it (uses pre-fetched set)
+            if entry.score >= 7 or anime.id in favorite_anime_ids:
                 preferences["highly_rated_anime"].append(anime)
 
-                # Count genres
+                # Count genres (uses prefetched genres - no extra queries)
                 for genre in anime.genres.all():
                     preferences["liked_genres"][genre.id] += weight
 
@@ -71,12 +80,18 @@ class ContentBasedRecommender:
                 preferences["preferred_types"][anime.anime_type] += weight
 
         # Also consider favorites (even if not rated highly)
-        favorites = UserFavorite.objects.filter(user=user).select_related("anime")
+        favorites = (
+            UserFavorite.objects.filter(user=user)
+            .select_related("anime")
+            .prefetch_related("anime__genres")
+        )
+        highly_rated_ids = {a.id for a in preferences["highly_rated_anime"]}
         for fav in favorites:
             anime = fav.anime
             preferences["watched_anime_ids"].add(anime.id)
-            if anime not in preferences["highly_rated_anime"]:
+            if anime.id not in highly_rated_ids:
                 preferences["highly_rated_anime"].append(anime)
+                highly_rated_ids.add(anime.id)
                 for genre in anime.genres.all():
                     preferences["liked_genres"][genre.id] += 0.7
 
@@ -89,8 +104,12 @@ class ContentBasedRecommender:
         return preferences
 
     def calculate_genre_similarity(self, anime: Anime, preferences: Dict) -> float:
-        """Calculate Jaccard similarity for genres"""
-        anime_genres = set(anime.genres.values_list("id", flat=True))
+        """Calculate Jaccard similarity for genres.
+
+        Uses prefetched genres from the queryset (no extra DB queries).
+        """
+        # Use prefetched genres - .all() on prefetched M2M is free (no query)
+        anime_genres = {g.id for g in anime.genres.all()}
         liked_genres = set(preferences["liked_genres"].keys())
 
         if not anime_genres or not liked_genres:
@@ -111,6 +130,8 @@ class ContentBasedRecommender:
         """
         Calculate content-based recommendation score.
         Returns (score, metadata) tuple.
+
+        Uses prefetched genres/studio from the queryset (no extra DB queries).
         """
         score = 0.0
         metadata = {
@@ -123,7 +144,7 @@ class ContentBasedRecommender:
         genre_sim = self.calculate_genre_similarity(anime, preferences)
         score += genre_sim * self.WEIGHTS["genres"]
 
-        # Get matched genres
+        # Get matched genres (uses prefetched genres - no extra query)
         anime_genres = {g.id: g.name for g in anime.genres.all()}
         for genre_id in preferences["liked_genres"]:
             if genre_id in anime_genres:
@@ -280,27 +301,21 @@ class RecommendationService:
             # Clear old recommendations for this user
             UserRecommendation.objects.filter(user=user).delete()
 
-            # Create new recommendations
-            # Use bulk_create for better performance, with ignore_conflicts as safety
-            saved_recs = []
-            for rec_data in recs:
-                try:
-                    user_rec = UserRecommendation.objects.create(
-                        user=user,
-                        anime=rec_data["anime"],
-                        score=Decimal(str(round(rec_data["score"], 2))),
-                        reason=rec_data["reason"],
-                        reason_metadata=rec_data["metadata"],
-                    )
-                    saved_recs.append(user_rec)
-                except Exception as e:
-                    # Skip duplicates that might occur from race conditions
-                    if "unique constraint" in str(e).lower() or "already exists" in str(e).lower():
-                        logger.warning(
-                            f"Skipping duplicate recommendation for anime {rec_data['anime'].id}"
-                        )
-                        continue
-                    raise
+            # Create new recommendations using bulk_create for performance
+            recommendation_objects = [
+                UserRecommendation(
+                    user=user,
+                    anime=rec_data["anime"],
+                    score=Decimal(str(round(rec_data["score"], 2))),
+                    reason=rec_data["reason"],
+                    reason_metadata=rec_data["metadata"],
+                )
+                for rec_data in recs
+            ]
+
+            saved_recs = UserRecommendation.objects.bulk_create(
+                recommendation_objects, ignore_conflicts=True
+            )
 
             logger.info(f"Generated {len(saved_recs)} recommendations for user {user.username}")
             return saved_recs

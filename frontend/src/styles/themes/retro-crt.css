@@ -1,0 +1,28 @@
+@layer base {
+[data-theme="retro-crt"] {
+
+    /* -------------------------------
+     THEME OVERRIDES
+  ------------------------------- */
+    & {
+      --color-dark: #1e1e1e;
+      --color-dark-50: #333333;
+      --color-dark-100: #2a2a2a;
+      --color-dark-200: #222222;
+      --color-dark-300: #1a1a1a;
+      --color-dark-400: #121212;
+      --color-accent: #aaaaaa;
+      --color-accent-light: #cccccc;
+      --color-accent-dark: #777777;
+      --font-sans: 'VT323', monospace;
+    }
+
+    body {
+      color: #1a1a1a;
+      background-color: #fcf9fc;
+      background-image: radial-gradient(#ffdfec 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+  }
+}

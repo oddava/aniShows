@@ -310,10 +310,20 @@ def get_annotated_user_queryset(user=None, lightweight=False):
     """
     from django.db.models import FloatField, Subquery, OuterRef
     from django.db.models.functions import Coalesce, Round
-    from apps.users.models import UserAnimeList
+    from django.db.models import Prefetch
+    from apps.users.models import UserAnimeList, UserBadge
 
     # Base queryset with select_related for userprofile
-    queryset = User.objects.select_related("userprofile")
+    # Prefetch featured badges to avoid N+1 in BadgesMixin.get_badges()
+    queryset = User.objects.select_related("userprofile").prefetch_related(
+        Prefetch(
+            "badges",
+            queryset=UserBadge.objects.filter(badge__is_active=True, is_featured=True)
+            .select_related("badge")
+            .order_by("-granted_at")[:3],
+            to_attr="_prefetched_badges",
+        )
+    )
 
     # Essential annotations always included (fast counts)
     queryset = queryset.annotate(
