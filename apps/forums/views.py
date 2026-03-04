@@ -7,7 +7,10 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Exists, OuterRef, Count, Prefetch
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 import hashlib
+import logging
 from apps.core.utils import get_client_ip
 
 from .models import Category, Thread, Post, Tag, ThreadLike, PostLike
@@ -39,6 +42,22 @@ from apps.core.services.notification_service import NotificationService
 from apps.users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+def _broadcast_to_thread(thread_id, event):
+    """Send a channel layer event to all subscribers of a forum thread.
+
+    Silently ignores failures so forum CRUD is never blocked by WebSocket issues.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return
+        group_name = f"forum_thread_{thread_id}"
+        async_to_sync(channel_layer.group_send)(group_name, event)
+    except Exception:
+        logger.exception("Failed to broadcast forum event for thread %s", thread_id)
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -251,6 +270,16 @@ class ThreadViewSet(viewsets.ModelViewSet):
 
         thread.like_count += 1
 
+        # Broadcast thread like to WebSocket subscribers
+        _broadcast_to_thread(
+            thread.id,
+            {
+                "type": "forum.thread_liked",
+                "thread_id": thread.id,
+                "like_count": thread.like_count,
+            },
+        )
+
         return Response(
             {
                 "status": "liked",
@@ -295,6 +324,17 @@ class ThreadViewSet(viewsets.ModelViewSet):
             like = ThreadLike.objects.get(thread=thread, user=request.user)
             like.delete()
             thread.like_count -= 1
+
+            # Broadcast thread unlike to WebSocket subscribers
+            _broadcast_to_thread(
+                thread.id,
+                {
+                    "type": "forum.thread_liked",
+                    "thread_id": thread.id,
+                    "like_count": thread.like_count,
+                },
+            )
+
             return Response(
                 {
                     "status": "unliked",
@@ -434,6 +474,27 @@ class PostViewSet(viewsets.ModelViewSet):
         invalidate_post_list_cache(thread.id)
         invalidate_thread_caches(thread.id, thread.category.slug)
 
+        # Broadcast new post to all WebSocket subscribers of this thread
+        _broadcast_to_thread(
+            thread.id,
+            {
+                "type": "forum.new_post",
+                "post": {
+                    "id": post.id,
+                    "thread_id": thread.id,
+                    "parent_id": post.parent_id,
+                    "author": {
+                        "id": post.author.id,
+                        "username": post.author.username,
+                    },
+                    "content": post.content,
+                    "depth": post.depth,
+                    "like_count": 0,
+                    "created_at": post.created_at.isoformat(),
+                },
+            },
+        )
+
     def perform_update(self, serializer):
         post = serializer.save()
         invalidate_post_list_cache(post.thread_id)
@@ -476,6 +537,16 @@ class PostViewSet(viewsets.ModelViewSet):
         post.like_count = new_count
         post.save(update_fields=["like_count"])
 
+        # Broadcast like to WebSocket subscribers
+        _broadcast_to_thread(
+            post.thread_id,
+            {
+                "type": "forum.post_liked",
+                "post_id": post.id,
+                "like_count": new_count,
+            },
+        )
+
         return Response(
             {
                 "status": "liked",
@@ -502,6 +573,17 @@ class PostViewSet(viewsets.ModelViewSet):
             new_count = post.likes.count()
             post.like_count = new_count
             post.save(update_fields=["like_count"])
+
+            # Broadcast unlike to WebSocket subscribers
+            _broadcast_to_thread(
+                post.thread_id,
+                {
+                    "type": "forum.post_liked",
+                    "post_id": post.id,
+                    "like_count": new_count,
+                },
+            )
+
             return Response(
                 {
                     "status": "unliked",

@@ -11,6 +11,11 @@
         reverse_proxy web:8000
     }
 
+    # WebSocket connections - proxy to Daphne ASGI server
+    handle /ws/* {
+        reverse_proxy daphne:8001
+    }
+
     # Django Admin (backend)
     handle /django-admin/* {
         reverse_proxy web:8000
@@ -40,6 +45,9 @@
         rewrite * /anishows-media/media{path}
         reverse_proxy minio:9000 {
             header_up Host {upstream_hostport}
+            # Strip CORS headers from MinIO to avoid duplicates
+            header_down -Access-Control-Allow-Origin
+            header_down -Access-Control-Allow-Methods
         }
         header {
             Access-Control-Allow-Origin "*"

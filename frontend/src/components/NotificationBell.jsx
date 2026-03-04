@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, X, CheckCheck, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { notificationApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useWebSocket } from '../hooks/useWebSocket';
 import logger from '../utils/logger';
 
 export const NotificationBell = () => {
@@ -12,25 +13,50 @@ export const NotificationBell = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(false);
     const dropdownRef = useRef(null);
+    const isOpenRef = useRef(false);
 
-    // Fetch unread count on mount and periodically
-    useEffect(() => {
-        if (!user) return;
+    // Keep isOpenRef in sync so the WebSocket handler can check it
+    isOpenRef.current = isOpen;
 
-        const fetchUnreadCount = async () => {
-            try {
-                const response = await notificationApi.getUnreadCount();
-                setUnreadCount(response.data.count);
-            } catch (error) {
-                logger.error('Failed to fetch unread count:', error);
-            }
-        };
+    // Handle incoming WebSocket messages for notifications
+    const handleWsMessage = useCallback((data) => {
+        switch (data.type) {
+            case 'notification':
+                // A new notification arrived — update count and prepend to list if dropdown is open
+                if (data.unread_count != null) {
+                    setUnreadCount(data.unread_count);
+                }
+                if (isOpenRef.current && data.notification) {
+                    setNotifications(prev => [data.notification, ...prev]);
+                }
+                break;
 
-        fetchUnreadCount();
-        const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
+            case 'unread_count':
+                // Server pushed an updated unread count (on connect, after mark-all-read, etc.)
+                setUnreadCount(data.count ?? 0);
+                break;
 
-        return () => clearInterval(interval);
-    }, [user]);
+            case 'notification_read':
+                // A notification was marked as read (via WebSocket mark_read)
+                if (data.notification_id) {
+                    setNotifications(prev => prev.filter(n => n.id !== data.notification_id));
+                }
+                if (data.unread_count != null) {
+                    setUnreadCount(data.unread_count);
+                }
+                break;
+
+            default:
+                break;
+        }
+    }, []);
+
+    // Connect to the notifications WebSocket (replaces 30-second polling)
+    useWebSocket(
+        user ? '/ws/notifications/' : null,
+        { onMessage: handleWsMessage },
+        { autoConnect: !!user }
+    );
 
     // Close dropdown when clicking outside
     useEffect(() => {

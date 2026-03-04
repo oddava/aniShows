@@ -2,7 +2,7 @@
 # aniShows Makefile
 # ============================================================================
 
-EXEC = docker compose exec web uv run python manage.py
+EXEC = docker compose exec web python manage.py
 
 .PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
         front-logs db-logs mig shell superuser test lint collectstatic \

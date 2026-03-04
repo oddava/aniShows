@@ -2,6 +2,8 @@ import logging
 from typing import Optional, Dict, Any
 from django.db import transaction
 from django.utils import timezone
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from apps.core.models import Notification, PushSubscription
 from apps.users.models import UserProfile
 
@@ -50,6 +52,10 @@ class NotificationService:
                     priority=priority,
                 )
                 logger.info(f"Created {notification_type} notification for user {user.id}")
+
+                # Broadcast via WebSocket channel layer
+                cls._broadcast_notification(notification)
+
                 return notification
         except Exception as e:
             logger.exception(f"Failed to create notification: {e}")
@@ -66,6 +72,45 @@ class NotificationService:
         # For in-app notifications, we always create them
         # Email/push preferences are checked when sending
         return True
+
+    @classmethod
+    def _broadcast_notification(cls, notification):
+        """Push a notification to the user's WebSocket channel group.
+
+        This is called synchronously from Django views/services. It uses
+        ``async_to_sync`` to send a message to the channel layer which
+        Daphne then delivers to the connected WebSocket consumer.
+        """
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer is None:
+                return
+
+            group_name = f"notifications_user_{notification.user_id}"
+            unread_count = Notification.objects.filter(
+                user_id=notification.user_id, is_read=False
+            ).count()
+
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "notification.new",
+                    "notification": {
+                        "id": notification.id,
+                        "notification_type": notification.notification_type,
+                        "title": notification.title,
+                        "message": notification.message,
+                        "data": notification.data,
+                        "priority": notification.priority,
+                        "created_at": notification.created_at.isoformat(),
+                        "is_read": False,
+                    },
+                    "unread_count": unread_count,
+                },
+            )
+        except Exception:
+            # Never let a broadcast failure break notification creation
+            logger.exception("Failed to broadcast notification via WebSocket")
 
     @classmethod
     def mark_as_read(cls, notification_id: int, user) -> bool:

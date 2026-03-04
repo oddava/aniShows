@@ -58,6 +58,7 @@ const refreshAccessToken = async (retryCount = 0) => {
 
     isRefreshing = true;
     refreshPromise = new Promise(async (resolve, reject) => {
+        let caughtError = null;
         try {
             const refreshToken = localStorage.getItem('refresh_token');
             if (!refreshToken) {
@@ -91,6 +92,7 @@ const refreshAccessToken = async (retryCount = 0) => {
             logger.debug('Token refresh successful');
             resolve(access);
         } catch (error) {
+            caughtError = error;
             // Check if we should retry (network errors only, not 401s)
             const isNetworkError = !error.response && error.request;
             const isServerError = error.response && error.response.status >= 500 && error.response.status < 600;
@@ -121,7 +123,7 @@ const refreshAccessToken = async (retryCount = 0) => {
             });
             reject(error);
         } finally {
-            if (retryCount === 0 || error?.response?.status === 401) {
+            if (retryCount === 0 || caughtError?.response?.status === 401) {
                 isRefreshing = false;
                 refreshPromise = null;
             }

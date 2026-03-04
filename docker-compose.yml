@@ -51,6 +51,53 @@ services:
         reservations:
           memory: 512M
 
+  # Daphne ASGI Server - WebSocket connections
+  daphne:
+    image: anishows_web:latest
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application"]
+    expose:
+      - "8001"
+    env_file:
+      - .env
+    environment:
+      DEBUG: "${DEBUG:-False}"
+      DJANGO_ENV: "${DJANGO_ENV:-production}"
+      USE_S3: "${USE_S3:-True}"
+      AWS_S3_ENDPOINT_URL: "${AWS_S3_ENDPOINT_URL:-http://minio:9000}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-minioadmin}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
+      AWS_STORAGE_BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
+      AWS_S3_REGION_NAME: "${AWS_S3_REGION_NAME:-us-east-1}"
+      MINIO_PUBLIC_DOMAIN: "${MINIO_PUBLIC_DOMAIN:-localhost:9000}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,daphne,localhost,127.0.0.1,0.0.0.0}"
+      DJANGO_SETTINGS_MODULE: "root.settings"
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_HOST: "${DB_HOST}"
+      DB_PORT: "${DB_PORT}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
+    # Disable the Dockerfile HEALTHCHECK (it targets port 8000 / Gunicorn)
+    healthcheck:
+      disable: true
+    depends_on:
+      web:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    user: "1000:1000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
   # React Frontend
   frontend:
     build:
@@ -294,6 +341,7 @@ services:
       - caddy_config:/config
     depends_on:
       - web
+      - daphne
       - frontend
       - grafana
     deploy:

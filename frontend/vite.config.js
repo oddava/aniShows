@@ -137,6 +137,11 @@ export default defineConfig(({ mode }) => ({
         target: 'http://web:8000',
         changeOrigin: true,
       },
+      '/ws': {
+        target: 'http://daphne:8001',
+        changeOrigin: true,
+        ws: true,
+      },
       '/media': {
         target: 'http://web:8000',
         changeOrigin: true,

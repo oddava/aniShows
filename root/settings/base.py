@@ -32,6 +32,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # =============================================================================
 
 DJANGO_APPS = [
+    "daphne",
     "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -43,6 +44,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "channels",
     "rest_framework",
     "rest_framework.authtoken",
     "rest_framework_simplejwt",
@@ -148,6 +150,7 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "root.urls"
 WSGI_APPLICATION = "root.wsgi.application"
+ASGI_APPLICATION = "root.asgi.application"
 
 TEMPLATES = [
     {
@@ -411,10 +414,12 @@ REDIS_DB = os.getenv("REDIS_DB", "0")
 if REDIS_PASSWORD:
     REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
     REDIS_BROKER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/1"
+    REDIS_CHANNEL_LAYER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/2"
 else:
     # Fallback to REDIS_URL env var for backward compatibility
     REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
     REDIS_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
+    REDIS_CHANNEL_LAYER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
 
 CACHES = {
     "default": {
@@ -431,6 +436,21 @@ CACHES = {
             "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
         },
     }
+}
+
+# =============================================================================
+# DJANGO CHANNELS (WebSocket support)
+# =============================================================================
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_CHANNEL_LAYER_URL],
+            "capacity": 1500,
+            "expiry": 10,
+        },
+    },
 }
 
 # =============================================================================

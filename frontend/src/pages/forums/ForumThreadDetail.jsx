@@ -29,6 +29,7 @@ import MarkdownRenderer from '../../components/common/MarkdownRenderer';
 import { preloadForumChunks } from '../../App';
 import { ThreadDetailSkeleton, PostSkeleton } from '../../components/forums/ForumSkeletons';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
+import { useForumWebSocket } from '../../hooks/useForumWebSocket';
 import ThreadedPost from '../../components/forums/ThreadedPost';
 import Avatar from '../../components/forums/Avatar';
 
@@ -153,6 +154,36 @@ const ForumThreadDetail = () => {
     // If we have cached/previous data (isPlaceholderData), user never sees loading
     const showThreadLoading = useDelayedLoading(isThreadLoading && !isThreadPlaceholder, 500);
     const showPostsLoading = useDelayedLoading(isPostsLoading && !isPostsPlaceholder, 500);
+
+    // ---- Live forum updates via WebSocket ----
+    useForumWebSocket(id, {
+        onNewPost: () => {
+            // A new reply was posted by another user — refetch posts and thread (reply count)
+            queryClient.invalidateQueries({ queryKey: ['forumPosts', id] });
+            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
+        },
+        onPostLiked: ({ post_id, like_count }) => {
+            // Update the post's like count in the cache without a network request
+            queryClient.setQueryData(['forumPosts', id, page], old => {
+                if (!old?.results) return old;
+                return {
+                    ...old,
+                    results: old.results.map(post =>
+                        post.id === post_id
+                            ? { ...post, like_count }
+                            : post
+                    ),
+                };
+            });
+        },
+        onThreadLiked: ({ like_count }) => {
+            // Update the thread's like count in the cache without a network request
+            queryClient.setQueryData(['forumThread', id], old => {
+                if (!old) return old;
+                return { ...old, like_count };
+            });
+        },
+    });
 
     // Handle scrolling to focused post after posts load
     useEffect(() => {

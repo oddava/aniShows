@@ -189,6 +189,9 @@ anime/covers/
 .last-deploy-commit
 static/
 
+# AI agent codebase context
+.opencode/
+
 # Docker Compose local dev overrides
 docker-compose.override.yml
 
