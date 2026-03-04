@@ -1028,6 +1028,29 @@
       background: transparent !important;
     }
 
+    /* Trending Now anime cards - pastel gradient overlay */
+    .grid[class*="grid-cols-3"] .group .absolute[class*="bg-gradient-to-t"][class*="from-black"] {
+      background: linear-gradient(to top, rgba(61, 47, 77, 0.95) 0%, rgba(61, 47, 77, 0.7) 50%, rgba(61, 47, 77, 0.3) 100%) !important;
+    }
+
+    /* Ensure text in card overlay is white with strong shadows */
+    .grid[class*="grid-cols-3"] .group .absolute h4 {
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+      letter-spacing: 0.02em !important;
+    }
+
+    .grid[class*="grid-cols-3"] .group .absolute span {
+      color: #ffffff !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .grid[class*="grid-cols-3"] .group .absolute div {
+      color: rgba(255, 255, 255, 0.95) !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+    }
+
     /* Trailer section - remove overlays and text in pastel theme */
     .anime-detail-page [class*="bg-gradient-to-t"][class*="from-dark/60"],
     .anime-detail-page [class*="bg-gradient-to-t"][class*="from-dark"] {
@@ -1134,6 +1157,39 @@
     [class*="bg-black/70"] svg[class*="text-yellow-400"] {
       color: #fbbf24 !important;
       fill: #fbbf24 !important;
+    }
+
+    /* Anime Detail Page - Title and Japanese subtitle - light and readable */
+    .anime-detail-page h1[class*="text-white/90"] {
+      color: #ffffff !important;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .anime-detail-page p.text-gray-400.tracking-wide,
+    .anime-detail-page p[class*="text-gray-400"][class*="tracking-wide"][class*="font-medium"] {
+      color: #ffffff !important;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    /* Friends Watching tooltip - pastel theme */
+    .anime-detail-page div[class*="bg-gray-900"] {
+      background-color: rgba(255, 255, 255, 0.98) !important;
+      border-color: rgba(181, 154, 201, 0.5) !important;
+      box-shadow: 0 4px 15px rgba(181, 154, 201, 0.3) !important;
+    }
+
+    .anime-detail-page div[class*="bg-gray-900"] p[class*="text-white"] {
+      color: #4a3a5c !important;
+    }
+
+    .anime-detail-page div[class*="bg-gray-900"] p[class*="text-gray-400"] {
+      color: #8a7a9c !important;
+    }
+
+    /* Friends Watching tooltip arrow - pastel theme */
+    .anime-detail-page div[class*="bg-gray-900"] div[class*="rotate-45"] {
+      background-color: rgba(255, 255, 255, 0.98) !important;
+      border-color: rgba(181, 154, 201, 0.5) !important;
     }
 
     /* Footer styling for pastel theme */

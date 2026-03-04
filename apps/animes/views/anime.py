@@ -60,28 +60,65 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     pagination_class = StandardResultsSetPagination
     lookup_field = "slug"
 
-    def get_queryset(self):
-        queryset = Anime.objects.select_related("studio").prefetch_related(
-            "genres",
-            "theme_songs",
-            Prefetch(
-                "cast",
-                queryset=AnimeCharacter.objects.select_related("character", "voice_actor"),
-            ),
-            Prefetch(
-                "production_staff",
-                queryset=AnimeStaff.objects.select_related("staff"),
-            ),
-        )
+    # Fields that AnimeListSerializer actually needs from the Anime table.
+    _LIST_FIELDS = (
+        "id",
+        "title",
+        "title_jp",
+        "slug",
+        "cover_image",
+        "cover_image_external_url",
+        "banner_image",
+        "banner_image_external_url",
+        "rating",
+        "episode_count",
+        "anime_type",
+        "status",
+        "synopsis",
+        "release_date",
+        "next_airing_episode",
+        "next_airing_date",
+        # FK id kept for select_related
+        "studio_id",
+        # Fields used by sort / filter logic
+        "popularity_rank",
+        "trending_rank",
+        "member_count",
+        "site_rank",
+    )
 
-        # Prefetch user-specific data to avoid N+1 queries in serializers
+    def get_queryset(self):
+        is_list = self.action == "list"
+
+        # ── Base queryset ───────────────────────────────────────────
+        queryset = Anime.objects.select_related("studio")
+
+        if is_list:
+            # Only fetch columns the list serializer actually reads.
+            queryset = queryset.only(*self._LIST_FIELDS, "studio__id", "studio__name")
+            # Genres are the only M2M the list serializer needs.
+            queryset = queryset.prefetch_related("genres")
+        else:
+            # Detail / other actions need the heavy relations.
+            queryset = queryset.prefetch_related(
+                "genres",
+                "theme_songs",
+                Prefetch(
+                    "cast",
+                    queryset=AnimeCharacter.objects.select_related("character", "voice_actor"),
+                ),
+                Prefetch(
+                    "production_staff",
+                    queryset=AnimeStaff.objects.select_related("staff"),
+                ),
+            )
+
+        # ── User-specific annotations (cheap – subquery + single prefetch) ──
         user = self.request.user
         if user.is_authenticated:
-            # Annotate is_favorite as boolean (avoids query per anime)
             queryset = queryset.annotate(
                 _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
             )
-            # Prefetch user's list entries for these anime
             queryset = queryset.prefetch_related(
                 Prefetch(
                     "user_lists",
@@ -90,15 +127,20 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 )
             )
 
-        # Annotate with counts
-        queryset = queryset.annotate(
-            review_count=Count("reviews", distinct=True),
-            avg_rating=Avg("reviews__rating"),
-            favorite_count=Count("favorites", distinct=True),
-        )
-
-        if self.action != "list":
+        # ── Aggregate annotations — only for detail (list doesn't display these) ──
+        if not is_list:
+            queryset = queryset.annotate(
+                review_count=Count("reviews", distinct=True),
+                avg_rating=Avg("reviews__rating"),
+            )
             return queryset.order_by("-id")
+
+        # ──────────────────────────────────────────────────────────
+        #  LIST-specific filtering & sorting below
+        # ──────────────────────────────────────────────────────────
+
+        # Track whether we need DISTINCT (only when genre JOINs can duplicate rows)
+        needs_distinct = False
 
         # Search - split query into words for better matching
         search = self.request.query_params.get("q")
@@ -132,6 +174,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             # Filter for anime that match ALL selected genres (AND logic)
             for genre in genres:
                 queryset = queryset.filter(genres__slug=genre)
+            # Multiple genre JOINs can produce duplicate rows
+            needs_distinct = True
 
         # Filter by status - validate against whitelist (case-insensitive)
         anime_status = self.request.query_params.get("status")
@@ -265,7 +309,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         # Add ID as tie-breaker for stable pagination
         queryset = queryset.order_by(sort_field, "-id")
 
-        return queryset.distinct()
+        # Only apply DISTINCT when genre joins can produce duplicate rows
+        if needs_distinct:
+            queryset = queryset.distinct()
+
+        return queryset
 
     def get_serializer_class(self):
         if self.action == "retrieve":

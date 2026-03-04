@@ -28,10 +28,7 @@ const LazyYouTube = memo(function LazyYouTube({ videoId, title = 'Trailer', acce
                             e.target.src = fallbackThumbnailUrl;
                         }}
                     />
-                    
-                    {/* Gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-dark/60 via-transparent to-dark/20" />
-                    
+
                     {/* Minimal Play Button */}
                     <button
                         onClick={handlePlay}
@@ -49,13 +46,6 @@ const LazyYouTube = memo(function LazyYouTube({ videoId, title = 'Trailer', acce
                             />
                         </div>
                     </button>
-                    
-                    {/* Video title */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-dark to-transparent">
-                        <p className="text-white/80 text-sm font-medium truncate">
-                            {title}
-                        </p>
-                    </div>
                 </>
             ) : (
                 <iframe
