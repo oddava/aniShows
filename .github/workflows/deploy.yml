@@ -281,6 +281,8 @@ jobs:
           labels: ${{ steps.meta-frontend.outputs.labels }}
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+            VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
+            VITE_ENVIRONMENT=production
             ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
             BUILD_DATE=${{ github.sha }}
           cache-from: type=gha,scope=frontend
