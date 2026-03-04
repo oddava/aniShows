@@ -13,9 +13,7 @@ import {
     ProfileTabs,
     ProfileContent,
 } from '../components/profile';
-import { setUserContext, initSentry } from '../sentry';
-
-initSentry();
+import { setUserContext } from '../sentry';
 
 import MarkdownRenderer from '../components/common/MarkdownRenderer';
 import OverviewTab from '../components/profile/OverviewTab';

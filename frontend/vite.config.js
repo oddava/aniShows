@@ -102,8 +102,6 @@ export default defineConfig(({ mode }) => ({
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Disable source maps in all outputs
-        sourcemap: false,
       },
     },
     // Minification options - use terser for better compression
@@ -117,7 +115,8 @@ export default defineConfig(({ mode }) => ({
     },
     // Optimize bundle size
     target: 'es2015',
-    sourcemap: false,
+    // Hidden source maps for Sentry error tracking (not exposed to browser)
+    sourcemap: 'hidden',
     // CSS optimization - no source maps in production
     cssMinify: true,
     cssCodeSplit: true,

@@ -52,6 +52,7 @@ dependencies = [
     "google-api-python-client>=2.100.0",
     "pydantic>=2.5.0",
     "drf-spectacular>=0.29.0",
+    "sentry-sdk[django,celery]>=2.19.0",
 ]
 
 [project.optional-dependencies]

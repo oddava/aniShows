@@ -38,6 +38,9 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
       # Prometheus multi-process metrics
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
+      # Sentry
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
     volumes:
       - prometheus_multiproc:/tmp/prometheus
     user: "1000:1000"
@@ -55,6 +58,8 @@ services:
       target: development
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+        - VITE_SENTRY_DSN=${VITE_SENTRY_DSN:-}
+        - VITE_ENVIRONMENT=${VITE_ENVIRONMENT:-development}
         - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
         - BUILDKIT_INLINE_CACHE=1
     ports:
@@ -147,6 +152,9 @@ services:
       DJANGO_SETTINGS_MODULE: "root.settings"
       # Prometheus multi-process metrics
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
+      # Sentry
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
     volumes:
       - prometheus_multiproc:/tmp/prometheus
     user: "0:0"
@@ -182,6 +190,9 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
 
       DJANGO_SETTINGS_MODULE: "root.settings"
+      # Sentry
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
     depends_on:
       - web
       - redis

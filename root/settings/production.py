@@ -5,6 +5,68 @@ Production settings for aniShows project.
 import os
 from .base import *
 
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+
+# =============================================================================
+# SENTRY ERROR MONITORING
+# =============================================================================
+
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        release=os.getenv("SENTRY_RELEASE", ""),
+        integrations=[
+            DjangoIntegration(
+                transaction_style="url",
+                middleware_spans=True,
+            ),
+            CeleryIntegration(
+                monitor_beat_tasks=True,
+            ),
+            RedisIntegration(),
+            LoggingIntegration(
+                level=None,  # Don't capture breadcrumbs from logging
+                event_level="ERROR",  # Send ERROR+ logs as events
+            ),
+        ],
+        # Performance monitoring
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        # Profile 10% of sampled transactions
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+        # Send request bodies (scrub PII separately)
+        send_default_pii=False,
+        # Attach server name for identification
+        server_name=os.getenv("SENTRY_SERVER_NAME", "anishows-web"),
+        # Filter out health check noise
+        before_send=lambda event, hint: _filter_sentry_event(event, hint),
+        before_send_transaction=lambda event, hint: _filter_sentry_transaction(event, hint),
+    )
+
+
+def _filter_sentry_event(event, hint):
+    """Filter out noisy or irrelevant error events."""
+    # Ignore DisallowedHost errors (bot scanners)
+    if "logger" in event and event["logger"] == "django.security.DisallowedHost":
+        return None
+    return event
+
+
+def _filter_sentry_transaction(event, hint):
+    """Filter out noisy transaction events."""
+    transaction_name = event.get("transaction", "")
+    # Skip health check and metrics endpoints
+    if transaction_name in ("/api/v1/health/", "/metrics"):
+        return None
+    return event
+
+
 # =============================================================================
 # SECURITY SETTINGS
 # =============================================================================
