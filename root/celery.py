@@ -147,7 +147,7 @@ app.conf.task_soft_time_limit = 540  # 9 minutes soft limit (default)
 
 # Worker settings
 app.conf.worker_max_tasks_per_child = 1000  # Restart worker after 1000 tasks
-app.conf.worker_max_memory_per_child = 256000  # 256MB memory limit per worker
+app.conf.worker_max_memory_per_child = 200000  # 200MB memory limit per worker
 
 # ============================================================================
 # RETRY AND ERROR HANDLING

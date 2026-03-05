@@ -69,7 +69,7 @@ echo ""
 # BACKEND DEPLOYMENT
 # =========================================================================
 echo -e "${BLUE}Step 2: Pulling latest backend images from GHCR...${NC}"
-$COMPOSE_CMD pull web celery beat
+$COMPOSE_CMD pull web celery celery_priority beat daphne
 echo -e "${GREEN}Backend images pulled!${NC}"
 echo ""
 
@@ -94,7 +94,7 @@ for i in $(seq 1 30); do
 done
 
 # Run migrations using compose run with --no-deps to avoid recreating other services
-$COMPOSE_CMD run --rm --no-deps -e DB_HOST="${DB_HOST:-db}" web python manage.py migrate --noinput
+$COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --noinput
 echo -e "${GREEN}Migrations complete!${NC}"
 echo ""
 
@@ -103,7 +103,7 @@ echo ""
 # =========================================================================
 echo -e "${BLUE}Step 4: Restarting services...${NC}"
 # Restart workers first, then web (reverse proxy keeps serving old containers until healthy)
-$COMPOSE_CMD up -d --no-deps celery beat
+$COMPOSE_CMD up -d --no-deps celery celery_priority beat daphne
 sleep 2
 $COMPOSE_CMD up -d --no-deps web
 echo -e "${GREEN}All containers started!${NC}"

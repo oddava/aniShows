@@ -25,6 +25,6 @@ env = os.getenv("DJANGO_ENV", "development")
 if env == "production":
     from .production import *
 elif env == "testing":
-    from .development import *  # Tests can use development settings
+    from .test import *
 else:
     from .development import *

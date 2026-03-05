@@ -137,11 +137,6 @@ CSRF_TRUSTED_ORIGINS = csrf_origins
 # Connection health check to prevent stale connections
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
-# Note: DISABLE_SERVER_SIDE_CURSORS is intentionally NOT set.
-# It's only needed with PgBouncer in transaction/statement pooling mode.
-# Without PgBouncer, server-side cursors provide better memory efficiency
-# for large querysets (e.g. paginated anime lists, export queries).
-
 # =============================================================================
 # LOGGING
 # =============================================================================

@@ -4,16 +4,23 @@ services:
   web:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: gunicorn root.wsgi:application -c gunicorn.conf.py
+    command: gunicorn root.asgi:application -c gunicorn.conf.py
     volumes:
       - prometheus_multiproc:/tmp/prometheus
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     depends_on:
       db:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -28,9 +35,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1.5G
+          memory: 768M
         reservations:
-          memory: 512M
+          memory: 384M
 
   redis:
     command: >
@@ -44,19 +51,30 @@ services:
   celery:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,default,batch,images,notifications,analytics,low_priority", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,analytics,low_priority", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 384M
         reservations:
-          memory: 256M
+          memory: 192M
+
+  celery_priority:
+    image: ghcr.io/oddava/anishows-backend:latest
+    restart: always
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications,images", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 192M
 
   # Daphne ASGI Server - WebSocket connections (production)
   daphne:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: ["daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application"]
+    command: [ "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
     expose:
       - "8001"
     env_file:
@@ -68,8 +86,11 @@ services:
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       REDIS_HOST: "${REDIS_HOST:-redis}"
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
@@ -82,12 +103,14 @@ services:
     depends_on:
       web:
         condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 256M
         reservations:
           memory: 128M
 
@@ -144,12 +167,7 @@ services:
       MINIO_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
       BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
     entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD};
-      mc mb myminio/$${BUCKET_NAME} --ignore-existing;
-      mc anonymous set download myminio/$${BUCKET_NAME}/media;
-      exit 0;
-      "
+      /bin/sh -c " mc alias set myminio http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD}; mc mb myminio/$${BUCKET_NAME} --ignore-existing; mc anonymous set download myminio/$${BUCKET_NAME}/media; exit 0; "
 
   beat:
     image: ghcr.io/oddava/anishows-backend:latest
@@ -161,8 +179,11 @@ services:
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       REDIS_HOST: "${REDIS_HOST:-redis}"
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
@@ -170,6 +191,7 @@ services:
       DJANGO_SETTINGS_MODULE: "root.settings"
     depends_on:
       - web
+      - pgbouncer
       - redis
     deploy:
       resources:

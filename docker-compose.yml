@@ -12,9 +12,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
       createbuckets:
         condition: service_completed_successfully
-    command: gunicorn root.wsgi:application -c gunicorn.conf.py
+    command: gunicorn root.asgi:application -c gunicorn.conf.py
     environment:
       DEBUG: "${DEBUG:-False}"
       DJANGO_ENV: "${DJANGO_ENV:-production}"
@@ -30,8 +32,11 @@ services:
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       REDIS_HOST: "${REDIS_HOST:-redis}"
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
@@ -54,7 +59,7 @@ services:
   # Daphne ASGI Server - WebSocket connections
   daphne:
     image: anishows_web:latest
-    command: ["daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application"]
+    command: [ "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
     expose:
       - "8001"
     env_file:
@@ -74,8 +79,11 @@ services:
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       REDIS_HOST: "${REDIS_HOST:-redis}"
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
@@ -88,6 +96,8 @@ services:
     depends_on:
       web:
         condition: service_started
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
     user: "1000:1000"
@@ -149,26 +159,52 @@ services:
         reservations:
           memory: 256M
 
+  # PgBouncer - PostgreSQL connection pooling
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    restart: always
+    expose:
+      - "6432"
+    environment:
+      DB_USER: "${DB_USER:-postgres}"
+      DB_PASSWORD: "${DB_PASSWORD:-1}"
+      DB_HOST: "${PGBOUNCER_DB_HOST:-db}"
+      DB_NAME: "${DB_NAME:-anishows_db}"
+      LISTEN_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      POOL_MODE: "${PGBOUNCER_POOL_MODE:-transaction}"
+      MAX_CLIENT_CONN: "${PGBOUNCER_MAX_CLIENT_CONN:-1000}"
+      DEFAULT_POOL_SIZE: "${PGBOUNCER_DEFAULT_POOL_SIZE:-50}"
+      RESERVE_POOL_SIZE: "${PGBOUNCER_RESERVE_POOL_SIZE:-20}"
+      RESERVE_POOL_TIMEOUT: "${PGBOUNCER_RESERVE_POOL_TIMEOUT:-3}"
+      AUTH_TYPE: "${PGBOUNCER_AUTH_TYPE:-scram-sha-256}"
+      IGNORE_STARTUP_PARAMETERS: "extra_float_digits"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-h", "localhost", "-p", "${DB_PGBOUNCER_PORT:-6432}", "-U", "${DB_USER:-postgres}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
   # Redis with persistence enabled
   redis:
     image: redis:7-alpine
     restart: always
     command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD:-redispassword123}
-      --maxmemory 192mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
-      --appendfsync everysec
-      --save 900 1
-      --save 300 10
-      --save 60 10000
+      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory 192mb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000
     volumes:
       - redis_data:/data
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -179,18 +215,21 @@ services:
         reservations:
           memory: 64M
 
-  # Celery Worker - Optimized for small EC2 (reduced concurrency)
+  # Celery Worker - default/batch/background queues
   celery:
     image: anishows_web:latest
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,default,batch,images,notifications,analytics,low_priority", "--concurrency=1", "--pool=solo", "--max-tasks-per-child=1000" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,low_priority", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=1000" ]
     env_file:
       - .env
     environment:
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       REDIS_HOST: "${REDIS_HOST:-redis}"
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
@@ -204,10 +243,14 @@ services:
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
     volumes:
       - prometheus_multiproc:/tmp/prometheus
+    healthcheck:
+      disable: true
     user: "0:0"
     depends_on:
       web:
         condition: service_started
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
       createbuckets:
@@ -219,6 +262,120 @@ services:
         reservations:
           memory: 128M
 
+  # Celery Worker - user-facing and notification queues
+  celery_priority:
+    image: anishows_web:latest
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500" ]
+    env_file:
+      - .env
+    environment:
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      DJANGO_SETTINGS_MODULE: "root.settings"
+      PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus
+    healthcheck:
+      disable: true
+    user: "0:0"
+    depends_on:
+      web:
+        condition: service_started
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+
+  # Celery Worker - image processing queue
+  celery_images:
+    image: anishows_web:latest
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=250" ]
+    env_file:
+      - .env
+    environment:
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      DJANGO_SETTINGS_MODULE: "root.settings"
+      PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus
+    healthcheck:
+      disable: true
+    user: "0:0"
+    depends_on:
+      web:
+        condition: service_started
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+
+  # Celery Worker - analytics queue
+  celery_analytics:
+    image: anishows_web:latest
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=500" ]
+    env_file:
+      - .env
+    environment:
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      DJANGO_SETTINGS_MODULE: "root.settings"
+      PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
+    volumes:
+      - prometheus_multiproc:/tmp/prometheus
+    healthcheck:
+      disable: true
+    user: "0:0"
+    depends_on:
+      web:
+        condition: service_started
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
+
   # Celery Beat - Reuses web image
   beat:
     image: anishows_web:latest
@@ -229,8 +386,11 @@ services:
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
       REDIS_HOST: "${REDIS_HOST:-redis}"
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
@@ -240,8 +400,11 @@ services:
       # Sentry
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
+    healthcheck:
+      disable: true
     depends_on:
       - web
+      - pgbouncer
       - redis
     deploy:
       resources:
@@ -264,7 +427,7 @@ services:
       MINIO_ROOT_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
     command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: [ "CMD", "mc", "ready", "local" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -289,12 +452,7 @@ services:
       MINIO_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
       BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
     entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD};
-      mc mb myminio/$${BUCKET_NAME} --ignore-existing;
-      mc anonymous set download myminio/$${BUCKET_NAME}/media;
-      exit 0;
-      "
+      /bin/sh -c " mc alias set myminio http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD}; mc mb myminio/$${BUCKET_NAME} --ignore-existing; mc anonymous set download myminio/$${BUCKET_NAME}/media; exit 0; "
 
   # Backup Service
   backup:
@@ -307,7 +465,7 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_HOST: "${DB_HOST:-db}"
+      POSTGRES_HOST: "${PGBOUNCER_DB_HOST:-db}"
       POSTGRES_DB: "${DB_NAME:-anishows_db}"
       POSTGRES_USER: "${DB_USER:-postgres}"
       POSTGRES_PASSWORD: "${DB_PASSWORD:-1}"
@@ -331,7 +489,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Grafana local development
+      - "8080:8080" # Grafana local development
     env_file:
       - .env
     volumes:
@@ -363,7 +521,7 @@ services:
       - ./monitoring/prometheus/entrypoint.sh:/entrypoint.sh:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
     depends_on:
       - web
     deploy:
@@ -435,4 +593,4 @@ volumes:
   caddy_config:
   prometheus_data:
   grafana_data:
-  prometheus_multiproc:  # Shared volume for multi-process metrics
+  prometheus_multiproc: # Shared volume for multi-process metrics

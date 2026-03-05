@@ -62,4 +62,4 @@ EXPOSE 8000 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
 
-CMD ["gunicorn", "root.wsgi:application", "-c", "gunicorn.conf.py"]
+CMD ["gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py"]

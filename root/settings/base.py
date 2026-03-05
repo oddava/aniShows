@@ -8,6 +8,32 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean-like environment variable."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_csv(value: str) -> list[str]:
+    """Parse comma-separated env values into a cleaned list."""
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _parse_sentinel_nodes(value: str) -> list[tuple[str, int]]:
+    """Parse Redis Sentinel nodes from ``host:port,host:port`` env format."""
+    nodes: list[tuple[str, int]] = []
+    for node in _parse_csv(value):
+        if ":" in node:
+            host, port = node.split(":", 1)
+            nodes.append((host.strip(), int(port.strip())))
+        else:
+            nodes.append((node, 26379))
+    return nodes
+
+
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -172,17 +198,60 @@ TEMPLATES = [
 # DATABASE
 # =============================================================================
 
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_PORT = os.getenv("DB_PORT")
+
+# PgBouncer (optional): route app traffic through pooler instead of Postgres directly.
+DB_USE_PGBOUNCER = _env_bool("DB_USE_PGBOUNCER", False)
+DB_PGBOUNCER_HOST = os.getenv("DB_PGBOUNCER_HOST", "pgbouncer")
+DB_PGBOUNCER_PORT = os.getenv("DB_PGBOUNCER_PORT", "6432")
+
+DB_HOST = os.getenv("DB_HOST", "db")
+if DB_USE_PGBOUNCER:
+    DB_HOST = DB_PGBOUNCER_HOST
+    DB_PORT = DB_PGBOUNCER_PORT
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
-        "CONN_MAX_AGE": 600,
+        "NAME": DB_NAME,
+        "USER": DB_USER,
+        "PASSWORD": DB_PASSWORD,
+        "HOST": DB_HOST,
+        "PORT": DB_PORT,
+        "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
     }
 }
+
+# PgBouncer transaction pooling is not compatible with server-side cursors.
+if DB_USE_PGBOUNCER:
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+
+# Read replicas (optional): set DB_REPLICA_HOSTS as comma-separated hosts.
+READ_REPLICA_HOSTS = _parse_csv(os.getenv("DB_REPLICA_HOSTS", ""))
+READ_REPLICA_ALIASES: list[str] = []
+
+for index, replica_host in enumerate(READ_REPLICA_HOSTS, start=1):
+    alias = f"replica{index}"
+    READ_REPLICA_ALIASES.append(alias)
+    DATABASES[alias] = {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv(f"DB_REPLICA_{index}_NAME", DB_NAME),
+        "USER": os.getenv(f"DB_REPLICA_{index}_USER", DB_USER),
+        "PASSWORD": os.getenv(f"DB_REPLICA_{index}_PASSWORD", DB_PASSWORD),
+        "HOST": replica_host,
+        "PORT": os.getenv(f"DB_REPLICA_{index}_PORT", os.getenv("DB_REPLICA_PORT", "5432")),
+        "CONN_MAX_AGE": int(os.getenv("DB_REPLICA_CONN_MAX_AGE", "600")),
+        "OPTIONS": {
+            "options": "-c default_transaction_read_only=on",
+        },
+    }
+
+DB_ENABLE_READ_REPLICA_ROUTING = _env_bool("DB_ENABLE_READ_REPLICA_ROUTING", False)
+if DB_ENABLE_READ_REPLICA_ROUTING and READ_REPLICA_ALIASES:
+    DATABASE_ROUTERS = ["root.db_routers.PrimaryReplicaRouter"]
 
 # =============================================================================
 # PASSWORD VALIDATION
@@ -221,6 +290,9 @@ USE_TZ = True
 # =============================================================================
 
 USE_S3 = os.getenv("USE_S3") == "True"
+CDN_BASE_URL = os.getenv("CDN_BASE_URL", "").strip().rstrip("/")
+STATIC_CDN_URL = os.getenv("STATIC_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
+MEDIA_CDN_URL = os.getenv("MEDIA_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
 
 if USE_S3:
     # AWS/MinIO settings
@@ -251,18 +323,31 @@ if USE_S3:
     IMAGEKIT_CACHE_PREFIX = "CACHE/images"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
-    # Static files are always served by whitenoise locally, not from S3
-    STATIC_URL = "/static/"
+    # Static files are always served by whitenoise locally in app containers.
+    # A CDN can still be configured to pull from /static and /media.
+    if STATIC_CDN_URL:
+        STATIC_URL = f"{STATIC_CDN_URL}/static/"
+    else:
+        STATIC_URL = "/static/"
     STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
     PUBLIC_MEDIA_LOCATION = "media"
-    MEDIA_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/"
+    if MEDIA_CDN_URL:
+        MEDIA_URL = f"{MEDIA_CDN_URL}/{PUBLIC_MEDIA_LOCATION}/"
+    else:
+        MEDIA_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/"
     DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
 else:
-    STATIC_URL = "/static/"
+    if STATIC_CDN_URL:
+        STATIC_URL = f"{STATIC_CDN_URL}/static/"
+    else:
+        STATIC_URL = "/static/"
     STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
-    MEDIA_URL = "/media/"
+    if MEDIA_CDN_URL:
+        MEDIA_URL = f"{MEDIA_CDN_URL}/media/"
+    else:
+        MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
     DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
@@ -405,36 +490,79 @@ USER_ONLINE_CACHE_TTL = 300  # 5 minutes for online status
 # REDIS CACHE (with authentication support)
 # =============================================================================
 
-# Build Redis URL with password if provided
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_SENTINEL_ENABLED = _env_bool("REDIS_SENTINEL_ENABLED", False)
+REDIS_SENTINEL_SERVICE_NAME = os.getenv("REDIS_SENTINEL_SERVICE_NAME", "mymaster")
+REDIS_SENTINEL_NODES = _parse_sentinel_nodes(
+    os.getenv("REDIS_SENTINEL_NODES", "redis-sentinel-1:26379,redis-sentinel-2:26379")
+)
 
-if REDIS_PASSWORD:
-    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    REDIS_BROKER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/1"
-    REDIS_CHANNEL_LAYER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/2"
+if REDIS_SENTINEL_ENABLED:
+    sentinel_password_part = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
+    # Use the first sentinel node for URL-based configuration; transport options
+    # handle the full sentinel list.
+    first_host, first_port = REDIS_SENTINEL_NODES[0]
+    REDIS_URL = f"redis://{sentinel_password_part}{first_host}:{first_port}/{REDIS_DB}"
+    REDIS_BROKER_URL = f"sentinel://{sentinel_password_part}{first_host}:{first_port}/1"
+    REDIS_CHANNEL_LAYER_URL = REDIS_URL
+
+    redis_cache_options = {
+        "CLIENT_CLASS": "django_redis.client.SentinelClient",
+        "SENTINELS": REDIS_SENTINEL_NODES,
+        "SENTINEL_KWARGS": {
+            "password": REDIS_PASSWORD,
+        },
+        "CONNECTION_FACTORY": "django_redis.pool.SentinelConnectionFactory",
+        "SENTINEL_MASTER": REDIS_SENTINEL_SERVICE_NAME,
+        "SOCKET_CONNECT_TIMEOUT": 5,
+        "SOCKET_TIMEOUT": 5,
+        "RETRY_ON_TIMEOUT": True,
+        "CONNECTION_POOL_KWARGS": {
+            "max_connections": 100,
+        },
+        "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+    }
+
+    channel_layer_hosts = [
+        {
+            "sentinels": REDIS_SENTINEL_NODES,
+            "master_name": REDIS_SENTINEL_SERVICE_NAME,
+            "db": 2,
+            "password": REDIS_PASSWORD,
+        }
+    ]
 else:
-    # Fallback to REDIS_URL env var for backward compatibility
-    REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
-    REDIS_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
-    REDIS_CHANNEL_LAYER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
+    if REDIS_PASSWORD:
+        REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        REDIS_BROKER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/1"
+        REDIS_CHANNEL_LAYER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/2"
+    else:
+        # Fallback to REDIS_URL env var for backward compatibility.
+        REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
+        REDIS_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
+        REDIS_CHANNEL_LAYER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
+
+    redis_cache_options = {
+        "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        "SOCKET_CONNECT_TIMEOUT": 5,
+        "SOCKET_TIMEOUT": 5,
+        "RETRY_ON_TIMEOUT": True,
+        "CONNECTION_POOL_KWARGS": {
+            "max_connections": 50,
+        },
+        "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+    }
+
+    channel_layer_hosts = [REDIS_CHANNEL_LAYER_URL]
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SOCKET_CONNECT_TIMEOUT": 5,
-            "SOCKET_TIMEOUT": 5,
-            "RETRY_ON_TIMEOUT": True,
-            "CONNECTION_POOL_KWARGS": {
-                "max_connections": 50,
-            },
-            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-        },
+        "OPTIONS": redis_cache_options,
     }
 }
 
@@ -446,7 +574,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_CHANNEL_LAYER_URL],
+            "hosts": channel_layer_hosts,
             "capacity": 1500,
             "expiry": 10,
         },
@@ -459,6 +587,15 @@ CHANNEL_LAYERS = {
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_BROKER_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_BROKER_URL)
+if REDIS_SENTINEL_ENABLED:
+    CELERY_BROKER_TRANSPORT_OPTIONS = {
+        "master_name": REDIS_SENTINEL_SERVICE_NAME,
+        "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
+    }
+    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
+        "master_name": REDIS_SENTINEL_SERVICE_NAME,
+        "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
+    }
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
@@ -477,13 +614,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(minute=5),  # 5 min past hour
         "kwargs": {"sync_type": "trending", "limit": 50},
-        "options": {"queue": "default"},
+        "options": {"queue": "high_priority"},
     },
     "sync-airing-workflow-hourly": {
         "task": "apps.animes.tasks.airing.sync_airing_workflow",
         "schedule": crontab(minute=30),  # 30 min past hour
         "kwargs": {"phases": ["sync"], "batch_size": 100},
-        "options": {"queue": "default"},
+        "options": {"queue": "high_priority"},
     },
     # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
     # -------------------------------------------------------------------------
@@ -515,7 +652,7 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.animes.tasks.themes.sync_theme_songs",
         "schedule": crontab(hour=6, minute=0),  # 6:00 AM
         "kwargs": {"limit": 500},  # Increased from 100 to 500
-        "options": {"queue": "default"},
+        "options": {"queue": "high_priority"},
     },
     "sync-themes-retry": {
         "task": "apps.animes.tasks.themes.sync_theme_songs",

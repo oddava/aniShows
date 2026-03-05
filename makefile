@@ -4,7 +4,8 @@
 
 EXEC = docker compose exec web python manage.py
 
-.PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
+.PHONY: help up down restart build ps logs web-logs celery-logs celery-priority-logs \
+        celery-images-logs celery-analytics-logs beat-logs \
         front-logs db-logs mig shell superuser test lint collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
         sync-themes sync-full sync-franchises sync-recs populate-themes \
@@ -43,6 +44,15 @@ web-logs:                       ## Follow web server logs
 
 celery-logs:                    ## Follow Celery worker logs
 	docker compose logs -f celery
+
+celery-priority-logs:           ## Follow Celery priority worker logs
+	docker compose logs -f celery_priority
+
+celery-images-logs:             ## Follow Celery images worker logs
+	docker compose logs -f celery_images
+
+celery-analytics-logs:          ## Follow Celery analytics worker logs
+	docker compose logs -f celery_analytics
 
 beat-logs:                      ## Follow Celery beat logs
 	docker compose logs -f beat

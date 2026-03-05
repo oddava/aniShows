@@ -4,7 +4,7 @@ Gunicorn configuration for aniShows production deployment.
 This file centralizes all gunicorn settings so docker-compose, Dockerfile,
 and deploy scripts don't need to duplicate CLI flags.
 
-Usage: gunicorn root.wsgi:application -c gunicorn.conf.py
+Usage: gunicorn root.asgi:application -c gunicorn.conf.py
 """
 
 import multiprocessing
@@ -20,23 +20,22 @@ bind = "0.0.0.0:8000"
 # =============================================================================
 # Use 2 * CPU + 1 as baseline, but cap for memory-constrained containers.
 # Override via GUNICORN_WORKERS env var if needed.
-workers = int(os.getenv("GUNICORN_WORKERS", min(multiprocessing.cpu_count() * 2 + 1, 4)))
-worker_class = "gthread"
-threads = 4
+workers = int(os.getenv("GUNICORN_WORKERS", min(multiprocessing.cpu_count() * 2 + 1, 3)))
+worker_class = os.getenv("GUNICORN_WORKER_CLASS", "uvicorn.workers.UvicornWorker")
 
 # =============================================================================
 # Worker Lifecycle
 # =============================================================================
 # Restart workers after N requests to prevent memory leaks
-max_requests = 1000
-max_requests_jitter = 100
+max_requests = 500
+max_requests_jitter = 50
 
 # =============================================================================
 # Timeouts
 # =============================================================================
-timeout = 30  # Kill worker if request takes longer than 30s
-graceful_timeout = 15  # Time for worker to finish after SIGTERM
-keepalive = 5  # Keep-alive connections for reverse proxy (Caddy)
+timeout = int(os.getenv("GUNICORN_TIMEOUT", "60"))
+graceful_timeout = int(os.getenv("GUNICORN_GRACEFUL_TIMEOUT", "30"))
+keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "5"))
 
 # =============================================================================
 # Preloading

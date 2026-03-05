@@ -1,27 +1,35 @@
-"""Database router for read replicas support."""
+"""Database router for primary/replica deployments."""
 
 import random
 
+from django.conf import settings
+
 
 class PrimaryReplicaRouter:
-    """
-    Route reads to replicas, writes to primary.
+    """Route reads to replicas and writes to primary."""
 
-    Add to settings.py:
-    DATABASE_ROUTERS = ['root.db_routers.PrimaryReplicaRouter']
-    """
+    @staticmethod
+    def _replicas() -> list[str]:
+        """Return configured replica aliases that exist in ``DATABASES``."""
+        configured = getattr(settings, "READ_REPLICA_ALIASES", [])
+        if not configured:
+            return []
+
+        return [alias for alias in configured if alias in settings.DATABASES]
 
     def db_for_read(self, model, **hints):
-        """Route read operations to replica."""
-        # Use round-robin or random selection for replicas
-        return random.choice(["replica1", "replica2", "default"])
+        """Route read operations to a random replica when available."""
+        replicas = self._replicas()
+        if not replicas:
+            return "default"
+        return random.choice(replicas)
 
     def db_for_write(self, model, **hints):
         """Route writes to primary."""
         return "default"
 
     def allow_relation(self, obj1, obj2, **hints):
-        """Allow relations between objects from different databases."""
+        """Allow relations across primary/replica databases."""
         return True
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):

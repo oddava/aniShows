@@ -34,7 +34,7 @@ CURRENT STRENGTHS
 PRIORITY 1 — CRITICAL (Scale & Retention Blockers)
 ================================================================================
 
-1. Real-Time Features via WebSockets ⬜
+1. Real-Time Features via WebSockets ✅
    Currently all interactions are request/response. No WebSocket layer exists.
    - Add Django Channels with Redis channel layer
    - Real-time notifications (eliminate polling)
@@ -52,16 +52,11 @@ PRIORITY 1 — CRITICAL (Scale & Retention Blockers)
    - Cold-start handling for new users (onboarding quiz / preference picker)
    Impact: Much better recommendation accuracy, core differentiator
 
-3. Horizontal Scaling Readiness ⬜
-   Single EC2 instance, sync Gunicorn workers, no load balancing.
-   - Switch Gunicorn to async workers (uvicorn/hypercorn via ASGI)
-   - Add health-check-based auto-scaling (AWS ASG or similar)
-   - Database read replicas for heavy read traffic
-   - Redis Cluster or Sentinel for HA
-   - CDN for static assets and images (CloudFront / Cloudflare)
-   - Connection pooling (pgBouncer)
-   - Separate Celery workers by queue on dedicated instances
-   Impact: Required to serve >1000 concurrent users reliably
+3. Horizontal Scaling Readiness ✅
+   Async ASGI Gunicorn, pgbouncer pooling, queue-split Celery workers, read-replica routing,
+   Redis Sentinel/HA config support, CDN URL support, and Terraform stack for ALB+ASG+RDS replica+
+   ElastiCache+CloudFront are now in place.
+   Impact: Foundation is production-ready for >1000 concurrent users with horizontal scaling.
 
 4. Comprehensive Backend Test Suite ⬜
    Frontend has Vitest tests but backend test coverage is minimal.

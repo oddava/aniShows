@@ -52,6 +52,7 @@ google-auth==2.48.0
 google-auth-httplib2==0.3.0
 googleapis-common-protos==1.72.0
 gunicorn==23.0.0
+uvicorn==0.41.0
 h11==0.16.0
 http_ece==1.2.1
 httpcore==1.0.9
