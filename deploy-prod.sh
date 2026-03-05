@@ -77,7 +77,7 @@ echo ""
 # RUN MIGRATIONS BEFORE RESTARTING (new code must handle old+new schema)
 # =========================================================================
 echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
-# Ensure DB and Redis are up before running migrations
+# Ensure DB, PgBouncer, and Redis are up before running migrations
 $COMPOSE_CMD up -d --no-deps db redis
 echo -e "${BLUE}  Waiting for database to be ready...${NC}"
 for i in $(seq 1 30); do
@@ -96,6 +96,23 @@ done
 # Run migrations using compose run with --no-deps to avoid recreating other services
 $COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --noinput
 echo -e "${GREEN}Migrations complete!${NC}"
+echo ""
+
+# Start PgBouncer now that DB is ready (web and workers connect through it)
+$COMPOSE_CMD up -d --no-deps pgbouncer
+echo -e "${BLUE}  Waiting for PgBouncer to be healthy...${NC}"
+for i in $(seq 1 15); do
+    if $COMPOSE_CMD exec -T pgbouncer pg_isready -h localhost -p "${DB_PGBOUNCER_PORT:-6432}" -U "${DB_USER:-postgres}" >/dev/null 2>&1; then
+        echo -e "${GREEN}  PgBouncer is ready!${NC}"
+        break
+    fi
+    if [ "$i" -eq 15 ]; then
+        echo -e "${RED}  PgBouncer failed to become ready after 15 attempts!${NC}"
+        $COMPOSE_CMD logs --tail=20 pgbouncer
+        exit 1
+    fi
+    sleep 2
+done
 echo ""
 
 # =========================================================================
