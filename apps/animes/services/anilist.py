@@ -670,14 +670,14 @@ class AniListService:
 
     @sync_to_async
     def _handle_relationships_async(self, anime, item):
-        genres = item.get("genres", [])
+        genres = item.get("genres") or []
         for genre_name in genres:
             genre, _ = Genre.objects.get_or_create(
                 name=genre_name, defaults={"slug": slugify(genre_name)}
             )
             anime.genres.add(genre)
 
-        studios = item.get("studios", {}).get("nodes", [])
+        studios = (item.get("studios") or {}).get("nodes") or []
         if studios and len(studios) > 0:
             studio_name = studios[0].get("name")
             if studio_name:
@@ -691,7 +691,7 @@ class AniListService:
 
         with transaction.atomic():
             # Handle Characters
-            characters_data = item.get("characterPreview", {}).get("edges", [])
+            characters_data = (item.get("characterPreview") or {}).get("edges") or []
             for edge in characters_data:
                 node = edge["node"]
                 role = edge["role"]  # MAIN, SUPPORTING, etc.
@@ -712,7 +712,7 @@ class AniListService:
                 )
 
                 # Handle Voice Actor (Japanese)
-                voice_actors = edge.get("voiceActors", [])
+                voice_actors = edge.get("voiceActors") or []
                 voice_actor = None
                 if voice_actors:
                     va_node = voice_actors[0]
@@ -740,7 +740,7 @@ class AniListService:
                 )
 
             # Handle Staff
-            staff_data = item.get("staffPreview", {}).get("edges", [])
+            staff_data = (item.get("staffPreview") or {}).get("edges") or []
             for edge in staff_data:
                 node = edge["node"]
                 role = edge["role"]

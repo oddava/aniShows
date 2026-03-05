@@ -55,6 +55,19 @@ def _filter_sentry_event(event, hint):
     # Ignore DisallowedHost errors (bot scanners)
     if "logger" in event and event["logger"] == "django.security.DisallowedHost":
         return None
+
+    logger_name = event.get("logger", "")
+    message = (event.get("message") or "").lower()
+    logentry = event.get("logentry") or {}
+    formatted = (logentry.get("formatted") or "").lower()
+
+    # Ignore expected Gunicorn worker shutdown messages during deploy/reload.
+    # Example: "Worker (pid:22) was sent SIGTERM!"
+    if logger_name == "gunicorn.error":
+        combined = f"{message} {formatted}"
+        if "was sent sigterm" in combined or "was sent sigquit" in combined:
+            return None
+
     return event
 
 

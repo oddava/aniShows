@@ -4,7 +4,7 @@ from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone as tz
 from .models import Anime, UserFavorite, ReviewComment, Review
 from apps.users.models import UserAnimeList, UserStats, UserActivity
@@ -114,9 +114,13 @@ def _create_activity_deduped(**kwargs):
 
     Prevents duplicate activities within 2 seconds (e.g. from rapid auto-saves).
     """
+    user = kwargs.get("user")
+    if not _user_exists(user):
+        return
+
     cutoff = tz.now() - timedelta(seconds=2)
     if UserActivity.objects.filter(
-        user=kwargs["user"],
+        user=user,
         anime=kwargs["anime"],
         activity_type=kwargs["activity_type"],
         created_at__gte=cutoff,
@@ -126,7 +130,11 @@ def _create_activity_deduped(**kwargs):
             f"for user {kwargs['user'].username}"
         )
         return
-    UserActivity.objects.create(**kwargs)
+
+    try:
+        UserActivity.objects.create(**kwargs)
+    except IntegrityError:
+        logger.debug("Skipping activity creation for deleted user", exc_info=True)
 
 
 @receiver(post_save, sender=UserAnimeList)

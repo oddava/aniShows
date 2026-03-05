@@ -13,6 +13,8 @@ import asyncio
 from datetime import timedelta
 from typing import Dict, List, Optional
 from celery import shared_task
+from django.db import close_old_connections, transaction
+from django.db.utils import InterfaceError, OperationalError
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
@@ -22,6 +24,7 @@ from apps.users.services.import_service import ImportService
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
 
 
 @shared_task(
@@ -47,11 +50,63 @@ def cleanup_unverified_accounts(self, days: int = 7):
             userprofile__email_verified=False, date_joined__lt=threshold_date
         )
 
-        count = users_to_delete.count()
+        user_ids = list(users_to_delete.values_list("id", flat=True))
+        usernames = list(users_to_delete.values_list("username", flat=True))
+        count = len(user_ids)
 
         if count > 0:
-            usernames = list(users_to_delete.values_list("username", flat=True))
-            users_to_delete.delete()
+            from apps.users.models import (
+                UserAnimeList,
+                UserActivity,
+                UserStats,
+                UserFollow,
+                UserBadge,
+                SocialLinkChangeLog,
+            )
+            from apps.animes.models import (
+                UserFavorite,
+                UserHistory,
+                Review,
+                ReviewVote,
+                ReviewComment,
+                UserRecommendation,
+            )
+            from apps.forums.models import Thread, Post, ThreadLike, PostLike
+            from apps.core.models import Notification, PushSubscription
+
+            db = User.objects.db
+
+            with transaction.atomic():
+                # Mirror manual account deletion cleanup to avoid signal side effects
+                # (e.g. on_commit activity creation for users being deleted).
+                PostLike.objects.filter(post__author_id__in=user_ids)._raw_delete(db)
+                PostLike.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                ThreadLike.objects.filter(thread__author_id__in=user_ids)._raw_delete(db)
+                ThreadLike.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                Post.objects.filter(thread__author_id__in=user_ids)._raw_delete(db)
+                Post.objects.filter(author_id__in=user_ids)._raw_delete(db)
+                Thread.objects.filter(author_id__in=user_ids)._raw_delete(db)
+
+                ReviewComment.objects.filter(review__user_id__in=user_ids)._raw_delete(db)
+                ReviewComment.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                ReviewVote.objects.filter(review__user_id__in=user_ids)._raw_delete(db)
+                ReviewVote.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                Review.objects.filter(user_id__in=user_ids)._raw_delete(db)
+
+                UserActivity.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                UserAnimeList.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                UserFavorite.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                UserHistory.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                UserRecommendation.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                UserStats.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                UserFollow.objects.filter(follower_id__in=user_ids)._raw_delete(db)
+                UserFollow.objects.filter(following_id__in=user_ids)._raw_delete(db)
+                UserBadge.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                SocialLinkChangeLog.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                Notification.objects.filter(user_id__in=user_ids)._raw_delete(db)
+                PushSubscription.objects.filter(user_id__in=user_ids)._raw_delete(db)
+
+                User.objects.filter(id__in=user_ids).delete()
 
             logger.info(f"Deleted {count} unverified accounts: {usernames}")
         else:
@@ -349,6 +404,10 @@ def update_user_stats(self, user_id: int = None):
                     logger.info(f"Updated stats for {updated_count}/{total_users} users")
 
             except Exception as e:
+                # DB connection failures should retry the whole task,
+                # not be swallowed per-user as partial success.
+                if isinstance(e, RETRYABLE_DB_ERRORS):
+                    raise
                 logger.error(f"Error updating stats for user {user.id}: {e}")
                 continue
 
@@ -362,7 +421,13 @@ def update_user_stats(self, user_id: int = None):
         }
 
     except Exception as e:
-        logger.error(f"Error in update_user_stats task: {e}")
+        if isinstance(e, RETRYABLE_DB_ERRORS):
+            # Transient network/DNS/connection issues happen during deploys
+            # and container restarts. Reset stale connections and retry.
+            close_old_connections()
+            logger.warning(f"Transient DB error in update_user_stats; retrying: {e}")
+        else:
+            logger.error(f"Error in update_user_stats task: {e}")
         raise self.retry(exc=e)
 
 
@@ -395,24 +460,34 @@ def warm_profile_cache(usernames: list = None):
 
         usernames = list(popular_users.values_list("username", flat=True))
 
-    warmed_count = 0
-    for username in usernames:
-        try:
-            user = get_annotated_user_queryset().filter(username=username).first()
-            if not user:
-                continue
+    requested_usernames = [username for username in usernames if username]
+    if not requested_usernames:
+        return {"warmed_count": 0}
 
-            serializer = PublicUserSerializer(user)
-            data = serializer.data
+    try:
+        # Fetch all requested users in one annotated query (+ one prefetch query for badges)
+        users = get_annotated_user_queryset(lightweight=False).filter(
+            username__in=requested_usernames
+        )
+        users_by_username = {user.username: user for user in users}
 
-            cache_key = f"public_profile:{username}:v0"
+        ordered_users = [
+            users_by_username[username]
+            for username in requested_usernames
+            if username in users_by_username
+        ]
+        serialized_users = PublicUserSerializer(ordered_users, many=True).data
+
+        warmed_count = 0
+        for user, data in zip(ordered_users, serialized_users):
+            # Cache key format used by PublicUserProfileViewSet.retrieve
+            cache_key = f"public_profile:{user.username}:v0:viewer:anonymous"
             cache.set(cache_key, data, timeout=1800)  # 30 minutes
-
             warmed_count += 1
 
-        except Exception as e:
-            logger.error(f"Error warming cache for {username}: {e}")
-            continue
+    except Exception as e:
+        logger.error(f"Error warming profile cache batch: {e}")
+        return {"warmed_count": 0}
 
     logger.info(f"Warmed cache for {warmed_count} profiles")
     return {"warmed_count": warmed_count}
