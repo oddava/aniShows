@@ -4,6 +4,7 @@ import logger from '../utils/logger';
 
 const API_BASE_URL = '/api/v1';
 const TOKEN_REFRESH_THRESHOLD = 5 * 60; // Refresh token if it expires in less than 5 minutes
+const TOKEN_EXPIRY_LEEWAY_SECONDS = 30; // Handle minor client/server clock skew
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -46,7 +47,7 @@ const shouldRefreshToken = (token) => {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Refresh access token with proper locking, queueing, and retry logic
-const refreshAccessToken = async (retryCount = 0) => {
+export const refreshAccessToken = async (retryCount = 0) => {
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 1000;
 
@@ -65,15 +66,17 @@ const refreshAccessToken = async (retryCount = 0) => {
                 throw new Error('No refresh token available');
             }
 
-            // Check if refresh token itself is expired
+            // Check if refresh token itself is valid and not expired
+            let decoded;
             try {
-                const decoded = jwtDecode(refreshToken);
-                const currentTime = Date.now() / 1000;
-                if (decoded.exp < currentTime) {
-                    throw new Error('Refresh token expired');
-                }
-            } catch (decodeError) {
+                decoded = jwtDecode(refreshToken);
+            } catch {
                 throw new Error('Invalid refresh token');
+            }
+
+            const currentTime = Date.now() / 1000;
+            if (decoded.exp <= currentTime + TOKEN_EXPIRY_LEEWAY_SECONDS) {
+                throw new Error('Refresh token expired');
             }
 
             const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {

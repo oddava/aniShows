@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { authApi } from '../api/client';
+import { authApi, refreshAccessToken } from '../api/client';
 import logger from '../utils/logger';
 
 const AuthContext = createContext(null);
@@ -63,8 +63,6 @@ const willExpireSoon = (token) => {
     }
 };
 
-const API_BASE_URL = '/api/v1';
-
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -75,47 +73,6 @@ export function AuthProvider({ children }) {
             return response.data;
         } catch (error) {
             return null;
-        }
-    }, []);
-
-    const refreshAccessToken = useCallback(async () => {
-        try {
-            const refreshToken = localStorage.getItem('refresh_token');
-            if (!refreshToken) {
-                throw new Error('No refresh token available');
-            }
-
-            // Check if refresh token itself is expired
-            try {
-                const decoded = jwtDecode(refreshToken);
-                const currentTime = Date.now() / 1000;
-                if (decoded.exp < currentTime) {
-                    throw new Error('Refresh token expired');
-                }
-            } catch (decodeError) {
-                throw new Error('Invalid refresh token');
-            }
-
-            // Use axios directly to avoid interceptors
-            const axios = (await import('axios')).default;
-            const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
-                refresh: refreshToken,
-            });
-
-            const { access, refresh } = response.data;
-            localStorage.setItem('access_token', access);
-            
-            // Update refresh token if rotated
-            if (refresh) {
-                localStorage.setItem('refresh_token', refresh);
-                logger.debug('Refresh token rotated and updated');
-            }
-            
-            logger.info('Token refresh successful on app load');
-            return access;
-        } catch (error) {
-            logger.error('Token refresh failed on app load:', error.message);
-            throw error;
         }
     }, []);
 
@@ -162,6 +119,7 @@ export function AuthProvider({ children }) {
             try {
                 logger.info('Access token expired or missing, attempting refresh...');
                 const newAccessToken = await refreshAccessToken();
+                logger.info('Token refresh successful on app load');
                 
                 // Decode and set user from new token
                 const decodedUser = decodeToken(newAccessToken);
@@ -190,10 +148,20 @@ export function AuthProvider({ children }) {
                 }
                 return;
             } catch (refreshError) {
-                logger.error('Refresh failed, clearing tokens:', refreshError.message);
-                // Refresh failed - clear tokens and log user out
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
+                const errorMessage = refreshError?.message || '';
+                const isAuthFailure =
+                    refreshError?.response?.status === 401 ||
+                    errorMessage.includes('expired') ||
+                    errorMessage.includes('Invalid refresh token') ||
+                    errorMessage.includes('No refresh token');
+
+                if (isAuthFailure) {
+                    logger.error('Refresh failed due to invalid auth state, clearing tokens:', errorMessage);
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                } else {
+                    logger.warn('Refresh failed due to temporary error, keeping tokens for retry:', errorMessage);
+                }
             }
         }
         
@@ -203,7 +171,7 @@ export function AuthProvider({ children }) {
         }
         
         setLoading(false);
-    }, [fetchUserStats, refreshAccessToken]);
+    }, [fetchUserStats]);
 
     useEffect(() => {
         checkAuth();
