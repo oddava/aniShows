@@ -1,6 +1,7 @@
-import { X, Briefcase, Sparkles, Film } from 'lucide-react';
+import { X, Briefcase, Sparkles, Film, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 
 // Parse markdown-style links [text](url) into React elements
 function parseMarkdownLinks(text) {
@@ -138,9 +139,16 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
                                 <Film className="w-3 h-3" />
                                 Other Works
                             </h3>
-                            <p className="text-gray-400 text-sm">
-                                View {staff.name}'s full profile to see other anime they've worked on.
-                            </p>
+                            <Link
+                                to={`/staff/${staff.id}`}
+                                onClick={onClose}
+                                className="flex items-center justify-between w-full px-4 py-3 bg-dark-200/60 hover:bg-dark-200 rounded-xl border border-white/5 hover:border-gray-600 transition-all group"
+                            >
+                                <span className="text-gray-300 text-sm group-hover:text-white transition-colors">
+                                    View {staff.name}'s full profile
+                                </span>
+                                <ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+                            </Link>
                         </div>
                     </div>
                 </div>

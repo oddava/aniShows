@@ -32,6 +32,7 @@ const Seasonal = lazy(() => import('./pages/Seasonal'));
 const Schedule = lazy(() => import('./pages/Schedule'));
 const ImportPage = lazy(() => import('./pages/ImportPage'));
 const ExportPage = lazy(() => import('./pages/ExportPage'));
+const VoiceActorDetail = lazy(() => import('./pages/VoiceActorDetail'));
 
 // Forums imports — with preload support
 const forumCategoryListImport = () => import('./pages/forums/ForumCategoryList');
@@ -124,6 +125,7 @@ function App() {
                       <Route path="privacy" element={<Privacy />} />
                       <Route path="import" element={<ImportPage />} />
                       <Route path="export" element={<ExportPage />} />
+                      <Route path="staff/:id" element={<VoiceActorDetail />} />
 
                       {/* Forum Routes */}
                       <Route path="forums" element={<ForumCategoryList />} />

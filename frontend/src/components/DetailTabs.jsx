@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, Users, Mic } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import FranchiseSection from './FranchiseSection';
 import MusicSection from './MusicSection';
 import LazyYouTube from './LazyYouTube';
@@ -105,9 +106,13 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
                                 {role.character.name}
                             </h3>
                             {role.voice_actor && (
-                                <p className="text-xs text-white/70 mt-0.5 truncate drop-shadow-md">
+                                <Link
+                                    to={`/staff/${role.voice_actor.id}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-xs text-white/70 mt-0.5 truncate drop-shadow-md hover:text-accent transition-colors block"
+                                >
                                     {role.voice_actor.name}
-                                </p>
+                                </Link>
                             )}
                         </div>
                     </div>
@@ -142,7 +147,15 @@ export function StaffTab({ anime, accentColor, onStaffClick }) {
                             className="w-full h-full object-cover"
                         />
                     </div>
-                    <h4 className="font-bold text-white text-sm line-clamp-2 mb-1">{staffRole.staff.name}</h4>
+                    <h4 className="font-bold text-white text-sm line-clamp-2 mb-1">
+                        <Link
+                            to={`/staff/${staffRole.staff.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-accent transition-colors"
+                        >
+                            {staffRole.staff.name}
+                        </Link>
+                    </h4>
                     <p className="text-xs text-gray-500 line-clamp-1">{staffRole.role}</p>
                 </div>
             ))}

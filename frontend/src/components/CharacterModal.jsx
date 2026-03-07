@@ -1,6 +1,7 @@
-import { X, Users, Sparkles } from 'lucide-react';
+import { X, Users, Sparkles, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 
 // Spoiler component that hides content until clicked
 function Spoiler({ children }) {
@@ -234,16 +235,20 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                                 <Users className="w-3 h-3" />
                                 Voice Actor (Japanese)
                             </h3>
-                            <div className="flex items-center gap-3 sm:gap-4">
-                                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg sm:rounded-xl overflow-hidden border-2 border-gray-700 flex-shrink-0">
+                            <Link
+                                to={`/staff/${voice_actor.id}`}
+                                onClick={onClose}
+                                className="flex items-center gap-3 sm:gap-4 p-3 -mx-3 rounded-xl hover:bg-dark-200/60 transition-colors group"
+                            >
+                                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg sm:rounded-xl overflow-hidden border-2 border-gray-700 flex-shrink-0 group-hover:border-gray-600 transition-colors">
                                     <img
                                         src={getImageUrl(voice_actor.image)}
                                         alt={voice_actor.name}
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
-                                <div className="min-w-0">
-                                    <p className="font-bold text-white text-sm sm:text-base truncate">
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-bold text-white text-sm sm:text-base truncate group-hover:text-accent transition-colors">
                                         {voice_actor.name}
                                     </p>
                                     {voice_actor.name_native && (
@@ -252,7 +257,8 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                                         </p>
                                     )}
                                 </div>
-                            </div>
+                                <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-accent group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                            </Link>
                         </div>
                     )}
                 </div>
