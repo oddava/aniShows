@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronDown, Users, Mic } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FranchiseSection from './FranchiseSection';
@@ -63,7 +63,24 @@ export function OverviewTab({ anime, accentColor }) {
 }
 
 export function CharactersTab({ anime, accentColor, onCharacterClick }) {
-    if (!anime.characters || anime.characters.length === 0) {
+    const uniqueCharacters = useMemo(() => {
+        if (!Array.isArray(anime.characters)) return [];
+
+        const seen = new Set();
+        return anime.characters.filter((role) => {
+            const characterId = role?.character?.id;
+            if (!characterId) return false;
+
+            const voiceActorId = role?.voice_actor?.id || 'none';
+            const dedupeKey = `${characterId}:${role?.role || 'unknown'}:${voiceActorId}`;
+            if (seen.has(dedupeKey)) return false;
+
+            seen.add(dedupeKey);
+            return true;
+        });
+    }, [anime.characters]);
+
+    if (uniqueCharacters.length === 0) {
         return (
             <div className="text-center py-12 animate-tab-content">
                 <Users className="w-12 h-12 text-gray-700 mx-auto mb-3" />
@@ -74,7 +91,7 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
 
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 animate-tab-content">
-            {anime.characters.map((role) => (
+            {uniqueCharacters.map((role) => (
                 <div
                     key={role.id}
                     onClick={() => onCharacterClick(role)}

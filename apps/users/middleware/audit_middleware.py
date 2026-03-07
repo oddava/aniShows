@@ -7,7 +7,6 @@ from apps.core.utils import get_client_ip
 
 audit_logger = logging.getLogger("api.audit")
 
-
 class AuditMiddleware(MiddlewareMixin):
     """
     Log security-relevant actions.

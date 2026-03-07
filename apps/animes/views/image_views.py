@@ -1,7 +1,3 @@
-"""
-Image optimization and caching utilities.
-"""
-
 import os
 from io import BytesIO
 from django.http import HttpResponse, HttpResponseNotFound
@@ -10,9 +6,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.views import View
 from PIL import Image
-import logging
-
-logger = logging.getLogger(__name__)
+from apps.shared.logger import logger
 
 # Supported image formats and their MIME types
 IMAGE_FORMATS = {
@@ -45,7 +39,6 @@ VALID_DIMENSIONS = {
 
 # Maximum allowed dimensions (security)
 MAX_DIMENSION = 1920
-
 
 class ImageResizeView(View):
     """

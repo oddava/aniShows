@@ -2,10 +2,7 @@ from django.http import JsonResponse
 from django.db import connection
 from django.core.cache import cache
 from django.conf import settings
-import logging
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 def health_check(request):
     """

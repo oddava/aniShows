@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Jikan API rate limiter for theme song synchronization.
 
@@ -7,14 +8,10 @@ Provides adaptive rate limiting with exponential backoff for 429 errors.
 import time
 import random
 import asyncio
-import logging
 from typing import Optional
 import httpx
 
-logger = logging.getLogger(__name__)
-
 JIKAN_BASE_URL = "https://api.jikan.moe/v4"
-
 
 class JikanRateLimiter:
     """
@@ -145,7 +142,6 @@ class JikanRateLimiter:
             "consecutive_429s": self.consecutive_429s,
             "success_streak": self.success_streak,
         }
-
 
 async def fetch_themes_from_jikan(
     http_client: httpx.AsyncClient,

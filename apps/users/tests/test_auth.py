@@ -18,7 +18,6 @@ from apps.users.models import UserProfile
 
 User = get_user_model()
 
-
 class RegistrationTests(APITestCase):
     """Tests for user registration endpoint."""
 
@@ -93,7 +92,6 @@ class RegistrationTests(APITestCase):
         }
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
 
 class EmailVerificationTests(APITestCase):
     """Tests for email verification functionality."""
@@ -212,7 +210,6 @@ class EmailVerificationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
 
-
 class LoginTests(APITestCase):
     """Tests for login endpoint."""
 
@@ -249,7 +246,6 @@ class LoginTests(APITestCase):
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-
 class TokenRefreshTests(APITestCase):
     """Tests for token refresh endpoint."""
 
@@ -277,7 +273,6 @@ class TokenRefreshTests(APITestCase):
         """Test refresh fails with invalid token."""
         response = self.client.post(self.refresh_url, {"refresh": "invalidtoken"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
 
 class ProfileTests(APITestCase):
     """Tests for user profile endpoints."""
@@ -322,7 +317,6 @@ class ProfileTests(APITestCase):
         self.user.userprofile.refresh_from_db()
         # Should be escaped
         self.assertNotIn("<script>", self.user.userprofile.bio)
-
 
 class ChangePasswordTests(APITestCase):
     """Tests for password change endpoint."""

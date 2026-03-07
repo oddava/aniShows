@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.utils.html import escape
 from django.conf import settings
+from apps.shared.logger import logger
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import (
     SerializerMethodField,
@@ -29,19 +30,16 @@ from apps.animes.models import (
     AnimeStaff,
     ThemeSong,
 )
-from apps.users.models import UserProfile, UserAnimeList, UserActivity, Badge, UserBadge
+from apps.users.models import UserAnimeList, UserActivity, Badge, UserBadge
 from apps.animes.serializers_mixins import (
     ImageUrlMixin,
     UserStatusMixin,
     UserProfileMixin,
     BadgesMixin,
 )
-import logging
 
 User = get_user_model()
-logger = logging.getLogger(__name__)
 
-# Import limits from settings
 MAX_AVATAR_SIZE = getattr(settings, "MAX_AVATAR_SIZE", 2 * 1024 * 1024)
 MAX_BANNER_SIZE = getattr(settings, "MAX_BANNER_SIZE", 5 * 1024 * 1024)
 ALLOWED_IMAGE_TYPES = getattr(
@@ -62,13 +60,11 @@ def validate_image_content(file, max_size, field_name):
     import magic
     from PIL import Image
 
-    # Check file size
     if file.size > max_size:
         raise ValidationError(
             f"{field_name} file too large. Maximum size is {max_size // (1024 * 1024)}MB."
         )
 
-    # Check magic bytes for actual content type
     file.seek(0)
     magic_bytes = file.read(2048)
     file.seek(0)
@@ -79,10 +75,9 @@ def validate_image_content(file, max_size, field_name):
             f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
         )
 
-    # Verify image can be opened and is not corrupted
     try:
         img = Image.open(file)
-        img.verify()  # Verify it's a valid image
+        img.verify()
         file.seek(0)
     except Exception:
         raise ValidationError(f"Invalid or corrupted image file for {field_name}.")
@@ -171,9 +166,6 @@ class AnimeStaffSerializer(ModelSerializer):
     class Meta:
         model = AnimeStaff
         fields = ["id", "staff", "role"]
-
-
-# ── Staff Detail Serializers (for /staff/<id>/ endpoint) ──
 
 
 class StaffVoiceRoleAnimeSerializer(ImageUrlMixin, ModelSerializer):
@@ -476,14 +468,12 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         )
 
     def get_user_review(self, obj):
-        # Use prefetched annotation if available
         if hasattr(obj, "_user_review"):
             return obj._user_review
         return None
 
     def get_status_distribution(self, obj):
         """Calculate anime list status distribution from prefetched data."""
-        from apps.users.models import UserAnimeList
 
         distribution = {
             "watching": 0,
@@ -493,7 +483,6 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "plan_to_watch": 0,
         }
 
-        # Use prefetched user_lists if available
         user_lists = getattr(obj, "_prefetched_objects_cache", {}).get("user_lists") or getattr(
             obj, "user_lists", None
         )
@@ -549,7 +538,6 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     favorites_count = IntegerField(read_only=True, source="_favorites_count")
     reviews_count = IntegerField(read_only=True, source="_reviews_count")
 
-    # Computed stats
     days_watched = SerializerMethodField()
     mean_score = SerializerMethodField()
     anime_count = IntegerField(read_only=True, source="_anime_count")
@@ -569,13 +557,11 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             return round(float(raw_score), 1)
         return None
 
-    # Social links
     social_links = SerializerMethodField()
 
     email_verified = SerializerMethodField()
     has_password = SerializerMethodField()
 
-    # Social features
     points = SerializerMethodField()
     followers_count = IntegerField(read_only=True, source="_followers_count")
     following_count = IntegerField(read_only=True, source="_following_count")
@@ -629,7 +615,6 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
     has_password = SerializerMethodField()
     social_links = SerializerMethodField()
 
-    # Use default values for stats (0) - will be fetched separately when needed
     anime_count = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
     days_watched = FloatField(default=0.0)
@@ -669,7 +654,6 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     reviews_count = IntegerField(read_only=True, source="_reviews_count")
     is_private = SerializerMethodField()
 
-    # Computed stats
     days_watched = SerializerMethodField()
     mean_score = SerializerMethodField()
     anime_count = IntegerField(read_only=True, source="_anime_count")
@@ -689,10 +673,8 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             return round(float(raw_score), 1)
         return None
 
-    # Dynamic Social links
     social_links = SerializerMethodField()
 
-    # Social features
     points = SerializerMethodField()
     followers_count = SerializerMethodField()
     following_count = SerializerMethodField()
@@ -729,7 +711,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
 
     def get_is_following(self, obj):
         """Check if the current user is following this user"""
-        # Use annotated field if available
+
         if hasattr(obj, "_is_following"):
             return obj._is_following
 
@@ -743,7 +725,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
         count = getattr(obj, "_followers_count", None)
         if count is not None:
             return int(count)
-        # Fallback: query the database
+
         return obj.followers.count()
 
     def get_following_count(self, obj):
@@ -751,7 +733,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
         count = getattr(obj, "_following_count", None)
         if count is not None:
             return int(count)
-        # Fallback: query the database
+
         return obj.following.count()
 
     def get_is_online(self, obj):
@@ -760,12 +742,10 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
         from django.utils import timezone
         from datetime import timedelta
 
-        # Check Redis cache first (fast)
         cache_key = f"user_online:{obj.id}"
         if cache.get(cache_key) is not None:
             return True
 
-        # Fallback: Check last_activity field if within 5 minutes
         profile = getattr(obj, "userprofile", None)
         if profile and profile.last_activity:
             time_since_activity = timezone.now() - profile.last_activity
@@ -784,24 +764,20 @@ class UserProfileUpdateSerializer(Serializer):
     is_private = BooleanField(required=False, default=False)
 
     def validate_is_private(self, value):
-        # Handle string values from FormData
         if isinstance(value, str):
             return value.lower() in ("true", "1", "yes", "on")
         return value
 
     def validate_remove_banner(self, value):
-        # Handle string values from FormData
         if isinstance(value, str):
             return value.lower() in ("true", "1", "yes", "on")
         return value
 
     def validate_bio(self, value):
-        # Escape HTML to prevent XSS
         from django.utils.html import escape
 
         return escape(value)
 
-    # Dynamic social links
     social_links = JSONField(required=False)
 
     def validate_social_links(self, value):
@@ -811,7 +787,6 @@ class UserProfileUpdateSerializer(Serializer):
         )
         import json
 
-        # Handle JSON string from FormData
         if isinstance(value, str):
             try:
                 value = json.loads(value)
@@ -824,7 +799,6 @@ class UserProfileUpdateSerializer(Serializer):
         if len(value) > 5:
             raise ValidationError("Maximum 5 social links allowed.")
 
-        # Clean up empty entries
         cleaned_links = []
         for link in value:
             if (
@@ -839,11 +813,9 @@ class UserProfileUpdateSerializer(Serializer):
                     }
                 )
 
-        # Use the new SocialLinksService for validation
         service = SocialLinksService()
 
         try:
-            # Get user from context if available
             user = self.context.get("request").user if self.context.get("request") else None
             processed_links = service.validate_and_process(cleaned_links, user)
             return processed_links
@@ -871,11 +843,8 @@ class RegisterSerializer(ModelSerializer):
         fields = ["username", "email", "password"]
 
     def validate_email(self, value):
-        # Normalize email to prevent case-based enumeration
         normalized_email = value.lower().strip()
 
-        # Check for existing email to prevent duplicates
-        # This provides defense in depth even if DB doesn't enforce uniqueness
         if User.objects.filter(email=normalized_email).exists():
             raise ValidationError(
                 "Unable to create account. The email or username may already be in use."
@@ -894,7 +863,6 @@ class RegisterSerializer(ModelSerializer):
             )
             return user
         except IntegrityError:
-            # Don't reveal if email/username exists - return generic error
             raise ValidationError(
                 {
                     "non_field_errors": [
@@ -920,7 +888,7 @@ class UserAnimeListSerializer(ModelSerializer):
         queryset=Anime.objects.all(),
         source="anime",
         write_only=True,
-        required=False,  # Not required for updates
+        required=False,
     )
     status = ChoiceField(choices=UserAnimeList.UserAnimeStatus.choices, required=False)
     progress = SerializerMethodField()
@@ -948,7 +916,6 @@ class UserAnimeListSerializer(ModelSerializer):
         return 0
 
     def validate(self, attrs):
-        # For creation, anime_id is required
         if not self.instance and "anime" not in attrs:
             raise ValidationError({"anime_id": "This field is required."})
 
@@ -956,7 +923,6 @@ class UserAnimeListSerializer(ModelSerializer):
         anime = attrs.get("anime")
         status = attrs.get("status")
 
-        # If updating, anime might not be in attrs, get from instance
         if not anime and self.instance:
             anime = self.instance.anime
 
@@ -968,11 +934,9 @@ class UserAnimeListSerializer(ModelSerializer):
                     }
                 )
 
-            # Auto-complete logic
             if episodes_watched == anime.episode_count:
                 attrs["status"] = UserAnimeList.UserAnimeStatus.completed
 
-        # If status is set to Completed, ensure episodes_watched is set to max
         if status == UserAnimeList.UserAnimeStatus.completed and anime and anime.episode_count > 0:
             attrs["episodes_watched"] = anime.episode_count
 
@@ -1044,7 +1008,7 @@ class UserActivitySerializer(ModelSerializer):
 
 
 class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
-    """Lightweight user serializer for reviews — avoids the N+1 badge/stats
+    """Lightweight user serializer for reviews
     queries that the full UserSerializer would trigger when user objects
     are not annotated with _followers_count, _anime_count, etc."""
 
@@ -1066,7 +1030,6 @@ class ReviewSerializer(ModelSerializer):
     has_spoilers = BooleanField(default=False, required=False)
     text = CharField(required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH)
 
-    # Use annotated fields from the view to avoid N+1 queries
     is_completed = BooleanField(read_only=True, source="_is_completed")
     helpful_count = IntegerField(read_only=True, source="_helpful_count")
     user_vote = SerializerMethodField()
@@ -1103,11 +1066,10 @@ class ReviewSerializer(ModelSerializer):
 
     def get_user_vote(self, obj):
         """Use the annotated _user_vote field to avoid N+1 queries."""
-        # The view annotates _user_vote as a boolean (Exists query result)
+
         if hasattr(obj, "_user_vote"):
             return obj._user_vote if obj._user_vote else None
 
-        # Fallback for when annotation is not available (e.g., single object retrieval)
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             vote = obj.votes.filter(user=request.user).first()
@@ -1161,11 +1123,9 @@ class ReviewCommentSerializer(ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
 
-        # Comment author can delete
         if obj.user == request.user:
             return True
 
-        # Review owner can delete any comment on their review
         if obj.review.user == request.user:
             return True
 
@@ -1180,10 +1140,8 @@ class ChangePasswordSerializer(Serializer):
         user = self.context["request"].user
         old_password = attrs.get("old_password")
 
-        # Log password change attempt without sensitive details
         logger.debug("Password change validation attempted")
 
-        # If user has a password, old_password is REQUIRED
         if user.has_usable_password():
             if not old_password:
                 raise ValidationError(
@@ -1272,7 +1230,6 @@ class UserFollowListSerializer(ModelSerializer):
         fields = ["id", "user", "is_following", "is_follower", "created_at"]
 
     def get_user(self, obj):
-        # Use the _display_user attribute set by the view
         user_obj = getattr(obj, "_display_user", obj.follower)
         profile = getattr(user_obj, "userprofile", None)
         return {
@@ -1284,14 +1241,14 @@ class UserFollowListSerializer(ModelSerializer):
 
     def get_is_following(self, obj):
         """Check if the current user follows this user"""
-        # Use annotated field if available
+
         if hasattr(obj, "_is_following"):
             return obj._is_following
         return False
 
     def get_is_follower(self, obj):
         """Check if this user follows the current user"""
-        # Use annotated field if available
+
         if hasattr(obj, "_is_follower"):
             return obj._is_follower
         return False

@@ -6,15 +6,13 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.db import transaction
-import logging
 
 from apps.users import throttling
 from apps.animes.serializers import UserSerializer, ChangePasswordSerializer
 from apps.users.services.email_service import EmailService
+from apps.shared.logger import logger
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -26,7 +24,6 @@ class ChangePasswordView(APIView):
             request.user.save()
             return Response({"message": "Password changed successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class DeleteAccountView(APIView):
     """Allow users to delete their own account."""
@@ -115,7 +112,6 @@ class DeleteAccountView(APIView):
 
         return Response({"message": "Account deleted successfully"}, status=status.HTTP_200_OK)
 
-
 class ChangeEmailView(APIView):
     """Request email change - sends verification to new email."""
 
@@ -160,7 +156,6 @@ class ChangeEmailView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-
 
 class ConfirmEmailChangeView(APIView):
     """Confirm email change with token."""

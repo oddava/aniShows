@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, Dict, Any
 from django.db import transaction
 from django.utils import timezone
@@ -6,9 +5,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from apps.core.models import Notification, PushSubscription
 from apps.users.models import UserProfile
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 class NotificationService:
     """Service for creating and managing user notifications."""

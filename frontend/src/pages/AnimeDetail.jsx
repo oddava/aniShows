@@ -29,6 +29,21 @@ const TABS = [
     { id: 'staff', label: 'Staff', icon: Mic },
 ];
 
+const getUniqueCharacterCount = (characters) => {
+    if (!Array.isArray(characters)) return 0;
+
+    const seen = new Set();
+    for (const role of characters) {
+        const characterId = role?.character?.id;
+        if (!characterId) continue;
+
+        const voiceActorId = role?.voice_actor?.id || 'none';
+        seen.add(`${characterId}:${role?.role || 'unknown'}:${voiceActorId}`);
+    }
+
+    return seen.size;
+};
+
 // Extract and memoize color from image
 const useAccentColor = (coverImage, bannerImage) => {
     const [accentColor, setAccentColor] = useState(null);
@@ -396,7 +411,7 @@ export default function AnimeDetail() {
 
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
-        count: tab.id === 'characters' ? anime.characters?.length :
+        count: tab.id === 'characters' ? getUniqueCharacterCount(anime.characters) :
             tab.id === 'staff' ? anime.staff?.length : 0
     }));
 

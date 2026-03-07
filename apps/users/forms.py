@@ -5,7 +5,6 @@ from django.forms import Form
 from django.forms.fields import EmailField
 from django.forms.widgets import EmailInput, TextInput
 
-
 class SignupForm(UserCreationForm):
     email = EmailField(
         required=True,
@@ -33,7 +32,6 @@ class SignupForm(UserCreationForm):
         if User.objects.filter(email=email).exists():
             raise ValidationError("This email is already registered.")
         return email
-
 
 class PasswordResetRequestForm(Form):
     email = EmailField(

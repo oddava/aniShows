@@ -12,18 +12,15 @@ from apps.users.services.cache import invalidate_user_caches
 from apps.users.services.stats_service import create_or_update_user_stats
 from apps.animes.tasks import enrich_metadata, generate_recommendations
 from apps.core.services.notification_service import NotificationService
-import logging
+from apps.shared.logger import logger
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 def _user_exists(user):
     """Check if a user still exists in the database (not mid-cascade-delete)."""
     if not user or not user.pk:
         return False
     return User.objects.filter(pk=user.pk).exists()
-
 
 def update_user_stats_and_cache(user):
     """
@@ -57,7 +54,6 @@ def update_user_stats_and_cache(user):
             pass
         logger.exception(f"Failed to update stats for user {user.username}: {e}")
 
-
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
     """
@@ -71,18 +67,15 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
         # This task routes to 'low_priority' queue via celery config
         enrich_metadata.delay(anime_id=instance.id, mode="single")
 
-
 # =============================================================================
 # ACTIVITY LOGGING SIGNALS
 # =============================================================================
-
 
 def invalidate_heatmap_cache(user_id):
     """Invalidate heatmap cache for a user when their activity changes."""
     cache_key = f"heatmap:{user_id}"
     cache.delete(cache_key)
     logger.debug(f"Invalidated heatmap cache for user {user_id}")
-
 
 @receiver(pre_save, sender=UserAnimeList)
 def capture_old_anime_list_state(sender, instance, **kwargs):
@@ -107,7 +100,6 @@ def capture_old_anime_list_state(sender, instance, **kwargs):
         instance._old_score = None
         instance._old_is_rewatching = None
         instance._old_notes = None
-
 
 def _create_activity_deduped(**kwargs):
     """Create activity record with deduplication guard.
@@ -135,7 +127,6 @@ def _create_activity_deduped(**kwargs):
         UserActivity.objects.create(**kwargs)
     except IntegrityError:
         logger.debug("Skipping activity creation for deleted user", exc_info=True)
-
 
 @receiver(post_save, sender=UserAnimeList)
 def log_user_activity(sender, instance, created, **kwargs):
@@ -232,7 +223,6 @@ def log_user_activity(sender, instance, created, **kwargs):
     except Exception as e:
         logger.exception(f"Failed to log activity for user {instance.user.username}: {e}")
 
-
 @receiver(post_delete, sender=UserAnimeList)
 def log_user_activity_on_delete(sender, instance, **kwargs):
     """Log REMOVED activity when anime is deleted from user's list."""
@@ -260,7 +250,6 @@ def log_user_activity_on_delete(sender, instance, **kwargs):
     except Exception as e:
         logger.exception(f"Failed to log removal activity for user {instance.user.username}: {e}")
 
-
 def _schedule_recommendations_debounced(user_id, countdown=300):
     """Schedule recommendation generation with cache-based deduplication.
 
@@ -285,7 +274,6 @@ def _schedule_recommendations_debounced(user_id, countdown=300):
     )
     logger.debug(f"Scheduled recommendation generation for user {user_id} in {countdown}s")
 
-
 @receiver([post_save, post_delete], sender=UserAnimeList)
 def handle_user_anime_list_change(sender, instance, **kwargs):
     """
@@ -305,7 +293,6 @@ def handle_user_anime_list_change(sender, instance, **kwargs):
 
         # Schedule recommendations with dedup (5-minute window)
         _schedule_recommendations_debounced(instance.user.id, countdown=300)
-
 
 @receiver([post_save, post_delete], sender=UserFavorite)
 def handle_user_favorite_change(sender, instance, **kwargs):
@@ -327,7 +314,6 @@ def handle_user_favorite_change(sender, instance, **kwargs):
         # Schedule recommendations with dedup (2-minute window)
         _schedule_recommendations_debounced(instance.user.id, countdown=120)
 
-
 @receiver([post_save, post_delete], sender=Review)
 def handle_review_change(sender, instance, **kwargs):
     """
@@ -342,7 +328,6 @@ def handle_review_change(sender, instance, **kwargs):
 
         # Update stats immediately for real-time feedback
         update_user_stats_and_cache(instance.user)
-
 
 @receiver(post_save, sender=ReviewComment)
 def handle_review_comment_created(sender, instance, created, **kwargs):

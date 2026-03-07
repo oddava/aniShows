@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Core Celery tasks for system maintenance and monitoring.
 
@@ -7,14 +8,10 @@ Provides:
 - Maintenance workflows
 """
 
-import logging
 from datetime import datetime, timedelta
 from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
-
-logger = logging.getLogger(__name__)
-
 
 @shared_task(
     bind=True,
@@ -92,7 +89,6 @@ def cleanup_old_task_results(self, days=7, batch_size=1000):
         logger.error(f"Error cleaning up task results: {e}")
         raise self.retry(exc=e)
 
-
 @shared_task
 def cleanup_celery_backend(days=1):
     """
@@ -111,7 +107,6 @@ def cleanup_celery_backend(days=1):
     # This task serves as a placeholder for custom backend cleanup if needed
     logger.info("Redis result backend cleanup skipped - handled automatically by Celery")
     return {"status": "skipped", "reason": "automatic_cleanup_enabled"}
-
 
 @shared_task(
     bind=True,

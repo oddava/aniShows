@@ -4,7 +4,6 @@ from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
-
 class Migration(migrations.Migration):
     dependencies = [
         ("users", "0020_userfollow_users_userf_followe_3f285f_idx_and_more"),

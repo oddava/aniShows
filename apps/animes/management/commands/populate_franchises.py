@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Management command to populate franchise relations for existing anime.
 Fetches relations from AniList and imports any related anime not yet in the database.
@@ -28,10 +29,6 @@ from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 from apps.animes.models import Anime
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class Command(BaseCommand):
     help = "Populate franchise/relations data for existing anime from AniList, ensuring ALL franchises have slugs linked"

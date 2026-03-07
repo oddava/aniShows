@@ -1,24 +1,20 @@
+from apps.shared.logger import logger
 """
 Social Links Service
 Main orchestrator for processing and validating social links.
 Optimized for fast saves - metadata fetched asynchronously.
 """
 
-import logging
 from typing import List, Dict, Any, Optional
 from django.conf import settings
 from .url_validator import URLValidator, URLValidationError
 from .metadata_service import MetadataService
 from apps.users.models import SocialLinkChangeLog
 
-logger = logging.getLogger(__name__)
-
-
 class SocialLinkValidationError(Exception):
     """Raised when a social link fails validation"""
 
     pass
-
 
 class SocialLinksService:
     """

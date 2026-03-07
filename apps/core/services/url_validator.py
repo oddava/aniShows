@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 URL Validator Service for Social Links
 Provides comprehensive security validation for URLs including:
@@ -18,18 +19,13 @@ import whois
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, List
-import logging
 import hashlib
 from django.core.cache import cache
-
-logger = logging.getLogger(__name__)
-
 
 class URLValidationError(Exception):
     """Raised when URL validation fails"""
 
     pass
-
 
 class URLValidator:
     """

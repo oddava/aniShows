@@ -7,18 +7,15 @@ from allauth.socialaccount.signals import social_account_added
 from allauth.account.signals import user_signed_up
 from .models import UserProfile, UserFollow
 from apps.core.services.notification_service import NotificationService
-import logging
+from apps.shared.logger import logger
 
 User = get_user_model()
-logger = logging.getLogger(__name__)
-
 
 def _user_exists(user):
     """Check if a user still exists in the database (not mid-cascade-delete)."""
     if not user or not user.pk:
         return False
     return User.objects.filter(pk=user.pk).exists()
-
 
 def invalidate_profile_cache(username):
     """Invalidate all cached versions of a user's public profile."""
@@ -32,14 +29,12 @@ def invalidate_profile_cache(username):
         cache.set(version_key, 1, timeout=settings.PROFILE_CACHE_VERSION_TTL)
         logger.debug(f"Created new cache version for user: {username}")
 
-
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     """Automatically create UserProfile for every new user."""
     if created:
         UserProfile.objects.get_or_create(user=instance)
         logger.debug(f"Created UserProfile for user: {instance.username}")
-
 
 @receiver(social_account_added)
 def verify_social_email(request, sociallogin, **kwargs):
@@ -49,7 +44,6 @@ def verify_social_email(request, sociallogin, **kwargs):
     user = sociallogin.user
     logger.info(f"Social account added/linked for user: {user.username}. Auto-verifying email.")
     _verify_user_profile(user, sociallogin)
-
 
 @receiver(user_signed_up)
 def verify_oauth_signup(request, user, **kwargs):
@@ -61,7 +55,6 @@ def verify_oauth_signup(request, user, **kwargs):
     if sociallogin:
         logger.info(f"OAuth signup for user: {user.username}. Auto-verifying email.")
         _verify_user_profile(user, sociallogin)
-
 
 def _verify_user_profile(user, sociallogin):
     """Helper to verify profile and allauth email addresses."""
@@ -75,7 +68,6 @@ def _verify_user_profile(user, sociallogin):
             email_address.verified = True
             if email_address.pk:
                 email_address.save()
-
 
 @receiver(post_save, sender=UserFollow)
 def handle_new_follower(sender, instance, created, **kwargs):
@@ -101,7 +93,6 @@ def handle_new_follower(sender, instance, created, **kwargs):
     except Exception as e:
         logger.exception(f"Failed to create new follower notification: {e}")
 
-
 @receiver(post_delete, sender=UserFollow)
 def handle_unfollow(sender, instance, **kwargs):
     """Invalidate cache when a follow relationship is deleted."""
@@ -116,7 +107,6 @@ def handle_unfollow(sender, instance, **kwargs):
         f"unfollowed {instance.following.username}"
     )
 
-
 @receiver(post_save, sender=UserProfile)
 def handle_profile_update(sender, instance, created, **kwargs):
     """Invalidate cache when profile is updated (avatar, banner, bio, etc.)."""
@@ -124,13 +114,11 @@ def handle_profile_update(sender, instance, created, **kwargs):
         invalidate_profile_cache(instance.user.username)
         logger.debug(f"Cache invalidated due to profile update for user: {instance.user.username}")
 
-
 # =============================================================================
 # Points signals (from review votes)
 # =============================================================================
 
 from apps.animes.models import ReviewVote
-
 
 @receiver(post_save, sender=ReviewVote)
 def update_points_on_vote_save(sender, instance, created, **kwargs):
@@ -149,7 +137,6 @@ def update_points_on_vote_save(sender, instance, created, **kwargs):
 
     profile.save(update_fields=["points"])
 
-
 @receiver(post_delete, sender=ReviewVote)
 def update_points_on_vote_delete(sender, instance, **kwargs):
     """Update author's points when a vote is removed."""
@@ -166,7 +153,6 @@ def update_points_on_vote_delete(sender, instance, **kwargs):
         profile.points = profile.points + 1
 
     profile.save(update_fields=["points"])
-
 
 def recalculate_user_points(user):
     """

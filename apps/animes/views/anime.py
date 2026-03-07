@@ -1,13 +1,14 @@
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef, F
 from django.db.models.functions import Coalesce
 from django.core.cache import cache
 from datetime import date
-import logging
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from apps.shared.logger import logger
+from apps.shared.pagination import StandardPagination
 
 from apps.animes.models import (
     Anime,
@@ -27,7 +28,6 @@ from apps.animes.serializers import (
     StudioSerializer,
 )
 
-
 # Valid filter values for security
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
 VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
@@ -36,28 +36,11 @@ VALID_SORT_FIELDS = {"popular", "rating", "newest", "title", "upcoming", "trendi
 MAX_RATING = 10.0
 MIN_RATING = 0.0
 
-logger = logging.getLogger(__name__)
-
-
-from rest_framework.pagination import PageNumberPagination
-
-
-class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 200
-
-
 import hashlib
 import json
 
-
 class AnimeViewSet(ReadOnlyModelViewSet):
-    """
-    Anime listing and detail with filtering, search, and sorting.
-    """
-
-    pagination_class = StandardResultsSetPagination
+    pagination_class = StandardPagination
     lookup_field = "slug"
 
     # Fields that AnimeListSerializer actually needs from the Anime table.
@@ -78,9 +61,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         "release_date",
         "next_airing_episode",
         "next_airing_date",
-        # FK id kept for select_related
         "studio_id",
-        # Fields used by sort / filter logic
         "popularity_rank",
         "trending_rank",
         "member_count",
@@ -90,16 +71,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         is_list = self.action == "list"
 
-        # ── Base queryset ───────────────────────────────────────────
         queryset = Anime.objects.select_related("studio")
 
         if is_list:
-            # Only fetch columns the list serializer actually reads.
             queryset = queryset.only(*self._LIST_FIELDS, "studio__id", "studio__name")
-            # Genres are the only M2M the list serializer needs.
             queryset = queryset.prefetch_related("genres")
         else:
-            # Detail / other actions need the heavy relations.
             queryset = queryset.prefetch_related(
                 "genres",
                 "theme_songs",
@@ -113,7 +90,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 ),
             )
 
-        # ── User-specific annotations (cheap – subquery + single prefetch) ──
         user = self.request.user
         if user.is_authenticated:
             queryset = queryset.annotate(
@@ -138,8 +114,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         # ──────────────────────────────────────────────────────────
         #  LIST-specific filtering & sorting below
         # ──────────────────────────────────────────────────────────
-
-        # Track whether we need DISTINCT (only when genre JOINs can duplicate rows)
         needs_distinct = False
 
         # Search - split query into words for better matching
@@ -1078,14 +1052,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         except Exception as e:
             logger.warning(f"Failed to update relation slug for {source_slug}: {e}")
 
-
-class GenreViewSet(viewsets.ReadOnlyModelViewSet):
+class GenreViewSet(ReadOnlyModelViewSet):
     queryset = Genre.objects.all().order_by("name")
     serializer_class = GenreSerializer
     pagination_class = None
 
-
-class StudioViewSet(viewsets.ReadOnlyModelViewSet):
+class StudioViewSet(ReadOnlyModelViewSet):
     queryset = Studio.objects.all().order_by("name")
     serializer_class = StudioSerializer
     pagination_class = None

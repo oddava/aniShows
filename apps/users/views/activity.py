@@ -13,7 +13,6 @@ User = get_user_model()
 # Cache heatmap data for 5 minutes per user
 HEATMAP_CACHE_TIMEOUT = 300
 
-
 def _check_privacy(target_user, request_user):
     """Check if request_user can view target_user's activity.
 
@@ -23,7 +22,6 @@ def _check_privacy(target_user, request_user):
         return False  # Own profile, always visible
     profile = getattr(target_user, "userprofile", None)
     return profile and profile.is_private
-
 
 class UserActivityViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only viewset for user activity feed and heatmap data."""

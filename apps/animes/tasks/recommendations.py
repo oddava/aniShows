@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Unified recommendation generation task.
 
@@ -11,18 +12,14 @@ With support for:
 - Configurable limits and algorithms
 """
 
-import logging
 from typing import Dict, List, Optional
-from asgiref.sync import sync_to_async
 from celery import shared_task
 from django.contrib.auth import get_user_model
 
 from apps.animes.services.recommendations import RecommendationService
 from .base import BaseTask
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 class RecommendationTask(BaseTask):
     """
@@ -175,7 +172,6 @@ class RecommendationTask(BaseTask):
         active_ids = UserAnimeList.objects.values_list("user_id", flat=True).distinct()
 
         return list(active_ids)
-
 
 @shared_task(
     bind=True,

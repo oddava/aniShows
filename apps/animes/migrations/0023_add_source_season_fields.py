@@ -2,7 +2,6 @@
 
 from django.db import migrations, models
 
-
 class Migration(migrations.Migration):
     dependencies = [
         ("anime", "0022_remove_anime_anime_status_anilist_idx_and_more"),

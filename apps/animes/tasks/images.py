@@ -1,17 +1,15 @@
+from apps.shared.logger import logger
 """
 Image processing tasks for anime.
 
 Includes thumbnail generation for anime images.
 """
-import logging
 import httpx
 import asyncio
 from celery import shared_task
 from django.core.files.base import ContentFile
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter
-
-logger = logging.getLogger(__name__)
 
 async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
     """Fetch high-res promotional image from Jikan API to use as a banner fallback."""
@@ -104,7 +102,6 @@ def fetch_anime_images(self, anime_id: int, cover_url: str, banner_url: str, mal
     except Exception as e:
         logger.error(f"Error fetching images for anime {anime_id}: {e}")
         raise self.retry(exc=e, countdown=60)
-
 
 @shared_task(
     bind=True,

@@ -18,7 +18,6 @@ from apps.users.models import UserProfile, UserAnimeList
 
 User = get_user_model()
 
-
 class AnimeListTests(APITestCase):
     """Tests for user anime list management."""
     
@@ -156,7 +155,6 @@ class AnimeListTests(APITestCase):
         # Should see own entries
         self.assertGreaterEqual(len(response.data.get('results', response.data)), 1)
 
-
 class PrivacyTests(APITestCase):
     """Tests for privacy settings on anime lists."""
     
@@ -203,7 +201,6 @@ class PrivacyTests(APITestCase):
         results = response.data.get('results', response.data)
         # Should be empty for private user
         self.assertEqual(len(results), 0)
-
 
 class DuplicateEntryTests(APITestCase):
     """Tests for duplicate entry prevention."""

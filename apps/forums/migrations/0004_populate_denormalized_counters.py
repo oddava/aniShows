@@ -3,7 +3,6 @@
 from django.db import migrations
 from django.db.models import Count
 
-
 def populate_denormalized_counters(apps, schema_editor):
     """Populate denormalized counters for existing data"""
     Thread = apps.get_model("forums", "Thread")
@@ -33,7 +32,6 @@ def populate_denormalized_counters(apps, schema_editor):
 
     print("Done!")
 
-
 def reverse_populate(apps, schema_editor):
     """Reverse migration - clear denormalized counters"""
     Thread = apps.get_model("forums", "Thread")
@@ -43,7 +41,6 @@ def reverse_populate(apps, schema_editor):
     Thread.objects.all().update(reply_count=0, like_count=0)
     Post.objects.all().update(like_count=0)
     Category.objects.all().update(thread_count=0)
-
 
 class Migration(migrations.Migration):
     dependencies = [

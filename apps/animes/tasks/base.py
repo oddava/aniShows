@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Base task infrastructure for unified Celery tasks.
 
@@ -9,15 +10,12 @@ Provides:
 
 import asyncio
 import hashlib
-import logging
 import time
 from typing import Any, Dict, Optional
 from contextlib import asynccontextmanager
 from celery import Task
 from celery.exceptions import MaxRetriesExceededError
 from django.core.cache import cache
-
-logger = logging.getLogger(__name__)
 
 # Retry configuration presets
 RETRY_PRESETS = {
@@ -58,7 +56,6 @@ TIME_LIMIT_PRESETS = {
     "long": (3600, 3300),  # 1 hour / 55 min
     "extended": (7200, 6900),  # 2 hours / 1h 55min
 }
-
 
 class TaskMetrics:
     """Collect metrics for task execution."""
@@ -105,7 +102,6 @@ class TaskMetrics:
             "records_processed": self.records_processed,
             "errors": self.errors,
         }
-
 
 class BaseTask(Task):
     """
@@ -383,7 +379,6 @@ class BaseTask(Task):
             job.save(update_fields=["status", "retries", "error_message"])
         except Exception as e:
             logger.error(f"Failed to update CeleryTaskResult on retry: {e}")
-
 
 # Helper to run async code in sync celery task
 def run_async_in_task(coro):

@@ -12,7 +12,6 @@ from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()
 
-
 class FavoriteViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     """Manage user favorites with email verification enforcement."""
 

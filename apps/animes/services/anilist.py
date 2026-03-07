@@ -1,6 +1,5 @@
 import httpx
 import asyncio
-import logging
 from typing import Literal, Optional, List
 from enum import Enum
 from datetime import datetime, timezone as dt_timezone
@@ -8,6 +7,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.core.files.base import ContentFile
 from asgiref.sync import sync_to_async
+from apps.shared.logger import logger
 
 # Import models
 from apps.animes.models import (
@@ -27,9 +27,6 @@ from .rate_limiting import (
     CircuitBreaker,
 )
 
-logger = logging.getLogger(__name__)
-
-
 class MediaSort(str, Enum):
     ID_DESC = "ID_DESC"
     SCORE = "SCORE_DESC"
@@ -37,13 +34,11 @@ class MediaSort(str, Enum):
     TRENDING = "TRENDING_DESC"
     START_DATE = "START_DATE_DESC"
 
-
 class MediaStatus(str, Enum):
     FINISHED = "FINISHED"
     RELEASING = "RELEASING"
     NOT_YET_RELEASED = "NOT_YET_RELEASED"
     CANCELLED = "CANCELLED"
-
 
 class MediaFormat(str, Enum):
     TV = "TV"
@@ -53,7 +48,6 @@ class MediaFormat(str, Enum):
     OVA = "OVA"
     ONA = "ONA"
     MUSIC = "MUSIC"
-
 
 class AniListService:
     BASE_URL = "https://graphql.anilist.co/"
@@ -994,7 +988,7 @@ class AniListService:
         """Async implementation of save_anime_to_db"""
         import logging
 
-        logger = logging.getLogger(__name__)
+        
 
         anilist_id = item.get("id")
         mal_id = item.get("idMal")

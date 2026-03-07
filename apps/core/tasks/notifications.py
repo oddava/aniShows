@@ -1,4 +1,3 @@
-import logging
 from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
@@ -8,9 +7,7 @@ from apps.core.services.push_service import PushService
 from apps.users.models import UserProfile
 from apps.animes.models import Anime, ReviewComment
 from apps.users.services.email_service import send_email_task
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 @shared_task
 def send_pending_notifications():
@@ -52,7 +49,6 @@ def send_pending_notifications():
         except Exception as e:
             logger.exception(f"Failed to send notification {notification.id}: {e}")
 
-
 def _should_send_email(notification, profile):
     """Check if email should be sent for this notification."""
     # Only send emails for new episodes, not for social interactions
@@ -61,7 +57,6 @@ def _should_send_email(notification, profile):
     # All other types (review_reply, new_follower, forum_reply, forum_mention,
     # forum_like, system) do not send emails.
     return False
-
 
 def _should_send_push(notification, profile):
     """Check if push should be sent for this notification."""
@@ -72,7 +67,6 @@ def _should_send_push(notification, profile):
     elif notification.notification_type == Notification.NotificationType.NEW_FOLLOWER:
         return profile.push_new_follower
     return True
-
 
 def _send_notification_email(notification):
     """Send email for a notification. Currently only NEW_EPISODE is supported."""
@@ -93,7 +87,6 @@ def _send_notification_email(notification):
         recipient_list=[notification.user.email],
         html_message=html_message,
     )
-
 
 def _build_new_episode_email(notification):
     """Build HTML email for new episode notification."""
@@ -129,7 +122,6 @@ def _build_new_episode_email(notification):
     </body>
     </html>
     """
-
 
 @shared_task
 def check_new_episodes():
@@ -208,7 +200,6 @@ def check_new_episodes():
 
     logger.info(f"Created {notifications_created} new episode notifications")
     return notifications_created
-
 
 @shared_task
 def cleanup_old_notifications_task(days: int = 90):

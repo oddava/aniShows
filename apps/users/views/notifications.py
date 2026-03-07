@@ -1,21 +1,16 @@
-import logging
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 
+from apps.shared.logger import logger
+from apps.shared.pagination import StandardPagination
 from apps.core.models import Notification, PushSubscription
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
 
-logger = logging.getLogger(__name__)
-
-
 class NotificationSerializer(serializers.ModelSerializer):
-    """Serializer for notifications."""
-
     class Meta:
         model = Notification
         fields = [
@@ -30,40 +25,25 @@ class NotificationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "read_at"]
 
-
 class PushSubscriptionSerializer(serializers.ModelSerializer):
-    """Serializer for push subscription registration."""
-
     endpoint = serializers.CharField(required=True)
     p256dh = serializers.CharField(required=True)
     auth = serializers.CharField(required=True)
     device_type = serializers.CharField(default="browser")
     device_info = serializers.JSONField(required=False, default=dict)
 
-
 class NotificationPreferencesSerializer(serializers.Serializer):
-    """Serializer for notification preferences."""
-
     email_new_episodes = serializers.BooleanField()
     push_new_episodes = serializers.BooleanField()
     push_review_replies = serializers.BooleanField()
     push_new_follower = serializers.BooleanField()
-
-
-class NotificationPagination(PageNumberPagination):
-    """Custom pagination for notifications."""
-
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
 
 class NotificationViewSet(viewsets.GenericViewSet):
     """ViewSet for managing user notifications."""
 
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = NotificationPagination
+    pagination_class = StandardPagination
 
     def get_queryset(self):
         """Return notifications for the current user."""
@@ -121,7 +101,6 @@ class NotificationViewSet(viewsets.GenericViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Notification.DoesNotExist:
             return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 class NotificationPreferenceView(APIView):
     """View for managing notification preferences."""
@@ -194,7 +173,6 @@ class NotificationPreferenceView(APIView):
                 {"error": "Failed to update preferences"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class PushSubscriptionView(APIView):
     """View for managing push subscriptions."""

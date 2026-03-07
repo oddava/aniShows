@@ -11,7 +11,6 @@ from .cache_utils import (
     invalidate_thread_list_cache,
 )
 
-
 def invalidate_after_commit(cache_invalidation_func):
     """Helper to delay cache invalidation until transaction commits.
 
@@ -20,13 +19,11 @@ def invalidate_after_commit(cache_invalidation_func):
     """
     transaction.on_commit(cache_invalidation_func)
 
-
 def _obj_exists(model, pk):
     """Check if a model instance still exists in the database."""
     if not pk:
         return False
     return model.objects.filter(pk=pk).exists()
-
 
 @receiver(post_save, sender=Post)
 def update_thread_on_post_create(sender, instance, created, **kwargs):
@@ -38,7 +35,6 @@ def update_thread_on_post_create(sender, instance, created, **kwargs):
             lambda: invalidate_thread_caches(instance.thread.id, instance.thread.category.slug)
         )
         invalidate_after_commit(lambda: invalidate_post_list_cache(instance.thread.id))
-
 
 @receiver(post_delete, sender=Post)
 def update_thread_on_post_delete(sender, instance, **kwargs):
@@ -54,7 +50,6 @@ def update_thread_on_post_delete(sender, instance, **kwargs):
     )
     invalidate_after_commit(lambda: invalidate_post_list_cache(instance.thread.id))
 
-
 @receiver(post_save, sender=ThreadLike)
 def update_thread_like_count_on_create(sender, instance, created, **kwargs):
     """Update thread like count when a like is created"""
@@ -62,7 +57,6 @@ def update_thread_like_count_on_create(sender, instance, created, **kwargs):
         instance.thread.update_like_count()
         # Invalidate thread detail cache AFTER transaction commits (likes changed)
         invalidate_after_commit(lambda: invalidate_thread_detail_cache(instance.thread.id))
-
 
 @receiver(post_delete, sender=ThreadLike)
 def update_thread_like_count_on_delete(sender, instance, **kwargs):
@@ -75,7 +69,6 @@ def update_thread_like_count_on_delete(sender, instance, **kwargs):
     # Invalidate thread detail cache AFTER transaction commits (likes changed)
     invalidate_after_commit(lambda: invalidate_thread_detail_cache(instance.thread.id))
 
-
 @receiver(post_save, sender=PostLike)
 def update_post_like_count_on_create(sender, instance, created, **kwargs):
     """Update post like count when a like is created"""
@@ -83,7 +76,6 @@ def update_post_like_count_on_create(sender, instance, created, **kwargs):
         instance.post.update_like_count()
         # Invalidate post list cache AFTER transaction commits
         invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
-
 
 @receiver(post_delete, sender=PostLike)
 def update_post_like_count_on_delete(sender, instance, **kwargs):
@@ -96,20 +88,17 @@ def update_post_like_count_on_delete(sender, instance, **kwargs):
     # Invalidate post list cache AFTER transaction commits
     invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
 
-
 @receiver(post_save, sender=Category)
 def invalidate_cache_on_category_save(sender, instance, **kwargs):
     """Invalidate category caches when a category is created or updated."""
     invalidate_after_commit(invalidate_category_list_cache)
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.slug))
 
-
 @receiver(post_delete, sender=Category)
 def invalidate_cache_on_category_delete(sender, instance, **kwargs):
     """Invalidate category caches when a category is deleted."""
     invalidate_after_commit(invalidate_category_list_cache)
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.slug))
-
 
 @receiver(post_save, sender=Thread)
 def update_category_on_thread_create(sender, instance, created, **kwargs):
@@ -120,7 +109,6 @@ def update_category_on_thread_create(sender, instance, created, **kwargs):
         invalidate_after_commit(invalidate_category_list_cache)
         invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))
         invalidate_after_commit(lambda: invalidate_thread_list_cache(instance.category.slug))
-
 
 @receiver(post_delete, sender=Thread)
 def update_category_on_thread_delete(sender, instance, **kwargs):

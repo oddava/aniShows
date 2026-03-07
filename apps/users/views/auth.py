@@ -8,17 +8,15 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-import logging
 
 from apps.users import throttling
 from apps.animes.serializers import RegisterSerializer, UserSerializer
 from apps.users.services.auth_service import AuthService
 from apps.users.services.email_service import EmailService
 from apps.users.services.cache import invalidate_user_caches
+from apps.shared.logger import logger
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
@@ -72,13 +70,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return super().validate(attrs)
 
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Handle login with username/email support."""
 
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [throttling.LoginRateThrottle]
-
 
 class RegisterView(APIView):
     """Handle user registration with email verification."""
@@ -106,7 +102,6 @@ class RegisterView(APIView):
             {"message": "Registration successful. Please check your email to verify your account."},
             status=status.HTTP_201_CREATED,
         )
-
 
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -170,7 +165,6 @@ class VerifyEmailView(APIView):
         token = request.data.get("token")
         return self._verify_and_respond(request, uidb64, token)
 
-
 class ResendVerificationView(APIView):
     """Resend verification email for users who didn't receive it or whose token expired."""
 
@@ -212,7 +206,6 @@ class ResendVerificationView(APIView):
             status=status.HTTP_200_OK,
         )
 
-
 class PasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -243,7 +236,6 @@ class PasswordResetView(APIView):
             {"message": "If an account exists with this email, a reset link has been sent."},
             status=status.HTTP_200_OK,
         )
-
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -278,13 +270,10 @@ class PasswordResetConfirmView(APIView):
                 {"error": "Invalid or expired link"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
-
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-
 
 class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
     """Token refresh serializer with logging for failed attempts."""
@@ -309,7 +298,6 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                     f"Token refresh failed: {str(e)}, token_preview={token_preview}", exc_info=True
                 )
             raise
-
 
 class LoggingTokenRefreshView(BaseTokenRefreshView):
     """Token refresh view with logging for monitoring authentication issues."""

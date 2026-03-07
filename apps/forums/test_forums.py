@@ -6,13 +6,11 @@ from apps.forums.models import Category, Thread, Post, Tag, ThreadLike, PostLike
 
 User = get_user_model()
 
-
 @pytest.fixture
 def user(db):
     return User.objects.create_user(
         username="testuser", email="test@example.com", password="password123"
     )
-
 
 @pytest.fixture
 def api_client():
@@ -20,12 +18,10 @@ def api_client():
 
     return APIClient()
 
-
 @pytest.fixture
 def authenticated_client(api_client, user):
     api_client.force_authenticate(user=user)
     return api_client
-
 
 @pytest.fixture
 def category(db):
@@ -33,18 +29,15 @@ def category(db):
         name="General Discussion", slug="general-discussion", description="Talk about anything"
     )
 
-
 @pytest.fixture
 def tag(db):
     return Tag.objects.create(name="News", slug="news", color="#FF0000")
-
 
 @pytest.fixture
 def thread(db, category, user):
     return Thread.objects.create(
         category=category, title="First Thread", author=user, content="Hello world"
     )
-
 
 @pytest.mark.django_db
 class TestForumsAPI:

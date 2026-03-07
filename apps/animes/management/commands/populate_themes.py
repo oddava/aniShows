@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Management command to populate theme songs for existing anime.
 Fetches openings and endings from Jikan (MyAnimeList) API.
@@ -20,10 +21,7 @@ from django.core.management.base import BaseCommand
 from apps.animes.models import Anime, ThemeSong
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.jikan import JikanRateLimiter, fetch_themes_from_jikan, JIKAN_BASE_URL
-import logging
 import re
-
-logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = (

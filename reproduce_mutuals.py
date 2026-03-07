@@ -26,7 +26,6 @@ l = logging.getLogger("django.db.backends")
 l.setLevel(logging.DEBUG)
 l.addHandler(logging.StreamHandler())
 
-
 from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 from apps.users.models import UserFollow

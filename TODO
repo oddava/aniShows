@@ -26,3 +26,53 @@ CURRENT STRENGTHS
 - Frontend testing (Vitest) ✅
 - TypeScript migration ✅
 - Elasticsearch for advanced search + fuzzy matching ✅
+
+---------------
+
+- use proper viewsets for creating APIS instead of APIView for everything, only use it when necessary
+- isolate the pagination classes and place them on an individual `pagination` file.
+- fix the models' styles. use this style:
+
+class UserFavorite(Model):
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="favorites")
+    anime = ForeignKey("anime.Anime", CASCADE, related_name="favorites")
+    added_at = DateTimeField(auto_now_add=True)
+    order = IntegerField(default=0)
+
+    class Meta:
+        unique_together = ("user", "anime")
+        ordering = ["order", "-added_at"]
+        indexes = [
+            Index(fields=["user", "order"]),
+            Index(fields=["user", "-added_at"]),
+            Index(fields=["anime"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.anime.title}"
+
+
+instead of:
+```
+class UserFavorite(Model):
+    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="favorites")
+    anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="favorites")
+    added_at = DateTimeField(auto_now_add=True)
+    order = IntegerField(default=0)  # User-defined order for display
+
+    class Meta:
+        unique_together = ("user", "anime")
+        ordering = ["order", "-added_at"]
+        indexes = [
+            Index(fields=["user", "order"]),  # Composite index for ordering favorites
+            Index(fields=["user", "-added_at"]),  # For recent favorites queries
+            Index(fields=["anime"]),  # For counting favorites per anime
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.anime.title}"
+```
+
+- create "shared" module for base clasess. and use base classes for common fields like `slug`, created dates on models.
+- there are too many logger instances, make one unified logger
+- remove all unnecessary comments

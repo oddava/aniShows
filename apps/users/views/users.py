@@ -8,8 +8,8 @@ from django.utils import timezone
 from django.core.cache import cache
 from django.db.models import Count, Avg, Sum, F, Q, Exists, OuterRef
 from datetime import timedelta
-import logging
 import time
+from apps.shared.logger import logger
 
 from apps.animes.serializers import (
     UserSerializer,
@@ -20,7 +20,6 @@ from apps.users.models import UserProfile, UserStats, UserBadge
 from apps.core.utils import get_client_ip
 from apps.users.services.cache import invalidate_user_caches
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
 
 

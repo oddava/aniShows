@@ -19,7 +19,6 @@ from apps.users.models import UserProfile, UserAnimeList
 
 User = get_user_model()
 
-
 class ReviewCreationTests(APITestCase):
     """Tests for review creation."""
     
@@ -106,7 +105,6 @@ class ReviewCreationTests(APITestCase):
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-
 class ReviewPermissionTests(APITestCase):
     """Tests for review permissions."""
     
@@ -187,7 +185,6 @@ class ReviewPermissionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Review.objects.filter(id=self.review.id).exists())
 
-
 class ReviewValidationTests(APITestCase):
     """Tests for review validation."""
     
@@ -257,7 +254,6 @@ class ReviewValidationTests(APITestCase):
         
         review = Review.objects.get(user=self.user, anime=self.anime)
         self.assertTrue(review.has_spoilers)
-
 
 class ReviewSubRatingTests(APITestCase):
     """Tests for sub-ratings fields."""

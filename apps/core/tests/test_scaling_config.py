@@ -13,7 +13,6 @@ from unittest.mock import patch
 import pytest
 from django.test import TestCase, override_settings
 
-
 class TestEnvParsers(TestCase):
     """Test environment variable parsing helpers used by settings.base."""
 
@@ -79,7 +78,6 @@ class TestEnvParsers(TestCase):
 
         assert _parse_sentinel_nodes("") == []
 
-
 class TestPrimaryReplicaRouter(TestCase):
     """Test the database router for primary/replica deployments."""
 
@@ -135,7 +133,6 @@ class TestPrimaryReplicaRouter(TestCase):
         assert router.allow_migrate("default", "users") is True
         assert router.allow_migrate("replica1", "users") is False
         assert router.allow_migrate("replica2", "users") is False
-
 
 class TestCeleryQueueRouting(TestCase):
     """Verify Celery beat schedule queues match task_routes configuration."""
@@ -205,7 +202,6 @@ class TestCeleryQueueRouting(TestCase):
 
         assert not undefined, f"Task routes reference undefined queues: {undefined}"
 
-
 class TestPgBouncerSettings(TestCase):
     """Verify PgBouncer compatibility settings."""
 
@@ -237,7 +233,6 @@ class TestPgBouncerSettings(TestCase):
 
         assert "DISABLE_SERVER_SIDE_CURSORS" not in db_config
 
-
 class TestCDNUrlConstruction(TestCase):
     """Verify CDN URL construction logic."""
 
@@ -259,7 +254,6 @@ class TestCDNUrlConstruction(TestCase):
 
         assert not settings.STATIC_CDN_URL.endswith("/")
         assert not settings.MEDIA_CDN_URL.endswith("/")
-
 
 class TestRedisConfig(TestCase):
     """Verify Redis configuration is consistent."""

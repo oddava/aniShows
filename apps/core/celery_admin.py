@@ -20,7 +20,6 @@ from datetime import timedelta
 
 from apps.core.models import CeleryTaskResult, CeleryWorkerStatus, CeleryTaskSchedule
 
-
 @admin.register(CeleryTaskResult)
 class CeleryTaskResultAdmin(admin.ModelAdmin):
     """Admin interface for Celery task results."""
@@ -254,7 +253,6 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
         success = tasks.filter(status="SUCCESS").count()
         return round((success / total) * 100, 1)
 
-
 @admin.register(CeleryWorkerStatus)
 class CeleryWorkerStatusAdmin(admin.ModelAdmin):
     """Admin interface for Celery worker monitoring."""
@@ -367,7 +365,6 @@ class CeleryWorkerStatusAdmin(admin.ModelAdmin):
             self.message_user(
                 request, f"Failed to refresh worker status: {e}", messages.ERROR
             )
-
 
 @admin.register(CeleryTaskSchedule)
 class CeleryTaskScheduleAdmin(admin.ModelAdmin):

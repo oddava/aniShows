@@ -1,7 +1,6 @@
 # Generated manually to fix corrupted like counts
 from django.db import migrations
 
-
 def recalculate_all_counters(apps, schema_editor):
     """Recalculate all denormalized counters to fix data corruption."""
     Thread = apps.get_model("forums", "Thread")
@@ -42,11 +41,9 @@ def recalculate_all_counters(apps, schema_editor):
 
     print("Done! All counters recalculated.")
 
-
 def reverse_migration(apps, schema_editor):
     """No reverse needed - data fix only."""
     pass
-
 
 class Migration(migrations.Migration):
     dependencies = [

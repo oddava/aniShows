@@ -10,7 +10,6 @@ from apps.users.models import UserStats
 
 User = get_user_model()
 
-
 class Command(BaseCommand):
     help = "Populate UserStats for all users who do not have stats yet"
 

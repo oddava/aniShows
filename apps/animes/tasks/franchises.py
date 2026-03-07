@@ -1,9 +1,9 @@
+from apps.shared.logger import logger
 """
 Franchise/Relations synchronization task.
 """
 
 import asyncio
-import logging
 from typing import Dict, List, Optional, Set
 from asgiref.sync import sync_to_async
 from celery import shared_task
@@ -12,9 +12,6 @@ from django.db.models import Q
 from apps.animes.services.anilist import AniListService
 from apps.animes.models import Anime
 from .base import BaseTask, run_async_in_task
-
-logger = logging.getLogger(__name__)
-
 
 class FranchiseSyncTask(BaseTask):
     """Unified task for syncing anime franchise/relations data."""
@@ -313,7 +310,6 @@ class FranchiseSyncTask(BaseTask):
 
         return imported_ids
 
-
 @shared_task(
     bind=True,
     base=FranchiseSyncTask,
@@ -343,7 +339,6 @@ def sync_franchises(
         priority_field=priority_field, skip_recently_updated=skip_recently_updated,
         update_window=update_window,
     )
-
 
 @shared_task(
     bind=True,

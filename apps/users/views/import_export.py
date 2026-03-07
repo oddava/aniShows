@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 API views for import/export functionality
 """
@@ -9,10 +10,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
-import logging
 import re
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
 
 from apps.users.models import UserImportJob
@@ -25,7 +24,6 @@ USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
 
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024
-
 
 class ImportMALView(APIView):
     """Import anime list from MyAnimeList"""
@@ -62,7 +60,6 @@ class ImportMALView(APIView):
             {"message": "Import started", "job_id": job.id, "status": "pending"},
             status=status.HTTP_202_ACCEPTED,
         )
-
 
 class ImportMALXMLView(APIView):
     """Import anime list from MyAnimeList XML export file"""
@@ -114,7 +111,6 @@ class ImportMALXMLView(APIView):
             status=status.HTTP_202_ACCEPTED,
         )
 
-
 class ImportAniListView(APIView):
     """Import anime list from AniList"""
 
@@ -159,7 +155,6 @@ class ImportAniListView(APIView):
             status=status.HTTP_202_ACCEPTED,
         )
 
-
 class ImportJobStatusView(APIView):
     """Get status of an import job"""
 
@@ -172,7 +167,6 @@ class ImportJobStatusView(APIView):
         serializer = UserImportJobSerializer(job)
         return Response(serializer.data)
 
-
 class ImportJobListView(APIView):
     """List user's import jobs"""
 
@@ -183,7 +177,6 @@ class ImportJobListView(APIView):
         jobs = UserImportJob.objects.filter(user=request.user).order_by("-created_at")[:10]
         serializer = UserImportJobSerializer(jobs, many=True)
         return Response(serializer.data)
-
 
 class ExportUserDataView(APIView):
     """Export user data"""
@@ -226,7 +219,6 @@ class ExportUserDataView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
 class ExportUserDataJSONView(APIView):
     """Export user data as JSON (for programmatic use)"""
 
@@ -243,7 +235,6 @@ class ExportUserDataJSONView(APIView):
                 {"error": "Failed to generate export"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 class ImportJobCancelView(APIView):
     """Cancel a pending or processing import job"""

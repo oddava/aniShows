@@ -4,7 +4,6 @@ import django.db.models.deletion
 import root.storage_backends
 from django.db import migrations, models
 
-
 class Migration(migrations.Migration):
 
     dependencies = [

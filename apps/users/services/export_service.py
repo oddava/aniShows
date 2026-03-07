@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Export service for user data
 """
@@ -7,11 +8,8 @@ from datetime import datetime
 from typing import Dict, Any
 from django.contrib.auth import get_user_model
 from apps.users.models import UserAnimeList, UserProfile
-import logging
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 class UserDataExporter:
     """Export all user data in a structured format"""
@@ -124,7 +122,6 @@ class UserDataExporter:
 
         return reviews
 
-
 class MALXMLExporter:
     """Export user anime list to MyAnimeList XML format"""
 
@@ -195,7 +192,6 @@ class MALXMLExporter:
         ]
 
         return "\n".join(lines)
-
 
 class ExportService:
     """Service for handling all export operations"""

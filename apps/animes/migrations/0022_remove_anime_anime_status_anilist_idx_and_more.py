@@ -2,7 +2,6 @@
 
 from django.db import migrations
 
-
 class Migration(migrations.Migration):
     dependencies = [
         ("anime", "0021_add_airing_sync_indexes"),

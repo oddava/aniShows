@@ -49,7 +49,6 @@ if SENTRY_DSN:
         before_send_transaction=lambda event, hint: _filter_sentry_transaction(event, hint),
     )
 
-
 def _filter_sentry_event(event, hint):
     """Filter out noisy or irrelevant error events."""
     # Ignore DisallowedHost errors (bot scanners)
@@ -70,7 +69,6 @@ def _filter_sentry_event(event, hint):
 
     return event
 
-
 def _filter_sentry_transaction(event, hint):
     """Filter out noisy transaction events."""
     transaction_name = event.get("transaction", "")
@@ -78,7 +76,6 @@ def _filter_sentry_transaction(event, hint):
     if transaction_name in ("/api/v1/health/", "/metrics"):
         return None
     return event
-
 
 # =============================================================================
 # SECURITY SETTINGS

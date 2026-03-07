@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Import services for MyAnimeList and AniList
 """
@@ -10,10 +11,6 @@ from typing import List, Dict, Optional, Tuple
 from apps.animes.models import Anime
 from apps.users.models import UserAnimeList, UserImportJob
 from django.utils import timezone
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class MALStatusMapper:
     """Map MAL status values to our status values"""
@@ -34,7 +31,6 @@ class MALStatusMapper:
         "Plan to Watch": UserAnimeList.UserAnimeStatus.plan_to_watch,
     }
 
-
 class AniListStatusMapper:
     """Map AniList status values to our status values"""
 
@@ -45,7 +41,6 @@ class AniListStatusMapper:
         "DROPPED": UserAnimeList.UserAnimeStatus.dropped,
         "PLANNING": UserAnimeList.UserAnimeStatus.plan_to_watch,
     }
-
 
 class BaseImporter:
     """Base class for importers"""
@@ -234,7 +229,6 @@ class BaseImporter:
             ]
         )
 
-
 class MyAnimeListAPIImporter(BaseImporter):
     """Import from MyAnimeList API"""
 
@@ -391,7 +385,6 @@ class MyAnimeListAPIImporter(BaseImporter):
         finally:
             self._cleanup()
 
-
 class MyAnimeListXMLImporter(BaseImporter):
     """Import from MyAnimeList XML export file"""
 
@@ -516,7 +509,6 @@ class MyAnimeListXMLImporter(BaseImporter):
             raise
         finally:
             self._cleanup()
-
 
 class AniListImporter(BaseImporter):
     """Import from AniList GraphQL API"""
@@ -706,7 +698,6 @@ class AniListImporter(BaseImporter):
             raise
         finally:
             self._cleanup()
-
 
 class ImportService:
     """Factory for creating importers"""

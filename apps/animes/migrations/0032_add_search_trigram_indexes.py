@@ -10,7 +10,6 @@ from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.operations import TrigramExtension
 from django.db import migrations
 
-
 class Migration(migrations.Migration):
     dependencies = [
         ("anime", "0031_increase_themesong_url_max_length"),

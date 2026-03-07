@@ -17,7 +17,6 @@ from imagekit.cachefiles import ImageCacheFile
 
 from apps.animes.models import Anime, Character, Staff
 
-
 # Map of model -> (source_field, [spec_field_names])
 MODEL_SPECS = {
     "anime": (
@@ -41,7 +40,6 @@ MODEL_SPECS = {
         ["image_small", "image_medium"],
     ),
 }
-
 
 class Command(BaseCommand):
     help = "Pre-generate all ImageKit thumbnails for Anime, Character, and Staff models"

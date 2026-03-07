@@ -22,7 +22,8 @@ from rest_framework.views import APIView
 from apps.animes.models import Anime, Genre, Studio, UserFavorite, UserHistory, Review
 from apps.users.models import UserProfile, UserAnimeList
 from apps.core.models import SystemLog, AuditLog
-from apps.core.permissions import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser
+from apps.shared.pagination import StandardPagination
 from datetime import datetime
 
 User = get_user_model()
@@ -125,7 +126,7 @@ class AdminUserViewSet(viewsets.ViewSet):
     """User management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all users with filtering and search - optimized with annotations."""
@@ -170,7 +171,7 @@ class AdminUserViewSet(viewsets.ViewSet):
             queryset = queryset.order_by(ordering)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         users_data = []
@@ -339,7 +340,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
     """Anime management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all anime with filtering."""
@@ -380,7 +381,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
         )
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         anime_data = []
@@ -471,7 +472,7 @@ class AdminReviewViewSet(viewsets.ViewSet):
     """Review moderation for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all reviews with filtering."""
@@ -506,7 +507,7 @@ class AdminReviewViewSet(viewsets.ViewSet):
             queryset = queryset.order_by(ordering)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         reviews_data = []
@@ -617,7 +618,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
     """Genre management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all genres with anime count."""
@@ -629,7 +630,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
             queryset = queryset.filter(name__icontains=search)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         genres_data = [
@@ -742,7 +743,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
     """Studio management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all studios with anime count."""
@@ -754,7 +755,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
             queryset = queryset.filter(name__icontains=search)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         studios_data = [
@@ -871,7 +872,7 @@ class AdminUserListViewSet(viewsets.ViewSet):
     """User list entries management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all user list entries."""
@@ -891,7 +892,7 @@ class AdminUserListViewSet(viewsets.ViewSet):
             queryset = queryset.filter(status=list_status)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         entries_data = [
@@ -943,7 +944,7 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
     """User favorites management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all user favorites."""
@@ -959,7 +960,7 @@ class AdminFavoritesViewSet(viewsets.ViewSet):
             queryset = queryset.filter(anime_id=anime_id)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         favorites_data = [
@@ -1488,7 +1489,7 @@ class AdminSystemLogViewSet(viewsets.ViewSet):
     """System logs management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all system logs with filtering."""
@@ -1549,7 +1550,7 @@ class AdminSystemLogViewSet(viewsets.ViewSet):
             queryset = queryset.order_by(ordering)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         logs_data = []
@@ -1684,7 +1685,7 @@ class AdminAuditLogViewSet(viewsets.ViewSet):
     """Audit logs management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all audit logs with filtering."""
@@ -1739,7 +1740,7 @@ class AdminAuditLogViewSet(viewsets.ViewSet):
             queryset = queryset.order_by(ordering)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         logs_data = []

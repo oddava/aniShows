@@ -14,7 +14,6 @@ import logging
 
 AnimeType, AnimeStatus = Anime.AnimeType, Anime.AnimeStatus
 
-
 class MediaSort(str, Enum):
     ID_DESC = "ID_DESC"
     SCORE = "SCORE_DESC"
@@ -22,13 +21,11 @@ class MediaSort(str, Enum):
     TRENDING = "TRENDING_DESC"
     START_DATE = "START_DATE_DESC"
 
-
 class MediaStatus(str, Enum):
     FINISHED = "FINISHED"
     RELEASING = "RELEASING"
     NOT_YET_RELEASED = "NOT_YET_RELEASED"
     CANCELLED = "CANCELLED"
-
 
 class MediaFormat(str, Enum):
     TV = "TV"
@@ -38,7 +35,6 @@ class MediaFormat(str, Enum):
     OVA = "OVA"
     ONA = "ONA"
     MUSIC = "MUSIC"
-
 
 class AniListScraper:
     BASE_URL = "https://graphql.anilist.co/"
@@ -170,7 +166,6 @@ class AniListScraper:
         except RuntimeError as e:
             if "Event loop is closed" not in str(e):
                 raise
-
 
 class Command(BaseCommand):
     help = "Import anime data from AniList API"

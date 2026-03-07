@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Unified user workflow tasks.
 
@@ -8,7 +9,6 @@ Consolidates user-related maintenance tasks:
 - cleanup_old_import_jobs
 """
 
-import logging
 import asyncio
 from datetime import timedelta
 from typing import Dict, List, Optional
@@ -22,10 +22,8 @@ from apps.animes.services.anilist import AniListService
 from apps.users.models import UserImportJob
 from apps.users.services.import_service import ImportService
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
-
 
 @shared_task(
     bind=True,
@@ -122,7 +120,6 @@ def cleanup_unverified_accounts(self, days: int = 7):
         logger.error(f"Error cleaning up unverified accounts: {e}")
         raise self.retry(exc=e)
 
-
 @shared_task(
     bind=True,
     max_retries=3,
@@ -181,7 +178,6 @@ def process_import_job(self, job_id: int, **kwargs):
 
         # Retry the task
         raise self.retry(exc=exc, countdown=60)
-
 
 @shared_task(
     max_retries=3,
@@ -245,7 +241,6 @@ def fetch_anime_by_external_id(
     finally:
         asyncio.run(service.close())
 
-
 @shared_task
 def cleanup_old_import_jobs(days: int = 30):
     """
@@ -277,7 +272,6 @@ def cleanup_old_import_jobs(days: int = 30):
     except Exception as e:
         logger.error(f"Error cleaning up import jobs: {e}")
         return 0
-
 
 @shared_task
 def run_user_maintenance_workflow(
@@ -320,7 +314,6 @@ def run_user_maintenance_workflow(
         "cleanup_unverified": cleanup_unverified,
         "cleanup_imports": cleanup_imports,
     }
-
 
 @shared_task(
     bind=True,
@@ -430,14 +423,12 @@ def update_user_stats(self, user_id: int = None):
             logger.error(f"Error in update_user_stats task: {e}")
         raise self.retry(exc=e)
 
-
 @shared_task
 def update_all_user_stats():
     """
     Update stats for all users - scheduled task run every 5 minutes.
     """
     return update_user_stats.delay()
-
 
 @shared_task
 def warm_profile_cache(usernames: list = None):

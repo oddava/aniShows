@@ -1,10 +1,10 @@
+from apps.shared.logger import logger
 """
 Unified theme song synchronization task.
 
 Uses Jikan API to fetch opening and ending themes for anime.
 """
 
-import logging
 import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -18,9 +18,6 @@ import httpx
 from apps.animes.models import Anime, ThemeSong
 from apps.animes.services.jikan import JikanRateLimiter, fetch_themes_from_jikan
 from .base import BaseTask, run_async_in_task
-
-logger = logging.getLogger(__name__)
-
 
 class ThemeSongSyncTask(BaseTask):
     """
@@ -493,7 +490,6 @@ class ThemeSongSyncTask(BaseTask):
 
         return count
 
-
 @shared_task(
     bind=True,
     base=ThemeSongSyncTask,
@@ -527,7 +523,6 @@ def sync_theme_songs(
         Dict with sync results
     """
     return self.execute(anime_id, limit, force_resync, retry_failed, base_delay)
-
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def backfill_theme_youtube_urls(self, limit: int = 100):
@@ -575,7 +570,6 @@ def backfill_theme_youtube_urls(self, limit: int = 100):
 
     logger.info(f"YouTube URL backfill complete: {result}")
     return result
-
 
 def _generate_youtube_url_sync(title: str, artist: str, song_type: str, anime_title: str) -> str:
     """Synchronous version of _generate_youtube_url for use in tasks."""

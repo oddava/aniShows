@@ -1,21 +1,16 @@
+from apps.shared.logger import logger
 """
 WebSocket consumers for the core app.
 
 Provides real-time notification delivery and online presence tracking.
 """
 
-import logging
-
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.core.cache import cache
 from django.utils import timezone
 
-logger = logging.getLogger(__name__)
-
-# Online presence TTL in seconds (matches activity_middleware.py)
 ONLINE_TIMEOUT = 300
-
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for real-time user notifications and presence.

@@ -18,7 +18,6 @@ from .models import (
     UserRecommendation,
 )
 
-
 @admin.register(Genre)
 class GenreAdmin(admin.ModelAdmin):
     """Admin for anime genres."""
@@ -48,7 +47,6 @@ class GenreAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         """Optimize queryset with annotation."""
         return super().get_queryset(request).annotate(anime_count=Count("anime"))
-
 
 @admin.register(Studio)
 class StudioAdmin(admin.ModelAdmin):
@@ -83,7 +81,6 @@ class StudioAdmin(admin.ModelAdmin):
         """Optimize queryset with annotation."""
         return super().get_queryset(request).annotate(anime_count=Count("anime"))
 
-
 class ReviewInline(admin.TabularInline):
     """Inline reviews for anime."""
 
@@ -101,7 +98,6 @@ class ReviewInline(admin.TabularInline):
         return "-"
 
     text_short.short_description = "Review"
-
 
 @admin.register(Anime)
 class AnimeAdmin(admin.ModelAdmin):
@@ -346,7 +342,6 @@ class AnimeAdmin(admin.ModelAdmin):
             )
         )
 
-
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     """Admin for anime reviews."""
@@ -436,7 +431,6 @@ class ReviewAdmin(admin.ModelAdmin):
         """Optimize queryset."""
         return super().get_queryset(request).select_related("user", "anime")
 
-
 @admin.register(Character)
 class CharacterAdmin(admin.ModelAdmin):
     """Admin for anime characters."""
@@ -453,7 +447,6 @@ class CharacterAdmin(admin.ModelAdmin):
         return "-"
 
     image_preview.short_description = "Image"
-
 
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
@@ -472,7 +465,6 @@ class StaffAdmin(admin.ModelAdmin):
 
     image_preview.short_description = "Image"
 
-
 @admin.register(AnimeCharacter)
 class AnimeCharacterAdmin(admin.ModelAdmin):
     """Admin for anime-character relationships."""
@@ -482,7 +474,6 @@ class AnimeCharacterAdmin(admin.ModelAdmin):
     search_fields = ["anime__title", "character__name", "voice_actor__name"]
     raw_id_fields = ["anime", "character", "voice_actor"]
 
-
 @admin.register(AnimeStaff)
 class AnimeStaffAdmin(admin.ModelAdmin):
     """Admin for anime-staff relationships."""
@@ -490,7 +481,6 @@ class AnimeStaffAdmin(admin.ModelAdmin):
     list_display = ["anime", "staff", "role"]
     search_fields = ["anime__title", "staff__name", "role"]
     raw_id_fields = ["anime", "staff"]
-
 
 @admin.register(UserFavorite)
 class UserFavoriteAdmin(admin.ModelAdmin):
@@ -501,7 +491,6 @@ class UserFavoriteAdmin(admin.ModelAdmin):
     raw_id_fields = ["user", "anime"]
     ordering = ["-added_at"]
 
-
 @admin.register(UserHistory)
 class UserHistoryAdmin(admin.ModelAdmin):
     """Admin for user viewing history."""
@@ -510,7 +499,6 @@ class UserHistoryAdmin(admin.ModelAdmin):
     search_fields = ["user__username", "anime__title"]
     raw_id_fields = ["user", "anime"]
     ordering = ["-viewed_at"]
-
 
 @admin.register(ReviewVote)
 class ReviewVoteAdmin(admin.ModelAdmin):
@@ -521,7 +509,6 @@ class ReviewVoteAdmin(admin.ModelAdmin):
     search_fields = ["user__username"]
     raw_id_fields = ["user", "review"]
     ordering = ["-created_at"]
-
 
 @admin.register(ReviewComment)
 class ReviewCommentAdmin(admin.ModelAdmin):
@@ -539,7 +526,6 @@ class ReviewCommentAdmin(admin.ModelAdmin):
         return "-"
 
     text_short.short_description = "Comment"
-
 
 @admin.register(UserRecommendation)
 class UserRecommendationAdmin(admin.ModelAdmin):

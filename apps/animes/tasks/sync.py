@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Unified AniList synchronization task.
 
@@ -11,7 +12,6 @@ Into a single parameterized task with smart routing.
 """
 
 import asyncio
-import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 from asgiref.sync import sync_to_async
@@ -24,8 +24,6 @@ from apps.animes.services.anilist import AniListService, MediaSort
 from apps.animes.services.rate_limiting import APICallCache
 from apps.animes.models import Anime
 from .base import BaseTask, run_async_in_task
-
-logger = logging.getLogger(__name__)
 
 # Sync type configurations
 SYNC_CONFIGS = {
@@ -71,7 +69,6 @@ SYNC_CONFIGS = {
         "description": "Fetch top 1000 rated anime to build comprehensive catalog",
     },
 }
-
 
 class SyncAnimeCatalogTask(BaseTask):
     """
@@ -327,7 +324,6 @@ class SyncAnimeCatalogTask(BaseTask):
                 await asyncio.sleep(0.5)
 
         logger.info(f"Theme sync queued for all {len(anime_ids)} new anime")
-
 
 @shared_task(
     bind=True,

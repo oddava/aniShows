@@ -5,17 +5,15 @@ from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Q, Exists, OuterRef, Avg, Case, When, Value, IntegerField
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
-import logging
 
 from apps.animes.models import Anime, Review, ReviewVote, ReviewComment
 from apps.users.models import UserAnimeList
 from apps.animes.serializers import ReviewSerializer, ReviewCommentSerializer
 from apps.users.permissions import EmailVerificationMixin
 from apps.users.services.cache import invalidate_user_caches
+from apps.shared.logger import logger
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     serializer_class = ReviewSerializer

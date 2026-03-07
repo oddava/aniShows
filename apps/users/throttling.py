@@ -5,7 +5,6 @@ Provides different rate limits for different types of endpoints.
 
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
-
 class PublicUserProfileRateThrottle(AnonRateThrottle):
     """
     Strict rate limiting for public user profile lookups.
@@ -13,7 +12,6 @@ class PublicUserProfileRateThrottle(AnonRateThrottle):
     """
 
     scope = "user_profile_lookup"
-
 
 class PublicAnimeListRateThrottle(AnonRateThrottle):
     """
@@ -23,14 +21,12 @@ class PublicAnimeListRateThrottle(AnonRateThrottle):
 
     scope = "anime_list"
 
-
 class PublicReviewRateThrottle(AnonRateThrottle):
     """
     Rate limiting for public review access.
     """
 
     scope = "review_access"
-
 
 class LoginRateThrottle(AnonRateThrottle):
     """
@@ -40,7 +36,6 @@ class LoginRateThrottle(AnonRateThrottle):
 
     scope = "login"
 
-
 class RegisterRateThrottle(AnonRateThrottle):
     """
     Rate limiting for registration.
@@ -48,7 +43,6 @@ class RegisterRateThrottle(AnonRateThrottle):
     """
 
     scope = "register"
-
 
 class PasswordResetRateThrottle(AnonRateThrottle):
     """
@@ -58,7 +52,6 @@ class PasswordResetRateThrottle(AnonRateThrottle):
 
     scope = "password_reset"
 
-
 class UserActionRateThrottle(UserRateThrottle):
     """
     Rate limiting for authenticated user actions.
@@ -66,7 +59,6 @@ class UserActionRateThrottle(UserRateThrottle):
     """
 
     scope = "user_actions"
-
 
 class AdminActionRateThrottle(UserRateThrottle):
     """
@@ -76,7 +68,6 @@ class AdminActionRateThrottle(UserRateThrottle):
 
     scope = "admin_actions"
 
-
 class StrictUserRateThrottle(UserRateThrottle):
     """
     Extra strict rate limiting for sensitive operations.
@@ -84,7 +75,6 @@ class StrictUserRateThrottle(UserRateThrottle):
     """
 
     scope = "strict_user"
-
 
 class SocialLinksRateThrottle(UserRateThrottle):
     """
@@ -120,7 +110,6 @@ class SocialLinksRateThrottle(UserRateThrottle):
         # Call parent to check rate limit
         return super().allow_request(request, view)
 
-
 class ForumLikeRateThrottle(UserRateThrottle):
     """
     Rate limiting for forum like/unlike actions.
@@ -128,7 +117,6 @@ class ForumLikeRateThrottle(UserRateThrottle):
     """
 
     scope = "forum_like"
-
 
 class ForumWriteRateThrottle(UserRateThrottle):
     """

@@ -2,7 +2,6 @@
 
 from django.db import migrations
 
-
 def create_initial_badges(apps, schema_editor):
     Badge = apps.get_model("users", "Badge")
 
@@ -52,13 +51,11 @@ def create_initial_badges(apps, schema_editor):
     for badge_data in initial_badges:
         Badge.objects.create(**badge_data)
 
-
 def remove_initial_badges(apps, schema_editor):
     Badge = apps.get_model("users", "Badge")
     Badge.objects.filter(
         slug__in=["founding-member", "staff", "superuser", "top-reviewer", "power-user"]
     ).delete()
-
 
 class Migration(migrations.Migration):
     dependencies = [

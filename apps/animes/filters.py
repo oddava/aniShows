@@ -4,7 +4,6 @@ from django_filters import FilterSet, CharFilter, OrderingFilter
 
 from .models import Anime
 
-
 class AnimeFilter(FilterSet):
     genre = CharFilter(method="filter_genre", label="Genre")
 

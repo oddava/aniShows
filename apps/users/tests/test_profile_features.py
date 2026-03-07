@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 User = get_user_model()
 
-
 class ProfileFeaturesTest(APITestCase):
     def setUp(self):
         from django.core.cache import cache

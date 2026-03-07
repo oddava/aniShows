@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-
 def _env_bool(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable."""
     raw = os.getenv(name)
@@ -16,11 +15,9 @@ def _env_bool(name: str, default: bool = False) -> bool:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
-
 def _parse_csv(value: str) -> list[str]:
     """Parse comma-separated env values into a cleaned list."""
     return [item.strip() for item in value.split(",") if item.strip()]
-
 
 def _parse_sentinel_nodes(value: str) -> list[tuple[str, int]]:
     """Parse Redis Sentinel nodes from ``host:port,host:port`` env format."""
@@ -32,7 +29,6 @@ def _parse_sentinel_nodes(value: str) -> list[tuple[str, int]]:
         else:
             nodes.append((node, 26379))
     return nodes
-
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent

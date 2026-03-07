@@ -1,7 +1,6 @@
 from django.contrib import admin
 from .models import Category, Thread, Post, Tag, ThreadLike, PostLike
 
-
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'slug', 'order', 'thread_count')
@@ -12,12 +11,10 @@ class CategoryAdmin(admin.ModelAdmin):
         return obj.threads.count()
     thread_count.short_description = 'Threads'
 
-
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
     list_display = ('name', 'slug', 'color')
     prepopulated_fields = {'slug': ('name',)}
-
 
 @admin.register(Thread)
 class ThreadAdmin(admin.ModelAdmin):
@@ -28,7 +25,6 @@ class ThreadAdmin(admin.ModelAdmin):
     filter_horizontal = ('tags',)
     readonly_fields = ('view_count', 'created_at', 'updated_at')
 
-
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
     list_display = ('__str__', 'author', 'thread', 'created_at')
@@ -37,12 +33,10 @@ class PostAdmin(admin.ModelAdmin):
     raw_id_fields = ('author', 'thread')
     readonly_fields = ('created_at', 'updated_at')
 
-
 @admin.register(ThreadLike) 
 class ThreadLikeAdmin(admin.ModelAdmin):
     list_display = ('user', 'thread', 'created_at')
     raw_id_fields = ('user', 'thread')
-
 
 @admin.register(PostLike)
 class PostLikeAdmin(admin.ModelAdmin):

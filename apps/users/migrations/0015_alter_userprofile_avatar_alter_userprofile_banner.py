@@ -4,7 +4,6 @@ import apps.users.utils.file_security
 import root.storage_backends
 from django.db import migrations, models
 
-
 class Migration(migrations.Migration):
     dependencies = [
         ("users", "0014_userprofile_last_activity"),

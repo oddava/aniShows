@@ -1,12 +1,9 @@
 import time
-import logging
 from django.conf import settings
 from apps.core.models import SystemLog, AuditLog
 from apps.core.tasks.logging_tasks import log_request_async, log_audit_async, log_exception_async
 from apps.core.utils import get_client_ip
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 class LoggingMiddleware:
     """Middleware to log all requests and responses asynchronously."""
@@ -81,7 +78,6 @@ class LoggingMiddleware:
             logger.error(f"Failed to queue async log entry: {e}")
 
         return response
-
 
 class AdminAuditMiddleware:
     """Middleware to audit admin actions."""
@@ -171,7 +167,6 @@ class AdminAuditMiddleware:
         if parts and parts[-1].isdigit():
             return parts[-1]
         return ""
-
 
 class ExceptionLoggingMiddleware:
     """Middleware to log exceptions."""

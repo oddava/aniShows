@@ -1,9 +1,6 @@
-import logging
 
 from storages.backends.s3boto3 import S3Boto3Storage
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 class MediaStorage(S3Boto3Storage):
     location = "media"

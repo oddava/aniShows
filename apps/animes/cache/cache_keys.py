@@ -2,7 +2,6 @@
 
 from typing import List
 
-
 class CacheKeys:
     """Namespace for all cache keys."""
 
@@ -42,7 +41,6 @@ class CacheKeys:
             cls.user_recommendations(user_id),
             cls.user_favorites_count(user_id),
         ]
-
 
 class CacheTTL:
     """TTL constants for different cache types (in seconds)."""

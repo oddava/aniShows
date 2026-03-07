@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Prometheus metrics integration for Celery tasks.
 
@@ -18,12 +19,9 @@ Usage:
 """
 
 import functools
-import logging
 import time
 from contextlib import contextmanager
 from typing import Optional, Callable
-
-logger = logging.getLogger(__name__)
 
 # Try to import prometheus_client, provide fallback if not available
 try:
@@ -69,7 +67,6 @@ except ImportError:
     Histogram = DummyMetric
     Gauge = DummyMetric
     Info = DummyMetric
-
 
 # Task execution metrics
 TASK_EXECUTION_TIME = Histogram(
@@ -158,7 +155,6 @@ USER_IMPORTS_PROCESSED = Counter(
     ["source", "status"],
 )
 
-
 @contextmanager
 def task_timer(task_name: str, queue: str = "default"):
     """
@@ -190,7 +186,6 @@ def task_timer(task_name: str, queue: str = "default"):
             task_name=task_name, queue=queue, status=status
         ).inc()
 
-
 def timed_task(queue: str = "default"):
     """
     Decorator to automatically time task execution.
@@ -220,7 +215,6 @@ def timed_task(queue: str = "default"):
 
     return decorator
 
-
 def increment_counter(metric_name: str, labels: Optional[dict] = None, value: int = 1):
     """
     Increment a counter metric.
@@ -244,7 +238,6 @@ def increment_counter(metric_name: str, labels: Optional[dict] = None, value: in
     if metric and labels:
         metric.labels(**labels).inc(value)
 
-
 def observe_histogram(metric_name: str, value: float, labels: Optional[dict] = None):
     """
     Observe a value in a histogram metric.
@@ -265,7 +258,6 @@ def observe_histogram(metric_name: str, value: float, labels: Optional[dict] = N
     metric = metric_map.get(metric_name)
     if metric and labels:
         metric.labels(**labels).observe(value)
-
 
 @contextmanager
 def api_timer(service: str, endpoint: str = "unknown"):
@@ -296,7 +288,6 @@ def api_timer(service: str, endpoint: str = "unknown"):
         ).observe(duration)
         API_CALL_COUNT.labels(service=service, endpoint=endpoint, status=status).inc()
 
-
 def update_queue_size(queue_name: str, size: int):
     """
     Update the queue size gauge.
@@ -308,7 +299,6 @@ def update_queue_size(queue_name: str, size: int):
     if PROMETHEUS_AVAILABLE:
         QUEUE_SIZE.labels(queue_name=queue_name).set(size)
 
-
 def record_task_retry(task_name: str):
     """
     Record a task retry.
@@ -318,7 +308,6 @@ def record_task_retry(task_name: str):
     """
     if PROMETHEUS_AVAILABLE:
         TASK_RETRY_COUNT.labels(task_name=task_name).inc()
-
 
 def get_metrics_registry():
     """

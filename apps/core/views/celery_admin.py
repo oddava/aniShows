@@ -20,14 +20,15 @@ from celery import current_app
 from celery.result import AsyncResult
 
 from apps.core.models import CeleryTaskResult, CeleryWorkerStatus, CeleryTaskSchedule
-from apps.core.permissions import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser
+from apps.shared.pagination import StandardPagination
 
 
 class CeleryTaskResultViewSet(viewsets.ViewSet):
     """ViewSet for Celery task results management."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all task results with filtering."""
@@ -97,7 +98,7 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
             queryset = queryset.order_by(ordering)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         results_data = []
@@ -623,7 +624,7 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
     """ViewSet for managing Celery task schedules."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def list(self, request):
         """List all custom task schedules."""
@@ -653,7 +654,7 @@ class CeleryTaskScheduleViewSet(viewsets.ViewSet):
             queryset = queryset.order_by(ordering)
 
         # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         schedules_data = []

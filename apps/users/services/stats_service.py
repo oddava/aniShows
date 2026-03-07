@@ -8,7 +8,6 @@ from django.db.models import Sum, Avg
 from apps.users.models import UserAnimeList, UserStats
 from apps.animes.models import UserFavorite, Review
 
-
 def calculate_user_stats(user):
     """
     Calculate user stats on-the-fly from UserAnimeList and related models.
@@ -66,7 +65,6 @@ def calculate_user_stats(user):
         "reviews_count": reviews_count,
     }
 
-
 def create_or_update_user_stats(user):
     """
     Create or update the UserStats materialized view for a user.
@@ -93,7 +91,6 @@ def create_or_update_user_stats(user):
     )
 
     return stats
-
 
 def get_user_stats_with_fallback(user):
     """

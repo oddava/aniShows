@@ -2,12 +2,9 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.cache import cache
-import logging
 
 from apps.animes.serializers import UserRecommendationSerializer
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 class RecommendationsViewSet(viewsets.ViewSet):
     """Personalized anime recommendations for authenticated users"""

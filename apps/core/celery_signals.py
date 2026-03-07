@@ -1,5 +1,4 @@
-import logging
-
+from apps.shared.logger import logger
 from celery.signals import (
     task_failure,
     task_prerun,
@@ -8,8 +7,6 @@ from celery.signals import (
     task_success,
 )
 from django.utils import timezone
-
-logger = logging.getLogger(__name__)
 
 
 @task_prerun.connect

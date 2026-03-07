@@ -9,7 +9,6 @@ from django.core.management.base import BaseCommand
 from apps.animes.models import ThemeSong
 from urllib.parse import quote_plus
 
-
 class Command(BaseCommand):
     help = "Backfill YouTube URLs for existing theme songs"
 

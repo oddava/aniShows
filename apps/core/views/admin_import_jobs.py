@@ -3,18 +3,20 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from celery import current_app
+from rest_framework.viewsets import ViewSet
 
 from apps.core.models import CeleryTaskResult
-from apps.core.permissions import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser
+from apps.shared.pagination import StandardPagination
 
 IMPORT_TASKS = ["apps.animes.tasks.sync.sync_anime_catalog"]
 
 
-class AdminImportJobViewSet(viewsets.ViewSet):
+class AdminImportJobViewSet(ViewSet):
     """Import jobs monitoring for admins, mapped to Celery sync tasks."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
 
     def _format_task_result(self, result):
         source = "System Auto-Sync"
@@ -28,7 +30,7 @@ class AdminImportJobViewSet(viewsets.ViewSet):
             source = "AniList API"
             source_type = result.task_kwargs.get("sync_type", "unknown")
 
-            # Extract items from result_data
+
             if isinstance(result.result_data, dict):
                 processed_items = result.result_data.get("records_processed", 0)
             total_items = (
@@ -39,7 +41,6 @@ class AdminImportJobViewSet(viewsets.ViewSet):
 
             error_count = 1 if result.status == "FAILURE" else 0
 
-        # Map statuses from Celery to frontend
         status_map = {
             "PENDING": "pending",
             "STARTED": "processing",
@@ -80,7 +81,6 @@ class AdminImportJobViewSet(viewsets.ViewSet):
             "-date_created"
         )
 
-        # Filters
         status_filter = request.query_params.get("status")
         if status_filter:
             celery_status_map = {
@@ -93,8 +93,7 @@ class AdminImportJobViewSet(viewsets.ViewSet):
             if status_filter in celery_status_map:
                 queryset = queryset.filter(status__in=celery_status_map[status_filter])
 
-        # Pagination
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
         jobs_data = [self._format_task_result(job) for job in page]

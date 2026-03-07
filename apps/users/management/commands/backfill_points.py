@@ -11,7 +11,6 @@ from django.db.models import Sum, Case, When, IntegerField
 from apps.users.models import UserProfile
 from apps.animes.models import ReviewVote
 
-
 class Command(BaseCommand):
     help = 'Backfill points for all users based on their existing review votes'
 

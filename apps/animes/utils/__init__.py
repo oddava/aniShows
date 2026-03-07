@@ -3,13 +3,10 @@ from django.template.loader import render_to_string
 from django.urls import reverse_lazy
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
-import logging
 
 from apps.animes.utils.tokens import account_activation_token
 from root.settings import EMAIL_HOST_USER
-
-logger = logging.getLogger(__name__)
-
+from apps.shared.logger import logger
 
 def send_email(subject: str, body: str | None, emails: list[str], html_content=None):
     email = EmailMultiAlternatives(subject=subject, body=body, from_email=EMAIL_HOST_USER, to=emails)

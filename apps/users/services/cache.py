@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Cache invalidation utilities for user-related data.
 
@@ -6,10 +7,6 @@ user actions occur, all relevant caches are properly invalidated.
 """
 
 from django.core.cache import cache
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
     """
@@ -65,12 +62,10 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
 
     logger.debug(f"Invalidated caches for user {user_id}")
 
-
 def invalidate_user_anime_caches(user_id):
     """Clear user-specific anime caches when their list changes."""
     cache.delete(f"anime_trending_{user_id}")
     cache.delete(f"anime_top_rated_{user_id}")
-
 
 def invalidate_anime_detail_cache(anime_slug, user_id=None):
     """Clear anime detail cache for a specific anime.
@@ -86,21 +81,17 @@ def invalidate_anime_detail_cache(anime_slug, user_id=None):
         # but the cache key includes user_id, so we just document this limitation
         pass
 
-
 def get_user_profile_cache_key(user_id, full=False):
     """Get the cache key for a user's profile."""
     return f"user_profile:{user_id}:{'full' if full else 'light'}"
-
 
 def get_user_stats_cache_key(user_id):
     """Get the cache key for a user's stats."""
     return f"user_stats:{user_id}"
 
-
 def get_public_profile_cache_key(username, viewer_id="anonymous"):
     """Get the cache key for a public profile."""
     return f"public_profile:{username}:v0:viewer:{viewer_id}"
-
 
 def get_profile_cache_version(username):
     """Get the current cache version for a user's profile."""

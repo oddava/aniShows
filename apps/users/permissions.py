@@ -1,6 +1,5 @@
 from rest_framework.exceptions import PermissionDenied
 
-
 class EmailVerificationMixin:
     """
     Mixin to enforce email verification across viewsets.

@@ -21,7 +21,6 @@ from django.db.models.signals import post_save
 
 User = get_user_model()
 
-
 class SeasonalAnimeTests(APITestCase):
     """Tests for seasonal anime filtering and API."""
 
@@ -201,7 +200,6 @@ class SeasonalAnimeTests(APITestCase):
         # Should have pagination metadata
         self.assertIn("count", response.data or {})
         self.assertIn("results", response.data or {})
-
 
 class SeasonalEdgeCasesTests(APITestCase):
     """Tests for edge cases in seasonal filtering."""

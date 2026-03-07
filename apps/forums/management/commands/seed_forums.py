@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
 from apps.forums.models import Category, Tag
 
-
 class Command(BaseCommand):
     help = 'Seed the forums with initial categories and tags'
 

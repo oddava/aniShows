@@ -11,7 +11,6 @@ admin.site.site_header = "aniShows Administration"
 admin.site.site_title = "aniShows Admin Portal"
 admin.site.index_title = "Welcome to aniShows Admin"
 
-
 @admin.register(SystemLog)
 class SystemLogAdmin(admin.ModelAdmin):
     """Admin for system logs."""
@@ -134,7 +133,6 @@ class SystemLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
-
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
@@ -297,7 +295,6 @@ class AuditLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
-
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     """Admin for user notifications."""
@@ -334,7 +331,6 @@ class NotificationAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
-
 
 @admin.register(PushSubscription)
 class PushSubscriptionAdmin(admin.ModelAdmin):

@@ -1,5 +1,4 @@
 from django.contrib.auth.models import AbstractUser
-from django.db import models
 from django.db.models import (
     OneToOneField,
     CASCADE,
@@ -9,6 +8,10 @@ from django.db.models import (
     ImageField,
     BooleanField,
     Index,
+    JSONField,
+    SlugField,
+    SET_NULL,
+    GenericIPAddressField,
 )
 from django.db.models.fields import (
     TextField,
@@ -18,10 +21,11 @@ from django.db.models.fields import (
     DateTimeField,
     DateField,
 )
-from django.conf import settings
-from root.storage_backends import MediaStorage
-from apps.users.utils.file_security import user_avatar_path, user_banner_path, badge_image_path
 from django.utils.text import slugify
+
+from apps.shared.models import CreatedAtMixin
+from apps.users.utils.file_security import user_avatar_path, user_banner_path, badge_image_path
+from root.storage_backends import MediaStorage
 
 
 class CustomUser(AbstractUser):
@@ -29,26 +33,16 @@ class CustomUser(AbstractUser):
 
 
 class UserProfile(Model):
-    user = OneToOneField(settings.AUTH_USER_MODEL, on_delete=CASCADE, db_index=True)
+    user = OneToOneField("users.CustomUser", CASCADE, db_index=True)
     avatar = ImageField(upload_to=user_avatar_path, blank=True, null=True, storage=MediaStorage())
     banner = ImageField(upload_to=user_banner_path, blank=True, null=True, storage=MediaStorage())
     bio = TextField(blank=True, null=True)
     last_username_change = DateTimeField(null=True, blank=True)
     is_private = BooleanField(default=False)
     email_verified = BooleanField(default=False)
-
-    # Reputation points from helpful review votes
     points = IntegerField(default=0)
-
-    # Dynamic social links
-    social_links = models.JSONField(default=list, blank=True)
-
-    # Track last activity for online status
+    social_links = JSONField(default=list, blank=True)
     last_activity = DateTimeField(null=True, blank=True)
-    # preferred_genres = ArrayField(CharField(max_length=50), default=list)
-    # telegram_id = BigIntegerField(null=True, blank=True)
-
-    # Notification preferences
     email_new_episodes = BooleanField(default=True)
     push_new_episodes = BooleanField(default=True)
     push_review_replies = BooleanField(default=True)
@@ -63,8 +57,8 @@ class UserAnimeList(Model):
         dropped = "Dropped"
         plan_to_watch = "Plan to Watch"
 
-    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="anime_lists")
-    anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="user_lists")
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="anime_lists")
+    anime = ForeignKey("anime.Anime", CASCADE, related_name="user_lists")
     status = CharField(max_length=20, choices=UserAnimeStatus.choices)
     score = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
@@ -92,9 +86,7 @@ class UserAnimeList(Model):
         return f"{self.user.username} - {self.anime.title} ({self.status})"
 
 
-class UserActivity(Model):
-    """Log individual activity events for heatmap and activity feed."""
-
+class UserActivity(CreatedAtMixin, Model):
     class ActivityType(TextChoices):
         ADDED = "added", "Added to List"
         STATUS_CHANGE = "status_change", "Status Changed"
@@ -105,22 +97,16 @@ class UserActivity(Model):
         REWATCHING = "rewatching", "Started Rewatching"
         NOTES_UPDATE = "notes_update", "Notes Updated"
 
-    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="activities")
-    anime = ForeignKey("anime.Anime", on_delete=CASCADE, related_name="user_activities")
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="activities")
+    anime = ForeignKey("anime.Anime", CASCADE, related_name="user_activities")
     activity_type = CharField(max_length=20, choices=ActivityType.choices)
-
-    # Snapshot fields — what changed
     old_status = CharField(max_length=20, blank=True, null=True)
     new_status = CharField(max_length=20, blank=True, null=True)
     old_episodes = IntegerField(null=True, blank=True)
     new_episodes = IntegerField(null=True, blank=True)
     old_score = IntegerField(null=True, blank=True)
     new_score = IntegerField(null=True, blank=True)
-
-    # User-provided detail
     notes = TextField(blank=True, default="")
-
-    created_at = DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -135,40 +121,29 @@ class UserActivity(Model):
         return f"{self.user.username} - {self.activity_type} - {self.anime.title}"
 
 
-class UserImportJob(models.Model):
-    """Track async import jobs for users"""
-
-    class ImportStatus(models.TextChoices):
+class UserImportJob(CreatedAtMixin, Model):
+    class ImportStatus(TextChoices):
         pending = "pending", "Pending"
         processing = "processing", "Processing"
         completed = "completed", "Completed"
         failed = "failed", "Failed"
 
-    class ImportSource(models.TextChoices):
+    class ImportSource(TextChoices):
         myanimelist_api = "mal_api", "MyAnimeList API"
         myanimelist_xml = "mal_xml", "MyAnimeList XML"
         anilist = "anilist", "AniList"
 
-    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="import_jobs")
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="import_jobs")
     source = CharField(max_length=20, choices=ImportSource.choices)
     status = CharField(max_length=20, choices=ImportStatus.choices, default=ImportStatus.pending)
-
-    # Progress tracking
     total_entries = IntegerField(default=0)
     processed_entries = IntegerField(default=0)
     imported_entries = IntegerField(default=0)
     skipped_entries = IntegerField(default=0)
     failed_entries = IntegerField(default=0)
-    fetched_entries = IntegerField(default=0)  # Anime fetched from external API
-
-    # Error tracking
-    errors = models.JSONField(default=list, blank=True)
-
-    # Source identifier (username, file path, etc.)
+    fetched_entries = IntegerField(default=0)
+    errors = JSONField(default=list, blank=True)
     source_identifier = CharField(max_length=255, blank=True)
-
-    # Timestamps
-    created_at = DateTimeField(auto_now_add=True)
     started_at = DateTimeField(null=True, blank=True)
     completed_at = DateTimeField(null=True, blank=True)
 
@@ -189,12 +164,9 @@ class UserImportJob(models.Model):
         return int((self.processed_entries / self.total_entries) * 100)
 
 
-class UserFollow(Model):
-    """Track user following relationships"""
-
-    follower = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="following")
-    following = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="followers")
-    created_at = DateTimeField(auto_now_add=True)
+class UserFollow(CreatedAtMixin, Model):
+    follower = ForeignKey("users.CustomUser", CASCADE, related_name="following")
+    following = ForeignKey("users.CustomUser", CASCADE, related_name="followers")
 
     class Meta:
         unique_together = ("follower", "following")
@@ -202,8 +174,8 @@ class UserFollow(Model):
         indexes = [
             Index(fields=["follower", "-created_at"]),
             Index(fields=["following", "-created_at"]),
-            Index(fields=["follower", "following"]),  # For checking mutual follows
-            Index(fields=["following", "follower"]),  # For reverse lookups
+            Index(fields=["follower", "following"]),
+            Index(fields=["following", "follower"]),
         ]
 
     def __str__(self):
@@ -211,35 +183,21 @@ class UserFollow(Model):
 
 
 class UserStats(Model):
-    """Materialized view for user statistics - updated every 5 minutes via Celery.
-
-    This table stores pre-calculated statistics to avoid expensive COUNT and SUM
-    queries on the profile page. Data is batch-updated every 5 minutes.
-    """
-
     user = OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=CASCADE,
+        "users.CustomUser",
+        CASCADE,
         related_name="stats",
         primary_key=True,
     )
-
-    # Social stats
     followers_count = IntegerField(default=0)
     following_count = IntegerField(default=0)
-
-    # Anime stats
     anime_count = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
     total_minutes = IntegerField(default=0)
     days_watched = FloatField(default=0.0)
     mean_score = FloatField(null=True, blank=True)
-
-    # Activity stats
     favorites_count = IntegerField(default=0)
     reviews_count = IntegerField(default=0)
-
-    # Metadata
     last_updated = DateTimeField(auto_now=True)
     is_active = BooleanField(default=True)
 
@@ -256,24 +214,20 @@ class UserStats(Model):
 
     @property
     def calculated_days_watched(self):
-        """Calculate days from total minutes."""
         return round(self.total_minutes / 1440.0, 1)
 
 
-class SocialLinkChangeLog(models.Model):
-    """Audit log for social link changes"""
-
-    class ActionChoices(models.TextChoices):
+class SocialLinkChangeLog(CreatedAtMixin, Model):
+    class ActionChoices(TextChoices):
         ADD = "add", "Add"
         EDIT = "edit", "Edit"
         DELETE = "delete", "Delete"
 
-    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="social_link_logs")
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="social_link_logs")
     action = CharField(max_length=20, choices=ActionChoices.choices)
-    old_value = models.JSONField(null=True, blank=True)
-    new_value = models.JSONField(default=dict)
-    ip_address = models.GenericIPAddressField()
-    created_at = DateTimeField(auto_now_add=True)
+    old_value = JSONField(null=True, blank=True)
+    new_value = JSONField(default=dict)
+    ip_address = GenericIPAddressField()
 
     class Meta:
         ordering = ["-created_at"]
@@ -288,11 +242,9 @@ class SocialLinkChangeLog(models.Model):
         return f"{self.user.username} - {self.action} at {self.created_at}"
 
 
-class Badge(Model):
-    """Definition of available badges."""
-
+class Badge(CreatedAtMixin, Model):
     name = CharField(max_length=100)
-    slug = models.SlugField(max_length=100, unique=True, blank=True)
+    slug = SlugField(max_length=100, unique=True, blank=True)
     description = TextField()
     icon = CharField(
         max_length=50, blank=True, help_text="Lucide icon name (e.g., 'award', 'shield')"
@@ -305,11 +257,9 @@ class Badge(Model):
         default=0, help_text="Higher = more prestigious, controls display ordering"
     )
     is_active = BooleanField(default=True, help_text="Whether this badge can still be granted")
-
-    created_at = DateTimeField(auto_now_add=True)
     created_by = ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        "users.CustomUser",
+        SET_NULL,
         null=True,
         related_name="created_badges",
     )
@@ -333,19 +283,15 @@ class Badge(Model):
 
 
 class UserBadge(Model):
-    """M2M through table tracking which user has which badge."""
-
-    user = ForeignKey(settings.AUTH_USER_MODEL, on_delete=CASCADE, related_name="badges")
-    badge = ForeignKey(Badge, on_delete=CASCADE, related_name="user_badges")
-
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="badges")
+    badge = ForeignKey(Badge, CASCADE, related_name="user_badges")
     granted_by = ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        "users.CustomUser",
+        SET_NULL,
         null=True,
         related_name="granted_badges",
     )
     granted_at = DateTimeField(auto_now_add=True)
-
     is_featured = BooleanField(default=False, help_text="User chose to display this badge")
     reason = CharField(
         max_length=255, blank=True, help_text="Optional note for why this was granted"

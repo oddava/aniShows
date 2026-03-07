@@ -1,11 +1,8 @@
+from apps.shared.logger import logger
 """Cache decorators for viewsets and functions."""
 
 from functools import wraps
 from django.core.cache import cache
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 def cached_response(key_func, ttl=300):
     """
@@ -42,7 +39,6 @@ def cached_response(key_func, ttl=300):
 
     return decorator
 
-
 def invalidate_cache(*keys):
     """
     Decorator to invalidate cache keys after successful operation.
@@ -63,7 +59,6 @@ def invalidate_cache(*keys):
         return wrapper
 
     return decorator
-
 
 def cached_queryset(cache_key, ttl=300):
     """

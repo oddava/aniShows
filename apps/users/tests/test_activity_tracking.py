@@ -19,7 +19,6 @@ from apps.users.models import UserAnimeList, UserActivity
 
 User = get_user_model()
 
-
 class ActivitySignalTests(TransactionTestCase):
     """Test that signal handlers create correct activity records.
 
@@ -222,7 +221,6 @@ class ActivitySignalTests(TransactionTestCase):
         # Should have created activity without error
         self.assertTrue(UserActivity.objects.filter(user=self.user, anime=self.anime).exists())
 
-
 class HeatmapAPITests(APITestCase):
     """Test the heatmap API endpoint."""
 
@@ -342,7 +340,6 @@ class HeatmapAPITests(APITestCase):
         response = self.client.get(reverse("activity-heatmap"), {"username": self.user.username})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [])
-
 
 class ActivityFeedAPITests(APITestCase):
     """Test the activity feed API endpoint."""

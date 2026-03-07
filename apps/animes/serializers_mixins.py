@@ -1,13 +1,9 @@
+from apps.shared.logger import logger
 """
 Serializer mixins for common functionality.
 """
 
-import logging
-
 from imagekit.cachefiles import ImageCacheFile
-
-logger = logging.getLogger(__name__)
-
 
 class ImageUrlMixin:
     """
@@ -104,7 +100,6 @@ class ImageUrlMixin:
             return getattr(obj, fallback_field_name, None)
         return None
 
-
 class UserStatusMixin:
     """
     Mixin for serializers that need is_favorite and user_list_status fields.
@@ -135,7 +130,6 @@ class UserStatusMixin:
                 else 0,
             }
         return None
-
 
 class UserProfileMixin:
     """
@@ -173,7 +167,6 @@ class UserProfileMixin:
     def get_points(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.points if profile else 0
-
 
 class BadgesMixin:
     """

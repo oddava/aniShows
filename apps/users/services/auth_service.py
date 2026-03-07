@@ -4,7 +4,6 @@ from typing import Dict
 
 User = get_user_model()
 
-
 class AuthService:
     """Handles authentication business logic."""
 

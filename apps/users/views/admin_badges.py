@@ -1,5 +1,3 @@
-import logging
-
 from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
@@ -8,12 +6,12 @@ from django.utils.text import slugify
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-
-logger = logging.getLogger(__name__)
+from apps.shared.logger import logger
 
 from apps.users.models import Badge, UserBadge
 from apps.animes.serializers import BadgeSerializer
-from apps.core.permissions import IsAdminUser, AdminPagination
+from apps.core.permissions import IsAdminUser
+from apps.shared.pagination import StandardPagination
 from apps.core.models import AuditLog
 from apps.core.services.notification_service import NotificationService
 
@@ -25,7 +23,7 @@ class AdminBadgeViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAdminUser]
     serializer_class = BadgeSerializer
-    pagination_class = AdminPagination
+    pagination_class = StandardPagination
     queryset = Badge.objects.annotate(holders_count=Count("user_badges")).order_by(
         "-priority", "name"
     )
@@ -211,7 +209,7 @@ class AdminBadgeViewSet(viewsets.ModelViewSet):
             .order_by("-granted_at")
         )
 
-        paginator = AdminPagination()
+        paginator = StandardPagination()
         page = paginator.paginate_queryset(user_badges, request)
 
         data = [

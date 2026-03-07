@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Metadata Service for Social Links
 Fetches Open Graph metadata, favicons, and other link information.
@@ -5,14 +6,10 @@ Caches results in Redis for 24 hours.
 """
 
 import httpx
-import logging
 from typing import Optional, Dict
 from datetime import timedelta
 from bs4 import BeautifulSoup
 from django.core.cache import cache
-
-logger = logging.getLogger(__name__)
-
 
 class MetadataService:
     """

@@ -1,5 +1,5 @@
 import re
-from rest_framework import viewsets, permissions, status
+from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -10,7 +10,10 @@ from django.db.models import Exists, OuterRef, Count, Prefetch
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import hashlib
-import logging
+
+from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet
+
+from apps.shared.logger import logger
 from apps.core.utils import get_client_ip
 
 from .models import Category, Thread, Post, Tag, ThreadLike, PostLike
@@ -42,14 +45,9 @@ from apps.core.services.notification_service import NotificationService
 from apps.users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 
 User = get_user_model()
-logger = logging.getLogger(__name__)
 
 
 def _broadcast_to_thread(thread_id, event):
-    """Send a channel layer event to all subscribers of a forum thread.
-
-    Silently ignores failures so forum CRUD is never blocked by WebSocket issues.
-    """
     try:
         channel_layer = get_channel_layer()
         if channel_layer is None:
@@ -82,7 +80,7 @@ def handle_mentions(author, instance, is_thread=False):
             pass
 
 
-class TagViewSet(viewsets.ReadOnlyModelViewSet):
+class TagViewSet(ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = [permissions.AllowAny]
@@ -101,7 +99,7 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
         return response
 
 
-class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+class CategoryViewSet(ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
     serializer_class = CategorySerializer
     lookup_field = "slug"
@@ -143,7 +141,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         return response
 
 
-class ThreadViewSet(viewsets.ModelViewSet):
+class ThreadViewSet(ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["category__slug", "author__username", "tags__slug"]

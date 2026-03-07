@@ -15,7 +15,6 @@ from apps.users.services.cache import (
 
 User = get_user_model()
 
-
 class UserAnimeListViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     serializer_class = UserAnimeListSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]

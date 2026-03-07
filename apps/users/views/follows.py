@@ -1,17 +1,13 @@
-"""
-Views for handling user following/followers functionality.
-"""
-
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
-import logging
 
+from apps.shared.logger import logger
+from apps.shared.pagination import StandardPagination
 from apps.users.models import UserFollow, UserAnimeList
 from apps.animes.models import Anime
 from apps.animes.serializers import (
@@ -21,21 +17,13 @@ from apps.animes.serializers import (
 )
 from apps.users.services.cache import invalidate_user_caches
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
-
-class FollowPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
 
 class FollowViewSet(viewsets.GenericViewSet):
     """Handle follow/unfollow operations and listing followers/following"""
 
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    pagination_class = FollowPagination
+    pagination_class = StandardPagination
 
     @action(detail=False, methods=["POST"])
     def toggle(self, request):

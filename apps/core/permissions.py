@@ -1,20 +1,6 @@
-"""
-Shared admin permissions and pagination for the aniShows admin dashboard.
-"""
-
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import BasePermission
 
-
-class AdminPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
-
 class IsAdminUser(BasePermission):
-    """Custom permission to only allow admin/staff users."""
-
     def has_permission(self, request, view):
         return bool(
             request.user

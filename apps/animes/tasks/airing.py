@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Unified airing workflow task.
 
@@ -9,7 +10,6 @@ Consolidates:
 Into a chained workflow with smart deduplication and batching.
 """
 
-import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 from asgiref.sync import sync_to_async
@@ -20,9 +20,6 @@ from apps.animes.services.anilist import AniListService
 from apps.animes.services.rate_limiting import APICallCache
 from apps.animes.models import Anime
 from .base import BaseTask, run_async_in_task
-
-logger = logging.getLogger(__name__)
-
 
 class AiringWorkflowTask(BaseTask):
     """
@@ -347,7 +344,6 @@ class AiringWorkflowTask(BaseTask):
             }
 
         return summary
-
 
 @shared_task(
     bind=True,

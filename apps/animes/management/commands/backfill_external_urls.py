@@ -12,7 +12,6 @@ from django.db.models import Q
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
 
-
 class Command(BaseCommand):
     help = "Backfill external image URLs for existing anime from AniList"
 

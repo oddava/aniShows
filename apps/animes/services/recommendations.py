@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Recommendation Engine Service
 
@@ -5,7 +6,6 @@ Lightweight content-based recommendation system using SQL and Python math.
 No heavy ML libraries - optimized for free tier hosting.
 """
 
-import logging
 from typing import List, Dict, Tuple
 from collections import defaultdict
 from decimal import Decimal
@@ -16,9 +16,7 @@ from django.contrib.auth import get_user_model
 from apps.animes.models import Anime, UserFavorite, UserHistory, UserRecommendation
 from apps.users.models import UserAnimeList
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 class ContentBasedRecommender:
     """Content-based recommendation using genre, studio, and type similarity"""
@@ -282,7 +280,6 @@ class ContentBasedRecommender:
                 )
 
         return recommendations[:limit]
-
 
 class RecommendationService:
     """Main service for generating and managing recommendations"""

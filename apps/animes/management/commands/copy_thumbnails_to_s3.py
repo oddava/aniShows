@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Copy existing ImageKit thumbnails from local CACHE to MinIO/S3 storage.
 
@@ -14,10 +15,6 @@ from django.core.management.base import BaseCommand
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.conf import settings
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class Command(BaseCommand):
     help = "Copy existing ImageKit thumbnails from local CACHE to MinIO/S3 storage"

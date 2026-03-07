@@ -4,7 +4,6 @@ from django.db.models import Prefetch
 from apps.animes.models import Staff, AnimeCharacter, AnimeStaff
 from apps.animes.serializers import StaffDetailSerializer
 
-
 class StaffViewSet(ReadOnlyModelViewSet):
     """
     Staff detail endpoint.  Only the retrieve (detail) action is meaningful;

@@ -8,7 +8,6 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from celery import chain, group
 
-
 class Command(BaseCommand):
     help = "Unified command for anime synchronization and enrichment tasks"
 

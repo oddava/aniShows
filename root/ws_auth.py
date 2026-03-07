@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 JWT authentication middleware for Django Channels WebSocket connections.
 
@@ -8,7 +9,6 @@ On successful auth, ``scope["user"]`` is set to the authenticated Django user.
 On failure, ``scope["user"]`` is set to ``AnonymousUser``.
 """
 
-import logging
 from urllib.parse import parse_qs
 
 from channels.db import database_sync_to_async
@@ -18,9 +18,7 @@ from django.contrib.auth.models import AnonymousUser
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
-
 
 @database_sync_to_async
 def get_user_from_token(token_str):
@@ -45,7 +43,6 @@ def get_user_from_token(token_str):
     except Exception:
         logger.exception("Unexpected error during WebSocket JWT auth")
         return AnonymousUser()
-
 
 class JWTAuthMiddleware(BaseMiddleware):
     """Channels middleware that authenticates via JWT query parameter.

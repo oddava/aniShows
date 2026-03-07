@@ -6,7 +6,6 @@ import uuid
 import os
 from django.core.exceptions import ValidationError
 
-
 def generate_secure_filename(filename, allowed_extensions=None):
     """
     Generate a secure, random filename to prevent path traversal attacks.
@@ -43,7 +42,6 @@ def generate_secure_filename(filename, allowed_extensions=None):
 
     return f"{secure_name}.{ext}"
 
-
 def user_avatar_path(instance, filename):
     """
     Generate secure upload path for user avatars.
@@ -61,7 +59,6 @@ def user_avatar_path(instance, filename):
     )
 
     return f"avatars/{user_id}/{secure_filename}"
-
 
 def user_banner_path(instance, filename):
     """
@@ -81,7 +78,6 @@ def user_banner_path(instance, filename):
 
     return f"banners/{user_id}/{secure_filename}"
 
-
 def anime_image_path(instance, filename, image_type="cover"):
     """
     Generate secure upload path for anime images.
@@ -99,7 +95,6 @@ def anime_image_path(instance, filename, image_type="cover"):
     )
 
     return f"anime/{image_type}/{anime_id}/{secure_filename}"
-
 
 def badge_image_path(instance, filename):
     """

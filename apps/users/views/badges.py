@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from apps.users.models import UserBadge
 from apps.animes.serializers import UserBadgeSerializer
 
-
 class UserBadgeViewSet(viewsets.GenericViewSet):
     """User-facing API for managing featured badges."""
 

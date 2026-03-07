@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Unified metadata enrichment task.
 
@@ -12,7 +13,6 @@ With support for:
 - Configurable batch sizes
 """
 
-import logging
 from typing import Dict, List, Optional
 from asgiref.sync import sync_to_async
 from celery import shared_task
@@ -21,9 +21,6 @@ from django.db.models import Q
 from apps.animes.services.anilist import AniListService
 from apps.animes.models import Anime
 from .base import BaseTask, run_async_in_task
-
-logger = logging.getLogger(__name__)
-
 
 class MetadataEnrichmentTask(BaseTask):
     """
@@ -199,7 +196,6 @@ class MetadataEnrichmentTask(BaseTask):
                 "no_results": no_results_count,
                 "errors": error_count,
             }
-
 
 @shared_task(
     bind=True,

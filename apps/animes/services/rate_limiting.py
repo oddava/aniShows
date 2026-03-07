@@ -1,3 +1,4 @@
+from apps.shared.logger import logger
 """
 Rate limiting and circuit breaker utilities for AniList API.
 Optimized for small EC2 instances with minimal Redis overhead.
@@ -5,14 +6,10 @@ Optimized for small EC2 instances with minimal Redis overhead.
 
 import asyncio
 import time
-import logging
 from functools import wraps
 from datetime import datetime
 from typing import Optional, Callable, Any
 from django.core.cache import cache
-
-logger = logging.getLogger(__name__)
-
 
 class AniListRateLimiter:
     """
@@ -81,7 +78,6 @@ class AniListRateLimiter:
                     self._local_last_request = time.time()
                     return
                 await asyncio.sleep(self.min_delay)
-
 
 class CircuitBreaker:
     """
@@ -188,7 +184,6 @@ class CircuitBreaker:
         except Exception as e:
             logger.error(f"Failed to record failure: {e}")
 
-
 class APICallCache:
     """
     Cache for API responses to prevent duplicate calls.
@@ -239,7 +234,6 @@ class APICallCache:
             cache.delete(self._get_recent_key(anilist_id))
         except Exception:
             pass
-
 
 def circuit_breaker_protected(
     name: str, failure_threshold: int = 5, recovery_timeout: int = 300
