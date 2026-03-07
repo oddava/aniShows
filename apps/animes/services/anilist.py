@@ -702,14 +702,26 @@ class AniListService:
                 char_desc = node.get("description") or ""
                 char_img = node.get("image", {}).get("large")
 
-                character, _ = Character.objects.update_or_create(
-                    name=char_name,
-                    defaults={
-                        "name_native": char_native or "",
-                        "description": char_desc,
-                        "image_url": char_img,  # Save the remote URL
-                    },
-                )
+                char_anilist_id = node.get("id")
+                if char_anilist_id:
+                    character, _ = Character.objects.update_or_create(
+                        anilist_id=char_anilist_id,
+                        defaults={
+                            "name": char_name,
+                            "name_native": char_native or "",
+                            "description": char_desc,
+                            "image_url": char_img,
+                        },
+                    )
+                else:
+                    character, _ = Character.objects.update_or_create(
+                        name=char_name,
+                        defaults={
+                            "name_native": char_native or "",
+                            "description": char_desc,
+                            "image_url": char_img,
+                        },
+                    )
 
                 # Handle Voice Actor (Japanese)
                 voice_actors = edge.get("voiceActors") or []
@@ -719,11 +731,22 @@ class AniListService:
                     va_name = va_node["name"].get("full")
                     va_native = va_node["name"].get("native")
                     va_img = va_node.get("image", {}).get("large")
+                    va_anilist_id = va_node.get("id")
 
-                    voice_actor, _ = Staff.objects.update_or_create(
-                        name=va_name,
-                        defaults={"name_native": va_native or "", "image_url": va_img},
-                    )
+                    if va_anilist_id:
+                        voice_actor, _ = Staff.objects.update_or_create(
+                            anilist_id=va_anilist_id,
+                            defaults={
+                                "name": va_name,
+                                "name_native": va_native or "",
+                                "image_url": va_img,
+                            },
+                        )
+                    else:
+                        voice_actor, _ = Staff.objects.update_or_create(
+                            name=va_name,
+                            defaults={"name_native": va_native or "", "image_url": va_img},
+                        )
 
                 # Link Anime -> Character
                 role_map = {
@@ -748,11 +771,22 @@ class AniListService:
                 staff_name = node["name"].get("full")
                 staff_native = node["name"].get("native")
                 staff_img = node.get("image", {}).get("large")
+                staff_anilist_id = node.get("id")
 
-                staff_member, _ = Staff.objects.update_or_create(
-                    name=staff_name,
-                    defaults={"name_native": staff_native or "", "image_url": staff_img},
-                )
+                if staff_anilist_id:
+                    staff_member, _ = Staff.objects.update_or_create(
+                        anilist_id=staff_anilist_id,
+                        defaults={
+                            "name": staff_name,
+                            "name_native": staff_native or "",
+                            "image_url": staff_img,
+                        },
+                    )
+                else:
+                    staff_member, _ = Staff.objects.update_or_create(
+                        name=staff_name,
+                        defaults={"name_native": staff_native or "", "image_url": staff_img},
+                    )
 
                 AnimeStaff.objects.update_or_create(
                     anime=anime,

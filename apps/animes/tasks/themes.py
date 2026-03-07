@@ -261,7 +261,6 @@ class ThemeSongSyncTask(BaseTask):
                         count = await self._save_theme_songs(anime, themes)
                         stats["themes_loaded"] += count
                         stats["with_themes"] += 1
-                        rate_limiter.record_success()
 
                         logger.info(
                             f"✓ ({i + 1}/{total}) {anime.title}: {count} themes "
@@ -270,7 +269,6 @@ class ThemeSongSyncTask(BaseTask):
                     else:
                         # No themes available - mark as checked but don't create placeholder
                         stats["without_themes"] += 1
-                        rate_limiter.record_success()
                         logger.info(f"⚠ ({i + 1}/{total}) {anime.title}: No themes available")
 
                     # Progress indicator every 10 anime

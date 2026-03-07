@@ -50,6 +50,7 @@ class Studio(Model):
 
 
 class Character(Model):
+    anilist_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
     name = CharField(max_length=200)
     name_native = CharField(max_length=200, blank=True)
     image = ImageField(upload_to="characters/", blank=True, null=True, storage=MediaStorage())
@@ -76,6 +77,7 @@ class Character(Model):
 
 
 class Staff(Model):
+    anilist_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
     name = CharField(max_length=200)
     name_native = CharField(max_length=200, blank=True)
     image = ImageField(upload_to="staff/", blank=True, null=True, storage=MediaStorage())

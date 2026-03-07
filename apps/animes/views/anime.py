@@ -911,15 +911,27 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     char_native = node.get("name", {}).get("native") or ""
                     char_desc = node.get("description") or ""
                     char_img = node.get("image", {}).get("large")
+                    char_anilist_id = node.get("id")
 
-                    character, _ = Character.objects.update_or_create(
-                        name=char_name,
-                        defaults={
-                            "name_native": char_native,
-                            "description": char_desc,
-                            "image_url": char_img,
-                        },
-                    )
+                    if char_anilist_id:
+                        character, _ = Character.objects.update_or_create(
+                            anilist_id=char_anilist_id,
+                            defaults={
+                                "name": char_name,
+                                "name_native": char_native,
+                                "description": char_desc,
+                                "image_url": char_img,
+                            },
+                        )
+                    else:
+                        character, _ = Character.objects.update_or_create(
+                            name=char_name,
+                            defaults={
+                                "name_native": char_native,
+                                "description": char_desc,
+                                "image_url": char_img,
+                            },
+                        )
 
                     # Handle voice actor (Japanese)
                     voice_actors = edge.get("voiceActors", [])
@@ -930,10 +942,21 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                         if va_name:
                             va_native = va_node.get("name", {}).get("native") or ""
                             va_img = va_node.get("image", {}).get("large")
-                            voice_actor, _ = Staff.objects.update_or_create(
-                                name=va_name,
-                                defaults={"name_native": va_native, "image_url": va_img},
-                            )
+                            va_anilist_id = va_node.get("id")
+                            if va_anilist_id:
+                                voice_actor, _ = Staff.objects.update_or_create(
+                                    anilist_id=va_anilist_id,
+                                    defaults={
+                                        "name": va_name,
+                                        "name_native": va_native,
+                                        "image_url": va_img,
+                                    },
+                                )
+                            else:
+                                voice_actor, _ = Staff.objects.update_or_create(
+                                    name=va_name,
+                                    defaults={"name_native": va_native, "image_url": va_img},
+                                )
 
                     role_map = {
                         "MAIN": AnimeCharacter.Role.MAIN,
@@ -962,11 +985,22 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
                     staff_native = node.get("name", {}).get("native") or ""
                     staff_img = node.get("image", {}).get("large")
+                    staff_anilist_id = node.get("id")
 
-                    staff_member, _ = Staff.objects.update_or_create(
-                        name=staff_name,
-                        defaults={"name_native": staff_native, "image_url": staff_img},
-                    )
+                    if staff_anilist_id:
+                        staff_member, _ = Staff.objects.update_or_create(
+                            anilist_id=staff_anilist_id,
+                            defaults={
+                                "name": staff_name,
+                                "name_native": staff_native,
+                                "image_url": staff_img,
+                            },
+                        )
+                    else:
+                        staff_member, _ = Staff.objects.update_or_create(
+                            name=staff_name,
+                            defaults={"name_native": staff_native, "image_url": staff_img},
+                        )
 
                     AnimeStaff.objects.update_or_create(
                         anime=anime,

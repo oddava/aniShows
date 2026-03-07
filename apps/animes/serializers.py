@@ -173,6 +173,87 @@ class AnimeStaffSerializer(ModelSerializer):
         fields = ["id", "staff", "role"]
 
 
+# ── Staff Detail Serializers (for /staff/<id>/ endpoint) ──
+
+
+class StaffVoiceRoleAnimeSerializer(ImageUrlMixin, ModelSerializer):
+    """Minimal anime serializer for staff detail voice roles."""
+
+    cover_image_small = SerializerMethodField()
+
+    class Meta:
+        model = Anime
+        fields = ["id", "title", "slug", "cover_image_small"]
+
+    def get_cover_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_small", "cover_image", "cover_image_external_url"
+        )
+
+
+class StaffVoiceRoleCharacterSerializer(ImageUrlMixin, ModelSerializer):
+    """Minimal character serializer for staff detail voice roles."""
+
+    image = SerializerMethodField()
+
+    class Meta:
+        model = Character
+        fields = ["id", "name", "name_native", "image"]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
+
+
+class StaffVoiceRoleSerializer(ModelSerializer):
+    """Serializer for a voice role entry on the staff detail page."""
+
+    anime = StaffVoiceRoleAnimeSerializer(read_only=True)
+    character = StaffVoiceRoleCharacterSerializer(read_only=True)
+
+    class Meta:
+        model = AnimeCharacter
+        fields = ["id", "anime", "character", "role"]
+
+
+class StaffProductionCreditSerializer(ModelSerializer):
+    """Serializer for a production credit entry on the staff detail page."""
+
+    anime = StaffVoiceRoleAnimeSerializer(read_only=True)
+
+    class Meta:
+        model = AnimeStaff
+        fields = ["id", "anime", "role"]
+
+
+class StaffDetailSerializer(ImageUrlMixin, ModelSerializer):
+    """Full serializer for the staff detail page."""
+
+    image = SerializerMethodField()
+    image_medium = SerializerMethodField()
+    voice_roles = StaffVoiceRoleSerializer(many=True, read_only=True)
+    production_credits = StaffProductionCreditSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Staff
+        fields = [
+            "id",
+            "anilist_id",
+            "name",
+            "name_native",
+            "image",
+            "image_medium",
+            "description",
+            "voice_roles",
+            "production_credits",
+        ]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
+
+    def get_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
+
+
 class ThemeSongSerializer(ModelSerializer):
     """Serializer for anime theme songs (openings and endings)"""
 

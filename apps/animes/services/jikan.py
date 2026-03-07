@@ -176,6 +176,7 @@ async def fetch_themes_from_jikan(
                 endings = themes.get('endings', [])
     """
     url = f"{JIKAN_BASE_URL}/anime/{mal_id}/themes"
+    transient_status_codes = {500, 502, 503, 504}
 
     for attempt in range(max_retries + 1):
         try:
@@ -185,12 +186,10 @@ async def fetch_themes_from_jikan(
             if response.status_code == 429:
                 rate_limiter.record_429()
 
-                # Try to get retry-after header
                 retry_after = response.headers.get("Retry-After")
                 if retry_after:
                     wait_time = float(retry_after)
                 else:
-                    # Exponential backoff with jitter
                     wait_time = min(2**attempt + random.uniform(0, 2), 60)
 
                 if attempt < max_retries:
@@ -200,25 +199,31 @@ async def fetch_themes_from_jikan(
                     )
                     await asyncio.sleep(wait_time)
                     continue
-                else:
-                    logger.error(f"Jikan 429 max retries exceeded for MAL ID {mal_id}")
-                    return None
 
-            # Handle server errors with retry
-            if response.status_code >= 500:
+                logger.error(f"Jikan 429 max retries exceeded for MAL ID {mal_id}")
+                return None
+
+            # Handle transient upstream/server errors with retry
+            if response.status_code in transient_status_codes:
+                rate_limiter.record_error()
                 if attempt < max_retries:
-                    wait_time = min(2**attempt, 10)
+                    wait_time = min(2**attempt + random.uniform(0, 1), 15)
                     logger.warning(
-                        f"Jikan server error {response.status_code}, "
-                        f"retrying in {wait_time:.1f}s"
+                        f"Jikan transient error {response.status_code} for MAL ID {mal_id}, "
+                        f"retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})"
                     )
                     await asyncio.sleep(wait_time)
                     continue
 
+                logger.warning(
+                    f"Jikan transient error {response.status_code} max retries exceeded "
+                    f"for MAL ID {mal_id}"
+                )
+                return None
+
             response.raise_for_status()
             data = response.json().get("data", {})
 
-            # Record success
             rate_limiter.record_success()
 
             return {
@@ -226,12 +231,31 @@ async def fetch_themes_from_jikan(
                 "endings": data.get("endings", []),
             }
 
-        except httpx.HTTPError as e:
-            logger.error(f"Jikan HTTP error for MAL ID {mal_id}: {e}")
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            rate_limiter.record_error()
             if attempt < max_retries:
-                wait_time = min(2**attempt, 10)
+                wait_time = min(2**attempt + random.uniform(0, 1), 15)
+                logger.warning(
+                    f"Jikan network timeout for MAL ID {mal_id}: {e}. "
+                    f"Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})"
+                )
                 await asyncio.sleep(wait_time)
                 continue
+
+            logger.warning(f"Jikan network timeout max retries exceeded for MAL ID {mal_id}: {e}")
+            return None
+        except httpx.HTTPError as e:
+            rate_limiter.record_error()
+            if attempt < max_retries:
+                wait_time = min(2**attempt + random.uniform(0, 1), 15)
+                logger.warning(
+                    f"Jikan HTTP error for MAL ID {mal_id}: {e}. "
+                    f"Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})"
+                )
+                await asyncio.sleep(wait_time)
+                continue
+
+            logger.error(f"Jikan HTTP error max retries exceeded for MAL ID {mal_id}: {e}")
             return None
         except Exception as e:
             logger.error(f"Unexpected error fetching themes for MAL ID {mal_id}: {e}")

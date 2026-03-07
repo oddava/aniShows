@@ -251,6 +251,10 @@ export const studioApi = {
     getAll: () => api.get('/studios/'),
 };
 
+export const staffApi = {
+    getById: (id, signal) => api.get(`/staff/${id}/`, { signal }),
+};
+
 export const authApi = {
     login: (credentials) => api.post('/auth/login/', credentials),
     register: (data) => api.post('/auth/register/', data),
