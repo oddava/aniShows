@@ -9,11 +9,8 @@ from rest_framework.routers import DefaultRouter
 from .views import health_check
 from .views.celery_admin import (
     CeleryTaskResultViewSet,
-    CeleryTaskTriggerView,
-    CeleryTaskControlView,
-    CeleryWorkerStatusView,
     CeleryTaskScheduleViewSet,
-    CeleryDashboardView,
+    CeleryAdminControlViewSet,
 )
 
 # Import admin views from both domain apps
@@ -72,18 +69,27 @@ urlpatterns = [
     path("admin/celery/", include(celery_router.urls)),
     path(
         "admin/celery/dashboard/",
-        CeleryDashboardView.as_view(),
+        CeleryAdminControlViewSet.as_view({"get": "dashboard"}),
         name="celery-dashboard",
     ),
     path(
         "admin/celery/tasks/trigger/",
-        CeleryTaskTriggerView.as_view(),
+        CeleryAdminControlViewSet.as_view({"post": "trigger_task"}),
         name="celery-task-trigger",
     ),
     path(
-        "admin/celery/tasks/<str:task_id>/control/",
-        CeleryTaskControlView.as_view(),
+        "admin/celery/tasks/control/",
+        CeleryAdminControlViewSet.as_view({"post": "control_task"}),
         name="celery-task-control",
     ),
-    path("admin/celery/workers/", CeleryWorkerStatusView.as_view(), name="celery-workers"),
+    path(
+        "admin/celery/workers/", 
+        CeleryAdminControlViewSet.as_view({"get": "worker_status"}), 
+        name="celery-workers"
+    ),
+    path(
+        "admin/celery/workers/control/",
+        CeleryAdminControlViewSet.as_view({"post": "worker_control"}),
+        name="celery-workers-control"
+    ),
 ]

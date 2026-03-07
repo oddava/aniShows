@@ -6,6 +6,8 @@ from django.utils.text import slugify
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
+
 from apps.shared.logger import logger
 
 from apps.users.models import Badge, UserBadge
@@ -18,7 +20,7 @@ from apps.core.services.notification_service import NotificationService
 User = get_user_model()
 
 
-class AdminBadgeViewSet(viewsets.ModelViewSet):
+class AdminBadgeViewSet(ModelViewSet):
     """Admin CRUD operations for Badges."""
 
     permission_classes = [IsAdminUser]

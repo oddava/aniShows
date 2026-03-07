@@ -1,8 +1,11 @@
-from rest_framework import viewsets, status, serializers
+from rest_framework import viewsets, status, serializers, generics
 from rest_framework.decorators import action
+from rest_framework.fields import CharField, JSONField, BooleanField
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.serializers import ModelSerializer, Serializer
 from rest_framework.views import APIView
+from rest_framework.viewsets import GenericViewSet
 
 from apps.shared.logger import logger
 from apps.shared.pagination import StandardPagination
@@ -10,7 +13,7 @@ from apps.core.models import Notification, PushSubscription
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
 
-class NotificationSerializer(serializers.ModelSerializer):
+class NotificationSerializer(ModelSerializer):
     class Meta:
         model = Notification
         fields = [
@@ -25,20 +28,26 @@ class NotificationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "read_at"]
 
-class PushSubscriptionSerializer(serializers.ModelSerializer):
-    endpoint = serializers.CharField(required=True)
-    p256dh = serializers.CharField(required=True)
-    auth = serializers.CharField(required=True)
-    device_type = serializers.CharField(default="browser")
-    device_info = serializers.JSONField(required=False, default=dict)
+class PushSubscriptionSerializer(ModelSerializer):
+    endpoint = CharField(required=True)
+    p256dh = CharField(required=True)
+    auth = CharField(required=True)
+    device_type = CharField(default="browser")
+    device_info = JSONField(required=False, default=dict)
 
-class NotificationPreferencesSerializer(serializers.Serializer):
-    email_new_episodes = serializers.BooleanField()
-    push_new_episodes = serializers.BooleanField()
-    push_review_replies = serializers.BooleanField()
-    push_new_follower = serializers.BooleanField()
+    class Meta:
+        model = PushSubscription
+        fields = ["id", "endpoint", "p256dh", "auth", "device_type", "device_info", "created_at"]
 
-class NotificationViewSet(viewsets.GenericViewSet):
+
+class NotificationPreferencesSerializer(Serializer):
+    email_new_episodes = BooleanField()
+    push_new_episodes = BooleanField()
+    push_review_replies = BooleanField()
+    push_new_follower = BooleanField()
+
+
+class NotificationViewSet(GenericViewSet):
     """ViewSet for managing user notifications."""
 
     serializer_class = NotificationSerializer
@@ -102,17 +111,22 @@ class NotificationViewSet(viewsets.GenericViewSet):
         except Notification.DoesNotExist:
             return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
 
-class NotificationPreferenceView(APIView):
+
+class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
     """View for managing notification preferences."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = NotificationPreferencesSerializer
 
-    def get(self, request):
+    def get_object(self):
+        return self.request.user.userprofile
+
+    def get(self, request, *args, **kwargs):
         """Get current notification preferences."""
         try:
-            profile = request.user.userprofile
+            profile = self.get_object()
             # Use getattr with defaults to handle missing fields during migration
-            serializer = NotificationPreferencesSerializer(
+            serializer = self.get_serializer(
                 {
                     "email_new_episodes": getattr(profile, "email_new_episodes", True),
                     "push_new_episodes": getattr(profile, "push_new_episodes", True),
@@ -128,40 +142,21 @@ class NotificationPreferenceView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def put(self, request):
+    def update(self, request, *args, **kwargs):
         """Update notification preferences."""
-        serializer = NotificationPreferencesSerializer(data=request.data)
+        profile = self.get_object()
+        serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            profile = request.user.userprofile
             data = serializer.validated_data
 
-            # Only update fields that exist in the model
-            if hasattr(profile, "email_new_episodes"):
-                profile.email_new_episodes = data.get(
-                    "email_new_episodes", profile.email_new_episodes
-                )
-            if hasattr(profile, "push_new_episodes"):
-                profile.push_new_episodes = data.get("push_new_episodes", profile.push_new_episodes)
-            if hasattr(profile, "push_review_replies"):
-                profile.push_review_replies = data.get(
-                    "push_review_replies", profile.push_review_replies
-                )
-            if hasattr(profile, "push_new_follower"):
-                profile.push_new_follower = data.get("push_new_follower", profile.push_new_follower)
-
-            # Only save fields that actually exist
             update_fields = []
-            if hasattr(profile, "email_new_episodes"):
-                update_fields.append("email_new_episodes")
-            if hasattr(profile, "push_new_episodes"):
-                update_fields.append("push_new_episodes")
-            if hasattr(profile, "push_review_replies"):
-                update_fields.append("push_review_replies")
-            if hasattr(profile, "push_new_follower"):
-                update_fields.append("push_new_follower")
+            for field in ["email_new_episodes", "push_new_episodes", "push_review_replies", "push_new_follower"]:
+                if hasattr(profile, field) and field in data:
+                    setattr(profile, field, data[field])
+                    update_fields.append(field)
 
             if update_fields:
                 profile.save(update_fields=update_fields)
@@ -174,14 +169,19 @@ class NotificationPreferenceView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-class PushSubscriptionView(APIView):
-    """View for managing push subscriptions."""
+
+class PushSubscriptionViewSet(GenericViewSet):
+    """ViewSet for managing push subscriptions."""
 
     permission_classes = [IsAuthenticated]
+    serializer_class = PushSubscriptionSerializer
 
-    def post(self, request):
+    def get_queryset(self):
+        return PushSubscription.objects.filter(user=self.request.user, is_active=True)
+
+    def create(self, request, *args, **kwargs):
         """Register a new push subscription."""
-        serializer = PushSubscriptionSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -206,7 +206,8 @@ class PushSubscriptionView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def delete(self, request):
+    @action(detail=False, methods=["delete"])
+    def unsubscribe(self, request):
         """Unsubscribe from push notifications."""
         endpoint = request.data.get("endpoint")
         if not endpoint:
@@ -217,9 +218,9 @@ class PushSubscriptionView(APIView):
             return Response({"status": "unsubscribed"})
         return Response({"error": "Subscription not found"}, status=status.HTTP_404_NOT_FOUND)
 
-    def get(self, request):
+    def list(self, request, *args, **kwargs):
         """Get user's active push subscriptions."""
-        subscriptions = PushSubscription.objects.filter(user=request.user, is_active=True).values(
+        subscriptions = self.get_queryset().values(
             "id", "device_type", "device_info", "created_at"
         )
         return Response(list(subscriptions))

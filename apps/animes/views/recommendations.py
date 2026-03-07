@@ -1,25 +1,22 @@
-from rest_framework import viewsets, permissions
+from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.cache import cache
+from rest_framework.viewsets import ViewSet
 
 from apps.animes.serializers import UserRecommendationSerializer
 from apps.shared.logger import logger
 
-class RecommendationsViewSet(viewsets.ViewSet):
+class RecommendationsViewSet(ViewSet):
     """Personalized anime recommendations for authenticated users"""
 
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
-        """Get personalized recommendations for the current user"""
         from apps.animes.services.recommendations import RecommendationService
 
-        # Get limit parameter
         limit = int(request.query_params.get("limit", 12))
 
-        # Always cache a generous set and slice to requested limit in Python,
-        # so different ?limit= values share one cache entry per user.
         cache_key = f"user_recommendations:{request.user.id}"
         cached_data = cache.get(cache_key)
 
@@ -27,7 +24,6 @@ class RecommendationsViewSet(viewsets.ViewSet):
             return Response(cached_data[:limit])
 
         try:
-            # Fetch a large batch to cache (covers most limit values)
             max_cache_limit = max(limit, 30)
             service = RecommendationService()
             recs = service.get_recommendations_for_user(request.user, limit=max_cache_limit)
@@ -36,7 +32,6 @@ class RecommendationsViewSet(viewsets.ViewSet):
 
             data = serializer.data
 
-            # Cache for 1 hour
             cache.set(cache_key, data, 60 * 60)
 
             return Response(data[:limit])
@@ -50,15 +45,12 @@ class RecommendationsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["post"])
     def refresh(self, request):
-        """Force refresh recommendations for the current user"""
         from apps.animes.services.recommendations import RecommendationService
 
         try:
-            # Clear cache
             cache_key = f"user_recommendations:{request.user.id}"
             cache.delete(cache_key)
 
-            # Generate new recommendations
             service = RecommendationService()
             recs = service.generate_for_user(request.user)
 
@@ -78,7 +70,6 @@ class RecommendationsViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=["post"])
     def dismiss(self, request, pk=None):
-        """Dismiss a recommendation (hide it from future results)"""
         from apps.animes.services.recommendations import RecommendationService
 
         try:
@@ -87,7 +78,6 @@ class RecommendationsViewSet(viewsets.ViewSet):
             success = service.dismiss_recommendation(request.user, anime_id)
 
             if success:
-                # Clear cache so dismissed item doesn't appear
                 cache_key = f"user_recommendations:{request.user.id}"
                 cache.delete(cache_key)
 

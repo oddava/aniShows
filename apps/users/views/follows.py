@@ -1,10 +1,11 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
+from rest_framework.viewsets import GenericViewSet
 
 from apps.shared.logger import logger
 from apps.shared.pagination import StandardPagination
@@ -19,7 +20,7 @@ from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()
 
-class FollowViewSet(viewsets.GenericViewSet):
+class FollowViewSet(GenericViewSet):
     """Handle follow/unfollow operations and listing followers/following"""
 
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]

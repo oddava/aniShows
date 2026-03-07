@@ -23,7 +23,6 @@ import time
 from contextlib import contextmanager
 from typing import Optional, Callable
 
-# Try to import prometheus_client, provide fallback if not available
 try:
     from prometheus_client import Counter, Histogram, Gauge, Info
     from prometheus_client import multiprocess
@@ -31,7 +30,6 @@ try:
 
     PROMETHEUS_AVAILABLE = True
 
-    # Setup multi-process mode if PROMETHEUS_MULTIPROC_DIR is set
     if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
         from prometheus_client import REGISTRY
 
@@ -46,7 +44,6 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
     logger.warning("prometheus_client not installed - metrics disabled")
 
-    # Create dummy classes for when prometheus is not available
     class DummyMetric:
         def __init__(self, *args, **kwargs):
             pass
@@ -68,7 +65,6 @@ except ImportError:
     Gauge = DummyMetric
     Info = DummyMetric
 
-# Task execution metrics
 TASK_EXECUTION_TIME = Histogram(
     "celery_task_execution_time_seconds",
     "Time spent executing Celery tasks",
@@ -101,15 +97,11 @@ TASK_RETRY_COUNT = Counter(
     "Total number of Celery task retries",
     ["task_name"],
 )
-
-# Queue metrics
 QUEUE_SIZE = Gauge(
     "celery_queue_size",
     "Current number of tasks in queue",
     ["queue_name"],
 )
-
-# Worker metrics
 WORKER_TASKS_PROCESSED = Counter(
     "celery_worker_tasks_processed_total",
     "Total tasks processed by worker",

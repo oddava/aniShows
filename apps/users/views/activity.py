@@ -1,9 +1,10 @@
-from rest_framework import viewsets, permissions
+from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.core.cache import cache as redis_cache
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from apps.users.models import UserActivity
 from apps.animes.serializers import UserActivitySerializer
@@ -23,7 +24,7 @@ def _check_privacy(target_user, request_user):
     profile = getattr(target_user, "userprofile", None)
     return profile and profile.is_private
 
-class UserActivityViewSet(viewsets.ReadOnlyModelViewSet):
+class UserActivityViewSet(ReadOnlyModelViewSet):
     """Read-only viewset for user activity feed and heatmap data."""
 
     serializer_class = UserActivitySerializer

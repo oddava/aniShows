@@ -10,37 +10,25 @@ from .views import (
     CustomTokenObtainPairView,
     RegisterView,
     LoggingTokenRefreshView,
-    VerifyEmailView,
-    ResendVerificationView,
-    PasswordResetView,
-    PasswordResetConfirmView,
-    ChangePasswordView,
+    AuthViewSet,
     UserProfileView,
     UserStatsView,
     PublicUserProfileViewSet,
     FollowViewSet,
     UserAnimeListViewSet,
     UserActivityViewSet,
-    DeleteAccountView,
-    ChangeEmailView,
-    ConfirmEmailChangeView,
+    AccountManagementViewSet,
     UserBadgeViewSet,
 )
 from .views.google import GoogleLogin
 from .views.notifications import (
     NotificationViewSet,
     NotificationPreferenceView,
-    PushSubscriptionView,
+    PushSubscriptionViewSet,
 )
 from .views.import_export import (
-    ImportJobCancelView,
-    ImportMALView,
-    ImportMALXMLView,
-    ImportAniListView,
-    ImportJobStatusView,
-    ImportJobListView,
-    ExportUserDataView,
-    ExportUserDataJSONView,
+    ImportExportViewSet,
+    UserImportJobViewSet,
 )
 
 router = DefaultRouter()
@@ -52,16 +40,15 @@ router.register(r"notifications", NotificationViewSet, basename="notifications")
 router.register(r"badges", UserBadgeViewSet, basename="user-badges")
 
 urlpatterns = [
-    # User profile - me endpoints must come before username lookup
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
     path("users/me/stats/", UserStatsView.as_view(), name="user_stats"),
-    # Public user profile lookup by username (must come after me/)
     path(
         "users/<str:username>/",
         PublicUserProfileViewSet.as_view({"get": "retrieve"}),
         name="public_user_profile",
     ),
-    # Notification endpoints (must be before router to avoid conflicts)
+    
+    # Notification preferences & Push mapping
     path(
         "notifications/preferences/",
         NotificationPreferenceView.as_view(),
@@ -69,55 +56,109 @@ urlpatterns = [
     ),
     path(
         "notifications/subscribe/",
-        PushSubscriptionView.as_view(),
+        PushSubscriptionViewSet.as_view({"post": "create"}),
         name="push_subscribe",
     ),
-    # Router URLs
+    path(
+        "notifications/unsubscribe/",
+        PushSubscriptionViewSet.as_view({"delete": "unsubscribe"}),
+        name="push_unsubscribe",
+    ),
+    
+    # Router URLs covers: users, follows, lists, activity, notifications, badges
     path("", include(router.urls)),
-    # Authentication
+    
+    # Core Auth (Obtain Pair, Refresh, Register)
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", LoggingTokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/google/", GoogleLogin.as_view(), name="google_login"),
+    
+    # Auth Workflow Routes (Verify Email, Resend, Reset Password)
     path(
         "verify-email/<str:uid>/<str:token>/",
-        VerifyEmailView.as_view(),
+        AuthViewSet.as_view({"get": "verify_email", "post": "verify_email"}),
         name="verify_email",
     ),
     path(
         "auth/resend-verification/",
-        ResendVerificationView.as_view(),
+        AuthViewSet.as_view({"post": "resend_verification"}),
         name="resend_verification",
     ),
-    path("auth/password-reset/", PasswordResetView.as_view(), name="password_reset"),
+    path(
+        "auth/password-reset/", 
+        AuthViewSet.as_view({"post": "password_reset"}), 
+        name="password_reset"
+    ),
     path(
         "auth/password-reset-confirm/",
-        PasswordResetConfirmView.as_view(),
+        AuthViewSet.as_view({"post": "password_reset_confirm"}),
         name="password_reset_confirm",
     ),
-    path("auth/change-password/", ChangePasswordView.as_view(), name="change_password"),
-    path("auth/delete-account/", DeleteAccountView.as_view(), name="delete_account"),
-    path("auth/change-email/", ChangeEmailView.as_view(), name="change_email"),
+    
+    # Account Management Routes (Password, Email, Delete)
+    path(
+        "auth/change-password/", 
+        AccountManagementViewSet.as_view({"post": "change_password"}), 
+        name="change_password"
+    ),
+    path(
+        "auth/delete-account/", 
+        AccountManagementViewSet.as_view({"delete": "delete_account"}), 
+        name="delete_account"
+    ),
+    path(
+        "auth/change-email/", 
+        AccountManagementViewSet.as_view({"post": "change_email"}), 
+        name="change_email"
+    ),
     path(
         "auth/confirm-email-change/",
-        ConfirmEmailChangeView.as_view(),
+        AccountManagementViewSet.as_view({"post": "confirm_email_change"}),
         name="confirm_email_change",
     ),
-    path("auth/google/", GoogleLogin.as_view(), name="google_login"),
-    # Import/Export
-    path("import/mal/", ImportMALView.as_view(), name="import_mal"),
-    path("import/mal/xml/", ImportMALXMLView.as_view(), name="import_mal_xml"),
-    path("import/anilist/", ImportAniListView.as_view(), name="import_anilist"),
-    path("import/jobs/", ImportJobListView.as_view(), name="import_jobs"),
+    
+    # Import/Export Routes
     path(
-        "import/jobs/<int:job_id>/",
-        ImportJobStatusView.as_view(),
+        "import/mal/", 
+        ImportExportViewSet.as_view({"post": "import_mal"}), 
+        name="import_mal"
+    ),
+    path(
+        "import/mal/xml/", 
+        ImportExportViewSet.as_view({"post": "import_mal_xml"}), 
+        name="import_mal_xml"
+    ),
+    path(
+        "import/anilist/", 
+        ImportExportViewSet.as_view({"post": "import_anilist"}), 
+        name="import_anilist"
+    ),
+    path(
+        "export/", 
+        ImportExportViewSet.as_view({"get": "export_data"}), 
+        name="export_user_data"
+    ),
+    path(
+        "export/json/", 
+        ImportExportViewSet.as_view({"get": "export_data"}), 
+        name="export_user_data_json"
+    ),
+    
+    # User Import Jobs
+    path(
+        "import/jobs/", 
+        UserImportJobViewSet.as_view({"get": "list"}), 
+        name="import_jobs"
+    ),
+    path(
+        "import/jobs/<int:pk>/",
+        UserImportJobViewSet.as_view({"get": "retrieve"}),
         name="import_job_status",
     ),
     path(
-        "import/jobs/<int:job_id>/cancel/",
-        ImportJobCancelView.as_view(),
+        "import/jobs/<int:pk>/cancel/",
+        UserImportJobViewSet.as_view({"post": "cancel"}),
         name="import_job_cancel",
     ),
-    path("export/", ExportUserDataView.as_view(), name="export_user_data"),
-    path("export/json/", ExportUserDataJSONView.as_view(), name="export_user_data_json"),
 ]

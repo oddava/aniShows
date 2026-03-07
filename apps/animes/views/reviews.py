@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from django.db.models import Count, Q, Exists, OuterRef, Avg, Case, When, Value, IntegerField
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
+from rest_framework.viewsets import ModelViewSet
 
 from apps.animes.models import Anime, Review, ReviewVote, ReviewComment
 from apps.users.models import UserAnimeList
@@ -15,7 +16,7 @@ from apps.shared.logger import logger
 
 User = get_user_model()
 
-class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
+class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to write reviews."
@@ -23,14 +24,11 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Review.objects.select_related("user", "user__userprofile", "anime")
 
-        # Always annotate helpful_count and comment_count to avoid N+1 queries
         queryset = queryset.annotate(
             _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
             _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
         )
 
-        # Annotate is_completed to avoid N+1 queries
-        # Check if the reviewer has completed the anime
         queryset = queryset.annotate(
             _is_completed=Exists(
                 UserAnimeList.objects.filter(
@@ -41,7 +39,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             )
         )
 
-        # Annotate user_vote for the current user to avoid N+1
         user = self.request.user
         if user.is_authenticated:
             queryset = queryset.annotate(
@@ -50,21 +47,17 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
                 )
             )
 
-        # Filter by anime
         anime_slug = self.request.query_params.get("anime")
         if anime_slug:
             queryset = queryset.filter(anime__slug=anime_slug)
 
-        # Filter by target user
         target_username = self.request.query_params.get("user")
         if target_username:
             queryset = queryset.filter(user__username=target_username)
 
-        # Filter by user (mine)
         if self.request.query_params.get("mine") == "true" and self.request.user.is_authenticated:
             queryset = queryset.filter(user=self.request.user)
 
-        # Filter by rating (1-5 stars = 2-10 internal rating)
         rating_filter = self.request.query_params.get("rating")
         if rating_filter:
             try:
@@ -76,7 +69,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             except ValueError:
                 pass
 
-        # Sorting
         sort = self.request.query_params.get("sort", "helpful")
         if sort == "highest":
             queryset = queryset.order_by("-rating", "-created_at")
@@ -84,14 +76,13 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             queryset = queryset.order_by("rating", "-created_at")
         elif sort == "newest":
             queryset = queryset.order_by("-created_at")
-        else:  # helpful (default)
+        else:
             queryset = queryset.order_by("-_helpful_count", "-created_at")
 
         return queryset
 
     @action(detail=False, methods=["get"])
     def stats(self, request):
-        """Get review statistics for an anime"""
         anime_slug = request.query_params.get("anime")
         if not anime_slug:
             return Response(
@@ -101,7 +92,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
         reviews = Review.objects.filter(anime__slug=anime_slug)
 
-        # Single aggregate query replaces 3 separate queries (count + values loop + aggregate)
         stats = reviews.aggregate(
             total=Count("id"),
             avg_overall=Avg("rating"),
@@ -141,7 +131,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             5: stats["stars_5"],
         }
 
-        # Convert to 5-point scale
         averages = {
             "overall": stats["avg_overall"] / 2 if stats["avg_overall"] else 0,
             "story": stats["avg_story"] / 2 if stats["avg_story"] else None,
@@ -160,7 +149,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         if not anime:
             raise serializers.ValidationError({"non_field_errors": ["Anime not found."]})
 
-        # Check if user has anime on their list
         if not UserAnimeList.objects.filter(user=user, anime=anime).exists():
             raise serializers.ValidationError(
                 {
@@ -172,7 +160,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
         try:
             serializer.save(user=user)
-            # Invalidate user caches - reviews count changed
             invalidate_user_caches(user.id, user.username)
         except IntegrityError:
             raise serializers.ValidationError(
@@ -180,28 +167,22 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
             )
 
     def perform_update(self, serializer):
-        """Ensure users can only update their own reviews."""
         if serializer.instance.user != self.request.user:
             raise PermissionDenied("You can only edit your own reviews.")
         serializer.save()
-        # Invalidate user caches - reviews may affect stats
         invalidate_user_caches(self.request.user.id, self.request.user.username)
 
     def perform_destroy(self, instance):
-        """Ensure users can only delete their own reviews."""
         if instance.user != self.request.user:
             raise PermissionDenied("You can only delete your own reviews.")
         instance.delete()
-        # Invalidate user caches - reviews count changed
         invalidate_user_caches(self.request.user.id, self.request.user.username)
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def vote(self, request, pk=None):
-        """Toggle helpful vote on a review"""
         review = self.get_object()
         user = request.user
 
-        # Can't vote on your own review
         if review.user == user:
             return Response(
                 {"error": "Cannot vote on your own review"},
@@ -210,41 +191,33 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
         is_helpful = request.data.get("is_helpful", True)
 
-        # Check if user already voted
         existing_vote = ReviewVote.objects.filter(user=user, review=review).first()
 
         if existing_vote:
             if existing_vote.is_helpful == is_helpful:
-                # Same vote type - remove the vote
                 existing_vote.delete()
                 return Response({"voted": False, "is_helpful": None})
             else:
-                # Different vote type - update the vote
                 existing_vote.is_helpful = is_helpful
                 existing_vote.save()
                 return Response({"voted": True, "is_helpful": is_helpful})
         else:
-            # Create new vote
             ReviewVote.objects.create(user=user, review=review, is_helpful=is_helpful)
             return Response({"voted": True, "is_helpful": is_helpful})
 
     @action(detail=True, methods=["get"])
     def comments(self, request, pk=None):
-        """Get paginated comments for a review"""
         review = self.get_object()
 
-        # Get pagination parameters
         page = int(request.query_params.get("page", 1))
         page_size = int(request.query_params.get("page_size", 10))
 
-        # Filter out soft-deleted comments
         comments = (
             review.comments.filter(is_deleted=False)
             .select_related("user", "user__userprofile", "review__user")
             .order_by("-created_at")
         )
 
-        # Manual pagination
         start = (page - 1) * page_size
         end = start + page_size
         total = comments.count()
@@ -266,7 +239,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def add_comment(self, request, pk=None):
-        """Add a comment to a review"""
         review = self.get_object()
         user = request.user
 
@@ -289,7 +261,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         url_path="comments/(?P<comment_id>[^/.]+)",
     )
     def update_comment(self, request, pk=None, comment_id=None):
-        """Update a comment"""
         review = self.get_object()
 
         try:
@@ -300,7 +271,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
                 status=404,
             )
 
-        # Only comment author can edit
         if comment.user != request.user:
             raise PermissionDenied("You can only edit your own comments.")
 
@@ -324,7 +294,6 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
         url_path="comments/(?P<comment_id>[^/.]+)/delete",
     )
     def delete_comment(self, request, pk=None, comment_id=None):
-        """Soft delete a comment"""
         review = self.get_object()
 
         try:
@@ -335,11 +304,9 @@ class ReviewViewSet(EmailVerificationMixin, viewsets.ModelViewSet):
                 status=404,
             )
 
-        # Comment author or review owner can delete
         if comment.user != request.user and review.user != request.user:
             raise PermissionDenied("You don't have permission to delete this comment.")
 
-        # Soft delete
         comment.soft_delete()
 
         return Response({"deleted": True})

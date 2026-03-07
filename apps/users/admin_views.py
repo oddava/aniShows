@@ -9,15 +9,16 @@ Provides secure admin-only endpoints for:
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Avg, Q, Sum, F
-from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
+from django.db.models import Count, Avg, Q, Sum
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.viewsets import ViewSet
 
 from apps.animes.models import Anime, Genre, Studio, UserFavorite, UserHistory, Review
 from apps.users.models import UserProfile, UserAnimeList
@@ -122,7 +123,7 @@ class AdminDashboardView(APIView):
         )
 
 
-class AdminUserViewSet(viewsets.ViewSet):
+class AdminUserViewSet(ViewSet):
     """User management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -336,7 +337,7 @@ class AdminUserViewSet(viewsets.ViewSet):
         return Response({"message": f"User '{username}' deleted successfully."})
 
 
-class AdminAnimeViewSet(viewsets.ViewSet):
+class AdminAnimeViewSet(ViewSet):
     """Anime management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -468,7 +469,7 @@ class AdminAnimeViewSet(viewsets.ViewSet):
         return Response({"message": f"Anime '{title}' deleted successfully."})
 
 
-class AdminReviewViewSet(viewsets.ViewSet):
+class AdminReviewViewSet(ViewSet):
     """Review moderation for admins."""
 
     permission_classes = [IsAdminUser]
@@ -614,7 +615,7 @@ class AdminStatsExportView(APIView):
         return Response(stats)
 
 
-class AdminGenreViewSet(viewsets.ViewSet):
+class AdminGenreViewSet(ViewSet):
     """Genre management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -739,7 +740,7 @@ class AdminGenreViewSet(viewsets.ViewSet):
         return Response({"message": f"Genre '{name}' deleted successfully."})
 
 
-class AdminStudioViewSet(viewsets.ViewSet):
+class AdminStudioViewSet(ViewSet):
     """Studio management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -868,7 +869,7 @@ class AdminStudioViewSet(viewsets.ViewSet):
         return Response({"message": f"Studio '{name}' deleted successfully."})
 
 
-class AdminUserListViewSet(viewsets.ViewSet):
+class AdminUserListViewSet(ViewSet):
     """User list entries management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -940,7 +941,7 @@ class AdminUserListViewSet(viewsets.ViewSet):
         return Response({"message": f"{deleted_count} list entries deleted successfully."})
 
 
-class AdminFavoritesViewSet(viewsets.ViewSet):
+class AdminFavoritesViewSet(ViewSet):
     """User favorites management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -1485,7 +1486,7 @@ class AdminReportsView(APIView):
         )
 
 
-class AdminSystemLogViewSet(viewsets.ViewSet):
+class AdminSystemLogViewSet(ViewSet):
     """System logs management for admins."""
 
     permission_classes = [IsAdminUser]
@@ -1681,7 +1682,7 @@ class AdminSystemLogViewSet(viewsets.ViewSet):
         )
 
 
-class AdminAuditLogViewSet(viewsets.ViewSet):
+class AdminAuditLogViewSet(ViewSet):
     """Audit logs management for admins."""
 
     permission_classes = [IsAdminUser]

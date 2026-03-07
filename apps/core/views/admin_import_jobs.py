@@ -1,9 +1,12 @@
-from rest_framework import viewsets, status
+from rest_framework import status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
+from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import FilterSet, CharFilter
 from django.utils import timezone
 from celery import current_app
-from rest_framework.viewsets import ViewSet
+from rest_framework.viewsets import GenericViewSet
 
 from apps.core.models import CeleryTaskResult
 from apps.core.permissions import IsAdminUser
@@ -11,12 +14,38 @@ from apps.shared.pagination import StandardPagination
 
 IMPORT_TASKS = ["apps.animes.tasks.sync.sync_anime_catalog"]
 
+class AdminImportJobFilter(FilterSet):
+    status = CharFilter(method='filter_status')
 
-class AdminImportJobViewSet(ViewSet):
+    class Meta:
+        model = CeleryTaskResult
+        fields = ['status']
+
+    def filter_status(self, queryset, name, value):
+        celery_status_map = {
+            "pending": ["PENDING"],
+            "processing": ["STARTED", "RETRY"],
+            "completed": ["SUCCESS"],
+            "failed": ["FAILURE"],
+            "cancelled": ["REVOKED"],
+        }
+        status_filter = value.lower()
+        if status_filter in celery_status_map:
+            return queryset.filter(status__in=celery_status_map[status_filter])
+        return queryset
+
+class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """Import jobs monitoring for admins, mapped to Celery sync tasks."""
 
     permission_classes = [IsAdminUser]
     pagination_class = StandardPagination
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = AdminImportJobFilter
+    ordering_fields = ['date_created', 'date_completed']
+    ordering = ['-date_created']
+
+    def get_queryset(self):
+        return CeleryTaskResult.objects.filter(task_name__in=IMPORT_TASKS)
 
     def _format_task_result(self, result):
         source = "System Auto-Sync"
@@ -29,7 +58,6 @@ class AdminImportJobViewSet(ViewSet):
         if result.task_name == "apps.animes.tasks.sync.sync_anime_catalog":
             source = "AniList API"
             source_type = result.task_kwargs.get("sync_type", "unknown")
-
 
             if isinstance(result.result_data, dict):
                 processed_items = result.result_data.get("records_processed", 0)
@@ -75,46 +103,23 @@ class AdminImportJobViewSet(ViewSet):
             },
         }
 
-    def list(self, request):
+    def list(self, request, *args, **kwargs):
         """List all import jobs."""
-        queryset = CeleryTaskResult.objects.filter(task_name__in=IMPORT_TASKS).order_by(
-            "-date_created"
-        )
-
-        status_filter = request.query_params.get("status")
-        if status_filter:
-            celery_status_map = {
-                "pending": ["PENDING"],
-                "processing": ["STARTED", "RETRY"],
-                "completed": ["SUCCESS"],
-                "failed": ["FAILURE"],
-                "cancelled": ["REVOKED"],
-            }
-            if status_filter in celery_status_map:
-                queryset = queryset.filter(status__in=celery_status_map[status_filter])
-
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request)
-
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
         jobs_data = [self._format_task_result(job) for job in page]
-        return paginator.get_paginated_response(jobs_data)
+        return self.get_paginated_response(jobs_data)
 
-    def retrieve(self, request, pk=None):
+    def retrieve(self, request, *args, **kwargs):
         """Get detailed import job information."""
-        try:
-            job = CeleryTaskResult.objects.get(pk=pk, task_name__in=IMPORT_TASKS)
-        except CeleryTaskResult.DoesNotExist:
-            return Response({"detail": "Import job not found."}, status=status.HTTP_404_NOT_FOUND)
-
+        job = self.get_object()
         return Response(self._format_task_result(job))
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         """Cancel a pending import job."""
-        try:
-            job = CeleryTaskResult.objects.get(pk=pk, task_name__in=IMPORT_TASKS)
-        except CeleryTaskResult.DoesNotExist:
-            return Response({"detail": "Import job not found."}, status=status.HTTP_404_NOT_FOUND)
+        job = self.get_object()
 
         if job.status not in ["PENDING", "STARTED", "RETRY"]:
             return Response(

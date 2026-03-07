@@ -1,9 +1,11 @@
-from rest_framework import status, permissions, serializers
-from rest_framework.views import APIView
+from rest_framework import status, permissions, serializers, generics
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.viewsets import ViewSet
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView as BaseTokenRefreshView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
@@ -70,50 +72,66 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return super().validate(attrs)
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Handle login with username/email support."""
 
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [throttling.LoginRateThrottle]
 
-class RegisterView(APIView):
+
+class RegisterView(generics.CreateAPIView):
     """Handle user registration with email verification."""
 
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
     throttle_classes = [throttling.RegisterRateThrottle]
+    serializer_class = RegisterSerializer
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.auth_service = AuthService()
         self.email_service = EmailService()
 
-    def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
         user = self.auth_service.register_user(serializer.validated_data)
 
         # Send verification email asynchronously
         self.email_service.send_verification_email(user)
 
+        headers = self.get_success_headers(serializer.data)
         return Response(
             {"message": "Registration successful. Please check your email to verify your account."},
             status=status.HTTP_201_CREATED,
+            headers=headers
         )
 
-class VerifyEmailView(APIView):
+
+class AuthViewSet(ViewSet):
+    """
+    ViewSet to handle email verification and password reset workflows.
+    Consolidates verify_email, resend_verification, password_reset, and password_reset_confirm.
+    """
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
-    throttle_classes = [throttling.StrictUserRateThrottle]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.auth_service = AuthService()
+        self.email_service = EmailService()
+
+    def get_throttles(self):
+        if self.action in ["resend_verification", "password_reset"]:
+            return [throttling.PasswordResetRateThrottle()]
+        if self.action in ["verify_email", "password_reset_confirm"]:
+            return [throttling.StrictUserRateThrottle()]
+        return super().get_throttles()
 
     def _verify_and_respond(self, request, uidb64, token):
-        """Shared verification logic for both GET and POST."""
+        """Shared verification logic for email verification."""
         if not uidb64 or not token:
             return Response({"error": "Missing UID or Token"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -153,30 +171,22 @@ class VerifyEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    def get(self, request, uid=None, token=None):
-        """Handle GET request from email verification link."""
-        # Support both URL path parameters and query parameters
-        uidb64 = uid or request.query_params.get("uid")
-        token = token or request.query_params.get("token")
+    @action(detail=False, methods=["get", "post"])
+    def verify_email(self, request, **kwargs):
+        """Verify email using URL parameters or POST data."""
+        if request.method == "GET":
+            # Support both query params and URL kwargs
+            uidb64 = kwargs.get("uid") or request.query_params.get("uid")
+            token = kwargs.get("token") or request.query_params.get("token")
+        else:
+            uidb64 = request.data.get("uid")
+            token = request.data.get("token")
+            
         return self._verify_and_respond(request, uidb64, token)
 
-    def post(self, request):
-        uidb64 = request.data.get("uid")
-        token = request.data.get("token")
-        return self._verify_and_respond(request, uidb64, token)
-
-class ResendVerificationView(APIView):
-    """Resend verification email for users who didn't receive it or whose token expired."""
-
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-    throttle_classes = [throttling.PasswordResetRateThrottle]
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.email_service = EmailService()
-
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def resend_verification(self, request):
+        """Resend verification email."""
         email = request.data.get("email")
         if not email:
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -188,7 +198,6 @@ class ResendVerificationView(APIView):
                 # Already verified, don't reveal this for security
                 raise User.DoesNotExist
         except User.DoesNotExist:
-            # Don't reveal user existence - return success anyway
             return Response(
                 {
                     "message": "If an account with this email exists and is pending verification, a new link has been sent."
@@ -196,9 +205,7 @@ class ResendVerificationView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        # Send verification email
         self.email_service.send_verification_email(user)
-
         return Response(
             {
                 "message": "If an account with this email exists and is pending verification, a new link has been sent."
@@ -206,16 +213,9 @@ class ResendVerificationView(APIView):
             status=status.HTTP_200_OK,
         )
 
-class PasswordResetView(APIView):
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-    throttle_classes = [throttling.PasswordResetRateThrottle]
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.email_service = EmailService()
-
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def password_reset(self, request):
+        """Request a password reset link."""
         email = request.data.get("email")
         if not email:
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -223,26 +223,20 @@ class PasswordResetView(APIView):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # Don't reveal user existence
             return Response(
                 {"message": "If an account exists with this email, a reset link has been sent."},
                 status=status.HTTP_200_OK,
             )
 
-        # Send password reset email
         self.email_service.send_password_reset_email(user)
-
         return Response(
             {"message": "If an account exists with this email, a reset link has been sent."},
             status=status.HTTP_200_OK,
         )
 
-class PasswordResetConfirmView(APIView):
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = []
-    throttle_classes = [throttling.StrictUserRateThrottle]
-
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def password_reset_confirm(self, request):
+        """Confirm password reset with the new password."""
         uidb64 = request.data.get("uid")
         token = request.data.get("token")
         password = request.data.get("password")
@@ -270,10 +264,6 @@ class PasswordResetConfirmView(APIView):
                 {"error": "Invalid or expired link"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
     """Token refresh serializer with logging for failed attempts."""
@@ -281,16 +271,13 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
     def validate(self, attrs):
         try:
             data = super().validate(attrs)
-            # logger.info(f"Token refresh successful for user") # Reduce noise
             return data
         except User.DoesNotExist:
-            # Handle case where token is valid but user was deleted
             logger.warning("Token refresh failed: User does not exist")
             raise InvalidToken()
         except Exception as e:
             refresh_token = attrs.get("refresh", "unknown")
             token_preview = f"{refresh_token[:20]}..." if len(refresh_token) > 20 else refresh_token
-            # Don't log full stack trace for known token errors
             if isinstance(e, (InvalidToken, TokenError)):
                 logger.warning(f"Token refresh failed: {str(e)}")
             else:
@@ -299,8 +286,7 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                 )
             raise
 
-class LoggingTokenRefreshView(BaseTokenRefreshView):
-    """Token refresh view with logging for monitoring authentication issues."""
 
+class LoggingTokenRefreshView(BaseTokenRefreshView):
+    """Token refresh view with custom logging serializer."""
     serializer_class = LoggingTokenRefreshSerializer
-    throttle_classes = [throttling.LoginRateThrottle]

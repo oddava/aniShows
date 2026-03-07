@@ -8,99 +8,55 @@ Provides REST API for:
 - Viewing worker status
 """
 
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import FilterSet, CharFilter, DateFilter
 from django.db.models import Count, Avg, Q
 from django.utils import timezone
 from datetime import timedelta
 
 from celery import current_app
-from celery.result import AsyncResult
 
 from apps.core.models import CeleryTaskResult, CeleryWorkerStatus, CeleryTaskSchedule
 from apps.core.permissions import IsAdminUser
 from apps.shared.pagination import StandardPagination
 
 
-class CeleryTaskResultViewSet(viewsets.ViewSet):
-    """ViewSet for Celery task results management."""
+class CeleryTaskResultFilter(FilterSet):
+    status = CharFilter(field_name='status', lookup_expr='iexact')
+    task_name = CharFilter(field_name='task_name', lookup_expr='icontains')
+    worker = CharFilter(field_name='worker', lookup_expr='icontains')
+    queue = CharFilter(field_name='queue')
+    date_from = DateFilter(field_name='date_created', lookup_expr='gte')
+    date_to = DateFilter(field_name='date_created', lookup_expr='lte')
+
+    class Meta:
+        model = CeleryTaskResult
+        fields = ['status', 'task_name', 'worker', 'queue', 'date_from', 'date_to']
+
+
+class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, viewsets.GenericViewSet):
+    """ViewSet for Celery task results management. Read-only plus delete/stats."""
 
     permission_classes = [IsAdminUser]
     pagination_class = StandardPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = CeleryTaskResultFilter
+    search_fields = ['task_id', 'task_name', 'error_message', 'result_summary']
+    ordering_fields = ['date_created', 'date_started', 'execution_time', 'task_name']
+    ordering = ['-date_created']
 
-    def list(self, request):
-        """List all task results with filtering."""
-        queryset = CeleryTaskResult.objects.all()
+    def get_queryset(self):
+        return CeleryTaskResult.objects.all()
 
-        # Filter by status
-        status_filter = request.query_params.get("status")
-        if status_filter:
-            queryset = queryset.filter(status=status_filter.upper())
-
-        # Filter by task name
-        task_name = request.query_params.get("task_name")
-        if task_name:
-            queryset = queryset.filter(task_name__icontains=task_name)
-
-        # Filter by worker
-        worker = request.query_params.get("worker")
-        if worker:
-            queryset = queryset.filter(worker__icontains=worker)
-
-        # Filter by queue
-        queue = request.query_params.get("queue")
-        if queue:
-            queryset = queryset.filter(queue=queue)
-
-        # Filter by date range
-        date_from = request.query_params.get("date_from")
-        if date_from:
-            try:
-                from_date = timezone.datetime.strptime(date_from, "%Y-%m-%d")
-                queryset = queryset.filter(date_created__gte=from_date)
-            except ValueError:
-                pass
-
-        date_to = request.query_params.get("date_to")
-        if date_to:
-            try:
-                to_date = timezone.datetime.strptime(date_to, "%Y-%m-%d")
-                to_date = to_date.replace(hour=23, minute=59, second=59)
-                queryset = queryset.filter(date_created__lte=to_date)
-            except ValueError:
-                pass
-
-        # Search
-        search = request.query_params.get("search", "")
-        if search:
-            queryset = queryset.filter(
-                Q(task_id__icontains=search)
-                | Q(task_name__icontains=search)
-                | Q(error_message__icontains=search)
-                | Q(result_summary__icontains=search)
-            )
-
-        # Ordering
-        ordering = request.query_params.get("ordering", "-date_created")
-        valid_orderings = [
-            "date_created",
-            "-date_created",
-            "date_started",
-            "-date_started",
-            "execution_time",
-            "-execution_time",
-            "task_name",
-            "-task_name",
-        ]
-        if ordering in valid_orderings:
-            queryset = queryset.order_by(ordering)
-
-        # Pagination
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request)
-
+    def list(self, request, *args, **kwargs):
+        """Extended list using the generic features without a dedicated serializer class."""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
         results_data = []
         for result in page:
             results_data.append(
@@ -133,16 +89,11 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
                     else None,
                 }
             )
+            
+        return self.get_paginated_response(results_data)
 
-        return paginator.get_paginated_response(results_data)
-
-    def retrieve(self, request, pk=None):
-        """Get detailed task result information."""
-        try:
-            result = CeleryTaskResult.objects.get(pk=pk)
-        except CeleryTaskResult.DoesNotExist:
-            return Response({"detail": "Task result not found."}, status=status.HTTP_404_NOT_FOUND)
-
+    def retrieve(self, request, *args, **kwargs):
+        result = self.get_object()
         return Response(
             {
                 "id": result.id,
@@ -175,25 +126,18 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
             }
         )
 
-    def destroy(self, request, pk=None):
-        """Delete a task result."""
+    def destroy(self, request, *args, **kwargs):
         if not request.user.is_superuser:
             return Response(
                 {"detail": "Only superusers can delete task results."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        try:
-            result = CeleryTaskResult.objects.get(pk=pk)
-        except CeleryTaskResult.DoesNotExist:
-            return Response({"detail": "Task result not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        result.delete()
+        instance = self.get_object()
+        self.perform_destroy(instance)
         return Response({"message": "Task result deleted successfully."})
 
     @action(detail=False, methods=["post"])
     def bulk_delete(self, request):
-        """Bulk delete task results."""
         if not request.user.is_superuser:
             return Response(
                 {"detail": "Only superusers can delete task results."},
@@ -220,26 +164,19 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"])
     def stats(self, request):
-        """Get task execution statistics."""
         now = timezone.now()
         last_24h = now - timedelta(hours=24)
         last_7d = now - timedelta(days=7)
         last_30d = now - timedelta(days=30)
 
-        # Overall stats
         total_tasks = CeleryTaskResult.objects.count()
-
-        # Status breakdown
         by_status = dict(CeleryTaskResult.objects.values_list("status").annotate(count=Count("id")))
-
-        # Task name breakdown (top 10)
         by_task = dict(
             CeleryTaskResult.objects.values_list("task_name")
             .annotate(count=Count("id"))
             .order_by("-count")[:10]
         )
 
-        # Time-based stats
         stats_24h = {
             "total": CeleryTaskResult.objects.filter(date_created__gte=last_24h).count(),
             "success": CeleryTaskResult.objects.filter(
@@ -270,7 +207,6 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
             else 0
         )
 
-        # Average execution time
         avg_execution = CeleryTaskResult.objects.filter(
             status="SUCCESS", execution_time__isnull=False
         ).aggregate(avg=Avg("execution_time"))["avg"]
@@ -287,9 +223,258 @@ class CeleryTaskResultViewSet(viewsets.ViewSet):
         )
 
 
-class CeleryTaskTriggerView(APIView):
-    """API endpoint for triggering and managing Celery tasks."""
+class CeleryTaskScheduleFilter(FilterSet):
+    status = CharFilter(field_name='status', lookup_expr='iexact')
+    schedule_type = CharFilter(field_name='schedule_type', lookup_expr='iexact')
 
+    class Meta:
+        model = CeleryTaskSchedule
+        fields = ['status', 'schedule_type']
+
+class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing Celery task schedules."""
+
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardPagination
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = CeleryTaskScheduleFilter
+    ordering_fields = ['name', 'created_at', 'last_run_at']
+    ordering = ['name']
+
+    def get_queryset(self):
+        return CeleryTaskSchedule.objects.all()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
+        schedules_data = []
+        for schedule in page:
+            schedules_data.append(
+                {
+                    "id": schedule.id,
+                    "name": schedule.name,
+                    "task_name": schedule.task_name,
+                    "task_name_short": schedule.task_name.split(".")[-1]
+                    if "." in schedule.task_name
+                    else schedule.task_name,
+                    "description": schedule.description,
+                    "schedule_type": schedule.schedule_type,
+                    "schedule_type_display": schedule.get_schedule_type_display(),
+                    "schedule_display": self._get_schedule_display(schedule),
+                    "status": schedule.status,
+                    "status_display": schedule.get_status_display(),
+                    "total_run_count": schedule.total_run_count,
+                    "last_run_at": schedule.last_run_at.isoformat()
+                    if schedule.last_run_at
+                    else None,
+                    "next_run_at": schedule.next_run_at.isoformat()
+                    if schedule.next_run_at
+                    else None,
+                    "created_at": schedule.created_at.isoformat(),
+                    "updated_at": schedule.updated_at.isoformat(),
+                }
+            )
+
+        return self.get_paginated_response(schedules_data)
+
+    def create(self, request, *args, **kwargs):
+        schedule = CeleryTaskSchedule.objects.create(
+            name=request.data.get("name"),
+            task_name=request.data.get("task_name"),
+            description=request.data.get("description", ""),
+            schedule_type=request.data.get("schedule_type", "CRONTAB"),
+            crontab_minute=request.data.get("crontab_minute", "*"),
+            crontab_hour=request.data.get("crontab_hour", "*"),
+            crontab_day_of_week=request.data.get("crontab_day_of_week", "*"),
+            crontab_day_of_month=request.data.get("crontab_day_of_month", "*"),
+            crontab_month_of_year=request.data.get("crontab_month_of_year", "*"),
+            interval_every=request.data.get("interval_every", 1),
+            interval_period=request.data.get("interval_period", "hours"),
+            one_time_datetime=request.data.get("one_time_datetime"),
+            task_args=request.data.get("task_args", []),
+            task_kwargs=request.data.get("task_kwargs", {}),
+            queue=request.data.get("queue", "default"),
+            status=request.data.get("status", "ENABLED"),
+        )
+        return Response(
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "message": "Schedule created successfully.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        schedule = self.get_object()
+        return Response(
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "task_name": schedule.task_name,
+                "description": schedule.description,
+                "schedule_type": schedule.schedule_type,
+                "crontab_minute": schedule.crontab_minute,
+                "crontab_hour": schedule.crontab_hour,
+                "crontab_day_of_week": schedule.crontab_day_of_week,
+                "crontab_day_of_month": schedule.crontab_day_of_month,
+                "crontab_month_of_year": schedule.crontab_month_of_year,
+                "interval_every": schedule.interval_every,
+                "interval_period": schedule.interval_period,
+                "one_time_datetime": schedule.one_time_datetime.isoformat()
+                if schedule.one_time_datetime
+                else None,
+                "task_args": schedule.task_args,
+                "task_kwargs": schedule.task_kwargs,
+                "queue": schedule.queue,
+                "status": schedule.status,
+                "total_run_count": schedule.total_run_count,
+                "last_run_at": schedule.last_run_at.isoformat() if schedule.last_run_at else None,
+                "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+                "created_at": schedule.created_at.isoformat(),
+                "updated_at": schedule.updated_at.isoformat(),
+            }
+        )
+
+    def update(self, request, *args, **kwargs):
+        schedule = self.get_object()
+        schedule.name = request.data.get("name", schedule.name)
+        schedule.task_name = request.data.get("task_name", schedule.task_name)
+        schedule.description = request.data.get("description", schedule.description)
+        schedule.schedule_type = request.data.get("schedule_type", schedule.schedule_type)
+        schedule.crontab_minute = request.data.get("crontab_minute", schedule.crontab_minute)
+        schedule.crontab_hour = request.data.get("crontab_hour", schedule.crontab_hour)
+        schedule.crontab_day_of_week = request.data.get(
+            "crontab_day_of_week", schedule.crontab_day_of_week
+        )
+        schedule.crontab_day_of_month = request.data.get(
+            "crontab_day_of_month", schedule.crontab_day_of_month
+        )
+        schedule.crontab_month_of_year = request.data.get(
+            "crontab_month_of_year", schedule.crontab_month_of_year
+        )
+        schedule.interval_every = request.data.get("interval_every", schedule.interval_every)
+        schedule.interval_period = request.data.get("interval_period", schedule.interval_period)
+        schedule.one_time_datetime = request.data.get(
+            "one_time_datetime", schedule.one_time_datetime
+        )
+        schedule.task_args = request.data.get("task_args", schedule.task_args)
+        schedule.task_kwargs = request.data.get("task_kwargs", schedule.task_kwargs)
+        schedule.queue = request.data.get("queue", schedule.queue)
+        schedule.status = request.data.get("status", schedule.status)
+        schedule.save()
+
+        return Response(
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "message": "Schedule updated successfully.",
+            }
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        schedule = self.get_object()
+        name = schedule.name
+        self.perform_destroy(schedule)
+        return Response({"message": f'Schedule "{name}" deleted successfully.'})
+
+    @action(detail=True, methods=["post"])
+    def enable(self, request, pk=None):
+        schedule = self.get_object()
+        schedule.status = CeleryTaskSchedule.TaskStatus.ENABLED
+        schedule.save()
+        return Response(
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "status": schedule.status,
+                "message": "Schedule enabled successfully.",
+            }
+        )
+
+    @action(detail=True, methods=["post"])
+    def disable(self, request, pk=None):
+        schedule = self.get_object()
+        schedule.status = CeleryTaskSchedule.TaskStatus.DISABLED
+        schedule.save()
+        return Response(
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "status": schedule.status,
+                "message": "Schedule disabled successfully.",
+            }
+        )
+
+    @action(detail=True, methods=["post"])
+    def run_now(self, request, pk=None):
+        schedule = self.get_object()
+        if schedule.status != CeleryTaskSchedule.TaskStatus.ENABLED:
+            return Response(
+                {"detail": "Cannot run disabled schedule."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = current_app.send_task(
+                schedule.task_name,
+                args=schedule.task_args or [],
+                kwargs=schedule.task_kwargs or {},
+                queue=schedule.queue or "default",
+            )
+
+            task_result = CeleryTaskResult.objects.create(
+                task_id=result.id,
+                task_name=schedule.task_name,
+                task_module=".".join(schedule.task_name.split(".")[:-1]),
+                status="PENDING",
+                task_args=schedule.task_args or [],
+                task_kwargs=schedule.task_kwargs or {},
+                queue=schedule.queue or "default",
+                triggered_by=request.user if request.user.is_authenticated else None,
+            )
+
+            schedule.last_run_at = timezone.now()
+            schedule.total_run_count += 1
+            schedule.save()
+
+            return Response(
+                {
+                    "message": f'Task "{schedule.name}" triggered successfully.',
+                    "task_id": result.id,
+                    "task_result_id": task_result.id,
+                }
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Failed to trigger task: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _get_schedule_display(self, schedule):
+        if schedule.schedule_type == CeleryTaskSchedule.ScheduleType.CRONTAB:
+            parts = []
+            if schedule.crontab_minute != "*":
+                parts.append(f"min:{schedule.crontab_minute}")
+            if schedule.crontab_hour != "*":
+                parts.append(f"hr:{schedule.crontab_hour}")
+            if schedule.crontab_day_of_week != "*":
+                parts.append(f"dow:{schedule.crontab_day_of_week}")
+            return " | ".join(parts) if parts else "Custom crontab"
+        elif schedule.schedule_type == CeleryTaskSchedule.ScheduleType.INTERVAL:
+            return f"Every {schedule.interval_every} {schedule.interval_period}"
+        elif schedule.schedule_type == CeleryTaskSchedule.ScheduleType.DATETIME:
+            return (
+                schedule.one_time_datetime.strftime("%Y-%m-%d %H:%M")
+                if schedule.one_time_datetime
+                else "Not set"
+            )
+        return "-"
+
+
+class CeleryAdminControlViewSet(viewsets.ViewSet):
+    """ViewSet for Celery task control and dashboard operations."""
     permission_classes = [IsAdminUser]
 
     # Available tasks registry
@@ -403,7 +588,8 @@ class CeleryTaskTriggerView(APIView):
         },
     }
 
-    def get(self, request):
+    @action(detail=False, methods=["get"])
+    def tasks(self, request):
         """List all available tasks that can be triggered."""
         tasks_list = []
         for task_path, task_info in self.AVAILABLE_TASKS.items():
@@ -416,10 +602,10 @@ class CeleryTaskTriggerView(APIView):
                     "default_queue": task_info.get("default_queue", "default"),
                 }
             )
-
         return Response({"tasks": tasks_list})
 
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def trigger_task(self, request):
         """Trigger a Celery task."""
         task_path = request.data.get("task")
         args = request.data.get("args", [])
@@ -431,7 +617,6 @@ class CeleryTaskTriggerView(APIView):
                 {"detail": "Task path is required."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate task is in allowed list
         if task_path not in self.AVAILABLE_TASKS:
             return Response(
                 {"detail": f"Task {task_path} is not allowed or does not exist."},
@@ -442,10 +627,8 @@ class CeleryTaskTriggerView(APIView):
         queue = queue or task_info.get("default_queue", "default")
 
         try:
-            # Send the task
             result = current_app.send_task(task_path, args=args, kwargs=kwargs, queue=queue)
 
-            # Create task result record
             task_result = CeleryTaskResult.objects.create(
                 task_id=result.id,
                 task_name=task_path,
@@ -466,21 +649,16 @@ class CeleryTaskTriggerView(APIView):
                 },
                 status=status.HTTP_202_ACCEPTED,
             )
-
         except Exception as e:
             return Response(
                 {"detail": f"Failed to trigger task: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
-class CeleryTaskControlView(APIView):
-    """API endpoint for controlling Celery tasks (revoke, terminate, etc.)."""
-
-    permission_classes = [IsAdminUser]
-
-    def post(self, request, task_id=None):
+    @action(detail=False, methods=["post"])
+    def control_task(self, request):
         """Revoke/terminate a running task."""
+        task_id = request.data.get("task_id")
         action = request.data.get("action", "revoke")
         terminate = request.data.get("terminate", False)
 
@@ -489,45 +667,33 @@ class CeleryTaskControlView(APIView):
 
         try:
             if action == "revoke":
-                # Revoke the task
                 current_app.control.revoke(task_id, terminate=terminate)
-
-                # Update our record if it exists
                 CeleryTaskResult.objects.filter(task_id=task_id).update(
                     status="REVOKED", date_completed=timezone.now()
                 )
-
                 return Response(
                     {
                         "message": f"Task {task_id} revoked successfully.",
                         "terminated": terminate,
                     }
                 )
-
             else:
                 return Response(
                     {"detail": f"Unknown action: {action}"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
         except Exception as e:
             return Response(
                 {"detail": f"Failed to {action} task: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
-class CeleryWorkerStatusView(APIView):
-    """API endpoint for Celery worker status."""
-
-    permission_classes = [IsAdminUser]
-
-    def get(self, request):
+    @action(detail=False, methods=["get"])
+    def worker_status(self, request):
         """Get current worker status from Celery."""
         try:
             inspector = current_app.control.inspect()
 
-            # Get worker stats
             stats = inspector.stats() or {}
             active = inspector.active() or {}
             scheduled = inspector.scheduled() or {}
@@ -535,11 +701,7 @@ class CeleryWorkerStatusView(APIView):
 
             workers_data = []
             for worker_name, worker_stats in stats.items():
-                # Get queue info
                 queues = []
-                if "prefetch_count" in worker_stats:
-                    # This is a basic check, real queue info might be elsewhere
-                    pass
 
                 worker_info = {
                     "name": worker_name,
@@ -555,7 +717,6 @@ class CeleryWorkerStatusView(APIView):
                 }
                 workers_data.append(worker_info)
 
-                # Update or create worker status record
                 CeleryWorkerStatus.objects.update_or_create(
                     worker_name=worker_name,
                     defaults={
@@ -576,29 +737,26 @@ class CeleryWorkerStatusView(APIView):
                     "total_active_tasks": sum(w["active_tasks"] for w in workers_data),
                 }
             )
-
         except Exception as e:
             return Response(
                 {"detail": f"Failed to get worker status: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def worker_control(self, request):
         """Perform control actions on workers."""
         action = request.data.get("action")
-        worker = request.data.get("worker")  # Specific worker or None for all
+        worker = request.data.get("worker")
 
         if not action:
             return Response({"detail": "Action is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             if action == "ping":
-                # Ping workers
                 result = current_app.control.ping(destination=[worker] if worker else None)
                 return Response({"pong": result})
-
             elif action == "shutdown":
-                # Shutdown workers (be careful!)
                 if not request.user.is_superuser:
                     return Response(
                         {"detail": "Only superusers can shutdown workers."},
@@ -606,331 +764,24 @@ class CeleryWorkerStatusView(APIView):
                     )
                 current_app.control.shutdown(destination=[worker] if worker else None)
                 return Response({"message": "Shutdown signal sent to workers."})
-
             else:
                 return Response(
                     {"detail": f"Unknown action: {action}"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
         except Exception as e:
             return Response(
                 {"detail": f"Failed to perform action: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-
-class CeleryTaskScheduleViewSet(viewsets.ViewSet):
-    """ViewSet for managing Celery task schedules."""
-
-    permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
-
-    def list(self, request):
-        """List all custom task schedules."""
-        queryset = CeleryTaskSchedule.objects.all()
-
-        # Filter by status
-        status_filter = request.query_params.get("status")
-        if status_filter:
-            queryset = queryset.filter(status=status_filter.upper())
-
-        # Filter by schedule type
-        schedule_type = request.query_params.get("schedule_type")
-        if schedule_type:
-            queryset = queryset.filter(schedule_type=schedule_type.upper())
-
-        # Ordering
-        ordering = request.query_params.get("ordering", "name")
-        valid_orderings = [
-            "name",
-            "-name",
-            "created_at",
-            "-created_at",
-            "last_run_at",
-            "-last_run_at",
-        ]
-        if ordering in valid_orderings:
-            queryset = queryset.order_by(ordering)
-
-        # Pagination
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(queryset, request)
-
-        schedules_data = []
-        for schedule in page:
-            schedules_data.append(
-                {
-                    "id": schedule.id,
-                    "name": schedule.name,
-                    "task_name": schedule.task_name,
-                    "task_name_short": schedule.task_name.split(".")[-1]
-                    if "." in schedule.task_name
-                    else schedule.task_name,
-                    "description": schedule.description,
-                    "schedule_type": schedule.schedule_type,
-                    "schedule_type_display": schedule.get_schedule_type_display(),
-                    "schedule_display": self._get_schedule_display(schedule),
-                    "status": schedule.status,
-                    "status_display": schedule.get_status_display(),
-                    "total_run_count": schedule.total_run_count,
-                    "last_run_at": schedule.last_run_at.isoformat()
-                    if schedule.last_run_at
-                    else None,
-                    "next_run_at": schedule.next_run_at.isoformat()
-                    if schedule.next_run_at
-                    else None,
-                    "created_at": schedule.created_at.isoformat(),
-                    "updated_at": schedule.updated_at.isoformat(),
-                }
-            )
-
-        return paginator.get_paginated_response(schedules_data)
-
-    def create(self, request):
-        """Create a new scheduled task."""
-        schedule = CeleryTaskSchedule.objects.create(
-            name=request.data.get("name"),
-            task_name=request.data.get("task_name"),
-            description=request.data.get("description", ""),
-            schedule_type=request.data.get("schedule_type", "CRONTAB"),
-            crontab_minute=request.data.get("crontab_minute", "*"),
-            crontab_hour=request.data.get("crontab_hour", "*"),
-            crontab_day_of_week=request.data.get("crontab_day_of_week", "*"),
-            crontab_day_of_month=request.data.get("crontab_day_of_month", "*"),
-            crontab_month_of_year=request.data.get("crontab_month_of_year", "*"),
-            interval_every=request.data.get("interval_every", 1),
-            interval_period=request.data.get("interval_period", "hours"),
-            one_time_datetime=request.data.get("one_time_datetime"),
-            task_args=request.data.get("task_args", []),
-            task_kwargs=request.data.get("task_kwargs", {}),
-            queue=request.data.get("queue", "default"),
-            status=request.data.get("status", "ENABLED"),
-        )
-
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "message": "Schedule created successfully.",
-            },
-            status=status.HTTP_201_CREATED,
-        )
-
-    def retrieve(self, request, pk=None):
-        """Get detailed schedule information."""
-        try:
-            schedule = CeleryTaskSchedule.objects.get(pk=pk)
-        except CeleryTaskSchedule.DoesNotExist:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "task_name": schedule.task_name,
-                "description": schedule.description,
-                "schedule_type": schedule.schedule_type,
-                "crontab_minute": schedule.crontab_minute,
-                "crontab_hour": schedule.crontab_hour,
-                "crontab_day_of_week": schedule.crontab_day_of_week,
-                "crontab_day_of_month": schedule.crontab_day_of_month,
-                "crontab_month_of_year": schedule.crontab_month_of_year,
-                "interval_every": schedule.interval_every,
-                "interval_period": schedule.interval_period,
-                "one_time_datetime": schedule.one_time_datetime.isoformat()
-                if schedule.one_time_datetime
-                else None,
-                "task_args": schedule.task_args,
-                "task_kwargs": schedule.task_kwargs,
-                "queue": schedule.queue,
-                "status": schedule.status,
-                "total_run_count": schedule.total_run_count,
-                "last_run_at": schedule.last_run_at.isoformat() if schedule.last_run_at else None,
-                "next_run_at": schedule.next_run_at.isoformat() if schedule.next_run_at else None,
-                "created_at": schedule.created_at.isoformat(),
-                "updated_at": schedule.updated_at.isoformat(),
-            }
-        )
-
-    def update(self, request, pk=None):
-        """Update a scheduled task."""
-        try:
-            schedule = CeleryTaskSchedule.objects.get(pk=pk)
-        except CeleryTaskSchedule.DoesNotExist:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        schedule.name = request.data.get("name", schedule.name)
-        schedule.task_name = request.data.get("task_name", schedule.task_name)
-        schedule.description = request.data.get("description", schedule.description)
-        schedule.schedule_type = request.data.get("schedule_type", schedule.schedule_type)
-        schedule.crontab_minute = request.data.get("crontab_minute", schedule.crontab_minute)
-        schedule.crontab_hour = request.data.get("crontab_hour", schedule.crontab_hour)
-        schedule.crontab_day_of_week = request.data.get(
-            "crontab_day_of_week", schedule.crontab_day_of_week
-        )
-        schedule.crontab_day_of_month = request.data.get(
-            "crontab_day_of_month", schedule.crontab_day_of_month
-        )
-        schedule.crontab_month_of_year = request.data.get(
-            "crontab_month_of_year", schedule.crontab_month_of_year
-        )
-        schedule.interval_every = request.data.get("interval_every", schedule.interval_every)
-        schedule.interval_period = request.data.get("interval_period", schedule.interval_period)
-        schedule.one_time_datetime = request.data.get(
-            "one_time_datetime", schedule.one_time_datetime
-        )
-        schedule.task_args = request.data.get("task_args", schedule.task_args)
-        schedule.task_kwargs = request.data.get("task_kwargs", schedule.task_kwargs)
-        schedule.queue = request.data.get("queue", schedule.queue)
-        schedule.status = request.data.get("status", schedule.status)
-        schedule.save()
-
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "message": "Schedule updated successfully.",
-            }
-        )
-
-    def destroy(self, request, pk=None):
-        """Delete a scheduled task."""
-        try:
-            schedule = CeleryTaskSchedule.objects.get(pk=pk)
-        except CeleryTaskSchedule.DoesNotExist:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        schedule.delete()
-        return Response({"message": f'Schedule "{schedule.name}" deleted successfully.'})
-
-    @action(detail=True, methods=["post"])
-    def enable(self, request, pk=None):
-        """Enable a scheduled task."""
-        try:
-            schedule = CeleryTaskSchedule.objects.get(pk=pk)
-        except CeleryTaskSchedule.DoesNotExist:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        schedule.status = CeleryTaskSchedule.TaskStatus.ENABLED
-        schedule.save()
-
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "status": schedule.status,
-                "message": "Schedule enabled successfully.",
-            }
-        )
-
-    @action(detail=True, methods=["post"])
-    def disable(self, request, pk=None):
-        """Disable a scheduled task."""
-        try:
-            schedule = CeleryTaskSchedule.objects.get(pk=pk)
-        except CeleryTaskSchedule.DoesNotExist:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        schedule.status = CeleryTaskSchedule.TaskStatus.DISABLED
-        schedule.save()
-
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "status": schedule.status,
-                "message": "Schedule disabled successfully.",
-            }
-        )
-
-    @action(detail=True, methods=["post"])
-    def run_now(self, request, pk=None):
-        """Run a scheduled task immediately."""
-        try:
-            schedule = CeleryTaskSchedule.objects.get(pk=pk)
-        except CeleryTaskSchedule.DoesNotExist:
-            return Response({"detail": "Schedule not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if schedule.status != CeleryTaskSchedule.TaskStatus.ENABLED:
-            return Response(
-                {"detail": "Cannot run disabled schedule."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            result = current_app.send_task(
-                schedule.task_name,
-                args=schedule.task_args or [],
-                kwargs=schedule.task_kwargs or {},
-                queue=schedule.queue or "default",
-            )
-
-            # Create task result record
-            task_result = CeleryTaskResult.objects.create(
-                task_id=result.id,
-                task_name=schedule.task_name,
-                task_module=".".join(schedule.task_name.split(".")[:-1]),
-                status="PENDING",
-                task_args=schedule.task_args or [],
-                task_kwargs=schedule.task_kwargs or {},
-                queue=schedule.queue or "default",
-                triggered_by=request.user if request.user.is_authenticated else None,
-            )
-
-            # Update schedule
-            schedule.last_run_at = timezone.now()
-            schedule.total_run_count += 1
-            schedule.save()
-
-            return Response(
-                {
-                    "message": f'Task "{schedule.name}" triggered successfully.',
-                    "task_id": result.id,
-                    "task_result_id": task_result.id,
-                }
-            )
-
-        except Exception as e:
-            return Response(
-                {"detail": f"Failed to trigger task: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    def _get_schedule_display(self, schedule):
-        """Generate human-readable schedule display."""
-        if schedule.schedule_type == CeleryTaskSchedule.ScheduleType.CRONTAB:
-            parts = []
-            if schedule.crontab_minute != "*":
-                parts.append(f"min:{schedule.crontab_minute}")
-            if schedule.crontab_hour != "*":
-                parts.append(f"hr:{schedule.crontab_hour}")
-            if schedule.crontab_day_of_week != "*":
-                parts.append(f"dow:{schedule.crontab_day_of_week}")
-            return " | ".join(parts) if parts else "Custom crontab"
-        elif schedule.schedule_type == CeleryTaskSchedule.ScheduleType.INTERVAL:
-            return f"Every {schedule.interval_every} {schedule.interval_period}"
-        elif schedule.schedule_type == CeleryTaskSchedule.ScheduleType.DATETIME:
-            return (
-                schedule.one_time_datetime.strftime("%Y-%m-%d %H:%M")
-                if schedule.one_time_datetime
-                else "Not set"
-            )
-        return "-"
-
-
-class CeleryDashboardView(APIView):
-    """Dashboard view for Celery task overview."""
-
-    permission_classes = [IsAdminUser]
-
-    def get(self, request):
+    @action(detail=False, methods=["get"])
+    def dashboard(self, request):
         """Get comprehensive Celery dashboard data."""
         now = timezone.now()
         last_24h = now - timedelta(hours=24)
         last_7d = now - timedelta(days=7)
 
-        # Task statistics
         task_stats = {
             "total": CeleryTaskResult.objects.count(),
             "last_24h": CeleryTaskResult.objects.filter(date_created__gte=last_24h).count(),
@@ -945,7 +796,6 @@ class CeleryDashboardView(APIView):
             ).count(),
         }
 
-        # Calculate success rate
         today_total = task_stats["success_today"] + task_stats["failed_today"]
         task_stats["success_rate_today"] = (
             round((task_stats["success_today"] / today_total * 100), 1)
@@ -953,7 +803,6 @@ class CeleryDashboardView(APIView):
             else 100.0
         )
 
-        # Recent tasks
         recent_tasks = CeleryTaskResult.objects.select_related("triggered_by").order_by(
             "-date_created"
         )[:10]
@@ -972,12 +821,10 @@ class CeleryDashboardView(APIView):
                 }
             )
 
-        # Scheduled tasks count
         scheduled_count = CeleryTaskSchedule.objects.filter(
             status=CeleryTaskSchedule.TaskStatus.ENABLED
         ).count()
 
-        # Workers
         workers = CeleryWorkerStatus.objects.filter(last_heartbeat__gte=now - timedelta(minutes=5))
         workers_data = []
         for worker in workers:
@@ -993,7 +840,6 @@ class CeleryDashboardView(APIView):
                 }
             )
 
-        # Top tasks by volume (last 7 days)
         top_tasks = (
             CeleryTaskResult.objects.filter(date_created__gte=last_7d)
             .values("task_name")

@@ -1,23 +1,20 @@
-from apps.shared.logger import logger
-"""
-API views for import/export functionality
-"""
+import re
+from django.contrib.auth import get_user_model
+from django.http import HttpResponse
 
 from rest_framework import status, permissions
-from rest_framework.views import APIView
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from django.contrib.auth import get_user_model
-from django.shortcuts import get_object_or_404
-from django.http import HttpResponse
-import re
+from rest_framework.viewsets import ViewSet, ReadOnlyModelViewSet
 
-User = get_user_model()
-
+from apps.shared.logger import logger
 from apps.users.models import UserImportJob
 from apps.users.services.export_service import ExportService
 from apps.users.tasks import process_import_job
 from apps.animes.serializers import UserImportJobSerializer
+
+User = get_user_model()
 
 # Validation for usernames - alphanumeric, underscores, hyphens only
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
@@ -25,12 +22,17 @@ USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024
 
-class ImportMALView(APIView):
-    """Import anime list from MyAnimeList"""
+
+class ImportExportViewSet(ViewSet):
+    """
+    ViewSet for handling importing and exporting of user anime lists.
+    Consolidates previously separate APIViews for MAL, AniList, and Exports.
+    """
 
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def import_mal(self, request):
         """Start MAL import from username"""
         username = request.data.get("username")
 
@@ -61,13 +63,8 @@ class ImportMALView(APIView):
             status=status.HTTP_202_ACCEPTED,
         )
 
-class ImportMALXMLView(APIView):
-    """Import anime list from MyAnimeList XML export file"""
-
-    permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def post(self, request):
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def import_mal_xml(self, request):
         """Upload and import MAL XML file"""
         if "file" not in request.FILES:
             return Response({"error": "XML file is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -111,12 +108,8 @@ class ImportMALXMLView(APIView):
             status=status.HTTP_202_ACCEPTED,
         )
 
-class ImportAniListView(APIView):
-    """Import anime list from AniList"""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
+    @action(detail=False, methods=["post"])
+    def import_anilist(self, request):
         """Start AniList import from username"""
         username = request.data.get("username")
         access_token = request.data.get("access_token")  # Optional
@@ -155,38 +148,11 @@ class ImportAniListView(APIView):
             status=status.HTTP_202_ACCEPTED,
         )
 
-class ImportJobStatusView(APIView):
-    """Get status of an import job"""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request, job_id):
-        """Get import job status and progress"""
-        job = get_object_or_404(UserImportJob, id=job_id, user=request.user)
-
-        serializer = UserImportJobSerializer(job)
-        return Response(serializer.data)
-
-class ImportJobListView(APIView):
-    """List user's import jobs"""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        """Get list of import jobs"""
-        jobs = UserImportJob.objects.filter(user=request.user).order_by("-created_at")[:10]
-        serializer = UserImportJobSerializer(jobs, many=True)
-        return Response(serializer.data)
-
-class ExportUserDataView(APIView):
-    """Export user data"""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        """Export user data as JSON or XML"""
-        # Use 'type' instead of 'format' to avoid DRF content negotiation issues
+    @action(detail=False, methods=["get"])
+    def export_user_data(self, request):
+        """Export user data as JSON or XML (Handles JSON programmatic vs file download)"""
         export_format = request.query_params.get("type", "json")
+        download = request.query_params.get("download", "true").lower() == "true"
 
         if export_format not in ["json", "xml"]:
             return Response(
@@ -197,6 +163,9 @@ class ExportUserDataView(APIView):
         try:
             # Generate export
             export_data = ExportService.export_user_data(request.user, export_format)
+
+            if not download and export_format == "json":
+                return Response({"data": export_data})
 
             # Determine content type and filename
             if export_format == "json":
@@ -219,34 +188,25 @@ class ExportUserDataView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-class ExportUserDataJSONView(APIView):
-    """Export user data as JSON (for programmatic use)"""
 
+class UserImportJobViewSet(ReadOnlyModelViewSet):
+    """
+    ViewSet for listing and retrieving import job statuses.
+    Read-only but includes a cancel action.
+    """
+    
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserImportJobSerializer
 
-    def get(self, request):
-        """Export user data as JSON"""
+    def get_queryset(self):
+        return UserImportJob.objects.filter(user=self.request.user).order_by("-created_at")
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Cancel a pending or processing import job"""
         try:
-            export_data = ExportService.export_user_data(request.user, "json")
-            return Response({"data": export_data})
-        except Exception as e:
-            logger.error(f"Export error: {e}")
-            return Response(
-                {"error": "Failed to generate export"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-class ImportJobCancelView(APIView):
-    """Cancel a pending or processing import job"""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request, job_id):
-        """Cancel an import job"""
-        try:
-            job = UserImportJob.objects.get(id=job_id, user=request.user)
+            job = self.get_object()
         except UserImportJob.DoesNotExist:
-            # Generic error message to prevent IDOR information leakage
             return Response(
                 {"error": "Job not found or access denied"},
                 status=status.HTTP_404_NOT_FOUND,

@@ -1,10 +1,12 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet
+
 from apps.users.models import UserBadge
 from apps.animes.serializers import UserBadgeSerializer
 
-class UserBadgeViewSet(viewsets.GenericViewSet):
+class UserBadgeViewSet(GenericViewSet):
     """User-facing API for managing featured badges."""
 
     permission_classes = [permissions.IsAuthenticated]

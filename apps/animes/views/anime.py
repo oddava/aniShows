@@ -1,5 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef, F
 from django.db.models.functions import Coalesce
@@ -28,7 +29,6 @@ from apps.animes.serializers import (
     StudioSerializer,
 )
 
-# Valid filter values for security
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
 VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
 VALID_SEASONS = {"winter", "spring", "summer", "fall"}
@@ -43,7 +43,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     pagination_class = StandardPagination
     lookup_field = "slug"
 
-    # Fields that AnimeListSerializer actually needs from the Anime table.
     _LIST_FIELDS = (
         "id",
         "title",
@@ -103,7 +102,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 )
             )
 
-        # ── Aggregate annotations — only for detail (list doesn't display these) ──
         if not is_list:
             queryset = queryset.annotate(
                 review_count=Count("reviews", distinct=True),
@@ -111,12 +109,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
             return queryset.order_by("-id")
 
-        # ──────────────────────────────────────────────────────────
-        #  LIST-specific filtering & sorting below
-        # ──────────────────────────────────────────────────────────
         needs_distinct = False
 
-        # Search - split query into words for better matching
         search = self.request.query_params.get("q")
         if search:
             search_words = search.strip().split()
@@ -127,9 +121,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     | Q(synopsis__icontains=search)
                 )
             else:
-                # Multi-word search - each word must appear in title OR title_jp
                 for word in search_words:
-                    if len(word) >= 2:  # Skip very short words
+                    if len(word) >= 2:
                         queryset = queryset.filter(
                             Q(title__icontains=word) | Q(title_jp__icontains=word)
                         )
@@ -145,21 +138,16 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 genres.append(param)
 
         if genres:
-            # Filter for anime that match ALL selected genres (AND logic)
             for genre in genres:
                 queryset = queryset.filter(genres__slug=genre)
-            # Multiple genre JOINs can produce duplicate rows
             needs_distinct = True
 
-        # Filter by status - validate against whitelist (case-insensitive)
         anime_status = self.request.query_params.get("status")
         if anime_status:
             if "," in anime_status:
                 statuses = [s.strip().lower() for s in anime_status.split(",")]
-                # Only allow valid statuses
                 valid_statuses = [s for s in statuses if s in VALID_STATUSES]
                 if valid_statuses:
-                    # Use iexact for case-insensitive matching with title-case DB values
                     status_q = Q()
                     for s in valid_statuses:
                         status_q |= Q(status__iexact=s)
@@ -169,12 +157,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if status_clean in VALID_STATUSES:
                     queryset = queryset.filter(status__iexact=status_clean)
 
-        # Filter by type - validate against whitelist
         anime_type = self.request.query_params.get("type")
         if anime_type:
             if "," in anime_type:
                 types_list = [t.strip().lower() for t in anime_type.split(",")]
-                # Only allow valid types
                 valid_types = [t for t in types_list if t in VALID_TYPES]
                 if valid_types:
                     queryset = queryset.filter(anime_type__in=valid_types)
@@ -183,7 +169,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if type_clean in VALID_TYPES:
                     queryset = queryset.filter(anime_type=type_clean)
 
-        # Filter by studio - validate as positive integer
         studio = self.request.query_params.get("studio")
         if studio:
             try:
@@ -191,10 +176,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if studio_id > 0:
                     queryset = queryset.filter(studio__id=studio_id)
             except (ValueError, TypeError):
-                # Invalid studio ID, ignore filter
                 pass
 
-        # Filter by rating range - validate numeric range
         min_rating = self.request.query_params.get("min_rating")
         max_rating = self.request.query_params.get("max_rating")
         if min_rating:
@@ -203,7 +186,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if MIN_RATING <= min_rating_val <= MAX_RATING:
                     queryset = queryset.filter(rating__gte=min_rating_val)
             except (ValueError, TypeError):
-                # Invalid rating, ignore filter
                 pass
         if max_rating:
             try:
@@ -211,18 +193,14 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if MIN_RATING <= max_rating_val <= MAX_RATING:
                     queryset = queryset.filter(rating__lte=max_rating_val)
             except (ValueError, TypeError):
-                # Invalid rating, ignore filter
                 pass
 
-        # Filter by season and year - validate inputs
         season = self.request.query_params.get("season")
         year = self.request.query_params.get("year")
         if year:
             try:
                 year_int = int(year)
-                # Validate year is reasonable (1980-2050)
                 if 1980 <= year_int <= 2050:
-                    # Season date ranges
                     season_ranges = {
                         "winter": [(year_int, 1, 1), (year_int, 3, 31)],
                         "spring": [(year_int, 4, 1), (year_int, 6, 30)],
@@ -236,13 +214,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                             release_date__gte=date(*start), release_date__lte=date(*end)
                         )
                     else:
-                        # Just filter by year
                         queryset = queryset.filter(release_date__year=year_int)
             except (ValueError, TypeError):
-                # Invalid year, ignore filter
                 pass
 
-        # Sorting - validate against whitelist
         sort = self.request.query_params.get("sort", "popular")
         sort_clean = sort.strip().lower()
         sort_mapping = {
@@ -253,37 +228,27 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             "upcoming": "-member_count",
             "trending": "trending_rank",
         }
-        # Only use valid sort fields, default to popular if invalid
         sort_field = sort_mapping.get(sort_clean, "popularity_rank")
 
-        # logical fixes for specific sorts:
         # Exclude upcoming (0 episodes) from rating and newest sorts to prevent them from hitting top
         if sort == "rating":
             queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
         elif sort == "newest":
             queryset = queryset.filter(episode_count__gt=0)
         elif sort == "upcoming":
-            # Show only upcoming anime, sorted by nearest release date
             queryset = queryset.filter(status="Upcoming")
         elif sort == "popular":
-            # For popular sort, filter out anime without popularity_rank so they don't clutter results
-            # BUT: when filtering by season/year or searching, include all anime so views work correctly
             if not season and not year and not search:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             else:
-                # For seasonal/search views, sort by member_count (descending) which is a better
-                # indicator of popularity - more members = more popular
-                # This ensures popular anime like Frieren appear first even if they
-                # don't have a popularity_rank set yet
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))
-                sort_field = "-member_sort"  # Descending - higher member count first
+                sort_field = "-member_sort"
         elif sort == "trending":
             queryset = queryset.filter(trending_rank__isnull=False)
 
         # Add ID as tie-breaker for stable pagination
         queryset = queryset.order_by(sort_field, "-id")
 
-        # Only apply DISTINCT when genre joins can produce duplicate rows
         if needs_distinct:
             queryset = queryset.distinct()
 
@@ -300,7 +265,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         user_id = request.user.id if request.user.is_authenticated else "anon"
         cache_key = f"anime_detail:{slug}:{user_id}"
 
-        # Try to get from cache first
         cached_data = cache.get(cache_key)
         if cached_data and not request.user.is_authenticated:
             return Response(cached_data)
@@ -314,8 +278,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             serializer = self.get_serializer(instance)
             data = serializer.data
 
-            # Cache for 10 minutes (longer cache for better performance)
-            # Only cache for anonymous users to avoid stale data for logged-in users
             if not request.user.is_authenticated:
                 cache.set(cache_key, data, 600)
 
@@ -334,7 +296,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             return super().list(request, *args, **kwargs)
 
         params = dict(request.query_params)
-        # Use a deterministic, fixed-size hash for the cache key
         param_string = json.dumps(sorted(params.items()), separators=(",", ":"))
         cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
         cache_key = f"anime_list:{cache_key_hash}"
@@ -345,7 +306,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         response = super().list(request, *args, **kwargs)
 
-        # Cache the response data (5 minutes for anonymous users)
         cache.set(cache_key, response.data, 300)
 
         return response
@@ -353,23 +313,17 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def _get_cached_shelf(self, request, cache_key, queryset_fn):
         """
         Shared helper for trending/top_rated shelves.
-
-        Caches the base anime data under a single shared key (not per-user)
-        and overlays lightweight user-specific fields for authenticated users.
-        This avoids 100k duplicate cache entries for identical data.
         """
         data = cache.get(cache_key)
 
         if not data:
-            # Use a lightweight queryset — only fields needed by AnimeListSerializer
             queryset = queryset_fn(
                 Anime.objects.select_related("studio").prefetch_related("genres")
             )
             serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
-            cache.set(cache_key, data, 60 * 10)  # 10 min shared cache
+            cache.set(cache_key, data, 60 * 10)
 
-        # Overlay user-specific fields for authenticated users
         if request.user.is_authenticated and data:
             anime_ids = [item["id"] for item in data]
             favorite_ids = set(
@@ -381,7 +335,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 entry.anime_id: entry
                 for entry in UserAnimeList.objects.filter(user=request.user, anime_id__in=anime_ids)
             }
-            # Return a new list so we don't mutate the cached data
             data = [
                 {
                     **item,
@@ -480,14 +433,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check if anime already exists locally
         try:
             anime = Anime.objects.get(anilist_id=anilist_id)
             return Response({"slug": anime.slug, "title": anime.title, "imported": False})
         except Anime.DoesNotExist:
             pass
 
-        # Rate limit: max 10 franchise fetches per minute per IP
         client_ip = self._get_client_ip(request)
         rate_key = f"franchise_fetch:{client_ip}"
         current_count = cache.get(rate_key, 0)
@@ -498,7 +449,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
         cache.set(rate_key, current_count + 1, timeout=60)
 
-        # Fetch from AniList using sync httpx and save to DB
         import httpx
         import re
         from django.db import IntegrityError
@@ -558,7 +508,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         """
 
         try:
-            # Synchronous AniList GraphQL request
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     ANILIST_URL,
@@ -591,7 +540,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            # Parse and save to database synchronously
             from apps.animes.models import Genre, Studio
 
             item = media
@@ -608,14 +556,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
             base_slug = slugify(title)
 
-            # Check again if it was created in between (race condition guard)
             try:
                 anime = Anime.objects.get(anilist_id=anilist_id)
                 return Response({"slug": anime.slug, "title": anime.title, "imported": False})
             except Anime.DoesNotExist:
                 pass
 
-            # Generate unique slug
             final_slug = base_slug
             counter = 0
             while Anime.objects.filter(slug=final_slug).exists():
@@ -624,7 +570,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if counter > 50:
                     break
 
-            # Map format
             format_map = {
                 "TV": Anime.AnimeType.tv,
                 "TV_SHORT": Anime.AnimeType.tv,
@@ -636,7 +581,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             }
             anime_type = format_map.get(item.get("format", "TV"), Anime.AnimeType.tv)
 
-            # Map status
             status_map = {
                 "RELEASING": Anime.AnimeStatus.airing,
                 "FINISHED": Anime.AnimeStatus.finished,
@@ -647,7 +591,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 item.get("status", "FINISHED"), Anime.AnimeStatus.finished
             )
 
-            # Parse dates
             def parse_date(date_obj):
                 if not date_obj or not date_obj.get("year"):
                     return None
@@ -670,7 +613,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             if description:
                 description = re.sub(r"<[^>]+>", "", description).strip()
 
-            # Source material
             source_map = {
                 "ORIGINAL": "Original",
                 "MANGA": "Manga",
@@ -693,7 +635,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             }
             source_material = source_map.get(item.get("source"), "") if item.get("source") else ""
 
-            # Build relations list with slug lookups
             raw_relations = [
                 {
                     "id": edge["node"]["id"],
@@ -708,7 +649,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 if edge["node"]["type"] == "ANIME"
             ]
 
-            # Look up slugs for related anime already in DB
             related_anilist_ids = [r["id"] for r in raw_relations if r.get("id")]
             slug_map = {}
             if related_anilist_ids:
@@ -720,7 +660,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             for rel in raw_relations:
                 rel["slug"] = slug_map.get(rel["id"])
 
-            # Next airing
             next_airing = item.get("nextAiringEpisode")
             next_airing_episode = next_airing.get("episode") if next_airing else None
             next_airing_date = None
@@ -730,12 +669,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     timezone=dt_timezone.utc,
                 )
 
-            # Validate source_material against model choices
             valid_sources = {c[0] for c in Anime.SourceMaterial.choices}
             if source_material not in valid_sources:
                 source_material = ""
 
-            # Grab external image URLs for immediate fallback (before Celery downloads)
             cover_url_external = (
                 item.get("coverImage", {}).get("extraLarge")
                 or item.get("coverImage", {}).get("large")
@@ -743,7 +680,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
             banner_url_external = item.get("bannerImage") or ""
 
-            # Handle title uniqueness: append format/year if title conflicts
             final_title = title
             if Anime.objects.filter(title=title).exists():
                 year_suffix = str(start_date.year) if start_date else ""
@@ -754,7 +690,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 else:
                     final_title = f"{title} ({anilist_id})"
 
-            # Handle mal_id uniqueness: set to None if already taken
             incoming_mal_id = item.get("idMal")
             if incoming_mal_id and Anime.objects.filter(mal_id=incoming_mal_id).exists():
                 incoming_mal_id = None
@@ -809,7 +744,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     banner_image_external_url=banner_url_external,
                 )
             except IntegrityError:
-                # Race condition: another request created this anime between our checks
                 try:
                     anime = Anime.objects.get(anilist_id=anilist_id)
                     return Response({"slug": anime.slug, "title": anime.title, "imported": False})
@@ -823,14 +757,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 f"Franchise fetch: created anime '{title}' (anilist_id={anilist_id}, slug={final_slug})"
             )
 
-            # Handle genres
             for genre_name in item.get("genres", []):
                 genre, _ = Genre.objects.get_or_create(
                     name=genre_name, defaults={"slug": slugify(genre_name)}
                 )
                 anime.genres.add(genre)
 
-            # Handle studio
             studios = item.get("studios", {}).get("nodes", [])
             if studios:
                 studio_name = studios[0].get("name")
@@ -839,7 +771,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     anime.studio = studio_obj
                     anime.save(update_fields=["studio"])
 
-            # Queue background image fetch
             cover_url = item.get("coverImage", {}).get("extraLarge") or item.get(
                 "coverImage", {}
             ).get("large")
@@ -859,7 +790,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 except Exception as img_err:
                     logger.warning(f"Failed to queue image fetch for {title}: {img_err}")
 
-            # Handle trailer
             trailer = item.get("trailer")
             if trailer and trailer.get("id") and trailer.get("site"):
                 trailer_url = None
@@ -871,7 +801,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     anime.trailer_url = trailer_url
                     anime.save(update_fields=["trailer_url"])
 
-            # Handle characters and voice actors
             try:
                 characters_data = item.get("characterPreview", {}).get("edges", [])
                 for edge in characters_data:
@@ -907,7 +836,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                             },
                         )
 
-                    # Handle voice actor (Japanese)
                     voice_actors = edge.get("voiceActors", [])
                     voice_actor = None
                     if voice_actors:
@@ -946,7 +874,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             except Exception as char_err:
                 logger.warning(f"Failed to import characters for {title}: {char_err}")
 
-            # Handle staff
             try:
                 staff_data = item.get("staffPreview", {}).get("edges", [])
                 for edge in staff_data:
@@ -984,7 +911,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             except Exception as staff_err:
                 logger.warning(f"Failed to import staff for {title}: {staff_err}")
 
-            # Queue theme song sync (requires mal_id)
             if anime.mal_id:
                 try:
                     from apps.animes.tasks.themes import sync_theme_songs
@@ -993,7 +919,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 except Exception as theme_err:
                     logger.warning(f"Failed to queue theme sync for {title}: {theme_err}")
 
-            # Update the source anime's relation slug so future visits are instant
             source_slug = request.data.get("source_slug")
             if source_slug:
                 self._update_relation_slug(source_slug, anilist_id, anime.slug)
@@ -1027,7 +952,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @staticmethod
     def _get_client_ip(request):
-        """Extract client IP from request for rate limiting."""
         x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
             return x_forwarded_for.split(",")[0].strip()
@@ -1035,7 +959,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @staticmethod
     def _update_relation_slug(source_slug, anilist_id, target_slug):
-        """Update the slug in the source anime's relations JSONField."""
         try:
             source_anime = Anime.objects.get(slug=source_slug)
             relations = source_anime.relations or []
