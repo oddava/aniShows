@@ -44,6 +44,7 @@ class CSPMiddleware(MiddlewareMixin):
                 "https://www.google-analytics.com",
                 "https://fonts.googleapis.com",
                 "https://fonts.gstatic.com",
+                "wss://anishows.com",
             ],
             "media-src": ["'self'", "https:", "http:"],
             "frame-src": ["'self'", "https://www.youtube.com", "https://youtube.com"],
