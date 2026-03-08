@@ -1,12 +1,12 @@
-from rest_framework.viewsets import ReadOnlyModelViewSet
 from django.db.models import Prefetch
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.animes.models import Staff, AnimeCharacter, AnimeStaff
+from apps.animes.models import AnimeCharacter, AnimeStaff, Staff
 from apps.animes.serializers import StaffDetailSerializer
 
+
 class StaffViewSet(ReadOnlyModelViewSet):
-    """
-    Staff detail endpoint.  Only the retrieve (detail) action is meaningful;
+    """Staff detail endpoint.  Only the retrieve (detail) action is meaningful;
     the list action is intentionally disabled.
     """
 

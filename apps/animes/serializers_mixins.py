@@ -1,13 +1,10 @@
-from apps.shared.logger import logger
-"""
-Serializer mixins for common functionality.
-"""
+"""Serializer mixins for common functionality."""
 
 from imagekit.cachefiles import ImageCacheFile
 
+
 class ImageUrlMixin:
-    """
-    Mixin to generate absolute URLs for image fields with fallback support.
+    """Mixin to generate absolute URLs for image fields with fallback support.
 
     This eliminates duplicate code across serializers that need to:
     1. Check if a local image exists
@@ -37,8 +34,7 @@ class ImageUrlMixin:
         return self._build_url(thumbnail_field)
 
     def get_image_url(self, obj, field_name, fallback_field_name=None):
-        """
-        Generate absolute URL for an image field.
+        """Generate absolute URL for an image field.
 
         Args:
             obj: The model instance
@@ -64,8 +60,7 @@ class ImageUrlMixin:
     def get_image_url_with_thumbnail(
         self, obj, thumbnail_field_name, original_field_name, fallback_field_name=None
     ):
-        """
-        Generate URL for a thumbnail with fallback to original image.
+        """Generate URL for a thumbnail with fallback to original image.
 
         Fallback chain: thumbnail → original image → external URL → None.
         Thumbnails are generated on-demand if they don't exist in storage.
@@ -101,8 +96,7 @@ class ImageUrlMixin:
         return None
 
 class UserStatusMixin:
-    """
-    Mixin for serializers that need is_favorite and user_list_status fields.
+    """Mixin for serializers that need is_favorite and user_list_status fields.
     Used by AnimeMinimalSerializer, AnimeListSerializer, AnimeDetailSerializer.
     """
 
@@ -132,8 +126,7 @@ class UserStatusMixin:
         return None
 
 class UserProfileMixin:
-    """
-    Mixin for serializers that need profile-derived fields (avatar, bio, etc.).
+    """Mixin for serializers that need profile-derived fields (avatar, bio, etc.).
     Used by UserSerializer, UserLightweightSerializer, PublicUserSerializer.
     """
 
@@ -169,8 +162,7 @@ class UserProfileMixin:
         return profile.points if profile else 0
 
 class BadgesMixin:
-    """
-    Mixin for serializers that display user badges.
+    """Mixin for serializers that display user badges.
     Used by UserSerializer and PublicUserSerializer.
 
     Expects the queryset to prefetch badges via:

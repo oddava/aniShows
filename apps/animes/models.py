@@ -1,30 +1,30 @@
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.contrib.postgres.indexes import GinIndex
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import (
-    Model,
-    TextField,
-    CharField,
-    URLField,
-    IntegerField,
-    DateField,
-    DecimalField,
-    DateTimeField,
-    BooleanField,
-    ManyToManyField,
+    CASCADE,
     SET_NULL,
+    BooleanField,
+    CharField,
+    DateField,
+    DateTimeField,
+    DecimalField,
     ForeignKey,
     ImageField,
-    SlugField,
-    CASCADE,
+    IntegerField,
     JSONField,
+    ManyToManyField,
+    Model,
+    SlugField,
+    TextField,
+    URLField,
 )
 from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
-from django.contrib.postgres.indexes import GinIndex
 from django.utils import timezone
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
 
-from apps.shared.models import TimestampMixin, CreatedAtMixin, SlugMixin
+from apps.shared.models import CreatedAtMixin, SlugMixin, TimestampMixin
 from root.storage_backends import MediaStorage
 
 

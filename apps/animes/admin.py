@@ -18,6 +18,7 @@ from .models import (
     UserRecommendation,
 )
 
+
 @admin.register(Genre)
 class GenreAdmin(admin.ModelAdmin):
     """Admin for anime genres."""

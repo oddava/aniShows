@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Base task infrastructure for unified Celery tasks.
 
@@ -11,10 +12,10 @@ Provides:
 import asyncio
 import hashlib
 import time
-from typing import Any, Dict, Optional
 from contextlib import asynccontextmanager
+from typing import Any
+
 from celery import Task
-from celery.exceptions import MaxRetriesExceededError
 from django.core.cache import cache
 
 # Retry configuration presets
@@ -61,9 +62,9 @@ class TaskMetrics:
     """Collect metrics for task execution."""
 
     def __init__(self):
-        self.start_time: Optional[float] = None
-        self.end_time: Optional[float] = None
-        self.api_calls: Dict[str, int] = {}
+        self.start_time: float | None = None
+        self.end_time: float | None = None
+        self.api_calls: dict[str, int] = {}
         self.records_processed: int = 0
         self.errors: int = 0
 
@@ -94,7 +95,7 @@ class TaskMetrics:
         """Record an error."""
         self.errors += 1
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert metrics to dictionary."""
         return {
             "duration_seconds": self.duration,
@@ -104,8 +105,7 @@ class TaskMetrics:
         }
 
 class BaseTask(Task):
-    """
-    Base task class with common functionality.
+    """Base task class with common functionality.
 
     Features:
     - Automatic service management with context manager
@@ -134,7 +134,7 @@ class BaseTask(Task):
 
     def _generate_idempotency_key(self, args, kwargs):
         """Generate idempotency key from task arguments."""
-        key_data = f"{self.name}:{str(args)}:{str(kwargs)}"
+        key_data = f"{self.name}:{args!s}:{kwargs!s}"
         return hashlib.sha256(key_data.encode()).hexdigest()
 
     def _get_lock_key(self, args, kwargs):
@@ -156,8 +156,7 @@ class BaseTask(Task):
         shadow=None,
         **options,
     ):
-        """
-        Override apply_async to support idempotency and locking.
+        """Override apply_async to support idempotency and locking.
 
         Args:
             idempotency_key: Custom idempotency key (optional)
@@ -228,8 +227,7 @@ class BaseTask(Task):
 
     @asynccontextmanager
     async def service_context(self, **kwargs):
-        """
-        Context manager for service lifecycle.
+        """Context manager for service lifecycle.
 
         Usage:
             async with self.service_context() as service:
@@ -260,8 +258,9 @@ class BaseTask(Task):
 
         # Update CeleryTaskResult in database
         try:
-            from apps.core.models import CeleryTaskResult
             from django.utils import timezone
+
+            from apps.core.models import CeleryTaskResult
 
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.SUCCESS
@@ -280,9 +279,9 @@ class BaseTask(Task):
         # Emit Prometheus metrics
         try:
             from apps.animes.services.metrics import (
-                TASK_EXECUTION_TIME,
-                TASK_EXECUTION_COUNT,
                 ANIME_SYNCED,
+                TASK_EXECUTION_COUNT,
+                TASK_EXECUTION_TIME,
             )
 
             duration = self.metrics.duration
@@ -318,8 +317,9 @@ class BaseTask(Task):
         )
         # Update CeleryTaskResult in database
         try:
-            from apps.core.models import CeleryTaskResult
             from django.utils import timezone
+
+            from apps.core.models import CeleryTaskResult
 
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.FAILURE
@@ -343,8 +343,8 @@ class BaseTask(Task):
         # Emit Prometheus metrics for failure
         try:
             from apps.animes.services.metrics import (
-                TASK_EXECUTION_TIME,
                 TASK_EXECUTION_COUNT,
+                TASK_EXECUTION_TIME,
             )
 
             duration = self.metrics.duration

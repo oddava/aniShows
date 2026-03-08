@@ -1,19 +1,18 @@
-"""
-Animes app URL configuration.
+"""Animes app URL configuration.
 Anime-related API endpoints.
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
     AnimeViewSet,
-    GenreViewSet,
-    StudioViewSet,
     FavoriteViewSet,
-    ReviewViewSet,
+    GenreViewSet,
     RecommendationsViewSet,
+    ReviewViewSet,
     StaffViewSet,
+    StudioViewSet,
 )
 from .views.image_views import ImageResizeView
 

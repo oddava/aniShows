@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Recommendation Engine Service
 
@@ -6,14 +7,13 @@ Lightweight content-based recommendation system using SQL and Python math.
 No heavy ML libraries - optimized for free tier hosting.
 """
 
-from typing import List, Dict, Tuple
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Q, Count
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
-from apps.animes.models import Anime, UserFavorite, UserHistory, UserRecommendation
+from apps.animes.models import Anime, UserFavorite, UserRecommendation
 from apps.users.models import UserAnimeList
 
 User = get_user_model()
@@ -33,7 +33,7 @@ class ContentBasedRecommender:
         self.genre_cache = {}
         self.anime_features_cache = {}
 
-    def get_user_preferences(self, user) -> Dict:
+    def get_user_preferences(self, user) -> dict:
         """Extract user preferences from their anime lists, favorites, and ratings"""
         preferences = {
             "liked_genres": defaultdict(int),
@@ -101,7 +101,7 @@ class ContentBasedRecommender:
 
         return preferences
 
-    def calculate_genre_similarity(self, anime: Anime, preferences: Dict) -> float:
+    def calculate_genre_similarity(self, anime: Anime, preferences: dict) -> float:
         """Calculate Jaccard similarity for genres.
 
         Uses prefetched genres from the queryset (no extra DB queries).
@@ -124,9 +124,8 @@ class ContentBasedRecommender:
 
         return weighted_intersection / len(union)
 
-    def calculate_content_score(self, anime: Anime, preferences: Dict) -> Tuple[float, Dict]:
-        """
-        Calculate content-based recommendation score.
+    def calculate_content_score(self, anime: Anime, preferences: dict) -> tuple[float, dict]:
+        """Calculate content-based recommendation score.
         Returns (score, metadata) tuple.
 
         Uses prefetched genres/studio from the queryset (no extra DB queries).
@@ -171,9 +170,8 @@ class ContentBasedRecommender:
 
         return final_score, metadata
 
-    def get_recommendations_for_user(self, user, limit: int = 50) -> List[Dict]:
-        """
-        Generate content-based recommendations for a user.
+    def get_recommendations_for_user(self, user, limit: int = 50) -> list[dict]:
+        """Generate content-based recommendations for a user.
         Returns list of dicts with anime, score, and reason.
         """
         preferences = self.get_user_preferences(user)
@@ -222,7 +220,7 @@ class ContentBasedRecommender:
 
         return diverse_recommendations
 
-    def _ensure_diversity(self, recommendations: List[Dict], limit: int) -> List[Dict]:
+    def _ensure_diversity(self, recommendations: list[dict], limit: int) -> list[dict]:
         """Ensure genre diversity in recommendations"""
         genre_count = defaultdict(int)
         diverse = []
@@ -244,7 +242,7 @@ class ContentBasedRecommender:
 
         return diverse
 
-    def _get_fallback_recommendations(self, limit: int) -> List[Dict]:
+    def _get_fallback_recommendations(self, limit: int) -> list[dict]:
         """Get fallback recommendations for new users (trending + top rated)"""
         recommendations = []
 
@@ -287,7 +285,7 @@ class RecommendationService:
     def __init__(self):
         self.content_recommender = ContentBasedRecommender()
 
-    def generate_for_user(self, user, save: bool = True) -> List[UserRecommendation]:
+    def generate_for_user(self, user, save: bool = True) -> list[UserRecommendation]:
         """Generate and optionally save recommendations for a user"""
         try:
             recs = self.content_recommender.get_recommendations_for_user(user, limit=50)
@@ -317,11 +315,11 @@ class RecommendationService:
             logger.info(f"Generated {len(saved_recs)} recommendations for user {user.username}")
             return saved_recs
 
-        except Exception as e:
+        except Exception:
             logger.exception(f"Error generating recommendations for user {user.username}")
             return []
 
-    def get_recommendations_for_user(self, user, limit: int = 12) -> List[UserRecommendation]:
+    def get_recommendations_for_user(self, user, limit: int = 12) -> list[UserRecommendation]:
         """Get cached recommendations for a user"""
         # Check if we have recent recommendations
         recs = (
@@ -341,7 +339,7 @@ class RecommendationService:
 
         return recs
 
-    def generate_for_all_users(self) -> Dict:
+    def generate_for_all_users(self) -> dict:
         """Generate recommendations for all active users"""
         stats = {
             "total_users": 0,

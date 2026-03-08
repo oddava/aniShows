@@ -1,6 +1,8 @@
-from apps.animes.models import Anime, Genre, Review, Studio
 from rest_framework.fields import FloatField, IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
+
+from apps.animes.models import Anime, Genre, Review, Studio
+
 
 class AdminGenreSerializer(ModelSerializer):
     """Admin serializer for anime genres."""

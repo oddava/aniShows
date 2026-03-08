@@ -1,42 +1,42 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.utils.html import escape
-from django.conf import settings
-from apps.shared.logger import logger
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import (
-    SerializerMethodField,
-    CharField,
-    IntegerField,
     BooleanField,
+    CharField,
     ChoiceField,
-    ImageField,
-    FloatField,
-    JSONField,
     DecimalField,
+    FloatField,
+    ImageField,
+    IntegerField,
+    JSONField,
+    SerializerMethodField,
 )
-from rest_framework.relations import SlugRelatedField, PrimaryKeyRelatedField
+from rest_framework.relations import PrimaryKeyRelatedField, SlugRelatedField
 from rest_framework.serializers import ModelSerializer, Serializer
 
 from apps.animes.models import (
     Anime,
-    Genre,
-    Studio,
-    UserFavorite,
-    Review,
-    ReviewComment,
-    Character,
-    Staff,
     AnimeCharacter,
     AnimeStaff,
+    Character,
+    Genre,
+    Review,
+    ReviewComment,
+    Staff,
+    Studio,
     ThemeSong,
+    UserFavorite,
 )
-from apps.users.models import UserAnimeList, UserActivity, Badge, UserBadge
 from apps.animes.serializers_mixins import (
-    ImageUrlMixin,
-    UserStatusMixin,
-    UserProfileMixin,
     BadgesMixin,
+    ImageUrlMixin,
+    UserProfileMixin,
+    UserStatusMixin,
 )
+from apps.shared.logger import logger
+from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
 
 User = get_user_model()
 
@@ -53,8 +53,7 @@ MAX_COMMENT_LENGTH = getattr(settings, "MAX_COMMENT_LENGTH", 2000)
 
 
 def validate_image_content(file, max_size, field_name):
-    """
-    Validate image file content for security.
+    """Validate image file content for security.
     Checks file size, magic bytes, and image integrity.
     """
     import magic
@@ -474,7 +473,6 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
 
     def get_status_distribution(self, obj):
         """Calculate anime list status distribution from prefetched data."""
-
         distribution = {
             "watching": 0,
             "completed": 0,
@@ -711,7 +709,6 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
 
     def get_is_following(self, obj):
         """Check if the current user is following this user"""
-
         if hasattr(obj, "_is_following"):
             return obj._is_following
 
@@ -738,9 +735,10 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
 
     def get_is_online(self, obj):
         """Check if user is currently online based on recent activity"""
+        from datetime import timedelta
+
         from django.core.cache import cache
         from django.utils import timezone
-        from datetime import timedelta
 
         cache_key = f"user_online:{obj.id}"
         if cache.get(cache_key) is not None:
@@ -781,11 +779,12 @@ class UserProfileUpdateSerializer(Serializer):
     social_links = JSONField(required=False)
 
     def validate_social_links(self, value):
+        import json
+
         from apps.core.services.social_links_service import (
             SocialLinksService,
             SocialLinkValidationError,
         )
-        import json
 
         if isinstance(value, str):
             try:
@@ -1010,7 +1009,8 @@ class UserActivitySerializer(ModelSerializer):
 class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
     """Lightweight user serializer for reviews
     queries that the full UserSerializer would trigger when user objects
-    are not annotated with _followers_count, _anime_count, etc."""
+    are not annotated with _followers_count, _anime_count, etc.
+    """
 
     avatar = SerializerMethodField()
     points = SerializerMethodField()
@@ -1066,7 +1066,6 @@ class ReviewSerializer(ModelSerializer):
 
     def get_user_vote(self, obj):
         """Use the annotated _user_vote field to avoid N+1 queries."""
-
         if hasattr(obj, "_user_vote"):
             return obj._user_vote if obj._user_vote else None
 
@@ -1126,10 +1125,7 @@ class ReviewCommentSerializer(ModelSerializer):
         if obj.user == request.user:
             return True
 
-        if obj.review.user == request.user:
-            return True
-
-        return False
+        return obj.review.user == request.user
 
 
 class ChangePasswordSerializer(Serializer):
@@ -1241,14 +1237,12 @@ class UserFollowListSerializer(ModelSerializer):
 
     def get_is_following(self, obj):
         """Check if the current user follows this user"""
-
         if hasattr(obj, "_is_following"):
             return obj._is_following
         return False
 
     def get_is_follower(self, obj):
         """Check if this user follows the current user"""
-
         if hasattr(obj, "_is_follower"):
             return obj._is_follower
         return False

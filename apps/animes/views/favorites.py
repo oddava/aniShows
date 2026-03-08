@@ -1,9 +1,9 @@
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 from rest_framework import permissions
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
-from django.shortcuts import get_object_or_404
-from django.contrib.auth import get_user_model
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.animes.models import Anime, UserFavorite

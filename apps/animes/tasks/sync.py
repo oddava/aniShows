@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Unified AniList synchronization task.
 
@@ -13,16 +14,14 @@ Into a single parameterized task with smart routing.
 
 import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional
+
 from asgiref.sync import sync_to_async
 from celery import shared_task
-from celery import chain, group
 from django.db import transaction
-from django.utils.text import slugify
 
-from apps.animes.services.anilist import AniListService, MediaSort
-from apps.animes.services.rate_limiting import APICallCache
 from apps.animes.models import Anime
+from apps.animes.services.anilist import AniListService, MediaSort
+
 from .base import BaseTask, run_async_in_task
 
 # Sync type configurations
@@ -71,8 +70,7 @@ SYNC_CONFIGS = {
 }
 
 class SyncAnimeCatalogTask(BaseTask):
-    """
-    Unified task for synchronizing anime catalog from AniList.
+    """Unified task for synchronizing anime catalog from AniList.
 
     Supports multiple sync types:
     - 'trending': Recently updated/popular anime
@@ -102,8 +100,7 @@ class SyncAnimeCatalogTask(BaseTask):
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(self, sync_type: str = "trending", limit: int = 50, **kwargs):
-        """
-        Run sync based on sync_type.
+        """Run sync based on sync_type.
 
         Args:
             sync_type: One of 'trending', 'seasonal', 'next_season', 'airing'
@@ -238,8 +235,7 @@ class SyncAnimeCatalogTask(BaseTask):
         return all_data[:limit]
 
     def _get_season(self, next_season: bool = False) -> tuple:
-        """
-        Calculate current or next season.
+        """Calculate current or next season.
 
         Returns:
             Tuple of (season_name, year)
@@ -274,7 +270,7 @@ class SyncAnimeCatalogTask(BaseTask):
 
         return current_season, year
 
-    async def _update_trending_ranks(self, data: List[Dict]):
+    async def _update_trending_ranks(self, data: list[dict]):
         """Batch update trending ranks using AniList ID."""
         rank_updates = {}
         for i, item in enumerate(data):
@@ -295,9 +291,8 @@ class SyncAnimeCatalogTask(BaseTask):
         await batch_update()
         logger.info(f"Updated {len(rank_updates)} trending ranks")
 
-    async def _trigger_theme_sync_for_new_anime(self, anime_ids: List[int]):
-        """
-        Trigger theme sync for newly created anime.
+    async def _trigger_theme_sync_for_new_anime(self, anime_ids: list[int]):
+        """Trigger theme sync for newly created anime.
         Uses Jikan API to fetch opening and ending themes.
         """
         from apps.animes.tasks import sync_theme_songs
@@ -337,8 +332,7 @@ class SyncAnimeCatalogTask(BaseTask):
     soft_time_limit=3300,
 )
 def sync_anime_catalog(self, sync_type: str = "trending", limit: int = 50, **kwargs):
-    """
-    Unified task for syncing anime catalog from AniList.
+    """Unified task for syncing anime catalog from AniList.
 
     Args:
         sync_type: 'trending', 'seasonal', 'next_season', or 'airing'

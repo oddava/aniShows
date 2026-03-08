@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Prometheus metrics integration for Celery tasks.
 
@@ -20,13 +21,13 @@ Usage:
 
 import functools
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Optional, Callable
 
 try:
-    from prometheus_client import Counter, Histogram, Gauge, Info
-    from prometheus_client import multiprocess
     import os
+
+    from prometheus_client import Counter, Gauge, Histogram, Info, multiprocess
 
     PROMETHEUS_AVAILABLE = True
 
@@ -149,8 +150,7 @@ USER_IMPORTS_PROCESSED = Counter(
 
 @contextmanager
 def task_timer(task_name: str, queue: str = "default"):
-    """
-    Context manager to time task execution and record metrics.
+    """Context manager to time task execution and record metrics.
 
     Args:
         task_name: Name of the task
@@ -166,7 +166,7 @@ def task_timer(task_name: str, queue: str = "default"):
 
     try:
         yield
-    except Exception as e:
+    except Exception:
         status = "failure"
         raise
     finally:
@@ -179,8 +179,7 @@ def task_timer(task_name: str, queue: str = "default"):
         ).inc()
 
 def timed_task(queue: str = "default"):
-    """
-    Decorator to automatically time task execution.
+    """Decorator to automatically time task execution.
 
     Args:
         queue: Queue name for metrics
@@ -207,9 +206,8 @@ def timed_task(queue: str = "default"):
 
     return decorator
 
-def increment_counter(metric_name: str, labels: Optional[dict] = None, value: int = 1):
-    """
-    Increment a counter metric.
+def increment_counter(metric_name: str, labels: dict | None = None, value: int = 1):
+    """Increment a counter metric.
 
     Args:
         metric_name: Name of the metric (e.g., 'anime_synced', 'api_calls')
@@ -230,9 +228,8 @@ def increment_counter(metric_name: str, labels: Optional[dict] = None, value: in
     if metric and labels:
         metric.labels(**labels).inc(value)
 
-def observe_histogram(metric_name: str, value: float, labels: Optional[dict] = None):
-    """
-    Observe a value in a histogram metric.
+def observe_histogram(metric_name: str, value: float, labels: dict | None = None):
+    """Observe a value in a histogram metric.
 
     Args:
         metric_name: Name of the metric
@@ -253,8 +250,7 @@ def observe_histogram(metric_name: str, value: float, labels: Optional[dict] = N
 
 @contextmanager
 def api_timer(service: str, endpoint: str = "unknown"):
-    """
-    Context manager to time external API calls.
+    """Context manager to time external API calls.
 
     Args:
         service: Service name (e.g., 'anilist', 'jikan')
@@ -270,7 +266,7 @@ def api_timer(service: str, endpoint: str = "unknown"):
 
     try:
         yield
-    except Exception as e:
+    except Exception:
         status = "failure"
         raise
     finally:
@@ -281,8 +277,7 @@ def api_timer(service: str, endpoint: str = "unknown"):
         API_CALL_COUNT.labels(service=service, endpoint=endpoint, status=status).inc()
 
 def update_queue_size(queue_name: str, size: int):
-    """
-    Update the queue size gauge.
+    """Update the queue size gauge.
 
     Args:
         queue_name: Name of the queue
@@ -292,8 +287,7 @@ def update_queue_size(queue_name: str, size: int):
         QUEUE_SIZE.labels(queue_name=queue_name).set(size)
 
 def record_task_retry(task_name: str):
-    """
-    Record a task retry.
+    """Record a task retry.
 
     Args:
         task_name: Name of the task
@@ -302,8 +296,7 @@ def record_task_retry(task_name: str):
         TASK_RETRY_COUNT.labels(task_name=task_name).inc()
 
 def get_metrics_registry():
-    """
-    Get the Prometheus metrics registry for exposing metrics.
+    """Get the Prometheus metrics registry for exposing metrics.
 
     Returns:
         Registry or None if prometheus_client not available

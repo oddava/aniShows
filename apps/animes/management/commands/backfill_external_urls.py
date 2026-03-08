@@ -1,16 +1,17 @@
-"""
-Backfill external image URLs for existing anime.
+"""Backfill external image URLs for existing anime.
 
 This command fetches external image URLs from AniList for anime
 that have anilist_id but no external image URLs stored.
 """
 
 import asyncio
+
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
+
 
 class Command(BaseCommand):
     help = "Backfill external image URLs for existing anime from AniList"

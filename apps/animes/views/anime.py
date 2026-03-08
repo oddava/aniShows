@@ -1,33 +1,33 @@
+from datetime import UTC, date
+
+from django.core.cache import cache
+from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
+from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
-from django.db.models import Count, Avg, Q, Prefetch, Exists, OuterRef, F
-from django.db.models.functions import Coalesce
-from django.core.cache import cache
-from datetime import date
 from rest_framework.viewsets import ReadOnlyModelViewSet
-
-from apps.shared.logger import logger
-from apps.shared.pagination import StandardPagination
 
 from apps.animes.models import (
     Anime,
-    Genre,
-    Studio,
-    UserFavorite,
     AnimeCharacter,
     AnimeStaff,
     Character,
+    Genre,
     Staff,
+    Studio,
+    UserFavorite,
 )
-from apps.users.models import UserAnimeList
 from apps.animes.serializers import (
-    AnimeListSerializer,
     AnimeDetailSerializer,
+    AnimeListSerializer,
     GenreSerializer,
     StudioSerializer,
 )
+from apps.shared.logger import logger
+from apps.shared.pagination import StandardPagination
+from apps.users.models import UserAnimeList
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
 VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
@@ -38,6 +38,7 @@ MIN_RATING = 0.0
 
 import hashlib
 import json
+
 
 class AnimeViewSet(ReadOnlyModelViewSet):
     pagination_class = StandardPagination
@@ -283,7 +284,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
             return Response(data)
         except Exception as e:
-            logger.error(f"Error retrieving anime {slug}: {str(e)}")
+            logger.error(f"Error retrieving anime {slug}: {e!s}")
             # If cache exists, return stale data rather than 500 error
             if cached_data:
                 logger.warning(f"Returning stale cache for anime {slug}")
@@ -311,9 +312,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         return response
 
     def _get_cached_shelf(self, request, cache_key, queryset_fn):
-        """
-        Shared helper for trending/top_rated shelves.
-        """
+        """Shared helper for trending/top_rated shelves."""
         data = cache.get(cache_key)
 
         if not data:
@@ -413,8 +412,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="franchise/fetch")
     def franchise_fetch(self, request):
-        """
-        Look up a franchise relation by anilist_id.
+        """Look up a franchise relation by anilist_id.
         If the anime exists locally, return its slug immediately.
         If not, fetch it from AniList synchronously, import it, and return the new slug.
         """
@@ -449,12 +447,13 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
         cache.set(rate_key, current_count + 1, timeout=60)
 
-        import httpx
         import re
+        from datetime import datetime
+
+        import httpx
         from django.db import IntegrityError
-        from django.utils.text import slugify
         from django.utils import timezone as django_timezone
-        from datetime import datetime, timezone as dt_timezone
+        from django.utils.text import slugify
 
         ANILIST_URL = "https://graphql.anilist.co/"
         MEDIA_FIELDS = """
@@ -666,7 +665,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             if next_airing and next_airing.get("airingAt"):
                 next_airing_date = django_timezone.make_aware(
                     datetime.fromtimestamp(next_airing["airingAt"]),
-                    timezone=dt_timezone.utc,
+                    timezone=UTC,
                 )
 
             valid_sources = {c[0] for c in Anime.SourceMaterial.choices}
@@ -685,10 +684,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 year_suffix = str(start_date.year) if start_date else ""
                 format_suffix = item.get("format", "")
                 parts = [p for p in [format_suffix, year_suffix] if p]
-                if parts:
-                    final_title = f"{title} ({' '.join(parts)})"
-                else:
-                    final_title = f"{title} ({anilist_id})"
+                final_title = f"{title} ({' '.join(parts)})" if parts else f"{title} ({anilist_id})"
 
             incoming_mal_id = item.get("idMal")
             if incoming_mal_id and Anime.objects.filter(mal_id=incoming_mal_id).exists():

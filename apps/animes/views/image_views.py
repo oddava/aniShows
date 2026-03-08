@@ -1,11 +1,13 @@
 import os
 from io import BytesIO
-from django.http import HttpResponse, HttpResponseNotFound
+
 from django.core.files.storage import default_storage
-from django.views.decorators.http import require_http_methods
+from django.http import HttpResponse, HttpResponseNotFound
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.http import require_http_methods
 from PIL import Image
+
 from apps.shared.logger import logger
 
 IMAGE_FORMATS = {
@@ -38,8 +40,7 @@ VALID_DIMENSIONS = {
 MAX_DIMENSION = 1920
 
 class ImageResizeView(View):
-    """
-    On-demand image resizing view.
+    """On-demand image resizing view.
 
     URL pattern: /media/resize/<path:filepath>?w=<width>&h=<height>&format=<format>
 
@@ -121,7 +122,7 @@ class ImageResizeView(View):
                 return response
 
         except Exception as e:
-            logger.error(f"Error resizing image {filepath}: {str(e)}")
+            logger.error(f"Error resizing image {filepath}: {e!s}")
             return self._serve_original(filepath)
 
     def _serve_original(self, filepath):
@@ -146,5 +147,5 @@ class ImageResizeView(View):
             return response
 
         except Exception as e:
-            logger.error(f"Error serving original image {filepath}: {str(e)}")
+            logger.error(f"Error serving original image {filepath}: {e!s}")
             return HttpResponseNotFound("Image not found")

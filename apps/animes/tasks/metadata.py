@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Unified metadata enrichment task.
 
@@ -13,18 +14,18 @@ With support for:
 - Configurable batch sizes
 """
 
-from typing import Dict, List, Optional
 from asgiref.sync import sync_to_async
 from celery import shared_task
 from django.db.models import Q
 
-from apps.animes.services.anilist import AniListService
 from apps.animes.models import Anime
+from apps.animes.services.anilist import AniListService
+
 from .base import BaseTask, run_async_in_task
 
+
 class MetadataEnrichmentTask(BaseTask):
-    """
-    Unified task for enriching anime metadata.
+    """Unified task for enriching anime metadata.
 
     Supports:
     - Single anime deep metadata fetch
@@ -52,14 +53,13 @@ class MetadataEnrichmentTask(BaseTask):
 
     def execute(
         self,
-        anime_id: Optional[int] = None,
+        anime_id: int | None = None,
         mode: str = "single",
         batch_size: int = 50,
-        filters: Optional[Dict] = None,
+        filters: dict | None = None,
         priority_field: str = "-popularity_rank",
     ):
-        """
-        Run metadata enrichment.
+        """Run metadata enrichment.
 
         Args:
             anime_id: Specific anime ID (for mode='single')
@@ -82,7 +82,7 @@ class MetadataEnrichmentTask(BaseTask):
         else:
             raise ValueError(f"Invalid mode: {mode}. Use 'single' or 'backfill'")
 
-    async def _enrich_single(self, anime_id: int) -> Dict:
+    async def _enrich_single(self, anime_id: int) -> dict:
         """Enrich metadata for a single anime."""
         async with self.service_context() as service:
             try:
@@ -121,9 +121,9 @@ class MetadataEnrichmentTask(BaseTask):
     async def _enrich_batch(
         self,
         batch_size: int,
-        filters: Optional[Dict],
+        filters: dict | None,
         priority_field: str,
-    ) -> Dict:
+    ) -> dict:
         """Batch enrich metadata for multiple anime."""
         async with self.service_context() as service:
             # Build queryset
@@ -210,14 +210,13 @@ class MetadataEnrichmentTask(BaseTask):
 )
 def enrich_metadata(
     self,
-    anime_id: Optional[int] = None,
+    anime_id: int | None = None,
     mode: str = "single",
     batch_size: int = 50,
-    filters: Optional[Dict] = None,
+    filters: dict | None = None,
     priority_field: str = "-popularity_rank",
 ):
-    """
-    Enrich anime metadata from AniList.
+    """Enrich anime metadata from AniList.
 
     Args:
         anime_id: Specific anime ID (for single mode)

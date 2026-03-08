@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Management command to populate theme songs for existing anime.
 Fetches openings and endings from Jikan (MyAnimeList) API.
@@ -13,15 +14,17 @@ Smart rate limiting features:
 """
 
 import asyncio
-import httpx
 import random
-import time
+import re
+
+import httpx
 from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
+
 from apps.animes.models import Anime, ThemeSong
 from apps.animes.services.anilist import AniListService
-from apps.animes.services.jikan import JikanRateLimiter, fetch_themes_from_jikan, JIKAN_BASE_URL
-import re
+from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter
+
 
 class Command(BaseCommand):
     help = (
@@ -119,7 +122,7 @@ class Command(BaseCommand):
                     self.stderr.write(f"No theme data found for: {anime.title}")
 
             except Exception as e:
-                self.stderr.write(f"Error processing {anime.title}: {str(e)}")
+                self.stderr.write(f"Error processing {anime.title}: {e!s}")
 
     async def process_batch(
         self, queryset, batch_size: int, max_retries: int, adaptive_delay: float
@@ -308,15 +311,14 @@ class Command(BaseCommand):
                         return None
 
                 # Handle other HTTP errors
-                if response.status_code >= 500:
-                    if attempt < max_retries:
-                        wait_time = min(2**attempt, 10)
-                        logger.warning(
-                            f"Jikan server error {response.status_code}, "
-                            f"retrying in {wait_time:.1f}s"
-                        )
-                        await asyncio.sleep(wait_time)
-                        continue
+                if response.status_code >= 500 and attempt < max_retries:
+                    wait_time = min(2**attempt, 10)
+                    logger.warning(
+                        f"Jikan server error {response.status_code}, "
+                        f"retrying in {wait_time:.1f}s"
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
 
                 response.raise_for_status()
                 data = response.json().get("data", {})

@@ -1,7 +1,8 @@
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
+
 from apps.animes.models import Anime
 from apps.users.models import UserAnimeList
 
@@ -14,7 +15,7 @@ class EpisodeTrackingTests(APITestCase):
         self.user.userprofile.email_verified = True
         self.user.userprofile.save()
         self.client.force_authenticate(user=self.user)
-        
+
         # Create anime with episodes
         self.anime = Anime.objects.create(
             title='Test Anime',
@@ -22,7 +23,7 @@ class EpisodeTrackingTests(APITestCase):
             episode_count=12,
             status='Finished'
         )
-        
+
         # Create anime with 0 episodes (e.g. upcoming or unknown)
         self.anime_unknown = Anime.objects.create(
             title='Unknown Anime',
@@ -30,7 +31,7 @@ class EpisodeTrackingTests(APITestCase):
             episode_count=0,
             status='Upcoming'
         )
-        
+
         self.url = reverse('lists-list')
 
     def test_add_anime_with_episodes(self):
@@ -44,16 +45,16 @@ class EpisodeTrackingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['episodes_watched'], 5)
         # 5/12 = 41.66% -> 41%
-        self.assertEqual(response.data['progress'], 41) 
+        self.assertEqual(response.data['progress'], 41)
 
     def test_update_episodes_progress(self):
         """Test updating episodes updates progress."""
         user_list = UserAnimeList.objects.create(user=self.user, anime=self.anime, status='Watching', episodes_watched=0)
         url = reverse('lists-detail', args=[user_list.id])
-        
+
         data = {'episodes_watched': 6}
         response = self.client.patch(url, data)
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['episodes_watched'], 6)
         self.assertEqual(response.data['progress'], 50)
@@ -62,10 +63,10 @@ class EpisodeTrackingTests(APITestCase):
         """Test status automatically changes to Completed when all episodes watched."""
         user_list = UserAnimeList.objects.create(user=self.user, anime=self.anime, status='Watching', episodes_watched=11)
         url = reverse('lists-detail', args=[user_list.id])
-        
+
         data = {'episodes_watched': 12}
         response = self.client.patch(url, data)
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'Completed')
 

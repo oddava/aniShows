@@ -1,5 +1,4 @@
-"""
-Pre-generate all ImageKit thumbnails for Anime, Character, and Staff models.
+"""Pre-generate all ImageKit thumbnails for Anime, Character, and Staff models.
 
 This ensures all thumbnails exist in S3/MinIO storage so the first page load
 is fast. The generation is idempotent — already-generated thumbnails are
@@ -12,6 +11,7 @@ Usage:
 """
 
 import time
+
 from django.core.management.base import BaseCommand
 from imagekit.cachefiles import ImageCacheFile
 

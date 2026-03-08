@@ -1,19 +1,23 @@
 from apps.shared.logger import logger
+
 """
 Rate limiting and circuit breaker utilities for AniList API.
 Optimized for small EC2 instances with minimal Redis overhead.
 """
 
 import asyncio
+import contextlib
 import time
-from functools import wraps
+from collections.abc import Callable
 from datetime import datetime
-from typing import Optional, Callable, Any
+from functools import wraps
+from typing import Any
+
 from django.core.cache import cache
 
+
 class AniListRateLimiter:
-    """
-    Distributed rate limiter using Redis for multi-worker coordination.
+    """Distributed rate limiter using Redis for multi-worker coordination.
     AniList allows 90 requests per minute per IP.
 
     Optimized for small EC2 instances:
@@ -37,8 +41,7 @@ class AniListRateLimiter:
         return f"anilist:rate:{current_minute}"
 
     async def acquire(self) -> None:
-        """
-        Acquire permission to make an API request.
+        """Acquire permission to make an API request.
         Blocks until it's safe to proceed.
         """
         while True:
@@ -80,8 +83,7 @@ class AniListRateLimiter:
                 await asyncio.sleep(self.min_delay)
 
 class CircuitBreaker:
-    """
-    Circuit breaker pattern for external API calls.
+    """Circuit breaker pattern for external API calls.
     Prevents cascading failures when API is down.
 
     States:
@@ -185,8 +187,7 @@ class CircuitBreaker:
             logger.error(f"Failed to record failure: {e}")
 
 class APICallCache:
-    """
-    Cache for API responses to prevent duplicate calls.
+    """Cache for API responses to prevent duplicate calls.
     Optimized for EC2 instances with configurable TTL.
     """
 
@@ -200,7 +201,7 @@ class APICallCache:
     def _get_recent_key(self, anilist_id: int) -> str:
         return f"api:recent:{anilist_id}"
 
-    def get(self, endpoint: str, params: str) -> Optional[Any]:
+    def get(self, endpoint: str, params: str) -> Any | None:
         """Get cached API response if available."""
         try:
             return cache.get(self._get_cache_key(endpoint, params))
@@ -223,23 +224,18 @@ class APICallCache:
 
     def mark_updated(self, anilist_id: int, window: int = 1800) -> None:
         """Mark anime as recently updated."""
-        try:
+        with contextlib.suppress(Exception):
             cache.set(self._get_recent_key(anilist_id), True, window)
-        except Exception:
-            pass
 
     def invalidate(self, anilist_id: int) -> None:
         """Invalidate cache for specific anime."""
-        try:
+        with contextlib.suppress(Exception):
             cache.delete(self._get_recent_key(anilist_id))
-        except Exception:
-            pass
 
 def circuit_breaker_protected(
     name: str, failure_threshold: int = 5, recovery_timeout: int = 300
 ) -> Callable:
-    """
-    Decorator to protect functions with circuit breaker pattern.
+    """Decorator to protect functions with circuit breaker pattern.
 
     Usage:
         @circuit_breaker_protected("anilist_api")
@@ -259,7 +255,7 @@ def circuit_breaker_protected(
                 result = await func(*args, **kwargs)
                 breaker.record_success()
                 return result
-            except Exception as e:
+            except Exception:
                 breaker.record_failure()
                 raise
 
@@ -272,7 +268,7 @@ def circuit_breaker_protected(
                 result = func(*args, **kwargs)
                 breaker.record_success()
                 return result
-            except Exception as e:
+            except Exception:
                 breaker.record_failure()
                 raise
 

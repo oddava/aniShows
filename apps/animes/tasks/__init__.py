@@ -1,5 +1,4 @@
-"""
-Unified Celery tasks for anime synchronization and enrichment.
+"""Unified Celery tasks for anime synchronization and enrichment.
 
 This module provides a consolidated task system with:
 - Base task classes with common functionality
@@ -30,27 +29,27 @@ Usage:
 """
 
 # Import all task modules to ensure registration
-from .sync import sync_anime_catalog
 from .airing import sync_airing_workflow
-from .metadata import enrich_metadata
-from .themes import sync_theme_songs, backfill_theme_youtube_urls
-from .recommendations import generate_recommendations
 from .franchises import sync_franchises, update_relation_slugs
 
 # Import legacy tasks from tasks.py (kept for backward compatibility)
 from .images import generate_image_thumbnails
+from .metadata import enrich_metadata
+from .recommendations import generate_recommendations
+from .sync import sync_anime_catalog
+from .themes import backfill_theme_youtube_urls, sync_theme_songs
 
 # Import legacy tasks to ensure they're registered
 # These are in tasks_legacy.py but imported via celery autodiscover
 
 __all__ = [
-    "sync_anime_catalog",
-    "sync_airing_workflow",
-    "enrich_metadata",
-    "sync_theme_songs",
     "backfill_theme_youtube_urls",
-    "generate_recommendations",
+    "enrich_metadata",
     "generate_image_thumbnails",
+    "generate_recommendations",
+    "sync_airing_workflow",
+    "sync_anime_catalog",
     "sync_franchises",
+    "sync_theme_songs",
     "update_relation_slugs",
 ]

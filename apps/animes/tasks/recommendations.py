@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Unified recommendation generation task.
 
@@ -12,18 +13,18 @@ With support for:
 - Configurable limits and algorithms
 """
 
-from typing import Dict, List, Optional
+
 from celery import shared_task
 from django.contrib.auth import get_user_model
 
 from apps.animes.services.recommendations import RecommendationService
+
 from .base import BaseTask
 
 User = get_user_model()
 
 class RecommendationTask(BaseTask):
-    """
-    Unified task for generating anime recommendations.
+    """Unified task for generating anime recommendations.
 
     Supports:
     - Batch generation for all active users
@@ -43,12 +44,11 @@ class RecommendationTask(BaseTask):
 
     def execute(
         self,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         limit: int = 10,
         algorithm: str = "hybrid",
     ):
-        """
-        Run recommendation generation.
+        """Run recommendation generation.
 
         Args:
             user_id: Specific user ID (None for all users)
@@ -70,7 +70,7 @@ class RecommendationTask(BaseTask):
         user_id: int,
         limit: int,
         algorithm: str,
-    ) -> Dict:
+    ) -> dict:
         """Generate recommendations for a single user."""
         try:
             user = User.objects.get(id=user_id)
@@ -105,7 +105,7 @@ class RecommendationTask(BaseTask):
         self,
         limit: int,
         algorithm: str,
-    ) -> Dict:
+    ) -> dict:
         """Generate recommendations for all active users."""
         try:
             service = RecommendationService()
@@ -164,7 +164,7 @@ class RecommendationTask(BaseTask):
             logger.exception("Error in batch recommendation generation")
             raise self.retry(exc=e)
 
-    def _get_active_user_ids(self) -> List[int]:
+    def _get_active_user_ids(self) -> list[int]:
         """Get IDs of users with anime activity."""
         from apps.users.models import UserAnimeList
 
@@ -186,12 +186,11 @@ class RecommendationTask(BaseTask):
 )
 def generate_recommendations(
     self,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
     limit: int = 10,
     algorithm: str = "hybrid",
 ):
-    """
-    Generate anime recommendations.
+    """Generate anime recommendations.
 
     Args:
         user_id: Specific user ID (None for all users)

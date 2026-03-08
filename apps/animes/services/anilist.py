@@ -1,24 +1,26 @@
-import httpx
 import asyncio
-from typing import Literal, Optional, List
-from enum import Enum
-from datetime import datetime, timezone as dt_timezone
+import contextlib
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Literal
+
+import httpx
+from asgiref.sync import sync_to_async
+from django.core.files.base import ContentFile
 from django.utils import timezone
 from django.utils.text import slugify
-from django.core.files.base import ContentFile
-from asgiref.sync import sync_to_async
-from apps.shared.logger import logger
 
 # Import models
 from apps.animes.models import (
     Anime,
-    Genre,
-    Studio,
-    Character,
-    Staff,
     AnimeCharacter,
     AnimeStaff,
+    Character,
+    Genre,
+    Staff,
+    Studio,
 )
+from apps.shared.logger import logger
 
 # Import rate limiting utilities
 from .rate_limiting import (
@@ -27,20 +29,21 @@ from .rate_limiting import (
     CircuitBreaker,
 )
 
-class MediaSort(str, Enum):
+
+class MediaSort(StrEnum):
     ID_DESC = "ID_DESC"
     SCORE = "SCORE_DESC"
     POPULARITY = "POPULARITY_DESC"
     TRENDING = "TRENDING_DESC"
     START_DATE = "START_DATE_DESC"
 
-class MediaStatus(str, Enum):
+class MediaStatus(StrEnum):
     FINISHED = "FINISHED"
     RELEASING = "RELEASING"
     NOT_YET_RELEASED = "NOT_YET_RELEASED"
     CANCELLED = "CANCELLED"
 
-class MediaFormat(str, Enum):
+class MediaFormat(StrEnum):
     TV = "TV"
     TV_SHORT = "TV_SHORT"
     MOVIE = "MOVIE"
@@ -119,7 +122,7 @@ class AniListService:
         if self.rate_limiter:
             await self.rate_limiter.acquire()
 
-    def _get_cached_result(self, endpoint: str, params: str) -> Optional[dict]:
+    def _get_cached_result(self, endpoint: str, params: str) -> dict | None:
         """Get cached API result if available."""
         if self.call_cache:
             return self.call_cache.get(endpoint, params)
@@ -145,8 +148,7 @@ class AniListService:
     async def _query(
         self, query: str, variables: dict, retry_count: int = 5, use_cache: bool = True
     ) -> dict:
-        """
-        Execute GraphQL query with rate limiting, caching, and circuit breaker.
+        """Execute GraphQL query with rate limiting, caching, and circuit breaker.
 
         Args:
             query: GraphQL query string
@@ -185,7 +187,7 @@ class AniListService:
                 )
 
                 # Check for rate limits
-                remaining = response.headers.get("X-RateLimit-Remaining")
+                response.headers.get("X-RateLimit-Remaining")
                 reset_time = response.headers.get("X-RateLimit-Reset")
 
                 if response.status_code == 429:
@@ -209,7 +211,7 @@ class AniListService:
                 if "errors" in data:
                     error_msg = data["errors"][0]["message"]
                     if "Too Many Requests" in error_msg:
-                        logger.warning(f"AniList GraphQL Rate Limit Error. Sleeping 60s...")
+                        logger.warning("AniList GraphQL Rate Limit Error. Sleeping 60s...")
                         await asyncio.sleep(60)
                         continue
                     logger.error(f"GraphQL Error: {error_msg}")
@@ -239,9 +241,8 @@ class AniListService:
         self._record_failure()
         return {}
 
-    async def download_image(self, url: str) -> Optional[bytes]:
-        """
-        Download image from URL with SSRF protection.
+    async def download_image(self, url: str) -> bytes | None:
+        """Download image from URL with SSRF protection.
         Only allows HTTPS URLs from trusted domains.
         """
         if not url:
@@ -319,8 +320,8 @@ class AniListService:
         variables: dict,
         include_season: bool = False,
         limit: int = 50,
-        custom_query: Optional[str] = None,  # Added custom_query parameter
-    ) -> List[dict]:
+        custom_query: str | None = None,  # Added custom_query parameter
+    ) -> list[dict]:
         results = []
         page = variables.get("page", 1)
         per_page = min(limit, self.MAX_PER_PAGE)
@@ -356,14 +357,14 @@ class AniListService:
 
         return results[:limit]
 
-    async def get_recent_updates(self, limit: int = 50) -> List[dict]:
+    async def get_recent_updates(self, limit: int = 50) -> list[dict]:
         return await self._fetch_paginated(
             variables={"sort": [MediaSort.TRENDING.value]},
             include_season=False,
             limit=limit,
         )
 
-    async def get_top_rated(self, limit: int = 50) -> List[dict]:
+    async def get_top_rated(self, limit: int = 50) -> list[dict]:
         return await self._fetch_paginated(
             variables={"sort": [MediaSort.SCORE.value]},
             include_season=False,
@@ -376,14 +377,14 @@ class AniListService:
         year: int,
         limit: int = 50,
         sort: MediaSort = MediaSort.POPULARITY,
-    ) -> List[dict]:
+    ) -> list[dict]:
         return await self._fetch_paginated(
             variables={"season": season, "year": year, "sort": [sort.value]},
             include_season=True,
             limit=limit,
         )
 
-    async def search_anime(self, query_string: str) -> List[dict]:
+    async def search_anime(self, query_string: str) -> list[dict]:
         """Search for a single anime by title to get detailed info"""
         query = f"""
             query SearchAnime($search: String) {{
@@ -403,16 +404,13 @@ class AniListService:
         return data.get("Page", {}).get("media", [])
 
     async def close(self):
-        try:
+        with contextlib.suppress(Exception):
             await self.client.aclose()
-        except Exception:
-            pass
 
     # --- Processing Logic (Extracted from Command) ---
 
-    async def process_media_list(self, media_list: List[dict], progress_callback=None):
-        """
-        Process a list of media items and save/update them in the database.
+    async def process_media_list(self, media_list: list[dict], progress_callback=None):
+        """Process a list of media items and save/update them in the database.
         Returns stats dict with created anime IDs for theme sync.
         """
         stats = {"created": 0, "updated": 0, "skipped": 0, "created_anime_ids": []}
@@ -475,8 +473,7 @@ class AniListService:
         return stats
 
     async def update_anime_manual(self, anime: Anime, item: dict):
-        """
-        Manually update a specific Anime instance with AniList data.
+        """Manually update a specific Anime instance with AniList data.
         Updates fields but PRESERVES the existing slug to avoid integrity errors/identity shifts.
         """
         try:
@@ -613,7 +610,7 @@ class AniListService:
             else None,
             "next_airing_date": timezone.make_aware(
                 datetime.fromtimestamp(item["nextAiringEpisode"]["airingAt"]),
-                timezone=dt_timezone.utc,
+                timezone=UTC,
             )
             if item.get("nextAiringEpisode") and item["nextAiringEpisode"].get("airingAt")
             else None,
@@ -943,7 +940,7 @@ class AniListService:
         setattr(anime, field_name, url)
         anime.save(update_fields=[field_name])
 
-    async def get_anime_by_id(self, anilist_id: int) -> Optional[dict]:
+    async def get_anime_by_id(self, anilist_id: int) -> dict | None:
         """Fetch a single anime by AniList ID"""
         query = f"""
             query GetAnimeById($id: Int) {{
@@ -960,7 +957,7 @@ class AniListService:
             return data["Media"]
         return None
 
-    async def search_by_mal_id(self, mal_id: int) -> Optional[dict]:
+    async def search_by_mal_id(self, mal_id: int) -> dict | None:
         """Search for anime by MyAnimeList ID"""
         query = f"""
             query SearchByMalId($idMal: Int) {{
@@ -986,10 +983,6 @@ class AniListService:
 
     async def _save_anime_to_db_async(self, item: dict) -> Anime:
         """Async implementation of save_anime_to_db"""
-        import logging
-
-        
-
         anilist_id = item.get("id")
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
@@ -1037,7 +1030,7 @@ class AniListService:
         counter = 0
         while True:
             try:
-                existing = await sync_to_async(Anime.objects.get)(slug=final_slug)
+                await sync_to_async(Anime.objects.get)(slug=final_slug)
                 # Found anime with this slug - if it's the same title, we would have found it above
                 # So this must be a different anime with same slug
                 counter += 1
@@ -1117,9 +1110,8 @@ class AniListService:
         await self._handle_relationships_async(anime, item)
         await self._download_and_save_images(anime, item)
 
-    async def _update_relation_slugs(self, anime_ids: List[int]):
-        """
-        Post-processing step to update relation slugs for processed anime.
+    async def _update_relation_slugs(self, anime_ids: list[int]):
+        """Post-processing step to update relation slugs for processed anime.
         This ensures related anime from the same batch are properly linked.
         """
         logger.info(f"Updating relation slugs for {len(anime_ids)} anime")

@@ -1,5 +1,4 @@
-"""
-Review API Tests
+"""Review API Tests
 
 Tests for:
 - Creating reviews (requires anime on list)
@@ -9,19 +8,19 @@ Tests for:
 - Cannot delete others' reviews
 - XSS prevention in review text
 """
-from django.test import TestCase
-from django.urls import reverse
-from rest_framework.test import APITestCase, APIClient
-from rest_framework import status
 from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient, APITestCase
+
 from apps.animes.models import Anime, Review
-from apps.users.models import UserProfile, UserAnimeList
+from apps.users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 
 class ReviewCreationTests(APITestCase):
     """Tests for review creation."""
-    
+
     def setUp(self):
         self.user = User.objects.create_user(
             username='testuser',
@@ -37,12 +36,12 @@ class ReviewCreationTests(APITestCase):
             anime_type='TV',
             status='Airing'
         )
-        
+
         self.reviews_url = reverse('reviews-list')
         self.client = APIClient()
         self.user.refresh_from_db()
         self.client.force_authenticate(user=self.user)
-    
+
     def test_create_review_requires_anime_on_list(self):
         """Test that creating a review requires the anime to be on user's list."""
         data = {
@@ -53,7 +52,7 @@ class ReviewCreationTests(APITestCase):
         response = self.client.post(self.reviews_url, data)
         # Should fail because anime is not on user's list
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
+
     def test_create_review_with_anime_on_list(self):
         """Test successful review creation when anime is on user's list."""
         # Add anime to list first
@@ -62,7 +61,7 @@ class ReviewCreationTests(APITestCase):
             anime=self.anime,
             status='Completed'
         )
-        
+
         data = {
             'anime_slug': 'test-anime',
             'rating': 9,
@@ -73,7 +72,7 @@ class ReviewCreationTests(APITestCase):
         self.assertTrue(
             Review.objects.filter(user=self.user, anime=self.anime).exists()
         )
-    
+
     def test_create_review_xss_prevention(self):
         """Test that review text is sanitized against XSS."""
         UserAnimeList.objects.create(
@@ -81,7 +80,7 @@ class ReviewCreationTests(APITestCase):
             anime=self.anime,
             status='Completed'
         )
-        
+
         data = {
             'anime_slug': 'test-anime',
             'rating': 7,
@@ -89,11 +88,11 @@ class ReviewCreationTests(APITestCase):
         }
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         review = Review.objects.get(user=self.user, anime=self.anime)
         self.assertNotIn('<script>', review.text)
         self.assertIn('&lt;script&gt;', review.text)  # Escaped
-    
+
     def test_create_review_unauthenticated(self):
         """Test that unauthenticated users cannot create reviews."""
         self.client.logout()
@@ -107,7 +106,7 @@ class ReviewCreationTests(APITestCase):
 
 class ReviewPermissionTests(APITestCase):
     """Tests for review permissions."""
-    
+
     def setUp(self):
         self.user1 = User.objects.create_user(
             username='user1',
@@ -121,7 +120,7 @@ class ReviewPermissionTests(APITestCase):
         )
         UserProfile.objects.update_or_create(user=self.user1, defaults={'email_verified': True})
         UserProfile.objects.update_or_create(user=self.user2, defaults={'email_verified': True})
-        
+
         self.anime = Anime.objects.create(
             title='Test Anime',
             slug='test-anime',
@@ -129,7 +128,7 @@ class ReviewPermissionTests(APITestCase):
             anime_type='TV',
             status='Airing'
         )
-        
+
         # User1's review
         UserAnimeList.objects.create(user=self.user1, anime=self.anime, status='Completed')
         self.review = Review.objects.create(
@@ -138,56 +137,56 @@ class ReviewPermissionTests(APITestCase):
             rating=8,
             text='Original review text'
         )
-        
+
         self.client = APIClient()
-    
+
     def test_update_own_review(self):
         """Test that users can update their own reviews."""
         self.client.force_authenticate(user=self.user1)
         detail_url = reverse('reviews-detail', args=[self.review.id])
-        
+
         data = {'rating': 9, 'text': 'Updated review text'}
         response = self.client.patch(detail_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         self.review.refresh_from_db()
         self.assertEqual(self.review.rating, 9)
         self.assertIn('Updated', self.review.text)
-    
+
     def test_cannot_update_others_review(self):
         """Test that users cannot update other users' reviews."""
         self.client.force_authenticate(user=self.user2)
         detail_url = reverse('reviews-detail', args=[self.review.id])
-        
+
         data = {'rating': 1, 'text': 'Hacked review!'}
         response = self.client.patch(detail_url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        
+
         # Verify original review unchanged
         self.review.refresh_from_db()
         self.assertEqual(self.review.rating, 8)
-    
+
     def test_delete_own_review(self):
         """Test that users can delete their own reviews."""
         self.client.force_authenticate(user=self.user1)
         detail_url = reverse('reviews-detail', args=[self.review.id])
-        
+
         response = self.client.delete(detail_url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Review.objects.filter(id=self.review.id).exists())
-    
+
     def test_cannot_delete_others_review(self):
         """Test that users cannot delete other users' reviews."""
         self.client.force_authenticate(user=self.user2)
         detail_url = reverse('reviews-detail', args=[self.review.id])
-        
+
         response = self.client.delete(detail_url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Review.objects.filter(id=self.review.id).exists())
 
 class ReviewValidationTests(APITestCase):
     """Tests for review validation."""
-    
+
     def setUp(self):
         self.user = User.objects.create_user(
             username='testuser',
@@ -195,7 +194,7 @@ class ReviewValidationTests(APITestCase):
             password='password123'
         )
         UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
-        
+
         self.anime = Anime.objects.create(
             title='Test Anime',
             slug='test-anime',
@@ -204,12 +203,12 @@ class ReviewValidationTests(APITestCase):
             status='Airing'
         )
         UserAnimeList.objects.create(user=self.user, anime=self.anime, status='Completed')
-        
+
         self.reviews_url = reverse('reviews-list')
         self.client = APIClient()
         self.user.refresh_from_db()
         self.client.force_authenticate(user=self.user)
-    
+
     def test_rating_required(self):
         """Test that rating is required."""
         data = {
@@ -218,19 +217,19 @@ class ReviewValidationTests(APITestCase):
         }
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
+
     def test_rating_bounds(self):
         """Test that rating must be between 1 and 10."""
         # Rating too low
         data = {'anime_slug': 'test-anime', 'rating': 0, 'text': 'Test'}
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        
+
         # Rating too high
         data = {'anime_slug': 'test-anime', 'rating': 11, 'text': 'Test'}
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-    
+
     def test_review_text_optional(self):
         """Test that review text is optional (rating-only reviews are valid)."""
         data = {
@@ -239,8 +238,8 @@ class ReviewValidationTests(APITestCase):
         }
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-    
-    
+
+
     def test_spoiler_flag(self):
         """Test that spoiler flag works correctly."""
         data = {
@@ -251,13 +250,13 @@ class ReviewValidationTests(APITestCase):
         }
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         review = Review.objects.get(user=self.user, anime=self.anime)
         self.assertTrue(review.has_spoilers)
 
 class ReviewSubRatingTests(APITestCase):
     """Tests for sub-ratings fields."""
-    
+
     def setUp(self):
         self.user = User.objects.create_user(
             username='testuser',
@@ -265,7 +264,7 @@ class ReviewSubRatingTests(APITestCase):
             password='password123'
         )
         UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
-        
+
         self.anime = Anime.objects.create(
             title='Test Anime',
             slug='test-anime',
@@ -274,7 +273,7 @@ class ReviewSubRatingTests(APITestCase):
             status='Airing'
         )
         UserAnimeList.objects.create(user=self.user, anime=self.anime, status='Completed')
-        
+
         self.reviews_url = reverse('reviews-list')
         self.client = APIClient()
         self.user.refresh_from_db()
@@ -293,7 +292,7 @@ class ReviewSubRatingTests(APITestCase):
         }
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         review = Review.objects.get(user=self.user, anime=self.anime)
         self.assertEqual(review.rating, 8)
         self.assertEqual(review.rating_story, 9)

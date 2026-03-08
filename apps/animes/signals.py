@@ -1,18 +1,20 @@
 from datetime import timedelta
 
-from django.db.models.signals import pre_save, post_save, post_delete
-from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.db.models.signals import post_delete, post_save, pre_save
+from django.dispatch import receiver
 from django.utils import timezone as tz
-from .models import Anime, UserFavorite, ReviewComment, Review
-from apps.users.models import UserAnimeList, UserStats, UserActivity
-from apps.users.services.cache import invalidate_user_caches
-from apps.users.services.stats_service import create_or_update_user_stats
+
 from apps.animes.tasks import enrich_metadata, generate_recommendations
 from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
+from apps.users.models import UserActivity, UserAnimeList
+from apps.users.services.cache import invalidate_user_caches
+from apps.users.services.stats_service import create_or_update_user_stats
+
+from .models import Anime, Review, ReviewComment, UserFavorite
 
 User = get_user_model()
 
@@ -23,8 +25,7 @@ def _user_exists(user):
     return User.objects.filter(pk=user.pk).exists()
 
 def update_user_stats_and_cache(user):
-    """
-    Update user stats asynchronously and invalidate caches immediately.
+    """Update user stats asynchronously and invalidate caches immediately.
     Stats are offloaded to Celery to avoid blocking the request.
     Cache invalidation happens synchronously so stale data is never served.
     """
@@ -56,8 +57,7 @@ def update_user_stats_and_cache(user):
 
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
-    """
-    Event-driven trigger: When a new Anime is created,
+    """Event-driven trigger: When a new Anime is created,
     automatically queue a low-priority task to fetch deep metadata (characters, staff).
     """
     if created:
@@ -276,9 +276,7 @@ def _schedule_recommendations_debounced(user_id, countdown=300):
 
 @receiver([post_save, post_delete], sender=UserAnimeList)
 def handle_user_anime_list_change(sender, instance, **kwargs):
-    """
-    Update stats and regenerate recommendations when a user updates their anime list.
-    """
+    """Update stats and regenerate recommendations when a user updates their anime list."""
     if instance and instance.user:
         # Skip if user is being deleted (cascade deletion)
         if not _user_exists(instance.user):
@@ -296,9 +294,7 @@ def handle_user_anime_list_change(sender, instance, **kwargs):
 
 @receiver([post_save, post_delete], sender=UserFavorite)
 def handle_user_favorite_change(sender, instance, **kwargs):
-    """
-    Update stats and regenerate recommendations when a user adds/removes favorites.
-    """
+    """Update stats and regenerate recommendations when a user adds/removes favorites."""
     if instance and instance.user:
         # Skip if user is being deleted (cascade deletion)
         if not _user_exists(instance.user):
@@ -316,9 +312,7 @@ def handle_user_favorite_change(sender, instance, **kwargs):
 
 @receiver([post_save, post_delete], sender=Review)
 def handle_review_change(sender, instance, **kwargs):
-    """
-    Update stats when a user creates/updates/deletes a review.
-    """
+    """Update stats when a user creates/updates/deletes a review."""
     if instance and instance.user:
         # Skip if user is being deleted (cascade deletion)
         if not _user_exists(instance.user):

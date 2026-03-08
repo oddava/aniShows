@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Unified airing workflow task.
 
@@ -10,20 +11,19 @@ Consolidates:
 Into a chained workflow with smart deduplication and batching.
 """
 
-from datetime import datetime
-from typing import Dict, List, Optional
 from asgiref.sync import sync_to_async
-from celery import shared_task, chain, chord
+from celery import shared_task
 from django.utils import timezone
 
+from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.rate_limiting import APICallCache
-from apps.animes.models import Anime
+
 from .base import BaseTask, run_async_in_task
 
+
 class AiringWorkflowTask(BaseTask):
-    """
-    Unified workflow for managing airing anime data.
+    """Unified workflow for managing airing anime data.
 
     This task chains multiple operations:
     1. Sync airing anime (update next_airing_date for all airing anime)
@@ -46,12 +46,11 @@ class AiringWorkflowTask(BaseTask):
 
     def execute(
         self,
-        phases: Optional[List[str]] = None,
+        phases: list[str] | None = None,
         batch_size: int = 100,
         dedup_window: int = 1800,
     ):
-        """
-        Run airing workflow.
+        """Run airing workflow.
 
         Args:
             phases: List of phases to run ['sync', 'cleanup', 'backfill'] or None for all
@@ -72,7 +71,7 @@ class AiringWorkflowTask(BaseTask):
 
     async def _async_workflow(
         self,
-        phases: List[str],
+        phases: list[str],
         batch_size: int,
         dedup_window: int,
     ):
@@ -115,9 +114,8 @@ class AiringWorkflowTask(BaseTask):
         service: AniListService,
         call_cache: APICallCache,
         batch_size: int,
-    ) -> Dict:
-        """
-        Sync all currently airing anime.
+    ) -> dict:
+        """Sync all currently airing anime.
 
         Updates next_airing_date for anime with status='airing'.
         Uses deduplication to prevent redundant API calls.
@@ -190,9 +188,8 @@ class AiringWorkflowTask(BaseTask):
         self,
         service: AniListService,
         batch_size: int,
-    ) -> Dict:
-        """
-        Clear next_airing_date for finished anime.
+    ) -> dict:
+        """Clear next_airing_date for finished anime.
 
         Also updates status from 'airing' to 'finished' if detected.
         """
@@ -258,9 +255,8 @@ class AiringWorkflowTask(BaseTask):
         service: AniListService,
         call_cache: APICallCache,
         batch_size: int,
-    ) -> Dict:
-        """
-        Backfill missing next_airing_date for airing anime.
+    ) -> dict:
+        """Backfill missing next_airing_date for airing anime.
 
         Processes anime with status='airing' but no next_airing_date.
         """
@@ -312,7 +308,7 @@ class AiringWorkflowTask(BaseTask):
             "errors": error_count,
         }
 
-    def _compile_summary(self, results: Dict) -> Dict:
+    def _compile_summary(self, results: dict) -> dict:
         """Compile workflow results into summary."""
         summary = {
             "status": "success",
@@ -358,12 +354,11 @@ class AiringWorkflowTask(BaseTask):
 )
 def sync_airing_workflow(
     self,
-    phases: Optional[List[str]] = None,
+    phases: list[str] | None = None,
     batch_size: int = 100,
     dedup_window: int = 1800,
 ):
-    """
-    Run unified airing workflow.
+    """Run unified airing workflow.
 
     Args:
         phases: Phases to run ['sync', 'cleanup', 'backfill'] or None for all

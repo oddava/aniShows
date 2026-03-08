@@ -1,6 +1,4 @@
-from apps.shared.logger import logger
-"""
-Management command to populate franchise relations for existing anime.
+"""Management command to populate franchise relations for existing anime.
 Fetches relations from AniList and imports any related anime not yet in the database.
 
 Smart rate limiting features:
@@ -13,22 +11,25 @@ Smart rate limiting features:
 Usage:
     # Run synchronously (default) - imports missing anime to ensure all slugs are linked
     python manage.py populate_franchises
-    
+
     # Run via Celery tasks (async)
     python manage.py populate_franchises --async
-    
+
     # Process specific anime
     python manage.py populate_franchises --anime-id 123
-    
+
     # Don't import missing related anime (not recommended - slugs may be missing)
     python manage.py populate_franchises --no-import-missing
 """
 
 import asyncio
+
 from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+
 from apps.animes.models import Anime
+
 
 class Command(BaseCommand):
     help = "Populate franchise/relations data for existing anime from AniList, ensuring ALL franchises have slugs linked"
@@ -162,20 +163,20 @@ class Command(BaseCommand):
     async def process_single_anime(self, anime, import_missing: bool, max_imports: int):
         """Process relations for a single anime using the franchise task logic."""
         from apps.animes.tasks.franchises import FranchiseSyncTask
-        
+
         task = FranchiseSyncTask()
         async with task.service_context() as service:
             try:
                 result = await task._process_anime_franchises(
                     service, anime, import_missing, max_imports
                 )
-                
+
                 if result.get("status") == "success":
                     linked = result.get("relations_linked", 0)
                     total = result.get("relations_count", 0)
                     imported = result.get("imported_count", 0)
                     missing = result.get("missing_slugs", 0)
-                    
+
                     status_msg = f"✓ Updated relations for: {anime.title} ({total} relations"
                     if linked == total:
                         status_msg += f", ALL {linked} linked with slugs"
@@ -184,7 +185,7 @@ class Command(BaseCommand):
                     if imported > 0:
                         status_msg += f", {imported} imported"
                     status_msg += ")"
-                    
+
                     self.stdout.write(self.style.SUCCESS(status_msg))
                 else:
                     self.stderr.write(
@@ -198,7 +199,7 @@ class Command(BaseCommand):
     ):
         """Process relations for multiple anime."""
         from apps.animes.tasks.franchises import FranchiseSyncTask
-        
+
         # Evaluate queryset in a sync context
         anime_list = await sync_to_async(list)(queryset[:batch_size])
         total = len(anime_list)
@@ -209,14 +210,14 @@ class Command(BaseCommand):
         total_linked = 0
 
         task = FranchiseSyncTask()
-        
+
         async with task.service_context() as service:
             for i, anime in enumerate(anime_list):
                 try:
                     result = await task._process_anime_franchises(
                         service, anime, import_missing, max_imports
                     )
-                    
+
                     if result.get("status") == "success":
                         processed += 1
                         total_imported += result.get("imported_count", 0)
@@ -224,15 +225,15 @@ class Command(BaseCommand):
                         linked_count = result.get("relations_linked", 0)
                         total_relations += rel_count
                         total_linked += linked_count
-                        
+
                         status_msg = f"✓ ({i+1}/{total}) {anime.title}: {rel_count} relations"
                         if linked_count == rel_count:
-                            status_msg += f", ALL linked"
+                            status_msg += ", ALL linked"
                         else:
                             status_msg += f", {linked_count} linked"
                         if result.get("imported_count", 0) > 0:
                             status_msg += f", {result['imported_count']} imported"
-                        
+
                         self.stdout.write(status_msg)
                     else:
                         errors += 1
@@ -250,7 +251,7 @@ class Command(BaseCommand):
 
                 except Exception as e:
                     errors += 1
-                    self.stderr.write(f"✗ Error ({anime.title}): {str(e)}")
+                    self.stderr.write(f"✗ Error ({anime.title}): {e!s}")
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -260,7 +261,7 @@ class Command(BaseCommand):
                 f"Imported: {total_imported}, Errors: {errors}"
             )
         )
-        
+
         if total_linked < total_relations:
             self.stdout.write(
                 self.style.WARNING(

@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Unified theme song synchronization task.
 
@@ -6,22 +7,22 @@ Uses Jikan API to fetch opening and ending themes for anime.
 """
 
 import re
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import timedelta
 from urllib.parse import quote_plus
 
+import httpx
 from asgiref.sync import sync_to_async
 from celery import shared_task
 from django.utils import timezone
-import httpx
 
 from apps.animes.models import Anime, ThemeSong
 from apps.animes.services.jikan import JikanRateLimiter, fetch_themes_from_jikan
+
 from .base import BaseTask, run_async_in_task
 
+
 class ThemeSongSyncTask(BaseTask):
-    """
-    Unified task for syncing theme songs from Jikan API.
+    """Unified task for syncing theme songs from Jikan API.
 
     Supports:
     - Batch sync for anime without themes
@@ -46,14 +47,13 @@ class ThemeSongSyncTask(BaseTask):
 
     def execute(
         self,
-        anime_id: Optional[int] = None,
+        anime_id: int | None = None,
         limit: int = 500,
         force_resync: bool = False,
         retry_failed: bool = False,
         base_delay: float = 0.35,
     ):
-        """
-        Run theme song synchronization.
+        """Run theme song synchronization.
 
         Args:
             anime_id: Specific anime ID to sync (optional)
@@ -74,7 +74,7 @@ class ThemeSongSyncTask(BaseTask):
                 self._sync_batch(limit, force_resync, retry_failed, base_delay)
             )
 
-    async def _sync_single(self, anime_id: int, base_delay: float) -> Dict:
+    async def _sync_single(self, anime_id: int, base_delay: float) -> dict:
         """Sync themes for a single anime."""
         rate_limiter = JikanRateLimiter(base_delay=base_delay)
 
@@ -167,7 +167,7 @@ class ThemeSongSyncTask(BaseTask):
         force_resync: bool,
         retry_failed: bool,
         base_delay: float,
-    ) -> Dict:
+    ) -> dict:
         """Sync themes for multiple anime."""
         rate_limiter = JikanRateLimiter(base_delay=base_delay)
 
@@ -387,7 +387,7 @@ class ThemeSongSyncTask(BaseTask):
 
         return count
 
-    def _parse_theme_song(self, text: str) -> Dict:
+    def _parse_theme_song(self, text: str) -> dict:
         """Parse theme song format: 'Song Title' by Artist (eps X-Y)"""
         result = {"title": text, "artist": "", "episodes": ""}
 
@@ -424,8 +424,7 @@ class ThemeSongSyncTask(BaseTask):
     def _generate_youtube_url(
         self, title: str, artist: str, song_type: str, anime_title: str
     ) -> str:
-        """
-        Generate a YouTube search URL for the theme song.
+        """Generate a YouTube search URL for the theme song.
 
         Creates a search query with the song title, artist, and anime name
         to help users find the official theme on YouTube.
@@ -503,14 +502,13 @@ class ThemeSongSyncTask(BaseTask):
 )
 def sync_theme_songs(
     self,
-    anime_id: Optional[int] = None,
+    anime_id: int | None = None,
     limit: int = 500,
     force_resync: bool = False,
     retry_failed: bool = False,
     base_delay: float = 0.35,
 ):
-    """
-    Sync theme songs from Jikan API.
+    """Sync theme songs from Jikan API.
 
     Args:
         anime_id: Specific anime ID (optional, for single sync)
@@ -526,8 +524,7 @@ def sync_theme_songs(
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def backfill_theme_youtube_urls(self, limit: int = 100):
-    """
-    Periodic task to backfill missing YouTube URLs for theme songs.
+    """Periodic task to backfill missing YouTube URLs for theme songs.
 
     Runs daily to catch any themes that were created without YouTube URLs.
     """

@@ -1,21 +1,21 @@
 from apps.shared.logger import logger
+
 """
 Jikan API rate limiter for theme song synchronization.
 
 Provides adaptive rate limiting with exponential backoff for 429 errors.
 """
 
-import time
-import random
 import asyncio
-from typing import Optional
+import random
+import time
+
 import httpx
 
 JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 
 class JikanRateLimiter:
-    """
-    Adaptive rate limiter for Jikan API.
+    """Adaptive rate limiter for Jikan API.
 
     Jikan limit: ~3 requests per second (60 req/min).
     Uses adaptive delays and exponential backoff for 429 errors.
@@ -46,8 +46,7 @@ class JikanRateLimiter:
         max_delay: float = 5.0,
         success_streak_threshold: int = 10,
     ):
-        """
-        Initialize rate limiter.
+        """Initialize rate limiter.
 
         Args:
             base_delay: Base delay between requests in seconds
@@ -68,8 +67,7 @@ class JikanRateLimiter:
         self.total_429s = 0
 
     async def acquire(self) -> None:
-        """
-        Acquire permission to make a request with adaptive rate limiting.
+        """Acquire permission to make a request with adaptive rate limiting.
 
         Waits if necessary to maintain rate limit compliance.
         """
@@ -85,8 +83,7 @@ class JikanRateLimiter:
         self.total_requests += 1
 
     def record_success(self) -> None:
-        """
-        Record successful request.
+        """Record successful request.
 
         Gradually reduces delay after a streak of successes.
         """
@@ -104,8 +101,7 @@ class JikanRateLimiter:
                 )
 
     def record_429(self) -> None:
-        """
-        Record 429 (Too Many Requests) error.
+        """Record 429 (Too Many Requests) error.
 
         Applies exponential backoff with jitter.
         """
@@ -125,8 +121,7 @@ class JikanRateLimiter:
         )
 
     def record_error(self) -> None:
-        """
-        Record general error.
+        """Record general error.
 
         Slightly increases delay to be more conservative.
         """
@@ -148,9 +143,8 @@ async def fetch_themes_from_jikan(
     mal_id: int,
     rate_limiter: JikanRateLimiter,
     max_retries: int = 3,
-) -> Optional[dict]:
-    """
-    Fetch theme songs from Jikan API with smart retry logic.
+) -> dict | None:
+    """Fetch theme songs from Jikan API with smart retry logic.
 
     Args:
         http_client: httpx AsyncClient instance

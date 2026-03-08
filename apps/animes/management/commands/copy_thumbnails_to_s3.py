@@ -1,6 +1,4 @@
-from apps.shared.logger import logger
-"""
-Copy existing ImageKit thumbnails from local CACHE to MinIO/S3 storage.
+"""Copy existing ImageKit thumbnails from local CACHE to MinIO/S3 storage.
 
 This script transfers thumbnails that were generated locally to the configured
 remote storage (MinIO/S3) so they can be served properly.
@@ -9,12 +7,13 @@ Usage:
     docker compose exec web uv run python manage.py copy_thumbnails_to_s3
 """
 
-import os
 from pathlib import Path
-from django.core.management.base import BaseCommand
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
+
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.management.base import BaseCommand
+
 
 class Command(BaseCommand):
     help = "Copy existing ImageKit thumbnails from local CACHE to MinIO/S3 storage"
@@ -97,7 +96,7 @@ class Command(BaseCommand):
                 content_file = ContentFile(content)
 
                 # Save to default storage (MinIO/S3)
-                saved_path = default_storage.save(storage_path, content_file)
+                default_storage.save(storage_path, content_file)
 
                 self.stdout.write(self.style.SUCCESS(f"  Uploaded: {storage_path}"))
                 uploaded += 1

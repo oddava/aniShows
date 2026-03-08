@@ -7,35 +7,35 @@ Provides secure admin-only endpoints for:
 - Review moderation
 """
 
+from datetime import datetime, timedelta
+
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Avg, Q
+from django.db.models import Avg, Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
-from datetime import timedelta, datetime
-
-from rest_framework import status, filters
+from django_filters import BooleanFilter, CharFilter, FilterSet, NumberFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status
 from rest_framework.decorators import action
+from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, DestroyModelMixin
-from django_filters.rest_framework import DjangoFilterBackend
-from django_filters import FilterSet, BooleanFilter, CharFilter, NumberFilter
 from rest_framework.viewsets import GenericViewSet, ModelViewSet, ViewSet
 
-from apps.animes.models import Anime, Genre, Studio, UserFavorite, UserHistory, Review
-from apps.users.models import UserProfile, UserAnimeList
-from apps.core.models import SystemLog, AuditLog
+from apps.animes.admin_serializers import (
+    AdminAnimeSerializer,
+    AdminGenreSerializer,
+    AdminReviewSerializer,
+    AdminStudioSerializer,
+)
+from apps.animes.models import Anime, Genre, Review, Studio, UserFavorite, UserHistory
+from apps.core.models import AuditLog, SystemLog
 from apps.core.permissions import IsAdminUser
 from apps.shared.pagination import StandardPagination
 
 # Serializers
 from apps.users.admin_serializers import AdminUserSerializer
-from apps.animes.admin_serializers import (
-    AdminAnimeSerializer,
-    AdminGenreSerializer,
-    AdminStudioSerializer,
-    AdminReviewSerializer
-)
+from apps.users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 
@@ -275,7 +275,7 @@ class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, G
 
     def get_queryset(self):
         return Anime.objects.prefetch_related("genres").select_related("studio").annotate(
-            favorites_count=Count("favorites"), 
+            favorites_count=Count("favorites"),
             reviews_count=Count("reviews"),
             avg_review_rating=Avg("reviews__rating")
         )
@@ -287,7 +287,7 @@ class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, G
                 {"detail": "Only superusers can delete anime."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         anime = self.get_object()
         title = anime.title
         self.perform_destroy(anime)
@@ -619,7 +619,7 @@ class AdminBulkOperationsView(APIView):
             return Response({"message": "Bulk operation completed.", "result": result})
         except Exception as e:
             return Response(
-                {"detail": f"An error occurred during bulk operation: {str(e)}"},
+                {"detail": f"An error occurred during bulk operation: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -790,7 +790,7 @@ class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
         """Extended list using the generic features without a dedicated serializer class."""
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        
+
         logs_data = []
         for log in page:
             logs_data.append(
@@ -947,14 +947,14 @@ class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
                 queryset = queryset.filter(timestamp__lte=end)
             except ValueError:
                 pass
-                
+
         return queryset
 
     def list(self, request, *args, **kwargs):
         """Extended generic list view without serializing classes manually"""
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        
+
         logs_data = []
         for log in page:
             logs_data.append(
@@ -1004,7 +1004,6 @@ class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     @action(detail=False, methods=["get"])
     def stats(self, request):
         """Get audit log statistics."""
-
         # Total counts
         total = AuditLog.objects.count()
 

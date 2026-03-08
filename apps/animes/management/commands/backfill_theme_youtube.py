@@ -1,13 +1,15 @@
-"""
-Management command to backfill YouTube URLs for existing theme songs.
+"""Management command to backfill YouTube URLs for existing theme songs.
 
 This command generates YouTube search URLs for theme songs that don't have them.
 Handles long URLs by intelligently trimming the search query.
 """
 
-from django.core.management.base import BaseCommand
-from apps.animes.models import ThemeSong
 from urllib.parse import quote_plus
+
+from django.core.management.base import BaseCommand
+
+from apps.animes.models import ThemeSong
+
 
 class Command(BaseCommand):
     help = "Backfill YouTube URLs for existing theme songs"
@@ -105,8 +107,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Errors: {errors}"))
 
     def _generate_youtube_url(self, theme: ThemeSong, max_length: int = 200) -> str:
-        """
-        Generate YouTube search URL for a theme song.
+        """Generate YouTube search URL for a theme song.
         Intelligently trims the query to fit within max_length.
         """
         base_url = "https://www.youtube.com/results?search_query="

@@ -1,5 +1,4 @@
-"""
-Seasonal Anime API Tests
+"""Seasonal Anime API Tests
 
 Tests for:
 - Filtering anime by season and year
@@ -10,14 +9,15 @@ Tests for:
 """
 
 from datetime import date
-from django.test import TestCase, override_settings
-from django.urls import reverse
-from rest_framework.test import APITestCase, APIClient
-from rest_framework import status
+
 from django.contrib.auth import get_user_model
-from apps.animes.models import Anime, Genre, Studio
-from apps.animes.signals import trigger_metadata_fetch
 from django.db.models.signals import post_save
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient, APITestCase
+
+from apps.animes.models import Anime, Studio
+from apps.animes.signals import trigger_metadata_fetch
 
 User = get_user_model()
 

@@ -1,11 +1,12 @@
+from django.core.cache import cache
 from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.core.cache import cache
 from rest_framework.viewsets import ViewSet
 
 from apps.animes.serializers import UserRecommendationSerializer
 from apps.shared.logger import logger
+
 
 class RecommendationsViewSet(ViewSet):
     """Personalized anime recommendations for authenticated users"""
@@ -36,7 +37,7 @@ class RecommendationsViewSet(ViewSet):
 
             return Response(data[:limit])
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error fetching recommendations")
             return Response(
                 {"error": "Failed to fetch recommendations"},
@@ -61,7 +62,7 @@ class RecommendationsViewSet(ViewSet):
                 }
             )
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error refreshing recommendations")
             return Response(
                 {"error": "Failed to refresh recommendations"},

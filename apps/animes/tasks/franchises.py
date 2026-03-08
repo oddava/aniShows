@@ -1,17 +1,20 @@
 from apps.shared.logger import logger
+
 """
 Franchise/Relations synchronization task.
 """
 
 import asyncio
-from typing import Dict, List, Optional, Set
+
 from asgiref.sync import sync_to_async
 from celery import shared_task
 from django.db.models import Q
 
-from apps.animes.services.anilist import AniListService
 from apps.animes.models import Anime
+from apps.animes.services.anilist import AniListService
+
 from .base import BaseTask, run_async_in_task
+
 
 class FranchiseSyncTask(BaseTask):
     """Unified task for syncing anime franchise/relations data."""
@@ -21,7 +24,7 @@ class FranchiseSyncTask(BaseTask):
 
     def execute(
         self,
-        anime_id: Optional[int] = None,
+        anime_id: int | None = None,
         mode: str = "single",
         batch_size: int = 50,
         import_missing: bool = True,
@@ -47,7 +50,7 @@ class FranchiseSyncTask(BaseTask):
         else:
             raise ValueError(f"Invalid mode: {mode}")
 
-    async def _sync_single(self, anime_id: int, import_missing: bool, max_imports: int) -> Dict:
+    async def _sync_single(self, anime_id: int, import_missing: bool, max_imports: int) -> dict:
         """Sync franchises for a single anime."""
         async with self.service_context() as service:
             try:
@@ -67,7 +70,7 @@ class FranchiseSyncTask(BaseTask):
     async def _sync_batch(
         self, batch_size: int, import_missing: bool, max_imports: int,
         priority_field: str, skip_recently_updated: bool, update_window: int
-    ) -> Dict:
+    ) -> dict:
         """Batch sync franchises for multiple anime."""
         async with self.service_context() as service:
             queryset = Anime.objects.filter(
@@ -99,7 +102,7 @@ class FranchiseSyncTask(BaseTask):
                     result = await self._process_anime_franchises(
                         service, anime, import_missing, max_imports
                     )
-                    
+
                     if result.get("status") == "success":
                         updated_count += 1
                         total_imported += result.get("imported_count", 0)
@@ -139,7 +142,7 @@ class FranchiseSyncTask(BaseTask):
 
     async def _process_anime_franchises(
         self, service: AniListService, anime: Anime, import_missing: bool, max_imports: int
-    ) -> Dict:
+    ) -> dict:
         """Process franchises for a single anime."""
         try:
             if not anime.anilist_id:
@@ -153,10 +156,10 @@ class FranchiseSyncTask(BaseTask):
             # Extract relations
             relations_data = data.get("relations", {})
             anilist_relations = relations_data.get("edges", [])
-            
+
             # Filter to only ANIME type
             anime_relations = [
-                edge for edge in anilist_relations 
+                edge for edge in anilist_relations
                 if edge.get("node", {}).get("type") == "ANIME"
             ]
 
@@ -182,7 +185,7 @@ class FranchiseSyncTask(BaseTask):
             for edge in anime_relations:
                 node = edge.get("node", {})
                 anilist_id = node.get("id")
-                
+
                 title = node.get("title", {}).get("english") or node.get("title", {}).get("romaji") or "Unknown"
 
                 relation_entry = {
@@ -217,7 +220,7 @@ class FranchiseSyncTask(BaseTask):
             # Link slugs
             all_related_ids = {rel["id"] for rel in new_relations}
             slug_map = await self._get_existing_slugs(all_related_ids)
-            
+
             relations_linked = 0
             for rel in new_relations:
                 rel_id = rel.get("id")
@@ -245,11 +248,11 @@ class FranchiseSyncTask(BaseTask):
             logger.error(f"Error processing franchises for {anime.title}: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "relations_count": 0}
 
-    async def _get_existing_slugs(self, anilist_ids: Set[int]) -> Dict[int, str]:
+    async def _get_existing_slugs(self, anilist_ids: set[int]) -> dict[int, str]:
         """Get slug mapping for existing anime by AniList ID."""
         if not anilist_ids:
             return {}
-        
+
         @sync_to_async
         def fetch_slugs():
             return {
@@ -257,28 +260,28 @@ class FranchiseSyncTask(BaseTask):
                 for anime in Anime.objects.filter(anilist_id__in=anilist_ids)
                 if anime.anilist_id
             }
-        
+
         return await fetch_slugs()
 
     async def _import_missing_anime_batch(
-        self, service: AniListService, anime_relations: List[dict], 
-        ids_to_import: Set[int], max_imports: int
-    ) -> Set[int]:
+        self, service: AniListService, anime_relations: list[dict],
+        ids_to_import: set[int], max_imports: int
+    ) -> set[int]:
         """Import missing related anime from AniList."""
         imported_ids = set()
-        
+
         # Build node map
         node_map = {}
         for edge in anime_relations:
             node = edge.get("node", {})
             if node.get("type") == "ANIME":
                 node_map[node.get("id")] = node
-        
+
         for anilist_id in list(ids_to_import)[:max_imports]:
             node = node_map.get(anilist_id)
             if not anilist_id or not node:
                 continue
-                
+
             try:
                 # Check if exists
                 @sync_to_async
@@ -296,7 +299,7 @@ class FranchiseSyncTask(BaseTask):
                 # Fetch and import
                 await asyncio.sleep(0.3)
                 full_data = await service.get_anime_by_id(anilist_id)
-                
+
                 if full_data:
                     stats = await service.process_media_list([full_data])
                     if stats.get("created", 0) > 0:
@@ -323,7 +326,7 @@ class FranchiseSyncTask(BaseTask):
 )
 def sync_franchises(
     self,
-    anime_id: Optional[int] = None,
+    anime_id: int | None = None,
     mode: str = "single",
     batch_size: int = 50,
     import_missing: bool = True,
@@ -383,7 +386,7 @@ def update_relation_slugs(self, batch_size: int = 100):
                         }
 
                     slug_map = await fetch_slugs_batch()
-                    
+
                     for rel in relations:
                         rel_id = rel.get("id")
                         if not rel.get("slug") and rel_id in slug_map:

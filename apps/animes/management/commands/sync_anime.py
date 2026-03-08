@@ -1,12 +1,11 @@
-"""
-Unified management command for anime synchronization and enrichment.
+"""Unified management command for anime synchronization and enrichment.
 
 Replaces multiple individual commands with a single interface.
 """
 
+from celery import chain
 from django.core.management.base import BaseCommand, CommandError
-from django.utils import timezone
-from celery import chain, group
+
 
 class Command(BaseCommand):
     help = "Unified command for anime synchronization and enrichment tasks"
@@ -224,7 +223,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Generating recommendations for user {user_id}")
             task = generate_recommendations.s(user_id=user_id, limit=limit)
         else:
-            self.stdout.write(f"Generating recommendations for all users")
+            self.stdout.write("Generating recommendations for all users")
             task = generate_recommendations.s(limit=limit)
 
         if run_async:
@@ -237,11 +236,11 @@ class Command(BaseCommand):
     def _handle_full_sync(self, options, run_async, queue):
         """Handle full synchronization workflow."""
         from apps.animes.tasks import (
-            sync_anime_catalog,
-            sync_airing_workflow,
             enrich_metadata,
-            sync_theme_songs,
             generate_recommendations,
+            sync_airing_workflow,
+            sync_anime_catalog,
+            sync_theme_songs,
         )
 
         self.stdout.write("Starting full synchronization workflow...")

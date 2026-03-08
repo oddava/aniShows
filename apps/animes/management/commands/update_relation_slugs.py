@@ -1,11 +1,11 @@
-from apps.shared.logger import logger
-"""
-Management command to add slugs to all anime relations.
+"""Management command to add slugs to all anime relations.
 This updates existing relations data to include the slug field for proper navigation.
 """
 
 from django.core.management.base import BaseCommand
+
 from apps.animes.models import Anime
+
 
 class Command(BaseCommand):
     help = "Add slugs to all anime relations for proper navigation"

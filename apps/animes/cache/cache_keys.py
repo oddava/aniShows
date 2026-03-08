@@ -1,6 +1,6 @@
 """Centralized cache key management to prevent invalidation bugs."""
 
-from typing import List
+
 
 class CacheKeys:
     """Namespace for all cache keys."""
@@ -26,7 +26,7 @@ class CacheKeys:
         return cls.USER_FAVORITES_COUNT.format(user_id=user_id)
 
     @classmethod
-    def invalidate_anime(cls, slug: str) -> List[str]:
+    def invalidate_anime(cls, slug: str) -> list[str]:
         """Get all keys to invalidate when anime changes."""
         return [
             cls.TRENDING_ANIME,
@@ -35,7 +35,7 @@ class CacheKeys:
         ]
 
     @classmethod
-    def invalidate_user(cls, user_id: int) -> List[str]:
+    def invalidate_user(cls, user_id: int) -> list[str]:
         """Get all keys to invalidate when user data changes."""
         return [
             cls.user_recommendations(user_id),

@@ -1,8 +1,8 @@
-import django_filters
 from django.db.models import Q
-from django_filters import FilterSet, CharFilter, OrderingFilter
+from django_filters import CharFilter, FilterSet, OrderingFilter
 
 from .models import Anime
+
 
 class AnimeFilter(FilterSet):
     genre = CharFilter(method="filter_genre", label="Genre")
