@@ -1,25 +1,35 @@
-from rest_framework.fields import IntegerField, FloatField, SerializerMethodField
+from rest_framework.fields import FloatField, IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
 
-from apps.animes.models import Anime, Genre, Studio, Review
+from apps.animes.models import Anime, Genre, Review, Studio
 
 class AdminGenreSerializer(ModelSerializer):
+    """Admin serializer for anime genres."""
+
     anime_count = IntegerField(read_only=True, default=0)
 
     class Meta:
+        """Meta configuration for AdminGenreSerializer."""
+
         model = Genre
         fields = ["id", "name", "slug", "description", "anime_count"]
 
 
 class AdminStudioSerializer(ModelSerializer):
+    """Admin serializer for anime studios."""
+
     anime_count = IntegerField(read_only=True, default=0)
 
     class Meta:
+        """Meta configuration for AdminStudioSerializer."""
+
         model = Studio
         fields = ["id", "name", "founded_date", "website", "anime_count"]
 
 
 class AdminAnimeSerializer(ModelSerializer):
+    """Admin serializer for anime."""
+
     favorites_count = IntegerField(read_only=True, default=0)
     reviews_count = IntegerField(read_only=True, default=0)
     avg_review_rating = FloatField(read_only=True, default=None)
@@ -31,6 +41,8 @@ class AdminAnimeSerializer(ModelSerializer):
     banner_image = SerializerMethodField()
 
     class Meta:
+        """Meta configuration for AdminAnimeSerializer."""
+
         model = Anime
         fields = [
             "id", "title", "title_jp", "slug", "synopsis", "status", "anime_type",
@@ -58,10 +70,14 @@ class AdminAnimeSerializer(ModelSerializer):
 
 
 class AdminReviewSerializer(ModelSerializer):
+    """Admin serializer for anime reviews."""
+
     user = SerializerMethodField()
     anime = SerializerMethodField()
 
     class Meta:
+        """Meta configuration for AdminReviewSerializer."""
+
         model = Review
         fields = [
             "id", "user", "anime", "rating", "text", "has_spoilers", 

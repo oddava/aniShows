@@ -25,6 +25,7 @@ class CSPMiddleware(MiddlewareMixin):
                 "'unsafe-eval'",  # Required by Jazzmin admin theme
                 "https://www.googletagmanager.com",
                 "https://www.google-analytics.com",
+                "https://static.cloudflareinsights.com",
             ],
             "style-src": [
                 "'self'",

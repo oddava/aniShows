@@ -351,11 +351,17 @@ export default function Schedule() {
       animeList.forEach(anime => {
         if (anime.next_airing_date) {
           // Parse the UTC date and convert to local timezone
-          const airDate = new Date(anime.next_airing_date);
+          let airDate = new Date(anime.next_airing_date);
 
           // Check if date is valid before processing
           if (isNaN(airDate.getTime())) {
             return; // Skip anime with invalid dates
+          }
+
+          if (anime.status === 'Airing' && airDate < weekStart) {
+            const msInWeek = 7 * 24 * 60 * 60 * 1000;
+            const weeksToAdvance = Math.ceil((weekStart.getTime() - airDate.getTime()) / msInWeek);
+            airDate = new Date(airDate.getTime() + (weeksToAdvance * msInWeek));
           }
 
           // Check if airing date is within current week

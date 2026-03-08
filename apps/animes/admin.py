@@ -1,20 +1,20 @@
 from django.contrib import admin
-from django.utils.html import format_html
 from django.db.models import Count
+from django.utils.html import format_html
 
 from .models import (
     Anime,
-    Genre,
-    Studio,
-    Review,
-    Character,
-    Staff,
     AnimeCharacter,
     AnimeStaff,
+    Character,
+    Genre,
+    Review,
+    ReviewComment,
+    ReviewVote,
+    Staff,
+    Studio,
     UserFavorite,
     UserHistory,
-    ReviewVote,
-    ReviewComment,
     UserRecommendation,
 )
 
@@ -440,6 +440,7 @@ class CharacterAdmin(admin.ModelAdmin):
     ordering = ["name"]
 
     def image_preview(self, obj):
+        """Display image preview."""
         if obj.image:
             return format_html(
                 '<img src="{}" style="max-height: 40px; max-width: 40px;" />', obj.image.url
@@ -457,6 +458,7 @@ class StaffAdmin(admin.ModelAdmin):
     ordering = ["name"]
 
     def image_preview(self, obj):
+        """Display image preview."""
         if obj.image:
             return format_html(
                 '<img src="{}" style="max-height: 40px; max-width: 40px;" />', obj.image.url
@@ -521,6 +523,7 @@ class ReviewCommentAdmin(admin.ModelAdmin):
     ordering = ["-created_at"]
 
     def text_short(self, obj):
+        """Return short version of the review comment text."""
         if obj.text:
             return obj.text[:80] + "..." if len(obj.text) > 80 else obj.text
         return "-"
