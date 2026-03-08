@@ -6,19 +6,17 @@
 
 set -e
 
-# Load environment variables from .env file (used by pg_isready check below)
 if [ -f .env ]; then
     set -a
     source .env
     set +a
 fi
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:latest"
@@ -27,7 +25,6 @@ FRONTEND_VOLUME="anishows_frontend_dist"
 echo -e "${BLUE}Starting full deployment (frontend + backend)...${NC}"
 echo ""
 
-# Ensure docker compose is available
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}Docker is not installed${NC}"
     exit 1

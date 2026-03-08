@@ -1,6 +1,3 @@
-# =============================================================================
-# Stage 1: Builder - install dependencies and compile assets
-# =============================================================================
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -17,16 +14,13 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-dev
 
-# =============================================================================
-# Stage 2: Runtime - lean production image
-# =============================================================================
+
 FROM python:3.12-slim AS runtime
 
 RUN useradd -m -u 1000 aniuser
 
 WORKDIR /app
 
-# Only install runtime dependencies (no gcc/build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libmagic1 \
@@ -34,14 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 
-# Collect static files for whitenoise to serve in production
 RUN DJANGO_SETTINGS_MODULE=root.settings.production \
     DJANGO_SECRET_KEY=collectstatic-placeholder \
     CORS_ALLOWED_ORIGINS=https://placeholder.com \

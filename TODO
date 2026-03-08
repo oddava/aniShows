@@ -76,3 +76,7 @@ class UserFavorite(Model):
 - create "shared" module for base clasess. and use base classes for common fields like `slug`, created dates on models.
 - there are too many logger instances, make one unified logger
 - remove all unnecessary comments
+
+================================================================================
+
+- send emails as the custom email
