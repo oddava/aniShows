@@ -1,5 +1,4 @@
-"""
-Admin API Views for aniShows Dashboard
+"""Admin API Views for aniShows Dashboard.
 
 Provides secure admin-only endpoints for:
 - Dashboard statistics

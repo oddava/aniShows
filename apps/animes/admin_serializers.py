@@ -1,7 +1,6 @@
+from apps.animes.models import Anime, Genre, Review, Studio
 from rest_framework.fields import FloatField, IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
-
-from apps.animes.models import Anime, Genre, Review, Studio
 
 class AdminGenreSerializer(ModelSerializer):
     """Admin serializer for anime genres."""
@@ -33,10 +32,10 @@ class AdminAnimeSerializer(ModelSerializer):
     favorites_count = IntegerField(read_only=True, default=0)
     reviews_count = IntegerField(read_only=True, default=0)
     avg_review_rating = FloatField(read_only=True, default=None)
-    
+
     studio = AdminStudioSerializer(read_only=True)
     genres = AdminGenreSerializer(many=True, read_only=True)
-    
+
     cover_image = SerializerMethodField()
     banner_image = SerializerMethodField()
 
@@ -53,6 +52,7 @@ class AdminAnimeSerializer(ModelSerializer):
         ]
 
     def get_cover_image(self, obj):
+        """Get cover image URL."""
         if obj.cover_image:
             try:
                 return obj.cover_image.url
@@ -61,6 +61,7 @@ class AdminAnimeSerializer(ModelSerializer):
         return None
 
     def get_banner_image(self, obj):
+        """Get banner image URL."""
         if obj.banner_image:
             try:
                 return obj.banner_image.url
@@ -80,17 +81,19 @@ class AdminReviewSerializer(ModelSerializer):
 
         model = Review
         fields = [
-            "id", "user", "anime", "rating", "text", "has_spoilers", 
+            "id", "user", "anime", "rating", "text", "has_spoilers",
             "created_at", "updated_at"
         ]
 
     def get_user(self, obj):
+        """Get user summary."""
         return {
             "id": obj.user.id,
             "username": obj.user.username,
         }
 
     def get_anime(self, obj):
+        """Get anime summary."""
         return {
             "id": obj.anime.id,
             "title": obj.anime.title,
