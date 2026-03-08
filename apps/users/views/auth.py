@@ -192,7 +192,7 @@ class AuthViewSet(ViewSet):
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.select_related("userprofile").get(email=email)
+            user = User.objects.select_related("userprofile").get(email__iexact=email)
             profile = getattr(user, "userprofile", None)
             if profile and profile.email_verified:
                 # Already verified, don't reveal this for security
@@ -221,7 +221,7 @@ class AuthViewSet(ViewSet):
             return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
         except User.DoesNotExist:
             return Response(
                 {"message": "If an account exists with this email, a reset link has been sent."},
