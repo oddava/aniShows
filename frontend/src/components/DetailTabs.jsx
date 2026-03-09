@@ -68,11 +68,11 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
 
         const seen = new Set();
         return anime.characters.filter((role) => {
-            const characterId = role?.character?.id;
-            if (!characterId) return false;
+            const characterName = role?.character?.name;
+            if (!characterName) return false;
 
-            const voiceActorId = role?.voice_actor?.id || 'none';
-            const dedupeKey = `${characterId}:${role?.role || 'unknown'}:${voiceActorId}`;
+            const voiceActorName = role?.voice_actor?.name || 'none';
+            const dedupeKey = `${characterName}:${role?.role || 'unknown'}:${voiceActorName}`;
             if (seen.has(dedupeKey)) return false;
 
             seen.add(dedupeKey);
@@ -140,7 +140,21 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
 }
 
 export function StaffTab({ anime, accentColor, onStaffClick }) {
-    if (!anime.staff || anime.staff.length === 0) {
+    const uniqueStaff = useMemo(() => {
+        if (!Array.isArray(anime.staff)) return [];
+        const seen = new Set();
+        return anime.staff.filter((staffRole) => {
+            const staffName = staffRole?.staff?.name;
+            if (!staffName) return false;
+            const roleName = staffRole?.role || 'unknown';
+            const dedupeKey = `${staffName}:${roleName}`;
+            if (seen.has(dedupeKey)) return false;
+            seen.add(dedupeKey);
+            return true;
+        });
+    }, [anime.staff]);
+
+    if (!uniqueStaff || uniqueStaff.length === 0) {
         return (
             <div className="text-center py-16 animate-tab-content">
                 <Mic className="w-16 h-16 text-gray-700 mx-auto mb-4" />
@@ -151,7 +165,7 @@ export function StaffTab({ anime, accentColor, onStaffClick }) {
 
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-tab-content">
-            {anime.staff.map((staffRole) => (
+            {uniqueStaff.map((staffRole) => (
                 <div
                     key={staffRole.id}
                     onClick={() => onStaffClick(staffRole)}

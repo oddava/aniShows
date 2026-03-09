@@ -34,11 +34,26 @@ const getUniqueCharacterCount = (characters) => {
 
     const seen = new Set();
     for (const role of characters) {
-        const characterId = role?.character?.id;
-        if (!characterId) continue;
+        const characterName = role?.character?.name;
+        if (!characterName) continue;
 
-        const voiceActorId = role?.voice_actor?.id || 'none';
-        seen.add(`${characterId}:${role?.role || 'unknown'}:${voiceActorId}`);
+        const voiceActorName = role?.voice_actor?.name || 'none';
+        seen.add(`${characterName}:${role?.role || 'unknown'}:${voiceActorName}`);
+    }
+
+    return seen.size;
+};
+
+const getUniqueStaffCount = (staff) => {
+    if (!Array.isArray(staff)) return 0;
+
+    const seen = new Set();
+    for (const staffRole of staff) {
+        const staffName = staffRole?.staff?.name;
+        if (!staffName) continue;
+
+        const roleName = staffRole?.role || 'unknown';
+        seen.add(`${staffName}:${roleName}`);
     }
 
     return seen.size;
@@ -412,7 +427,7 @@ export default function AnimeDetail() {
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
         count: tab.id === 'characters' ? getUniqueCharacterCount(anime.characters) :
-            tab.id === 'staff' ? anime.staff?.length : 0
+            tab.id === 'staff' ? getUniqueStaffCount(anime.staff) : 0
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
