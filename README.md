@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">🌸 AniShows 🌸</h1>
+  <h1 align="center">AniShows</h1>
   <p align="center">
     <strong>Your personal anime journey.</strong>
   </p>
@@ -54,7 +54,7 @@ That's it! Your local instance should now be running:
 - **Frontend App:** http://localhost:5173
 - **Backend API:** http://localhost:8000
 
-## 🤝 Contributing
+## Contributing
 
 We love contributions! Whether you're fixing a bug, adding a feature, or just improving some documentation, we'd be thrilled to review your Pull Request. 
 
@@ -64,7 +64,7 @@ We love contributions! Whether you're fixing a bug, adding a feature, or just im
 4. Push to the branch (`git push origin feature/cool-new-thing`)
 5. Open a Pull Request!
 
-## 📜 License
+## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
 

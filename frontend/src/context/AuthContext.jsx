@@ -165,6 +165,17 @@ export function AuthProvider({ children }) {
         setUser(null);
     }, []);
 
+    const refreshProfile = useCallback(async () => {
+        try {
+            const response = await authApi.getProfile();
+            setUser(response.data);
+            return response.data;
+        } catch (error) {
+            logger.error('Failed to refresh profile:', error);
+            throw error;
+        }
+    }, []);
+
     const setTokens = useCallback(async (access, refresh, userData = null) => {
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
@@ -187,8 +198,9 @@ export function AuthProvider({ children }) {
         register,
         logout,
         setTokens,
+        refreshProfile,
         isAuthenticated: !!user,
-    }), [user, loading, login, register, logout, setTokens]);
+    }), [user, loading, login, register, logout, setTokens, refreshProfile]);
 
     return (
         <AuthContext.Provider value={value}>
