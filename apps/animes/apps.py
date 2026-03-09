@@ -7,4 +7,4 @@ class AnimeConfig(AppConfig):
     label = "anime"
 
     def ready(self):
-        pass
+        import apps.animes.signals

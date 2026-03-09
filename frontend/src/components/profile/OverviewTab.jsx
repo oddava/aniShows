@@ -165,7 +165,7 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
     return (
         <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-5 border border-gray-800/30">
             <div className="flex items-center justify-between mb-4">
-                <button 
+                <button
                     onClick={() => onTabChange && onTabChange('friends')}
                     className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-wider flex items-center gap-2"
                 >
@@ -210,7 +210,7 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
                         </Link>
                     ))}
                     {remainingCount > 0 && (
-                        <button 
+                        <button
                             onClick={() => onTabChange && onTabChange('friends')}
                             className="flex flex-col items-center gap-1.5 w-14 hover:opacity-80 transition-opacity"
                         >
@@ -319,10 +319,10 @@ function ActivityHistorySidebar({ username, isPrivate }) {
         refetchOnMount: true,
     });
 
-    if (isPrivate || isLoading || isError || !heatmapData || heatmapData.length === 0) return null;
+    if (isPrivate || isLoading || isError || !heatmapData) return null;
 
     return (
-        <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg border border-gray-800/30 overflow-hidden">
+        <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg border border-gray-800/30 w-full overflow-hidden">
             <ActivityHeatmap activityData={heatmapData} />
         </div>
     );

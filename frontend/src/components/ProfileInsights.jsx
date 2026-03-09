@@ -16,38 +16,15 @@ const SCORE_COLORS = {
     4: '#f59e0b', 3: '#fbbf24', 2: '#ef4444', 1: '#dc2626'
 };
 
-// Premium Stat Card with Glassmorphism and Glow
+// Flat Stat Card stripped of Icons and Gradients
 const StatCard = ({ icon: Icon, label, value, subtext, color = 'accent' }) => {
-    const colorClasses = {
-        accent: 'bg-accent/10 text-accent ring-accent/20',
-        yellow: 'bg-yellow-500/10 text-yellow-500 ring-yellow-500/20',
-        blue: 'bg-blue-500/10 text-blue-500 ring-blue-500/20',
-        green: 'bg-green-500/10 text-green-500 ring-green-500/20',
-    };
-
-    const gradientColors = {
-        accent: 'from-accent/10 to-transparent',
-        yellow: 'from-yellow-500/10 to-transparent',
-        blue: 'from-blue-500/10 to-transparent',
-        green: 'from-green-500/10 to-transparent',
-    };
-
     return (
-        <div className="relative group overflow-hidden bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-5">
-            {/* Subtle Gradient Background */}
-            <div className={`absolute -right-8 -top-8 w-24 h-24 blur-3xl opacity-10 group-hover:opacity-20 transition-opacity bg-gradient-to-br ${gradientColors[color]}`} />
-
-            <div className="flex items-center gap-4 relative z-10">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ${colorClasses[color] || colorClasses.accent}`}>
-                    <Icon className="w-6 h-6" />
-                </div>
-                <div>
-                    <div className="flex items-baseline gap-1">
-                        <div className="text-2xl font-black text-white tracking-tight">{value}</div>
-                        {subtext && !subtext.includes('from') && <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">{subtext}</span>}
-                    </div>
-                    <div className="text-[10px] text-gray-400 font-black uppercase tracking-[0.1em]">{label}</div>
-                    {subtext && subtext.includes('from') && <div className="text-[10px] text-gray-500 font-medium mt-0.5">{subtext}</div>}
+        <div className="bg-dark-100/50 rounded-xl border border-gray-800 p-6">
+            <div className="flex flex-col gap-1">
+                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.1em] mb-2">{label}</div>
+                <div className="flex items-baseline gap-2">
+                    <div className="text-2xl font-black text-white tracking-tight">{value}</div>
+                    {subtext && <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">{subtext}</span>}
                 </div>
             </div>
         </div>
@@ -83,7 +60,7 @@ const ActivityHeatmapSection = ({ username, isPrivate }) => {
 
     if (isLoading) {
         return (
-            <div className="bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-6 h-full flex items-center justify-center min-h-[300px]">
+            <div className="bg-dark-100/50 rounded-xl border border-gray-800 p-6 h-full flex items-center justify-center min-h-[300px]">
                 <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
             </div>
         );
@@ -91,7 +68,7 @@ const ActivityHeatmapSection = ({ username, isPrivate }) => {
 
     if (isError) {
         return (
-            <div className="bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-6 flex flex-col items-center justify-center min-h-[200px] gap-3">
+            <div className="bg-dark-100/50 rounded-xl border border-gray-800 p-6 flex flex-col items-center justify-center min-h-[200px] gap-3">
                 <p className="text-sm text-gray-500">Failed to load activity heatmap.</p>
                 <button
                     onClick={() => refetch()}
@@ -104,7 +81,7 @@ const ActivityHeatmapSection = ({ username, isPrivate }) => {
     }
 
     return (
-        <div className="bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 w-fit mx-auto lg:mx-0">
+        <div className="bg-dark-100/50 rounded-xl border border-gray-800 w-full overflow-hidden mx-auto lg:mx-0">
             <ActivityHeatmap activityData={heatmapData || []} />
         </div>
     );
@@ -156,8 +133,7 @@ export default function ProfileInsights({ username, isPrivate }) {
 
     if (isPrivate) {
         return (
-            <div className="text-center py-20 bg-dark-100/40 backdrop-blur-xl rounded-3xl border border-white/5">
-                <Activity className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+            <div className="text-center py-20 bg-dark-100/50 rounded-xl border border-gray-800">
                 <p className="text-gray-400 font-bold px-4">Insights are not available for private profiles.</p>
             </div>
         );
@@ -168,12 +144,12 @@ export default function ProfileInsights({ username, isPrivate }) {
             <div className="flex flex-col gap-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
                     {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-28 bg-dark-100/40 backdrop-blur-xl border border-white/5 rounded-2xl" />
+                        <div key={i} className="h-28 bg-dark-100/50 rounded-xl border border-gray-800" />
                     ))}
                 </div>
                 <div className="grid lg:grid-cols-2 gap-6 animate-pulse">
-                    <div className="h-96 bg-dark-100/40 backdrop-blur-xl border border-white/5 rounded-2xl" />
-                    <div className="h-96 bg-dark-100/40 backdrop-blur-xl border border-white/5 rounded-2xl" />
+                    <div className="h-96 bg-dark-100/50 rounded-xl border border-gray-800" />
+                    <div className="h-96 bg-dark-100/50 rounded-xl border border-gray-800" />
                 </div>
             </div>
         );
@@ -182,8 +158,7 @@ export default function ProfileInsights({ username, isPrivate }) {
     // Handle errors gracefully
     if (listsError || reviewsError) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 bg-dark-100/40 backdrop-blur-xl rounded-3xl border border-white/5">
-                <BarChart3 className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <div className="flex flex-col items-center justify-center py-20 bg-dark-100/50 rounded-xl border border-gray-800">
                 <p className="text-gray-400 font-bold mb-4">Failed to load insights.</p>
                 <button
                     onClick={() => {
@@ -267,11 +242,10 @@ export default function ProfileInsights({ username, isPrivate }) {
             {/* Charts Row */}
             <div className="grid md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch w-full">
                 {/* Anime DNA - 5 cols on desktop, full on mobile, 1 col on tablet */}
-                <div className="lg:col-span-5 md:col-span-2 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
+                <div className="lg:col-span-5 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
-                                <BarChart3 className="w-3.5 h-3.5 text-accent" />
                                 Anime DNA
                             </h3>
                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Your unique taste profile</p>
@@ -293,18 +267,12 @@ export default function ProfileInsights({ username, isPrivate }) {
                                             dataKey="value"
                                             stroke="#8b5cf6"
                                             strokeWidth={3}
-                                            fill="url(#radarGradient)"
-                                            fillOpacity={0.6}
+                                            fill="#8b5cf6"
+                                            fillOpacity={0.3}
                                             dot={{ r: 4, fill: '#8b5cf6', stroke: '#fff', strokeWidth: 1.5 }}
                                             animationDuration={1500}
                                         />
                                         <Tooltip content={<CustomTooltip />} />
-                                        <defs>
-                                            <linearGradient id="radarGradient" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.9} />
-                                                <stop offset="100%" stopColor="#ec4899" stopOpacity={0.4} />
-                                            </linearGradient>
-                                        </defs>
                                     </RadarChart>
                                 </ResponsiveContainer>
                             </div>
@@ -320,18 +288,16 @@ export default function ProfileInsights({ username, isPrivate }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <BarChart3 className="w-12 h-12 mb-4 text-gray-700" />
                             <p className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em]">Build your list to see DNA</p>
                         </div>
                     )}
                 </div>
 
                 {/* Score Distribution - 7 cols on desktop, full on mobile, 1 col on tablet */}
-                <div className="lg:col-span-7 md:col-span-2 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
+                <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
-                                <Star className="w-3.5 h-3.5 text-yellow-500" />
                                 Ratings Matrix
                             </h3>
                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">How you evaluate anime quality</p>
@@ -363,7 +329,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                                     <Bar
                                         dataKey="count"
-                                        radius={[6, 6, 2, 2]}
+                                        radius={[6, 6, 0, 0]}
                                         animationDuration={1500}
                                     >
                                         {scoreData.map((entry, index) => (
@@ -380,7 +346,6 @@ export default function ProfileInsights({ username, isPrivate }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <Star className="w-12 h-12 mb-4 text-gray-700" />
                             <p className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em]">Write reviews to see distribution</p>
                         </div>
                     )}
@@ -395,9 +360,8 @@ export default function ProfileInsights({ username, isPrivate }) {
                 </div>
 
                 {/* Watching Progress - 7 cols on desktop */}
-                <div className="lg:col-span-7 md:col-span-2 bg-dark-100/40 backdrop-blur-xl rounded-2xl border border-white/5 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
+                <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
                     <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-6">
-                        <Activity className="w-3.5 h-3.5 text-cyan-500" />
                         Live Progress
                     </h3>
                     <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
@@ -429,7 +393,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                                                     </div>
                                                     <div className="relative h-1.5 bg-dark-400 rounded-full overflow-hidden p-[1px] shadow-inner">
                                                         <div
-                                                            className="h-full bg-gradient-to-r from-accent to-purple-500 rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(139,92,246,0.5)]"
+                                                            className="h-full bg-accent transition-all duration-1000"
                                                             style={{ width: `${progress}%` }}
                                                         />
                                                     </div>
@@ -441,7 +405,6 @@ export default function ProfileInsights({ username, isPrivate }) {
                             })
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-30">
-                                <Tv className="w-10 h-10 mb-3 text-gray-600" />
                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">No active progress</p>
                             </div>
                         )}
