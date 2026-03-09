@@ -13,7 +13,7 @@ https://channels.readthedocs.io/en/stable/deploying.html
 import os
 
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import OriginValidator
+from channels.security.websocket import AllowedHostsOriginValidator
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "root.settings")
@@ -31,11 +31,10 @@ from django.conf import settings  # noqa: E402
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": OriginValidator(
+        "websocket": AllowedHostsOriginValidator(
             JWTAuthMiddleware(
                 URLRouter(core_ws_urls + forum_ws_urls),
             ),
-            settings.CORS_ALLOWED_ORIGINS + ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"]
         ),
     }
 )

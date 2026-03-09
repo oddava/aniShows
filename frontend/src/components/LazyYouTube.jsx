@@ -52,7 +52,7 @@ const LazyYouTube = memo(function LazyYouTube({ videoId, title = 'Trailer', acce
                     src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
                     title={title}
                     frameBorder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allow="fullscreen"
                     allowFullScreen
                     className="absolute inset-0 w-full h-full"
                 />

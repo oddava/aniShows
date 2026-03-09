@@ -143,9 +143,9 @@ const markdownComponents = {
         return (
             <span className="block relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden my-4 border border-gray-800">
                 <iframe
-                    src={`https://www.youtube.com/embed/${videoId}`}
+                    src={`https://www.youtube-nocookie.com/embed/${videoId}`}
                     title="YouTube video player"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allow="fullscreen"
                     allowFullScreen
                     className="absolute top-0 left-0 w-full h-full"
                 ></iframe>
