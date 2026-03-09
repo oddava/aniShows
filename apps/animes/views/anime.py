@@ -20,8 +20,10 @@ from apps.animes.models import (
     UserFavorite,
 )
 from apps.animes.serializers import (
+    AnimeCharacterSerializer,
     AnimeDetailSerializer,
     AnimeListSerializer,
+    AnimeStaffSerializer,
     GenreSerializer,
     StudioSerializer,
 )
@@ -80,14 +82,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             queryset = queryset.prefetch_related(
                 "genres",
                 "theme_songs",
-                Prefetch(
-                    "cast",
-                    queryset=AnimeCharacter.objects.select_related("character", "voice_actor"),
-                ),
-                Prefetch(
-                    "production_staff",
-                    queryset=AnimeStaff.objects.select_related("staff"),
-                ),
+            ).annotate(
+                character_count=Count("cast", distinct=True),
+                staff_count=Count("production_staff", distinct=True),
             )
 
         user = self.request.user
@@ -261,35 +258,64 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         return AnimeListSerializer
 
     def retrieve(self, request, *args, **kwargs):
-        """Override to prefetch user_lists for status distribution calculation with caching"""
+        """Optimized retrieve with base data caching and user data injection."""
         slug = kwargs.get("slug")
-        user_id = request.user.id if request.user.is_authenticated else "anon"
-        cache_key = f"anime_detail:{slug}:{user_id}"
+        is_auth = request.user.is_authenticated
 
-        cached_data = cache.get(cache_key)
-        if cached_data and not request.user.is_authenticated:
-            return Response(cached_data)
+        # Cache the BASE data (same for all users)
+        base_cache_key = f"anime_detail_base:{slug}"
+        cached_base = cache.get(base_cache_key)
 
-        try:
-            instance = self.get_object()
-            from apps.users.models import UserAnimeList
+        if cached_base:
+            data = cached_base.copy()
+        else:
+            try:
+                # Use a lightweight queryset for base data
+                instance = self.get_queryset().get(slug=slug)
+                serializer = self.get_serializer(instance)
+                data = serializer.data
+                # Store in cache for 1 hour
+                cache.set(base_cache_key, data, 3600)
+            except Anime.DoesNotExist:
+                return Response({"error": "Anime not found"}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                logger.error(f"Error retrieving anime {slug}: {e!s}")
+                return Response(
+                    {"error": "Internal server error"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
-            user_lists = UserAnimeList.objects.filter(anime=instance).only("status")
-            instance._prefetched_objects_cache["user_lists"] = user_lists
-            serializer = self.get_serializer(instance)
-            data = serializer.data
+        # Inject user-specific data if authenticated
+        if is_auth:
+            user = request.user
+            # Get latest user status and favorite info
+            # These are small queries that are fast with indexes
+            data["is_favorite"] = UserFavorite.objects.filter(user=user, anime_id=data["id"]).exists()
 
-            if not request.user.is_authenticated:
-                cache.set(cache_key, data, 600)
+            try:
+                from apps.users.models import UserAnimeList
 
-            return Response(data)
-        except Exception as e:
-            logger.error(f"Error retrieving anime {slug}: {e!s}")
-            # If cache exists, return stale data rather than 500 error
-            if cached_data:
-                logger.warning(f"Returning stale cache for anime {slug}")
-                return Response(cached_data)
-            raise
+                entry = UserAnimeList.objects.filter(user=user, anime_id=data["id"]).first()
+                if entry:
+                    data["user_list_status"] = {
+                        "id": entry.id,
+                        "status": entry.status,
+                        "score": entry.score,
+                        "episodes_watched": entry.episodes_watched,
+                        "notes": entry.notes,
+                        "started_at": str(entry.started_at) if entry.started_at else None,
+                        "finished_at": str(entry.finished_at) if entry.finished_at else None,
+                        "is_rewatching": entry.is_rewatching,
+                        "progress": (entry.episodes_watched / data["episode_count"] * 100)
+                        if data.get("episode_count") and data["episode_count"] > 0
+                        else 0,
+                    }
+                else:
+                    data["user_list_status"] = None
+            except Exception as e:
+                logger.warning(f"Error injecting user status for anime {slug}: {e}")
+
+        return Response(data)
 
     def list(self, request, *args, **kwargs):
         """Override to add caching for anime list endpoint"""
@@ -408,6 +434,24 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             .order_by("-shared_genres")[:8]
         )
         serializer = AnimeListSerializer(related, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"])
+    def characters(self, request, slug=None):
+        """Get full characters list for this anime."""
+        instance = self.get_object()
+        characters = AnimeCharacter.objects.filter(anime=instance).select_related(
+            "character", "voice_actor"
+        )
+        serializer = AnimeCharacterSerializer(characters, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"])
+    def staff(self, request, slug=None):
+        """Get full staff list for this anime."""
+        instance = self.get_object()
+        staff = AnimeStaff.objects.filter(anime=instance).select_related("staff")
+        serializer = AnimeStaffSerializer(staff, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=["post"], url_path="franchise/fetch")

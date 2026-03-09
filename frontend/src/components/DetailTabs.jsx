@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Users, Mic } from 'lucide-react';
+import { ChevronDown, Users, Mic, Loader } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FranchiseSection from './FranchiseSection';
 import MusicSection from './MusicSection';
@@ -62,7 +62,7 @@ export function OverviewTab({ anime, accentColor }) {
     );
 }
 
-export function CharactersTab({ anime, accentColor, onCharacterClick }) {
+export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick }) {
     const uniqueCharacters = useMemo(() => {
         if (!Array.isArray(anime.characters)) return [];
 
@@ -79,6 +79,14 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
             return true;
         });
     }, [anime.characters]);
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center py-24">
+                <Loader className="w-10 h-10 text-accent animate-spin" />
+            </div>
+        );
+    }
 
     if (uniqueCharacters.length === 0) {
         return (
@@ -139,7 +147,7 @@ export function CharactersTab({ anime, accentColor, onCharacterClick }) {
     );
 }
 
-export function StaffTab({ anime, accentColor, onStaffClick }) {
+export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
     const uniqueStaff = useMemo(() => {
         if (!Array.isArray(anime.staff)) return [];
         const seen = new Set();
@@ -153,6 +161,14 @@ export function StaffTab({ anime, accentColor, onStaffClick }) {
             return true;
         });
     }, [anime.staff]);
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center py-24">
+                <Loader className="w-10 h-10 text-accent animate-spin" />
+            </div>
+        );
+    }
 
     if (!uniqueStaff || uniqueStaff.length === 0) {
         return (

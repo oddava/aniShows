@@ -126,8 +126,11 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
 
     genres = GenreSerializer(many=True, read_only=True)
     studio = StudioSerializer(read_only=True)
-    characters = AnimeCharacterSerializer(source="cast", many=True, read_only=True)
-    staff = AnimeStaffSerializer(source="production_staff", many=True, read_only=True)
+    # Removing full lists to optimize payload - will be fetched on demand
+    # characters = AnimeCharacterSerializer(source="cast", many=True, read_only=True)
+    # staff = AnimeStaffSerializer(source="production_staff", many=True, read_only=True)
+    character_count = IntegerField(read_only=True)
+    staff_count = IntegerField(read_only=True)
     theme_songs = ThemeSongSerializer(many=True, read_only=True)
 
     is_favorite = SerializerMethodField()
@@ -169,8 +172,8 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "end_date",
             "genres",
             "studio",
-            "characters",
-            "staff",
+            "character_count",
+            "staff_count",
             "external_links",
             "relations",
             "site_rank",

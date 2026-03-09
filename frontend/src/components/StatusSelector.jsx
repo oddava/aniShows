@@ -17,7 +17,6 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
-    const [isClosingDropdown, setIsClosingDropdown] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Status state
@@ -29,7 +28,6 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
     // Detail fields
     const [showDetails, setShowDetails] = useState(false);
-    const [isClosingDetails, setIsClosingDetails] = useState(false);
     const [notes, setNotes] = useState(initialStatus?.notes || '');
     const [startedAt, setStartedAt] = useState(initialStatus?.started_at || '');
     const [finishedAt, setFinishedAt] = useState(initialStatus?.finished_at || '');
@@ -39,12 +37,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     const detailsRef = useRef(null);
 
     const closeDropdown = () => {
-        if (!isOpen || isClosingDropdown) return;
-        setIsClosingDropdown(true);
-        setTimeout(() => {
-            setIsOpen(false);
-            setIsClosingDropdown(false);
-        }, 200);
+        setIsOpen(false);
     };
 
     const toggleDropdown = () => {
@@ -56,12 +49,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     };
 
     const closeDetails = () => {
-        if (!showDetails || isClosingDetails) return;
-        setIsClosingDetails(true);
-        setTimeout(() => {
-            setShowDetails(false);
-            setIsClosingDetails(false);
-        }, 200);
+        setShowDetails(false);
     };
 
     const toggleDetails = () => {
@@ -144,17 +132,12 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             const isAdding = !currentStatus;
 
             if (isAdding) {
-                // Wait for the dropdown to animate out before transforming the layout
-                setIsClosingDropdown(true);
-                setTimeout(() => {
-                    setCurrentStatus(newStatus);
-                    setListId(response.data.id);
-                    setIsOpen(false);
-                    setIsClosingDropdown(false);
-                    queryClient.invalidateQueries({ queryKey: ['lists'] });
-                    queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-                    if (onUpdate) onUpdate(response.data);
-                }, 200);
+                setCurrentStatus(newStatus);
+                setListId(response.data.id);
+                setIsOpen(false);
+                queryClient.invalidateQueries({ queryKey: ['lists'] });
+                queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+                if (onUpdate) onUpdate(response.data);
             } else {
                 setCurrentStatus(newStatus);
                 queryClient.invalidateQueries({ queryKey: ['lists'] });
@@ -175,20 +158,14 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
         try {
             await listApi.remove(listId);
 
-            // Animate everything out first
-            closeDropdown();
-            if (showDetails) closeDetails();
-
-            // Wait for animations to complete before switching back to the "Add to List" button
-            setTimeout(() => {
-                setCurrentStatus(null);
-                setListId(null);
-                setScore(0);
-                setEpisodesWatched(0);
-                queryClient.invalidateQueries({ queryKey: ['lists'] });
-                queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-                if (onUpdate) onUpdate(null);
-            }, 200);
+            // Immediately switch back to the "Add to List" button
+            setCurrentStatus(null);
+            setListId(null);
+            setScore(0);
+            setEpisodesWatched(0);
+            queryClient.invalidateQueries({ queryKey: ['lists'] });
+            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            if (onUpdate) onUpdate(null);
         } catch (error) {
             logger.error('Failed to remove entry:', error);
         } finally {
@@ -251,7 +228,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 <button
                     onClick={toggleDropdown}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-dark-200/90 backdrop-blur-xl text-gray-300 font-bold text-sm sm:text-base border border-white/10 active:scale-[0.99] transition-transform"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-dark-200/90 backdrop-blur-xl text-gray-300 font-bold text-sm sm:text-base border border-white/10 transition-colors"
                 >
                     {isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -263,13 +240,12 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 </button>
 
                 {isOpen && (
-                    <div className={`absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100] ${isClosingDropdown ? 'animate-dropdown-out' : 'animate-dropdown-premium'}`}>
+                    <div className="absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100]">
                         {STATUS_OPTIONS.map((option, index) => (
                             <button
                                 key={option.value}
                                 onClick={() => handleStatusChange(option.value)}
-                                style={{ animationDelay: `${index * 40}ms` }}
-                                className="w-full px-4 py-3 text-left flex items-center gap-3 transition-all duration-200 group hover:bg-white/5 rounded-xl animate-dropdown-premium"
+                                className="w-full px-4 py-3 text-left flex items-center gap-3 transition-all duration-200 group hover:bg-white/5 rounded-xl"
                             >
                                 <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
                                     {option.icon && (
@@ -293,7 +269,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             <div className="relative flex items-center justify-between p-1.5 sm:p-2 bg-dark-200/60 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-lg shadow-black/20 z-10">
 
                 {/* Status Dropdown - Left */}
-                <div className="relative flex-shrink-0 animate-bar-reveal" style={{ animationDelay: '100ms' }} ref={dropdownRef}>
+                <div className="relative flex-shrink-0" ref={dropdownRef}>
                     <button
                         onClick={toggleDropdown}
                         disabled={isLoading}
@@ -315,13 +291,12 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
                     {/* Status Menu */}
                     {isOpen && (
-                        <div className={`absolute top-full left-0 mt-3 w-56 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100] ${isClosingDropdown ? 'animate-dropdown-out' : 'animate-dropdown-premium'}`}>
+                        <div className="absolute top-full left-0 mt-3 w-56 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100]">
                             {STATUS_OPTIONS.map((option, index) => (
                                 <button
                                     key={option.value}
                                     onClick={() => handleStatusChange(option.value)}
-                                    style={{ animationDelay: `${index * 40}ms` }}
-                                    className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 group rounded-xl animate-dropdown-premium
+                                    className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 group rounded-xl
                                         ${currentStatus === option.value ? 'bg-white/10' : 'hover:bg-white/5'}`}
                                 >
                                     <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
@@ -337,8 +312,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                             <div className="h-px bg-white/10 my-1" />
                             <button
                                 onClick={handleRemove}
-                                style={{ animationDelay: `${STATUS_OPTIONS.length * 40}ms` }}
-                                className="w-full px-3 py-2.5 text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-3 text-sm font-bold rounded-xl transition-colors duration-200 group animate-dropdown-premium"
+                                className="w-full px-3 py-2.5 text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-3 text-sm font-bold rounded-xl transition-colors duration-200 group"
                             >
                                 <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 group-hover:bg-red-500/20 transition-colors">
                                     <Trash2 className="w-4 h-4" />
@@ -350,12 +324,12 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 </div>
 
                 {/* Episode Counter - Center */}
-                <div className="flex items-center justify-center flex-1 px-2 sm:px-4 min-w-[120px] animate-bar-reveal" style={{ animationDelay: '200ms' }}>
+                <div className="flex items-center justify-center flex-1 px-2 sm:px-4 min-w-[120px]">
                     <div className="flex items-center gap-2 sm:gap-3 bg-dark-100/50 rounded-xl p-1 border border-white/5">
                         <button
                             onClick={() => handleEpisodeChange(episodesWatched - 1)}
                             disabled={isLoading || episodesWatched <= 0}
-                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-dark-200 hover:bg-white/10 text-gray-400 hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:hover:bg-dark-200 flex-shrink-0"
+                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-dark-200 hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-dark-200 flex-shrink-0"
                         >
                             <Minus className="w-4 h-4" />
                         </button>
@@ -390,7 +364,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                         <button
                             onClick={() => handleEpisodeChange(episodesWatched + 1)}
                             disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
-                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-white transition-all active:scale-95 disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
+                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -398,10 +372,10 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 </div>
 
                 {/* Edit Details Button - Right */}
-                <div className="flex-shrink-0 animate-bar-reveal" style={{ animationDelay: '300ms' }}>
+                <div className="flex-shrink-0">
                     <button
                         onClick={toggleDetails}
-                        className={`w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl transition-all duration-300 border active:scale-95
+                        className={`w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl transition-all duration-300 border
                             ${showDetails || score > 0 || notes || startedAt || isRewatching
                                 ? 'bg-accent/20 border-accent/30 text-accent hover:bg-accent hover:text-white hover:border-accent'
                                 : 'bg-dark-100 border-gray-700 text-gray-400 hover:border-white/20 hover:text-white hover:bg-white/5'}`}
@@ -419,7 +393,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             <div className="absolute -bottom-1 left-4 right-4 h-1 sm:h-1.5 bg-dark-100 rounded-b-xl overflow-hidden opacity-80 z-0">
                 <div
                     style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                    className={`h-full transition-all duration-700 ease-out rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
+                    className={`h-full rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
                         ? 'bg-green-500'
                         : 'bg-accent'
                         }`}
@@ -437,7 +411,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
                     <div
                         ref={detailsRef}
-                        className={`absolute top-[calc(100%+12px)] right-0 w-[calc(100vw-2rem)] sm:w-[380px] max-w-full bg-dark-100/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] z-[70] overflow-hidden ${isClosingDetails ? 'animate-dropdown-out' : 'animate-dropdown-premium'}`}
+                        className="absolute top-[calc(100%+12px)] right-0 w-[calc(100vw-2rem)] sm:w-[380px] max-w-full bg-dark-100/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] z-[70] overflow-hidden"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.02]">
@@ -572,7 +546,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                         }
                                     }}
                                     disabled={isLoading}
-                                    className="flex-[2] py-3.5 rounded-xl bg-accent text-white font-bold text-sm hover:brightness-110 transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center"
+                                    className="flex-[2] py-3.5 rounded-xl bg-accent text-white font-bold text-sm hover:brightness-110 transition-all disabled:opacity-50 flex justify-center items-center"
                                 >
                                     {isLoading ? (
                                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

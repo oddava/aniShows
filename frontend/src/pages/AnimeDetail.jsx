@@ -249,8 +249,22 @@ export default function AnimeDetail() {
     const { data: anime, isLoading, isError } = useQuery({
         queryKey: ['anime', slug, user?.id],
         queryFn: () => animeApi.getBySlug(slug).then(res => res.data),
-        refetchOnMount: 'always',
-        staleTime: 0,
+        staleTime: 300000, // 5 minutes
+        gcTime: 600000, // 10 minutes
+    });
+
+    const { data: characters, isLoading: charactersLoading } = useQuery({
+        queryKey: ['anime', slug, 'characters'],
+        queryFn: () => animeApi.getCharacters(slug).then(res => res.data),
+        enabled: !!anime && activeTab === 'characters',
+        staleTime: Infinity, // Character lists rarely change
+    });
+
+    const { data: staff, isLoading: staffLoading } = useQuery({
+        queryKey: ['anime', slug, 'staff'],
+        queryFn: () => animeApi.getStaff(slug).then(res => res.data),
+        enabled: !!anime && activeTab === 'staff',
+        staleTime: Infinity, // Staff lists rarely change
     });
 
     const { data: reviewsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading: reviewsLoading } = useInfiniteQuery({
@@ -426,8 +440,8 @@ export default function AnimeDetail() {
 
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
-        count: tab.id === 'characters' ? getUniqueCharacterCount(anime.characters) :
-            tab.id === 'staff' ? getUniqueStaffCount(anime.staff) : 0
+        count: tab.id === 'characters' ? (anime.character_count || 0) :
+            tab.id === 'staff' ? (anime.staff_count || 0) : 0
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
@@ -622,14 +636,16 @@ export default function AnimeDetail() {
                                 )}
                                 {activeTab === 'characters' && (
                                     <CharactersTab
-                                        anime={anime}
+                                        anime={{ ...anime, characters }}
+                                        isLoading={charactersLoading}
                                         accentColor={accentColor}
                                         onCharacterClick={setSelectedCharacter}
                                     />
                                 )}
                                 {activeTab === 'staff' && (
                                     <StaffTab
-                                        anime={anime}
+                                        anime={{ ...anime, staff }}
+                                        isLoading={staffLoading}
                                         accentColor={accentColor}
                                         onStaffClick={setSelectedStaff}
                                     />
