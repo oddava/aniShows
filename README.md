@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">AniShows 🌸</h1>
+  <h1 align="center">🌸 AniShows 🌸</h1>
   <p align="center">
     <strong>Your personal anime journey.</strong>
   </p>

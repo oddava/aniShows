@@ -136,12 +136,12 @@ urlpatterns = [
     ),
     path(
         "export/", 
-        ImportExportViewSet.as_view({"get": "export_data"}), 
+        ImportExportViewSet.as_view({"get": "export_user_data"}), 
         name="export_user_data"
     ),
     path(
         "export/json/", 
-        ImportExportViewSet.as_view({"get": "export_data"}), 
+        ImportExportViewSet.as_view({"get": "export_user_data"}), 
         name="export_user_data_json"
     ),
     
