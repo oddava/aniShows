@@ -2,13 +2,14 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
+
 from apps.shared.logger import logger
+
 
 class CustomOAuth2Client(OAuth2Client):
     def __init__(self, *args, **kwargs):
         # Fix for "got multiple values for argument 'scope_delimiter'"
-        if "scope_delimiter" in kwargs:
-            del kwargs["scope_delimiter"]
+        kwargs.pop("scope_delimiter", None)
         # Fix for potential other argument conflicts by just passing through
         super().__init__(*args, **kwargs)
 
@@ -43,7 +44,7 @@ class GoogleLogin(SocialLoginView):
 
         try:
             return super().post(request, *args, **kwargs)
-        except Exception as e:
+        except Exception:
             # Log error securely without exposing sensitive data
             logger.exception("GoogleLogin failed")
             raise

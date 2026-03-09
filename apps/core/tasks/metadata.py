@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Celery tasks for social links metadata fetching.
 Runs in background to avoid blocking profile saves.
@@ -6,8 +7,10 @@ Runs in background to avoid blocking profile saves.
 
 from celery import shared_task
 from django.core.cache import cache
+
 from apps.core.services.metadata_service import MetadataService
 from apps.users.models import UserProfile
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def fetch_link_metadata_async(self, url: str, user_id: int, link_index: int = None):

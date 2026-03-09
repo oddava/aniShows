@@ -2,9 +2,8 @@ from django.contrib import admin
 from django.utils.html import format_html
 
 # Import celery admin to register models (registers automatically via @admin.register)
-from apps.core import celery_admin  # noqa: F401
-
-from apps.core.models import SystemLog, AuditLog, Notification, PushSubscription
+from apps.core import celery_admin
+from apps.core.models import AuditLog, Notification, PushSubscription, SystemLog
 
 # Admin site branding
 admin.site.site_header = "aniShows Administration"
@@ -119,8 +118,9 @@ class SystemLogAdmin(admin.ModelAdmin):
     @admin.action(description="Clear logs older than 30 days")
     def clear_old_logs(self, request, queryset):
         """Clear old system logs."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         cutoff_date = timezone.now() - timedelta(days=30)
         old_logs = SystemLog.objects.filter(timestamp__lt=cutoff_date)
@@ -280,8 +280,9 @@ class AuditLogAdmin(admin.ModelAdmin):
     @admin.action(description="Clear audit logs older than 180 days")
     def clear_old_logs(self, request, queryset):
         """Clear old audit logs."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         cutoff_date = timezone.now() - timedelta(days=180)
         old_logs = AuditLog.objects.filter(timestamp__lt=cutoff_date)
@@ -320,8 +321,9 @@ class NotificationAdmin(admin.ModelAdmin):
 
     @admin.action(description="Delete notifications older than 90 days")
     def delete_old_notifications(self, request, queryset):
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         cutoff = timezone.now() - timedelta(days=90)
         old = Notification.objects.filter(created_at__lt=cutoff)

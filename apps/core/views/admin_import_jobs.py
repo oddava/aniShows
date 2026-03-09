@@ -1,11 +1,11 @@
-from rest_framework import status, filters
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
-from django_filters.rest_framework import DjangoFilterBackend
-from django_filters import FilterSet, CharFilter
-from django.utils import timezone
 from celery import current_app
+from django.utils import timezone
+from django_filters import CharFilter, FilterSet
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status
+from rest_framework.decorators import action
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
+from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.models import CeleryTaskResult
@@ -107,7 +107,7 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
         """List all import jobs."""
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        
+
         jobs_data = [self._format_task_result(job) for job in page]
         return self.get_paginated_response(jobs_data)
 

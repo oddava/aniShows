@@ -3,10 +3,11 @@ Management command to populate UserStats for all users.
 Run: python manage.py populate_user_stats
 """
 
-from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from apps.users.services.stats_service import create_or_update_user_stats
+from django.core.management.base import BaseCommand
+
 from apps.users.models import UserStats
+from apps.users.services.stats_service import create_or_update_user_stats
 
 User = get_user_model()
 

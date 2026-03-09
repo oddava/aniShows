@@ -1,11 +1,11 @@
 import bleach
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import SerializerMethodField, IntegerField, CharField
+from rest_framework.fields import CharField, IntegerField, SerializerMethodField
 from rest_framework.relations import PrimaryKeyRelatedField
 from rest_framework.serializers import ModelSerializer
 
-from .models import Category, Thread, Post, Tag
+from .models import Category, Post, Tag, Thread
 
 User = get_user_model()
 

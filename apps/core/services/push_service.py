@@ -1,9 +1,12 @@
 from typing import Optional
-from pywebpush import webpush, WebPushException
+
 from django.conf import settings
 from django.utils import timezone
+from pywebpush import WebPushException, webpush
+
 from apps.core.models import PushSubscription
 from apps.shared.logger import logger
+
 
 class PushService:
     """Service for sending Web Push notifications."""
@@ -21,7 +24,7 @@ class PushService:
         subscription: PushSubscription,
         title: str,
         message: str,
-        data: Optional[dict] = None,
+        data: dict | None = None,
     ) -> bool:
         """Send a push notification to a subscription.
 
@@ -84,7 +87,7 @@ class PushService:
         user,
         title: str,
         message: str,
-        data: Optional[dict] = None,
+        data: dict | None = None,
     ) -> int:
         """Send push notification to all active subscriptions for a user.
 
@@ -115,7 +118,7 @@ class PushService:
         p256dh: str,
         auth: str,
         device_type: str = "browser",
-        device_info: Optional[dict] = None,
+        device_info: dict | None = None,
     ) -> PushSubscription:
         """Create or update a push subscription for a user."""
         subscription, created = PushSubscription.objects.update_or_create(

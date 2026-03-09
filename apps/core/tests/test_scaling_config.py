@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 from django.test import TestCase, override_settings
 
+
 class TestEnvParsers(TestCase):
     """Test environment variable parsing helpers used by settings.base."""
 
@@ -168,7 +169,7 @@ class TestCeleryQueueRouting(TestCase):
                 )
 
         assert not mismatches, (
-            f"Hourly beat schedule queue mismatches with task_routes:\n"
+            "Hourly beat schedule queue mismatches with task_routes:\n"
             + "\n".join(mismatches)
         )
 

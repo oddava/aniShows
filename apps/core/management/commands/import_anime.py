@@ -1,16 +1,18 @@
-from django.core.management.base import BaseCommand
-from django.utils.text import slugify
-from django.core.files.base import ContentFile
-from asgiref.sync import sync_to_async
-from apps.animes.models import Anime, Genre, Studio
-import httpx
 import asyncio
 import json
-from typing import Literal, Optional, List, Dict
-from enum import Enum
-from datetime import datetime
-import os
 import logging
+import os
+from datetime import datetime
+from enum import Enum
+from typing import Dict, List, Literal, Optional
+
+import httpx
+from asgiref.sync import sync_to_async
+from django.core.files.base import ContentFile
+from django.core.management.base import BaseCommand
+from django.utils.text import slugify
+
+from apps.animes.models import Anime, Genre, Studio
 
 AnimeType, AnimeStatus = Anime.AnimeType, Anime.AnimeStatus
 
@@ -60,7 +62,7 @@ class AniListScraper:
             logging.error(f"Request error: {e}")
             return {}
 
-    async def download_image(self, url: str) -> Optional[bytes]:
+    async def download_image(self, url: str) -> bytes | None:
         if not url:
             return None
         try:
@@ -274,7 +276,7 @@ class Command(BaseCommand):
                     )
                 )
         await self.scraper.close()
-        self.stdout.write(self.style.SUCCESS(f"\n=== Import Summary ==="))
+        self.stdout.write(self.style.SUCCESS("\n=== Import Summary ==="))
         self.stdout.write(f"Created: {created_count}")
         self.stdout.write(f"Updated: {updated_count}")
         self.stdout.write(f"Skipped: {skipped_count}")
@@ -304,14 +306,14 @@ class Command(BaseCommand):
                 if cover_data:
                     filename = f"{anime.slug}_cover.jpg"
                     await self._save_image(anime, "cover_image", filename, cover_data)
-                    self.stdout.write(self.style.SUCCESS(f"  ✓ Cover downloaded"))
+                    self.stdout.write(self.style.SUCCESS("  ✓ Cover downloaded"))
             if banner_url and not has_banner:
                 self.stdout.write(f"  Downloading banner for {anime.title}...")
                 banner_data = await self.scraper.download_image(banner_url)
                 if banner_data:
                     filename = f"{anime.slug}_banner.jpg"
                     await self._save_image(anime, "banner_image", filename, banner_data)
-                    self.stdout.write(self.style.SUCCESS(f"  ✓ Banner downloaded"))
+                    self.stdout.write(self.style.SUCCESS("  ✓ Banner downloaded"))
             if not has_trailer:
                 trailer = item.get("trailer")
                 if trailer:
@@ -330,7 +332,7 @@ class Command(BaseCommand):
                         if trailer_url:
                             await self._save_trailer_url(anime, trailer_url)
                             self.stdout.write(
-                                self.style.SUCCESS(f"  ✓ Trailer URL saved")
+                                self.style.SUCCESS("  ✓ Trailer URL saved")
                             )
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"  Error downloading media: {str(e)}"))
@@ -521,4 +523,4 @@ class Command(BaseCommand):
         self.stdout.write(f"Total anime: {anime_id - 1}")
         self.stdout.write(f"Total genres: {genre_id - 1}")
         self.stdout.write(f"Total studios: {studio_id - 1}")
-        self.stdout.write(f"\nLoad with: python manage.py loaddata anime_data.json")
+        self.stdout.write("\nLoad with: python manage.py loaddata anime_data.json")

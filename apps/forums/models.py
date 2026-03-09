@@ -1,20 +1,21 @@
 from django.db.models import (
-    Model,
+    CASCADE,
+    BooleanField,
     CharField,
-    TextField,
-    SlugField,
+    F,
+    ForeignKey,
+    Index,
     IntegerField,
+    ManyToManyField,
+    Model,
     PositiveIntegerField,
     PositiveSmallIntegerField,
-    BooleanField,
-    ForeignKey,
-    ManyToManyField,
-    CASCADE,
-    Index,
-    F,
+    SlugField,
+    TextField,
 )
 
-from apps.shared.models import TimestampMixin, CreatedAtMixin
+from apps.shared.models import CreatedAtMixin, TimestampMixin
+
 
 class Category(Model):
     name = CharField(max_length=255)

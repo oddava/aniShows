@@ -1,30 +1,30 @@
 from django.contrib.auth.models import AbstractUser
 from django.db.models import (
-    OneToOneField,
     CASCADE,
-    Model,
-    ForeignKey,
-    TextChoices,
-    ImageField,
+    SET_NULL,
     BooleanField,
+    ForeignKey,
+    GenericIPAddressField,
+    ImageField,
     Index,
     JSONField,
+    Model,
+    OneToOneField,
     SlugField,
-    SET_NULL,
-    GenericIPAddressField,
+    TextChoices,
 )
 from django.db.models.fields import (
-    TextField,
     CharField,
-    IntegerField,
-    FloatField,
-    DateTimeField,
     DateField,
+    DateTimeField,
+    FloatField,
+    IntegerField,
+    TextField,
 )
 from django.utils.text import slugify
 
 from apps.shared.models import CreatedAtMixin
-from apps.users.utils.file_security import user_avatar_path, user_banner_path, badge_image_path
+from apps.users.utils.file_security import badge_image_path, user_avatar_path, user_banner_path
 from root.storage_backends import MediaStorage
 
 

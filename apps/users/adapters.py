@@ -1,8 +1,10 @@
+import uuid
+
+import httpx
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-import httpx
-import uuid
+
 from apps.shared.logger import logger
 
 User = get_user_model()
@@ -46,7 +48,7 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
                     if response.status_code == 200:
                         filename = f"avatar_{user.pk}.jpg"
                         profile.avatar.save(filename, ContentFile(response.content), save=True)
-            except Exception as e:
+            except Exception:
                 logger.exception(f"Failed to download OAuth avatar for {user.username}")
 
         return user

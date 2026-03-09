@@ -1,25 +1,28 @@
+import time
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db.models import Avg, Count, Exists, F, Q, Sum
+from django.utils import timezone
 from rest_framework import permissions
-from rest_framework.views import APIView
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.users import throttling
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from django.core.cache import cache
-from django.db.models import Count, Avg, Sum, F, Q, Exists
-from datetime import timedelta
-import time
-from apps.shared.logger import logger
-
-from apps.animes.serializers import (
+from apps.animes.serializers.users import (
     PublicUserSerializer,
     UserProfileUpdateSerializer,
 )
-from apps.users.models import UserProfile, UserStats, UserBadge
 from apps.core.utils import get_client_ip
-from apps.users.services.cache import invalidate_user_caches
+from apps.shared.logger import logger
+from apps.users import throttling
+from apps.users.models import UserBadge, UserProfile, UserStats
+from apps.users.services.cache import (
+    get_public_profile_cache_key,
+    invalidate_user_caches,
+)
 
 User = get_user_model()
 
@@ -282,9 +285,9 @@ def get_annotated_user_queryset(user=None, lightweight=False):
         user: The requesting user (for is_following annotation)
         lightweight: If True, only include essential fields for faster loading
     """
-    from django.db.models import FloatField, Subquery, OuterRef
+    from django.db.models import FloatField, OuterRef, Prefetch, Subquery
     from django.db.models.functions import Coalesce, Round
-    from django.db.models import Prefetch
+
     from apps.users.models import UserAnimeList, UserBadge
 
     queryset = User.objects.select_related("userprofile").prefetch_related(
@@ -374,7 +377,7 @@ class PublicUserProfileViewSet(ReadOnlyModelViewSet):
         is_own_profile = is_authenticated and request.user.username.lower() == username.lower()
 
         viewer_id = request.user.id if is_authenticated else "anonymous"
-        cache_key = f"public_profile:{username}:v0:viewer:{viewer_id}"
+        cache_key = get_public_profile_cache_key(username, viewer_id)
         cached_data = cache.get(cache_key)
 
         if cached_data:
@@ -509,9 +512,10 @@ class PublicUserProfileViewSet(ReadOnlyModelViewSet):
 
     def _check_user_online(self, user):
         """Check if user is currently online."""
+        from datetime import timedelta
+
         from django.core.cache import cache
         from django.utils import timezone
-        from datetime import timedelta
 
         cache_key = f"user_online:{user.id}"
         if cache.get(cache_key) is not None:

@@ -1,8 +1,9 @@
+from django.contrib.auth import get_user_model
+from django.core import mail
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
-from django.core import mail
+
 from apps.users.models import UserProfile
 
 User = get_user_model()
@@ -16,7 +17,7 @@ class AccountManagementTests(APITestCase):
         )
         self.profile, _ = UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
         self.client.force_authenticate(user=self.user)
-        
+
         # URLs
         self.delete_account_url = reverse('delete_account')
         self.change_email_url = reverse('change_email')
@@ -27,10 +28,10 @@ class AccountManagementTests(APITestCase):
         """Test account deletion with correct password."""
         # Initial check
         self.assertEqual(User.objects.count(), 1)
-        
+
         data = {'password': 'testpassword123'}
         response = self.client.delete(self.delete_account_url, data, format='json')
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(User.objects.count(), 0)
 
@@ -38,7 +39,7 @@ class AccountManagementTests(APITestCase):
         """Test account deletion fails with wrong password."""
         data = {'password': 'wrongpassword'}
         response = self.client.delete(self.delete_account_url, data, format='json')
-        
+
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(User.objects.count(), 1)
 
@@ -49,10 +50,10 @@ class AccountManagementTests(APITestCase):
             'new_email': new_email,
             'password': 'testpassword123'
         }
-        
+
         response = self.client.post(self.change_email_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Check email sent
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(new_email, mail.outbox[0].to)
@@ -61,7 +62,7 @@ class AccountManagementTests(APITestCase):
     def test_change_email_existing(self):
         """Test changing email to existing email fails."""
         User.objects.create_user(username='other', email='taken@example.com', password='pw')
-        
+
         data = {
             'new_email': 'taken@example.com',
             'password': 'testpassword123'
@@ -73,10 +74,10 @@ class AccountManagementTests(APITestCase):
         """Test resending verification email."""
         self.profile.email_verified = False
         self.profile.save()
-        
+
         data = {'email': self.user.email}
         response = self.client.post(self.resend_url, data)
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Verify your email', mail.outbox[0].subject)
@@ -85,11 +86,11 @@ class AccountManagementTests(APITestCase):
         """Test resending verification when already verified (should pretend success)."""
         self.profile.email_verified = True
         self.profile.save()
-        
+
         data = {'email': self.user.email}
         response = self.client.post(self.resend_url, data)
-        
-        # Should return 200 but NOT send email (or maybe send "already verified" email? 
+
+        # Should return 200 but NOT send email (or maybe send "already verified" email?
         # Current implementation raises User.DoesNotExist which returns success message)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # In implementation: check 'if profile and profile.email_verified: raise User.DoesNotExist'

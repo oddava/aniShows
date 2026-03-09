@@ -1,48 +1,48 @@
+import hashlib
 import re
-from rest_framework import permissions, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Exists, OuterRef, Count, Prefetch
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
-import hashlib
+from django.db.models import Count, Exists, OuterRef, Prefetch
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import permissions, status
+from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
-from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet
-
-from apps.shared.logger import logger
+from apps.core.services.notification_service import NotificationService
 from apps.core.utils import get_client_ip
+from apps.shared.logger import logger
+from apps.users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 
-from .models import Category, Thread, Post, Tag, ThreadLike, PostLike
-from .serializers import (
-    CategorySerializer,
-    ThreadSerializer,
-    ThreadListSerializer,
-    PostSerializer,
-    TagSerializer,
-)
 from .cache_utils import (
-    get_cached_thread_list,
-    cache_thread_list,
-    get_cached_thread_detail,
-    cache_thread_detail,
-    get_cached_post_list,
-    cache_post_list,
-    get_cached_category_list,
-    cache_category_list,
-    get_cached_category_detail,
     cache_category_detail,
-    get_cached_tag_list,
+    cache_category_list,
+    cache_post_list,
     cache_tag_list,
-    invalidate_thread_caches,
+    cache_thread_detail,
+    cache_thread_list,
+    get_cached_category_detail,
+    get_cached_category_list,
+    get_cached_post_list,
+    get_cached_tag_list,
+    get_cached_thread_detail,
+    get_cached_thread_list,
     invalidate_post_list_cache,
+    invalidate_thread_caches,
     invalidate_thread_list_cache,
 )
-from apps.core.services.notification_service import NotificationService
-from apps.users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
+from .models import Category, Post, PostLike, Tag, Thread, ThreadLike
+from .serializers import (
+    CategorySerializer,
+    PostSerializer,
+    TagSerializer,
+    ThreadListSerializer,
+    ThreadSerializer,
+)
 
 User = get_user_model()
 

@@ -1,17 +1,18 @@
-from rest_framework import viewsets, status, serializers, generics
+from rest_framework import generics, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.fields import CharField, JSONField, BooleanField
-from rest_framework.response import Response
+from rest_framework.fields import BooleanField, CharField, JSONField
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer, Serializer
 from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
-from apps.shared.logger import logger
-from apps.shared.pagination import StandardPagination
 from apps.core.models import Notification, PushSubscription
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
+from apps.shared.logger import logger
+from apps.shared.pagination import StandardPagination
+
 
 class NotificationSerializer(ModelSerializer):
     class Meta:

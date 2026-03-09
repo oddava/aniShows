@@ -1,18 +1,19 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django.utils.html import format_html
 from django.db.models import Count
+from django.utils.html import format_html
 
 from apps.users.models import (
     CustomUser,
-    UserProfile,
-    UserImportJob,
-    UserAnimeList,
-    UserActivity,
-    UserFollow,
-    UserStats,
     SocialLinkChangeLog,
+    UserActivity,
+    UserAnimeList,
+    UserFollow,
+    UserImportJob,
+    UserProfile,
+    UserStats,
 )
+
 
 class UserProfileInline(admin.StackedInline):
     """Inline admin for user profiles."""
@@ -184,8 +185,9 @@ class CustomUserAdmin(UserAdmin):
     @admin.action(description="Delete unverified accounts older than 7 days")
     def delete_unverified(self, request, queryset):
         """Delete unverified accounts."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         cutoff_date = timezone.now() - timedelta(days=7)
 
@@ -373,8 +375,9 @@ class UserImportJobAdmin(admin.ModelAdmin):
     @admin.action(description="Delete jobs older than 30 days")
     def delete_old_jobs(self, request, queryset):
         """Delete old import jobs."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         cutoff_date = timezone.now() - timedelta(days=30)
         old_jobs = UserImportJob.objects.filter(created_at__lt=cutoff_date)

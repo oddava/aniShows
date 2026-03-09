@@ -1,17 +1,17 @@
-from rest_framework import serializers, permissions
-from rest_framework.exceptions import PermissionDenied
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from django.contrib.auth import get_user_model
+from rest_framework import permissions, serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.viewsets import ModelViewSet
 
+from apps.animes.serializers.users import UserAnimeListSerializer
 from apps.users.models import UserAnimeList
-from apps.animes.serializers import UserAnimeListSerializer
 from apps.users.permissions import EmailVerificationMixin
 from apps.users.services.cache import (
-    invalidate_user_caches,
-    invalidate_user_anime_caches,
     invalidate_anime_detail_cache,
+    invalidate_user_anime_caches,
+    invalidate_user_caches,
 )
 
 User = get_user_model()

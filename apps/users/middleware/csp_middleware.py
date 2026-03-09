@@ -2,6 +2,7 @@
 
 from django.utils.deprecation import MiddlewareMixin
 
+
 class CSPMiddleware(MiddlewareMixin):
     """
     Add Content Security Policy headers.

@@ -1,12 +1,14 @@
+from datetime import timedelta
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from datetime import timedelta
-from apps.users.models import UserProfile, UserAnimeList
+
 from apps.animes.models import Anime, UserFavorite
-from unittest.mock import patch
+from apps.users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 
@@ -191,6 +193,6 @@ class ProfileFeaturesTest(APITestCase):
 
         # Verify lists endpoint (should return empty/blocked)
         # Using UserAnimeListViewSet logic: if user.profile.is_private -> returns empty
-        list_url = reverse("lists-list") + f"?username=mainuser"
+        list_url = reverse("lists-list") + "?username=mainuser"
         res = self.client.get(list_url)
         self.assertEqual(len(res.data["results"]), 0)

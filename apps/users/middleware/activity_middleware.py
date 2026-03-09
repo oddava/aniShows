@@ -1,11 +1,12 @@
 from apps.shared.logger import logger
+
 """
 Middleware for tracking user activity and online status.
 Uses Redis cache for efficient tracking with automatic expiration.
 """
 
-from django.utils import timezone
 from django.core.cache import cache
+from django.utils import timezone
 
 # Cache timeout in seconds (5 minutes)
 ONLINE_TIMEOUT = 300

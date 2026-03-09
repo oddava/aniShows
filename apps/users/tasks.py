@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Unified user workflow tasks.
 
@@ -12,11 +13,12 @@ Consolidates user-related maintenance tasks:
 import asyncio
 from datetime import timedelta
 from typing import Dict, List, Optional
+
 from celery import shared_task
+from django.contrib.auth import get_user_model
 from django.db import close_old_connections, transaction
 from django.db.utils import InterfaceError, OperationalError
 from django.utils import timezone
-from django.contrib.auth import get_user_model
 
 from apps.animes.services.anilist import AniListService
 from apps.users.models import UserImportJob
@@ -53,24 +55,24 @@ def cleanup_unverified_accounts(self, days: int = 7):
         count = len(user_ids)
 
         if count > 0:
-            from apps.users.models import (
-                UserAnimeList,
-                UserActivity,
-                UserStats,
-                UserFollow,
-                UserBadge,
-                SocialLinkChangeLog,
-            )
             from apps.animes.models import (
+                Review,
+                ReviewComment,
+                ReviewVote,
                 UserFavorite,
                 UserHistory,
-                Review,
-                ReviewVote,
-                ReviewComment,
                 UserRecommendation,
             )
-            from apps.forums.models import Thread, Post, ThreadLike, PostLike
             from apps.core.models import Notification, PushSubscription
+            from apps.forums.models import Post, PostLike, Thread, ThreadLike
+            from apps.users.models import (
+                SocialLinkChangeLog,
+                UserActivity,
+                UserAnimeList,
+                UserBadge,
+                UserFollow,
+                UserStats,
+            )
 
             db = User.objects.db
 
@@ -334,8 +336,9 @@ def update_user_stats(self, user_id: int = None):
     Returns:
         Dict with update results
     """
-    from django.db.models import Count, Sum, Avg, F, Q
-    from apps.users.models import UserStats, UserAnimeList
+    from django.db.models import Avg, Count, F, Q, Sum
+
+    from apps.users.models import UserAnimeList, UserStats
 
     start_time = timezone.now()
     updated_count = 0
@@ -438,9 +441,11 @@ def warm_profile_cache(usernames: list = None):
     Args:
         usernames: List of usernames to warm, or None for popular users
     """
-    from apps.users.views.users import get_annotated_user_queryset
-    from apps.animes.serializers import PublicUserSerializer
     from django.core.cache import cache
+
+    from apps.animes.serializers.users import PublicUserSerializer
+    from apps.users.services.cache import get_public_profile_cache_key
+    from apps.users.views.users import get_annotated_user_queryset
 
     if not usernames:
         from django.db.models import Count
@@ -472,7 +477,7 @@ def warm_profile_cache(usernames: list = None):
         warmed_count = 0
         for user, data in zip(ordered_users, serialized_users):
             # Cache key format used by PublicUserProfileViewSet.retrieve
-            cache_key = f"public_profile:{user.username}:v0:viewer:anonymous"
+            cache_key = get_public_profile_cache_key(user.username, viewer_id="anonymous")
             cache.set(cache_key, data, timeout=1800)  # 30 minutes
             warmed_count += 1
 

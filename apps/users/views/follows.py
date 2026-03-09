@@ -1,21 +1,21 @@
-from rest_framework import permissions, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
+from rest_framework import permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from apps.animes.models import Anime
+from apps.animes.serializers.users import (
+    FollowSerializer,
+    FriendWatchingSerializer,
+    UserFollowListSerializer,
+)
 from apps.shared.logger import logger
 from apps.shared.pagination import StandardPagination
-from apps.users.models import UserFollow, UserAnimeList
-from apps.animes.models import Anime
-from apps.animes.serializers import (
-    FollowSerializer,
-    UserFollowListSerializer,
-    FriendWatchingSerializer,
-)
+from apps.users.models import UserAnimeList, UserFollow
 from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()

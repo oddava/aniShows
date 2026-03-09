@@ -9,7 +9,7 @@ const AuthContext = createContext(null);
 const decodeToken = (token) => {
     try {
         const decoded = jwtDecode(token);
-        
+
         // Handle both old tokens (only user_id) and new tokens (with username/email)
         // For old tokens without username, we'll need to fetch from API
         if (!decoded.username && !decoded.email) {
@@ -24,7 +24,7 @@ const decodeToken = (token) => {
                 _needsApiFetch: true, // Flag to indicate we need API data
             };
         }
-        
+
         return {
             id: decoded.user_id,
             username: decoded.username || 'User', // Fallback if somehow missing
@@ -67,85 +67,34 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const fetchUserStats = useCallback(async () => {
-        try {
-            const response = await authApi.getStats();
-            return response.data;
-        } catch (error) {
-            return null;
-        }
-    }, []);
-
     const checkAuth = useCallback(async () => {
         const token = localStorage.getItem('access_token');
         const refreshToken = localStorage.getItem('refresh_token');
-        
+
         if (token && !isTokenExpired(token)) {
-            // Token is valid - proceed as before
-            const decodedUser = decodeToken(token);
-            if (decodedUser) {
-                
-                // If we have username from token, show it immediately
-                if (!decodedUser._needsApiFetch) {
-                    setUser(decodedUser);
-                    setLoading(false); // Stop loading immediately!
-                } else {
-                    // Old token - need to fetch username, but set user anyway to avoid blank state
-                    setUser({ ...decodedUser, username: 'Loading...' });
-                    setLoading(false);
-                }
-                
-                // BACKGROUND: Get lightweight profile (fast, no expensive stats)
-                try {
-                    const response = await authApi.getProfile(false); // lightweight (default)
-                    setUser(response.data);
-                    
-                    // BACKGROUND: Fetch expensive stats asynchronously (don't block UI)
-                    fetchUserStats().then(stats => {
-                        if (stats) {
-                            setUser(prev => ({ ...prev, ...stats }));
-                        }
-                    });
-                } catch (error) {
-                    // Don't remove tokens - keep using decoded data
-                    logger.warn('Failed to fetch profile during checkAuth:', error.message);
-                }
+            try {
+                // Fetch full profile to get admin status
+                const response = await authApi.getProfile();
+                setUser(response.data);
+                setLoading(false);
                 return;
+            } catch (error) {
+                logger.warn('Failed to fetch profile with valid token, trying refresh:', error.message);
+                // Fall through to refresh logic if profile fetch fails
             }
         }
-        
+
         // Token is expired or missing, but we have a refresh token - try to refresh
         if (refreshToken) {
             try {
                 logger.info('Access token expired or missing, attempting refresh...');
                 const newAccessToken = await refreshAccessToken();
                 logger.info('Token refresh successful on app load');
-                
-                // Decode and set user from new token
-                const decodedUser = decodeToken(newAccessToken);
-                if (decodedUser) {
-                    if (!decodedUser._needsApiFetch) {
-                        setUser(decodedUser);
-                        setLoading(false);
-                    } else {
-                        setUser({ ...decodedUser, username: 'Loading...' });
-                        setLoading(false);
-                    }
-                    
-                    // Fetch profile in background
-                    try {
-                        const response = await authApi.getProfile(false);
-                        setUser(response.data);
-                        
-                        fetchUserStats().then(stats => {
-                            if (stats) {
-                                setUser(prev => ({ ...prev, ...stats }));
-                            }
-                        });
-                    } catch (error) {
-                        logger.warn('Failed to fetch profile after token refresh:', error.message);
-                    }
-                }
+
+                // Fetch full profile after refresh
+                const response = await authApi.getProfile();
+                setUser(response.data);
+                setLoading(false);
                 return;
             } catch (refreshError) {
                 const errorMessage = refreshError?.message || '';
@@ -164,14 +113,14 @@ export function AuthProvider({ children }) {
                 }
             }
         }
-        
+
         // No token or invalid token
         if (token && isTokenExpired(token) && !refreshToken) {
             localStorage.removeItem('access_token');
         }
-        
+
         setLoading(false);
-    }, [fetchUserStats]);
+    }, []);
 
     useEffect(() => {
         checkAuth();
@@ -184,25 +133,20 @@ export function AuthProvider({ children }) {
         localStorage.setItem('access_token', access);
         localStorage.setItem('refresh_token', refresh);
 
-        // Decode token instantly for immediate UI update
-        const decodedUser = decodeToken(access);
-        if (decodedUser) {
-            setUser(decodedUser);
-        }
-
-        // Fetch lightweight profile (fast)
-        const profileResponse = await authApi.getProfile(false);
-        setUser(profileResponse.data);
-
-        // Fetch stats asynchronously in background
-        fetchUserStats().then(stats => {
-            if (stats) {
-                setUser(prev => ({ ...prev, ...stats }));
+        // Fetch full profile immediately after login to get admin status
+        try {
+            const profileResponse = await authApi.getProfile();
+            setUser(profileResponse.data);
+            return profileResponse.data;
+        } catch (error) {
+            // Fallback to token decode if profile fetch fails
+            const decodedUser = decodeToken(access);
+            if (decodedUser) {
+                setUser(decodedUser);
             }
-        });
-
-        return profileResponse.data;
-    }, [fetchUserStats]);
+            return decodedUser;
+        }
+    }, []);
 
     const register = useCallback(async (username, email, password) => {
         const response = await authApi.register({
@@ -227,23 +171,12 @@ export function AuthProvider({ children }) {
 
         if (userData) {
             setUser(userData);
-            return userData;
-        }
-
-        const profileResponse = await authApi.getProfile();
-        setUser(profileResponse.data);
-
-        return profileResponse.data;
-    }, []);
-
-    const refreshProfile = useCallback(async () => {
-        try {
-            const response = await authApi.getProfile();
-            setUser(response.data);
-            return response.data;
-        } catch (error) {
-            logger.error('Failed to refresh profile:', error);
-            throw error;
+        } else {
+            // If no user data provided, decode it from token
+            const decodedUser = decodeToken(access);
+            if (decodedUser) {
+                setUser(decodedUser);
+            }
         }
     }, []);
 
@@ -254,9 +187,8 @@ export function AuthProvider({ children }) {
         register,
         logout,
         setTokens,
-        refreshProfile,
         isAuthenticated: !!user,
-    }), [user, loading, login, register, logout, setTokens, refreshProfile]);
+    }), [user, loading, login, register, logout, setTokens]);
 
     return (
         <AuthContext.Provider value={value}>

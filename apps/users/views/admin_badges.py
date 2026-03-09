@@ -2,20 +2,18 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.utils.text import slugify
-
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.shared.logger import logger
-
-from apps.users.models import Badge, UserBadge
-from apps.animes.serializers import BadgeSerializer
-from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
+from apps.animes.serializers.users import BadgeSerializer
 from apps.core.models import AuditLog
+from apps.core.permissions import IsAdminUser
 from apps.core.services.notification_service import NotificationService
+from apps.shared.logger import logger
+from apps.shared.pagination import StandardPagination
+from apps.users.models import Badge, UserBadge
 
 User = get_user_model()
 
@@ -220,7 +218,7 @@ class AdminBadgeViewSet(ModelViewSet):
                 "user": {
                     "id": ub.user.id,
                     "username": ub.user.username,
-                    "avatar": getattr(getattr(ub.user, "userprofile", None), "avatar").url
+                    "avatar": getattr(ub.user, "userprofile", None).avatar.url
                     if getattr(getattr(ub.user, "userprofile", None), "avatar", None)
                     else None,
                 },

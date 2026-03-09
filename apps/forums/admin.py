@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Category, Thread, Post, Tag, ThreadLike, PostLike
+
+from .models import Category, Post, PostLike, Tag, Thread, ThreadLike
+
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -33,7 +35,7 @@ class PostAdmin(admin.ModelAdmin):
     raw_id_fields = ('author', 'thread')
     readonly_fields = ('created_at', 'updated_at')
 
-@admin.register(ThreadLike) 
+@admin.register(ThreadLike)
 class ThreadLikeAdmin(admin.ModelAdmin):
     list_display = ('user', 'thread', 'created_at')
     raw_id_fields = ('user', 'thread')

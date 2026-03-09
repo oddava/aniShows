@@ -8,14 +8,14 @@ Tests cover:
 - Privacy filtering for heatmap and feed
 """
 
-from django.test import TestCase, TransactionTestCase
 from django.contrib.auth import get_user_model
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
-from rest_framework.test import APITestCase
 from rest_framework import status
+from rest_framework.test import APITestCase
 
 from apps.animes.models import Anime
-from apps.users.models import UserAnimeList, UserActivity
+from apps.users.models import UserActivity, UserAnimeList
 
 User = get_user_model()
 

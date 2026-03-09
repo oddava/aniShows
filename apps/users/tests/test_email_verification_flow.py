@@ -1,18 +1,18 @@
-from django.urls import reverse
-from rest_framework import status
-from rest_framework.test import APITestCase
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 User = get_user_model()
 
 class EmailVerificationFlowTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username='testuser', 
-            email='test@example.com', 
+            username='testuser',
+            email='test@example.com',
             password='testpassword123'
         )
         self.user.is_active = True
@@ -26,15 +26,15 @@ class EmailVerificationFlowTests(APITestCase):
         """
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        
+
         url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
-        
+
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
         self.assertIn('refresh', response.data)
         self.assertIn('user', response.data)
-        
+
         # Verify user is marked as verified
         self.user.refresh_from_db()
         profile = getattr(self.user, 'userprofile', None)
@@ -60,12 +60,12 @@ class EmailVerificationFlowTests(APITestCase):
 
         profile.email_verified = True
         profile.save()
-        
+
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        
+
         url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
-        
+
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should still return tokens for auto-login

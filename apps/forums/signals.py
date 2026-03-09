@@ -1,15 +1,17 @@
 from django.db import transaction
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
-from .models import Post, ThreadLike, PostLike, Thread, Category
+
 from .cache_utils import (
+    invalidate_category_detail_cache,
+    invalidate_category_list_cache,
+    invalidate_post_list_cache,
     invalidate_thread_caches,
     invalidate_thread_detail_cache,
-    invalidate_post_list_cache,
-    invalidate_category_list_cache,
-    invalidate_category_detail_cache,
     invalidate_thread_list_cache,
 )
+from .models import Category, Post, PostLike, Thread, ThreadLike
+
 
 def invalidate_after_commit(cache_invalidation_func):
     """Helper to delay cache invalidation until transaction commits.

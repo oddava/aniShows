@@ -1,6 +1,8 @@
 from celery import shared_task
-from apps.core.models import SystemLog, AuditLog
+
+from apps.core.models import AuditLog, SystemLog
 from apps.shared.logger import logger
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=5)
 def log_request_async(self, log_data):

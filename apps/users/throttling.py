@@ -5,6 +5,7 @@ Provides different rate limits for different types of endpoints.
 
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
+
 class PublicUserProfileRateThrottle(AnonRateThrottle):
     """
     Strict rate limiting for public user profile lookups.
@@ -97,6 +98,7 @@ class SocialLinksRateThrottle(UserRateThrottle):
 
         # Calculate account age
         from datetime import timedelta
+
         from django.utils import timezone
 
         account_age = timezone.now() - user.date_joined

@@ -303,6 +303,7 @@ const AdminLayout = () => {
             items: [
                 { path: '/admin/settings', icon: <Settings size={20} />, label: 'Settings' },
                 { path: '/admin/logs', icon: <FileText size={20} />, label: 'Logs' },
+                { path: '/django-admin/', icon: <ShieldAlert size={20} />, label: 'Django Admin', external: true },
             ]
         },
     ];
@@ -361,23 +362,12 @@ const AdminLayout = () => {
                             </div>
                             <div className="space-y-1">
                                 {section.items.map((item) => {
-                                    const isActive = item.exact
+                                    const isActive = !item.external && (item.exact
                                         ? location.pathname === item.path
-                                        : location.pathname.startsWith(item.path);
+                                        : location.pathname.startsWith(item.path));
 
-                                    return (
-                                        <NavLink
-                                            key={item.path}
-                                            to={item.path}
-                                            end={item.exact}
-                                            className={`
-                                                flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden
-                                                ${isActive
-                                                    ? 'border border-white/10 text-white bg-white/5'
-                                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                                }
-                                            `}
-                                        >
+                                    const linkContent = (
+                                        <>
                                             {isActive && (
                                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full" />
                                             )}
@@ -385,6 +375,37 @@ const AdminLayout = () => {
                                                 {item.icon}
                                             </span>
                                             {item.label}
+                                        </>
+                                    );
+
+                                    const commonClasses = `
+                                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden
+                                        ${isActive
+                                            ? 'border border-white/10 text-white bg-white/5'
+                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }
+                                    `;
+
+                                    if (item.external) {
+                                        return (
+                                            <a
+                                                key={item.path}
+                                                href={item.path}
+                                                className={commonClasses}
+                                            >
+                                                {linkContent}
+                                            </a>
+                                        );
+                                    }
+
+                                    return (
+                                        <NavLink
+                                            key={item.path}
+                                            to={item.path}
+                                            end={item.exact}
+                                            className={commonClasses}
+                                        >
+                                            {linkContent}
                                         </NavLink>
                                     );
                                 })}

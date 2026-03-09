@@ -1,13 +1,13 @@
+from .account_management import AccountManagementViewSet
+from .activity import UserActivityViewSet
+from .admin_badges import AdminBadgeViewSet
 from .auth import (
-    CustomTokenObtainPairView, 
-    RegisterView, 
-    LoggingTokenRefreshView,
     AuthViewSet,
+    CustomTokenObtainPairView,
+    LoggingTokenRefreshView,
+    RegisterView,
 )
-from .users import UserProfileView, UserStatsView, PublicUserProfileViewSet
+from .badges import UserBadgeViewSet
 from .follows import FollowViewSet
 from .lists import UserAnimeListViewSet
-from .activity import UserActivityViewSet
-from .account_management import AccountManagementViewSet
-from .admin_badges import AdminBadgeViewSet
-from .badges import UserBadgeViewSet
+from .users import PublicUserProfileViewSet, UserProfileView, UserStatsView

@@ -1,11 +1,14 @@
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.db import transaction
 from django.utils import timezone
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
+
 from apps.core.models import Notification, PushSubscription
-from apps.users.models import UserProfile
 from apps.shared.logger import logger
+from apps.users.models import UserProfile
+
 
 class NotificationService:
     """Service for creating and managing user notifications."""
@@ -17,9 +20,9 @@ class NotificationService:
         notification_type: str,
         title: str,
         message: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: Dict[str, Any] | None = None,
         priority: str = "medium",
-    ) -> Optional[Notification]:
+    ) -> Notification | None:
         """Create a notification for a user.
 
         Args:
@@ -166,7 +169,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.REVIEW_REPLY,
-            title=f"New reply to your review",
+            title="New reply to your review",
             message=f"{comment.user.username} replied to your review of {review.anime.title}",
             data={
                 "review_id": review.id,
@@ -186,7 +189,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.NEW_FOLLOWER,
-            title=f"New Follower",
+            title="New Follower",
             message=f"{follower.username} started following you",
             data={
                 "follower_id": follower.id,
@@ -202,7 +205,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_REPLY,
-            title=f"New reply to your thread",
+            title="New reply to your thread",
             message=f"{post.author.username} replied to your thread '{thread.title}'",
             data={
                 "thread_id": thread.id,
@@ -219,7 +222,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_REPLY,
-            title=f"New reply to your post",
+            title="New reply to your post",
             message=f"{reply.author.username} replied to your post in '{reply.thread.title}'",
             data={
                 "thread_id": reply.thread.id,
@@ -242,7 +245,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_MENTION,
-            title=f"You were mentioned",
+            title="You were mentioned",
             message=f"{author.username} mentioned you in a {item_type} in '{title}'",
             data={
                 "thread_id": thread_id,
@@ -263,7 +266,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_LIKE,
-            title=f"New Like",
+            title="New Like",
             message=f"{author.username} liked your {item_type} in '{title}'",
             data={
                 "thread_id": thread_id,

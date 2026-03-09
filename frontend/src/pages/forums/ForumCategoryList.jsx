@@ -3,7 +3,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { Pin, Lock, Plus, ChevronRight, Clock, Flame, Search, MessageSquare, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { forumsApi } from '../../api/forumsApi';
+import { forumsApi } from '../../api/client';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';

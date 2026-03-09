@@ -1,15 +1,18 @@
 from apps.shared.logger import logger
+
 """
 Metadata Service for Social Links
 Fetches Open Graph metadata, favicons, and other link information.
 Caches results in Redis for 24 hours.
 """
 
-import httpx
-from typing import Optional, Dict
 from datetime import timedelta
+from typing import Dict, Optional
+
+import httpx
 from bs4 import BeautifulSoup
 from django.core.cache import cache
+
 
 class MetadataService:
     """
@@ -113,7 +116,7 @@ class MetadataService:
         domain = urlparse(url).netloc
         return domain
 
-    def _extract_description(self, soup: BeautifulSoup) -> Optional[str]:
+    def _extract_description(self, soup: BeautifulSoup) -> str | None:
         """Extract page description"""
         # Try Open Graph description
         og_desc = soup.find("meta", property="og:description")
@@ -159,7 +162,7 @@ class MetadataService:
         # Use first favicon service as default
         return self.FAVICON_SERVICES[0].format(domain=domain)
 
-    def _extract_og_image(self, soup: BeautifulSoup) -> Optional[str]:
+    def _extract_og_image(self, soup: BeautifulSoup) -> str | None:
         """Extract Open Graph image"""
         og_image = soup.find("meta", property="og:image")
         if og_image and og_image.get("content"):

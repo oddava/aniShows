@@ -6,10 +6,11 @@ Usage:
     python manage.py backfill_points
 """
 from django.core.management.base import BaseCommand
-from django.db.models import Sum, Case, When, IntegerField
+from django.db.models import Case, IntegerField, Sum, When
 
-from apps.users.models import UserProfile
 from apps.animes.models import ReviewVote
+from apps.users.models import UserProfile
+
 
 class Command(BaseCommand):
     help = 'Backfill points for all users based on their existing review votes'
@@ -23,13 +24,13 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
-        
+
         self.stdout.write('Calculating points for all users...')
-        
+
         # Get all users with profiles
         profiles = UserProfile.objects.select_related('user').all()
         updated_count = 0
-        
+
         for profile in profiles:
             # Count helpful votes as +1, unhelpful as -1
             result = ReviewVote.objects.filter(review__user=profile.user).aggregate(
@@ -42,9 +43,9 @@ class Command(BaseCommand):
                     )
                 )
             )
-            
+
             new_points = result['total_points'] or 0
-            
+
             if profile.points != new_points:
                 if dry_run:
                     self.stdout.write(
@@ -59,7 +60,7 @@ class Command(BaseCommand):
                         )
                     )
                 updated_count += 1
-        
+
         if dry_run:
             self.stdout.write(
                 self.style.WARNING(

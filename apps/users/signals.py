@@ -1,13 +1,15 @@
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from allauth.account.signals import user_signed_up
 from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.signals import social_account_added
-from allauth.account.signals import user_signed_up
-from .models import UserProfile, UserFollow
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
+
 from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
+
+from .models import UserFollow, UserProfile
 
 User = get_user_model()
 
@@ -120,6 +122,7 @@ def handle_profile_update(sender, instance, created, **kwargs):
 
 from apps.animes.models import ReviewVote
 
+
 @receiver(post_save, sender=ReviewVote)
 def update_points_on_vote_save(sender, instance, created, **kwargs):
     """Update author's points when a vote is added or changed."""
@@ -159,7 +162,7 @@ def recalculate_user_points(user):
     Recalculate all points for a user based on their reviews' votes.
     Used for vote updates and as a safety net.
     """
-    from django.db.models import Sum, Case, When, IntegerField
+    from django.db.models import Case, IntegerField, Sum, When
 
     profile, _ = UserProfile.objects.get_or_create(user=user)
 

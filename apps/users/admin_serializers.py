@@ -1,11 +1,11 @@
-from rest_framework import serializers
-
 from django.contrib.auth import get_user_model
-from rest_framework.fields import SerializerMethodField, IntegerField
+from django.db.models import Count
+from rest_framework import serializers
+from rest_framework.fields import IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
 
+from apps.core.models import AuditLog, SystemLog
 from apps.users.models import UserProfile
-from django.db.models import Count
 
 User = get_user_model()
 
@@ -15,7 +15,7 @@ class AdminUserSerializer(ModelSerializer):
     banner = SerializerMethodField()
     bio = SerializerMethodField()
     is_private = SerializerMethodField()
-    
+
     # Activity counts from annotations
     favorites_count = IntegerField(source='_favorites_count', read_only=True, default=0)
     reviews_count = IntegerField(source='_reviews_count', read_only=True, default=0)
@@ -59,3 +59,29 @@ class AdminUserSerializer(ModelSerializer):
     def get_is_private(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.is_private if profile else False
+
+
+class SystemLogSerializer(ModelSerializer):
+    """Serializer for system logs."""
+
+    username = SerializerMethodField()
+
+    class Meta:
+        model = SystemLog
+        fields = "__all__"
+
+    def get_username(self, obj):
+        return obj.user.username if obj.user else None
+
+
+class AuditLogSerializer(ModelSerializer):
+    """Serializer for administrative audit logs."""
+
+    username = SerializerMethodField()
+
+    class Meta:
+        model = AuditLog
+        fields = "__all__"
+
+    def get_username(self, obj):
+        return obj.user.username if obj.user else None

@@ -1,5 +1,7 @@
 from django.core.management.base import BaseCommand
-from apps.forums.models import Thread, Post, Category
+
+from apps.forums.models import Category, Post, Thread
+
 
 class Command(BaseCommand):
     help = "Fix corrupted like/reply/thread counters"

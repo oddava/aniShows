@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 WebSocket consumers for the forums app.
 
@@ -6,6 +7,7 @@ Provides real-time updates for forum threads — new posts, likes, etc.
 """
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
 
 class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for live forum thread updates.

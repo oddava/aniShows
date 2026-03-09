@@ -10,7 +10,9 @@ from prometheus_client import (
     generate_latest,
     multiprocess,
 )
+
 from apps.shared.logger import logger
+
 
 class MetricsView(View):
     def get(self, request, *args, **kwargs) -> HttpResponse:

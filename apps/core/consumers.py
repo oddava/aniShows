@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 WebSocket consumers for the core app.
 

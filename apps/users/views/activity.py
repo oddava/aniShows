@@ -1,13 +1,13 @@
+from django.contrib.auth import get_user_model
+from django.core.cache import cache as redis_cache
+from django.shortcuts import get_object_or_404
 from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.shortcuts import get_object_or_404
-from django.contrib.auth import get_user_model
-from django.core.cache import cache as redis_cache
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from apps.animes.serializers.users import UserActivitySerializer
 from apps.users.models import UserActivity
-from apps.animes.serializers import UserActivitySerializer
 
 User = get_user_model()
 
@@ -81,8 +81,9 @@ class UserActivityViewSet(ReadOnlyModelViewSet):
         if cached is not None:
             return Response(cached)
 
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         one_year_ago = timezone.now() - timedelta(days=365)
 
@@ -93,8 +94,8 @@ class UserActivityViewSet(ReadOnlyModelViewSet):
         ]
 
         # Use DB-level aggregation instead of loading all activities into Python
-        from django.db.models import F, Value, Case, When, IntegerField, Sum
-        from django.db.models.functions import TruncDate, Coalesce, Greatest
+        from django.db.models import Case, F, IntegerField, Sum, Value, When
+        from django.db.models.functions import Coalesce, Greatest, TruncDate
 
         # Calculate episode diff at the DB level, clamped to >= 0
         activities = (

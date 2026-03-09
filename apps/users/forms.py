@@ -1,9 +1,10 @@
-from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.forms import Form
 from django.forms.fields import EmailField
 from django.forms.widgets import EmailInput, TextInput
+
 
 class SignupForm(UserCreationForm):
     email = EmailField(

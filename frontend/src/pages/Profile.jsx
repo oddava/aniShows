@@ -13,6 +13,7 @@ import {
     ProfileTabs,
     ProfileContent,
 } from '../components/profile';
+import useUserProfile from '../hooks/useUserProfile';
 import { setUserContext } from '../sentry';
 
 import MarkdownRenderer from '../components/common/MarkdownRenderer';
@@ -64,17 +65,8 @@ export default function Profile({ forcedUsername }) {
         refetchOnWindowFocus: true,
     });
 
-    // For own profile, also fetch fresh data to get badges and other updates
-    const { data: ownProfile, isLoading: ownProfileLoading } = useQuery({
-        queryKey: ['ownProfile'],
-        queryFn: () => authApi.getProfile(true).then(res => res.data),
-        enabled: isOwnProfile && !!currentUser,
-        retry: 2,
-        staleTime: 0, // Always get fresh data for own profile
-        gcTime: 5 * 60 * 1000,
-        refetchOnMount: 'always', // Always refetch, even if data exists in cache
-        refetchOnWindowFocus: true,
-    });
+    // For own profile, use the centralized hook
+    const { data: ownProfile, isLoading: ownProfileLoading } = useUserProfile();
 
     const displayUser = isPublicView ? publicProfile : (ownProfile || currentUser);
     const isPrivate = isPublicView && displayUser?.is_private;
@@ -223,10 +215,10 @@ export default function Profile({ forcedUsername }) {
 
                 <div className="max-w-7xl mx-auto px-4 mt-8">
                     {activeTab === 'overview' ? (
-                        <OverviewTab 
-                            displayUser={displayUser} 
-                            targetUsername={targetUsername} 
-                            isPrivate={isPrivate} 
+                        <OverviewTab
+                            displayUser={displayUser}
+                            targetUsername={targetUsername}
+                            isPrivate={isPrivate}
                             onTabChange={setActiveTab}
                         />
                     ) : (

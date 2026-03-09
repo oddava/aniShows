@@ -1,18 +1,18 @@
 import re
+
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse
-
-from rest_framework import status, permissions
+from rest_framework import permissions, status
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.viewsets import ViewSet, ReadOnlyModelViewSet
+from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 
+from apps.animes.serializers.imports import UserImportJobSerializer
 from apps.shared.logger import logger
 from apps.users.models import UserImportJob
 from apps.users.services.export_service import ExportService
 from apps.users.tasks import process_import_job
-from apps.animes.serializers import UserImportJobSerializer
 
 User = get_user_model()
 
@@ -194,7 +194,7 @@ class UserImportJobViewSet(ReadOnlyModelViewSet):
     ViewSet for listing and retrieving import job statuses.
     Read-only but includes a cancel action.
     """
-    
+
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = UserImportJobSerializer
 

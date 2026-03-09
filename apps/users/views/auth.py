@@ -1,22 +1,23 @@
-from rest_framework import status, permissions, serializers, generics
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.viewsets import ViewSet
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView as BaseTokenRefreshView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
+from rest_framework import generics, permissions, serializers, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.viewsets import ViewSet
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
-from apps.users import throttling
-from apps.animes.serializers import RegisterSerializer, UserSerializer
-from apps.users.services.auth_service import AuthService
-from apps.users.services.email_service import EmailService
-from apps.users.services.cache import invalidate_user_caches
+from apps.animes.serializers.users import RegisterSerializer, UserSerializer
 from apps.shared.logger import logger
+from apps.users import throttling
+from apps.users.services.auth_service import AuthService
+from apps.users.services.cache import invalidate_user_caches
+from apps.users.services.email_service import EmailService
 
 User = get_user_model()
 
@@ -96,7 +97,7 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         user = self.auth_service.register_user(serializer.validated_data)
 
         # Send verification email asynchronously
@@ -181,7 +182,7 @@ class AuthViewSet(ViewSet):
         else:
             uidb64 = request.data.get("uid")
             token = request.data.get("token")
-            
+
         return self._verify_and_respond(request, uidb64, token)
 
     @action(detail=False, methods=["post"])

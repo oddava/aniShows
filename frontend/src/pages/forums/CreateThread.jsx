@@ -5,7 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { ShieldAlert, Send, ArrowLeft, ChevronRight, ChevronDown, Eye, Hash } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { forumsApi } from '../../api/forumsApi';
+import { forumsApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import RichTextEditor from '../../components/forums/RichTextEditor';

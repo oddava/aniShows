@@ -1,8 +1,9 @@
 import pytest
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
-from django.contrib.auth import get_user_model
-from apps.forums.models import Category, Thread, Post, Tag, ThreadLike, PostLike
+
+from apps.forums.models import Category, Post, PostLike, Tag, Thread, ThreadLike
 
 User = get_user_model()
 

@@ -1,6 +1,7 @@
+from typing import Dict
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from typing import Dict
 
 User = get_user_model()
 
@@ -26,6 +27,7 @@ class AuthService:
         try:
             from django.utils.encoding import force_str
             from django.utils.http import urlsafe_base64_decode
+
             from apps.users.views.users import get_annotated_user_queryset
 
             uid = force_str(urlsafe_base64_decode(uidb64))

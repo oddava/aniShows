@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 URL Validator Service for Social Links
 Provides comprehensive security validation for URLs including:
@@ -12,15 +13,17 @@ Provides comprehensive security validation for URLs including:
 - Domain age verification
 """
 
+import hashlib
 import re
 import socket
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
+from urllib.parse import urlparse, urlunparse
+
 import idna
 import whois
-from urllib.parse import urlparse, urlunparse
-from datetime import datetime, timedelta
-from typing import Optional, Tuple, List
-import hashlib
 from django.core.cache import cache
+
 
 class URLValidationError(Exception):
     """Raised when URL validation fails"""
@@ -72,7 +75,6 @@ class URLValidator:
         "link.zip",
         "linkd.in",
         "moourl.com",
-        "ow.ly",
         "sp2.ro",
         "su.pr",
         "tl.gd",
@@ -116,7 +118,7 @@ class URLValidator:
     # Cache validation results for 1 hour
     VALIDATION_CACHE_TTL = 3600
 
-    def __init__(self, google_safe_browsing_api_key: Optional[str] = None):
+    def __init__(self, google_safe_browsing_api_key: str | None = None):
         self.google_safe_browsing_api_key = google_safe_browsing_api_key
         self._safe_browsing_client = None
 
@@ -293,7 +295,7 @@ class URLValidator:
             try:
                 socket.inet_pton(socket.AF_INET6, host)
                 return True
-            except (socket.error, OSError):
+            except OSError:
                 pass
 
         return False
@@ -364,7 +366,7 @@ class URLValidator:
         except socket.gaierror:
             return False
 
-    def _get_domain_age(self, netloc: str) -> Optional[int]:
+    def _get_domain_age(self, netloc: str) -> int | None:
         """Get domain age in days using WHOIS"""
         host = netloc.split(":")[0]  # Remove port
 
@@ -427,7 +429,7 @@ class URLValidator:
                 .execute()
             )
 
-            if "matches" in response and response["matches"]:
+            if response.get("matches"):
                 threat = response["matches"][0]
                 return {
                     "safe": False,
@@ -441,7 +443,7 @@ class URLValidator:
             # Fail open - if API fails, assume safe but log it
             return {"safe": True, "threat": None}
 
-    def _detect_platform(self, netloc: str) -> Optional[str]:
+    def _detect_platform(self, netloc: str) -> str | None:
         """Detect social platform from domain"""
         domain = netloc.lower()
         if domain.startswith("www."):

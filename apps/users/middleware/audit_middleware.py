@@ -2,7 +2,9 @@
 
 import logging
 import time
+
 from django.utils.deprecation import MiddlewareMixin
+
 from apps.core.utils import get_client_ip
 
 audit_logger = logging.getLogger("api.audit")

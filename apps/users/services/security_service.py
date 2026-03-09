@@ -1,7 +1,9 @@
 """Security validation utilities."""
 
 import re
+
 from django.core.exceptions import ValidationError
+
 
 class SecurityService:
     """Security validation utilities."""

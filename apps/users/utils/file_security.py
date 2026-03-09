@@ -2,9 +2,11 @@
 Secure file upload utilities to prevent path traversal and malicious file uploads.
 """
 
-import uuid
 import os
+import uuid
+
 from django.core.exceptions import ValidationError
+
 
 def generate_secure_filename(filename, allowed_extensions=None):
     """

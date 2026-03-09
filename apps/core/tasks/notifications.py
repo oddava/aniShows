@@ -1,13 +1,15 @@
 from celery import shared_task
-from django.utils import timezone
 from django.conf import settings
+from django.utils import timezone
+
+from apps.animes.models import Anime, ReviewComment
 from apps.core.models import Notification
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
-from apps.users.models import UserProfile
-from apps.animes.models import Anime, ReviewComment
-from apps.users.services.email_service import send_email_task
 from apps.shared.logger import logger
+from apps.users.models import UserProfile
+from apps.users.services.email_service import send_email_task
+
 
 @shared_task
 def send_pending_notifications():
@@ -135,6 +137,7 @@ def check_new_episodes():
     logger.info("Checking for new episodes...")
 
     from datetime import timedelta as td
+
     from apps.users.models import UserAnimeList
 
     yesterday = timezone.now() - td(hours=24)

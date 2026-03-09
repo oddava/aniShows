@@ -1,24 +1,26 @@
 from datetime import timedelta
 
 from django.db.models import (
-    Model,
-    TextChoices,
-    DateTimeField,
-    CharField,
-    ForeignKey,
-    SET_NULL,
-    GenericIPAddressField,
-    PositiveIntegerField,
-    TextField,
-    JSONField,
-    FloatField,
     CASCADE,
+    SET_NULL,
     BooleanField,
+    CharField,
+    DateTimeField,
+    FloatField,
+    ForeignKey,
+    GenericIPAddressField,
+    JSONField,
+    Model,
+    PositiveIntegerField,
+    TextChoices,
+    TextField,
     URLField,
 )
 from django.db.models.indexes import Index
 from django.utils import timezone
-from apps.shared.models import TimestampMixin, CreatedAtMixin
+
+from apps.shared.models import CreatedAtMixin, TimestampMixin
+
 
 class SystemLog(Model):
     class LogLevel(TextChoices):
@@ -305,8 +307,9 @@ class CeleryTaskSchedule(TimestampMixin, Model):
                 month_of_year=self.crontab_month_of_year,
             )
         elif self.schedule_type == self.ScheduleType.INTERVAL:
-            from celery.schedules import schedule
             import datetime
+
+            from celery.schedules import schedule
 
             period_map = {
                 "days": timedelta(days=self.interval_every),

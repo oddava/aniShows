@@ -8,19 +8,19 @@ Provides REST API for:
 - Viewing worker status
 """
 
-from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, DestroyModelMixin
-from django_filters.rest_framework import DjangoFilterBackend
-from django_filters import FilterSet, CharFilter, DateFilter
-from django.db.models import Count, Avg, Q
-from django.utils import timezone
 from datetime import timedelta
 
 from celery import current_app
+from django.db.models import Avg, Count, Q
+from django.utils import timezone
+from django_filters import CharFilter, DateFilter, FilterSet
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.response import Response
 
-from apps.core.models import CeleryTaskResult, CeleryWorkerStatus, CeleryTaskSchedule
+from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
 from apps.core.permissions import IsAdminUser
 from apps.shared.pagination import StandardPagination
 
@@ -56,7 +56,7 @@ class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMi
         """Extended list using the generic features without a dedicated serializer class."""
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        
+
         results_data = []
         for result in page:
             results_data.append(
@@ -89,7 +89,7 @@ class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMi
                     else None,
                 }
             )
-            
+
         return self.get_paginated_response(results_data)
 
     def retrieve(self, request, *args, **kwargs):
@@ -247,7 +247,7 @@ class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        
+
         schedules_data = []
         for schedule in page:
             schedules_data.append(

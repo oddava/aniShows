@@ -9,11 +9,12 @@ Tests for:
 - Profile retrieval
 """
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
-from django.contrib.auth import get_user_model
+from rest_framework.test import APIClient, APITestCase
+
 from apps.users.models import UserProfile
 
 User = get_user_model()
@@ -98,8 +99,8 @@ class EmailVerificationTests(APITestCase):
 
     def setUp(self):
         from django.contrib.auth.tokens import default_token_generator
-        from django.utils.http import urlsafe_base64_encode
         from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
 
         self.resend_url = reverse("resend_verification")
         self.login_url = reverse("token_obtain_pair")

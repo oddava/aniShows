@@ -1,4 +1,5 @@
-from django.db.models import Model, DateTimeField, SlugField
+from django.db.models import DateTimeField, Model, SlugField
+
 
 class TimestampMixin(Model):
     created_at = DateTimeField(auto_now_add=True)

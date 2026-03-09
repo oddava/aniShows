@@ -4,9 +4,11 @@ Provides functions for calculating user statistics on-the-fly
 when UserStats materialized view is not available.
 """
 
-from django.db.models import Sum, Avg
+from django.db.models import Avg, Sum
+
+from apps.animes.models import Review, UserFavorite
 from apps.users.models import UserAnimeList, UserStats
-from apps.animes.models import UserFavorite, Review
+
 
 def calculate_user_stats(user):
     """

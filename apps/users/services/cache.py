@@ -1,4 +1,5 @@
 from apps.shared.logger import logger
+
 """
 Cache invalidation utilities for user-related data.
 
@@ -7,6 +8,7 @@ user actions occur, all relevant caches are properly invalidated.
 """
 
 from django.core.cache import cache
+
 
 def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
     """
@@ -32,23 +34,19 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
 
     # Delete public profile caches if username provided
     if username:
-        # Use pattern deletion to clear all viewer-specific cache keys
-        # Pattern: public_profile:{username}:*  (covers all versions and all viewers)
-        try:
-            cache.delete_pattern(f"public_profile:{username}:*")
-            logger.debug(f"Deleted public profile cache pattern for {username}")
-        except (AttributeError, Exception) as e:
-            # Fallback: delete the base key if pattern deletion is not available
-            cache.delete(f"public_profile:{username}:v0")
-            logger.debug(f"Fallback: deleted base public profile cache for {username}: {e}")
-
-        # Increment cache version to invalidate all authenticated views
+        # Increment cache version to invalidate all public profile cache keys.
+        # We no longer use cache.delete_pattern as it blocks the Redis event loop.
+        # Instead, we rely on versioned keys which will naturally expire.
         version_key = f"profile_cache_version:{username}"
         try:
             cache.incr(version_key)
             logger.debug(f"Incremented cache version for {username}")
         except ValueError:
-            cache.set(version_key, 1, timeout=3600)
+            # If the key doesn't exist, set it to 1
+            cache.set(version_key, 1, timeout=86400)  # Long timeout as it's a version counter
+            logger.debug(f"Initialized cache version for {username}")
+        except Exception as e:
+            logger.warning(f"Failed to increment cache version for {username}: {e}")
 
     # Trigger async stats update for immediate data consistency
     if trigger_stats_update:
@@ -90,8 +88,9 @@ def get_user_stats_cache_key(user_id):
     return f"user_stats:{user_id}"
 
 def get_public_profile_cache_key(username, viewer_id="anonymous"):
-    """Get the cache key for a public profile."""
-    return f"public_profile:{username}:v0:viewer:{viewer_id}"
+    """Get the cache key for a public profile, including the current version."""
+    version = get_profile_cache_version(username)
+    return f"public_profile:{username}:v{version}:viewer:{viewer_id}"
 
 def get_profile_cache_version(username):
     """Get the current cache version for a user's profile."""

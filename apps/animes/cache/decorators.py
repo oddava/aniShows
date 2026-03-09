@@ -1,10 +1,10 @@
 """Cache decorators for viewsets and functions."""
 
-from apps.shared.logger import logger
-
 from functools import wraps
 
 from django.core.cache import cache
+
+from apps.shared.logger import logger
 
 
 def cached_response(key_func, ttl=300):

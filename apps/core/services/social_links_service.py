@@ -1,15 +1,20 @@
 from apps.shared.logger import logger
+
 """
 Social Links Service
 Main orchestrator for processing and validating social links.
 Optimized for fast saves - metadata fetched asynchronously.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from django.conf import settings
-from .url_validator import URLValidator, URLValidationError
-from .metadata_service import MetadataService
+
 from apps.users.models import SocialLinkChangeLog
+
+from .metadata_service import MetadataService
+from .url_validator import URLValidationError, URLValidator
+
 
 class SocialLinkValidationError(Exception):
     """Raised when a social link fails validation"""
@@ -103,7 +108,6 @@ class SocialLinksService:
         self, platform: str, value: str, skip_metadata: bool = True
     ) -> Dict:
         """Process and validate a single social link"""
-
         # Check for dangerous schemes (XSS prevention)
         dangerous_schemes = ["javascript:", "data:", "vbscript:", "file:"]
         value_lower = value.lower()
@@ -159,7 +163,7 @@ class SocialLinksService:
             logger.warning(f"Failed to trigger async metadata fetch: {e}")
 
     def _determine_trust_level(
-        self, platform: Optional[str], validation_metadata: Dict
+        self, platform: str | None, validation_metadata: Dict
     ) -> str:
         """
         Determine trust level based on platform and validation data.

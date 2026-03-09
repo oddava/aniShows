@@ -8,17 +8,18 @@ Provides comprehensive admin interface for:
 - Controlling workers and tasks
 """
 
-from django.contrib import admin
-from django.utils.html import format_html
-from django.utils.safestring import mark_safe
-from django.urls import path
-from django.shortcuts import redirect
-from django.contrib import messages
-from django.db.models import Count, Avg
-from django.utils import timezone
 from datetime import timedelta
 
-from apps.core.models import CeleryTaskResult, CeleryWorkerStatus, CeleryTaskSchedule
+from django.contrib import admin, messages
+from django.db.models import Avg, Count
+from django.shortcuts import redirect
+from django.urls import path
+from django.utils import timezone
+from django.utils.html import format_html
+from django.utils.safestring import mark_safe
+
+from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
+
 
 @admin.register(CeleryTaskResult)
 class CeleryTaskResultAdmin(admin.ModelAdmin):

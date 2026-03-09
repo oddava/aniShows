@@ -1,17 +1,17 @@
-from rest_framework import status, permissions
-from rest_framework.decorators import action
-from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.db import transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-from django.db import transaction
+from rest_framework import permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.users import throttling
-from apps.animes.serializers import ChangePasswordSerializer
-from apps.users.services.email_service import EmailService
+from apps.animes.serializers.users import ChangePasswordSerializer
 from apps.shared.logger import logger
+from apps.users import throttling
+from apps.users.services.email_service import EmailService
 
 User = get_user_model()
 
@@ -64,24 +64,24 @@ class AccountManagementViewSet(ViewSet):
         # Pre-delete related records using raw SQL deletes (bypassing signals)
         # to avoid post_delete signals that try to record activity for the user
         with transaction.atomic():
-            from apps.users.models import (
-                UserAnimeList,
-                UserActivity,
-                UserStats,
-                UserFollow,
-                UserBadge,
-                SocialLinkChangeLog,
-            )
             from apps.animes.models import (
+                Review,
+                ReviewComment,
+                ReviewVote,
                 UserFavorite,
                 UserHistory,
-                Review,
-                ReviewVote,
-                ReviewComment,
                 UserRecommendation,
             )
-            from apps.forums.models import Thread, Post, ThreadLike, PostLike
             from apps.core.models import Notification, PushSubscription
+            from apps.forums.models import Post, PostLike, Thread, ThreadLike
+            from apps.users.models import (
+                SocialLinkChangeLog,
+                UserActivity,
+                UserAnimeList,
+                UserBadge,
+                UserFollow,
+                UserStats,
+            )
 
             db = user._state.db or "default"
 

@@ -1,12 +1,15 @@
 from apps.shared.logger import logger
+
 """
 Export service for user data
 """
 
 import json
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
+
 from django.contrib.auth import get_user_model
+
 from apps.users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
@@ -139,7 +142,7 @@ class MALXMLExporter:
             "  <myinfo>",
             f"    <user_id>{self.user.id}</user_id>",
             f"    <user_name>{self.user.username}</user_name>",
-            f"    <user_export_type>1</user_export_type>",
+            "    <user_export_type>1</user_export_type>",
             f"    <user_total_anime>{len(entries)}</user_total_anime>",
             "  </myinfo>",
         ]

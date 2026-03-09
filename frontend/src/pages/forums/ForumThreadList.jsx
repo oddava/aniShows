@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Pin, Lock, Plus, ChevronRight, ArrowLeft, MessageSquare, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { forumsApi } from '../../api/forumsApi';
+import { forumsApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import Pagination from '../../components/common/Pagination';
 import { preloadForumChunks } from '../../App';
