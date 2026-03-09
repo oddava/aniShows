@@ -7,6 +7,8 @@ services:
     command: gunicorn root.asgi:application -c gunicorn.conf.py
     volumes:
       - prometheus_multiproc:/tmp/prometheus
+    env_file:
+      - .env
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"

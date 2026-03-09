@@ -1,9 +1,9 @@
 """WebSocket URL routing for the core app."""
 
-from django.urls import re_path
+from django.urls import path
 
 from . import consumers
 
 websocket_urlpatterns = [
-    re_path(r"ws/notifications/$", consumers.NotificationConsumer.as_asgi()),
+    path("ws/notifications/", consumers.NotificationConsumer.as_asgi()),
 ]
