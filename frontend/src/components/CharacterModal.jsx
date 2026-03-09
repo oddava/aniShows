@@ -157,7 +157,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                 onClick={onClose}
             />
             <div
-                className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl animate-modal-in flex flex-col"
+                className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col"
                 style={{ boxShadow: `0 0 50px -10px ${accentColor || '#8b5cf6'}30` }}
             >
                 {/* Header */}
