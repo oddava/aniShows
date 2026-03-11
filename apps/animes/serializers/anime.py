@@ -250,3 +250,26 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
                     distribution[status_key] += 1
 
         return distribution
+
+
+class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
+    """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""
+
+    cover_image_small = SerializerMethodField()
+
+    class Meta:
+        model = Anime
+        fields = [
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "cover_image",
+            "cover_image_small",
+            "rating",
+        ]
+
+    def get_cover_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "cover_image_small", "cover_image", "cover_image_external_url"
+        )

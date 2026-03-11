@@ -16,7 +16,7 @@ from rest_framework.serializers import (
 )
 
 from apps.animes.models import Anime, UserFavorite
-from apps.animes.serializers.anime import AnimeListSerializer, AnimeMinimalSerializer
+from apps.animes.serializers.anime import AnimeListSerializer, AnimeMinimalSerializer, AnimeCompactSerializer
 from apps.animes.serializers.base import validate_image_content
 from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from apps.shared.logger import logger
@@ -661,3 +661,12 @@ class FriendWatchingSerializer(ModelSerializer):
             "title": obj.anime.title,
             "episode_count": obj.anime.episode_count,
         }
+
+class FavoriteCompactSerializer(ModelSerializer):
+    """Ultra-minimal serializer for favorites list display."""
+    anime = AnimeCompactSerializer(read_only=True)
+
+    class Meta:
+        model = UserFavorite
+        fields = ["id", "anime", "added_at"]
+        read_only_fields = ["id", "added_at"]

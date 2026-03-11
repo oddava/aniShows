@@ -17,6 +17,12 @@ class FavoriteViewSet(EmailVerificationMixin, ModelViewSet):
     """Manage user favorites with email verification enforcement."""
 
     serializer_class = FavoriteSerializer
+
+    def get_serializer_class(self):
+        if self.request and self.request.query_params.get("compact") == "true":
+            from apps.animes.serializers import FavoriteCompactSerializer
+            return FavoriteCompactSerializer
+        return super().get_serializer_class()
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to add favorites."
 
