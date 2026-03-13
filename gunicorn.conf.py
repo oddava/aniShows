@@ -57,3 +57,29 @@ loglevel = os.getenv("GUNICORN_LOG_LEVEL", "warning")
 limit_request_line = 8190
 limit_request_fields = 100
 limit_request_field_size = 8190
+
+
+# =============================================================================
+# Prometheus Metrics (Multiprocess Mode)
+# =============================================================================
+def child_exit(server, worker):
+    """Mark process dead for Prometheus multiprocess mode"""
+    from prometheus_client import multiprocess
+
+    multiprocess.mark_process_dead(worker.pid)
+
+
+def on_starting(server):
+    """Clean up Prometheus multiprocess directory on start"""
+    import glob
+
+    path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if path:
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+        else:
+            for f in glob.glob(os.path.join(path, "*.db")):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass

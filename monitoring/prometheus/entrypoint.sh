@@ -29,6 +29,13 @@ scrape_configs:
     basic_auth:
       username: '${METRICS_USERNAME:-admin}'
       password: '${METRICS_PASSWORD:-admin}'
+
+  - job_name: 'celery'
+    static_configs:
+      - targets: ['celery:9090', 'celery_priority:9090', 'celery_images:9090', 'celery_analytics:9090']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
 EOF
 
 exec /bin/prometheus \

@@ -46,8 +46,6 @@ services:
       # Sentry
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
-    volumes:
-      - prometheus_multiproc:/tmp/prometheus
     user: "1000:1000"
     deploy:
       resources:
@@ -241,11 +239,9 @@ services:
       # Sentry
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
-    volumes:
-      - prometheus_multiproc:/tmp/prometheus
     healthcheck:
       disable: true
-    user: "0:0"
+    user: "1000:1000"
     depends_on:
       web:
         condition: service_started
@@ -285,11 +281,9 @@ services:
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
-    volumes:
-      - prometheus_multiproc:/tmp/prometheus
     healthcheck:
       disable: true
-    user: "0:0"
+    user: "1000:1000"
     depends_on:
       web:
         condition: service_started
@@ -323,11 +317,9 @@ services:
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
-    volumes:
-      - prometheus_multiproc:/tmp/prometheus
     healthcheck:
       disable: true
-    user: "0:0"
+    user: "1000:1000"
     depends_on:
       web:
         condition: service_started
@@ -361,11 +353,9 @@ services:
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
-    volumes:
-      - prometheus_multiproc:/tmp/prometheus
     healthcheck:
       disable: true
-    user: "0:0"
+    user: "1000:1000"
     depends_on:
       web:
         condition: service_started
@@ -593,4 +583,3 @@ volumes:
   caddy_config:
   prometheus_data:
   grafana_data:
-  prometheus_multiproc: # Shared volume for multi-process metrics

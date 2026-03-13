@@ -31,6 +31,18 @@ scrape_configs:
       username: '${METRICS_USERNAME:-admin}'
       password: '${METRICS_PASSWORD:-admin}'
 
+  # Celery Workers
+  - job_name: 'celery'
+    static_configs:
+      - targets: 
+        - 'celery:9090'
+        - 'celery_priority:9090'
+        - 'celery_images:9090'
+        - 'celery_analytics:9090'
+    metrics_path: '/'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
   # Redis (using redis_exporter if added later)
   # - job_name: 'redis'
   #   static_configs:

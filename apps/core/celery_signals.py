@@ -5,10 +5,28 @@ from celery.signals import (
     task_revoked,
     task_success,
     worker_ready,
+    celeryd_init,
 )
 from django.utils import timezone
+import os
+import glob
 
 from apps.shared.logger import logger
+
+
+@celeryd_init.connect
+def clean_multiproc_dir(sender, instance, **kwargs):
+    """Clean up the Prometheus multiprocess directory before worker starts."""
+    path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if path:
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+        else:
+            for f in glob.glob(os.path.join(path, "*.db")):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
 
 
 @task_prerun.connect
@@ -182,3 +200,17 @@ def start_queue_monitor(sender, **kwargs):
     thread = threading.Thread(target=monitor_queue_sizes, daemon=True)
     thread.start()
     logger.info("Started Prometheus queue size monitor thread")
+
+    # Start Prometheus metrics server for Celery if multiprocess dir is set
+    path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if path:
+        try:
+            from prometheus_client import start_http_server, CollectorRegistry, multiprocess
+
+            registry = CollectorRegistry()
+            multiprocess.MultiProcessCollector(registry, path=path)
+            # Port 8000 is used by web, we use 9090 for celery metrics
+            start_http_server(9090, registry=registry)
+            logger.info("Started Prometheus metrics server on port 9090")
+        except Exception as e:
+            logger.error(f"Failed to start Prometheus metrics server: {e}")
