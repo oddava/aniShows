@@ -25,21 +25,9 @@ from collections.abc import Callable
 from contextlib import contextmanager
 
 try:
-    import os
-
-    from prometheus_client import Counter, Gauge, Histogram, Info, multiprocess
+    from prometheus_client import Counter, Gauge, Histogram, Info
 
     PROMETHEUS_AVAILABLE = True
-
-    if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
-        from prometheus_client import REGISTRY
-
-        multiprocess.MultiProcessCollector(
-            REGISTRY, path=os.environ["PROMETHEUS_MULTIPROC_DIR"]
-        )
-        logger.info(
-            f"Prometheus multi-process mode enabled: {os.environ['PROMETHEUS_MULTIPROC_DIR']}"
-        )
 
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -48,6 +36,9 @@ except ImportError:
     class DummyMetric:
         def __init__(self, *args, **kwargs):
             pass
+
+        def labels(self, *args, **kwargs):
+            return self
 
         def inc(self, *args, **kwargs):
             pass
@@ -66,7 +57,35 @@ except ImportError:
     Gauge = DummyMetric
     Info = DummyMetric
 
-TASK_EXECUTION_TIME = Histogram(
+
+def _safe_metric(metric_cls, *args, **kwargs):
+    """Create a Prometheus metric, handling duplicate registration in multi-process mode."""
+    try:
+        return metric_cls(*args, **kwargs)
+    except ValueError:
+        # Already registered (happens in gunicorn preload+fork or module re-import)
+        # Return a dummy that delegates to the existing registered metric
+        pass
+
+    # Fallback: return a no-op dummy
+    if PROMETHEUS_AVAILABLE:
+        class _NoOpLabels:
+            def inc(self, *a, **kw): pass
+            def observe(self, *a, **kw): pass
+            def set(self, *a, **kw): pass
+            def info(self, *a, **kw): pass
+        class _NoOp:
+            def labels(self, *a, **kw): return _NoOpLabels()
+            def inc(self, *a, **kw): pass
+            def observe(self, *a, **kw): pass
+            def set(self, *a, **kw): pass
+            def info(self, *a, **kw): pass
+        return _NoOp()
+    return DummyMetric()
+
+
+TASK_EXECUTION_TIME = _safe_metric(
+    Histogram,
     "celery_task_execution_time_seconds",
     "Time spent executing Celery tasks",
     ["task_name", "queue", "status"],
@@ -87,66 +106,101 @@ TASK_EXECUTION_TIME = Histogram(
     ],
 )
 
-TASK_EXECUTION_COUNT = Counter(
+TASK_EXECUTION_COUNT = _safe_metric(
+    Counter,
     "celery_task_executions_total",
     "Total number of Celery task executions",
     ["task_name", "queue", "status"],
 )
 
-TASK_RETRY_COUNT = Counter(
+TASK_RETRY_COUNT = _safe_metric(
+    Counter,
     "celery_task_retries_total",
     "Total number of Celery task retries",
     ["task_name"],
 )
-QUEUE_SIZE = Gauge(
+QUEUE_SIZE = _safe_metric(
+    Gauge,
     "celery_queue_size",
     "Current number of tasks in queue",
     ["queue_name"],
 )
-WORKER_TASKS_PROCESSED = Counter(
+WORKER_TASKS_PROCESSED = _safe_metric(
+    Counter,
     "celery_worker_tasks_processed_total",
     "Total tasks processed by worker",
     ["worker_name", "queue"],
 )
 
-WORKER_TASKS_FAILED = Counter(
+WORKER_TASKS_FAILED = _safe_metric(
+    Counter,
     "celery_worker_tasks_failed_total",
     "Total tasks failed by worker",
     ["worker_name", "queue"],
 )
 
 # API call metrics
-API_CALL_DURATION = Histogram(
+API_CALL_DURATION = _safe_metric(
+    Histogram,
     "external_api_call_duration_seconds",
     "Duration of external API calls",
     ["service", "endpoint", "status"],
     buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
 )
 
-API_CALL_COUNT = Counter(
+API_CALL_COUNT = _safe_metric(
+    Counter,
     "external_api_calls_total",
     "Total number of external API calls",
     ["service", "endpoint", "status"],
 )
 
 # Business logic metrics
-ANIME_SYNCED = Counter(
+ANIME_SYNCED = _safe_metric(
+    Counter,
     "anime_synced_total",
     "Total number of anime synced",
     ["sync_type", "source"],
 )
 
-RECOMMENDATIONS_GENERATED = Counter(
+RECOMMENDATIONS_GENERATED = _safe_metric(
+    Counter,
     "recommendations_generated_total",
     "Total number of recommendations generated",
     ["algorithm"],
 )
 
-USER_IMPORTS_PROCESSED = Counter(
+USER_IMPORTS_PROCESSED = _safe_metric(
+    Counter,
     "user_imports_processed_total",
     "Total number of user imports processed",
     ["source", "status"],
 )
+
+# Circuit breaker state metric (0=CLOSED, 1=OPEN, 2=HALF_OPEN)
+CIRCUIT_BREAKER_STATE = _safe_metric(
+    Gauge,
+    "circuit_breaker_state",
+    "Circuit breaker state (0=CLOSED, 1=OPEN, 2=HALF_OPEN)",
+    ["name"],
+)
+
+# State mapping for circuit breaker
+_CB_STATE_MAP = {
+    "CLOSED": 0,
+    "OPEN": 1,
+    "HALF_OPEN": 2,
+}
+
+def update_circuit_breaker_state(name: str, state: str):
+    """Update the circuit breaker state Prometheus metric.
+
+    Args:
+        name: Circuit breaker name (e.g., 'anilist_api')
+        state: One of 'CLOSED', 'OPEN', 'HALF_OPEN'
+    """
+    if PROMETHEUS_AVAILABLE:
+        CIRCUIT_BREAKER_STATE.labels(name=name).set(_CB_STATE_MAP.get(state, 0))
 
 @contextmanager
 def task_timer(task_name: str, queue: str = "default"):

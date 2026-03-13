@@ -380,6 +380,14 @@ class BaseTask(Task):
         except Exception as e:
             logger.error(f"Failed to update CeleryTaskResult on retry: {e}")
 
+        # Emit Prometheus retry metric
+        try:
+            from apps.animes.services.metrics import TASK_RETRY_COUNT
+
+            TASK_RETRY_COUNT.labels(task_name=self.name).inc()
+        except Exception:
+            pass
+
 # Helper to run async code in sync celery task
 def run_async_in_task(coro):
     """Helper to run async code in sync celery task context."""

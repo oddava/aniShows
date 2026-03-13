@@ -16,6 +16,7 @@ from typing import Any
 from django.core.cache import cache
 
 
+
 class AniListRateLimiter:
     """Distributed rate limiter using Redis for multi-worker coordination.
     AniList allows 90 requests per minute per IP.
@@ -130,6 +131,8 @@ class CircuitBreaker:
                         # Try half-open state
                         cache.set(self._get_state_key(), "HALF_OPEN", self.recovery_timeout)
                         cache.set(self._get_half_open_calls_key(), 0, self.recovery_timeout)
+                        from apps.animes.services.metrics import update_circuit_breaker_state
+                        update_circuit_breaker_state(self.name, "HALF_OPEN")
                         logger.info(f"Circuit breaker {self.name} entering HALF_OPEN state")
                         return False
                 return True
@@ -160,6 +163,8 @@ class CircuitBreaker:
                 # Recovery successful - close the circuit
                 cache.set(self._get_state_key(), "CLOSED", self.recovery_timeout)
                 cache.set(self._get_failures_key(), 0, self.recovery_timeout)
+                from apps.animes.services.metrics import update_circuit_breaker_state
+                update_circuit_breaker_state(self.name, "CLOSED")
                 logger.info(f"Circuit breaker {self.name} CLOSED - service recovered")
             else:
                 # Just reset failure count
@@ -178,6 +183,8 @@ class CircuitBreaker:
 
             if state == "HALF_OPEN" or failures >= self.failure_threshold:
                 cache.set(self._get_state_key(), "OPEN", self.recovery_timeout)
+                from apps.animes.services.metrics import update_circuit_breaker_state
+                update_circuit_breaker_state(self.name, "OPEN")
                 logger.critical(
                     f"Circuit breaker {self.name} OPENED after {failures} failures. "
                     f"API calls will fail fast for {self.recovery_timeout}s"

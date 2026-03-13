@@ -165,15 +165,20 @@ async def fetch_themes_from_jikan(
                 openings = themes.get('openings', [])
                 endings = themes.get('endings', [])
     """
+    from apps.animes.services.metrics import API_CALL_COUNT, API_CALL_DURATION
+
     url = f"{JIKAN_BASE_URL}/anime/{mal_id}/themes"
     transient_status_codes = {500, 502, 503, 504}
 
     for attempt in range(max_retries + 1):
+        _start = time.time()
+        _status = "success"
         try:
             response = await http_client.get(url)
 
             # Handle rate limiting with exponential backoff
             if response.status_code == 429:
+                _status = "rate_limited"
                 rate_limiter.record_429()
 
                 retry_after = response.headers.get("Retry-After")
@@ -195,6 +200,7 @@ async def fetch_themes_from_jikan(
 
             # Handle transient upstream/server errors with retry
             if response.status_code in transient_status_codes:
+                _status = "failure"
                 rate_limiter.record_error()
                 if attempt < max_retries:
                     wait_time = min(2**attempt + random.uniform(0, 1), 15)
@@ -222,6 +228,7 @@ async def fetch_themes_from_jikan(
             }
 
         except (httpx.TimeoutException, httpx.ConnectError) as e:
+            _status = "failure"
             rate_limiter.record_error()
             if attempt < max_retries:
                 wait_time = min(2**attempt + random.uniform(0, 1), 15)
@@ -235,6 +242,7 @@ async def fetch_themes_from_jikan(
             logger.warning(f"Jikan network timeout max retries exceeded for MAL ID {mal_id}: {e}")
             return None
         except httpx.HTTPError as e:
+            _status = "failure"
             rate_limiter.record_error()
             if attempt < max_retries:
                 wait_time = min(2**attempt + random.uniform(0, 1), 15)
@@ -248,7 +256,19 @@ async def fetch_themes_from_jikan(
             logger.error(f"Jikan HTTP error max retries exceeded for MAL ID {mal_id}: {e}")
             return None
         except Exception as e:
+            _status = "failure"
             logger.error(f"Unexpected error fetching themes for MAL ID {mal_id}: {e}")
             return None
+        finally:
+            _duration = time.time() - _start
+            try:
+                API_CALL_DURATION.labels(
+                    service="jikan", endpoint="themes", status=_status
+                ).observe(_duration)
+                API_CALL_COUNT.labels(
+                    service="jikan", endpoint="themes", status=_status
+                ).inc()
+            except Exception:
+                pass
 
     return None

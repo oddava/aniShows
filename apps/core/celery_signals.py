@@ -4,6 +4,7 @@ from celery.signals import (
     task_retry,
     task_revoked,
     task_success,
+    worker_ready,
 )
 from django.utils import timezone
 
@@ -113,6 +114,15 @@ def on_task_retry(request, reason, einfo, **kwargs):
     except Exception as e:
         logger.error(f"Error in task_retry signal for task {request.id}: {e}")
 
+    # Emit Prometheus retry metric
+    try:
+        from apps.animes.services.metrics import TASK_RETRY_COUNT
+
+        task_name = getattr(request, "task", "unknown") if hasattr(request, "task") else "unknown"
+        TASK_RETRY_COUNT.labels(task_name=task_name).inc()
+    except Exception:
+        pass
+
 
 @task_revoked.connect
 def on_task_revoked(request, terminated, signum, expired, **kwargs):
@@ -131,3 +141,44 @@ def on_task_revoked(request, terminated, signum, expired, **kwargs):
         job.save(update_fields=["status", "error_message", "date_completed", "execution_time"])
     except Exception as e:
         logger.error(f"Error in task_revoked signal for task {task_id}: {e}")
+
+
+@worker_ready.connect
+def start_queue_monitor(sender, **kwargs):
+    """Start periodic queue size monitoring when worker is ready."""
+    import threading
+
+    def monitor_queue_sizes():
+        import time
+
+        from django.core.cache import cache
+
+        from apps.animes.services.metrics import update_queue_size
+
+        queue_names = [
+            "critical",
+            "high_priority",
+            "default",
+            "batch",
+            "images",
+            "notifications",
+            "analytics",
+            "low_priority",
+        ]
+
+        while True:
+            try:
+                for queue_name in queue_names:
+                    try:
+                        redis_client = cache.client.get_client()
+                        size = redis_client.llen(queue_name)
+                        update_queue_size(queue_name, size)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            time.sleep(15)  # Update every 15 seconds (matches Prometheus scrape interval)
+
+    thread = threading.Thread(target=monitor_queue_sizes, daemon=True)
+    thread.start()
+    logger.info("Started Prometheus queue size monitor thread")

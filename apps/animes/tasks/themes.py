@@ -286,6 +286,17 @@ class ThemeSongSyncTask(BaseTask):
 
         self.metrics.record_records(stats["with_themes"] + stats["without_themes"])
 
+        # Record Prometheus metric for theme sync
+        try:
+            from apps.animes.services.metrics import ANIME_SYNCED
+
+            if stats["with_themes"] > 0:
+                ANIME_SYNCED.labels(sync_type="themes", source="jikan").inc(
+                    stats["with_themes"]
+                )
+        except Exception:
+            pass
+
         # Log summary
         logger.info(
             f"Theme sync complete: {total} processed | "

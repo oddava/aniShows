@@ -159,6 +159,8 @@ class AniListService:
         Returns:
             API response data or empty dict on failure
         """
+        from apps.animes.services.metrics import API_CALL_COUNT, API_CALL_DURATION
+
         # Generate cache key from query and variables
         cache_key = (
             f"{hash(query) & 0xFFFFFFFF}:{hash(str(sorted(variables.items()))) & 0xFFFFFFFF}"
@@ -182,58 +184,84 @@ class AniListService:
                 # Acquire rate limit permission
                 await self._acquire_rate_limit()
 
-                response = await self.client.post(
-                    self.BASE_URL, json={"query": query, "variables": variables}
-                )
+                import time as _time
+                _start = _time.time()
+                _status = "success"
 
-                # Check for rate limits
-                response.headers.get("X-RateLimit-Remaining")
-                reset_time = response.headers.get("X-RateLimit-Reset")
-
-                if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    wait_time = float(retry_after) if retry_after else 60.0
-
-                    if reset_time:
-                        # Wait until reset time plus a small buffer
-                        now = datetime.now().timestamp()
-                        wait_time = max(float(reset_time) - now + 1, wait_time)
-
-                    logger.warning(
-                        f"AniList Rate Limit Hit! Waiting {wait_time:.2f}s before retry (Attempt {attempt + 1}/{retry_count})"
+                try:
+                    response = await self.client.post(
+                        self.BASE_URL, json={"query": query, "variables": variables}
                     )
-                    await asyncio.sleep(wait_time)
-                    continue
 
-                response.raise_for_status()
-                data = response.json()
+                    # Check for rate limits
+                    response.headers.get("X-RateLimit-Remaining")
+                    reset_time = response.headers.get("X-RateLimit-Reset")
 
-                if "errors" in data:
-                    error_msg = data["errors"][0]["message"]
-                    if "Too Many Requests" in error_msg:
-                        logger.warning("AniList GraphQL Rate Limit Error. Sleeping 60s...")
-                        await asyncio.sleep(60)
+                    if response.status_code == 429:
+                        retry_after = response.headers.get("Retry-After")
+                        wait_time = float(retry_after) if retry_after else 60.0
+
+                        if reset_time:
+                            # Wait until reset time plus a small buffer
+                            now = datetime.now().timestamp()
+                            wait_time = max(float(reset_time) - now + 1, wait_time)
+
+                        logger.warning(
+                            f"AniList Rate Limit Hit! Waiting {wait_time:.2f}s before retry (Attempt {attempt + 1}/{retry_count})"
+                        )
+                        _status = "rate_limited"
+                        await asyncio.sleep(wait_time)
                         continue
-                    logger.error(f"GraphQL Error: {error_msg}")
-                    self._record_failure()
-                    return {}
 
-                # Success - record it
-                self._record_success()
-                result = data.get("data", {})
+                    response.raise_for_status()
+                    data = response.json()
 
-                # Cache successful response
-                if use_cache and result:
-                    self._cache_result(endpoint, cache_key, result)
+                    if "errors" in data:
+                        error_msg = data["errors"][0]["message"]
+                        if "Too Many Requests" in error_msg:
+                            logger.warning("AniList GraphQL Rate Limit Error. Sleeping 60s...")
+                            _status = "rate_limited"
+                            await asyncio.sleep(60)
+                            continue
+                        logger.error(f"GraphQL Error: {error_msg}")
+                        _status = "failure"
+                        self._record_failure()
+                        return {}
 
-                return result
+                    # Success - record it
+                    self._record_success()
+                    result = data.get("data", {})
 
-            except httpx.HTTPError as e:
-                logger.error(f"Request error (Attempt {attempt + 1}): {e}")
-                if attempt < retry_count - 1:
-                    wait = (attempt + 1) * 2
-                    await asyncio.sleep(wait)
-                else:
+                    # Cache successful response
+                    if use_cache and result:
+                        self._cache_result(endpoint, cache_key, result)
+
+                    return result
+
+                except httpx.HTTPError as e:
+                    _status = "failure"
+                    logger.error(f"Request error (Attempt {attempt + 1}): {e}")
+                    if attempt < retry_count - 1:
+                        wait = (attempt + 1) * 2
+                        await asyncio.sleep(wait)
+                    else:
+                        self._record_failure()
+                        return {}
+                finally:
+                    _duration = _time.time() - _start
+                    try:
+                        API_CALL_DURATION.labels(
+                            service="anilist", endpoint=endpoint, status=_status
+                        ).observe(_duration)
+                        API_CALL_COUNT.labels(
+                            service="anilist", endpoint=endpoint, status=_status
+                        ).inc()
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                logger.error(f"Unexpected error in _query (Attempt {attempt + 1}): {e}")
+                if attempt >= retry_count - 1:
                     self._record_failure()
                     return {}
 

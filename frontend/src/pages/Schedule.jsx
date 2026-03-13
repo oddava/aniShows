@@ -358,7 +358,7 @@ export default function Schedule() {
             return; // Skip anime with invalid dates
           }
 
-          if (anime.status === 'Airing') {
+          if (anime.status === 'Airing' && airDate < weekStart) {
             const msInWeek = 7 * 24 * 60 * 60 * 1000;
             const weeksToAdvance = Math.ceil((weekStart.getTime() - airDate.getTime()) / msInWeek);
             airDate = new Date(airDate.getTime() + (weeksToAdvance * msInWeek));

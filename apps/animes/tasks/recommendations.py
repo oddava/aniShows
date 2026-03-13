@@ -79,6 +79,14 @@ class RecommendationTask(BaseTask):
             # Generate recommendations
             recs = service.generate_for_user(user)
 
+            # Record Prometheus metric
+            try:
+                from apps.animes.services.metrics import RECOMMENDATIONS_GENERATED
+
+                RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(len(recs))
+            except Exception:
+                pass
+
             logger.info(f"Generated {len(recs)} recommendations for {user.username}")
 
             return {
@@ -145,6 +153,14 @@ class RecommendationTask(BaseTask):
                     continue
 
             self.metrics.stop()
+
+            # Record Prometheus metric
+            try:
+                from apps.animes.services.metrics import RECOMMENDATIONS_GENERATED
+
+                RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(total_recs)
+            except Exception:
+                pass
 
             logger.info(
                 f"Batch complete: {processed}/{total} users, "

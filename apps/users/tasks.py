@@ -162,6 +162,16 @@ def process_import_job(self, job_id: int, **kwargs):
         importer = ImportService.create_importer(job, **kwargs)
         result = importer.run()
 
+        # Record Prometheus metric
+        try:
+            from apps.animes.services.metrics import USER_IMPORTS_PROCESSED
+
+            USER_IMPORTS_PROCESSED.labels(
+                source=getattr(job, "source", "unknown"), status="success"
+            ).inc()
+        except Exception:
+            pass
+
         logger.info(f"Import job {job_id} completed successfully")
 
         return {
@@ -177,6 +187,16 @@ def process_import_job(self, job_id: int, **kwargs):
         job.status = UserImportJob.ImportStatus.failed
         job.errors.append(str(exc))
         job.save(update_fields=["status", "errors"])
+
+        # Record Prometheus metric
+        try:
+            from apps.animes.services.metrics import USER_IMPORTS_PROCESSED
+
+            USER_IMPORTS_PROCESSED.labels(
+                source=getattr(job, "source", "unknown"), status="failure"
+            ).inc()
+        except Exception:
+            pass
 
         # Retry the task
         raise self.retry(exc=exc, countdown=60)

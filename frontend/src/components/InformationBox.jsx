@@ -86,7 +86,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                     <InfoRow icon={Users} label="Members" value={anime.member_count.toLocaleString()} />
                 )}
 
-                {anime.status === 'Airing' && anime.next_airing_episode && anime.next_airing_date && (
+                {anime.status === 'Airing' && anime.next_airing_date && (
                     <div className="pt-4 mt-4 border-t border-white/10">
                         <div
                             className="p-4 rounded-xl border"
@@ -121,7 +121,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                             </div>
                             <div className="space-y-1">
                                 <p className="text-white font-bold text-lg">
-                                    Episode {anime.next_airing_episode}
+                                    Episode {anime.next_airing_episode ?? 'TBA'}
                                 </p>
                                 <p
                                     className="text-sm font-semibold"
