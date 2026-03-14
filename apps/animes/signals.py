@@ -78,7 +78,9 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
 
 def invalidate_heatmap_cache(user_id):
     """Invalidate heatmap cache for a user when their activity changes."""
-    cache_key = f"heatmap:{user_id}"
+    from apps.users.services.cache import get_user_heatmap_cache_key
+
+    cache_key = get_user_heatmap_cache_key(user_id)
     cache.delete(cache_key)
     logger.debug(f"Invalidated heatmap cache for user {user_id}")
 

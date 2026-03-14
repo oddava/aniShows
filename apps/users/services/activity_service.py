@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from apps.users.models import UserActivity
+from apps.users.services.cache import get_user_heatmap_cache_key
 
 User = get_user_model()
 
@@ -58,7 +59,7 @@ def get_heatmap_data(request):
     if target_user is None:
         return []
 
-    cache_key = f"heatmap:{target_user.id}"
+    cache_key = get_user_heatmap_cache_key(target_user.id)
     cached = cache.get(cache_key)
     if cached is not None:
         return cached

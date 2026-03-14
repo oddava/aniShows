@@ -5,6 +5,7 @@ from django.core.cache import cache
 
 from apps.shared.logger import logger
 from apps.users.models import UserBadge, UserStats
+from apps.users.services.cache import get_user_online_cache_key, get_user_profile_cache_key
 
 User = get_user_model()
 
@@ -16,7 +17,7 @@ class ProfileResult:
 
 
 def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
-    cache_key = f"user_profile:{user_id}:{'full' if is_full else 'light'}"
+    cache_key = get_user_profile_cache_key(user_id, full=is_full)
     cached_data = cache.get(cache_key)
     if cached_data:
         return ProfileResult(data=cached_data, cache_hit=True)
@@ -60,7 +61,7 @@ def is_user_online(user) -> bool:
 
     from django.utils import timezone
 
-    cache_key = f"user_online:{user.id}"
+    cache_key = get_user_online_cache_key(user.id)
     if cache.get(cache_key) is not None:
         return True
 

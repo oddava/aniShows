@@ -5,6 +5,7 @@ from django.db.models import Avg, F, Sum
 from django.utils import timezone
 
 from apps.users.models import UserAnimeList, UserStats
+from apps.users.services.cache import get_user_stats_cache_key
 
 
 @dataclass(slots=True)
@@ -14,7 +15,7 @@ class UserStatsResult:
 
 
 def get_user_stats(user) -> UserStatsResult:
-    cache_key = f"user_stats:{user.id}"
+    cache_key = get_user_stats_cache_key(user.id)
     cached_data = cache.get(cache_key)
     if cached_data:
         return UserStatsResult(data=cached_data, cache_hit=True)

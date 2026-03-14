@@ -40,7 +40,7 @@ class ActivitySignalTests(TransactionTestCase):
 
     def test_activity_created_on_add(self):
         """Adding anime to list creates an ADDED activity."""
-        entry = UserAnimeList.objects.create(
+        _entry = UserAnimeList.objects.create(
             user=self.user,
             anime=self.anime,
             status=UserAnimeList.UserAnimeStatus.watching,
@@ -213,7 +213,7 @@ class ActivitySignalTests(TransactionTestCase):
     def test_no_activity_without_user(self):
         """Signal handlers should gracefully handle missing user."""
         # This test just ensures no crash if instance has issues
-        entry = UserAnimeList.objects.create(
+        _entry = UserAnimeList.objects.create(
             user=self.user,
             anime=self.anime,
             status=UserAnimeList.UserAnimeStatus.watching,
@@ -243,7 +243,9 @@ class HeatmapAPITests(APITestCase):
         # Clear heatmap cache to ensure fresh data for each test
         from django.core.cache import cache
 
-        cache.delete(f"heatmap:{self.user.id}")
+        from apps.users.services.cache import get_user_heatmap_cache_key
+
+        cache.delete(get_user_heatmap_cache_key(self.user.id))
 
     def test_heatmap_empty(self):
         """Heatmap returns empty list when no activity exists."""

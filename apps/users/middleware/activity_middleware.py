@@ -40,7 +40,9 @@ class UserActivityMiddleware:
         user_id = user.id
 
         # Update Redis cache (fast, with auto-expiration)
-        cache_key = f"user_online:{user_id}"
+        from apps.users.services.cache import get_user_online_cache_key
+
+        cache_key = get_user_online_cache_key(user_id)
         cache.set(cache_key, timezone.now().isoformat(), timeout=ONLINE_TIMEOUT)
 
         # Throttle database updates to avoid excessive writes

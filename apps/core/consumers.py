@@ -175,10 +175,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _set_online(self):
-        cache_key = f"user_online:{self.user.id}"
+        from apps.users.services.cache import get_user_online_cache_key
+
+        cache_key = get_user_online_cache_key(self.user.id)
         cache.set(cache_key, timezone.now().isoformat(), timeout=ONLINE_TIMEOUT)
 
     @database_sync_to_async
     def _set_offline(self):
-        cache_key = f"user_online:{self.user.id}"
+        from apps.users.services.cache import get_user_online_cache_key
+
+        cache_key = get_user_online_cache_key(self.user.id)
         cache.delete(cache_key)

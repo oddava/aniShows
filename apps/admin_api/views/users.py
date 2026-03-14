@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
+from django.db.models import Count
 from django_filters import BooleanFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
@@ -8,6 +8,21 @@ from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveMod
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
+from apps.admin_api.services.user_admin_service import (
+    AdminUserActionError,
+    delete_user_account,
+    toggle_user_active,
+    toggle_user_staff,
+)
+from apps.admin_api.services.user_favorites_admin_service import (
+    build_user_favorites_queryset,
+    serialize_user_favorites,
+)
+from apps.admin_api.services.user_list_admin_service import (
+    build_user_list_queryset,
+    serialize_user_list_entries,
+    serialize_user_list_entry,
+)
 from apps.animes.models import UserFavorite
 from apps.core.permissions import IsAdminUser
 from apps.shared.pagination import StandardPagination
@@ -53,90 +68,34 @@ class AdminUserViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, Ge
         """Toggle user active status (ban/unban)."""
         user = self.get_object()
 
-        # Prevent self-deactivation
-        if user.id == request.user.id:
-            return Response(
-                {"detail": "Cannot deactivate your own account."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        try:
+            result = toggle_user_active(user, request.user)
+        except AdminUserActionError as exc:
+            return Response({"detail": exc.message}, status=exc.status_code)
 
-        # Prevent modifying superusers (unless you're also superuser)
-        if user.is_superuser and not request.user.is_superuser:
-            return Response(
-                {"detail": "Cannot modify superuser status."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        user.is_active = not user.is_active
-        user.save()
-
-        return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "is_active": user.is_active,
-                "message": f"User {'activated' if user.is_active else 'deactivated'} successfully.",
-            }
-        )
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=True, methods=["post"])
     def toggle_staff(self, request, pk=None):
         """Toggle user staff/admin status."""
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can modify staff status."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         user = self.get_object()
 
-        # Prevent self-modification
-        if user.id == request.user.id:
-            return Response(
-                {"detail": "Cannot modify your own staff status."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        try:
+            result = toggle_user_staff(user, request.user)
+        except AdminUserActionError as exc:
+            return Response({"detail": exc.message}, status=exc.status_code)
 
-        user.is_staff = not user.is_staff
-        user.save()
-
-        return Response(
-            {
-                "id": user.id,
-                "username": user.username,
-                "is_staff": user.is_staff,
-                "message": f"User {'promoted to' if user.is_staff else 'removed from'} staff.",
-            }
-        )
+        return Response(result.payload, status=result.status_code)
 
     def destroy(self, request, *args, **kwargs):
         """Delete a user account."""
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can delete users."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         user = self.get_object()
+        try:
+            result = delete_user_account(user, request.user)
+        except AdminUserActionError as exc:
+            return Response({"detail": exc.message}, status=exc.status_code)
 
-        # Prevent self-deletion
-        if user.id == request.user.id:
-            return Response(
-                {"detail": "Cannot delete your own account through admin."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Prevent deleting other superusers
-        if user.is_superuser:
-            return Response(
-                {"detail": "Cannot delete superuser accounts."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        username = user.username
-        self.perform_destroy(user)
-
-        return Response({"message": f"User '{username}' deleted successfully."})
+        return Response(result.payload, status=result.status_code)
 
 
 class AdminUserListViewSet(ViewSet):
@@ -146,45 +105,12 @@ class AdminUserListViewSet(ViewSet):
     pagination_class = StandardPagination
 
     def list(self, request):
-        queryset = UserAnimeList.objects.select_related("user", "anime")
-
-        # Filters
-        list_status = request.query_params.get("status")
-        if list_status:
-            queryset = queryset.filter(status=list_status)
-
-        min_score = request.query_params.get("min_score")
-        if min_score:
-            queryset = queryset.filter(score__gte=int(min_score))
-
-        # Search
-        search = request.query_params.get("search", "")
-        if search:
-            queryset = queryset.filter(
-                Q(user__username__icontains=search) | Q(anime__title__icontains=search)
-            )
-
-        # Sorting
-        ordering = request.query_params.get("ordering", "-updated_at")
-        valid_orderings = ["updated_at", "-updated_at", "score", "-score"]
-        if ordering in valid_orderings:
-            queryset = queryset.order_by(ordering)
+        queryset = build_user_list_queryset(request.query_params)
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
-        entries_data = [
-            {
-                "id": entry.id,
-                "user": {"id": entry.user.id, "username": entry.user.username},
-                "anime": {"id": entry.anime.id, "title": entry.anime.title},
-                "status": entry.status,
-                "score": entry.score,
-                "episodes_watched": entry.episodes_watched,
-                "updated_at": entry.updated_at.isoformat(),
-            }
-            for entry in page
-        ]
+        entries_data = serialize_user_list_entries(page)
 
         return paginator.get_paginated_response(entries_data)
 
@@ -196,21 +122,7 @@ class AdminUserListViewSet(ViewSet):
                 {"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-        return Response(
-            {
-                "id": entry.id,
-                "user": {"id": entry.user.id, "username": entry.user.username},
-                "anime": {"id": entry.anime.id, "title": entry.anime.title},
-                "status": entry.status,
-                "score": entry.score,
-                "episodes_watched": entry.episodes_watched,
-                "is_rewatching": entry.is_rewatching,
-                "notes": entry.notes,
-                "started_at": entry.started_at.isoformat() if entry.started_at else None,
-                "finished_at": entry.finished_at.isoformat() if entry.finished_at else None,
-                "updated_at": entry.updated_at.isoformat(),
-            }
-        )
+        return Response(serialize_user_list_entry(entry))
 
     def destroy(self, request, pk=None):
         try:
@@ -231,33 +143,12 @@ class AdminFavoritesViewSet(ViewSet):
     pagination_class = StandardPagination
 
     def list(self, request):
-        queryset = UserFavorite.objects.select_related("user", "anime")
-
-        # Search
-        search = request.query_params.get("search", "")
-        if search:
-            queryset = queryset.filter(
-                Q(user__username__icontains=search) | Q(anime__title__icontains=search)
-            )
-
-        # Sorting
-        ordering = request.query_params.get("ordering", "-created_at")
-        valid_orderings = ["created_at", "-created_at"]
-        if ordering in valid_orderings:
-            queryset = queryset.order_by(ordering)
+        queryset = build_user_favorites_queryset(request.query_params)
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(queryset, request)
 
-        favorites_data = [
-            {
-                "id": fav.id,
-                "user": {"id": fav.user.id, "username": fav.user.username},
-                "anime": {"id": fav.anime.id, "title": fav.anime.title},
-                "created_at": fav.created_at.isoformat(),
-            }
-            for fav in page
-        ]
+        favorites_data = serialize_user_favorites(page)
 
         return paginator.get_paginated_response(favorites_data)
 

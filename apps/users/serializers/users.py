@@ -278,7 +278,9 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
         from django.core.cache import cache
         from django.utils import timezone
 
-        cache_key = f"user_online:{obj.id}"
+        from apps.users.services.cache import get_user_online_cache_key
+
+        cache_key = get_user_online_cache_key(obj.id)
         if cache.get(cache_key) is not None:
             return True
 

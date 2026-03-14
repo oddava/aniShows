@@ -28,9 +28,9 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
         trigger_stats_update: Whether to trigger an async stats update (default True)
     """
     # Delete profile caches
-    cache.delete(f"user_profile:{user_id}:light")
-    cache.delete(f"user_profile:{user_id}:full")
-    cache.delete(f"user_stats:{user_id}")
+    cache.delete(get_user_profile_cache_key(user_id, full=False))
+    cache.delete(get_user_profile_cache_key(user_id, full=True))
+    cache.delete(get_user_stats_cache_key(user_id))
 
     # Delete public profile caches if username provided
     if username:
@@ -87,6 +87,10 @@ def get_user_stats_cache_key(user_id):
     """Get the cache key for a user's stats."""
     return f"user_stats:{user_id}"
 
+def get_user_heatmap_cache_key(user_id):
+    """Get the cache key for a user's activity heatmap."""
+    return f"heatmap:{user_id}"
+
 def get_public_profile_cache_key(username, viewer_id="anonymous"):
     """Get the cache key for a public profile, including the current version."""
     version = get_profile_cache_version(username)
@@ -100,3 +104,7 @@ def get_profile_cache_version(username):
         cache.set(version_key, 0, timeout=3600)
         return 0
     return version
+
+def get_user_online_cache_key(user_id):
+    """Get the cache key for user online status."""
+    return f"user_online:{user_id}"
