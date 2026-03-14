@@ -1,22 +1,25 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
 from rest_framework import generics, permissions, serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
-from apps.users.serializers.users import RegisterSerializer, UserSerializer
 from apps.shared.logger import logger
 from apps.users import throttling
+from apps.users.serializers.users import RegisterSerializer
+from apps.users.services.auth_flow_service import (
+    AuthFlowError,
+    password_reset_confirm_flow,
+    password_reset_flow,
+    register_user_flow,
+    resend_verification_flow,
+    verify_email_flow,
+)
 from apps.users.services.auth_service import AuthService
-from apps.users.services.cache import invalidate_user_caches
 from apps.users.services.email_service import EmailService
 
 User = get_user_model()
@@ -40,8 +43,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Allow login with email or username
         email = attrs.get("email")
         username = attrs.get("username")
-        password = attrs.get("password")
-
         if username:
             username = username.strip()
 
@@ -98,15 +99,11 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = self.auth_service.register_user(serializer.validated_data)
-
-        # Send verification email asynchronously
-        self.email_service.send_verification_email(user)
-
+        result = register_user_flow(serializer.validated_data, self.auth_service, self.email_service)
         headers = self.get_success_headers(serializer.data)
         return Response(
-            {"message": "Registration successful. Please check your email to verify your account."},
-            status=status.HTTP_201_CREATED,
+            result.payload,
+            status=result.status_code,
             headers=headers
         )
 
@@ -131,47 +128,6 @@ class AuthViewSet(ViewSet):
             return [throttling.StrictUserRateThrottle()]
         return super().get_throttles()
 
-    def _verify_and_respond(self, request, uidb64, token):
-        """Shared verification logic for email verification."""
-        if not uidb64 or not token:
-            return Response({"error": "Missing UID or Token"}, status=status.HTTP_400_BAD_REQUEST)
-
-        is_valid, user = self.auth_service.verify_email(uidb64, token)
-
-        if is_valid and user:
-            # Invalidate user cache to refresh email_verified status
-            invalidate_user_caches(user.id, user.username)
-
-            # Generate tokens for auto-login
-            refresh = RefreshToken.for_user(user)
-
-            return Response(
-                {
-                    "message": "Email verified successfully!",
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user": UserSerializer(user, context={"request": request}).data,
-                },
-                status=status.HTTP_200_OK,
-            )
-        elif user and getattr(user, "userprofile", None) and user.userprofile.email_verified:
-            # Already verified, return tokens
-            refresh = RefreshToken.for_user(user)
-            return Response(
-                {
-                    "message": "Email already verified",
-                    "access": str(refresh.access_token),
-                    "refresh": str(refresh),
-                    "user": UserSerializer(user, context={"request": request}).data,
-                },
-                status=status.HTTP_200_OK,
-            )
-        else:
-            return Response(
-                {"error": "Invalid or expired token"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
     @action(detail=False, methods=["get", "post"])
     def verify_email(self, request, **kwargs):
         """Verify email using URL parameters or POST data."""
@@ -183,87 +139,46 @@ class AuthViewSet(ViewSet):
             uidb64 = request.data.get("uid")
             token = request.data.get("token")
 
-        return self._verify_and_respond(request, uidb64, token)
+        try:
+            result = verify_email_flow(uidb64, token, request, self.auth_service)
+        except AuthFlowError as exc:
+            return Response({"error": exc.message}, status=exc.status_code)
+
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["post"])
     def resend_verification(self, request):
         """Resend verification email."""
-        email = request.data.get("email")
-        if not email:
-            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            user = User.objects.select_related("userprofile").get(email__iexact=email)
-            profile = getattr(user, "userprofile", None)
-            if profile and profile.email_verified:
-                # Already verified, don't reveal this for security
-                raise User.DoesNotExist
-        except User.DoesNotExist:
-            return Response(
-                {
-                    "message": "If an account with this email exists and is pending verification, a new link has been sent."
-                },
-                status=status.HTTP_200_OK,
-            )
+            result = resend_verification_flow(request.data.get("email"), self.email_service)
+        except AuthFlowError as exc:
+            return Response({"error": exc.message}, status=exc.status_code)
 
-        self.email_service.send_verification_email(user)
-        return Response(
-            {
-                "message": "If an account with this email exists and is pending verification, a new link has been sent."
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["post"])
     def password_reset(self, request):
         """Request a password reset link."""
-        email = request.data.get("email")
-        if not email:
-            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            user = User.objects.get(email__iexact=email)
-        except User.DoesNotExist:
-            return Response(
-                {"message": "If an account exists with this email, a reset link has been sent."},
-                status=status.HTTP_200_OK,
-            )
+            result = password_reset_flow(request.data.get("email"), self.email_service)
+        except AuthFlowError as exc:
+            return Response({"error": exc.message}, status=exc.status_code)
 
-        self.email_service.send_password_reset_email(user)
-        return Response(
-            {"message": "If an account exists with this email, a reset link has been sent."},
-            status=status.HTTP_200_OK,
-        )
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["post"])
     def password_reset_confirm(self, request):
         """Confirm password reset with the new password."""
-        uidb64 = request.data.get("uid")
-        token = request.data.get("token")
-        password = request.data.get("password")
-
-        if not all([uidb64, token, password]):
-            return Response(
-                {"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            uid = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return Response({"error": "Invalid link"}, status=status.HTTP_400_BAD_REQUEST)
+            result = password_reset_confirm_flow(
+                request.data.get("uid"),
+                request.data.get("token"),
+                request.data.get("password"),
+            )
+        except AuthFlowError as exc:
+            return Response({"error": exc.message}, status=exc.status_code)
 
-        if default_token_generator.check_token(user, token):
-            user.set_password(password)
-            user.save()
-            return Response(
-                {"message": "Password has been reset successfully."},
-                status=status.HTTP_200_OK,
-            )
-        else:
-            return Response(
-                {"error": "Invalid or expired link"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        return Response(result.payload, status=result.status_code)
 
 
 class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
