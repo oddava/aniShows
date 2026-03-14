@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
-from apps.animes.serializers.users import RegisterSerializer, UserSerializer
+from apps.users.serializers.users import RegisterSerializer, UserSerializer
 from apps.shared.logger import logger
 from apps.users import throttling
 from apps.users.services.auth_service import AuthService

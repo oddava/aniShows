@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.animes.models import Anime
-from apps.animes.serializers.users import (
+from apps.users.serializers.users import (
     FollowSerializer,
     FriendWatchingSerializer,
     UserFollowListSerializer,

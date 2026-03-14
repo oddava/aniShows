@@ -1,0 +1,112 @@
+from dataclasses import dataclass
+
+from asgiref.sync import async_to_sync
+from django.core.cache import cache
+
+from apps.animes.models import Anime
+from apps.animes.services.anilist import AniListService
+from apps.shared.logger import logger
+
+
+class FranchiseImportError(Exception):
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
+@dataclass(slots=True)
+class FranchiseImportResult:
+    slug: str
+    title: str
+    imported: bool
+
+
+class FranchiseImportService:
+    rate_limit = 10
+    rate_window_seconds = 60
+
+    def import_from_anilist(
+        self, *, anilist_id: int, client_ip: str, source_slug: str | None = None
+    ) -> FranchiseImportResult:
+        existing = Anime.objects.filter(anilist_id=anilist_id).first()
+        if existing:
+            return FranchiseImportResult(
+                slug=existing.slug,
+                title=existing.title,
+                imported=False,
+            )
+
+        self._enforce_rate_limit(client_ip)
+
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        try:
+            item = async_to_sync(service.get_anime_by_id)(anilist_id)
+            if not item:
+                raise FranchiseImportError("Not found", 404)
+
+            imported = self._will_create_new_anime(item)
+            anime = service.save_anime_to_db(item)
+
+            if anime.mal_id:
+                from apps.animes.tasks.themes import sync_theme_songs
+
+                sync_theme_songs.delay(anime_id=anime.id)
+
+            if source_slug:
+                self.update_relation_slug(source_slug, anilist_id, anime.slug)
+
+            return FranchiseImportResult(
+                slug=anime.slug,
+                title=anime.title,
+                imported=imported,
+            )
+        except FranchiseImportError:
+            raise
+        except Exception as exc:
+            logger.error(f"Error importing franchise anime {anilist_id}: {exc}", exc_info=True)
+            raise FranchiseImportError("Import failed", 500) from exc
+        finally:
+            async_to_sync(service.close)()
+
+    def _enforce_rate_limit(self, client_ip: str) -> None:
+        rate_key = f"franchise_fetch:{client_ip}"
+        current_count = cache.get(rate_key, 0)
+        if current_count >= self.rate_limit:
+            raise FranchiseImportError("Rate limit exceeded", 429)
+        cache.set(rate_key, current_count + 1, timeout=self.rate_window_seconds)
+
+    @staticmethod
+    def _will_create_new_anime(item: dict) -> bool:
+        anilist_id = item.get("id")
+        mal_id = item.get("idMal")
+        title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
+
+        if anilist_id and Anime.objects.filter(anilist_id=anilist_id).exists():
+            return False
+        if mal_id and Anime.objects.filter(mal_id=mal_id).exists():
+            return False
+        if title:
+            from django.utils.text import slugify
+
+            if Anime.objects.filter(slug=slugify(title)).exists():
+                return False
+        return True
+
+    @staticmethod
+    def update_relation_slug(source_slug: str, anilist_id: int, target_slug: str) -> None:
+        try:
+            source_anime = Anime.objects.get(slug=source_slug)
+            relations = source_anime.relations or []
+            updated = False
+            for rel in relations:
+                if rel.get("id") == anilist_id and not rel.get("slug"):
+                    rel["slug"] = target_slug
+                    updated = True
+            if updated:
+                source_anime.relations = relations
+                source_anime.save(update_fields=["relations"])
+        except Anime.DoesNotExist:
+            return
+        except Exception as exc:
+            logger.warning(f"Failed to update relation slug for {source_slug}: {exc}")

@@ -1,0 +1,18 @@
+from apps.users.serializers.users import (
+    BadgeSerializer,
+    ChangePasswordSerializer,
+    FavoriteCompactSerializer,
+    FavoriteSerializer,
+    FollowSerializer,
+    FriendWatchingSerializer,
+    PublicUserSerializer,
+    RegisterSerializer,
+    UserActivitySerializer,
+    UserAnimeListSerializer,
+    UserBadgeSerializer,
+    UserFollowListSerializer,
+    UserLightweightSerializer,
+    UserProfileUpdateSerializer,
+    UserRecommendationSerializer,
+    UserSerializer,
+)

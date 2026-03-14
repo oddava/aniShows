@@ -1,28 +1,28 @@
 import time
-from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.db.models import Avg, Count, Exists, F, Q, Sum
-from django.utils import timezone
 from rest_framework import permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.animes.serializers.users import (
+from apps.shared.logger import logger
+from apps.users import throttling
+from apps.users.models import UserStats
+from apps.users.serializers.users import (
     PublicUserSerializer,
     UserProfileUpdateSerializer,
 )
-from apps.core.utils import get_client_ip
-from apps.shared.logger import logger
-from apps.users import throttling
-from apps.users.models import UserBadge, UserProfile, UserStats
-from apps.users.services.cache import (
-    get_public_profile_cache_key,
-    invalidate_user_caches,
+from apps.users.services.profile_service import get_current_user_profile
+from apps.users.services.profile_update_service import update_user_profile
+from apps.users.services.public_profile_service import (
+    PublicProfileError,
+    get_public_profile,
 )
+from apps.users.services.user_queryset import get_annotated_user_queryset
+from apps.users.services.user_stats_service import get_user_stats
 
 User = get_user_model()
 
@@ -43,168 +43,34 @@ class UserProfileView(APIView):
         user_id = request.user.id
         is_full = request.query_params.get("full", "false").lower() == "true"
 
-        cache_key = f"user_profile:{user_id}:{'full' if is_full else 'light'}"
-        cached_data = cache.get(cache_key)
-
-        if cached_data:
-            duration = (time.time() - start_time) * 1000
-            logger.debug(f"Profile cache hit for user {user_id}: {duration:.2f}ms")
-            return Response(cached_data)
-
         try:
-            user = User.objects.select_related("userprofile").get(pk=user_id)
+            result = get_current_user_profile(user_id=user_id, is_full=is_full)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
 
-        stats_data = None
-        try:
-            stats = UserStats.objects.get(user=user)
-            stats_data = {
-                "followers_count": stats.followers_count,
-                "following_count": stats.following_count,
-                "anime_count": stats.anime_count,
-                "episodes_watched": stats.episodes_watched,
-                "total_minutes": getattr(stats, "total_minutes", 0),
-                "days_watched": round(stats.days_watched, 1),
-                "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
-                "favorites_count": stats.favorites_count,
-                "reviews_count": stats.reviews_count,
-            }
-        except UserStats.DoesNotExist:
-            from apps.users.services.stats_service import calculate_user_stats
-
-            stats_data = calculate_user_stats(user)
-            stats_data["followers_count"] = 0
-            stats_data["following_count"] = 0
-
-            from apps.users.tasks import update_user_stats
-
-            update_user_stats.delay(user_id)
-
-        profile = getattr(user, "userprofile", None)
-        data = {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "date_joined": user.date_joined,
-            "avatar": profile.avatar.url if profile and profile.avatar else None,
-            "banner": profile.banner.url if profile and profile.banner else None,
-            "bio": profile.bio if profile else None,
-            "is_private": profile.is_private if profile else False,
-            "email_verified": profile.email_verified if profile else False,
-            "social_links": profile.social_links if profile else [],
-            "points": profile.points if profile else 0,
-            "has_password": user.has_usable_password(),
-            "is_staff": user.is_staff,
-            "is_superuser": user.is_superuser,
-        }
-
-        if stats_data:
-            data.update(stats_data)
-
-        featured_badges = (
-            UserBadge.objects.filter(user=user, badge__is_active=True, is_featured=True)
-            .select_related("badge")
-            .order_by("-granted_at")[:3]
-        )
-        data["badges"] = [
-            {
-                "id": ub.badge.id,
-                "name": ub.badge.name,
-                "slug": ub.badge.slug,
-                "icon": ub.badge.icon,
-                "image": ub.badge.image.url if ub.badge.image else None,
-                "color": ub.badge.color,
-                "description": ub.badge.description,
-            }
-            for ub in featured_badges
-        ]
-        data["total_badges_count"] = UserBadge.objects.filter(
-            user=user, badge__is_active=True
-        ).count()
-
-        cache.set(cache_key, data, timeout=300)
-
         duration = (time.time() - start_time) * 1000
-        logger.info(f"Profile fetched for user {user_id}: {duration:.2f}ms")
+        if result.cache_hit:
+            logger.debug(f"Profile cache hit for user {user_id}: {duration:.2f}ms")
+        else:
+            logger.info(f"Profile fetched for user {user_id}: {duration:.2f}ms")
 
-        return Response(data)
+        return Response(result.data)
 
     def patch(self, request):
         serializer = UserProfileUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
 
-        user = request.user
-
-        new_username = serializer.validated_data.get("username")
-        if new_username and new_username != user.username:
-            profile, _ = UserProfile.objects.get_or_create(user=user)
-
-            if profile.last_username_change:
-                elapsed = timezone.now() - profile.last_username_change
-                if elapsed < timedelta(days=14):
-                    days_left = 14 - elapsed.days
-                    return Response(
-                        {"username": f"You can change your username again in {days_left} days."},
-                        status=400,
-                    )
-
-            if User.objects.filter(username=new_username).exists():
-                return Response({"username": "This username is already taken."}, status=400)
-
-            user.username = new_username
-            user.save()
-            profile.last_username_change = timezone.now()
-            profile.save()
-
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-
-        if "avatar" in serializer.validated_data:
-            profile.avatar = serializer.validated_data["avatar"]
-        if "banner" in serializer.validated_data:
-            profile.banner = serializer.validated_data["banner"]
-        if serializer.validated_data.get("remove_banner"):
-            profile.banner = None
-        if "bio" in serializer.validated_data:
-            profile.bio = serializer.validated_data["bio"]
-        if "is_private" in serializer.validated_data:
-            profile.is_private = serializer.validated_data["is_private"]
-        if "social_links" in serializer.validated_data:
-            old_links = profile.social_links if profile.social_links else []
-            new_links = serializer.validated_data["social_links"]
-
-            def hash_links(links):
-                """Create a simple hash of links for comparison"""
-                if not links:
-                    return ""
-                link_strs = []
-                for link in sorted(links, key=lambda x: x.get("url", "") + x.get("value", "")):
-                    url = link.get("url") or link.get("value", "")
-                    platform = link.get("platform", "")
-                    link_strs.append(f"{platform}:{url}")
-                return "|".join(link_strs)
-
-            if hash_links(old_links) != hash_links(new_links):
-                ip_address = get_client_ip(request)
-
-                from apps.core.services.social_links_service import SocialLinksService
-
-                service = SocialLinksService()
-                service.log_changes(user, old_links, new_links, ip_address)
-
-                processed_links = service.validate_and_process(new_links, user, skip_metadata=True)
-                profile.social_links = processed_links
-
-        profile.save()
-
-        self._invalidate_user_caches(user.id, user.username)
+        try:
+            update_user_profile(
+                request.user,
+                serializer.validated_data,
+                ip_address=request.META.get("REMOTE_ADDR"),
+            )
+        except ValidationError as exc:
+            return Response(exc.detail, status=400)
 
         return self.get(request)
-
-    def _invalidate_user_caches(self, user_id, username):
-        """Invalidate all user-related caches."""
-        invalidate_user_caches(user_id, username)
 
 
 class UserStatsView(APIView):
@@ -213,138 +79,8 @@ class UserStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        user_id = request.user.id
-        cache_key = f"user_stats:{user_id}"
-
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return Response(cached_data)
-
-        try:
-            stats = UserStats.objects.get(user=request.user)
-            data = {
-                "favorites_count": stats.favorites_count,
-                "reviews_count": stats.reviews_count,
-                "anime_count": stats.anime_count,
-                "episodes_watched": stats.episodes_watched,
-                "total_minutes": getattr(stats, "total_minutes", 0),
-                "days_watched": round(stats.days_watched, 1),
-                "mean_score": round(stats.mean_score, 1) if stats.mean_score else 0,
-                "last_updated": stats.last_updated,
-            }
-            cache.set(cache_key, data, timeout=300)
-            return Response(data)
-        except UserStats.DoesNotExist:
-            pass
-
-        from apps.users.models import UserAnimeList
-
-        favorites_count = request.user.favorites.count()
-        reviews_count = request.user.reviews.count()
-        anime_count = UserAnimeList.objects.filter(user=request.user).count()
-
-        episodes_watched = (
-            UserAnimeList.objects.filter(user=request.user).aggregate(
-                total=Sum("episodes_watched")
-            )["total"]
-            or 0
-        )
-
-        total_minutes = (
-            UserAnimeList.objects.filter(user=request.user)
-            .annotate(entry_minutes=F("episodes_watched") * F("anime__duration_minutes"))
-            .aggregate(total=Sum("entry_minutes"))["total"]
-            or 0
-        )
-
-        mean_score = UserAnimeList.objects.filter(user=request.user, score__gt=0).aggregate(
-            avg=Avg("score")
-        )["avg"]
-
-        days_watched = total_minutes / 1440.0
-
-        data = {
-            "favorites_count": favorites_count,
-            "reviews_count": reviews_count,
-            "anime_count": anime_count,
-            "episodes_watched": episodes_watched,
-            "total_minutes": total_minutes,
-            "days_watched": round(days_watched, 1),
-            "mean_score": round(mean_score, 1) if mean_score else 0,
-            "last_updated": timezone.now(),
-        }
-
-        cache.set(cache_key, data, timeout=300)
-        return Response(data)
-
-
-def get_annotated_user_queryset(user=None, lightweight=False):
-    """Helper to get user queryset with all performance annotations.
-
-    Args:
-        user: The requesting user (for is_following annotation)
-        lightweight: If True, only include essential fields for faster loading
-    """
-    from django.db.models import FloatField, OuterRef, Prefetch, Subquery
-    from django.db.models.functions import Coalesce, Round
-
-    from apps.users.models import UserAnimeList, UserBadge
-
-    queryset = User.objects.select_related("userprofile").prefetch_related(
-        Prefetch(
-            "badges",
-            queryset=UserBadge.objects.filter(badge__is_active=True, is_featured=True)
-            .select_related("badge")
-            .order_by("-granted_at")[:3],
-            to_attr="_prefetched_badges",
-        )
-    )
-
-    queryset = queryset.annotate(
-        _followers_count=Count("followers", distinct=True),
-        _following_count=Count("following", distinct=True),
-        _anime_count=Count("anime_lists", distinct=True),
-    )
-
-    if not lightweight:
-        queryset = queryset.annotate(
-            _favorites_count=Count("favorites", distinct=True),
-            _reviews_count=Count("reviews", distinct=True),
-        )
-
-        episodes_subquery = (
-            UserAnimeList.objects.filter(user=OuterRef("pk"))
-            .values("user")
-            .annotate(total=Sum("episodes_watched"))
-            .values("total")
-        )
-
-        queryset = queryset.annotate(_episodes_watched=Coalesce(Subquery(episodes_subquery), 0))
-
-        total_minutes_subquery = (
-            UserAnimeList.objects.filter(user=OuterRef("pk"))
-            .annotate(entry_minutes=F("episodes_watched") * F("anime__duration_minutes"))
-            .values("user")
-            .annotate(total=Sum("entry_minutes"))
-            .values("total")
-        )
-
-        queryset = queryset.annotate(_total_minutes=Coalesce(Subquery(total_minutes_subquery), 0))
-
-        queryset = queryset.annotate(
-            _mean_score_raw=Avg("anime_lists__score", filter=Q(anime_lists__score__gt=0))
-        )
-
-        queryset = queryset.annotate(_days_watched=Coalesce(F("_total_minutes"), 0) / 1440.0)
-
-    if user and user.is_authenticated:
-        from apps.users.models import UserFollow
-
-        queryset = queryset.annotate(
-            _is_following=Exists(UserFollow.objects.filter(follower=user, following=OuterRef("pk")))
-        )
-
-    return queryset
+        result = get_user_stats(request.user)
+        return Response(result.data)
 
 
 class PublicUserProfileViewSet(ReadOnlyModelViewSet):
@@ -367,163 +103,20 @@ class PublicUserProfileViewSet(ReadOnlyModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         """Optimized retrieve using pre-calculated stats table and caching."""
-        import time
-
         start_time = time.time()
-
         username = self.kwargs.get(self.lookup_field)
-        is_authenticated = request.user.is_authenticated
-
-        is_own_profile = is_authenticated and request.user.username.lower() == username.lower()
-
-        viewer_id = request.user.id if is_authenticated else "anonymous"
-        cache_key = get_public_profile_cache_key(username, viewer_id)
-        cached_data = cache.get(cache_key)
-
-        if cached_data:
-            if cached_data.get("is_private") and not is_own_profile:
-                return Response({"error": "Profile not found"}, status=404)
-
-            logger.debug(
-                f"Profile cache hit for {username}: {(time.time() - start_time) * 1000:.2f}ms"
-            )
-            return Response(cached_data)
 
         try:
-            from apps.users.models import UserStats
-
-            user = User.objects.select_related("userprofile", "stats").get(username=username)
-
-            is_private = user.userprofile.is_private if user.userprofile else False
-            if is_private and not is_own_profile:
-                return Response({"error": "Profile not found"}, status=404)
-
-            if hasattr(user, "stats"):
-                stats = user.stats
-
-                if stats.anime_count == 0:
-                    from apps.users.models import UserAnimeList
-
-                    has_anime = UserAnimeList.objects.filter(user=user).exists()
-                    if has_anime:
-                        logger.warning(
-                            f"UserStats for {username} has anime_count=0 but user has anime entries — "
-                            "falling through to live query"
-                        )
-                        from apps.users.tasks import update_user_stats
-
-                        update_user_stats.delay(user.id)
-                        raise ValueError("Stale UserStats detected")
-
-                data = {
-                    "id": user.id,
-                    "username": user.username,
-                    "date_joined": user.date_joined,
-                    "avatar": user.userprofile.avatar.url
-                    if user.userprofile and user.userprofile.avatar
-                    else None,
-                    "banner": user.userprofile.banner.url
-                    if user.userprofile and user.userprofile.banner
-                    else None,
-                    "bio": user.userprofile.bio if user.userprofile else None,
-                    "is_private": user.userprofile.is_private if user.userprofile else False,
-                    "social_links": user.userprofile.social_links if user.userprofile else [],
-                    "points": user.userprofile.points if user.userprofile else 0,
-                    "followers_count": stats.followers_count,
-                    "following_count": stats.following_count,
-                    "anime_count": stats.anime_count,
-                    "episodes_watched": stats.episodes_watched,
-                    "days_watched": stats.days_watched,
-                    "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
-                    "favorites_count": stats.favorites_count,
-                    "reviews_count": stats.reviews_count,
-                    "is_online": self._check_user_online(user),
-                }
-
-                if is_authenticated:
-                    from apps.users.models import UserFollow
-
-                    data["is_following"] = UserFollow.objects.filter(
-                        follower=request.user, following=user
-                    ).exists()
-                else:
-                    data["is_following"] = False
-
-                featured_badges = (
-                    UserBadge.objects.filter(user=user, badge__is_active=True, is_featured=True)
-                    .select_related("badge")
-                    .order_by("-granted_at")[:3]
-                )
-                data["badges"] = [
-                    {
-                        "id": ub.badge.id,
-                        "name": ub.badge.name,
-                        "slug": ub.badge.slug,
-                        "icon": ub.badge.icon,
-                        "image": ub.badge.image.url if ub.badge.image else None,
-                        "color": ub.badge.color,
-                        "description": ub.badge.description,
-                    }
-                    for ub in featured_badges
-                ]
-                data["total_badges_count"] = UserBadge.objects.filter(
-                    user=user, badge__is_active=True
-                ).count()
-
-                cache.set(cache_key, data, timeout=300)
-
-                duration = (time.time() - start_time) * 1000
-                logger.info(f"Profile stats hit for {username}: {duration:.2f}ms")
-                return Response(data)
-
-        except User.DoesNotExist:
-            from rest_framework.exceptions import NotFound
-
-            raise NotFound("User not found")
-        except Exception as e:
-            logger.warning(f"Stats table lookup failed for {username}: {e}")
-
-        logger.warning(f"Using fallback query for {username} - stats table miss")
-        queryset = self.get_queryset().filter(username=username)
-
-        if not queryset.exists():
-            from rest_framework.exceptions import NotFound
-
-            raise NotFound("User not found")
-
-        user = queryset.first()
-
-        is_private = user.userprofile.is_private if user.userprofile else False
-        if is_private and not is_own_profile:
-            return Response({"error": "Profile not found"}, status=404)
-
-        serializer = self.get_serializer(user)
-        data = serializer.data
-
-        cache.set(cache_key, data, timeout=300)
-
-        from apps.users.tasks import update_user_stats
-
-        update_user_stats.delay(user.id)
+            result = get_public_profile(username, request.user, request=request)
+        except PublicProfileError as exc:
+            return Response({"error": exc.message}, status=exc.status_code)
 
         duration = (time.time() - start_time) * 1000
-        logger.warning(f"Profile fallback query for {username}: {duration:.2f}ms")
-        return Response(data)
+        if result.cache_hit:
+            logger.debug(f"Profile cache hit for {username}: {duration:.2f}ms")
+        elif result.source == "stats":
+            logger.info(f"Profile stats hit for {username}: {duration:.2f}ms")
+        else:
+            logger.warning(f"Profile fallback query for {username}: {duration:.2f}ms")
 
-    def _check_user_online(self, user):
-        """Check if user is currently online."""
-        from datetime import timedelta
-
-        from django.core.cache import cache
-        from django.utils import timezone
-
-        cache_key = f"user_online:{user.id}"
-        if cache.get(cache_key) is not None:
-            return True
-
-        if user.userprofile and user.userprofile.last_activity:
-            time_since = timezone.now() - user.userprofile.last_activity
-            if time_since < timedelta(minutes=5):
-                return True
-
-        return False
+        return Response(result.data)

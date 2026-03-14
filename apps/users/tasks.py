@@ -463,7 +463,7 @@ def warm_profile_cache(usernames: list = None):
     """
     from django.core.cache import cache
 
-    from apps.animes.serializers.users import PublicUserSerializer
+    from apps.users.serializers.users import PublicUserSerializer
     from apps.users.services.cache import get_public_profile_cache_key
     from apps.users.views.users import get_annotated_user_queryset
 

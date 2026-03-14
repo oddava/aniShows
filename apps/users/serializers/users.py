@@ -16,7 +16,11 @@ from rest_framework.serializers import (
 )
 
 from apps.animes.models import Anime, UserFavorite
-from apps.animes.serializers.anime import AnimeListSerializer, AnimeMinimalSerializer, AnimeCompactSerializer
+from apps.animes.serializers.anime import (
+    AnimeCompactSerializer,
+    AnimeListSerializer,
+    AnimeMinimalSerializer,
+)
 from apps.animes.serializers.base import validate_image_content
 from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from apps.shared.logger import logger

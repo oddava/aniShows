@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.animes.serializers.users import UserActivitySerializer
+from apps.users.serializers.users import UserActivitySerializer
 from apps.users.models import UserActivity
 
 User = get_user_model()

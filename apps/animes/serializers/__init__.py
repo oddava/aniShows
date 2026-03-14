@@ -1,6 +1,7 @@
 from apps.animes.serializers.anime import (
+    AnimeCompactSerializer,
     AnimeDetailSerializer,
-    AnimeListSerializer, AnimeCompactSerializer,
+    AnimeListSerializer,
     AnimeMinimalSerializer,
 )
 from apps.animes.serializers.base import (
@@ -25,16 +26,17 @@ from apps.animes.serializers.reviews import (
     ReviewSerializer,
     ReviewUserSerializer,
 )
-from apps.animes.serializers.users import (
+from apps.users.serializers.users import (
     BadgeSerializer,
     ChangePasswordSerializer,
-    FavoriteSerializer, FavoriteCompactSerializer,
+    FavoriteCompactSerializer,
+    FavoriteSerializer,
     FollowSerializer,
     FriendWatchingSerializer,
     PublicUserSerializer,
     RegisterSerializer,
     UserActivitySerializer,
-    UserAnimeListSerializer, AnimeCompactSerializer,
+    UserAnimeListSerializer,
     UserBadgeSerializer,
     UserFollowListSerializer,
     UserLightweightSerializer,

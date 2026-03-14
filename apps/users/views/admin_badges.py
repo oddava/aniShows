@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.animes.serializers.users import BadgeSerializer
+from apps.users.serializers.users import BadgeSerializer
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdminUser
 from apps.core.services.notification_service import NotificationService

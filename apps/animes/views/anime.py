@@ -1,4 +1,6 @@
-from datetime import UTC, date
+import hashlib
+import json
+from datetime import date
 
 from django.core.cache import cache
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
@@ -27,6 +29,7 @@ from apps.animes.serializers import (
     GenreSerializer,
     StudioSerializer,
 )
+from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
 from apps.shared.logger import logger
 from apps.shared.pagination import StandardPagination
 from apps.users.models import UserAnimeList
@@ -38,13 +41,11 @@ VALID_SORT_FIELDS = {"popular", "rating", "newest", "title", "upcoming", "trendi
 MAX_RATING = 10.0
 MIN_RATING = 0.0
 
-import hashlib
-import json
-
 
 class AnimeViewSet(ReadOnlyModelViewSet):
     pagination_class = StandardPagination
     lookup_field = "slug"
+    franchise_import_service = FranchiseImportService()
 
     _LIST_FIELDS = (
         "id",
@@ -456,10 +457,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="franchise/fetch")
     def franchise_fetch(self, request):
-        """Look up a franchise relation by anilist_id.
-        If the anime exists locally, return its slug immediately.
-        If not, fetch it from AniList synchronously, import it, and return the new slug.
-        """
         anilist_id = request.data.get("anilist_id")
         if not anilist_id:
             return Response(
@@ -476,519 +473,20 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
 
         try:
-            anime = Anime.objects.get(anilist_id=anilist_id)
-            return Response({"slug": anime.slug, "title": anime.title, "imported": False})
-        except Anime.DoesNotExist:
-            pass
-
-        client_ip = self._get_client_ip(request)
-        rate_key = f"franchise_fetch:{client_ip}"
-        current_count = cache.get(rate_key, 0)
-        if current_count >= 10:
-            return Response(
-                {"error": "Rate limit exceeded"},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            result = self.franchise_import_service.import_from_anilist(
+                anilist_id=anilist_id,
+                client_ip=self._get_client_ip(request),
+                source_slug=request.data.get("source_slug"),
             )
-        cache.set(rate_key, current_count + 1, timeout=60)
-
-        import re
-        from datetime import datetime
-
-        import httpx
-        from django.db import IntegrityError
-        from django.utils import timezone as django_timezone
-        from django.utils.text import slugify
-
-        ANILIST_URL = "https://graphql.anilist.co/"
-        MEDIA_FIELDS = """
-            id
-            idMal
-            title { romaji english native }
-            format status episodes averageScore popularity duration
-            startDate { year month day }
-            endDate { year month day }
-            season seasonYear
-            source
-            genres
-            studios(isMain: true) { nodes { name } }
-            description
-            coverImage { large extraLarge }
-            bannerImage
-            trailer { id site }
-            rankings { rank type allTime context }
-            stats { statusDistribution { status amount } }
-            externalLinks { site url icon }
-            nextAiringEpisode { episode airingAt }
-            relations {
-                edges {
-                    relationType
-                    node { id title { romaji english native } type format status coverImage { large } }
-                }
-            }
-            characterPreview: characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
-                edges {
-                    role
-                    node { id name { full native } image { large } description }
-                    voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                        id name { full native } image { large } description
-                    }
-                }
-            }
-            staffPreview: staff(perPage: 10, sort: [RELEVANCE, ID]) {
-                edges {
-                    role
-                    node { id name { full native } image { large } description }
-                }
-            }
-        """
-
-        query = f"""
-            query GetAnimeById($id: Int) {{
-                Media(id: $id, type: ANIME) {{
-                    {MEDIA_FIELDS}
-                }}
-            }}
-        """
-
-        try:
-            with httpx.Client(timeout=15.0) as client:
-                resp = client.post(
-                    ANILIST_URL,
-                    json={"query": query, "variables": {"id": anilist_id}},
-                    headers={"Content-Type": "application/json"},
-                )
-
-                if resp.status_code == 429:
-                    logger.warning(f"AniList rate limited during franchise fetch for {anilist_id}")
-                    return Response(
-                        {"error": "External API rate limited, try again shortly"},
-                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    )
-
-                resp.raise_for_status()
-                data = resp.json()
-
-            if "errors" in data:
-                logger.error(f"AniList GraphQL error for {anilist_id}: {data['errors']}")
-                return Response(
-                    {"error": "Could not fetch from AniList"},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-
-            media = data.get("data", {}).get("Media")
-            if not media:
-                logger.warning(f"No media returned from AniList for anilist_id={anilist_id}")
-                return Response(
-                    {"error": "Not found"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-
-            from apps.animes.models import Genre, Studio
-
-            item = media
-            title_english = item.get("title", {}).get("english") or ""
-            title_romaji = item.get("title", {}).get("romaji") or ""
-            title_native = item.get("title", {}).get("native") or ""
-            title = title_english or title_romaji
-
-            if not title:
-                return Response(
-                    {"error": "Anime has no title"},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-
-            base_slug = slugify(title)
-
-            try:
-                anime = Anime.objects.get(anilist_id=anilist_id)
-                return Response({"slug": anime.slug, "title": anime.title, "imported": False})
-            except Anime.DoesNotExist:
-                pass
-
-            final_slug = base_slug
-            counter = 0
-            while Anime.objects.filter(slug=final_slug).exists():
-                counter += 1
-                final_slug = f"{base_slug}-{counter}"
-                if counter > 50:
-                    break
-
-            format_map = {
-                "TV": Anime.AnimeType.tv,
-                "TV_SHORT": Anime.AnimeType.tv,
-                "MOVIE": Anime.AnimeType.movie,
-                "OVA": Anime.AnimeType.ova,
-                "ONA": Anime.AnimeType.special,
-                "SPECIAL": Anime.AnimeType.special,
-                "MUSIC": Anime.AnimeType.special,
-            }
-            anime_type = format_map.get(item.get("format", "TV"), Anime.AnimeType.tv)
-
-            status_map = {
-                "RELEASING": Anime.AnimeStatus.airing,
-                "FINISHED": Anime.AnimeStatus.finished,
-                "NOT_YET_RELEASED": Anime.AnimeStatus.upcoming,
-                "CANCELLED": Anime.AnimeStatus.finished,
-            }
-            anime_status = status_map.get(
-                item.get("status", "FINISHED"), Anime.AnimeStatus.finished
-            )
-
-            def parse_date(date_obj):
-                if not date_obj or not date_obj.get("year"):
-                    return None
-                try:
-                    return datetime(
-                        date_obj["year"],
-                        date_obj.get("month") or 1,
-                        date_obj.get("day") or 1,
-                    ).date()
-                except (ValueError, TypeError):
-                    return None
-
-            start_date = parse_date(item.get("startDate", {}))
-            end_date = parse_date(item.get("endDate", {}))
-
-            avg_score = item.get("averageScore", 0)
-            rating = round(avg_score / 10, 1) if avg_score else None
-
-            description = item.get("description", "") or ""
-            if description:
-                description = re.sub(r"<[^>]+>", "", description).strip()
-
-            source_map = {
-                "ORIGINAL": "Original",
-                "MANGA": "Manga",
-                "LIGHT_NOVEL": "Light Novel",
-                "VISUAL_NOVEL": "Visual Novel",
-                "VIDEO_GAME": "Game",
-                "WEB_NOVEL": "Novel",
-                "NOVEL": "Novel",
-                "DOUJINSHI": "Other",
-                "ANIME": "Original",
-                "MUSIC": "Music",
-                "MIXED_MEDIA": "Mixed Media",
-                "PICTURE_BOOK": "Picture Book",
-                "CARD_GAME": "Card Game",
-                "WEB_MANGA": "Web Manga",
-                "COMIC": "Manga",
-                "LIVE_ACTION": "Other",
-                "MULTIMEDIA_PROJECT": "Mixed Media",
-                "OTHER": "Other",
-            }
-            source_material = source_map.get(item.get("source"), "") if item.get("source") else ""
-
-            raw_relations = [
-                {
-                    "id": edge["node"]["id"],
-                    "type": edge["relationType"],
-                    "title": edge["node"]["title"].get("english")
-                    or edge["node"]["title"].get("romaji"),
-                    "format": edge["node"]["format"],
-                    "status": edge["node"]["status"],
-                    "cover": edge["node"]["coverImage"].get("large"),
-                }
-                for edge in item.get("relations", {}).get("edges", [])
-                if edge["node"]["type"] == "ANIME"
-            ]
-
-            related_anilist_ids = [r["id"] for r in raw_relations if r.get("id")]
-            slug_map = {}
-            if related_anilist_ids:
-                slug_map = dict(
-                    Anime.objects.filter(anilist_id__in=related_anilist_ids).values_list(
-                        "anilist_id", "slug"
-                    )
-                )
-            for rel in raw_relations:
-                rel["slug"] = slug_map.get(rel["id"])
-
-            next_airing = item.get("nextAiringEpisode")
-            next_airing_episode = next_airing.get("episode") if next_airing else None
-            next_airing_date = None
-            if next_airing and next_airing.get("airingAt"):
-                next_airing_date = django_timezone.make_aware(
-                    datetime.fromtimestamp(next_airing["airingAt"]),
-                    timezone=UTC,
-                )
-
-            valid_sources = {c[0] for c in Anime.SourceMaterial.choices}
-            if source_material not in valid_sources:
-                source_material = ""
-
-            cover_url_external = (
-                item.get("coverImage", {}).get("extraLarge")
-                or item.get("coverImage", {}).get("large")
-                or ""
-            )
-            banner_url_external = item.get("bannerImage") or ""
-
-            final_title = title
-            if Anime.objects.filter(title=title).exists():
-                year_suffix = str(start_date.year) if start_date else ""
-                format_suffix = item.get("format", "")
-                parts = [p for p in [format_suffix, year_suffix] if p]
-                final_title = f"{title} ({' '.join(parts)})" if parts else f"{title} ({anilist_id})"
-
-            incoming_mal_id = item.get("idMal")
-            if incoming_mal_id and Anime.objects.filter(mal_id=incoming_mal_id).exists():
-                incoming_mal_id = None
-
-            try:
-                anime = Anime.objects.create(
-                    title=final_title,
-                    title_jp=title_native,
-                    slug=final_slug,
-                    synopsis=description or "No description available.",
-                    anime_type=anime_type,
-                    status=anime_status,
-                    episode_count=item.get("episodes") or 0,
-                    duration_minutes=item.get("duration") or 24,
-                    member_count=item.get("popularity") or 0,
-                    release_date=start_date,
-                    end_date=end_date,
-                    rating=rating,
-                    meta_description=(description[:157] + "...")
-                    if description and len(description) > 160
-                    else (description or ""),
-                    site_rank=next(
-                        (
-                            r["rank"]
-                            for r in item.get("rankings", [])
-                            if r["allTime"] and r["type"] == "RATED"
-                        ),
-                        None,
-                    ),
-                    popularity_rank=next(
-                        (
-                            r["rank"]
-                            for r in item.get("rankings", [])
-                            if r["allTime"] and r["type"] == "POPULAR"
-                        ),
-                        None,
-                    ),
-                    status_distribution={
-                        s["status"]: s["amount"]
-                        for s in item.get("stats", {}).get("statusDistribution", [])
-                    },
-                    external_links=item.get("externalLinks", []),
-                    relations=raw_relations,
-                    next_airing_episode=next_airing_episode,
-                    next_airing_date=next_airing_date,
-                    source_material=source_material,
-                    season=item.get("season") or "",
-                    season_year=item.get("seasonYear"),
-                    anilist_id=item.get("id"),
-                    mal_id=incoming_mal_id,
-                    cover_image_external_url=cover_url_external,
-                    banner_image_external_url=banner_url_external,
-                )
-            except IntegrityError:
-                try:
-                    anime = Anime.objects.get(anilist_id=anilist_id)
-                    return Response({"slug": anime.slug, "title": anime.title, "imported": False})
-                except Anime.DoesNotExist:
-                    return Response(
-                        {"error": "Import failed due to conflict"},
-                        status=status.HTTP_409_CONFLICT,
-                    )
-
-            logger.info(
-                f"Franchise fetch: created anime '{title}' (anilist_id={anilist_id}, slug={final_slug})"
-            )
-
-            for genre_name in item.get("genres", []):
-                genre, _ = Genre.objects.get_or_create(
-                    name=genre_name, defaults={"slug": slugify(genre_name)}
-                )
-                anime.genres.add(genre)
-
-            studios = item.get("studios", {}).get("nodes", [])
-            if studios:
-                studio_name = studios[0].get("name")
-                if studio_name:
-                    studio_obj, _ = Studio.objects.get_or_create(name=studio_name)
-                    anime.studio = studio_obj
-                    anime.save(update_fields=["studio"])
-
-            cover_url = item.get("coverImage", {}).get("extraLarge") or item.get(
-                "coverImage", {}
-            ).get("large")
-            banner_url = item.get("bannerImage")
-            mal_id = item.get("idMal")
-
-            if cover_url or banner_url or mal_id:
-                try:
-                    from apps.animes.tasks.images import fetch_anime_images
-
-                    fetch_anime_images.delay(
-                        anime_id=anime.id,
-                        cover_url=cover_url,
-                        banner_url=banner_url,
-                        mal_id=mal_id,
-                    )
-                except Exception as img_err:
-                    logger.warning(f"Failed to queue image fetch for {title}: {img_err}")
-
-            trailer = item.get("trailer")
-            if trailer and trailer.get("id") and trailer.get("site"):
-                trailer_url = None
-                if trailer["site"].lower() == "youtube":
-                    trailer_url = f"https://www.youtube.com/watch?v={trailer['id']}"
-                elif trailer["site"].lower() == "dailymotion":
-                    trailer_url = f"https://www.dailymotion.com/video/{trailer['id']}"
-                if trailer_url:
-                    anime.trailer_url = trailer_url
-                    anime.save(update_fields=["trailer_url"])
-
-            try:
-                characters_data = item.get("characterPreview", {}).get("edges", [])
-                for edge in characters_data:
-                    node = edge.get("node", {})
-                    role = edge.get("role", "SUPPORTING")
-
-                    char_name = node.get("name", {}).get("full")
-                    if not char_name:
-                        continue
-
-                    char_native = node.get("name", {}).get("native") or ""
-                    char_desc = node.get("description") or ""
-                    char_img = node.get("image", {}).get("large")
-                    char_anilist_id = node.get("id")
-
-                    if char_anilist_id:
-                        character, _ = Character.objects.update_or_create(
-                            anilist_id=char_anilist_id,
-                            defaults={
-                                "name": char_name,
-                                "name_native": char_native,
-                                "description": char_desc,
-                                "image_url": char_img,
-                            },
-                        )
-                    else:
-                        character, _ = Character.objects.update_or_create(
-                            name=char_name,
-                            defaults={
-                                "name_native": char_native,
-                                "description": char_desc,
-                                "image_url": char_img,
-                            },
-                        )
-
-                    voice_actors = edge.get("voiceActors", [])
-                    voice_actor = None
-                    if voice_actors:
-                        va_node = voice_actors[0]
-                        va_name = va_node.get("name", {}).get("full")
-                        if va_name:
-                            va_native = va_node.get("name", {}).get("native") or ""
-                            va_img = va_node.get("image", {}).get("large")
-                            va_anilist_id = va_node.get("id")
-                            if va_anilist_id:
-                                voice_actor, _ = Staff.objects.update_or_create(
-                                    anilist_id=va_anilist_id,
-                                    defaults={
-                                        "name": va_name,
-                                        "name_native": va_native,
-                                        "image_url": va_img,
-                                    },
-                                )
-                            else:
-                                voice_actor, _ = Staff.objects.update_or_create(
-                                    name=va_name,
-                                    defaults={"name_native": va_native, "image_url": va_img},
-                                )
-
-                    role_map = {
-                        "MAIN": AnimeCharacter.Role.MAIN,
-                        "SUPPORTING": AnimeCharacter.Role.SUPPORTING,
-                        "BACKGROUND": AnimeCharacter.Role.BACKGROUND,
-                    }
-                    AnimeCharacter.objects.update_or_create(
-                        anime=anime,
-                        character=character,
-                        voice_actor=voice_actor,
-                        defaults={"role": role_map.get(role, AnimeCharacter.Role.SUPPORTING)},
-                    )
-            except Exception as char_err:
-                logger.warning(f"Failed to import characters for {title}: {char_err}")
-
-            try:
-                staff_data = item.get("staffPreview", {}).get("edges", [])
-                for edge in staff_data:
-                    node = edge.get("node", {})
-                    role = edge.get("role", "")
-
-                    staff_name = node.get("name", {}).get("full")
-                    if not staff_name:
-                        continue
-
-                    staff_native = node.get("name", {}).get("native") or ""
-                    staff_img = node.get("image", {}).get("large")
-                    staff_anilist_id = node.get("id")
-
-                    if staff_anilist_id:
-                        staff_member, _ = Staff.objects.update_or_create(
-                            anilist_id=staff_anilist_id,
-                            defaults={
-                                "name": staff_name,
-                                "name_native": staff_native,
-                                "image_url": staff_img,
-                            },
-                        )
-                    else:
-                        staff_member, _ = Staff.objects.update_or_create(
-                            name=staff_name,
-                            defaults={"name_native": staff_native, "image_url": staff_img},
-                        )
-
-                    AnimeStaff.objects.update_or_create(
-                        anime=anime,
-                        staff=staff_member,
-                        role=role,
-                    )
-            except Exception as staff_err:
-                logger.warning(f"Failed to import staff for {title}: {staff_err}")
-
-            if anime.mal_id:
-                try:
-                    from apps.animes.tasks.themes import sync_theme_songs
-
-                    sync_theme_songs.delay(anime_id=anime.id)
-                except Exception as theme_err:
-                    logger.warning(f"Failed to queue theme sync for {title}: {theme_err}")
-
-            source_slug = request.data.get("source_slug")
-            if source_slug:
-                self._update_relation_slug(source_slug, anilist_id, anime.slug)
-
             return Response(
                 {
-                    "slug": anime.slug,
-                    "title": anime.title,
-                    "imported": True,
+                    "slug": result.slug,
+                    "title": result.title,
+                    "imported": result.imported,
                 }
             )
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"AniList HTTP error for {anilist_id}: {e}", exc_info=True)
-            return Response(
-                {"error": "External API error"},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        except httpx.RequestError as e:
-            logger.error(f"AniList request error for {anilist_id}: {e}", exc_info=True)
-            return Response(
-                {"error": "Could not reach external API"},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        except Exception as e:
-            logger.error(f"Error importing franchise anime {anilist_id}: {e}", exc_info=True)
-            return Response(
-                {"error": "Import failed"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        except FranchiseImportError as exc:
+            return Response({"error": exc.message}, status=exc.status_code)
 
     @staticmethod
     def _get_client_ip(request):
@@ -996,24 +494,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         if x_forwarded_for:
             return x_forwarded_for.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR", "unknown")
-
-    @staticmethod
-    def _update_relation_slug(source_slug, anilist_id, target_slug):
-        try:
-            source_anime = Anime.objects.get(slug=source_slug)
-            relations = source_anime.relations or []
-            updated = False
-            for rel in relations:
-                if rel.get("id") == anilist_id and not rel.get("slug"):
-                    rel["slug"] = target_slug
-                    updated = True
-            if updated:
-                source_anime.relations = relations
-                source_anime.save(update_fields=["relations"])
-        except Anime.DoesNotExist:
-            pass
-        except Exception as e:
-            logger.warning(f"Failed to update relation slug for {source_slug}: {e}")
 
 class GenreViewSet(ReadOnlyModelViewSet):
     queryset = Genre.objects.all().order_by("name")
