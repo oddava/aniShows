@@ -228,7 +228,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 <button
                     onClick={toggleDropdown}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-dark-200/90 backdrop-blur-xl text-gray-300 font-bold text-sm sm:text-base border border-white/10 transition-colors"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-dark-200  text-gray-300 font-bold text-sm sm:text-base border border-dark-50 transition-colors"
                 >
                     {isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -240,7 +240,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 </button>
 
                 {isOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100]">
+                    <div className="absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100  border border-dark-50 rounded-2xl shadow-none z-[100]">
                         {STATUS_OPTIONS.map((option, index) => (
                             <button
                                 key={option.value}
@@ -249,7 +249,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                             >
                                 <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
                                     {option.icon && (
-                                        <option.icon className={`w-4 h-4 transition-all duration-300 ${option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100' : 'opacity-100'}`} />
+                                        <option.icon className={`w-4 h-4 transition-all duration-300 ${option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100  ' : 'opacity-100'}`} />
                                     )}
                                 </div>
                                 <span className="font-bold text-sm text-gray-300 group-hover:text-white">
@@ -266,7 +266,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     return (
         <div className="w-full relative status-selector-container">
             {/* Sleek Main Controls Bar */}
-            <div className="relative flex items-center justify-between p-1.5 sm:p-2 bg-dark-200/60 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-lg shadow-black/20 z-10">
+            <div className="relative flex items-center justify-between p-1.5 sm:p-2 bg-dark-200  rounded-2xl border border-dark-50   z-10">
 
                 {/* Status Dropdown - Left */}
                 <div className="relative flex-shrink-0" ref={dropdownRef}>
@@ -291,7 +291,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
                     {/* Status Menu */}
                     {isOpen && (
-                        <div className="absolute top-full left-0 mt-3 w-56 p-2 bg-dark-100/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.7)] z-[100]">
+                        <div className="absolute top-full left-0 mt-3 w-56 p-2 bg-dark-100  border border-dark-50 rounded-2xl shadow-none z-[100]">
                             {STATUS_OPTIONS.map((option, index) => (
                                 <button
                                     key={option.value}
@@ -301,7 +301,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                 >
                                     <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
                                         {option.icon && (
-                                            <option.icon className={`w-4 h-4 transition-all duration-300 ${currentStatus === option.value ? option.color.replace('bg-', 'text-') : option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100' : 'opacity-100'}`} />
+                                            <option.icon className={`w-4 h-4 transition-all duration-300 ${currentStatus === option.value ? option.color.replace('bg-', 'text-') : option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100  ' : 'opacity-100'}`} />
                                         )}
                                     </div>
                                     <span className={`font-bold text-sm transition-colors ${currentStatus === option.value ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
@@ -411,7 +411,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
                     <div
                         ref={detailsRef}
-                        className="absolute top-[calc(100%+12px)] right-0 w-[calc(100vw-2rem)] sm:w-[380px] max-w-full bg-dark-100/95 backdrop-blur-3xl rounded-3xl border border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] z-[70] overflow-hidden"
+                        className="absolute top-[calc(100%+12px)] right-0 w-[calc(100vw-2rem)] sm:w-[380px] max-w-full bg-dark-100  rounded-3xl border border-dark-50 shadow-none z-[70] overflow-hidden"
                     >
                         {/* Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.02]">
@@ -463,7 +463,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                         type="date"
                                         value={startedAt}
                                         onChange={(e) => setStartedAt(e.target.value)}
-                                        className="w-full bg-dark-200/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all shadow-inner [color-scheme:dark]"
+                                        className="w-full bg-dark-200 border border-dark-50 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all  [color-scheme:dark]"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -474,7 +474,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                         type="date"
                                         value={finishedAt}
                                         onChange={(e) => setFinishedAt(e.target.value)}
-                                        className="w-full bg-dark-200/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all shadow-inner [color-scheme:dark]"
+                                        className="w-full bg-dark-200 border border-dark-50 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all  [color-scheme:dark]"
                                     />
                                 </div>
                             </div>
@@ -492,10 +492,10 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                 </div>
                                 <button
                                     onClick={() => setIsRewatching(!isRewatching)}
-                                    className={`relative w-12 h-6 rounded-full transition-all duration-300 shadow-inner ${isRewatching ? 'bg-cyan-500' : 'bg-dark-100 border border-gray-700'
+                                    className={`relative w-12 h-6 rounded-full transition-all duration-300  ${isRewatching ? 'bg-cyan-500' : 'bg-dark-100 border border-gray-700'
                                         }`}
                                 >
-                                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ease-spring ${isRewatching ? 'translate-x-6' : 'translate-x-0.5'
+                                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white  transition-transform duration-300 ease-spring ${isRewatching ? 'translate-x-6' : 'translate-x-0.5'
                                         }`} />
                                 </button>
                             </div>
@@ -509,7 +509,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
                                     placeholder="Write your private thoughts..."
-                                    className="w-full bg-dark-200/50 border border-white/10 rounded-2xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all shadow-inner"
+                                    className="w-full bg-dark-200 border border-dark-50 rounded-2xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all "
                                     rows={3}
                                 />
                             </div>

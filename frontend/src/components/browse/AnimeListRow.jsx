@@ -21,10 +21,10 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
     return (
         <Link
             to={`/anime/${anime.slug}`}
-            className="relative flex gap-3 sm:gap-5 p-2.5 sm:p-4 bg-dark-100/40 hover:bg-dark-100/80 rounded-2xl border border-gray-800/60 hover:border-accent/40 hover:shadow-2xl hover:shadow-accent/5 transition-all duration-300 group overflow-hidden"
+            className="relative flex gap-3 sm:gap-5 p-2.5 sm:p-4 bg-dark-100 hover:bg-dark-100/80 rounded-2xl border border-gray-800/60 hover:border-accent/40   transition-all duration-300 group overflow-hidden"
         >
             {/* Hover Glow Effect */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-accent/0 via-accent/5 to-accent/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="absolute -inset-1 bg-dark-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             {/* Left: Image Container */}
             <div className="relative flex-shrink-0 z-10">
@@ -32,12 +32,12 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     src={anime.cover_image}
                     alt={anime.title}
                     loading="lazy"
-                    className="w-[85px] sm:w-[100px] h-[120px] sm:h-[140px] object-cover rounded-xl shadow-lg ring-1 ring-white/5 group-hover:ring-accent/20 transition-all duration-300"
+                    className="w-[85px] sm:w-[100px] h-[120px] sm:h-[140px] object-cover rounded-xl  ring-1 ring-white/5 group-hover:ring-accent/20 transition-all duration-300"
                 />
 
                 {/* Mobile Rating Badge */}
                 {anime.rating && (
-                    <div className="sm:hidden absolute top-1.5 right-1.5 flex items-center gap-1 bg-dark-200/90 backdrop-blur-md px-1.5 py-0.5 rounded-lg border border-white/10 shadow-lg">
+                    <div className="sm:hidden absolute top-1.5 right-1.5 flex items-center gap-1 bg-dark-200/90  px-1.5 py-0.5 rounded-lg border border-white/10 ">
                         <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
                         <span className="text-[11px] font-bold text-white">{anime.rating}</span>
                     </div>
@@ -78,7 +78,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                         {anime.genres?.slice(0, 3).map((genre) => (
                             <span
                                 key={genre.id}
-                                className="px-2 py-0.5 bg-dark-50/50 text-[10px] sm:text-xs text-gray-400 rounded-lg border border-gray-800 shadow-sm"
+                                className="px-2 py-0.5 bg-dark-50/50 text-[10px] sm:text-xs text-gray-400 rounded-lg border border-gray-800 "
                             >
                                 {genre.name}
                             </span>

@@ -15,9 +15,9 @@ function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
                 src={anime.cover_image}
                 alt={anime.title}
                 loading="lazy"
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                className="w-full h-full object-cover  transition-transform duration-300"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="absolute bottom-2 left-2 right-2">
                     <h3 className="text-xs font-bold text-white line-clamp-2">
                         {displayTitle}

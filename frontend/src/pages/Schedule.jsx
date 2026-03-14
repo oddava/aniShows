@@ -97,7 +97,7 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
               className={`
                 flex-shrink-0 px-3 py-2 rounded-lg border transition-all duration-200 min-w-[60px]
                 ${isSelected
-                  ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
+                  ? 'bg-accent text-white border-accent  '
                   : 'bg-dark-100 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-white'
                 }
                 ${isToday && !isSelected ? 'border-accent/30' : ''}
@@ -139,7 +139,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
         className={`
           bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300
           ${isUrgent
-            ? 'border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.15)] hover:border-green-500'
+            ? 'border-green-500/40  hover:border-green-500'
             : 'border-gray-800 hover:border-accent/40'
           }
         `}
@@ -156,10 +156,10 @@ const ScheduleCard = ({ anime, onUpdate }) => {
             {/* Episode Badge - Top Right */}
             <div className="absolute top-2 right-2">
               <div className={`
-                px-2 py-1 rounded-md text-xs font-bold shadow-lg
+                px-2 py-1 rounded-md text-xs font-bold 
                 ${isUrgent
                   ? 'bg-green-500 text-white'
-                  : 'bg-dark/90 backdrop-blur-sm text-white border border-white/30'
+                  : 'bg-dark text-white border border-white/30'
                 }
               `}>
                 EP {anime.next_airing_episode}
@@ -167,7 +167,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
             </div>
 
             {/* Airing Info Overlay - Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8 pb-3 px-3">
+            <div className="absolute bottom-0 left-0 right-0 bg-black/80 pt-8 pb-3 px-3">
               {hasAired ? (
                 <div className="flex items-center gap-2">
                   <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500/20">

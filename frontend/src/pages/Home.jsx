@@ -128,22 +128,22 @@ export default function Home() {
                                     sizes="100vw"
                                     alt={`${anime.title} banner image`}
                                     loading={index === 0 ? 'eager' : 'lazy'}
-                                    className="w-full h-full object-cover scale-[1.02]"
+                                    className="w-full h-full object-cover "
                                 />
                             </div>
                         ))}
-                        <div className="absolute inset-0 bg-gradient-to-r from-dark/95 via-dark/70 to-transparent" />
+                        <div className="absolute inset-0 bg-dark/80" />
                         <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent h-full" />
                     </div>
 
                     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
                         {heroAnime && (
                             <div className="max-w-2xl animate-fade-in transition-all duration-500">
-                                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 leading-tight text-white/90 drop-shadow-2xl tracking-tight">
+                                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 leading-tight text-white/90  tracking-tight">
                                     {heroAnime.title}
                                 </h1>
 
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base font-medium text-gray-300 mb-4 sm:mb-5 drop-shadow-md">
+                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base font-medium text-gray-300 mb-4 sm:mb-5 ">
                                     {heroAnime.rating && (
                                         <span className="flex items-center gap-1.5 text-yellow-400 font-bold">
                                             <Star className="w-4 h-4 fill-current" />
@@ -166,14 +166,14 @@ export default function Home() {
                                     )}
                                 </div>
 
-                                <p className="text-sm sm:text-base md:text-lg text-gray-300 mb-6 sm:mb-8 max-w-2xl line-clamp-2 md:line-clamp-3 font-normal leading-relaxed drop-shadow-md">
+                                <p className="text-sm sm:text-base md:text-lg text-gray-300 mb-6 sm:mb-8 max-w-2xl line-clamp-2 md:line-clamp-3 font-normal leading-relaxed ">
                                     {heroAnime.synopsis}
                                 </p>
 
                                 <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                                     <Link
                                         to={`/anime/${heroAnime.slug}`}
-                                        className="bg-accent hover:bg-accent-light text-white flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base min-w-[140px] transition-all duration-300 shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.5)]"
+                                        className="bg-accent hover:bg-accent-light text-white flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base min-w-[140px] transition-all duration-300  "
                                     >
                                         <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                                         Play Now
@@ -183,8 +183,8 @@ export default function Home() {
                                             onClick={handleAddToList}
                                             disabled={heroListLoading || isHeroInList}
                                             className={`flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base transition-all duration-300 min-w-[140px] ${isHeroInList
-                                                ? 'bg-white/10 text-white cursor-default backdrop-blur-md border border-white/5'
-                                                : 'bg-dark-100/50 hover:bg-white/10 text-white backdrop-blur-md border border-white/10 hover:border-white/20'
+                                                ? 'bg-white/10 text-white cursor-default  border border-white/5'
+                                                : 'bg-dark-100 hover:bg-white/10 text-white  border border-white/10 hover:border-white/20'
                                                 }`}
                                         >
                                             {heroListLoading ? (

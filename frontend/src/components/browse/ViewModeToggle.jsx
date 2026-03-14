@@ -21,7 +21,7 @@ export default function ViewModeToggle({ viewMode, onChange, showLabels = false 
             title={mode.label}
             className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-all duration-200
               ${isActive
-                ? 'bg-accent text-white shadow-sm shadow-accent/20' 
+                ? 'bg-accent text-white  ' 
                 : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             aria-pressed={isActive}

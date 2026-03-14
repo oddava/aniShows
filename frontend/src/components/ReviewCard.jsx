@@ -34,7 +34,7 @@ const LetterAvatar = ({ name, size = 'md' }) => {
 
     return (
         <div
-            className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white shadow-lg`}
+            className={`${sizeClasses[size]} rounded-full flex items-center justify-center font-bold text-white `}
             style={{ backgroundColor: bgColor }}
         >
             {letter}
@@ -263,7 +263,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                 {isMenuOpen && (
                                     <>
                                         <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)} />
-                                        <div className="absolute right-0 top-full mt-1 w-28 bg-dark-200 rounded-lg border border-gray-700 shadow-xl z-20 overflow-hidden">
+                                        <div className="absolute right-0 top-full mt-1 w-28 bg-dark-200 rounded-lg border border-gray-700  z-20 overflow-hidden">
                                             {onEdit && (
                                                 <button
                                                     onClick={() => { onEdit(review); setIsMenuOpen(false); }}

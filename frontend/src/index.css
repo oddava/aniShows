@@ -1,10 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
 @import "tailwindcss";
 @import "./styles/components/utilities.css";
 @import "./styles/components/cards.css";
 @import "./styles/components/animations.css";
-@import "./styles/themes/retro-crt.css";
-@import "./styles/themes/retro-anime.css";
 
 @theme {
   --color-dark: #0f0f0f;
@@ -25,54 +22,23 @@
   body {
     @apply bg-dark text-gray-200 selection:bg-accent/30;
   }
-
-  /* Common Window styling for retro modes */
-  .retro-window {
-    border: 2px solid;
-    border-color: #ffffff #808080 #808080 #ffffff !important;
-    background: var(--color-dark-100);
-    position: relative;
-    padding-top: 24px;
-  }
-
-  .retro-window::before {
-    content: attr(data-title);
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    right: 2px;
-    height: 18px;
-    background: #000080;
-    color: white !important;
-    font-size: 12px;
-    font-family: 'VT323', monospace;
-    display: flex;
-    align-items: center;
-    padding: 0 4px;
-    z-index: 10;
-  }
-
-  [data-theme="retro-anime"] .retro-window::before {
-    background: #000080;
-    color: white !important;
-  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-accent hover:bg-accent-dark text-white font-semibold py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-accent/20 active:scale-95 disabled:opacity-50;
+    @apply bg-accent hover:bg-accent-dark text-white font-semibold py-2.5 px-6 rounded-md transition-none disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply bg-dark-100 hover:bg-dark-50 text-white font-semibold py-2.5 px-6 rounded-xl border border-gray-800 transition-all active:scale-95 disabled:opacity-50;
+    @apply bg-transparent hover:bg-dark-50 text-white font-semibold py-2.5 px-6 rounded-md border border-dark-50 transition-none disabled:opacity-50;
   }
 
   .badge {
-    @apply px-3 py-1 bg-dark-100 text-gray-400 rounded-full text-xs font-medium border border-gray-800 transition-all;
+    @apply px-3 py-1 bg-dark-100 text-gray-400 rounded-md text-xs font-medium border border-dark-50 transition-none;
   }
 
   .input {
-    @apply bg-dark-200 border border-gray-800 text-white rounded-xl px-4 py-3 text-sm transition-all focus:outline-none focus:border-accent focus:ring-4 focus:ring-accent/10 placeholder:text-gray-600;
+    @apply bg-dark-50 border border-dark-50 text-white rounded-md px-4 py-3 text-sm transition-none focus:outline-none focus:border-accent placeholder:text-gray-500;
   }
 
   .heatmap-cell {

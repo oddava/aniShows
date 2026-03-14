@@ -190,7 +190,7 @@ export default function Seasonal() {
                             </button>
 
                             <div className="text-center">
-                                <h1 className="text-3xl md:text-4xl font-extrabold text-white/90 tracking-tight drop-shadow-xl">
+                                <h1 className="text-3xl md:text-4xl font-extrabold text-white/90 tracking-tight ">
                                     {currentSeasonData?.label} {selectedYear}
                                 </h1>
                                 <p className="text-accent text-xs font-bold uppercase tracking-[0.2em] mt-2">{currentSeasonData?.months}</p>
@@ -215,7 +215,7 @@ export default function Seasonal() {
                         {/* Season Pills */}
                         <div
                             ref={seasonTabsRef}
-                            className="flex items-center bg-dark-100/50 backdrop-blur-sm rounded-full p-1.5 border border-gray-800/50"
+                            className="flex items-center bg-dark-100 rounded-full p-1.5 border border-gray-800/50"
                             role="tablist"
                             aria-label="Select Season"
                         >
@@ -243,7 +243,7 @@ export default function Seasonal() {
                             id="year-select"
                             value={selectedYear}
                             onChange={(e) => updateYear(parseInt(e.target.value))}
-                            className="px-5 py-2.5 bg-dark-100/50 backdrop-blur-sm border border-gray-800/50 rounded-full text-sm font-bold text-gray-300 focus:outline-none focus:border-accent/50 cursor-pointer appearance-none text-center"
+                            className="px-5 py-2.5 bg-dark-100 border border-gray-800/50 rounded-full text-sm font-bold text-gray-300 focus:outline-none focus:border-accent/50 cursor-pointer appearance-none text-center"
                             aria-label="Select year"
                         >
                             {YEAR_OPTIONS.map((year) => (

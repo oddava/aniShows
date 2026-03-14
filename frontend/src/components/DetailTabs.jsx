@@ -127,14 +127,14 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
                         </span>
 
                         <div className="absolute bottom-0 left-0 right-0 p-3">
-                            <h3 className="text-sm font-bold text-white truncate drop-shadow-lg">
+                            <h3 className="text-sm font-bold text-white truncate ">
                                 {role.character.name}
                             </h3>
                             {role.voice_actor && (
                                 <Link
                                     to={`/staff/${role.voice_actor.id}`}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-xs text-white/70 mt-0.5 truncate drop-shadow-md hover:text-accent transition-colors block"
+                                    className="text-xs text-white/70 mt-0.5 truncate  hover:text-accent transition-colors block"
                                 >
                                     {role.voice_actor.name}
                                 </Link>
@@ -187,7 +187,7 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
                     onClick={() => onStaffClick(staffRole)}
                     className="flex flex-col items-center text-center p-6 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors cursor-pointer group"
                 >
-                    <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4 shadow-lg group-hover:border-gray-600 transition-colors">
+                    <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4  group-hover:border-gray-600 transition-colors">
                         <img
                             src={staffRole.staff.image || '/placeholder-avatar.png'}
                             alt={staffRole.staff.name}

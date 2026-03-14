@@ -68,11 +68,11 @@ export default function TrendingCarousel({
                 src={getOptimizedImageUrl(item, 'cover', 'medium')}
                 alt={item.title}
                 loading={index < 3 ? "eager" : "lazy"}
-                className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                className="w-full h-full object-cover transition-all duration-300 "
               />
 
               {/* Hover Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/40 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-2">
+              <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-2">
                 <h4 className="font-semibold text-[11px] text-white mb-1 line-clamp-2">
                   {item.title}
                 </h4>

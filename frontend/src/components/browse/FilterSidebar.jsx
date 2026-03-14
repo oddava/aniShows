@@ -335,7 +335,7 @@ export default function FilterSidebar({
                     onClick={() => onToggleGenre(genre.slug)}
                     className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200
                       ${isSelected
-                        ? 'bg-accent text-white shadow-sm shadow-accent/20'
+                        ? 'bg-accent text-white  '
                         : 'bg-dark-100 text-gray-400 border border-gray-700 hover:border-accent/50 hover:text-white'
                       }`}
                   >
@@ -363,7 +363,7 @@ export default function FilterSidebar({
           {!isMobile && (
             <button
               onClick={onApplyFilters}
-              className="w-full py-2.5 text-sm font-bold text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors shadow-lg shadow-accent/20"
+              className="w-full py-2.5 text-sm font-bold text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors  "
             >
               Apply Filters
             </button>

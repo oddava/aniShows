@@ -40,13 +40,13 @@ export default function MobileFilterDrawer({
     <div className="fixed inset-0 z-[100] lg:hidden" ref={drawerRef}>
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/70  animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
       
       {/* Drawer */}
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-[360px] sm:max-w-[380px] bg-dark-100 border-l border-gray-700 overflow-hidden flex flex-col shadow-2xl">
+      <div className="absolute right-0 top-0 bottom-0 w-full max-w-[360px] sm:max-w-[380px] bg-dark-100 border-l border-gray-700 overflow-hidden flex flex-col ">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-dark-100 border-b border-gray-700 p-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -75,7 +75,7 @@ export default function MobileFilterDrawer({
           <button
             onClick={onApply}
             disabled={isApplying}
-            className="w-full py-3 text-sm font-bold flex items-center justify-center gap-2 text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors shadow-lg shadow-accent/20 disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full py-3 text-sm font-bold flex items-center justify-center gap-2 text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors   disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {isApplying ? (
               <>

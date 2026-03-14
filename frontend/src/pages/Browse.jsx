@@ -617,7 +617,7 @@ export default function Browse() {
                     key={genreSlug}
                     onClick={() => toggleArrayParam('genre', genreSlug)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${isActive
-                      ? 'bg-accent text-white shadow-sm shadow-accent/20'
+                      ? 'bg-accent text-white  '
                       : 'bg-dark-100 text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600'
                       }`}
                   >
@@ -643,7 +643,7 @@ export default function Browse() {
                   }}
                   className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all whitespace-nowrap
                     ${activeTab === 'search'
-                      ? 'bg-accent text-white shadow-lg shadow-accent/25 scale-105'
+                      ? 'bg-accent text-white   '
                       : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
                     }`}
                 >
@@ -660,7 +660,7 @@ export default function Browse() {
                     onClick={() => handleTabChange(tab.key)}
                     className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all whitespace-nowrap
                       ${isActive
-                        ? 'bg-accent text-white shadow-lg shadow-accent/25 scale-105'
+                        ? 'bg-accent text-white   '
                         : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
                       }`}
                   >
@@ -676,7 +676,7 @@ export default function Browse() {
           <div className="flex gap-6 lg:gap-8">
             {/* Filter Sidebar - Desktop */}
             <aside className="hidden lg:block w-60 flex-shrink-0">
-              <div className="sticky top-24 bg-dark-100/50 backdrop-blur-sm rounded-2xl border border-gray-800 p-5 h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar">
+              <div className="sticky top-24 bg-dark-100 rounded-2xl border border-gray-800 p-5 h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar">
                 <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-800">
                   <Filter className="w-5 h-5 text-accent" />
                   <h2 className="text-base font-bold text-accent">Filters</h2>

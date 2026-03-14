@@ -131,7 +131,7 @@ const useShare = () => {
         navigator.clipboard.writeText(window.location.href);
         // Could use a toast notification here instead of alert
         const toast = document.createElement('div');
-        toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
+        toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg  z-50 animate-fade-in';
         toast.textContent = 'Link copied!';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2000);
@@ -148,7 +148,7 @@ const RelatedAnimeCard = memo(({ anime, getImageUrl, accentColor }) => (
             <img
                 src={getImageUrl(anime.cover_image)}
                 alt={anime.title}
-                className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                className="w-full h-full object-cover transition-transform "
                 loading="lazy"
             />
         </div>
@@ -180,7 +180,7 @@ const MobileRelatedCard = memo(({ anime, getImageUrl }) => (
             <img
                 src={getImageUrl(anime.cover_image)}
                 alt={anime.title}
-                className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                className="w-full h-full object-cover transition-transform "
                 loading="lazy"
             />
         </div>
@@ -208,7 +208,7 @@ const TabButton = memo(({ tab, isActive, onClick, accentColor, count }) => {
             onClick={onClick}
             className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
                 ${isActive
-                    ? 'text-white shadow-lg'
+                    ? 'text-white '
                     : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             style={isActive ? {
                 backgroundColor: accentColor || '#8b5cf6',
@@ -523,7 +523,7 @@ export default function AnimeDetail() {
                                         <Link
                                             key={genre.id}
                                             to={`/browse?genre=${genre.slug}`}
-                                            className="px-4 py-1.5 bg-dark-100 text-gray-300 rounded-full text-xs font-bold border border-gray-700 hover:text-white transition-all shadow-sm"
+                                            className="px-4 py-1.5 bg-dark-100 text-gray-300 rounded-full text-xs font-bold border border-gray-700 hover:text-white transition-all "
                                             style={{ '--hover-bg': mappedAccent }}
                                             onMouseEnter={(e) => {
                                                 e.currentTarget.style.backgroundColor = mappedAccent;
@@ -540,7 +540,7 @@ export default function AnimeDetail() {
                                 </div>
 
                                 {/* Main Actions */}
-                                <div className={`flex flex-col gap-3 sm:gap-4 md:gap-5 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border relative z-20 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none border-t-0 pb-6' : 'bg-dark-100/40 border-gray-800/50 backdrop-blur-md'}`}
+                                <div className={`flex flex-col gap-3 sm:gap-4 md:gap-5 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border relative z-20 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none border-t-0 pb-6' : 'bg-dark-100 border-dark-50'}`}
                                     data-title="Tracking Actions"
                                 >
                                     {isAuthenticated ? (
@@ -565,16 +565,16 @@ export default function AnimeDetail() {
                                                         title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
                                                         className={`p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border transition-all duration-300 group flex-shrink-0
                                                             ${isFavorite
-                                                                ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20'
+                                                                ? 'bg-red-500 border-red-500 text-white  '
                                                                 : 'bg-dark-200 border-gray-700 text-gray-400 hover:border-red-500/50 hover:text-red-500'}`}
                                                     >
-                                                        <Heart className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 transition-transform group-hover:scale-110 ${isFavorite ? 'fill-current' : ''}`} />
+                                                        <Heart className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 transition-transform  ${isFavorite ? 'fill-current' : ''}`} />
                                                     </button>
 
                                                     <button
                                                         onClick={handleShare}
                                                         title="Share Anime"
-                                                        className="p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300 active:scale-95 flex-shrink-0"
+                                                        className="p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300  flex-shrink-0"
                                                     >
                                                         <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -608,7 +608,7 @@ export default function AnimeDetail() {
                             </div>
 
                             {/* Tab Navigation */}
-                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100/60 backdrop-blur-md border-white/5'}`}
+                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (
@@ -678,7 +678,7 @@ export default function AnimeDetail() {
                                             canReview ? (
                                                 <button
                                                     onClick={() => setIsWritingReview(true)}
-                                                    className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl shadow-lg text-white font-bold bg-accent"
+                                                    className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent"
                                                     style={{
                                                         backgroundColor: accentColor || '#8b5cf6',
                                                         boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
@@ -687,7 +687,7 @@ export default function AnimeDetail() {
                                                     Write a Review
                                                 </button>
                                             ) : (
-                                                <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 shadow-inner">
+                                                <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 ">
                                                     Add to list to write a review
                                                 </div>
                                             )

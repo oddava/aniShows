@@ -1,10 +1,10 @@
 /* Hide scrollbar utility */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 .scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  display: none;
 }
 
 /* Custom Scrollbar for dark theme */
@@ -18,27 +18,17 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #374151; /* gray-700 */
-  border-radius: 4px;
+  background-color: var(--color-dark-50);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #4b5563; /* gray-600 */
+  background-color: var(--color-dark-50);
 }
 
-/* Glassmorphism utilities */
-.glass {
-  background: rgba(26, 26, 26, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.glass-panel {
-  background: rgba(26, 26, 26, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Replaced glass with solid flats */
+.glass, .glass-panel {
+  background: var(--color-dark-100);
+  border: 1px solid var(--color-dark-50);
 }
 
 /* Hide number input spinners */
