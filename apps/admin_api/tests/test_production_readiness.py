@@ -10,6 +10,7 @@ from apps.admin_api.services.reports_service import generate_report
 from apps.animes.models import Anime, Genre, Review, ReviewReport
 from apps.core.middleware.logging_middleware import AdminAuditMiddleware
 from apps.core.models import AdminPanelSettings
+from apps.users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 
@@ -232,3 +233,139 @@ class TestReportsServiceCache(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(refreshed.status_code, 200)
         self.assertEqual(payload_builder.call_count, 2)
+
+
+class TestRuntimePolicyControls(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.enrich_patch = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        self.enrich_patch.start()
+        self.addCleanup(self.enrich_patch.stop)
+
+        self.admin = User.objects.create_user(
+            username="ops_admin",
+            email="ops-admin@example.com",
+            password="password123",
+            is_staff=True,
+        )
+        self.regular_user = User.objects.create_user(
+            username="regular_user",
+            email="regular@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=self.regular_user, defaults={"email_verified": True})
+        self.anime = Anime.objects.create(
+            title="Runtime Controls Anime",
+            slug="runtime-controls-anime",
+            synopsis="Anime for runtime controls tests.",
+            status="Airing",
+            anime_type="TV",
+        )
+        self.genre = Genre.objects.create(name="Runtime", slug="runtime")
+        self.anime.genres.add(self.genre)
+
+    def _set_settings(self, payload: dict):
+        AdminPanelSettings.objects.update_or_create(
+            key="global",
+            defaults={"data": payload, "updated_by": self.admin},
+        )
+        cache.clear()
+
+    def test_maintenance_mode_blocks_public_api_but_not_admin(self):
+        self._set_settings({"general": {"maintenanceMode": True}})
+
+        public_response = self.client.get("/api/v1/genres/")
+        self.assertEqual(public_response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        self.client.force_authenticate(user=self.admin)
+        admin_response = self.client.get("/api/v1/admin/settings/")
+        self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
+
+    def test_registration_can_be_disabled(self):
+        self._set_settings({"general": {"allowRegistration": False}})
+
+        response = self.client.post(
+            "/api/v1/auth/register/",
+            {"username": "newuser123", "email": "newuser@example.com", "password": "securepass123"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_register_respects_dynamic_username_length(self):
+        self._set_settings({"users": {"minUsernameLength": 6, "maxUsernameLength": 8}})
+
+        too_short = self.client.post(
+            "/api/v1/auth/register/",
+            {"username": "short", "email": "short@example.com", "password": "securepass123"},
+            format="json",
+        )
+        self.assertEqual(too_short.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", too_short.data)
+
+        too_long = self.client.post(
+            "/api/v1/auth/register/",
+            {
+                "username": "verylongusername",
+                "email": "verylong@example.com",
+                "password": "securepass123",
+            },
+            format="json",
+        )
+        self.assertEqual(too_long.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", too_long.data)
+
+    def test_registration_can_skip_email_verification_when_disabled(self):
+        self._set_settings({"users": {"emailVerification": False}})
+
+        response = self.client.post(
+            "/api/v1/auth/register/",
+            {
+                "username": "verifiedonregister",
+                "email": "verified-on-register@example.com",
+                "password": "securepass123",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(username="verifiedonregister")
+        self.assertTrue(user.userprofile.email_verified)
+
+    def test_reviews_can_be_disabled(self):
+        self._set_settings({"content": {"enableReviews": False}})
+        self.client.force_authenticate(user=self.regular_user)
+        UserAnimeList.objects.create(
+            user=self.regular_user,
+            anime=self.anime,
+            status=UserAnimeList.UserAnimeStatus.completed,
+        )
+
+        response = self.client.post(
+            "/api/v1/reviews/",
+            {"anime_slug": self.anime.slug, "rating": 8, "text": "Should be blocked"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_comments_can_be_disabled(self):
+        self._set_settings({"content": {"enableReviews": True, "allowComments": False}})
+
+        author = User.objects.create_user(
+            username="review_author",
+            email="review-author@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=author, defaults={"email_verified": True})
+        review = Review.objects.create(
+            user=author,
+            anime=self.anime,
+            rating=7,
+            text="Comment control test review.",
+        )
+
+        self.client.force_authenticate(user=self.regular_user)
+        response = self.client.post(
+            f"/api/v1/reviews/{review.id}/add_comment/",
+            {"text": "Comment should be blocked"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

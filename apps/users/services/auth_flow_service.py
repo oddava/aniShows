@@ -6,6 +6,7 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.core.services.admin_settings_service import is_email_verification_required
 from apps.users.serializers.users import UserSerializer
 from apps.users.services.cache import invalidate_user_caches
 
@@ -126,10 +127,14 @@ def password_reset_confirm_flow(uidb64: str | None, token: str | None, password:
 
 def register_user_flow(validated_data, auth_service, email_service) -> AuthFlowResult:
     user = auth_service.register_user(validated_data)
-    email_service.send_verification_email(user)
+
+    if is_email_verification_required():
+        email_service.send_verification_email(user)
+        message = "Registration successful. Please check your email to verify your account."
+    else:
+        message = "Registration successful. Email verification is currently optional."
+
     return AuthFlowResult(
-        payload={
-            "message": "Registration successful. Please check your email to verify your account."
-        },
+        payload={"message": message},
         status_code=201,
     )

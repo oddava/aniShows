@@ -339,8 +339,12 @@ describe('Schedule Component', () => {
   });
 
   it('renders airing time countdown for upcoming episodes', async () => {
+    // Create an airing time 2 hours from now, but ensure it stays on the same day
     const future = new Date();
-    future.setHours(future.getHours() + 2); // 2 hours from now
+    future.setHours(future.getHours() + 2);
+    if (future.getDay() !== new Date().getDay()) {
+      future.setDate(future.getDate() - 1);
+    }
     
     const mockAnime = [
       {
@@ -374,9 +378,11 @@ describe('Schedule Component', () => {
   it('renders "Aired" status for past episodes', async () => {
     // Create a date for today that's in the past but still today
     const now = new Date();
-    const today = now.getDay();
     const airDate = new Date(now);
     airDate.setHours(airDate.getHours() - 1); // 1 hour ago today
+    if (airDate.getDay() !== now.getDay()) {
+      airDate.setDate(airDate.getDate() + 1);
+    }
     
     const mockAnime = [
       {

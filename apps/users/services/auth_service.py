@@ -3,6 +3,8 @@ from typing import Dict
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 
+from apps.core.services.admin_settings_service import is_email_verification_required
+
 User = get_user_model()
 
 class AuthService:
@@ -15,10 +17,11 @@ class AuthService:
             email=data["email"],
             password=data["password"],
         )
-        # Profile is auto-created via signal, but ensure email_verified is False
+        verification_required = is_email_verification_required()
+        # Profile is auto-created via signal; sync verification state with panel settings.
         profile = getattr(user, "userprofile", None)
         if profile:
-            profile.email_verified = False
+            profile.email_verified = not verification_required
             profile.save()
         return user
 

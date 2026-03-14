@@ -139,7 +139,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
         className={`
           bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300
           ${isUrgent
-            ? 'border-green-500/40  hover:border-green-500'
+            ? 'border-green-500/40 hover:border-green-500'
             : 'border-gray-800 hover:border-accent/40'
           }
         `}
@@ -150,16 +150,16 @@ const ScheduleCard = ({ anime, onUpdate }) => {
             <img
               src={getImageUrl(anime.cover_image)}
               alt={anime.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-opacity duration-300"
             />
 
             {/* Episode Badge - Top Right */}
-            <div className="absolute top-2 right-2">
+            <div className="absolute top-2 right-2 z-[100]">
               <div className={`
-                px-2 py-1 rounded-md text-xs font-bold 
+                px-2 py-1 rounded-md text-xs font-bold shadow-sm backdrop-blur-md
                 ${isUrgent
                   ? 'bg-green-500 text-white'
-                  : 'bg-dark text-white border border-white/30'
+                  : 'bg-black/60 text-white border border-white/20'
                 }
               `}>
                 EP {anime.next_airing_episode}
@@ -167,24 +167,24 @@ const ScheduleCard = ({ anime, onUpdate }) => {
             </div>
 
             {/* Airing Info Overlay - Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/80 pt-8 pb-3 px-3">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-8 pb-2 px-2.5 z-[100]">
               {hasAired ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500/20">
-                    <CheckCircle2 className="w-3 h-3 text-green-400" />
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20">
+                    <CheckCircle2 className="w-2.5 h-2.5 text-green-400" />
                   </div>
-                  <span className="text-sm font-semibold text-green-400">Aired</span>
+                  <span className="text-xs font-semibold text-green-400">Aired</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <div className={`
-                    flex items-center justify-center w-5 h-5 rounded-full
+                    flex items-center justify-center w-4 h-4 rounded-full
                     ${isUrgent ? 'bg-green-500/20' : 'bg-white/10'}
                   `}>
-                    <Clock className={`w-3 h-3 ${isUrgent ? 'text-green-400' : 'text-white'}`} />
+                    <Clock className={`w-2.5 h-2.5 ${isUrgent ? 'text-green-400' : 'text-white'}`} />
                   </div>
                   <span className={`
-                    text-sm font-semibold
+                    text-xs font-semibold
                     ${isUrgent ? 'text-green-400' : 'text-white'}
                   `}>
                     {timeRemaining}
@@ -196,40 +196,28 @@ const ScheduleCard = ({ anime, onUpdate }) => {
         </div>
 
         {/* Content */}
-        <div className="p-3 flex-grow flex flex-col bg-dark-100 rounded-b-xl">
-          <Link to={`/anime/${anime.slug}`}>
-            <h3 className="text-xs font-semibold text-white line-clamp-2 group-hover:text-accent transition-colors mb-1.5 leading-relaxed">
-              {anime.title}
-            </h3>
-          </Link>
+        <Link to={`/anime/${anime.slug}`} className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl">
+          <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent-light transition-colors">
+            {anime.title}
+          </h3>
 
-          <div className="text-[11px] text-gray-400">
-            {anime.anime_type} • {anime.episode_count} eps
-          </div>
-
-          {/* User Actions */}
-          {isAuthenticated && anime.user_list_status && (
-            <div className="mt-2.5 pt-2 border-t border-gray-800/50">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className={`
-                px-2 py-0.5 rounded font-medium
-                ${anime.user_list_status.status === 'watching'
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-gray-700/50 text-gray-400'
-                  }
-              `}>
-                  {anime.user_list_status.status}
-                </span>
-
-                {anime.user_list_status.status === 'watching' && (
-                  <span className="text-gray-500 text-[11px]">
-                    EP {anime.user_list_status.episodes_watched}/{anime.episode_count}
-                  </span>
-                )}
-              </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-400 mt-auto">
+            <span className="font-medium text-accent-light">{anime.anime_type || 'TV'}</span>
+            
+            <div className="flex items-center gap-1 text-gray-400">
+              {isAuthenticated && anime.user_list_status?.status === 'watching' ? (
+                <>
+                  <span className="text-accent-light font-bold">{anime.user_list_status.episodes_watched}</span>
+                  <span className="text-gray-500">/</span>
+                  <span>{anime.episode_count || '?'}</span>
+                  <span className="text-[10px] text-gray-500 ml-0.5">eps</span>
+                </>
+              ) : (
+                <span>{anime.episode_count || '?'} eps</span>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </Link>
       </div>
     </div>
   );

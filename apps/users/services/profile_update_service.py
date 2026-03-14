@@ -4,6 +4,10 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from apps.core.services.admin_settings_service import (
+    is_username_change_allowed,
+    username_length_limits,
+)
 from apps.core.services.social_links_service import SocialLinksService
 from apps.shared.logger import logger
 from apps.users.models import UserProfile
@@ -39,6 +43,16 @@ def _handle_username_change(user, validated_data) -> None:
     if not new_username or new_username == user.username:
         return
 
+    if not is_username_change_allowed():
+        raise ValidationError({"username": "Username changes are currently disabled."})
+
+    min_length, max_length = username_length_limits()
+    normalized_username = new_username.strip()
+    if len(normalized_username) < min_length:
+        raise ValidationError({"username": f"Username must be at least {min_length} characters."})
+    if len(normalized_username) > max_length:
+        raise ValidationError({"username": f"Username must be at most {max_length} characters."})
+
     profile, _ = UserProfile.objects.get_or_create(user=user)
 
     if profile.last_username_change:
@@ -49,10 +63,10 @@ def _handle_username_change(user, validated_data) -> None:
                 {"username": f"You can change your username again in {days_left} days."}
             )
 
-    if User.objects.filter(username=new_username).exists():
+    if User.objects.filter(username__iexact=normalized_username).exclude(pk=user.pk).exists():
         raise ValidationError({"username": "This username is already taken."})
 
-    user.username = new_username
+    user.username = normalized_username
     user.save(update_fields=["username"])
     profile.last_username_change = timezone.now()
     profile.save(update_fields=["last_username_change"])

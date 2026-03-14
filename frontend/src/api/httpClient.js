@@ -6,6 +6,7 @@ import logger from '../utils/logger';
 const API_BASE_URL = '/api/v1';
 const TOKEN_REFRESH_THRESHOLD = 5 * 60;
 const TOKEN_EXPIRY_LEEWAY_SECONDS = 30;
+export const MAINTENANCE_MODE_EVENT = 'app:maintenance-mode';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -18,6 +19,25 @@ const api = axios.create({
 let isRefreshing = false;
 let refreshPromise = null;
 let failedRequestQueue = [];
+
+const emitMaintenanceMode = (enabled, payload = {}) => {
+    if (typeof window === 'undefined') return;
+
+    if (enabled) {
+        sessionStorage.setItem('app_maintenance_mode', 'true');
+    } else {
+        sessionStorage.removeItem('app_maintenance_mode');
+    }
+
+    window.dispatchEvent(
+        new CustomEvent(MAINTENANCE_MODE_EVENT, {
+            detail: {
+                enabled,
+                ...payload,
+            },
+        }),
+    );
+};
 
 const processQueue = (error, token = null) => {
     failedRequestQueue.forEach((pendingRequest) => {
@@ -208,6 +228,14 @@ api.interceptors.response.use(
 
                 return Promise.reject(refreshError);
             }
+        }
+
+        if (error.response?.status === 503) {
+            const detail = error.response?.data?.detail || 'The service is temporarily unavailable.';
+            emitMaintenanceMode(true, {
+                message: detail,
+                retryAfter: error.response?.headers?.['retry-after'] || null,
+            });
         }
 
         return Promise.reject(error);

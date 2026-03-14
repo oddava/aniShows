@@ -157,6 +157,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.core.middleware.SiteControlMiddleware",
     "apps.core.middleware.LoggingMiddleware",
     "apps.core.middleware.AdminAuditMiddleware",
     "apps.core.middleware.ExceptionLoggingMiddleware",

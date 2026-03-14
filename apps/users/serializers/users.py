@@ -23,6 +23,7 @@ from apps.animes.serializers.anime import (
 )
 from apps.animes.serializers.base import validate_image_content
 from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
+from apps.core.services.admin_settings_service import username_length_limits
 from apps.shared.logger import logger
 from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
 
@@ -379,6 +380,22 @@ class RegisterSerializer(ModelSerializer):
     class Meta:
         model = User
         fields = ["username", "email", "password"]
+
+    def validate_username(self, value):
+        normalized = value.strip()
+        min_length, max_length = username_length_limits()
+
+        if len(normalized) < min_length:
+            raise ValidationError(f"Username must be at least {min_length} characters long.")
+        if len(normalized) > max_length:
+            raise ValidationError(f"Username must be at most {max_length} characters long.")
+
+        if User.objects.filter(username__iexact=normalized).exists():
+            raise ValidationError(
+                "Unable to create account. The email or username may already be in use."
+            )
+
+        return normalized
 
     def validate_email(self, value):
         normalized_email = value.lower().strip()

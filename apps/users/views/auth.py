@@ -8,6 +8,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
+from apps.core.services.admin_settings_service import is_registration_enabled
 from apps.shared.logger import logger
 from apps.users import throttling
 from apps.users.serializers.users import RegisterSerializer
@@ -96,6 +97,12 @@ class RegisterView(generics.CreateAPIView):
         self.email_service = EmailService()
 
     def create(self, request, *args, **kwargs):
+        if not is_registration_enabled():
+            return Response(
+                {"detail": "Registration is currently disabled by the administrator."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

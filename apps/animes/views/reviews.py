@@ -13,6 +13,10 @@ from apps.animes.serializers import (
     ReviewReportCreateSerializer,
     ReviewSerializer,
 )
+from apps.core.services.admin_settings_service import (
+    are_review_comments_enabled,
+    are_reviews_enabled,
+)
 from apps.users.models import UserAnimeList
 from apps.users.permissions import EmailVerificationMixin
 from apps.users.services.cache import invalidate_user_caches
@@ -23,6 +27,15 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to write reviews."
+
+    def _ensure_reviews_enabled(self):
+        if not are_reviews_enabled():
+            raise PermissionDenied("Reviews are currently disabled by the administrator.")
+
+    def _ensure_comments_enabled(self):
+        self._ensure_reviews_enabled()
+        if not are_review_comments_enabled():
+            raise PermissionDenied("Review comments are currently disabled by the administrator.")
 
     def get_queryset(self):
         queryset = Review.objects.select_related("user", "user__userprofile", "anime")
@@ -147,6 +160,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        self._ensure_reviews_enabled()
         user = self.request.user
         anime = serializer.validated_data.get("anime")
         if not anime:
@@ -170,12 +184,14 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
             )
 
     def perform_update(self, serializer):
+        self._ensure_reviews_enabled()
         if serializer.instance.user != self.request.user:
             raise PermissionDenied("You can only edit your own reviews.")
         serializer.save()
         invalidate_user_caches(self.request.user.id, self.request.user.username)
 
     def perform_destroy(self, instance):
+        self._ensure_reviews_enabled()
         if instance.user != self.request.user:
             raise PermissionDenied("You can only delete your own reviews.")
         instance.delete()
@@ -183,6 +199,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def vote(self, request, pk=None):
+        self._ensure_reviews_enabled()
         review = self.get_object()
         user = request.user
 
@@ -242,6 +259,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def add_comment(self, request, pk=None):
+        self._ensure_comments_enabled()
         review = self.get_object()
         user = request.user
 
@@ -264,6 +282,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         url_path="comments/(?P<comment_id>[^/.]+)",
     )
     def update_comment(self, request, pk=None, comment_id=None):
+        self._ensure_comments_enabled()
         review = self.get_object()
 
         try:
@@ -316,6 +335,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
     def report(self, request, pk=None):
+        self._ensure_reviews_enabled()
         review = self.get_object()
         user = request.user
 

@@ -15,12 +15,9 @@ vi.mock('../../api/client', () => ({
 // Mock SEO component
 vi.mock('../../components/SEO', () => ({
   default: ({ customTitle, customDescription }) => (
-    <>
-      <title data-testid="seo-title">{customTitle}</title>
-      {customDescription && (
-        <meta name="description" content={customDescription} data-testid="seo-description" />
-      )}
-    </>
+    <div data-testid="seo-component" data-title={customTitle} data-description={customDescription}>
+      SEO Component
+    </div>
   ),
 }));
 
@@ -62,7 +59,7 @@ describe('Seasonal Component', () => {
     
     render(<Seasonal />, { wrapper: createWrapper() });
     
-    expect(screen.getByText(/Loading.../i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Loading.../i)[0]).toBeInTheDocument();
   });
 
   it('renders anime list successfully', async () => {
@@ -87,7 +84,7 @@ describe('Seasonal Component', () => {
     
     // Check that stats show 2 highly rated anime (8+)
     expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('rated 8+')).toBeInTheDocument();
+    expect(screen.getByText('Highly Rated')).toBeInTheDocument();
   });
 
   it('handles API error gracefully', async () => {
@@ -139,16 +136,16 @@ describe('Seasonal Component', () => {
       data: { results: [{ id: 1, title: 'Test', rating: '8.0' }] },
     });
 
-    render(<Seasonal />, { wrapper: createWrapper() });
+    const { container } = render(<Seasonal />, { wrapper: createWrapper() });
 
     await waitFor(() => {
       expect(screen.getByText('Test')).toBeInTheDocument();
     });
 
     const currentYear = new Date().getFullYear();
-    const title = screen.getByTestId('seo-title');
-    expect(title.textContent).toContain(currentYear.toString());
-    expect(title.textContent).toContain('Anime - AniShows');
+    const seoComponent = screen.getByTestId('seo-component');
+    expect(seoComponent).toHaveAttribute('data-title', expect.stringContaining(currentYear.toString()));
+    expect(seoComponent).toHaveAttribute('data-title', expect.stringContaining('Anime - AniShows'));
   });
 
   it('supports keyboard navigation with arrow keys', async () => {
@@ -189,7 +186,7 @@ describe('Seasonal Component', () => {
     // Should show 2 highly rated (8.5 and 9.0)
     const stats = screen.getByRole('status');
     expect(stats).toHaveTextContent('2');
-    expect(stats).toHaveTextContent('rated 8+');
+    expect(stats).toHaveTextContent('Highly Rated');
   });
 
   it('renders season tabs with proper ARIA attributes', async () => {

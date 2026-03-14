@@ -454,7 +454,7 @@ export default function Navbar() {
                         {/* Search - Always Extended with Fuzzy Search */}
                         <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
                             <div
-                                className={`relative w-full max-w-[200px] lg:max-w-md transition-opacity ${hideSearch
+                                className={`relative w-full max-w-sm lg:max-w-xl transition-opacity ${hideSearch
                                     ? 'opacity-0 pointer-events-none'
                                     : 'opacity-100'
                                     }`}

@@ -7,32 +7,32 @@ import React from 'react';
 export function ScheduleCardSkeleton({ delay = 0 }) {
     return (
         <div
-            className="relative overflow-hidden rounded-xl bg-dark-200 skeleton-fade-in"
+            className="relative overflow-hidden rounded-xl bg-dark-100 skeleton-fade-in border border-gray-800 h-full flex flex-col"
             style={{ animationDelay: `${delay}ms` }}
         >
             {/* Shimmer overlay */}
             <div className="absolute inset-0 z-20 pointer-events-none shimmer-gradient" />
 
             {/* Cover image placeholder - aspect ratio 2:3 */}
-            <div className="relative aspect-[2/3] overflow-hidden">
-                <div className="absolute inset-0 bg-dark-300">
+            <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
+                <div className="absolute inset-0 bg-dark-200">
                     <div className="absolute inset-0 skeleton-wave" />
                 </div>
 
                 {/* Episode badge placeholder - Top Right */}
-                <div className="absolute top-2 right-2">
-                    <div className="h-5 w-14 bg-dark-100/80 rounded-md relative overflow-hidden">
+                <div className="absolute top-2 right-2 z-[100]">
+                    <div className="h-6 w-12 bg-black/60 rounded-md relative overflow-hidden border border-white/20">
                         <div className="absolute inset-0 skeleton-wave" />
                     </div>
                 </div>
 
                 {/* Time overlay placeholder - Bottom with larger display */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black/80 pt-8 pb-3 px-3">
-                    <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-dark-300 relative overflow-hidden">
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-8 pb-2 px-2.5 z-[100]">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-4 h-4 rounded-full bg-white/10 relative overflow-hidden">
                             <div className="absolute inset-0 skeleton-wave" />
                         </div>
-                        <div className="h-4 w-20 bg-dark-300 rounded relative overflow-hidden">
+                        <div className="h-3 w-16 bg-white/10 rounded relative overflow-hidden">
                             <div className="absolute inset-0 skeleton-wave" />
                         </div>
                     </div>
@@ -40,31 +40,24 @@ export function ScheduleCardSkeleton({ delay = 0 }) {
             </div>
 
             {/* Content area */}
-            <div className="p-3 space-y-1.5">
+            <div className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl space-y-2">
                 {/* Title placeholder */}
-                <div className="h-3.5 bg-dark-300 rounded w-full relative overflow-hidden">
-                    <div className="absolute inset-0 skeleton-wave" />
-                </div>
-                <div className="h-3.5 bg-dark-300 rounded w-3/4 relative overflow-hidden">
-                    <div className="absolute inset-0 skeleton-wave" />
-                </div>
-
-                {/* Meta info placeholder */}
-                <div className="pt-0.5">
-                    <div className="h-3 w-20 bg-dark-300 rounded relative overflow-hidden">
+                <div className="space-y-1.5 mb-1">
+                    <div className="h-3.5 bg-dark-200 rounded w-full relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-wave" />
+                    </div>
+                    <div className="h-3.5 bg-dark-200 rounded w-2/3 relative overflow-hidden">
                         <div className="absolute inset-0 skeleton-wave" />
                     </div>
                 </div>
 
-                {/* User status placeholder (optional) */}
-                <div className="mt-2.5 pt-2 border-t border-gray-800/50">
-                    <div className="flex items-center justify-between">
-                        <div className="h-4 w-16 bg-dark-300 rounded relative overflow-hidden">
-                            <div className="absolute inset-0 skeleton-wave" />
-                        </div>
-                        <div className="h-3 w-14 bg-dark-300 rounded relative overflow-hidden">
-                            <div className="absolute inset-0 skeleton-wave" />
-                        </div>
+                {/* Meta info placeholder */}
+                <div className="flex items-center justify-between pt-1 mt-auto">
+                    <div className="h-2.5 w-8 bg-dark-200 rounded relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-wave" />
+                    </div>
+                    <div className="h-2.5 w-12 bg-dark-200 rounded relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-wave" />
                     </div>
                 </div>
             </div>

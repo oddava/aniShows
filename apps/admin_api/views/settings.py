@@ -8,44 +8,13 @@ from rest_framework.views import APIView
 
 from apps.core.models import AdminPanelSettings
 from apps.core.permissions import IsAdminUser
-
-SETTINGS_CACHE_KEY = "admin:panel_settings:v1"
-SETTINGS_DB_KEY = "global"
-
-DEFAULT_ADMIN_SETTINGS = {
-    "general": {
-        "siteName": "aniShows",
-        "siteDescription": "Your Ultimate Anime Discovery Platform",
-        "maintenanceMode": False,
-        "allowRegistration": True,
-        "defaultLanguage": "en",
-        "timezone": "UTC",
-    },
-    "users": {
-        "emailVerification": True,
-        "allowUsernameChange": True,
-        "minUsernameLength": 3,
-        "maxUsernameLength": 30,
-        "defaultUserRole": "user",
-        "profileVisibility": "public",
-    },
-    "content": {
-        "enableReviews": True,
-        "requireApproval": False,
-        "allowComments": True,
-        "autoFetchMetadata": True,
-        "maxUploadSize": 10,
-        "allowedImageTypes": "jpg,jpeg,png,webp",
-    },
-    "security": {
-        "sessionTimeout": 24,
-        "maxLoginAttempts": 5,
-        "requireStrongPassword": True,
-        "twoFactorAuth": False,
-        "ipBlocking": False,
-        "apiRateLimit": 1000,
-    },
-}
+from apps.core.services.admin_settings_service import (
+    ADMIN_SETTINGS_CACHE_KEY,
+    ADMIN_SETTINGS_CACHE_TTL_SECONDS,
+    ADMIN_SETTINGS_DB_KEY,
+    DEFAULT_ADMIN_SETTINGS,
+    merge_admin_settings,
+)
 
 SETTINGS_VALIDATION_RULES = {
     "general": {
@@ -81,21 +50,6 @@ SETTINGS_VALIDATION_RULES = {
         "apiRateLimit": {"type": "int", "min": 100, "max": 100000},
     },
 }
-
-
-def _merge_with_defaults(payload: dict | None) -> dict:
-    merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
-    if not isinstance(payload, dict):
-        return merged
-
-    for section, fields in payload.items():
-        if section not in merged or not isinstance(fields, dict):
-            continue
-        for field, value in fields.items():
-            if field in merged[section]:
-                merged[section][field] = value
-
-    return merged
 
 
 def _validate_payload(incoming: dict) -> tuple[dict, dict]:
@@ -158,21 +112,21 @@ class AdminSettingsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        cached = cache.get(SETTINGS_CACHE_KEY)
+        cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
         if isinstance(cached, dict):
             return Response(cached)
 
         settings_obj, _ = AdminPanelSettings.objects.get_or_create(
-            key=SETTINGS_DB_KEY,
+            key=ADMIN_SETTINGS_DB_KEY,
             defaults={"data": deepcopy(DEFAULT_ADMIN_SETTINGS), "updated_by": request.user},
         )
-        merged = _merge_with_defaults(settings_obj.data)
+        merged = merge_admin_settings(settings_obj.data)
 
         if settings_obj.data != merged:
             settings_obj.data = merged
             settings_obj.save(update_fields=["data", "updated_at"])
 
-        cache.set(SETTINGS_CACHE_KEY, merged, timeout=300)
+        cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
         return Response(merged)
 
     def put(self, request):
@@ -189,12 +143,12 @@ class AdminSettingsView(APIView):
 
         with transaction.atomic():
             settings_obj, _ = AdminPanelSettings.objects.select_for_update().get_or_create(
-                key=SETTINGS_DB_KEY,
+                key=ADMIN_SETTINGS_DB_KEY,
                 defaults={"data": deepcopy(DEFAULT_ADMIN_SETTINGS), "updated_by": request.user},
             )
             settings_obj.data = merged
             settings_obj.updated_by = request.user
             settings_obj.save(update_fields=["data", "updated_by", "updated_at"])
 
-        cache.set(SETTINGS_CACHE_KEY, merged, timeout=300)
+        cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
         return Response({"message": "Settings saved successfully.", "settings": merged})
