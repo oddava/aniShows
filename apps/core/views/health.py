@@ -3,6 +3,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.http import JsonResponse
 
+from apps.core.services.admin_settings_service import is_maintenance_mode_enabled
 from apps.shared.logger import logger
 
 
@@ -40,11 +41,29 @@ def health_check(request):
     # Overall status
     all_healthy = all(checks.values())
 
+    maintenance_mode = is_maintenance_mode_enabled()
+    service_available = all_healthy and not maintenance_mode
+
+    if not all_healthy:
+        status_label = "unhealthy"
+    elif maintenance_mode:
+        status_label = "maintenance"
+    else:
+        status_label = "healthy"
+
     response_data = {
-        "status": "healthy" if all_healthy else "unhealthy",
+        "status": status_label,
         "checks": checks,
+        "maintenance_mode": maintenance_mode,
+        "service_available": service_available,
         "version": getattr(settings, "VERSION", "unknown"),
     }
+
+    if maintenance_mode:
+        response_data["detail"] = (
+            "Service is temporarily unavailable due to maintenance. Please try again later."
+        )
+        response_data["retry_after"] = 300
 
     status_code = 200 if all_healthy else 503
 

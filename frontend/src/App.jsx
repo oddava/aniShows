@@ -31,10 +31,21 @@ function App() {
                 cache: 'no-store',
                 credentials: 'same-origin',
             });
-            if (response.ok) {
+            const payload = await response.json().catch(() => ({}));
+
+            const serviceAvailable = response.ok && payload?.service_available === true;
+            if (serviceAvailable) {
                 sessionStorage.removeItem('app_maintenance_mode');
                 setMaintenance({ enabled: false, message: DEFAULT_MAINTENANCE_MESSAGE });
                 return true;
+            }
+
+            if (payload?.maintenance_mode === true) {
+                setMaintenance((prev) => ({
+                    ...prev,
+                    enabled: true,
+                    message: payload?.detail || prev.message || DEFAULT_MAINTENANCE_MESSAGE,
+                }));
             }
         } catch (err) {
             // Ignore transient network errors and keep maintenance screen active.
@@ -63,6 +74,10 @@ function App() {
             window.removeEventListener(MAINTENANCE_MODE_EVENT, onMaintenanceEvent);
         };
     }, []);
+
+    useEffect(() => {
+        checkServiceHealth();
+    }, [checkServiceHealth]);
 
     useEffect(() => {
         if (!maintenance.enabled) return undefined;

@@ -281,6 +281,18 @@ class TestRuntimePolicyControls(APITestCase):
         admin_response = self.client.get("/api/v1/admin/settings/")
         self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
 
+    def test_health_endpoint_reports_maintenance_without_failing_liveness(self):
+        self._set_settings({"general": {"maintenanceMode": True}})
+
+        response = self.client.get("/api/v1/health/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertEqual(payload["status"], "maintenance")
+        self.assertTrue(payload["maintenance_mode"])
+        self.assertFalse(payload["service_available"])
+        self.assertIn("detail", payload)
+        self.assertEqual(payload["retry_after"], 300)
+
     def test_registration_can_be_disabled(self):
         self._set_settings({"general": {"allowRegistration": False}})
 
