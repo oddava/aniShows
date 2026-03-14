@@ -19,18 +19,23 @@ def send_pending_notifications():
 
     cutoff = timezone.now() - timedelta(hours=24)
 
-    notifications = Notification.objects.filter(
-        is_email_sent=False, created_at__gte=cutoff
-    ).select_related("user", "user__userprofile")
+    notifications = (
+        Notification.objects.filter(is_email_sent=False, created_at__gte=cutoff)
+        .select_related("user", "user__userprofile")
+        .iterator(chunk_size=200)
+    )
+    pending_updates = []
 
     for notification in notifications:
         try:
             profile = notification.user.userprofile
+            email_sent = notification.is_email_sent
+            push_sent = notification.is_push_sent
 
             # Send email if enabled
             if _should_send_email(notification, profile):
                 _send_notification_email(notification)
-                notification.is_email_sent = True
+                email_sent = True
 
             # Send push if enabled
             if _should_send_push(notification, profile):
@@ -41,15 +46,32 @@ def send_pending_notifications():
                     data=notification.data,
                 )
                 if sent > 0:
-                    notification.is_push_sent = True
+                    push_sent = True
 
-            notification.save(update_fields=["is_email_sent", "is_push_sent"])
+            if (
+                email_sent != notification.is_email_sent
+                or push_sent != notification.is_push_sent
+            ):
+                notification.is_email_sent = email_sent
+                notification.is_push_sent = push_sent
+                pending_updates.append(notification)
+
+            if len(pending_updates) >= 200:
+                Notification.objects.bulk_update(
+                    pending_updates, ["is_email_sent", "is_push_sent"], batch_size=200
+                )
+                pending_updates.clear()
 
         except UserProfile.DoesNotExist:
             # User doesn't have a profile, skip
             pass
         except Exception as e:
             logger.exception(f"Failed to send notification {notification.id}: {e}")
+
+    if pending_updates:
+        Notification.objects.bulk_update(
+            pending_updates, ["is_email_sent", "is_push_sent"], batch_size=200
+        )
 
 def _should_send_email(notification, profile):
     """Check if email should be sent for this notification."""
@@ -160,15 +182,17 @@ def check_new_episodes():
     anime_ids = list(anime_map.keys())
 
     # Single query: all interested users across all recently-aired anime
-    interested_entries = UserAnimeList.objects.filter(
-        anime_id__in=anime_ids,
-        status__in=[
-            UserAnimeList.UserAnimeStatus.watching,
-            UserAnimeList.UserAnimeStatus.plan_to_watch,
-        ],
-    ).select_related("user")
+    interested_entries = list(
+        UserAnimeList.objects.filter(
+            anime_id__in=anime_ids,
+            status__in=[
+                UserAnimeList.UserAnimeStatus.watching,
+                UserAnimeList.UserAnimeStatus.plan_to_watch,
+            ],
+        ).select_related("user", "user__userprofile")
+    )
 
-    if not interested_entries.exists():
+    if not interested_entries:
         logger.info("No users interested in recently aired anime")
         return 0
 

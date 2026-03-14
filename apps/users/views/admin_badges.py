@@ -106,19 +106,30 @@ class AdminBadgeViewSet(ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            users = User.objects.filter(id__in=user_ids)
-            granted_count = 0
+            users = list(User.objects.filter(id__in=user_ids))
+            existing_user_ids = set(
+                UserBadge.objects.filter(
+                    badge=badge, user_id__in=[user.id for user in users]
+                ).values_list("user_id", flat=True)
+            )
+            users_to_grant = [user for user in users if user.id not in existing_user_ids]
 
-            for user in users:
-                # Skip if user already has this badge
-                if UserBadge.objects.filter(user=user, badge=badge).exists():
-                    continue
-
-                UserBadge.objects.create(
-                    user=user, badge=badge, granted_by=request.user, reason=reason
+            if users_to_grant:
+                UserBadge.objects.bulk_create(
+                    [
+                        UserBadge(
+                            user=user,
+                            badge=badge,
+                            granted_by=request.user,
+                            reason=reason,
+                        )
+                        for user in users_to_grant
+                    ]
                 )
-                granted_count += 1
 
+            granted_count = len(users_to_grant)
+
+            for user in users_to_grant:
                 # Send notification (gracefully handle if notification type doesn't exist yet)
                 try:
                     NotificationService.create_badge_awarded_notification(
@@ -145,7 +156,7 @@ class AdminBadgeViewSet(ModelViewSet):
             # Invalidate user caches for all affected users
             from apps.users.services.cache import invalidate_user_caches
 
-            for user in users:
+            for user in users_to_grant:
                 invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
 
             return Response({"message": f"Badge granted to {granted_count} users successfully."})
@@ -205,7 +216,7 @@ class AdminBadgeViewSet(ModelViewSet):
         badge = self.get_object()
         user_badges = (
             UserBadge.objects.filter(badge=badge)
-            .select_related("user", "granted_by")
+            .select_related("user", "user__userprofile", "granted_by")
             .order_by("-granted_at")
         )
 

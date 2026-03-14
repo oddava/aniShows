@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
@@ -229,6 +229,7 @@ TabButton.displayName = 'TabButton';
 
 export default function AnimeDetail() {
     const { slug } = useParams();
+    const location = useLocation();
     const { isAuthenticated, user } = useAuth();
     const { theme } = useTheme();
     const isRetro = theme && theme.startsWith('retro-');
@@ -429,10 +430,14 @@ export default function AnimeDetail() {
         );
     }
 
+    const relationCoverFallback = location.state?.prefetchedRelationCover;
+
     const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
         getOptimizedImageUrl(anime, 'cover', 'large') ||
+        relationCoverFallback ||
         `https://placehold.co/1920x600/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
     const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') ||
+        relationCoverFallback ||
         `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');

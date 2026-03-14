@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Film, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 
 export default function FranchiseSection({ relations, accentColor, sourceSlug }) {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const { theme } = useTheme();
     const isRetro = theme && theme.startsWith('retro-');
     const [loadingId, setLoadingId] = useState(null);
@@ -19,7 +21,13 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
             const response = await animeApi.fetchFranchise(rel.id, sourceSlug);
             const { slug } = response.data;
             if (slug) {
-                navigate(`/anime/${slug}`);
+                // Ensure we don't reuse stale detail payloads for newly linked franchise entries.
+                queryClient.removeQueries({ queryKey: ['anime', slug] });
+                navigate(`/anime/${slug}`, {
+                    state: {
+                        prefetchedRelationCover: rel.cover || null,
+                    },
+                });
             }
         } catch {
             // Silently fail - user can just click again
@@ -27,7 +35,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
         } finally {
             setLoadingId(null);
         }
-    }, [loadingId, sourceSlug, navigate]);
+    }, [loadingId, sourceSlug, navigate, queryClient]);
 
     if (!relations || relations.length === 0) return null;
 

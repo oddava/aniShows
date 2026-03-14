@@ -55,6 +55,14 @@ class CategorySerializer(ModelSerializer):
         fields = ["id", "name", "description", "slug", "order", "thread_count", "latest_thread"]
 
     def get_latest_thread(self, obj):
+        if getattr(obj, "latest_thread_id", None):
+            return {
+                "id": obj.latest_thread_id,
+                "title": obj.latest_thread_title,
+                "updated_at": obj.latest_thread_updated_at,
+                "author": obj.latest_thread_author_username,
+            }
+
         if hasattr(obj, "prefetched_latest_thread"):
             latest = obj.prefetched_latest_thread[0] if obj.prefetched_latest_thread else None
         else:

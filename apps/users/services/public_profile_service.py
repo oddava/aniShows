@@ -110,10 +110,9 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
         logger.warning("Stats table lookup failed for %s: %s", username, exc)
 
     queryset = get_annotated_user_queryset(viewer if is_authenticated else None).filter(username=username)
-    if not queryset.exists():
-        raise PublicProfileError("User not found", 404)
-
     user = queryset.first()
+    if user is None:
+        raise PublicProfileError("User not found", 404)
     is_private = user.userprofile.is_private if user.userprofile else False
     if is_private and not is_own_profile:
         raise PublicProfileError("Profile not found", 404)

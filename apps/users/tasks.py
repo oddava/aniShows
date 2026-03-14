@@ -356,76 +356,132 @@ def update_user_stats(self, user_id: int = None):
     Returns:
         Dict with update results
     """
-    from django.db.models import Avg, Count, F, Q, Sum
+    from django.db.models import Avg, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
+    from django.db.models.functions import Coalesce
 
-    from apps.users.models import UserAnimeList, UserStats
+    from apps.animes.models import Review, UserFavorite
+    from apps.users.models import UserAnimeList, UserFollow, UserStats
 
     start_time = timezone.now()
     updated_count = 0
 
     try:
         if user_id:
-            # Update single user
-            users = User.objects.filter(id=user_id)
+            user_ids = list(User.objects.filter(id=user_id).values_list("id", flat=True))
         else:
-            # Update all active users (logged in within last 30 days)
             thirty_days_ago = timezone.now() - timedelta(days=30)
-            users = User.objects.filter(last_login__gte=thirty_days_ago).select_related(
-                "userprofile"
+            user_ids = list(
+                User.objects.filter(last_login__gte=thirty_days_ago).values_list("id", flat=True)
             )
 
-        total_users = users.count()
+        total_users = len(user_ids)
         logger.info(f"Starting stats update for {total_users} users")
 
-        for user in users.iterator(chunk_size=100):
-            try:
-                # Get or create stats record
-                stats, created = UserStats.objects.get_or_create(user=user)
+        if total_users == 0:
+            return {
+                "updated_count": 0,
+                "total_users": 0,
+                "duration_seconds": (timezone.now() - start_time).total_seconds(),
+            }
 
-                # Calculate social stats (fast - indexed)
-                stats.followers_count = user.followers.count()
-                stats.following_count = user.following.count()
+        followers_counts = {
+            row["following_id"]: row["total"]
+            for row in UserFollow.objects.filter(following_id__in=user_ids)
+            .values("following_id")
+            .annotate(total=Count("id"))
+        }
+        following_counts = {
+            row["follower_id"]: row["total"]
+            for row in UserFollow.objects.filter(follower_id__in=user_ids)
+            .values("follower_id")
+            .annotate(total=Count("id"))
+        }
 
-                # Calculate anime stats
-                anime_stats = UserAnimeList.objects.filter(user=user).aggregate(
-                    anime_count=Count("id", distinct=True),
-                    episodes_watched=Sum("episodes_watched"),
-                    mean_score=Avg("score", filter=Q(score__gt=0)),
-                )
+        minutes_expr = ExpressionWrapper(
+            F("episodes_watched") * Coalesce(F("anime__duration_minutes"), Value(0)),
+            output_field=IntegerField(),
+        )
+        anime_stats_map = {
+            row["user_id"]: row
+            for row in UserAnimeList.objects.filter(user_id__in=user_ids)
+            .values("user_id")
+            .annotate(
+                anime_count=Count("id", distinct=True),
+                episodes_watched=Coalesce(Sum("episodes_watched"), 0),
+                mean_score=Avg("score", filter=Q(score__gt=0)),
+                total_minutes=Coalesce(Sum(minutes_expr), 0),
+            )
+        }
 
-                stats.anime_count = anime_stats["anime_count"] or 0
-                stats.episodes_watched = anime_stats["episodes_watched"] or 0
-                stats.mean_score = anime_stats["mean_score"]
+        favorites_counts = {
+            row["user_id"]: row["total"]
+            for row in UserFavorite.objects.filter(user_id__in=user_ids)
+            .values("user_id")
+            .annotate(total=Count("id"))
+        }
+        reviews_counts = {
+            row["user_id"]: row["total"]
+            for row in Review.objects.filter(user_id__in=user_ids)
+            .values("user_id")
+            .annotate(total=Count("id"))
+        }
 
-                # Calculate total minutes (expensive - use pre-calculated episodes)
-                total_minutes = (
-                    UserAnimeList.objects.filter(user=user).aggregate(
-                        total=Sum(F("episodes_watched") * F("anime__duration_minutes"))
-                    )["total"]
-                    or 0
-                )
+        existing_stats_map = {
+            stats.user_id: stats for stats in UserStats.objects.filter(user_id__in=user_ids)
+        }
+        now = timezone.now()
+        to_create = []
+        to_update = []
 
-                stats.total_minutes = total_minutes
-                stats.days_watched = round(total_minutes / 1440.0, 1)
+        for idx, uid in enumerate(user_ids, start=1):
+            anime_data = anime_stats_map.get(uid, {})
+            total_minutes = int(anime_data.get("total_minutes") or 0)
 
-                # Calculate activity stats
-                stats.favorites_count = user.favorites.count()
-                stats.reviews_count = user.reviews.count()
+            data = {
+                "followers_count": int(followers_counts.get(uid, 0)),
+                "following_count": int(following_counts.get(uid, 0)),
+                "anime_count": int(anime_data.get("anime_count") or 0),
+                "episodes_watched": int(anime_data.get("episodes_watched") or 0),
+                "total_minutes": total_minutes,
+                "days_watched": round(total_minutes / 1440.0, 1),
+                "mean_score": anime_data.get("mean_score"),
+                "favorites_count": int(favorites_counts.get(uid, 0)),
+                "reviews_count": int(reviews_counts.get(uid, 0)),
+                "last_updated": now,
+            }
 
-                stats.save()
-                updated_count += 1
+            stats = existing_stats_map.get(uid)
+            if stats is None:
+                to_create.append(UserStats(user_id=uid, is_active=True, **data))
+            else:
+                for field, value in data.items():
+                    setattr(stats, field, value)
+                to_update.append(stats)
 
-                # Log progress every 100 users
-                if updated_count % 100 == 0:
-                    logger.info(f"Updated stats for {updated_count}/{total_users} users")
+            if idx % 100 == 0:
+                logger.info(f"Prepared stats for {idx}/{total_users} users")
 
-            except Exception as e:
-                # DB connection failures should retry the whole task,
-                # not be swallowed per-user as partial success.
-                if isinstance(e, RETRYABLE_DB_ERRORS):
-                    raise
-                logger.error(f"Error updating stats for user {user.id}: {e}")
-                continue
+        if to_create:
+            UserStats.objects.bulk_create(to_create, batch_size=500)
+        if to_update:
+            UserStats.objects.bulk_update(
+                to_update,
+                [
+                    "followers_count",
+                    "following_count",
+                    "anime_count",
+                    "episodes_watched",
+                    "total_minutes",
+                    "days_watched",
+                    "mean_score",
+                    "favorites_count",
+                    "reviews_count",
+                    "last_updated",
+                ],
+                batch_size=500,
+            )
+
+        updated_count = len(user_ids)
 
         duration = (timezone.now() - start_time).total_seconds()
         logger.info(f"Stats update complete: {updated_count} users in {duration:.2f}s")

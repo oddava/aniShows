@@ -39,6 +39,7 @@ class FranchiseImportService:
                 self._refresh_existing_anime(existing, anilist_id)
                 existing.refresh_from_db(fields=["title", "slug"])
 
+            cache.delete(f"anime_detail_base:{existing.slug}")
             return FranchiseImportResult(
                 slug=existing.slug,
                 title=existing.title,
@@ -55,6 +56,8 @@ class FranchiseImportService:
 
             imported = self._will_create_new_anime(item)
             anime = service.save_anime_to_db(item)
+            self._ensure_external_image_refs(anime, item)
+            cache.delete(f"anime_detail_base:{anime.slug}")
 
             if anime.mal_id:
                 from apps.animes.tasks.themes import sync_theme_songs
@@ -83,7 +86,8 @@ class FranchiseImportService:
         try:
             item = async_to_sync(service.get_anime_by_id)(anilist_id)
             if item:
-                service.save_anime_to_db(item)
+                refreshed = service.save_anime_to_db(item)
+                self._ensure_external_image_refs(refreshed, item)
             else:
                 logger.warning(
                     f"No AniList payload returned while refreshing existing anime {anilist_id}"
@@ -100,6 +104,31 @@ class FranchiseImportService:
         has_cover_ref = bool(anime.cover_image or anime.cover_image_external_url)
         has_banner_ref = bool(anime.banner_image or anime.banner_image_external_url)
         return not has_cover_ref or not has_banner_ref
+
+    @staticmethod
+    def _ensure_external_image_refs(anime: Anime, item: dict) -> None:
+        """Persist external URLs when local media is absent.
+
+        This keeps detail pages renderable immediately while background image downloads run.
+        """
+        cover_url = item.get("coverImage", {}).get("extraLarge") or item.get("coverImage", {}).get(
+            "large"
+        )
+        banner_url = item.get("bannerImage")
+
+        update_fields: list[str] = []
+        if not anime.cover_image and not anime.cover_image_external_url and cover_url:
+            anime.cover_image_external_url = cover_url
+            update_fields.append("cover_image_external_url")
+
+        # Some AniList entries do not expose a banner; use cover as banner fallback.
+        fallback_banner = banner_url or cover_url
+        if not anime.banner_image and not anime.banner_image_external_url and fallback_banner:
+            anime.banner_image_external_url = fallback_banner
+            update_fields.append("banner_image_external_url")
+
+        if update_fields:
+            anime.save(update_fields=update_fields)
 
     def _enforce_rate_limit(self, client_ip: str) -> None:
         rate_key = f"franchise_fetch:{client_ip}"

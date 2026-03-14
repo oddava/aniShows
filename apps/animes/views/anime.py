@@ -266,17 +266,23 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         # Cache the BASE data (same for all users)
         base_cache_key = f"anime_detail_base:{slug}"
         cached_base = cache.get(base_cache_key)
-
+        needs_refresh = not cached_base
         if cached_base:
             data = cached_base.copy()
-        else:
+            # Self-heal stale cache entries that were stored before image refs existed.
+            if not self._has_cover_media(data):
+                needs_refresh = True
+                cache.delete(base_cache_key)
+
+        if needs_refresh:
             try:
                 # Use a lightweight queryset for base data
                 instance = self.get_queryset().get(slug=slug)
                 serializer = self.get_serializer(instance)
                 data = serializer.data
-                # Store in cache for 1 hour
-                cache.set(base_cache_key, data, 3600)
+                # Avoid long-lived cache for still-incomplete media payloads.
+                ttl = 3600 if self._has_cover_media(data) else 60
+                cache.set(base_cache_key, data, ttl)
             except Anime.DoesNotExist:
                 return Response({"error": "Anime not found"}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
@@ -317,6 +323,15 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 logger.warning(f"Error injecting user status for anime {slug}: {e}")
 
         return Response(data)
+
+    @staticmethod
+    def _has_cover_media(data: dict) -> bool:
+        return bool(
+            data.get("cover_image_large")
+            or data.get("cover_image_medium")
+            or data.get("cover_image_small")
+            or data.get("cover_image")
+        )
 
     def list(self, request, *args, **kwargs):
         """Override to add caching for anime list endpoint"""

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
+from django.db.models import BooleanField, Case, Value, When
 
 from apps.animes.models import Anime, Review
 
@@ -67,12 +68,13 @@ def _handle_review_bulk(operation: str, ids):
         )
 
     if operation == "toggle_spoiler":
-        reviews = Review.objects.filter(id__in=ids)
-        updated = 0
-        for review in reviews:
-            review.has_spoilers = not review.has_spoilers
-            review.save(update_fields=["has_spoilers"])
-            updated += 1
+        updated = Review.objects.filter(id__in=ids).update(
+            has_spoilers=Case(
+                When(has_spoilers=True, then=Value(False)),
+                default=Value(True),
+                output_field=BooleanField(),
+            )
+        )
         return BulkOperationResult(
             payload={"message": f"Toggled spoiler status for {updated} reviews."},
             status_code=200,

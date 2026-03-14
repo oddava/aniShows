@@ -5,7 +5,8 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Count, Exists, OuterRef, Prefetch
+from django.db.models import Count, Exists, OuterRef, Subquery
+from django.db.models.functions import Lower
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import permissions, status
 from rest_framework.decorators import action
@@ -67,17 +68,18 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 def handle_mentions(author, instance, is_thread=False):
     pattern = r"(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z0-9_]+)"
-    usernames = set(re.findall(pattern, instance.content))
-    for username in usernames:
-        if username == author.username:
-            continue
-        try:
-            mentioned_user = User.objects.get(username__iexact=username)
-            NotificationService.create_forum_mention_notification(
-                user=mentioned_user, author=author, instance=instance, is_thread=is_thread
-            )
-        except User.DoesNotExist:
-            pass
+    usernames = {username.lower() for username in re.findall(pattern, instance.content)}
+    usernames.discard(author.username.lower())
+    if not usernames:
+        return
+
+    mentioned_users = User.objects.annotate(_username_lower=Lower("username")).filter(
+        _username_lower__in=usernames
+    )
+    for mentioned_user in mentioned_users:
+        NotificationService.create_forum_mention_notification(
+            user=mentioned_user, author=author, instance=instance, is_thread=is_thread
+        )
 
 
 class TagViewSet(ReadOnlyModelViewSet):
@@ -107,12 +109,13 @@ class CategoryViewSet(ReadOnlyModelViewSet):
     ordering = ["order"]
 
     def get_queryset(self):
-        latest_thread_prefetch = Prefetch(
-            "threads",
-            queryset=Thread.objects.select_related("author").order_by("-updated_at"),
-            to_attr="prefetched_latest_thread",
+        latest_thread = Thread.objects.filter(category=OuterRef("pk")).order_by("-updated_at")
+        return Category.objects.annotate(
+            latest_thread_id=Subquery(latest_thread.values("id")[:1]),
+            latest_thread_title=Subquery(latest_thread.values("title")[:1]),
+            latest_thread_updated_at=Subquery(latest_thread.values("updated_at")[:1]),
+            latest_thread_author_username=Subquery(latest_thread.values("author__username")[:1]),
         )
-        return Category.objects.prefetch_related(latest_thread_prefetch)
 
     def list(self, request, *args, **kwargs):
         """Cache category list"""
@@ -160,7 +163,7 @@ class ThreadViewSet(ModelViewSet):
         return list(super().get_throttles())
 
     def get_queryset(self):
-        """Optimize queryset based on action - avoid prefetching posts for list views"""
+        """Optimize queryset for list/detail without loading posts eagerly."""
         queryset = Thread.objects.select_related(
             "author", "author__userprofile", "category"
         ).prefetch_related("tags")
@@ -171,9 +174,6 @@ class ThreadViewSet(ModelViewSet):
                     ThreadLike.objects.filter(thread=OuterRef("pk"), user=self.request.user)
                 ),
             )
-
-        if self.action != "list":
-            queryset = queryset.prefetch_related("posts")
 
         return queryset
 

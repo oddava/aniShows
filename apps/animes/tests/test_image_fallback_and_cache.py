@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
+from rest_framework.test import APITestCase
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
@@ -68,3 +70,53 @@ class AnimeDetailCacheInvalidationSignalTests(TestCase):
         anime.delete()
 
         self.assertIsNone(cache.get(cache_key))
+
+
+class AnimeDetailCacheSelfHealTests(APITestCase):
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_retrieve_refreshes_stale_cached_payload_without_cover(self, _mock_delay):
+        anime = Anime.objects.create(
+            title="Cached No Cover Anime",
+            slug="cached-no-cover-anime",
+            synopsis="desc",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.anilist.co/cover-stale-fix.jpg",
+            banner_image_external_url="https://img.anilist.co/banner-stale-fix.jpg",
+        )
+
+        cache_key = f"anime_detail_base:{anime.slug}"
+        cache.set(
+            cache_key,
+            {
+                "id": anime.id,
+                "slug": anime.slug,
+                "cover_image": None,
+                "cover_image_small": None,
+                "cover_image_medium": None,
+                "cover_image_large": None,
+                "banner_image": None,
+                "banner_image_small": None,
+                "banner_image_medium": None,
+                "banner_image_large": None,
+            },
+            timeout=3600,
+        )
+
+        response = self.client.get(reverse("anime-detail", args=[anime.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data.get("cover_image_large"),
+            "https://img.anilist.co/cover-stale-fix.jpg",
+        )
+        self.assertEqual(
+            response.data.get("banner_image_large"),
+            "https://img.anilist.co/banner-stale-fix.jpg",
+        )
+
+        refreshed_cached = cache.get(cache_key)
+        self.assertEqual(
+            refreshed_cached.get("cover_image_large"),
+            "https://img.anilist.co/cover-stale-fix.jpg",
+        )

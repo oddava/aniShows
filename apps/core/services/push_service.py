@@ -94,9 +94,8 @@ class PushService:
         Returns:
             Number of successfully sent notifications
         """
-        subscriptions = PushSubscription.objects.filter(user=user, is_active=True)
-
-        if not subscriptions.exists():
+        subscriptions = list(PushSubscription.objects.filter(user=user, is_active=True))
+        if not subscriptions:
             logger.debug(f"No active push subscriptions for user {user.id}")
             return 0
 
@@ -106,7 +105,7 @@ class PushService:
                 sent_count += 1
 
         logger.info(
-            f"Sent push notification to {sent_count}/{subscriptions.count()} devices for user {user.id}"
+            f"Sent push notification to {sent_count}/{len(subscriptions)} devices for user {user.id}"
         )
         return sent_count
 
