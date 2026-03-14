@@ -5,6 +5,22 @@
 
 const isProduction = import.meta.env.PROD;
 
+export const isRequestAbortError = (error) => {
+    const code = error?.code;
+    const name = error?.name;
+    const message = (error?.message || '').toLowerCase();
+
+    return (
+        code === 'ERR_CANCELED' ||
+        name === 'AbortError' ||
+        name === 'CanceledError' ||
+        message.includes('request aborted') ||
+        message.includes('aborted') ||
+        message.includes('canceled') ||
+        message.includes('cancelled')
+    );
+};
+
 /**
  * Check if the error is an authentication-related error that should always be logged
  */

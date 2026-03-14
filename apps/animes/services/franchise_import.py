@@ -31,6 +31,14 @@ class FranchiseImportService:
     ) -> FranchiseImportResult:
         existing = Anime.objects.filter(anilist_id=anilist_id).first()
         if existing:
+            if source_slug:
+                self.update_relation_slug(source_slug, anilist_id, existing.slug)
+
+            if self._is_missing_primary_images(existing):
+                self._enforce_rate_limit(client_ip)
+                self._refresh_existing_anime(existing, anilist_id)
+                existing.refresh_from_db(fields=["title", "slug"])
+
             return FranchiseImportResult(
                 slug=existing.slug,
                 title=existing.title,
@@ -68,6 +76,30 @@ class FranchiseImportService:
             raise FranchiseImportError("Import failed", 500) from exc
         finally:
             async_to_sync(service.close)()
+
+    def _refresh_existing_anime(self, anime: Anime, anilist_id: int) -> None:
+        """Fetch fresh AniList data for an existing anime with missing media metadata."""
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        try:
+            item = async_to_sync(service.get_anime_by_id)(anilist_id)
+            if item:
+                service.save_anime_to_db(item)
+            else:
+                logger.warning(
+                    f"No AniList payload returned while refreshing existing anime {anilist_id}"
+                )
+        except Exception as exc:
+            logger.warning(
+                f"Failed to refresh existing anime {anime.slug} ({anilist_id}): {exc}"
+            )
+        finally:
+            async_to_sync(service.close)()
+
+    @staticmethod
+    def _is_missing_primary_images(anime: Anime) -> bool:
+        has_cover_ref = bool(anime.cover_image or anime.cover_image_external_url)
+        has_banner_ref = bool(anime.banner_image or anime.banner_image_external_url)
+        return not has_cover_ref or not has_banner_ref
 
     def _enforce_rate_limit(self, client_ip: str) -> None:
         rate_key = f"franchise_fetch:{client_ip}"

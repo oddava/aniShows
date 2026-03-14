@@ -371,7 +371,7 @@ const AdminLayout = () => {
                                             {isActive && (
                                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full" />
                                             )}
-                                            <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
+                                            <span>
                                                 {item.icon}
                                             </span>
                                             {item.label}
@@ -379,7 +379,7 @@ const AdminLayout = () => {
                                     );
 
                                     const commonClasses = `
-                                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden
+                                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group relative overflow-hidden
                                         ${isActive
                                             ? 'border border-white/10 text-white bg-white/5'
                                             : 'text-gray-400 hover:text-white hover:bg-white/5'

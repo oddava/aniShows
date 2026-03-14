@@ -1,13 +1,14 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { Search, Menu, X, User, LogOut, ChevronDown, Star, Loader2, Play, Calendar, Heart, Tv, Bell, Clock, Command, Sparkles, MessageSquare } from 'lucide-react';
+import { Search, Menu, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { animeApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
 import ThemeSwitcher from './ThemeSwitcher';
-import logger from '../utils/logger';
+import logger, { isRequestAbortError } from '../utils/logger';
 
 import Fuse from 'fuse.js';
+import Logo from './Logo';
 
 // Navigation Item Component with Active State
 const NavItem = ({ to, icon: Icon, label, end = false }) => {  // eslint-disable-line no-unused-vars
@@ -17,22 +18,15 @@ const NavItem = ({ to, icon: Icon, label, end = false }) => {  // eslint-disable
             end={end}
             title={label}
             className={({ isActive }) => `
-                relative flex items-center gap-2 px-2 lg:px-3 py-2 rounded-lg font-medium transition-all duration-200
+                flex items-center gap-2 rounded-lg px-2 lg:px-3 py-2 font-medium transition-colors border border-transparent
                 ${isActive
-                    ? 'text-white bg-white/10'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'bg-dark-50 text-white border-gray-700'
+                    : 'text-gray-400 hover:bg-dark-100 hover:text-white'
                 }
             `}
         >
-            {({ isActive }) => (
-                <>
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm hidden lg:inline">{label}</span>
-                    {isActive && (
-                        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-accent rounded-full" />
-                    )}
-                </>
-            )}
+            <Icon className="w-4 h-4" />
+            <span className="text-sm hidden lg:inline">{label}</span>
         </NavLink>
     );
 };
@@ -171,16 +165,30 @@ export default function Navbar() {
 
     // Load all anime data for fuzzy search on mount
     useEffect(() => {
+        const controller = new AbortController();
+        let active = true;
+
         const loadAllAnime = async () => {
             try {
                 // Load first 100 anime for fuzzy search
-                const response = await animeApi.getAll({ page_size: 100 });
-                setAllAnimeCache(response.data.results || []);
+                const response = await animeApi.getAll({ page_size: 100 }, controller.signal);
+                if (active) {
+                    setAllAnimeCache(response.data.results || []);
+                }
             } catch (error) {
+                if (isRequestAbortError(error)) {
+                    return;
+                }
                 logger.error('Failed to load anime cache:', error);
             }
         };
+
         loadAllAnime();
+
+        return () => {
+            active = false;
+            controller.abort();
+        };
     }, []);
 
     // Close dropdowns when clicking outside
@@ -424,42 +432,13 @@ export default function Navbar() {
 
     return (
         <nav
-            className={`fixed top-0 left-0 right-0 z-[1000] bg-dark/80 backdrop-blur-xl border-b border-gray-800 transition-all duration-300 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
+            className={`fixed top-0 left-0 right-0 z-[1000] border-b border-gray-800 bg-dark/95 transition-transform duration-200 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
         >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2.5 group">
-                        <svg
-                            viewBox="0 0 120 120"
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="w-10 h-10 transition-all duration-300"
-                        >
-                            <defs>
-                                <linearGradient id="neonPurple" x1="0%" y1="100%" x2="100%" y2="0%">
-                                    <stop offset="0%" stopColor="#7B1FA2" />
-                                    <stop offset="50%" stopColor="#B388FF" />
-                                    <stop offset="100%" stopColor="#EA80FC" />
-                                </linearGradient>
-
-                                <linearGradient id="darkPurple" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" stopColor="#4A148C" />
-                                    <stop offset="100%" stopColor="#210F40" />
-                                </linearGradient>
-                            </defs>
-
-                            <g transform="translate(10, 5)">
-                                <path d="M48 25 L22 85 L42 85 L68 25 Z" fill="url(#darkPurple)" />
-
-                                <path d="M48 25 L88 85 L68 85 L36 40 Z" fill="url(#neonPurple)" />
-
-                                <rect x="30" y="62" width="45" height="8" rx="4" fill="#311B92" />
-                                <rect x="30" y="62" width="28" height="8" rx="4" fill="#EA80FC" />
-                            </g>
-                        </svg>
-                                <span className="text-xl font-bold text-white">
-                            AniShows
-                        </span>
+                    <Link to="/" className="focus:outline-none">
+                        <Logo />
                     </Link>
 
                     {/* Desktop Nav */}
@@ -475,7 +454,7 @@ export default function Navbar() {
                         {/* Search - Always Extended with Fuzzy Search */}
                         <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
                             <div
-                                className={`relative transition-all duration-300 ease-out w-full max-w-[200px] lg:max-w-md ${hideSearch
+                                className={`relative w-full max-w-[200px] lg:max-w-md transition-opacity ${hideSearch
                                     ? 'opacity-0 pointer-events-none'
                                     : 'opacity-100'
                                     }`}
@@ -495,8 +474,7 @@ export default function Navbar() {
                                             }
                                         }}
                                         placeholder="Search anime..."
-                                        className="w-full pl-11 pr-4 py-2.5 bg-dark-100 border border-gray-700/50 rounded-xl text-sm text-white
-                                             placeholder:text-gray-400 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all shadow-sm"
+                                        className="w-full rounded-xl border border-gray-700 bg-dark-100 py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-gray-400 focus:border-accent focus:outline-none"
                                     />
                                     <div className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4">
                                         {isSearching ? (
@@ -516,7 +494,7 @@ export default function Navbar() {
                                                 setSelectedIndex(-1);
                                                 searchInputRef.current?.focus();
                                             }}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                         >
                                             <X className="w-4 h-4" />
                                         </button>
@@ -532,7 +510,7 @@ export default function Navbar() {
 
                                 {/* Enhanced Search Suggestions Dropdown - Always visible when active */}
                                 <div
-                                    className={`absolute left-0 right-0 top-full mt-2 bg-dark-100 border border-gray-700/50 rounded-xl shadow-2xl overflow-hidden z-50 max-h-[70vh] overflow-y-auto transition-all duration-200 ${showSuggestions ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'
+                                    className={`absolute left-0 right-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto overflow-hidden rounded-xl border border-gray-700 bg-dark-100 shadow-lg shadow-black/30 transition-opacity ${showSuggestions ? 'opacity-100' : 'pointer-events-none opacity-0'
                                         }`}
                                 >
                                     {isSearching && searchSuggestions.length === 0 ? (
@@ -548,9 +526,9 @@ export default function Navbar() {
                                                     key={anime.id}
                                                     onClick={() => handleSuggestionClick(anime.slug)}
                                                     onMouseEnter={() => setSelectedIndex(index)}
-                                                    className={`w-full flex items-center gap-3 p-3 transition-all text-left border-l-2 ${selectedIndex === index
+                                                    className={`w-full flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
                                                         ? 'bg-accent/10 border-accent'
-                                                        : 'hover:bg-dark-50/50 border-transparent'
+                                                        : 'border-transparent hover:bg-dark-50'
                                                         }`}
                                                 >
                                                     <img
@@ -623,11 +601,10 @@ export default function Navbar() {
                                 {/* Profile Button */}
                                 <button
                                     onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                    className="flex items-center gap-2.5 px-3 py-1.5 bg-dark-100 hover:bg-dark-50 rounded-xl
-                                               border border-gray-700/50 hover:border-accent/50 transition-all duration-200 group ml-2"
+                                    className="group ml-2 flex items-center gap-2.5 rounded-xl border border-gray-700 bg-dark-100 px-3 py-1.5 transition-colors hover:border-gray-600 hover:bg-dark-50 focus:outline-none"
                                 >
                                     {/* Avatar */}
-                                    <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-accent/50 transition-colors">
+                                    <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-gray-500 transition-colors">
                                         {user?.avatar ? (
                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                         ) : (
@@ -639,17 +616,16 @@ export default function Navbar() {
                                     <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
                                         {user?.username}
                                     </span>
-                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {/* Enhanced Dropdown Menu */}
                                 {isProfileOpen && (
-                                    <div className="absolute right-0 top-full mt-2 w-72 py-2 bg-dark-100/95 backdrop-blur-xl 
-                                                    rounded-xl border border-accent/30 shadow-xl shadow-black/20 animate-fade-in">
+                                    <div className="absolute right-0 top-full mt-2 w-72 py-2 rounded-xl border border-gray-700 bg-dark-100 shadow-lg shadow-black/30">
                                         {/* User Info Header */}
-                                        <div className="px-4 py-3 border-b border-accent/20">
+                                        <div className="px-4 py-3 border-b border-gray-700">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-accent/30">
+                                                <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-gray-700">
                                                     {user?.avatar ? (
                                                         <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                                     ) : (
@@ -666,17 +642,17 @@ export default function Navbar() {
                                         </div>
 
                                         {/* User Stats */}
-                                        <div className="px-4 py-3 border-b border-accent/20">
+                                        <div className="px-4 py-3 border-b border-gray-700">
                                             <div className="grid grid-cols-3 gap-2 text-center">
-                                                <div className="p-2 bg-accent/10 rounded-lg">
+                                                <div className="rounded-lg border border-gray-700 bg-dark-50 p-2">
                                                     <p className="text-lg font-bold text-accent">{userStats.animeWatched}</p>
                                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Anime</p>
                                                 </div>
-                                                <div className="p-2 bg-accent/10 rounded-lg">
+                                                <div className="rounded-lg border border-gray-700 bg-dark-50 p-2">
                                                     <p className="text-lg font-bold text-accent">{userStats.episodesWatched}</p>
                                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Episodes</p>
                                                 </div>
-                                                <div className="p-2 bg-accent/10 rounded-lg">
+                                                <div className="rounded-lg border border-gray-700 bg-dark-50 p-2">
                                                     <p className="text-lg font-bold text-accent">{formatHours(userStats.hoursWatched)}h</p>
                                                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">Hours</p>
                                                 </div>
@@ -688,8 +664,7 @@ export default function Navbar() {
                                             <Link
                                                 to="/profile"
                                                 onClick={() => setIsProfileOpen(false)}
-                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
-                                                           hover:bg-white/5 transition-colors"
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                             >
                                                 <User className="w-4 h-4" />
                                                 <span className="text-sm font-medium">Profile</span>
@@ -697,8 +672,7 @@ export default function Navbar() {
                                             <Link
                                                 to="/settings"
                                                 onClick={() => setIsProfileOpen(false)}
-                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-white 
-                                                           hover:bg-white/5 transition-colors"
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                             >
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -709,8 +683,7 @@ export default function Navbar() {
                                             <div className="border-t border-white/10 my-1" />
                                             <button
                                                 onClick={() => { logout(); setIsProfileOpen(false); }}
-                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:text-red-400 
-                                                           hover:bg-red-500/10 transition-colors"
+                                                className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400 focus:outline-none"
                                             >
                                                 <LogOut className="w-4 h-4" />
                                                 <span className="text-sm font-medium">Sign Out</span>
@@ -721,10 +694,10 @@ export default function Navbar() {
                             </div>
                         ) : (
                             <>
-                                <Link to="/login" className="text-gray-300 hover:text-white transition-colors font-medium px-3 py-2">
+                                <Link to="/login" className="text-gray-300 hover:text-white transition-colors font-medium px-3 py-2 focus:outline-none">
                                     Sign In
                                 </Link>
-                                <Link to="/register" className="btn-primary text-sm py-2 px-4">
+                                <Link to="/register" className="btn-primary text-sm py-2 px-4 focus:outline-none">
                                     Get Started
                                 </Link>
                             </>
@@ -735,7 +708,7 @@ export default function Navbar() {
                     <button
                         onClick={() => setIsMenuOpen(!isMenuOpen)}
                         aria-label="Toggle mobile menu"
-                        className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                        className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors focus:outline-none"
                     >
                         {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                     </button>
@@ -754,7 +727,7 @@ export default function Navbar() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search anime..."
                                 className="w-full pl-11 pr-4 py-3 bg-dark-50 border border-gray-700 rounded-xl text-sm text-white
-                                     placeholder:text-gray-400 focus:outline-none focus:border-accent transition-all"
+                                     placeholder:text-gray-400 focus:outline-none focus:border-accent transition-colors"
                             />
                             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         </form>

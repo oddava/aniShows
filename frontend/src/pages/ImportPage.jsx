@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
-import { 
+import {
     Upload, 
     Globe, 
     FileText, 
@@ -15,6 +15,18 @@ import {
     ChevronUp,
     X
 } from 'lucide-react';
+
+const normalizeJobsResponse = (payload) => {
+    if (Array.isArray(payload)) {
+        return payload;
+    }
+
+    if (payload && Array.isArray(payload.results)) {
+        return payload.results;
+    }
+
+    return [];
+};
 
 const ImportPage = () => {
     const navigate = useNavigate();
@@ -51,7 +63,7 @@ const ImportPage = () => {
     const fetchJobs = async () => {
         try {
             const response = await importExportApi.getImportJobs();
-            setJobs(response.data);
+            setJobs(normalizeJobsResponse(response.data));
         } catch (err) {
             logger.error('Failed to fetch import jobs:', err);
         }
@@ -63,9 +75,16 @@ const ImportPage = () => {
             const job = response.data;
             
             // Update jobs list
-            setJobs(prevJobs => 
-                prevJobs.map(j => j.id === jobId ? job : j)
-            );
+            setJobs((prevJobs) => {
+                const jobsList = normalizeJobsResponse(prevJobs);
+                const existingIndex = jobsList.findIndex((j) => j.id === jobId);
+
+                if (existingIndex === -1) {
+                    return [job, ...jobsList];
+                }
+
+                return jobsList.map((j) => (j.id === jobId ? job : j));
+            });
             
             // Continue polling if job is still processing
             if (job.status === 'pending' || job.status === 'processing') {

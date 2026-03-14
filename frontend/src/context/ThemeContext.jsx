@@ -1,22 +1,31 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const ThemeContext = createContext();
+const SUPPORTED_THEMES = ['default'];
 
 export function ThemeProvider({ children }) {
+    const normalizeTheme = (value) => (SUPPORTED_THEMES.includes(value) ? value : 'default');
+
     // Get initial theme from localStorage or default to 'default'
     const [theme, setThemeState] = useState(() => {
         const savedTheme = localStorage.getItem('theme');
-        return savedTheme || 'default';
+        return normalizeTheme(savedTheme || 'default');
     });
 
     const setTheme = (newTheme) => {
-        setThemeState(newTheme);
-        localStorage.setItem('theme', newTheme);
+        const normalizedTheme = normalizeTheme(newTheme);
+        setThemeState(normalizedTheme);
+        localStorage.setItem('theme', normalizedTheme);
     };
 
     // Apply the theme to the document element
     useEffect(() => {
-        document.documentElement.setAttribute('data-theme', theme);
+        const normalizedTheme = normalizeTheme(theme);
+        document.documentElement.setAttribute('data-theme', normalizedTheme);
+        if (normalizedTheme !== theme) {
+            setThemeState(normalizedTheme);
+            localStorage.setItem('theme', normalizedTheme);
+        }
     }, [theme]);
 
     return (

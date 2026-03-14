@@ -63,19 +63,16 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
     return createPortal(
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4">
             <div
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/80"
                 onClick={onClose}
             />
             <div
                 className="relative w-full max-w-xl max-h-[85vh] sm:max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col"
-                style={{ boxShadow: `0 0 50px -10px ${accentColor || '#8b5cf6'}30` }}
             >
                 {/* Header */}
                 <div className="relative h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 border-b border-white/5 flex-shrink-0"
                     style={{
-                        background: accentColor
-                            ? `linear-gradient(135deg, ${accentColor}20 0%, transparent 100%)`
-                            : 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, transparent 100%)'
+                        backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.15)'
                     }}
                 >
                     <button
@@ -142,12 +139,12 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
                             <Link
                                 to={`/staff/${staff.id}`}
                                 onClick={onClose}
-                                className="flex items-center justify-between w-full px-4 py-3 bg-dark-200/60 hover:bg-dark-200 rounded-xl border border-white/5 hover:border-gray-600 transition-all group"
+                                className="group flex w-full items-center justify-between rounded-xl border border-white/5 bg-dark-200/60 px-4 py-3 transition-colors hover:border-gray-600 hover:bg-dark-200"
                             >
                                 <span className="text-gray-300 text-sm group-hover:text-white transition-colors">
                                     View {staff.name}'s full profile
                                 </span>
-                                <ArrowRight className="w-4 h-4 text-gray-500 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+                                <ArrowRight className="w-4 h-4 text-gray-500 transition-colors group-hover:text-accent" />
                             </Link>
                         </div>
                     </div>

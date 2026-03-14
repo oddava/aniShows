@@ -50,7 +50,7 @@ const StarInput = ({ label, value, onChange, size = "md" }) => {
                                     // Small delay allows the "tap" to be felt without sticking
                                     setTimeout(() => setHoverValue(0), 100);
                                 }}
-                                className={`p-0.5 focus:outline-none transition-transform hover:scale-110 relative touch-manipulation`}
+                                className="relative p-0.5 focus:outline-none touch-manipulation"
                             >
                                 <Star
                                     className={`${size === "lg" ? "w-8 h-8" : "w-5 h-5"} transition-colors
@@ -359,4 +359,3 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
         </div>
     );
 }
-

@@ -5,7 +5,16 @@ from django.core.cache import cache
 
 from apps.shared.logger import logger
 from apps.users.models import UserBadge, UserStats
-from apps.users.services.cache import get_user_online_cache_key, get_user_profile_cache_key
+
+try:
+    from apps.users.services.cache import get_user_online_cache_key, get_user_profile_cache_key
+except ImportError:
+    # Backward-compatible fallback for environments with older cache service exports.
+    def get_user_profile_cache_key(user_id, full=False):
+        return f"user_profile:{user_id}:{'full' if full else 'light'}"
+
+    def get_user_online_cache_key(user_id):
+        return f"user_online:{user_id}"
 
 User = get_user_model()
 

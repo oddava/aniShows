@@ -148,7 +148,7 @@ const RelatedAnimeCard = memo(({ anime, getImageUrl, accentColor }) => (
             <img
                 src={getImageUrl(anime.cover_image)}
                 alt={anime.title}
-                className="w-full h-full object-cover transition-transform "
+                className="w-full h-full object-cover"
                 loading="lazy"
             />
         </div>
@@ -180,7 +180,7 @@ const MobileRelatedCard = memo(({ anime, getImageUrl }) => (
             <img
                 src={getImageUrl(anime.cover_image)}
                 alt={anime.title}
-                className="w-full h-full object-cover transition-transform "
+                className="w-full h-full object-cover"
                 loading="lazy"
             />
         </div>
@@ -206,13 +206,12 @@ const TabButton = memo(({ tab, isActive, onClick, accentColor, count }) => {
     return (
         <button
             onClick={onClick}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
                 ${isActive
                     ? 'text-white '
                     : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             style={isActive ? {
-                backgroundColor: accentColor || '#8b5cf6',
-                boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+                backgroundColor: accentColor || '#8b5cf6'
             } : {}}
         >
             <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -568,7 +567,7 @@ export default function AnimeDetail() {
                                                                 ? 'bg-red-500 border-red-500 text-white  '
                                                                 : 'bg-dark-200 border-gray-700 text-gray-400 hover:border-red-500/50 hover:text-red-500'}`}
                                                     >
-                                                        <Heart className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 transition-transform  ${isFavorite ? 'fill-current' : ''}`} />
+                                                        <Heart className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 ${isFavorite ? 'fill-current' : ''}`} />
                                                     </button>
 
                                                     <button
@@ -680,8 +679,7 @@ export default function AnimeDetail() {
                                                     onClick={() => setIsWritingReview(true)}
                                                     className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent"
                                                     style={{
-                                                        backgroundColor: accentColor || '#8b5cf6',
-                                                        boxShadow: `0 10px 25px -5px ${accentColor || '#8b5cf6'}40`
+                                                        backgroundColor: accentColor || '#8b5cf6'
                                                     }}
                                                 >
                                                     Write a Review

@@ -188,7 +188,7 @@ export default function VoiceActorDetail() {
                                     {staff.description.length > 300 && (
                                         <>
                                             {!descExpanded && (
-                                                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-dark to-transparent pointer-events-none" />
+                                                <div className="absolute bottom-0 left-0 right-0 h-10 bg-dark/80 pointer-events-none" />
                                             )}
                                             <button
                                                 onClick={() => setDescExpanded(!descExpanded)}

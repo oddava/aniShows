@@ -6,8 +6,8 @@ export function AnimeDetailSkeleton() {
             {/* Banner Skeleton */}
             <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200 skeleton-fade-in">
                 <div className="absolute inset-0 skeleton-wave" />
-                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent z-10" />
-                <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-transparent to-transparent z-10" />
+                <div className="absolute inset-0 bg-dark/70 z-10" />
+                <div className="absolute inset-0 bg-dark/25 z-10" />
             </div>
 
             {/* Content Container */}

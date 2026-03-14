@@ -197,7 +197,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     loading={loadingStrategy.loading}
                     decoding={loadingStrategy.decoding}
                     onLoad={() => setImageLoaded(true)}
-                    className={`w-full h-full object-cover transition-transform duration-300 group-hover:bg-dark-50 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    className={`w-full h-full object-cover ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="absolute bottom-2 left-2 right-2">
@@ -242,7 +242,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                                     className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-none border transition-all duration-200 touch-manipulation
                                         ${listStatus && currentStatusOption
                                             ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                            : 'bg-accent/90 text-white border-accent hover:bg-accent hover:border-accent-dark opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
+                                            : 'bg-black/60 backdrop-blur-md text-white border-white/20 hover:bg-black/80 hover:border-white/30 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
                                     title={listStatus ? currentStatusOption?.label : 'Add to List'}
                                 >
                                     {isLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> :
@@ -292,7 +292,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     {isAuthenticated && listStatus === 'Watching' && (
                         <button
                             onClick={handleQuickProgress}
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-accent text-white shadow-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer z-40 border-2 border-white/30 touch-manipulation"
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-md text-white shadow-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer z-40 border border-white/20 hover:bg-black/80 hover:border-white/30 touch-manipulation"
                             title={`Mark episode ${episodesWatched + 1} as watched`}
                         >
                             {isLoading ? (
@@ -311,7 +311,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                         <button
                             onClick={handleFavorite}
                             className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-none border transition-all duration-200 hover:bg-dark-50 touch-manipulation
-                                ${isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-accent/90 text-white border-accent hover:bg-red-500 hover:border-red-400'}`}
+                                ${isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-black/60 backdrop-blur-md text-white border-white/20 hover:bg-red-500/20 hover:border-red-400/50'}`}
                         >
                             <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-current' : ''}`} />
                         </button>

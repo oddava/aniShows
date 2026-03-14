@@ -20,7 +20,7 @@ const CategorySelector = memo(({ allCategories, selectedCategoryId, onChange }) 
             <select
                 value={selectedCategoryId || ''}
                 onChange={(e) => onChange(parseInt(e.target.value) || null)}
-                className="w-full px-4 py-2.5 bg-dark border border-white/[0.08] rounded-xl text-sm text-white focus:outline-none focus:border-accent/50 appearance-none cursor-pointer transition-colors"
+                className="w-full px-4 py-2.5 bg-dark border border-white/[0.08] rounded-xl text-sm text-white focus:outline-none focus:border-gray-600 appearance-none cursor-pointer transition-colors"
                 required
             >
                 <option value="">Select a category...</option>

@@ -164,13 +164,13 @@ function FavoritesContent({
                     />
                 </ProfileErrorBoundary>
             ) : (
-                <div className="flex flex-col items-center justify-center py-20 bg-dark-100/30 rounded-3xl border border-gray-800 border-dashed glass">
+                <div className="ui-empty-state flex flex-col items-center justify-center py-20">
                     <Heart className="w-12 h-12 text-gray-700 mb-4" />
                     <p className="text-gray-400 text-lg font-medium">
                         {isPublicView ? "No favorites yet." : "You haven't added any favorites yet."}
                     </p>
                     {!isPublicView && (
-                        <Link to="/browse" className="mt-6 px-6 py-2.5 bg-accent text-white rounded-xl font-bold shadow-lg shadow-accent/20 hover:scale-105 transition-transform">
+                        <Link to="/browse" className="btn-primary mt-6 px-6 py-2.5">
                             Browse Anime
                         </Link>
                     )}
@@ -226,8 +226,8 @@ function AnimeListContent({
                     <button
                         key={tab.value}
                         onClick={() => setListStatusFilter(tab.value)}
-                        className={`px-5 py-2 rounded-lg font-bold text-sm transition-all duration-300 ${listStatusFilter === tab.value
-                            ? 'bg-accent text-white shadow-md scale-105 z-10'
+                        className={`px-5 py-2 rounded-lg font-bold text-sm transition-colors ${listStatusFilter === tab.value
+                            ? 'bg-accent text-white'
                             : 'text-gray-500 hover:text-gray-200 hover:bg-dark-50'
                             }`}
                     >
@@ -251,14 +251,14 @@ function AnimeListContent({
                 <div className="flex items-center gap-1 bg-dark-100 rounded-lg p-1 border border-gray-800">
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
                         title="Grid view"
                     >
                         <LayoutGrid className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
                         title="List view"
                     >
                         <LayoutList className="w-4 h-4" />

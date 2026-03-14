@@ -58,7 +58,7 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             placeholder="https://..."
-                            className="w-full px-4 py-2.5 bg-dark border border-gray-700 rounded-xl focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/50 text-white text-sm transition-all"
+                            className="w-full px-4 py-2.5 bg-dark border border-gray-700 rounded-xl focus:outline-none focus:border-gray-600 text-white text-sm transition-all"
                             required
                         />
                     </div>
@@ -72,7 +72,7 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
                                 placeholder={type === 'link' ? "Click here" : "Video title"}
-                                className="w-full px-4 py-2.5 bg-dark border border-gray-700 rounded-xl focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/50 text-white text-sm transition-all"
+                                className="w-full px-4 py-2.5 bg-dark border border-gray-700 rounded-xl focus:outline-none focus:border-gray-600 text-white text-sm transition-all"
                             />
                         </div>
                     )}

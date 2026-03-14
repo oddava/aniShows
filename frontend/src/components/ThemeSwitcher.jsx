@@ -9,8 +9,6 @@ export default function ThemeSwitcher() {
 
     const themes = [
         { id: 'default', name: 'Default Dark' },
-        { id: 'retro-crt', name: 'Retro CRT' },
-        { id: 'retro-anime', name: 'Pastel Anime' },
     ];
 
     useEffect(() => {
@@ -27,7 +25,7 @@ export default function ThemeSwitcher() {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                className="p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all focus:outline-none"
                 title="Switch Theme"
             >
                 <Palette className="w-5 h-5" />
@@ -48,8 +46,8 @@ export default function ThemeSwitcher() {
                                     setIsOpen(false);
                                 }}
                                 className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${isActive
-                                        ? 'bg-accent/10 text-accent font-medium'
-                                        : 'text-gray-300 hover:bg-dark-50 hover:text-white'
+                                    ? 'bg-accent/10 text-accent font-medium'
+                                    : 'text-gray-300 hover:bg-dark-50 hover:text-white'
                                     }`}
                             >
                                 {t.name}

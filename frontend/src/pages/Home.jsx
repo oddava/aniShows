@@ -138,7 +138,7 @@ export default function Home() {
 
                     <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
                         {heroAnime && (
-                            <div className="max-w-2xl animate-fade-in transition-all duration-500">
+                            <div className="max-w-2xl">
                                 <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 leading-tight text-white/90  tracking-tight">
                                     {heroAnime.title}
                                 </h1>
@@ -173,7 +173,7 @@ export default function Home() {
                                 <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                                     <Link
                                         to={`/anime/${heroAnime.slug}`}
-                                        className="bg-accent hover:bg-accent-light text-white flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base min-w-[140px] transition-all duration-300  "
+                                        className="btn-primary min-w-[140px] rounded-lg px-6 py-2.5 text-sm sm:px-8 sm:py-3 sm:text-base"
                                     >
                                         <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                                         Play Now
@@ -182,9 +182,9 @@ export default function Home() {
                                         <button
                                             onClick={handleAddToList}
                                             disabled={heroListLoading || isHeroInList}
-                                            className={`flex items-center justify-center gap-2 py-2.5 sm:py-3 px-6 sm:px-8 rounded-full font-bold text-sm sm:text-base transition-all duration-300 min-w-[140px] ${isHeroInList
-                                                ? 'bg-white/10 text-white cursor-default  border border-white/5'
-                                                : 'bg-dark-100 hover:bg-white/10 text-white  border border-white/10 hover:border-white/20'
+                                            className={`flex min-w-[140px] items-center justify-center gap-2 rounded-lg border px-6 py-2.5 text-sm font-bold sm:px-8 sm:py-3 sm:text-base ${isHeroInList
+                                                ? 'cursor-default border-gray-700 bg-dark-100 text-white'
+                                                : 'border-gray-700 bg-dark-100 text-white transition-colors hover:bg-dark-50'
                                                 }`}
                                         >
                                             {heroListLoading ? (
@@ -205,11 +205,11 @@ export default function Home() {
 
                 {/* Main Content Area */}
                 <div className="relative">
+                    <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-dark/80 to-transparent pointer-events-none z-10" />
                     <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.02)_0%,transparent_50%)]" />
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(255,255,255,0.01)_0%,transparent_50%)]" />
                     </div>
-
                     <div className="relative space-y-8 md:space-y-16 py-8 md:py-12 mt-8 md:mt-12 z-20">
                         {isAuthenticated && <CurrentlyWatchingSection />}
 
@@ -255,7 +255,7 @@ export default function Home() {
                                         <p className="text-xs md:text-sm text-gray-500 mt-0.5">Highest rated by community</p>
                                     </div>
                                     <Link to="/browse?sort=rating" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-yellow-400/40 group">
-                                        View All <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                                        View All <ChevronRight className="w-4 h-4" />
                                     </Link>
                                 </div>
 
@@ -286,8 +286,7 @@ export default function Home() {
                     {/* CTA Section */}
                     {!isAuthenticated && (
                         <section ref={setRevealRef} className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800 reveal">
-                            <div className="absolute inset-0 bg-accent/5 blur-[100px] pointer-events-none" />
-                            <div className="max-w-4xl mx-auto text-center relative z-10 glass border-white/5 py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl">
+                            <div className="max-w-4xl mx-auto text-center relative z-10 ui-surface py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl">
                                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white/90 mb-4 tracking-tight">
                                     Start Tracking Your Journey
                                 </h2>
@@ -295,9 +294,9 @@ export default function Home() {
                                     Join over <span className="text-white font-semibold">10,000+</span> anime fans listing, rating, and reviewing their favorite series.
                                 </p>
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                                    <Link to="/register" className="btn-primary flex items-center gap-2 group text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto justify-center">
+                                    <Link to="/register" className="btn-primary flex items-center gap-2 text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto justify-center">
                                         Create Free Account
-                                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:translate-x-1" />
+                                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                                     </Link>
                                     <span className="text-gray-500 text-xs sm:text-sm">No credit card required</span>
                                 </div>

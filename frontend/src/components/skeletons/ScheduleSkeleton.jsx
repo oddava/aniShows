@@ -27,7 +27,7 @@ export function ScheduleCardSkeleton({ delay = 0 }) {
                 </div>
 
                 {/* Time overlay placeholder - Bottom with larger display */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent pt-8 pb-3 px-3">
+                <div className="absolute bottom-0 left-0 right-0 bg-black/80 pt-8 pb-3 px-3">
                     <div className="flex items-center gap-2">
                         <div className="w-5 h-5 rounded-full bg-dark-300 relative overflow-hidden">
                             <div className="absolute inset-0 skeleton-wave" />

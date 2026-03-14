@@ -136,7 +136,7 @@ export const NotificationBell = () => {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={handleBellClick}
-                className="relative p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+                className="relative p-2.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-all focus:outline-none"
                 aria-label="Notifications"
             >
                 <Bell className="w-5 h-5" />

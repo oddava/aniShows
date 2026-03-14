@@ -6,99 +6,13 @@
   overflow: hidden;
 }
 
-/* Base structural utility classes instead of glassmorphism */
-.glass-light {
-  background: var(--color-dark-100);
-}
-
-.glass-border {
-  border: 1px solid var(--color-dark-50);
-}
-
-.glass-card {
-  background: var(--color-dark-100);
-  border: 1px solid var(--color-dark-50);
-}
-
-.glass-card-hover {
-  /* removed transitions */
-}
-
-.glass-card-hover:hover {
-  border-color: var(--color-accent);
-}
-
-/* Gradients removed, fallback to flat */
-.bg-section-gradient, .bg-top-rated-gradient {
-  background: var(--color-dark-100);
-}
-
-/* Icon Glows removed */
-.icon-glow-accent, .icon-glow-gold, .icon-glow-blue, .icon-glow-pink {
-  filter: none;
-}
-
-/* Rank Podium Styles */
-.rank-1, .rank-2, .rank-3 {
-  color: #fbbf24;
-}
-.rank-2 { color: #9ca3af; }
-.rank-3 { color: #b45309; }
-
-/* Scroll Reveal Base */
 .reveal {
   opacity: 0;
+  transition: opacity 220ms ease-out;
 }
+
 .reveal.active {
   opacity: 1;
-}
-
-/* Circular Progress Ring */
-.progress-ring {
-  transform: rotate(-90deg);
-}
-.progress-ring-circle {
-  /* flat, no transition */
-}
-
-/* Bento Grid Featured Card */
-.bento-featured {
-  grid-column: span 2;
-  grid-row: span 2;
-}
-
-@media (max-width: 768px) {
-  .bento-featured {
-    grid-column: span 1;
-    grid-row: span 1;
-  }
-}
-
-/* Tab Active */
-.tab-glow {
-  position: relative;
-}
-.tab-glow.active, .tab-glow:hover {
-  border-bottom: 2px solid var(--color-accent);
-}
-
-/* Stats card backgrounds */
-.stat-card-gradient-yellow { background-color: #fbbf24; color: #000; }
-.stat-card-gradient-green { background-color: #10b981; color: #000; }
-.stat-card-gradient-blue { background-color: #3b82f6; color: #000; }
-
-/* Hover reveal animation */
-.hover-reveal {
-  opacity: 0;
-}
-.group:hover .hover-reveal, .hover-trigger:hover .hover-reveal {
-  opacity: 1;
-}
-
-/* Featured card quote styling */
-.featured-quote {
-  padding-left: 1rem;
-  border-left: 2px solid var(--color-accent);
 }
 
 html {
@@ -110,7 +24,20 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible, a:focus-visible {
-  outline: 2px solid var(--color-accent);
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-border-strong);
   outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: var(--color-border-strong) !important;
 }

@@ -71,6 +71,18 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
         enrich_metadata.delay(anime_id=instance.id, mode="single")
 
 
+@receiver(post_save, sender=Anime)
+def invalidate_anime_detail_cache(sender, instance, **kwargs):
+    """Invalidate cached anime detail payload when anime fields change."""
+    cache.delete(f"anime_detail_base:{instance.slug}")
+
+
+@receiver(post_delete, sender=Anime)
+def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
+    """Invalidate cached anime detail payload on delete."""
+    cache.delete(f"anime_detail_base:{instance.slug}")
+
+
 # =============================================================================
 # ACTIVITY LOGGING SIGNALS
 # =============================================================================

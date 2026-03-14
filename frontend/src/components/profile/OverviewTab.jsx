@@ -35,7 +35,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
         return (
             <div className="mb-10">
                 <h3 className="text-sm font-bold text-white mb-4">Currently Watching</h3>
-                <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-8 border border-gray-800/30 text-center">
+                <div className="ui-surface-subtle p-8 text-center">
                     <p className="text-sm text-gray-500">Not watching anything right now</p>
                 </div>
             </div>
@@ -45,7 +45,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
     return (
         <div className="mb-10">
             <h3 className="text-sm font-bold text-white mb-4">Currently Watching</h3>
-            <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-5 border border-gray-800/30">
+            <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {watchingItems.map((item) => {
                         const eps = item.episodes_watched || 0;
@@ -56,31 +56,26 @@ function CurrentlyWatchingGrid({ watchingItems }) {
                             <Link
                                 key={item.id}
                                 to={`/anime/${item.anime?.slug}`}
-                                className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-dark-200 transition-all duration-500"
+                                className="relative aspect-[2/3] rounded-xl overflow-hidden border border-gray-800 bg-dark-200"
                             >
                                 <img
                                     src={item.anime?.cover_image_small || item.anime?.cover_image}
                                     alt={item.anime?.title}
-                                    className="w-full h-full object-cover transition-transform duration-700"
+                                    className="w-full h-full object-cover"
                                 />
-                                {/* Bottom Progress bar with glow */}
                                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-dark-400/80 z-20">
                                     <div
-                                        className="h-full bg-accent transition-all duration-300 shadow-[0_0_8px_rgba(139,92,246,0.6)]"
+                                        className="h-full bg-accent transition-[width] duration-300"
                                         style={{ width: `${progress}%` }}
                                     />
                                 </div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-dark/95 via-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-2.5 z-10">
-                                    <p className="text-[10px] font-black text-white leading-tight line-clamp-2 mb-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-75">
+                                <div className="absolute inset-x-0 bottom-0 z-10 bg-dark/85 p-2.5">
+                                    <p className="mb-1 line-clamp-2 text-[10px] font-black leading-tight text-white">
                                         {item.anime?.title}
                                     </p>
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-100">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
                                         {eps} / {total || '?'} eps
                                     </p>
-                                </div>
-                                {/* Shine effect */}
-                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
-                                    <div className="absolute -inset-[100%] translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
                                 </div>
                             </Link>
                         );
@@ -101,7 +96,7 @@ function FavoritesGrid({ favoritesData }) {
         return (
             <div className="mb-10">
                 <h3 className="text-sm font-bold text-white mb-4">Favorites</h3>
-                <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-8 border border-gray-800/30 text-center">
+                <div className="ui-surface-subtle p-8 text-center">
                     <p className="text-sm text-gray-500">No favorites yet</p>
                 </div>
             </div>
@@ -111,30 +106,26 @@ function FavoritesGrid({ favoritesData }) {
     return (
         <div className="mb-10">
             <h3 className="text-sm font-bold text-white mb-4">Favorites</h3>
-            <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-5 border border-gray-800/30">
+            <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {favorites.map((fav) => (
                         <Link
                             key={fav.id}
                             to={`/anime/${fav.anime?.slug}`}
-                            className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-dark-200 border border-white/5 transition-all duration-500"
+                            className="relative aspect-[2/3] rounded-xl overflow-hidden border border-gray-800 bg-dark-200"
                         >
                             <img
                                 src={fav.anime?.cover_image_small || fav.anime?.cover_image}
                                 alt={fav.anime?.title}
-                                className="w-full h-full object-cover transition-transform duration-700"
+                                className="w-full h-full object-cover"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-dark/95 via-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-2.5 z-10">
-                                <p className="text-[10px] font-black text-white leading-tight line-clamp-2 mb-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-75">
+                            <div className="absolute inset-x-0 bottom-0 z-10 bg-dark/85 p-2.5">
+                                <p className="mb-1 line-clamp-2 text-[10px] font-black leading-tight text-white">
                                     {fav.anime?.title}
                                 </p>
-                                <p className="text-[9px] text-gray-400 uppercase font-bold tracking-[0.1em] transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-100">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
                                     {fav.anime?.type || 'Anime'}
                                 </p>
-                            </div>
-                            {/* Shine effect */}
-                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
-                                <div className="absolute -inset-[100%] translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
                             </div>
                         </Link>
                     ))}
@@ -163,7 +154,7 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
     const remainingCount = totalCount - MAX_DISPLAYED;
 
     return (
-        <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-5 border border-gray-800/30">
+        <div className="ui-surface-subtle p-5">
             <div className="flex items-center justify-between mb-4">
                 <button
                     onClick={() => onTabChange && onTabChange('friends')}
@@ -187,24 +178,24 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
                         <Link
                             key={item.user.id}
                             to={`/profile/${item.user.username}`}
-                            className="group flex flex-col items-center gap-1.5 w-14"
+                            className="flex w-14 flex-col items-center gap-1.5"
                             title={item.user.username}
                         >
                             {item.user.avatar ? (
                                 <img
                                     src={item.user.avatar}
                                     alt={item.user.username}
-                                    className="w-11 h-11 rounded-full object-cover border-2 border-gray-700/50 group-hover:border-accent/50 transition-colors"
+                                    className="h-11 w-11 rounded-full border-2 border-gray-700 object-cover"
                                     loading="lazy"
                                 />
                             ) : (
-                                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent/30 to-pink-500/30 flex items-center justify-center border-2 border-gray-700/50 group-hover:border-accent/50 transition-colors">
+                                <div className="ui-avatar-fallback h-11 w-11">
                                     <span className="text-sm font-bold text-white">
                                         {item.user.username[0].toUpperCase()}
                                     </span>
                                 </div>
                             )}
-                            <span className="text-[10px] text-gray-500 group-hover:text-white truncate w-full text-center transition-colors">
+                            <span className="w-full truncate text-center text-[10px] text-gray-400">
                                 {item.user.username}
                             </span>
                         </Link>
@@ -212,7 +203,7 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
                     {remainingCount > 0 && (
                         <button
                             onClick={() => onTabChange && onTabChange('friends')}
-                            className="flex flex-col items-center gap-1.5 w-14 hover:opacity-80 transition-opacity"
+                            className="flex w-14 flex-col items-center gap-1.5"
                         >
                             <div className="w-11 h-11 rounded-full bg-dark-200 border-2 border-gray-700/50 flex items-center justify-center">
                                 <span className="text-xs font-medium text-gray-400">+{remainingCount}</span>
@@ -264,7 +255,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
 
     return (
         <div className="mb-8">
-            <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-5 border border-gray-800/30">
+            <div className="ui-surface-subtle p-5">
                 <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Top Genres</h3>
 
                 <div className="mb-4 pb-4 border-b border-gray-800/30">
@@ -287,7 +278,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
                     {sortedGenres.slice(1).map((genre, index) => (
                         <div
                             key={genre.name}
-                            className="group flex items-center gap-3 hover:bg-dark-100/20 rounded-lg p-1.5 -mx-1.5 transition-colors"
+                            className="flex items-center gap-3 rounded-lg p-1.5 -mx-1.5"
                         >
                             <span className="text-xs text-gray-400 w-6 font-medium">{index + 2}</span>
                             <div className="flex-1">
@@ -297,7 +288,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
                                 </div>
                                 <div className="h-1 bg-dark-400/30 rounded-full overflow-hidden">
                                     <div
-                                        className="h-full bg-gray-600 group-hover:bg-gray-500 rounded-full transition-all duration-300"
+                                        className="h-full rounded-full bg-gray-600 transition-[width] duration-300"
                                         style={{ width: `${(genre.count / maxCount) * 100}%` }}
                                     />
                                 </div>
@@ -322,7 +313,7 @@ function ActivityHistorySidebar({ username, isPrivate }) {
     if (isPrivate || isLoading || isError || !heatmapData) return null;
 
     return (
-        <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg border border-gray-800/30 w-full overflow-hidden">
+        <div className="ui-surface-subtle w-full overflow-hidden">
             <ActivityHeatmap activityData={heatmapData} />
         </div>
     );
@@ -360,7 +351,7 @@ export default function OverviewTab({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                 <div className="lg:col-span-5 space-y-8">
                     {displayUser?.bio ? (
-                        <div className="bg-dark-100/30 backdrop-blur-sm rounded-lg p-6 border border-gray-800/30">
+                        <div className="ui-surface-subtle p-6">
                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">About</h3>
                             <div className="text-sm text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar pr-3">
                                 <MarkdownRenderer content={displayUser.bio} />

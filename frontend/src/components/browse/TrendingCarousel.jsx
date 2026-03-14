@@ -33,8 +33,7 @@ export default function TrendingCarousel({
       {!isRetro ? (
         <div className="flex items-end justify-between mb-6">
           <div>
-            <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Trending Now</h2>
-            <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 uppercase tracking-wider font-bold">Community Favorites</p>
+            <h2 className="text-lg md:text-xl font-bold text-gray-400 tracking-tight">Trending Now</h2>
           </div>
 
           <button

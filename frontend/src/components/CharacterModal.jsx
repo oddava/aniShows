@@ -153,19 +153,16 @@ export default function CharacterModal({ role, onClose, accentColor }) {
     return createPortal(
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4">
             <div
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/80"
                 onClick={onClose}
             />
             <div
                 className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] bg-dark-100 rounded-2xl sm:rounded-3xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col"
-                style={{ boxShadow: `0 0 50px -10px ${accentColor || '#8b5cf6'}30` }}
             >
                 {/* Header */}
                 <div className="relative h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 border-b border-white/5 flex-shrink-0"
                     style={{
-                        background: accentColor
-                            ? `linear-gradient(135deg, ${accentColor}20 0%, transparent 100%)`
-                            : 'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, transparent 100%)'
+                        backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.15)'
                     }}
                 >
                     <button
@@ -257,7 +254,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                                         </p>
                                     )}
                                 </div>
-                                <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-accent group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                                <ArrowRight className="w-4 h-4 text-gray-600 transition-colors group-hover:text-accent flex-shrink-0" />
                             </Link>
                         </div>
                     )}

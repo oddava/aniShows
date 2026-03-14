@@ -72,7 +72,7 @@ const ActivityHeatmapSection = ({ username, isPrivate }) => {
                 <p className="text-sm text-gray-500">Failed to load activity heatmap.</p>
                 <button
                     onClick={() => refetch()}
-                    className="px-4 py-2 rounded-xl bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-all"
+                    className="px-4 py-2 rounded-xl bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
                 >
                     Try Again
                 </button>
@@ -165,7 +165,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                         if (listsError) refetchLists();
                         if (reviewsError) refetchReviews();
                     }}
-                    className="px-6 py-2.5 bg-accent text-white rounded-xl font-bold text-sm hover:scale-105 transition-transform"
+                    className="btn-primary px-6 py-2.5 text-sm"
                 >
                     Try Again
                 </button>
@@ -230,7 +230,7 @@ export default function ProfileInsights({ username, isPrivate }) {
         : '-';
 
     return (
-        <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-700 w-full overflow-x-hidden">
+        <div className="w-full space-y-6 overflow-x-hidden lg:space-y-8">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
                 <StatCard icon={Tv} label="Total Anime" value={totalAnime} color="blue" />
@@ -278,9 +278,9 @@ export default function ProfileInsights({ username, isPrivate }) {
                             </div>
                             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 pt-6 border-t border-white/5">
                                 {genreData.slice(0, 6).map((genre) => (
-                                    <div key={genre.name} className="flex items-center gap-2 group cursor-default">
-                                        <div className="w-2 h-2 rounded-full ring-2 ring-white/5 shadow-lg group-hover:scale-125 transition-transform" style={{ backgroundColor: genre.color }} />
-                                        <span className="text-[10px] font-black text-gray-400 group-hover:text-white transition-colors uppercase tracking-widest">{genre.name}</span>
+                                    <div key={genre.name} className="flex cursor-default items-center gap-2">
+                                        <div className="h-2 w-2 rounded-full ring-2 ring-white/5" style={{ backgroundColor: genre.color }} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{genre.name}</span>
                                         <span className="text-[10px] font-bold text-gray-600">({genre.value})</span>
                                     </div>
                                 ))}
@@ -337,7 +337,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                                                 key={`cell-${index}`}
                                                 fill={entry.fill}
                                                 fillOpacity={0.8}
-                                                className="hover:fill-opacity-100 transition-all duration-300"
+                                                className="hover:fill-opacity-100 transition-opacity duration-300"
                                             />
                                         ))}
                                     </Bar>
@@ -393,7 +393,7 @@ export default function ProfileInsights({ username, isPrivate }) {
                                                     </div>
                                                     <div className="relative h-1.5 bg-dark-400 rounded-full overflow-hidden p-[1px] shadow-inner">
                                                         <div
-                                                            className="h-full bg-accent transition-all duration-1000"
+                                                            className="h-full bg-accent transition-[width] duration-1000"
                                                             style={{ width: `${progress}%` }}
                                                         />
                                                     </div>

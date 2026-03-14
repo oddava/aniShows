@@ -1,43 +1,24 @@
-/* Loading shimmer effect - kept minimal */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
 }
 
-.shimmer {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite;
+.shimmer,
+.shimmer-bg,
+.skeleton-shimmer,
+.skeleton-wave,
+.shimmer-gradient,
+.shimmer-overlay {
+  background: rgba(255, 255, 255, 0.08);
+  animation: pulse-soft 1.4s ease-in-out infinite;
 }
 
-.shimmer-bg {
-  background: linear-gradient(90deg, var(--color-dark-50) 0%, var(--color-dark-100) 50%, var(--color-dark-50) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
-}
-
-@keyframes skeleton-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.skeleton-shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.06) 50%, transparent 100%);
-  animation: skeleton-shimmer 1.6s infinite;
-}
-
-@keyframes skeleton-wave {
-  0% { transform: translateX(-100%) skewX(-15deg); }
-  100% { transform: translateX(200%) skewX(-15deg); }
-}
-
-.skeleton-wave {
-  background: linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.12) 30%, rgba(167, 139, 250, 0.15) 50%, rgba(139, 92, 246, 0.12) 70%, transparent 100%);
-  background-size: 200% 100%;
-  animation: skeleton-wave 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-/* Skeleton background color utility */
 .skeleton-bg {
   background-color: var(--color-dark-100);
 }
@@ -46,14 +27,13 @@
   background-color: var(--color-dark-50);
 }
 
-/* Remove card enter animations */
-.card-enter, .grid-stagger > *, .skeleton-fade-in {
+.card-enter,
+.grid-stagger > *,
+.skeleton-fade-in {
   opacity: 1;
-  transform: none;
   animation: none;
 }
 
-/* Simple loading spinner */
 @keyframes spin-accent {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -73,7 +53,7 @@
 }
 
 .content-transition {
-  /* flat, no transition */
+  transition: opacity 120ms ease;
 }
 .content-transition.loading {
   opacity: 0.5;
@@ -95,7 +75,6 @@
   border-color: var(--color-accent);
 }
 
-/* Keyboard hint */
 .keyboard-hint {
-  display: none; /* or remove animation */
+  display: none;
 }

@@ -130,7 +130,7 @@ function FranchiseCard({ rel, label, onFetch }) {
                     <img
                         src={rel.cover}
                         alt={rel.title}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover"
                         loading="lazy"
                     />
                 ) : (
@@ -140,7 +140,7 @@ function FranchiseCard({ rel, label, onFetch }) {
                 )}
 
                 {/* Hover overlay */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
+                <div className="absolute inset-0 bg-black/10" />
 
                 {/* Relation type badge */}
                 <div className="absolute top-1.5 left-1.5">

@@ -168,13 +168,13 @@ export default function FollowersModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
             aria-label={`${username}'s followers and following`}
         >
-            <div className="bg-dark-100 border border-gray-800 rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-gray-800 bg-dark-100 shadow-xl">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-800">
                     <h2 className="text-lg font-bold text-white">@{username}</h2>
@@ -360,7 +360,7 @@ function ErrorState({ tab, onRetry }) {
             {onRetry && (
                 <button
                     onClick={onRetry}
-                    className="px-4 py-2 rounded-lg bg-dark-200 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-all"
+                    className="px-4 py-2 rounded-lg bg-dark-200 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
                 >
                     Try Again
                 </button>
@@ -385,7 +385,7 @@ function EmptyState({ tab }) {
 
 function UserListItem({ user, onClose, isFollowing, isFollower, onFollowToggle }) {
     return (
-        <div className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-800/50 transition-colors group h-full">
+        <div className="group flex h-full items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-gray-800/50">
             <Link
                 to={`/profile/${user.username}`}
                 onClick={onClose}
@@ -418,7 +418,7 @@ function Avatar({ user }) {
     }
 
     return (
-        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent/30 to-pink-500/30 flex items-center justify-center border-2 border-gray-700 shrink-0">
+        <div className="ui-avatar-fallback h-11 w-11 shrink-0">
             <span className="text-lg font-bold text-white">
                 {user.username[0].toUpperCase()}
             </span>
@@ -525,7 +525,7 @@ function ModalFollowButton({ username, isFollowing, isFollower, onToggle }) {
             disabled={isPending}
             className={`
                 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium
-                transition-all duration-200 shrink-0
+                transition-colors shrink-0
                 ${getStyles()}
                 disabled:opacity-50 disabled:cursor-not-allowed
             `}

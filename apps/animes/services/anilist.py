@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Literal
 
 import httpx
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 from django.core.files.base import ContentFile
 from django.utils import timezone
 from django.utils.text import slugify
@@ -647,6 +647,12 @@ class AniListService:
             # Season Information
             "season": item.get("season") or "",
             "season_year": item.get("seasonYear"),
+            # External image URLs are available immediately while background jobs
+            # fetch and persist local image files.
+            "cover_image_external_url": item.get("coverImage", {}).get("extraLarge")
+            or item.get("coverImage", {}).get("large")
+            or "",
+            "banner_image_external_url": item.get("bannerImage") or "",
             # External IDs
             "anilist_id": item.get("id"),
             "mal_id": item.get("idMal"),
@@ -1004,10 +1010,9 @@ class AniListService:
 
     def save_anime_to_db(self, item: dict) -> Anime:
         """Synchronously save anime data to database (for use in Celery tasks)"""
-        import asyncio
-
-        # Run the async save method synchronously
-        return asyncio.run(self._save_anime_to_db_async(item))
+        # Use asgiref bridge instead of asyncio.run() to avoid executor/thread
+        # conflicts when called from request threads that already used async_to_sync.
+        return async_to_sync(self._save_anime_to_db_async)(item)
 
     async def _save_anime_to_db_async(self, item: dict) -> Anime:
         """Async implementation of save_anime_to_db"""
@@ -1079,8 +1084,6 @@ class AniListService:
         # Add slugs to relations by looking up related anime in database
         relations = anime_data.get("relations", [])
         if relations:
-            from apps.animes.models import Anime
-
             for rel in relations:
                 rel_anilist_id = rel.get("id")
                 if rel_anilist_id:
@@ -1118,8 +1121,6 @@ class AniListService:
         # Add slugs to relations by looking up related anime in database
         relations = anime_data.get("relations", [])
         if relations:
-            from apps.animes.models import Anime
-
             for rel in relations:
                 anilist_id = rel.get("id")
                 if anilist_id:

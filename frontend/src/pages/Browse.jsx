@@ -373,7 +373,11 @@ export default function Browse() {
       setIsTabSwitching(false);
       setMinLoadingTime(false);
     }
-  }, [isLoading, data, minLoadingTime]);
+    if (isError) {
+      setIsTabSwitching(false);
+      setMinLoadingTime(false);
+    }
+  }, [isLoading, data, minLoadingTime, isError]);
 
   useEffect(() => {
     let isMounted = true;
@@ -382,7 +386,20 @@ export default function Browse() {
       const timer = setTimeout(() => {
         if (isMounted) setMinLoadingTime(true);
       }, 500);
-      return () => { isMounted = false; clearTimeout(timer); };
+
+      // Safety valve: never keep loading UI locked forever.
+      const maxTimer = setTimeout(() => {
+        if (isMounted) {
+          setIsTabSwitching(false);
+          setMinLoadingTime(false);
+        }
+      }, 6000);
+
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+        clearTimeout(maxTimer);
+      };
     }
   }, [isTabSwitching]);
 
@@ -777,26 +794,30 @@ export default function Browse() {
   );
 
   function renderContent() {
+    const errorState = (
+      <div className="text-center py-16">
+        <p className="text-red-400 mb-4">Failed to load anime</p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button onClick={() => refetch()} className="btn-primary">
+            Try Again
+          </button>
+          <button onClick={() => window.location.reload()} className="btn-secondary">
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+
     // Grid View
     if (viewMode === 'grid') {
       return (
         <div>
-          {isLoading || isTabSwitching ? (
+          {isError ? (
+            errorState
+          ) : isLoading || isTabSwitching ? (
             <div className="skeleton-fade-in">
               <GridSkeleton count={skeletonCount} />
               <div ref={loadMoreRef} className="h-0 overflow-hidden" />
-            </div>
-          ) : isError ? (
-            <div className="text-center py-16">
-              <p className="text-red-400 mb-4">Failed to load anime</p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button onClick={() => refetch()} className="btn-primary">
-                  Try Again
-                </button>
-                <button onClick={() => window.location.reload()} className="btn-secondary">
-                  Reload Page
-                </button>
-              </div>
             </div>
           ) : allAnime.length === 0 ? (
             <EmptyState
@@ -833,7 +854,9 @@ export default function Browse() {
     if (viewMode === 'list') {
       return (
         <div className="space-y-3">
-          {isLoading || isTabSwitching ? (
+          {isError ? (
+            errorState
+          ) : isLoading || isTabSwitching ? (
             <div className="skeleton-fade-in">
               <ListSkeleton count={skeletonCount} />
               <div ref={loadMoreRef} className="h-0 overflow-hidden" />
@@ -879,7 +902,9 @@ export default function Browse() {
     // Minimal View
     return (
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2">
-        {isLoading || isTabSwitching ? (
+        {isError ? (
+          <div className="col-span-full">{errorState}</div>
+        ) : isLoading || isTabSwitching ? (
           <div className="col-span-full grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2 skeleton-fade-in">
             <MinimalSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { authApi, refreshAccessToken } from '../api/client';
-import logger from '../utils/logger';
+import logger, { isRequestAbortError } from '../utils/logger';
 
 const AuthContext = createContext(null);
 
@@ -79,6 +79,14 @@ export function AuthProvider({ children }) {
                 setLoading(false);
                 return;
             } catch (error) {
+                if (isRequestAbortError(error)) {
+                    const decodedUser = decodeToken(token);
+                    if (decodedUser) {
+                        setUser(decodedUser);
+                    }
+                    setLoading(false);
+                    return;
+                }
                 logger.warn('Failed to fetch profile with valid token, trying refresh:', error.message);
                 // Fall through to refresh logic if profile fetch fails
             }
@@ -97,6 +105,15 @@ export function AuthProvider({ children }) {
                 setLoading(false);
                 return;
             } catch (refreshError) {
+                if (isRequestAbortError(refreshError)) {
+                    const activeToken = localStorage.getItem('access_token') || token;
+                    const decodedUser = decodeToken(activeToken);
+                    if (decodedUser) {
+                        setUser(decodedUser);
+                    }
+                    setLoading(false);
+                    return;
+                }
                 const errorMessage = refreshError?.message || '';
                 const isAuthFailure =
                     refreshError?.response?.status === 401 ||

@@ -5,54 +5,78 @@ import AdminLayout from '../components/AdminLayout';
 import AdminRoute from '../components/AdminRoute';
 import Layout from '../components/Layout';
 
-const Home = lazy(() => import('../pages/Home'));
-const Browse = lazy(() => import('../pages/Browse'));
-const AnimeDetail = lazy(() => import('../pages/AnimeDetail'));
-const Profile = lazy(() => import('../pages/Profile'));
-const Settings = lazy(() => import('../pages/Settings'));
-const Login = lazy(() => import('../pages/Auth').then((module) => ({ default: module.Login })));
-const Register = lazy(() => import('../pages/Auth').then((module) => ({ default: module.Register })));
-const VerifyEmail = lazy(() => import('../pages/VerifyEmail'));
-const VerificationPending = lazy(() => import('../pages/VerificationPending'));
-const ConfirmEmailChange = lazy(() => import('../pages/ConfirmEmailChange'));
-const PasswordReset = lazy(() => import('../pages/PasswordReset'));
-const PasswordResetConfirm = lazy(() => import('../pages/PasswordResetConfirm'));
-const GoogleCallback = lazy(() => import('../pages/GoogleCallback'));
-const Terms = lazy(() => import('../pages/Terms'));
-const Privacy = lazy(() => import('../pages/Privacy'));
-const NotFound = lazy(() => import('../pages/NotFound'));
-const Seasonal = lazy(() => import('../pages/Seasonal'));
-const Schedule = lazy(() => import('../pages/Schedule'));
-const ImportPage = lazy(() => import('../pages/ImportPage'));
-const ExportPage = lazy(() => import('../pages/ExportPage'));
-const VoiceActorDetail = lazy(() => import('../pages/VoiceActorDetail'));
+const lazyWithRetry = (importer, retries = 1, retryDelayMs = 250) => lazy(async () => {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+            return await importer();
+        } catch (error) {
+            lastError = error;
+            const message = (error?.message || '').toLowerCase();
+            const isModuleLoadFailure =
+                message.includes('failed to fetch dynamically imported module') ||
+                message.includes('error loading dynamically imported module');
+
+            if (!isModuleLoadFailure || attempt === retries) {
+                throw error;
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
+        }
+    }
+
+    throw lastError;
+});
+
+const Home = lazyWithRetry(() => import('../pages/Home'));
+const Browse = lazyWithRetry(() => import('../pages/Browse'));
+const AnimeDetail = lazyWithRetry(() => import('../pages/AnimeDetail'));
+const Profile = lazyWithRetry(() => import('../pages/Profile'));
+const Settings = lazyWithRetry(() => import('../pages/Settings'));
+const Login = lazyWithRetry(() => import('../pages/Auth').then((module) => ({ default: module.Login })));
+const Register = lazyWithRetry(() => import('../pages/Auth').then((module) => ({ default: module.Register })));
+const VerifyEmail = lazyWithRetry(() => import('../pages/VerifyEmail'));
+const VerificationPending = lazyWithRetry(() => import('../pages/VerificationPending'));
+const ConfirmEmailChange = lazyWithRetry(() => import('../pages/ConfirmEmailChange'));
+const PasswordReset = lazyWithRetry(() => import('../pages/PasswordReset'));
+const PasswordResetConfirm = lazyWithRetry(() => import('../pages/PasswordResetConfirm'));
+const GoogleCallback = lazyWithRetry(() => import('../pages/GoogleCallback'));
+const Terms = lazyWithRetry(() => import('../pages/Terms'));
+const Privacy = lazyWithRetry(() => import('../pages/Privacy'));
+const NotFound = lazyWithRetry(() => import('../pages/NotFound'));
+const Seasonal = lazyWithRetry(() => import('../pages/Seasonal'));
+const Schedule = lazyWithRetry(() => import('../pages/Schedule'));
+const ImportPage = lazyWithRetry(() => import('../pages/ImportPage'));
+const ExportPage = lazyWithRetry(() => import('../pages/ExportPage'));
+const VoiceActorDetail = lazyWithRetry(() => import('../pages/VoiceActorDetail'));
 
 const forumCategoryListImport = () => import('../pages/forums/ForumCategoryList');
 const forumThreadListImport = () => import('../pages/forums/ForumThreadList');
 const forumThreadDetailImport = () => import('../pages/forums/ForumThreadDetail');
 const createThreadImport = () => import('../pages/forums/CreateThread');
 
-const ForumCategoryList = lazy(forumCategoryListImport);
-const ForumThreadList = lazy(forumThreadListImport);
-const ForumThreadDetail = lazy(forumThreadDetailImport);
-const CreateThread = lazy(createThreadImport);
+const ForumCategoryList = lazyWithRetry(forumCategoryListImport);
+const ForumThreadList = lazyWithRetry(forumThreadListImport);
+const ForumThreadDetail = lazyWithRetry(forumThreadDetailImport);
+const CreateThread = lazyWithRetry(createThreadImport);
 
-const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
-const AdminUsers = lazy(() => import('../pages/admin/AdminUsers'));
-const AdminBadges = lazy(() => import('../pages/admin/AdminBadges'));
-const AdminAnime = lazy(() => import('../pages/admin/AdminAnime'));
-const AdminReviews = lazy(() => import('../pages/admin/AdminReviews'));
-const AdminGenres = lazy(() => import('../pages/admin/AdminGenres'));
-const AdminStudios = lazy(() => import('../pages/admin/AdminStudios'));
-const AdminUserLists = lazy(() => import('../pages/admin/AdminUserLists'));
-const AdminFavorites = lazy(() => import('../pages/admin/AdminFavorites'));
-const AdminImportJobs = lazy(() => import('../pages/admin/AdminImportJobs'));
-const AdminReports = lazy(() => import('../pages/admin/AdminReports'));
-const AdminCharacters = lazy(() => import('../pages/admin/AdminCharacters'));
-const AdminStaff = lazy(() => import('../pages/admin/AdminStaff'));
-const AdminSettings = lazy(() => import('../pages/admin/AdminSettings'));
-const AdminLogs = lazy(() => import('../pages/admin/AdminLogs'));
-const AdminReviewReports = lazy(() => import('../pages/admin/AdminReviewReports'));
+const AdminDashboard = lazyWithRetry(() => import('../pages/admin/AdminDashboard'));
+const AdminUsers = lazyWithRetry(() => import('../pages/admin/AdminUsers'));
+const AdminBadges = lazyWithRetry(() => import('../pages/admin/AdminBadges'));
+const AdminAnime = lazyWithRetry(() => import('../pages/admin/AdminAnime'));
+const AdminReviews = lazyWithRetry(() => import('../pages/admin/AdminReviews'));
+const AdminGenres = lazyWithRetry(() => import('../pages/admin/AdminGenres'));
+const AdminStudios = lazyWithRetry(() => import('../pages/admin/AdminStudios'));
+const AdminUserLists = lazyWithRetry(() => import('../pages/admin/AdminUserLists'));
+const AdminFavorites = lazyWithRetry(() => import('../pages/admin/AdminFavorites'));
+const AdminImportJobs = lazyWithRetry(() => import('../pages/admin/AdminImportJobs'));
+const AdminReports = lazyWithRetry(() => import('../pages/admin/AdminReports'));
+const AdminCharacters = lazyWithRetry(() => import('../pages/admin/AdminCharacters'));
+const AdminStaff = lazyWithRetry(() => import('../pages/admin/AdminStaff'));
+const AdminSettings = lazyWithRetry(() => import('../pages/admin/AdminSettings'));
+const AdminLogs = lazyWithRetry(() => import('../pages/admin/AdminLogs'));
+const AdminReviewReports = lazyWithRetry(() => import('../pages/admin/AdminReviewReports'));
 
 const PageLoader = () => (
     <div className="min-h-[60vh] flex items-center justify-center">
