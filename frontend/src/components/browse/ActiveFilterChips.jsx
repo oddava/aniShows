@@ -92,7 +92,6 @@ export default function ActiveFilterChips({
   return (
     <div className="flex flex-wrap items-center gap-2 mb-6 animate-fade-in">
       <div className="flex items-center gap-1.5 text-xs text-gray-500 mr-1">
-        <SlidersHorizontal className="w-3.5 h-3.5" />
         <span>Active:</span>
       </div>
       
