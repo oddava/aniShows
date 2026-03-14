@@ -240,7 +240,7 @@ const OverviewTab = ({ stats }) => {
           <StatCard title="Total Favorites" value={stats.engagement?.favorites?.toLocaleString() || '0'} change={stats.engagement?.favorites_growth} changeType={getChangeType(stats.engagement?.favorites_growth)} icon={Heart} colorClass="text-pink-500" bgClass="bg-pink-500/10" />
           <StatCard title="Total Reviews" value={stats.engagement?.reviews?.toLocaleString() || '0'} change={stats.engagement?.reviews_growth} changeType={getChangeType(stats.engagement?.reviews_growth)} icon={Star} colorClass="text-amber-400" bgClass="bg-amber-500/10" link="/admin/reviews" linkText="Moderate reviews" />
           <StatCard title="User Lists" value={stats.engagement?.watchlists?.toLocaleString() || '0'} change={stats.engagement?.watchlists_growth} changeType={getChangeType(stats.engagement?.watchlists_growth)} icon={ListPlus} colorClass="text-emerald-400" bgClass="bg-emerald-500/10" />
-          <StatCard title="Average Rating" value={stats.engagement?.avg_rating?.toFixed(1) || '0.0'} icon={Target} colorClass="text-blue-400" bgClass="bg-blue-500/10" />
+          <StatCard title="Average Rating" value={stats.engagement?.avg_rating ? Number(stats.engagement.avg_rating).toFixed(1) : '0.0'} icon={Target} colorClass="text-blue-400" bgClass="bg-blue-500/10" />
         </div>
       </section>
 
@@ -763,7 +763,7 @@ const EngagementTab = ({ data, loading }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <StatCard title="Total Reviews" value={data.total_reviews?.toLocaleString() || '0'} icon={Star} colorClass="text-amber-400" bgClass="bg-amber-500/10" />
         <StatCard title="New Reviews" value={data.new_reviews?.toLocaleString() || '0'} icon={BookOpen} colorClass="text-blue-400" bgClass="bg-blue-500/10" />
-        <StatCard title="Average Rating" value={data.avg_rating?.toFixed(1) || '0.0'} icon={Target} colorClass="text-emerald-400" bgClass="bg-emerald-500/10" />
+        <StatCard title="Average Rating" value={data.avg_rating ? Number(data.avg_rating).toFixed(1) : '0.0'} icon={Target} colorClass="text-emerald-400" bgClass="bg-emerald-500/10" />
         <StatCard
           title="Review Sentiment"
           value={
@@ -886,7 +886,7 @@ const EngagementTab = ({ data, loading }) => {
           data={data.most_reviewed}
           columns={{
             title: (a) => a.title,
-            subtitle: (a) => `Rating: ${a.rating ? a.rating.toFixed(1) : 'N/A'}/10`,
+            subtitle: (a) => `Rating: ${a.rating ? Number(a.rating).toFixed(1) : 'N/A'}/10`,
             badge: (a) => `${a.review_count} reviews`,
           }}
           emptyText="No reviews yet"
@@ -898,7 +898,7 @@ const EngagementTab = ({ data, loading }) => {
           data={data.most_favorited}
           columns={{
             title: (a) => a.title,
-            subtitle: (a) => `Rating: ${a.rating ? a.rating.toFixed(1) : 'N/A'}/10`,
+            subtitle: (a) => `Rating: ${a.rating ? Number(a.rating).toFixed(1) : 'N/A'}/10`,
             badge: (a) => `${a.favorite_count} favorites`,
           }}
           emptyText="No favorites yet"
@@ -925,10 +925,13 @@ const AdminReports = () => {
   });
   const [exporting, setExporting] = useState(false);
 
-  const fetchTabData = useCallback(async (tab, days) => {
+  const fetchTabData = useCallback(async (tab, days, forceRefresh = false) => {
     setLoading(prev => ({ ...prev, [tab]: true }));
     try {
       const params = new URLSearchParams({ type: tab, days });
+      if (forceRefresh) {
+        params.set('refresh', 'true');
+      }
       const response = await api.get(`/admin/reports/?${params}`);
       switch (tab) {
         case 'overview': setOverviewData(response.data); break;
@@ -961,7 +964,7 @@ const AdminReports = () => {
       case 'content': setContentData(null); break;
       case 'engagement': setEngagementData(null); break;
     }
-    fetchTabData(activeTab, dateRange);
+    fetchTabData(activeTab, dateRange, true);
   };
 
   const handleExport = async () => {

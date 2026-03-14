@@ -17,9 +17,14 @@ class AdminReportsView(APIView):
 
     def get(self, request):
         report_type = request.query_params.get("type", "overview")
-        days = int(request.query_params.get("days", 30))
+        days = request.query_params.get("days", 30)
+        force_refresh = str(request.query_params.get("refresh", "")).lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         try:
-            result = generate_report(report_type, days)
+            result = generate_report(report_type, days, force_refresh=force_refresh)
         except ReportError as exc:
             return Response({"detail": exc.message}, status=exc.status_code)
 
@@ -32,11 +37,16 @@ class AdminBulkOperationsView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
+        entity_type = request.data.get("entity_type") or request.data.get("entity")
+        entity_ids = request.data.get("entity_ids")
+        if entity_ids is None:
+            entity_ids = request.data.get("ids", [])
+
         try:
             result = perform_bulk_operation(
                 request.data.get("operation"),
-                request.data.get("entity_type"),
-                request.data.get("entity_ids", []),
+                entity_type,
+                entity_ids,
                 request.user,
                 request.data,
             )

@@ -1,7 +1,7 @@
 from rest_framework.fields import FloatField, IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
 
-from apps.animes.models import Anime, Genre, Review, Studio
+from apps.animes.models import Anime, Character, Genre, Review, Staff, Studio
 
 
 class AdminGenreSerializer(ModelSerializer):
@@ -101,3 +101,59 @@ class AdminReviewSerializer(ModelSerializer):
             "title": obj.anime.title,
             "slug": obj.anime.slug,
         }
+
+
+class AdminCharacterSerializer(ModelSerializer):
+    """Admin serializer for characters."""
+
+    anime_count = IntegerField(read_only=True, default=0)
+    image = SerializerMethodField()
+
+    class Meta:
+        model = Character
+        fields = [
+            "id",
+            "name",
+            "name_native",
+            "description",
+            "anilist_id",
+            "image_url",
+            "image",
+            "anime_count",
+        ]
+
+    def get_image(self, obj):
+        if obj.image:
+            try:
+                return obj.image.url
+            except ValueError:
+                return None
+        return obj.image_url or None
+
+
+class AdminStaffSerializer(ModelSerializer):
+    """Admin serializer for staff."""
+
+    anime_count = IntegerField(read_only=True, default=0)
+    image = SerializerMethodField()
+
+    class Meta:
+        model = Staff
+        fields = [
+            "id",
+            "name",
+            "name_native",
+            "description",
+            "anilist_id",
+            "image_url",
+            "image",
+            "anime_count",
+        ]
+
+    def get_image(self, obj):
+        if obj.image:
+            try:
+                return obj.image.url
+            except ValueError:
+                return None
+        return obj.image_url or None

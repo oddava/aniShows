@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import DataTable from './components/DataTable';
-import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';

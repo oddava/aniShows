@@ -1,0 +1,234 @@
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.admin_api.services.reports_service import generate_report
+from apps.animes.models import Anime, Genre, Review, ReviewReport
+from apps.core.middleware.logging_middleware import AdminAuditMiddleware
+from apps.core.models import AdminPanelSettings
+
+User = get_user_model()
+
+
+class TestAdminSettingsAPI(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.admin = User.objects.create_user(
+            username="admin_user",
+            email="admin@example.com",
+            password="password123",
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=self.admin)
+        self.url = "/api/v1/admin/settings/"
+
+    def test_get_settings_initializes_persistent_record(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("general", response.data)
+        self.assertEqual(AdminPanelSettings.objects.count(), 1)
+
+    def test_put_settings_persists_to_database(self):
+        payload = {
+            "general": {"siteName": "aniShows Pro", "timezone": "America/New_York"},
+            "security": {"sessionTimeout": 12, "apiRateLimit": 5000},
+        }
+        response = self.client.put(self.url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["settings"]["general"]["siteName"], "aniShows Pro")
+
+        cache.clear()
+        get_response = self.client.get(self.url)
+        self.assertEqual(get_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(get_response.data["general"]["siteName"], "aniShows Pro")
+        self.assertEqual(get_response.data["security"]["sessionTimeout"], 12)
+
+    def test_put_settings_rejects_invalid_types(self):
+        payload = {"security": {"sessionTimeout": "abc"}}
+        response = self.client.put(self.url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("errors", response.data)
+        self.assertIn("security.sessionTimeout", response.data["errors"])
+
+
+class TestReviewReportFlow(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.enrich_patch = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        self.enrich_patch.start()
+        self.addCleanup(self.enrich_patch.stop)
+
+        self.admin = User.objects.create_user(
+            username="moderator",
+            email="moderator@example.com",
+            password="password123",
+            is_staff=True,
+        )
+        self.author = User.objects.create_user(
+            username="author",
+            email="author@example.com",
+            password="password123",
+        )
+        self.reporter = User.objects.create_user(
+            username="reporter",
+            email="reporter@example.com",
+            password="password123",
+        )
+        self.anime = Anime.objects.create(
+            title="Review Report Test Anime",
+            slug="review-report-test-anime",
+            synopsis="Anime for review report tests.",
+            status="Finished",
+            anime_type="TV",
+        )
+        self.review = Review.objects.create(
+            user=self.author,
+            anime=self.anime,
+            rating=8,
+            text="This review should be reportable.",
+            has_spoilers=False,
+        )
+
+    def test_submit_report_and_resolve_from_admin_queue(self):
+        self.client.force_authenticate(user=self.reporter)
+        report_response = self.client.post(
+            f"/api/v1/reviews/{self.review.id}/report/",
+            {"reason": ReviewReport.Reason.SPAM, "description": "Looks like spam"},
+            format="json",
+        )
+        self.assertEqual(report_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(ReviewReport.objects.count(), 1)
+
+        self.client.force_authenticate(user=self.admin)
+        queue_response = self.client.get("/api/v1/admin/reviews/reports/?min_score=1")
+        self.assertEqual(queue_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(queue_response.data["count"], 1)
+        self.assertEqual(queue_response.data["results"][0]["id"], self.review.id)
+        self.assertGreaterEqual(queue_response.data["results"][0]["open_user_reports"], 1)
+
+        resolve_response = self.client.post(
+            f"/api/v1/admin/reviews/{self.review.id}/reports/resolve/",
+            {"status": ReviewReport.Status.RESOLVED, "notes": "Handled by moderator"},
+            format="json",
+        )
+        self.assertEqual(resolve_response.status_code, status.HTTP_200_OK)
+
+        report = ReviewReport.objects.get(review=self.review, reporter=self.reporter)
+        self.assertEqual(report.status, ReviewReport.Status.RESOLVED)
+        self.assertEqual(report.resolved_by_id, self.admin.id)
+        self.assertIsNotNone(report.resolved_at)
+
+        queue_after_resolution = self.client.get("/api/v1/admin/reviews/reports/?min_score=1")
+        self.assertEqual(queue_after_resolution.status_code, status.HTTP_200_OK)
+        self.assertEqual(queue_after_resolution.data["count"], 0)
+
+
+class TestBulkOperationSafety(APITestCase):
+    def setUp(self):
+        self.enrich_patch = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        self.enrich_patch.start()
+        self.addCleanup(self.enrich_patch.stop)
+
+        self.staff_admin = User.objects.create_user(
+            username="staff_admin",
+            email="staff-admin@example.com",
+            password="password123",
+            is_staff=True,
+        )
+        self.superuser = User.objects.create_user(
+            username="root_admin",
+            email="root-admin@example.com",
+            password="password123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.genre = Genre.objects.create(name="Action", slug="action")
+        self.anime = Anime.objects.create(
+            title="Bulk Safety Anime",
+            slug="bulk-safety-anime",
+            synopsis="Anime used for bulk operation safety tests.",
+            status="Airing",
+            anime_type="TV",
+        )
+        self.anime.genres.add(self.genre)
+        self.bulk_url = "/api/v1/admin/bulk/"
+
+    def test_bulk_genre_delete_requires_force_when_referenced(self):
+        self.client.force_authenticate(user=self.staff_admin)
+        response = self.client.post(
+            self.bulk_url,
+            {"operation": "delete", "entity_type": "genre", "entity_ids": [self.genre.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Genre.objects.filter(id=self.genre.id).exists())
+
+    def test_bulk_genre_delete_succeeds_with_force(self):
+        self.client.force_authenticate(user=self.staff_admin)
+        response = self.client.post(
+            self.bulk_url,
+            {
+                "operation": "delete",
+                "entity_type": "genre",
+                "entity_ids": [self.genre.id],
+                "force": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Genre.objects.filter(id=self.genre.id).exists())
+
+    def test_bulk_anime_delete_requires_superuser(self):
+        self.client.force_authenticate(user=self.staff_admin)
+        denied = self.client.post(
+            self.bulk_url,
+            {"operation": "delete", "entity_type": "anime", "entity_ids": [self.anime.id]},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Anime.objects.filter(id=self.anime.id).exists())
+
+        self.client.force_authenticate(user=self.superuser)
+        allowed = self.client.post(
+            self.bulk_url,
+            {"operation": "delete", "entity_type": "anime", "entity_ids": [self.anime.id]},
+            format="json",
+        )
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        self.assertFalse(Anime.objects.filter(id=self.anime.id).exists())
+
+
+class TestAuditMiddlewareExtraction(TestCase):
+    def setUp(self):
+        self.middleware = AdminAuditMiddleware(lambda request: None)
+
+    def test_extracts_correct_entity_and_id(self):
+        self.assertEqual(self.middleware._get_entity_type("/api/v1/admin/users/123/"), "User")
+        self.assertEqual(self.middleware._extract_entity_id("/api/v1/admin/users/123/"), "123")
+
+    def test_ignores_action_paths_for_entity_id(self):
+        self.assertEqual(self.middleware._get_entity_type("/api/v1/admin/reports/"), "Report")
+        self.assertEqual(self.middleware._extract_entity_id("/api/v1/admin/reviews/reports/"), "")
+
+
+class TestReportsServiceCache(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_generate_report_uses_cache_and_force_refresh(self):
+        with patch(
+            "apps.admin_api.services.reports_service._overview_payload",
+            return_value={"ok": True},
+        ) as payload_builder:
+            first = generate_report("overview", 30)
+            second = generate_report("overview", 30)
+            refreshed = generate_report("overview", 30, force_refresh=True)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(refreshed.status_code, 200)
+        self.assertEqual(payload_builder.call_count, 2)

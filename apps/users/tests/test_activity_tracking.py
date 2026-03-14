@@ -115,6 +115,32 @@ class ActivitySignalTests(TransactionTestCase):
         self.assertEqual(activity.old_episodes, 3)
         self.assertEqual(activity.new_episodes, 6)
 
+    def test_rapid_distinct_progress_updates_not_deduped(self):
+        """Distinct rapid progress updates should produce separate activities."""
+        entry = UserAnimeList.objects.create(
+            user=self.user,
+            anime=self.anime,
+            status=UserAnimeList.UserAnimeStatus.watching,
+            episodes_watched=0,
+        )
+        UserActivity.objects.all().delete()
+
+        entry.episodes_watched = 1
+        entry.save()
+        entry.episodes_watched = 2
+        entry.save()
+
+        activities = list(
+            UserActivity.objects.filter(
+                user=self.user,
+                anime=self.anime,
+                activity_type=UserActivity.ActivityType.PROGRESS,
+            ).order_by("created_at")
+        )
+        self.assertEqual(len(activities), 2)
+        self.assertEqual((activities[0].old_episodes, activities[0].new_episodes), (0, 1))
+        self.assertEqual((activities[1].old_episodes, activities[1].new_episodes), (1, 2))
+
     def test_activity_on_completion(self):
         """Changing status to Completed creates a COMPLETED activity."""
         entry = UserAnimeList.objects.create(

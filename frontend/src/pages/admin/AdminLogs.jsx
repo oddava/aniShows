@@ -42,7 +42,7 @@ const AdminLogs = () => {
       const response = await api.get(`/admin/logs/?${params}`);
       setLogs(response.data.results);
       setTotalPages(Math.ceil(response.data.count / 20));
-    } catch {
+    } catch (err) {
       logger.error('Failed to fetch logs:', err);
       toast.error('Failed to load logs');
     }
@@ -52,7 +52,7 @@ const AdminLogs = () => {
     try {
       const response = await api.get('/admin/logs/stats/');
       setStats(response.data);
-    } catch {
+    } catch (err) {
       logger.error('Failed to fetch stats:', err);
     }
   }, []);
@@ -279,10 +279,10 @@ const AdminLogs = () => {
                         <span>{getTypeIcon(log.log_type)}</span>
                         {log.log_type}
                       </span>
-                      {log.user && (
+                      {(log.username || log.user) && (
                         <span className="flex items-center gap-1">
                           <span>👤</span>
-                          {log.user.username}
+                          {log.username || `User #${log.user}`}
                         </span>
                       )}
                       {log.method && (
@@ -385,10 +385,10 @@ const AdminLogs = () => {
                   <p className="text-white">{getTypeIcon(selectedLog.log_type)} {selectedLog.log_type}</p>
                 </div>
 
-                {selectedLog.user && (
+                {(selectedLog.username || selectedLog.user) && (
                   <div>
                     <label className="block text-sm font-medium text-white/50 mb-1">User</label>
-                    <p className="text-white">{selectedLog.user.username} (ID: {selectedLog.user.id})</p>
+                    <p className="text-white">{selectedLog.username || 'Unknown'} (ID: {selectedLog.user})</p>
                   </div>
                 )}
 

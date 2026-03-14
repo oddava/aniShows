@@ -195,12 +195,12 @@ const AdminAnime = () => {
                                                         {anime.title}
                                                     </Link>
                                                     <span className="text-xs text-gray-500 mt-1 truncate block">
-                                                        Studio: {anime.studio || 'Unknown'}
+                                                        Studio: {anime.studio?.name || 'Unknown'}
                                                     </span>
                                                     <div className="flex items-center gap-3 mt-1.5">
                                                         <span className="flex items-center gap-1 text-[10px] font-bold tracking-wide uppercase text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">
                                                             <Star fill="currentColor" size={10} />
-                                                            {anime.rating ? anime.rating.toFixed(1) : '—'}
+                                                            {anime.rating ? Number(anime.rating).toFixed(1) : '—'}
                                                         </span>
                                                     </div>
                                                 </div>

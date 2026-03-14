@@ -4,13 +4,15 @@ from django.utils.html import escape
 from rest_framework.serializers import (
     BooleanField,
     CharField,
+    ChoiceField,
     IntegerField,
     ModelSerializer,
+    Serializer,
     SerializerMethodField,
     SlugRelatedField,
 )
 
-from apps.animes.models import Anime, Review, ReviewComment
+from apps.animes.models import Anime, Review, ReviewComment, ReviewReport
 from apps.animes.serializers.anime import AnimeListSerializer
 from apps.animes.serializers_mixins import UserProfileMixin
 
@@ -139,3 +141,8 @@ class ReviewCommentSerializer(ModelSerializer):
             return True
 
         return obj.review.user == request.user
+
+
+class ReviewReportCreateSerializer(Serializer):
+    reason = ChoiceField(choices=ReviewReport.Reason.choices)
+    description = CharField(required=False, allow_blank=True, max_length=500)

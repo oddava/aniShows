@@ -20,6 +20,20 @@ def build_user_list_queryset(params):
             Q(user__username__icontains=search) | Q(anime__title__icontains=search)
         )
 
+    user_filter = params.get("user")
+    if user_filter:
+        if str(user_filter).isdigit():
+            queryset = queryset.filter(user_id=int(user_filter))
+        else:
+            queryset = queryset.filter(user__username__icontains=user_filter)
+
+    anime_filter = params.get("anime")
+    if anime_filter:
+        if str(anime_filter).isdigit():
+            queryset = queryset.filter(anime_id=int(anime_filter))
+        else:
+            queryset = queryset.filter(anime__title__icontains=anime_filter)
+
     ordering = params.get("ordering", "-updated_at")
     valid_orderings = {"updated_at", "-updated_at", "score", "-score"}
     if ordering in valid_orderings:
@@ -33,7 +47,7 @@ def serialize_user_list_entries(entries):
         {
             "id": entry.id,
             "user": {"id": entry.user.id, "username": entry.user.username},
-            "anime": {"id": entry.anime.id, "title": entry.anime.title},
+            "anime": {"id": entry.anime.id, "title": entry.anime.title, "slug": entry.anime.slug},
             "status": entry.status,
             "score": entry.score,
             "episodes_watched": entry.episodes_watched,
@@ -47,7 +61,7 @@ def serialize_user_list_entry(entry):
     return {
         "id": entry.id,
         "user": {"id": entry.user.id, "username": entry.user.username},
-        "anime": {"id": entry.anime.id, "title": entry.anime.title},
+        "anime": {"id": entry.anime.id, "title": entry.anime.title, "slug": entry.anime.slug},
         "status": entry.status,
         "score": entry.score,
         "episodes_watched": entry.episodes_watched,

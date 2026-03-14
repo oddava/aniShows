@@ -23,6 +23,7 @@ from apps.animes.serializers.imports import (
 )
 from apps.animes.serializers.reviews import (
     ReviewCommentSerializer,
+    ReviewReportCreateSerializer,
     ReviewSerializer,
     ReviewUserSerializer,
 )

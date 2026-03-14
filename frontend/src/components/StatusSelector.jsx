@@ -93,6 +93,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     if (!isAuthenticated || !isOwnProfile) return null;
 
     const handleStatusChange = async (newStatus) => {
+        if (isLoading) return;
         setIsLoading(true);
         try {
             let nextEpisodes = episodesWatched;
@@ -100,9 +101,11 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             if (newStatus === 'Completed' && totalEpisodes && totalEpisodes > 0) {
                 nextEpisodes = totalEpisodes;
                 setEpisodesWatched(totalEpisodes);
+                setLocalEpisodes(totalEpisodes);
             } else if (newStatus === 'Plan to Watch') {
                 nextEpisodes = 0;
                 setEpisodesWatched(0);
+                setLocalEpisodes(0);
             }
 
             let response;
@@ -153,7 +156,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     };
 
     const handleRemove = async () => {
-        if (!listId) return;
+        if (!listId || isLoading) return;
         setIsLoading(true);
         try {
             await listApi.remove(listId);
@@ -163,6 +166,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             setListId(null);
             setScore(0);
             setEpisodesWatched(0);
+            setLocalEpisodes(0);
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (onUpdate) onUpdate(null);
@@ -174,6 +178,10 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     };
 
     const handleEpisodeChange = async (newEpisodes) => {
+        if (!listId || isLoading) {
+            return;
+        }
+
         if (newEpisodes < 0 || (totalEpisodes && newEpisodes > totalEpisodes)) {
             setLocalEpisodes(episodesWatched);
             return;
@@ -182,6 +190,7 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
         const prevEpisodes = episodesWatched;
         const prevStatus = currentStatus;
 
+        setIsLoading(true);
         setEpisodesWatched(newEpisodes);
         setLocalEpisodes(newEpisodes);
 
@@ -214,7 +223,10 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
         } catch (error) {
             logger.error('Failed to update episodes:', error);
             setEpisodesWatched(prevEpisodes);
+            setLocalEpisodes(prevEpisodes);
             setCurrentStatus(prevStatus);
+        } finally {
+            setIsLoading(false);
         }
     };
 

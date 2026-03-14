@@ -1,0 +1,200 @@
+from copy import deepcopy
+
+from django.core.cache import cache
+from django.db import transaction
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.core.models import AdminPanelSettings
+from apps.core.permissions import IsAdminUser
+
+SETTINGS_CACHE_KEY = "admin:panel_settings:v1"
+SETTINGS_DB_KEY = "global"
+
+DEFAULT_ADMIN_SETTINGS = {
+    "general": {
+        "siteName": "aniShows",
+        "siteDescription": "Your Ultimate Anime Discovery Platform",
+        "maintenanceMode": False,
+        "allowRegistration": True,
+        "defaultLanguage": "en",
+        "timezone": "UTC",
+    },
+    "users": {
+        "emailVerification": True,
+        "allowUsernameChange": True,
+        "minUsernameLength": 3,
+        "maxUsernameLength": 30,
+        "defaultUserRole": "user",
+        "profileVisibility": "public",
+    },
+    "content": {
+        "enableReviews": True,
+        "requireApproval": False,
+        "allowComments": True,
+        "autoFetchMetadata": True,
+        "maxUploadSize": 10,
+        "allowedImageTypes": "jpg,jpeg,png,webp",
+    },
+    "security": {
+        "sessionTimeout": 24,
+        "maxLoginAttempts": 5,
+        "requireStrongPassword": True,
+        "twoFactorAuth": False,
+        "ipBlocking": False,
+        "apiRateLimit": 1000,
+    },
+}
+
+SETTINGS_VALIDATION_RULES = {
+    "general": {
+        "siteName": {"type": "str", "max_length": 120},
+        "siteDescription": {"type": "str", "max_length": 500},
+        "maintenanceMode": {"type": "bool"},
+        "allowRegistration": {"type": "bool"},
+        "defaultLanguage": {"type": "str", "max_length": 10},
+        "timezone": {"type": "str", "max_length": 64},
+    },
+    "users": {
+        "emailVerification": {"type": "bool"},
+        "allowUsernameChange": {"type": "bool"},
+        "minUsernameLength": {"type": "int", "min": 1, "max": 50},
+        "maxUsernameLength": {"type": "int", "min": 1, "max": 100},
+        "defaultUserRole": {"type": "str", "max_length": 30},
+        "profileVisibility": {"type": "str", "max_length": 20},
+    },
+    "content": {
+        "enableReviews": {"type": "bool"},
+        "requireApproval": {"type": "bool"},
+        "allowComments": {"type": "bool"},
+        "autoFetchMetadata": {"type": "bool"},
+        "maxUploadSize": {"type": "int", "min": 1, "max": 100},
+        "allowedImageTypes": {"type": "str", "max_length": 120},
+    },
+    "security": {
+        "sessionTimeout": {"type": "int", "min": 1, "max": 168},
+        "maxLoginAttempts": {"type": "int", "min": 1, "max": 20},
+        "requireStrongPassword": {"type": "bool"},
+        "twoFactorAuth": {"type": "bool"},
+        "ipBlocking": {"type": "bool"},
+        "apiRateLimit": {"type": "int", "min": 100, "max": 100000},
+    },
+}
+
+
+def _merge_with_defaults(payload: dict | None) -> dict:
+    merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
+    if not isinstance(payload, dict):
+        return merged
+
+    for section, fields in payload.items():
+        if section not in merged or not isinstance(fields, dict):
+            continue
+        for field, value in fields.items():
+            if field in merged[section]:
+                merged[section][field] = value
+
+    return merged
+
+
+def _validate_payload(incoming: dict) -> tuple[dict, dict]:
+    merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
+    errors = {}
+
+    for section, section_payload in incoming.items():
+        if section not in SETTINGS_VALIDATION_RULES:
+            errors[section] = "Unknown settings section."
+            continue
+        if not isinstance(section_payload, dict):
+            errors[section] = "Section payload must be an object."
+            continue
+
+        section_rules = SETTINGS_VALIDATION_RULES[section]
+        for field, value in section_payload.items():
+            path = f"{section}.{field}"
+            rule = section_rules.get(field)
+            if not rule:
+                errors[path] = "Unknown setting field."
+                continue
+
+            expected_type = rule["type"]
+            if expected_type == "bool":
+                if not isinstance(value, bool):
+                    errors[path] = "Must be a boolean."
+                    continue
+            elif expected_type == "int":
+                if isinstance(value, bool) or not isinstance(value, int):
+                    errors[path] = "Must be an integer."
+                    continue
+                if "min" in rule and value < rule["min"]:
+                    errors[path] = f"Must be >= {rule['min']}."
+                    continue
+                if "max" in rule and value > rule["max"]:
+                    errors[path] = f"Must be <= {rule['max']}."
+                    continue
+            elif expected_type == "str":
+                if not isinstance(value, str):
+                    errors[path] = "Must be a string."
+                    continue
+                if not value.strip():
+                    errors[path] = "Cannot be blank."
+                    continue
+                if "max_length" in rule and len(value) > rule["max_length"]:
+                    errors[path] = f"Must be <= {rule['max_length']} characters."
+                    continue
+
+            merged[section][field] = value
+
+    min_name = merged["users"]["minUsernameLength"]
+    max_name = merged["users"]["maxUsernameLength"]
+    if min_name > max_name:
+        errors["users.minUsernameLength"] = "Cannot be greater than maxUsernameLength."
+
+    return merged, errors
+
+
+class AdminSettingsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        cached = cache.get(SETTINGS_CACHE_KEY)
+        if isinstance(cached, dict):
+            return Response(cached)
+
+        settings_obj, _ = AdminPanelSettings.objects.get_or_create(
+            key=SETTINGS_DB_KEY,
+            defaults={"data": deepcopy(DEFAULT_ADMIN_SETTINGS), "updated_by": request.user},
+        )
+        merged = _merge_with_defaults(settings_obj.data)
+
+        if settings_obj.data != merged:
+            settings_obj.data = merged
+            settings_obj.save(update_fields=["data", "updated_at"])
+
+        cache.set(SETTINGS_CACHE_KEY, merged, timeout=300)
+        return Response(merged)
+
+    def put(self, request):
+        incoming = request.data
+        if not isinstance(incoming, dict):
+            return Response({"detail": "Invalid settings payload."}, status=status.HTTP_400_BAD_REQUEST)
+
+        merged, errors = _validate_payload(incoming)
+        if errors:
+            return Response(
+                {"detail": "Invalid settings payload.", "errors": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            settings_obj, _ = AdminPanelSettings.objects.select_for_update().get_or_create(
+                key=SETTINGS_DB_KEY,
+                defaults={"data": deepcopy(DEFAULT_ADMIN_SETTINGS), "updated_by": request.user},
+            )
+            settings_obj.data = merged
+            settings_obj.updated_by = request.user
+            settings_obj.save(update_fields=["data", "updated_by", "updated_at"])
+
+        cache.set(SETTINGS_CACHE_KEY, merged, timeout=300)
+        return Response({"message": "Settings saved successfully.", "settings": merged})

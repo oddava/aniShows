@@ -33,7 +33,7 @@ const AdminReviews = () => {
             const response = await api.get(`/admin/reviews/?${params}`);
             setReviews(response.data.results);
             setTotalPages(Math.ceil(response.data.count / 20));
-        } catch {
+        } catch (err) {
             logger.error('Failed to fetch reviews:', err);
             setError(err.response?.data?.detail || 'Failed to load reviews');
         } finally {
@@ -59,7 +59,7 @@ const AdminReviews = () => {
             await api.delete(`/admin/reviews/${reviewId}/`);
             setSelectedReview(null);
             fetchReviews();
-        } catch {
+        } catch (err) {
             alert(err.response?.data?.detail || 'Failed to delete review');
         }
     };
@@ -68,8 +68,8 @@ const AdminReviews = () => {
         try {
             const response = await api.get(`/admin/reviews/${reviewId}/`);
             setSelectedReview(response.data);
-        } catch {
-            alert('Failed to load review details');
+        } catch (err) {
+            alert(err.response?.data?.detail || 'Failed to load review details');
         }
     };
 

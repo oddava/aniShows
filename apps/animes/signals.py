@@ -125,18 +125,30 @@ def capture_old_anime_list_state(sender, instance, **kwargs):
 def _create_activity_deduped(**kwargs):
     """Create activity record with deduplication guard.
 
-    Prevents duplicate activities within 2 seconds (e.g. from rapid auto-saves).
+    Prevents identical duplicate activities within 2 seconds (e.g. from rapid auto-saves).
+    Distinct progress changes (1->2, then 2->3) are treated as separate events.
     """
     user = kwargs.get("user")
     if not _user_exists(user):
         return
 
     cutoff = tz.now() - timedelta(seconds=2)
+    dedupe_fields = {
+        "old_status": kwargs.get("old_status"),
+        "new_status": kwargs.get("new_status"),
+        "old_episodes": kwargs.get("old_episodes"),
+        "new_episodes": kwargs.get("new_episodes"),
+        "old_score": kwargs.get("old_score"),
+        "new_score": kwargs.get("new_score"),
+        "notes": kwargs.get("notes", ""),
+    }
+
     if UserActivity.objects.filter(
         user=user,
         anime=kwargs["anime"],
         activity_type=kwargs["activity_type"],
         created_at__gte=cutoff,
+        **dedupe_fields,
     ).exists():
         logger.debug(
             f"Skipping duplicate activity {kwargs['activity_type']} "

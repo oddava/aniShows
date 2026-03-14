@@ -92,6 +92,17 @@ class EpisodeTrackingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('episodes_watched', response.data)
 
+    def test_cannot_set_negative_episodes(self):
+        """Negative episode counts should be rejected."""
+        data = {
+            'anime_id': self.anime.id,
+            'status': 'Watching',
+            'episodes_watched': -1
+        }
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('episodes_watched', response.data)
+
     def test_unknown_episode_count(self):
         """Test behavior with 0/unknown total episodes."""
         data = {

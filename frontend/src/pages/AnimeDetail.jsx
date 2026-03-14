@@ -449,6 +449,10 @@ export default function AnimeDetail() {
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
+    const watchedEpisodes = anime?.user_list_status?.episodes_watched || 0;
+    const episodeDuration = anime?.duration_minutes || 24;
+    const watchedMinutes = watchedEpisodes * episodeDuration;
+    const watchTimeLabel = `${Math.floor(watchedMinutes / 60)}h ${watchedMinutes % 60}m`;
 
     return (
         <div
@@ -554,13 +558,7 @@ export default function AnimeDetail() {
                                                 <div className="flex flex-col">
                                                     <span className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-0.5 sm:mb-1">Watch Time</span>
                                                     <span className="text-xs sm:text-sm md:text-base font-black text-white whitespace-nowrap">
-                                                        {anime.episode_count ? (() => {
-                                                            const duration = anime.duration_minutes || 24;
-                                                            const totalMinutes = anime.episode_count * duration;
-                                                            const hours = Math.floor(totalMinutes / 60);
-                                                            const minutes = totalMinutes % 60;
-                                                            return `${hours}h ${minutes}m`;
-                                                        })() : 'N/A'}
+                                                        {watchTimeLabel}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 sm:gap-2">

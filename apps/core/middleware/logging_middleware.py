@@ -1,4 +1,5 @@
 import time
+from uuid import UUID
 
 from django.conf import settings
 
@@ -147,29 +148,69 @@ class AdminAuditMiddleware:
 
     def _get_entity_type(self, path):
         """Extract entity type from API path."""
-        parts = path.split("/")
-        if len(parts) >= 4:
-            entity = parts[3]  # /api/v1/admin/{entity}/
+        segments = self._admin_segments(path)
+        if segments:
+            entity = segments[0]
             entity_map = {
                 "users": "User",
                 "anime": "Anime",
                 "genres": "Genre",
                 "studios": "Studio",
+                "characters": "Character",
+                "staff": "Staff",
                 "reviews": "Review",
+                "review-reports": "ReviewReport",
                 "user-lists": "UserAnimeList",
                 "favorites": "UserFavorite",
                 "import-jobs": "ImportJob",
+                "settings": "AdminPanelSettings",
+                "logs": "SystemLog",
+                "audit-logs": "AuditLog",
+                "reports": "Report",
+                "bulk": "BulkOperation",
+                "dashboard": "Dashboard",
+                "celery": "Celery",
             }
-            return entity_map.get(entity, entity.title())
+            return entity_map.get(entity, entity.replace("-", " ").title().replace(" ", ""))
         return "Unknown"
 
     def _extract_entity_id(self, path):
         """Extract entity ID from path if present."""
-        parts = path.rstrip("/").split("/")
-        # Check if last part is a number (ID)
-        if parts and parts[-1].isdigit():
-            return parts[-1]
+        segments = self._admin_segments(path)
+        if len(segments) < 2:
+            return ""
+
+        candidate = segments[1]
+        action_segments = {
+            "reports",
+            "stats",
+            "export",
+            "bulk",
+            "dashboard",
+            "trigger",
+            "control",
+            "resolve",
+        }
+        if candidate in action_segments:
+            return ""
+        if candidate.isdigit():
+            return candidate
+
+        try:
+            UUID(candidate)
+            return candidate
+        except ValueError:
+            pass
+
+        if "-" in candidate and len(candidate) >= 8:
+            return candidate
         return ""
+
+    def _admin_segments(self, path):
+        parts = [part for part in path.split("/") if part]
+        if len(parts) >= 4 and parts[:3] == ["api", "v1", "admin"]:
+            return parts[3:]
+        return []
 
 class ExceptionLoggingMiddleware:
     """Middleware to log exceptions."""

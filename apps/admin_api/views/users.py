@@ -135,6 +135,15 @@ class AdminUserListViewSet(ViewSet):
         entry.delete()
         return Response({"message": "List entry deleted successfully."})
 
+    @action(detail=False, methods=["post"])
+    def bulk_delete(self, request):
+        ids = request.data.get("ids", [])
+        if not isinstance(ids, list) or not ids:
+            return Response({"detail": "ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        deleted_count, _ = UserAnimeList.objects.filter(id__in=ids).delete()
+        return Response({"message": f"Deleted {deleted_count} list entries."})
+
 
 class AdminFavoritesViewSet(ViewSet):
     """User favorites management for admins."""
@@ -160,3 +169,39 @@ class AdminFavoritesViewSet(ViewSet):
 
         fav.delete()
         return Response({"message": "Favorite deleted successfully."})
+
+    @action(detail=False, methods=["get"])
+    def stats(self, request):
+        base_qs = UserFavorite.objects.select_related("anime")
+        top_anime = (
+            base_qs.values(
+                "anime_id",
+                "anime__title",
+                "anime__slug",
+                "anime__cover_image",
+                "anime__cover_image_external_url",
+            )
+            .annotate(favorite_count=Count("id"))
+            .order_by("-favorite_count")[:6]
+        )
+
+        serialized_top = [
+            {
+                "id": item["anime_id"],
+                "title": item["anime__title"],
+                "slug": item["anime__slug"],
+                "favorite_count": item["favorite_count"],
+                "poster": item["anime__cover_image"] or item["anime__cover_image_external_url"] or "",
+                "poster_small": item["anime__cover_image"] or item["anime__cover_image_external_url"] or "",
+            }
+            for item in top_anime
+        ]
+
+        return Response(
+            {
+                "total_favorites": base_qs.count(),
+                "unique_users": base_qs.values("user_id").distinct().count(),
+                "unique_anime": base_qs.values("anime_id").distinct().count(),
+                "top_anime": serialized_top,
+            }
+        )

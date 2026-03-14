@@ -464,6 +464,9 @@ class UserAnimeListSerializer(ModelSerializer):
         if not anime and self.instance:
             anime = self.instance.anime
 
+        if episodes_watched is not None and episodes_watched < 0:
+            raise ValidationError({"episodes_watched": "Episodes watched cannot be negative."})
+
         if episodes_watched is not None and anime and anime.episode_count > 0:
             if episodes_watched > anime.episode_count:
                 raise ValidationError(

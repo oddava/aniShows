@@ -7,8 +7,12 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.animes.models import Review, ReviewComment, ReviewVote
-from apps.animes.serializers import ReviewCommentSerializer, ReviewSerializer
+from apps.animes.models import Review, ReviewComment, ReviewReport, ReviewVote
+from apps.animes.serializers import (
+    ReviewCommentSerializer,
+    ReviewReportCreateSerializer,
+    ReviewSerializer,
+)
 from apps.users.models import UserAnimeList
 from apps.users.permissions import EmailVerificationMixin
 from apps.users.services.cache import invalidate_user_caches
@@ -309,3 +313,37 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         comment.soft_delete()
 
         return Response({"deleted": True})
+
+    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
+    def report(self, request, pk=None):
+        review = self.get_object()
+        user = request.user
+
+        if review.user_id == user.id:
+            return Response({"error": "You cannot report your own review."}, status=400)
+
+        serializer = ReviewReportCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        report, created = ReviewReport.objects.update_or_create(
+            review=review,
+            reporter=user,
+            defaults={
+                "reason": serializer.validated_data["reason"],
+                "description": serializer.validated_data.get("description", "").strip(),
+                "status": ReviewReport.Status.OPEN,
+                "resolved_by": None,
+                "resolved_at": None,
+                "resolution_notes": "",
+            },
+        )
+
+        return Response(
+            {
+                "id": report.id,
+                "review_id": review.id,
+                "status": report.status,
+                "created": created,
+            },
+            status=201 if created else 200,
+        )

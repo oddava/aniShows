@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
     Users, Film, Star, Heart, CheckCircle,
     TrendingUp, ExternalLink, Activity, ArrowUpRight, ArrowDownRight,
@@ -29,6 +29,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const AdminDashboard = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -131,11 +132,17 @@ const AdminDashboard = () => {
                     <p className="text-gray-400 mt-1">Here's what's happening with your platform today.</p>
                 </div>
                 <div className="flex gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 border border-white/20 hover:border-white/40 rounded-xl text-sm font-medium transition-colors text-white bg-transparent">
+                    <button
+                        onClick={() => navigate('/admin/logs')}
+                        className="flex items-center gap-2 px-4 py-2 border border-white/20 hover:border-white/40 rounded-xl text-sm font-medium transition-colors text-white bg-transparent"
+                    >
                         <Activity size={16} />
                         View Live Logs
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-200 rounded-xl text-sm font-medium transition-colors">
+                    <button
+                        onClick={() => navigate('/admin/reports')}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-200 rounded-xl text-sm font-medium transition-colors"
+                    >
                         Generate Report
                     </button>
                 </div>

@@ -1,9 +1,9 @@
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
-from dj_rest_auth.registration.views import SocialLoginView
 from django.conf import settings
 
 from apps.shared.logger import logger
+from apps.users.views.social_auth import SocialLoginView
 
 
 class CustomOAuth2Client(OAuth2Client):
@@ -12,6 +12,7 @@ class CustomOAuth2Client(OAuth2Client):
         kwargs.pop("scope_delimiter", None)
         # Fix for potential other argument conflicts by just passing through
         super().__init__(*args, **kwargs)
+
 
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter

@@ -8,10 +8,12 @@ from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from apps.animes.admin_serializers import (
     AdminAnimeSerializer,
+    AdminCharacterSerializer,
     AdminGenreSerializer,
+    AdminStaffSerializer,
     AdminStudioSerializer,
 )
-from apps.animes.models import Anime, Genre, Studio
+from apps.animes.models import Anime, Character, Genre, Staff, Studio
 from apps.core.permissions import IsAdminUser
 from apps.shared.pagination import StandardPagination
 
@@ -124,3 +126,33 @@ class AdminStudioViewSet(ModelViewSet):
         self.perform_destroy(studio)
 
         return Response({"message": f"Studio '{name}' deleted successfully."})
+
+
+class AdminCharacterViewSet(ModelViewSet):
+    """Character management for admins."""
+
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardPagination
+    serializer_class = AdminCharacterSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "name_native", "description"]
+    ordering_fields = ["name", "anilist_id", "id"]
+    ordering = ["name"]
+
+    def get_queryset(self):
+        return Character.objects.annotate(anime_count=Count("animes", distinct=True))
+
+
+class AdminStaffViewSet(ModelViewSet):
+    """Staff management for admins."""
+
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardPagination
+    serializer_class = AdminStaffSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "name_native", "description"]
+    ordering_fields = ["name", "anilist_id", "id"]
+    ordering = ["name"]
+
+    def get_queryset(self):
+        return Staff.objects.annotate(anime_count=Count("animes", distinct=True))

@@ -411,6 +411,51 @@ class ReviewComment(TimestampMixin, Model):
         self.save(update_fields=["is_deleted", "updated_at"])
 
 
+class ReviewReport(TimestampMixin, Model):
+    class Reason(TextChoices):
+        SPOILER = "spoiler", "Spoiler"
+        SPAM = "spam", "Spam"
+        HARASSMENT = "harassment", "Harassment"
+        HATE_SPEECH = "hate_speech", "Hate Speech"
+        MISINFORMATION = "misinformation", "Misinformation"
+        OFF_TOPIC = "off_topic", "Off Topic"
+        OTHER = "other", "Other"
+
+    class Status(TextChoices):
+        OPEN = "open", "Open"
+        IN_REVIEW = "in_review", "In Review"
+        RESOLVED = "resolved", "Resolved"
+        DISMISSED = "dismissed", "Dismissed"
+
+    review = ForeignKey("anime.Review", CASCADE, related_name="reports")
+    reporter = ForeignKey("users.CustomUser", CASCADE, related_name="review_reports")
+    reason = CharField(max_length=30, choices=Reason.choices, default=Reason.OTHER)
+    description = TextField(blank=True)
+
+    status = CharField(max_length=20, choices=Status.choices, default=Status.OPEN, db_index=True)
+    resolved_by = ForeignKey(
+        "users.CustomUser",
+        SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_review_reports",
+    )
+    resolved_at = DateTimeField(null=True, blank=True)
+    resolution_notes = TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ("review", "reporter")
+        indexes = [
+            Index(fields=["status", "-created_at"]),
+            Index(fields=["review", "status"]),
+            Index(fields=["reporter", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Report by {self.reporter.username} on review {self.review_id}"
+
+
 class UserRecommendation(TimestampMixin, Model):
     class RecommendationReason(TextChoices):
         GENRE_MATCH = "genre_match", "Genre Match"
