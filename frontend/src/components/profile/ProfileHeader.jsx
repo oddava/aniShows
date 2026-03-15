@@ -148,7 +148,7 @@ export default function ProfileHeader({
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-3 shrink-0 mt-4">
+                        <div className="flex items-center justify-end gap-3 shrink-0 mt-0">
                             {!isPublicView ? (
                                 <Link
                                     to="/settings"
