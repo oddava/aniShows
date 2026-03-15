@@ -390,11 +390,18 @@ export default function OverviewTab({
 
                     <CurrentlyWatchingGrid watchingItems={watchingItems} />
 
-                    <div className="mt-8">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-sm font-bold text-white">Recent Activity</h3>
+                    <div className="mt-8 ui-surface-subtle p-5">
+                        <div className="mb-5 flex items-center justify-between gap-4">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-200">Watching Activity</h3>
+                            <button
+                                type="button"
+                                onClick={() => onTabChange && onTabChange('activity')}
+                                className="rounded-lg border border-gray-700 bg-dark-100 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:border-accent/50 hover:text-white"
+                            >
+                                View Full Feed
+                            </button>
                         </div>
-                        <ActivityFeed username={targetUsername} isPrivate={isPrivate} />
+                        <ActivityFeed username={targetUsername} isPrivate={isPrivate} compact />
                     </div>
                 </div>
             </div>

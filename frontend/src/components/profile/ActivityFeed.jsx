@@ -1,16 +1,72 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { activityApi } from '../../api/client';
 import { Link } from 'react-router-dom';
+import {
+    CheckCircle2,
+    CircleDashed,
+    ListPlus,
+    PlayCircle,
+    Repeat2,
+    Star,
+    StickyNote,
+    Trash2,
+    Workflow,
+} from 'lucide-react';
+
+const FILTER_OPTIONS = [
+    { value: 'all', label: 'All', icon: CircleDashed },
+    { value: 'progress', label: 'Progress', icon: PlayCircle },
+    { value: 'completed', label: 'Completed', icon: CheckCircle2 },
+    { value: 'status_change', label: 'Status', icon: Workflow },
+    { value: 'added', label: 'Added', icon: ListPlus },
+    { value: 'removed', label: 'Removed', icon: Trash2 },
+    { value: 'score', label: 'Score', icon: Star },
+    { value: 'rewatching', label: 'Rewatch', icon: Repeat2 },
+    { value: 'notes_update', label: 'Notes', icon: StickyNote },
+];
 
 const ACTIVITY_CONFIG = {
-    completed: { borderColor: 'border-green-500', bgHover: 'hover:bg-green-500/5' },
-    added: { borderColor: 'border-blue-500', bgHover: 'hover:bg-blue-500/5' },
-    progress: { borderColor: 'border-accent', bgHover: 'hover:bg-accent/5' },
-    status_change: { borderColor: 'border-yellow-500', bgHover: 'hover:bg-yellow-500/5' },
-    score: { borderColor: 'border-amber-500', bgHover: 'hover:bg-amber-500/5' },
-    removed: { borderColor: 'border-red-500', bgHover: 'hover:bg-red-500/5' },
-    rewatching: { borderColor: 'border-cyan-500', bgHover: 'hover:bg-cyan-500/5' },
-    notes_update: { borderColor: 'border-pink-500', bgHover: 'hover:bg-pink-500/5' },
+    completed: {
+        icon: CheckCircle2,
+        marker: 'bg-emerald-400',
+        chip: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10',
+    },
+    added: {
+        icon: ListPlus,
+        marker: 'bg-blue-400',
+        chip: 'text-blue-300 border-blue-500/30 bg-blue-500/10',
+    },
+    progress: {
+        icon: PlayCircle,
+        marker: 'bg-accent',
+        chip: 'text-accent-light border-accent/30 bg-accent/10',
+    },
+    status_change: {
+        icon: Workflow,
+        marker: 'bg-yellow-400',
+        chip: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10',
+    },
+    score: {
+        icon: Star,
+        marker: 'bg-amber-400',
+        chip: 'text-amber-300 border-amber-500/30 bg-amber-500/10',
+    },
+    removed: {
+        icon: Trash2,
+        marker: 'bg-rose-400',
+        chip: 'text-rose-300 border-rose-500/30 bg-rose-500/10',
+    },
+    rewatching: {
+        icon: Repeat2,
+        marker: 'bg-cyan-400',
+        chip: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10',
+    },
+    notes_update: {
+        icon: StickyNote,
+        marker: 'bg-pink-400',
+        chip: 'text-pink-300 border-pink-500/30 bg-pink-500/10',
+    },
 };
 
 function timeAgo(dateStr) {
@@ -26,64 +82,164 @@ function timeAgo(dateStr) {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function groupActivitiesByDate(activities) {
-    const groups = {};
-    
-    activities.forEach(activity => {
-        const date = new Date(activity.created_at);
-        const dateKey = date.toLocaleDateString('en-US', { 
-            month: 'long', 
-            day: 'numeric',
-            year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-        });
-        
-        if (!groups[dateKey]) {
-            groups[dateKey] = [];
-        }
-        groups[dateKey].push(activity);
+function formatDateGroupLabel(dateValue) {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const sameDay = (a, b) =>
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate();
+
+    if (sameDay(dateValue, today)) return 'Today';
+    if (sameDay(dateValue, yesterday)) return 'Yesterday';
+
+    return dateValue.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: dateValue.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
     });
-    
-    return groups;
+}
+
+function groupActivitiesByDate(activities) {
+    const groupsMap = new Map();
+    const grouped = [];
+
+    activities.forEach(activity => {
+        const activityDate = new Date(activity.created_at);
+        const dateKey = `${activityDate.getFullYear()}-${String(activityDate.getMonth() + 1).padStart(2, '0')}-${String(activityDate.getDate()).padStart(2, '0')}`;
+
+        if (!groupsMap.has(dateKey)) {
+            const dateGroup = {
+                key: dateKey,
+                label: formatDateGroupLabel(activityDate),
+                activities: [],
+            };
+            groupsMap.set(dateKey, dateGroup);
+            grouped.push(dateGroup);
+        }
+        groupsMap.get(dateKey).activities.push(activity);
+    });
+
+    return grouped;
+}
+
+function parseNextPage(lastPage) {
+    if (!lastPage?.next) return undefined;
+
+    try {
+        const parsed = new URL(lastPage.next, 'http://localhost');
+        const page = Number(parsed.searchParams.get('page'));
+        return Number.isFinite(page) && page > 0 ? page : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function activityMetadata(activity) {
+    if (activity.activity_type === 'status_change' && activity.new_status) {
+        return activity.old_status
+            ? `${activity.old_status} -> ${activity.new_status}`
+            : activity.new_status;
+    }
+
+    if (activity.activity_type === 'score' && activity.new_score != null) {
+        return `${activity.new_score}/10`;
+    }
+
+    if (activity.activity_type === 'completed' && activity.new_score != null) {
+        return `${activity.new_score}/10`;
+    }
+
+    return null;
+}
+
+function EmptyState({ filterType }) {
+    const isFiltered = filterType !== 'all';
+
+    return (
+        <div className="ui-empty-state py-14">
+            <p className="text-sm text-gray-300">
+                {isFiltered ? 'No entries for this filter yet.' : 'No watching activity yet.'}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+                {isFiltered ? 'Try another filter to see more updates.' : 'Updates will appear when list progress changes.'}
+            </p>
+        </div>
+    );
 }
 
 function ActivityCard({ activity }) {
     const config = ACTIVITY_CONFIG[activity.activity_type] || ACTIVITY_CONFIG.added;
     const anime = activity.anime;
+    const coverImage = anime?.cover_image_small || anime?.cover_image;
+    const metadata = activityMetadata(activity);
+    const title = anime?.title || 'Unknown title';
 
     return (
-        <div className={`flex gap-4 py-3 border-l-2 ${config.borderColor} pl-4 ${config.bgHover} transition-colors`}>
-            <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-200">
-                    {activity.activity_description}
-                </p>
-                
-                {activity.notes && (
-                    <p className="text-xs text-gray-500 mt-1 italic line-clamp-1">
-                        "{activity.notes}"
-                    </p>
-                )}
-                
-                <span className="text-[11px] text-gray-600 mt-1 block">
-                    {timeAgo(activity.created_at)}
-                </span>
+        <article className="group relative overflow-hidden rounded-xl border border-gray-800/70 bg-gradient-to-br from-dark-100/85 to-dark-200/85 p-3 transition-colors hover:border-gray-700">
+            <div className="absolute left-0 top-0 h-full w-1 bg-gray-700/80">
+                <span className={`block h-full w-full ${config.marker}`} />
             </div>
 
-            {anime && (
-                <Link to={`/anime/${anime.slug}`} className="shrink-0 group">
-                    {anime.cover_image_small && (
-                        <img
-                            src={anime.cover_image_small}
-                            alt={anime.title}
-                            className="w-10 h-14 rounded object-cover border border-gray-800 group-hover:border-accent/50 transition-colors"
-                        />
+            <div className="flex gap-3 pl-2">
+                <div className="flex-1 min-w-0">
+                    <div className="mb-1">
+                        <p className="text-sm leading-5 text-gray-100">
+                            {activity.activity_description}
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-gray-500">
+                            {timeAgo(activity.created_at)}
+                        </span>
+                        {metadata && (
+                            <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${config.chip}`}>
+                                {metadata}
+                            </span>
+                        )}
+                    </div>
+
+                    {activity.notes && (
+                        <p className="mt-2 line-clamp-2 rounded-lg border border-gray-800/80 bg-dark-200/60 px-2.5 py-2 text-xs italic text-gray-400">
+                            "{activity.notes}"
+                        </p>
                     )}
+                </div>
+
+                {anime?.slug && coverImage && (
+                    <Link
+                        to={`/anime/${anime.slug}`}
+                        className="shrink-0 overflow-hidden rounded-lg border border-gray-800/80 transition-colors group-hover:border-gray-700"
+                    >
+                        <img
+                            src={coverImage}
+                            alt={title}
+                            className="h-16 w-11 object-cover"
+                            loading="lazy"
+                        />
+                    </Link>
+                )}
+            </div>
+
+            {anime?.slug && (
+                <Link
+                    to={`/anime/${anime.slug}`}
+                    className="mt-1 ml-2 block truncate text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
+                >
+                    {title}
                 </Link>
             )}
-        </div>
+        </article>
     );
 }
 
-export default function ActivityFeed({ username, isPrivate }) {
+export default function ActivityFeed({ username, isPrivate, compact = false }) {
+    const [filterType, setFilterType] = useState('all');
+    const pageSize = compact ? 8 : 16;
+
     const {
         data,
         fetchNextPage,
@@ -93,97 +249,108 @@ export default function ActivityFeed({ username, isPrivate }) {
         isError,
         refetch,
     } = useInfiniteQuery({
-        queryKey: ['activity-feed', username],
+        queryKey: ['activity-feed', username, filterType, pageSize],
         queryFn: ({ pageParam }) =>
-            activityApi.getFeed({ username, page: pageParam }).then(res => res.data),
+            activityApi.getFeed({
+                username,
+                page: pageParam,
+                page_size: pageSize,
+                ...(filterType !== 'all' ? { type: filterType } : {}),
+            }).then(res => res.data),
         initialPageParam: 1,
-        getNextPageParam: (lastPage) => {
-            if (lastPage && lastPage.next) {
-                try {
-                    const url = new URL(lastPage.next);
-                    return url.searchParams.get('page');
-                } catch { return undefined; }
-            }
-            return undefined;
-        },
+        getNextPageParam: parseNextPage,
         enabled: !isPrivate && !!username,
         staleTime: 2 * 60 * 1000,
     });
 
     if (isPrivate) {
         return (
-            <div className="text-center py-16 text-gray-400 text-sm">
-                Activity is not available for private profiles.
+            <div className="ui-empty-state py-12">
+                <p className="text-sm text-gray-400">Activity is not available for private profiles.</p>
             </div>
         );
     }
 
-    if (isLoading) {
-        return (
-            <div className="flex justify-center py-12">
-                <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
-    }
-
-    if (isError) {
-        return (
-            <div className="text-center py-16 text-gray-500">
-                <p className="text-sm mb-3">Failed to load activity feed.</p>
-                <button
-                    onClick={() => refetch()}
-                    className="px-4 py-2 rounded-lg bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-all"
-                >
-                    Try Again
-                </button>
-            </div>
-        );
-    }
-
-    const activities = data?.pages?.flatMap(page => page.results || page) || [];
-
-    if (activities.length === 0) {
-        return (
-            <div className="text-center py-16 text-gray-500">
-                <p className="text-sm">Nothing here yet</p>
-                <p className="text-xs mt-1 text-gray-600">Start tracking anime to see activity here</p>
-            </div>
-        );
-    }
-
-    const groupedActivities = groupActivitiesByDate(activities);
-    const dateGroups = Object.entries(groupedActivities);
+    const activities = data?.pages?.flatMap(page => page?.results || []) || [];
+    const dateGroups = groupActivitiesByDate(activities);
 
     return (
-        <div className="space-y-6">
-            {dateGroups.map(([date, dateActivities]) => (
-                <div key={date}>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                        {date}
-                    </h4>
-                    <div className="space-y-1">
-                        {dateActivities.map((activity) => (
-                            <ActivityCard key={activity.id} activity={activity} />
-                        ))}
-                    </div>
-                </div>
-            ))}
+        <section className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+                {FILTER_OPTIONS.map((filter) => {
+                    const Icon = filter.icon;
+                    const isActive = filterType === filter.value;
+                    return (
+                        <button
+                            key={filter.value}
+                            type="button"
+                            onClick={() => setFilterType(filter.value)}
+                            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${isActive
+                                ? 'border-accent/60 bg-accent/15 text-accent-light'
+                                : 'border-gray-700/80 bg-dark-100/70 text-gray-400 hover:border-gray-600 hover:text-gray-200'
+                                }`}
+                        >
+                            <Icon className="h-3.5 w-3.5" />
+                            {filter.label}
+                        </button>
+                    );
+                })}
+            </div>
 
-            {hasNextPage && (
-                <div className="flex justify-center pt-4">
+            {isLoading && (
+                <div className="space-y-2">
+                    {Array.from({ length: compact ? 3 : 5 }).map((_, index) => (
+                        <div key={index} className="h-20 animate-pulse rounded-xl border border-gray-800/60 bg-dark-100/60" />
+                    ))}
+                </div>
+            )}
+
+            {isError && (
+                <div className="ui-empty-state py-12">
+                    <p className="text-sm text-gray-300">Failed to load activity feed.</p>
                     <button
-                        onClick={() => fetchNextPage()}
-                        disabled={isFetchingNextPage}
-                        className="px-6 py-2.5 rounded-lg bg-dark-100 border border-gray-700 text-sm text-gray-300 hover:text-white hover:border-accent transition-all disabled:opacity-50"
+                        type="button"
+                        onClick={() => refetch()}
+                        className="mt-3 rounded-lg border border-gray-700 bg-dark-100 px-4 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-accent/50 hover:text-white"
                     >
-                        {isFetchingNextPage ? (
-                            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-                        ) : (
-                            'Load More'
-                        )}
+                        Retry
                     </button>
                 </div>
             )}
-        </div>
+
+            {!isLoading && !isError && activities.length === 0 && (
+                <EmptyState filterType={filterType} />
+            )}
+
+            {!isLoading && !isError && activities.length > 0 && (
+                <div className="space-y-5">
+                    {dateGroups.map((group) => (
+                        <div key={group.key}>
+                            <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+                                {group.label}
+                            </h4>
+                            <div className="space-y-2">
+                                {group.activities.map((activity) => (
+                                    <ActivityCard key={activity.id} activity={activity} />
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {hasNextPage && !isError && (
+                <div className="flex justify-center pt-1">
+                    <button
+                        type="button"
+                        onClick={() => fetchNextPage()}
+                        disabled={isFetchingNextPage}
+                        className="rounded-lg border border-gray-700 bg-dark-100 px-5 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-gray-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {isFetchingNextPage ? 'Loading...' : 'Load More Activity'}
+                    </button>
+                </div>
+            )}
+        </section>
     );
 }
