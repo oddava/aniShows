@@ -328,6 +328,8 @@ STATIC_CDN_URL = os.getenv("STATIC_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
 MEDIA_CDN_URL = os.getenv("MEDIA_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
 
 if USE_S3:
+    from botocore.config import Config
+
     # AWS/MinIO settings
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -337,6 +339,8 @@ if USE_S3:
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
+    # Keep runtime request paths fast; bucket creation is handled by createbuckets init job.
+    S3_RUNTIME_BUCKET_AUTOCREATE = _env_bool("S3_RUNTIME_BUCKET_AUTOCREATE", False)
 
     MINIO_PUBLIC_DOMAIN = os.getenv("MINIO_PUBLIC_DOMAIN", "localhost:9000")
 
@@ -349,6 +353,15 @@ if USE_S3:
         AWS_S3_URL_PROTOCOL = "https:"
 
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+    AWS_S3_CLIENT_CONFIG = Config(
+        connect_timeout=max(_env_int("AWS_S3_CONNECT_TIMEOUT", 3), 1),
+        read_timeout=max(_env_int("AWS_S3_READ_TIMEOUT", 10), 1),
+        retries={
+            "max_attempts": max(_env_int("AWS_S3_MAX_RETRIES", 1), 1),
+            "mode": "standard",
+        },
+        max_pool_connections=max(_env_int("AWS_S3_MAX_POOL_CONNECTIONS", 50), 10),
+    )
 
     # ImageKit configuration - store generated thumbnails in MinIO
     IMAGEKIT_DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
