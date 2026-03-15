@@ -731,6 +731,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute=0),  # Every hour
         "options": {"queue": "low_priority"},
     },
+    "heal-missing-media-30min": {
+        "task": "apps.animes.tasks.images.heal_missing_anime_media",
+        "schedule": crontab(minute="*/30"),
+        "kwargs": {"batch_size": 100},
+        "options": {"queue": "low_priority"},
+    },
     # Weekly Tasks
     # -------------------------------------------------------------------------
     "sync-upcoming-weekly": {

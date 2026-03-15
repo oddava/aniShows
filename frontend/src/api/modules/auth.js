@@ -25,5 +25,7 @@ export const authApi = {
     changeEmail: (data) => api.post('/auth/change-email/', data),
     confirmEmailChange: (uid, token, newEmail) =>
         api.get(`/confirm-email-change/${uid}/${token}/${newEmail}/`),
+    googleLogin: (code, callbackUrl) =>
+        api.post('/auth/google/', { code, callback_url: callbackUrl }),
     deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),
 };

@@ -33,7 +33,7 @@ from .airing import sync_airing_workflow
 from .franchises import sync_franchises, update_relation_slugs
 
 # Import legacy tasks from tasks.py (kept for backward compatibility)
-from .images import generate_image_thumbnails
+from .images import generate_image_thumbnails, heal_missing_anime_media
 from .metadata import enrich_metadata
 from .recommendations import generate_recommendations
 from .sync import sync_anime_catalog
@@ -47,6 +47,7 @@ __all__ = [
     "enrich_metadata",
     "generate_image_thumbnails",
     "generate_recommendations",
+    "heal_missing_anime_media",
     "sync_airing_workflow",
     "sync_anime_catalog",
     "sync_franchises",

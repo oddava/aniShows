@@ -102,6 +102,7 @@ app.conf.task_routes = {
     "apps.core.tasks.notifications.cleanup_old_notifications_task": {"queue": "low_priority"},
     "apps.core.tasks.cleanup_tasks.cleanup_old_task_results": {"queue": "low_priority"},
     "apps.animes.tasks.themes.backfill_theme_youtube_urls": {"queue": "low_priority"},
+    "apps.animes.tasks.images.heal_missing_anime_media": {"queue": "low_priority"},
     # User maintenance
     "apps.users.tasks.warm_profile_cache": {"queue": "low_priority"},
     "apps.users.tasks.update_all_user_stats": {"queue": "low_priority"},

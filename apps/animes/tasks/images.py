@@ -9,9 +9,118 @@ import asyncio
 
 import httpx
 from celery import shared_task
+from django.conf import settings
+from django.core.cache import cache
+from django.db.models import Q
 
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter
+
+try:
+    from botocore.exceptions import ConnectionClosedError, EndpointConnectionError
+
+    _BOTOCORE_STORAGE_ERRORS: tuple[type[Exception], ...] = (
+        ConnectionClosedError,
+        EndpointConnectionError,
+    )
+except Exception:  # pragma: no cover - botocore is available in runtime environments
+    _BOTOCORE_STORAGE_ERRORS = ()
+
+_ENDPOINT_ERROR_PATTERNS = (
+    "could not connect to the endpoint url",
+    "connection refused",
+    "failed to establish a new connection",
+    "name or service not known",
+    "temporary failure in name resolution",
+    "connection reset by peer",
+    "nodename nor servname provided",
+)
+_FETCH_DEDUP_KEY = "anime:image-fetch:queued:{anime_id}"
+_FETCH_DEDUP_TTL_SECONDS = 300
+_STORAGE_RETRY_BASE_DELAY_SECONDS = 300
+_STORAGE_RETRY_MAX_DELAY_SECONDS = 3600
+_STORAGE_RETRY_ATTEMPT_LIMIT = 24
+
+
+def _iter_exception_chain(exc: Exception):
+    """Iterate through an exception and its causes/contexts."""
+    seen = set()
+    current = exc
+    while current and id(current) not in seen:
+        yield current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+
+
+def _is_storage_endpoint_error(exc: Exception) -> bool:
+    """Return True when the error is likely a transient storage endpoint outage."""
+    for current in _iter_exception_chain(exc):
+        if _BOTOCORE_STORAGE_ERRORS and isinstance(current, _BOTOCORE_STORAGE_ERRORS):
+            return True
+
+        msg = str(current).lower()
+        if any(pattern in msg for pattern in _ENDPOINT_ERROR_PATTERNS):
+            return True
+        if "endpoint url" in msg and "minio" in msg:
+            return True
+    return False
+
+
+def _storage_retry_delay_seconds(storage_retry: int) -> int:
+    multiplier = 2 ** min(storage_retry, 4)
+    return min(
+        _STORAGE_RETRY_BASE_DELAY_SECONDS * multiplier,
+        _STORAGE_RETRY_MAX_DELAY_SECONDS,
+    )
+
+
+def _queue_image_fetch(
+    anime_id: int,
+    cover_url: str,
+    banner_url: str,
+    mal_id: int | None,
+    *,
+    countdown: int = 0,
+    storage_retry: int = 0,
+    force: bool = False,
+) -> bool:
+    """Queue image fetch task with per-anime dedupe to prevent retry storms."""
+    dedupe_ttl = max(_FETCH_DEDUP_TTL_SECONDS, countdown + 60)
+    cache_key = _FETCH_DEDUP_KEY.format(anime_id=anime_id)
+
+    if not force and not cache.add(cache_key, True, timeout=dedupe_ttl):
+        return False
+
+    kwargs = {
+        "anime_id": anime_id,
+        "cover_url": cover_url or "",
+        "banner_url": banner_url or "",
+        "mal_id": mal_id,
+        "storage_retry": storage_retry,
+    }
+    if countdown > 0:
+        fetch_anime_images.apply_async(kwargs=kwargs, countdown=countdown)
+    else:
+        fetch_anime_images.delay(**kwargs)
+    return True
+
+
+def _is_storage_available() -> bool:
+    """Check whether object storage is currently reachable."""
+    if not getattr(settings, "USE_S3", False):
+        return True
+
+    from django.core.files.storage import default_storage
+
+    try:
+        default_storage.exists("health-check/storage-probe")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        if _is_storage_endpoint_error(exc):
+            return False
+
+        logger.warning(f"Storage health probe failed unexpectedly: {exc}")
+        return False
 
 
 async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
@@ -54,7 +163,14 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
     default_retry_delay=60,
     time_limit=300,
 )
-def fetch_anime_images(self, anime_id: int, cover_url: str, banner_url: str, mal_id: int | None = None):
+def fetch_anime_images(
+    self,
+    anime_id: int,
+    cover_url: str,
+    banner_url: str,
+    mal_id: int | None = None,
+    storage_retry: int = 0,
+):
     """Background task to download and save cover/banner images without blocking the main sync loop.
     Implements a Jikan fallback for missing banner images.
     """
@@ -67,43 +183,136 @@ def fetch_anime_images(self, anime_id: int, cover_url: str, banner_url: str, mal
 
         async def _download_job():
             service = AniListService(enable_caching=False, enable_rate_limiting=False)
+            try:
+                nonlocal banner_url
 
-            nonlocal banner_url
-
-            # Step 1: Jikan Fallback if no banner from AniList
-            if not banner_url and not anime.banner_image and mal_id:
-                logger.info(f"No banner for {anime.title}, attempting Jikan fallback...")
-                banner_url = await _fetch_jikan_fallback_banner(mal_id)
-                if banner_url:
-                    # Save external URL reference
-                    anime.banner_image_external_url = banner_url
+                # Persist external URLs so the API can always fall back even while
+                # local storage is degraded.
+                if cover_url and cover_url != anime.cover_image_external_url:
+                    await service._save_external_url(anime, "cover_image_external_url", cover_url)
+                if banner_url and banner_url != anime.banner_image_external_url:
                     await service._save_external_url(anime, "banner_image_external_url", banner_url)
 
-            # Step 2: Download the Images natively
-            if cover_url and not anime.cover_image:
-                cover_data = await service.download_image(cover_url)
-                if cover_data:
-                    filename = f"{anime.slug}_cover.jpg"
-                    await service._save_image(anime, "cover_image", filename, cover_data)
+                # Step 1: Jikan Fallback if no banner from AniList
+                if not banner_url and not anime.banner_image and mal_id:
+                    logger.info(f"No banner for {anime.title}, attempting Jikan fallback...")
+                    banner_url = await _fetch_jikan_fallback_banner(mal_id)
+                    if banner_url:
+                        # Save external URL reference
+                        anime.banner_image_external_url = banner_url
+                        await service._save_external_url(anime, "banner_image_external_url", banner_url)
 
-            if banner_url and not anime.banner_image:
-                banner_data = await service.download_image(banner_url)
-                if banner_data:
-                    filename = f"{anime.slug}_banner.jpg"
-                    await service._save_image(anime, "banner_image", filename, banner_data)
+                # Step 2: Download the Images natively
+                if cover_url and not anime.cover_image:
+                    cover_data = await service.download_image(cover_url)
+                    if cover_data:
+                        filename = f"{anime.slug}_cover.jpg"
+                        await service._save_image(anime, "cover_image", filename, cover_data)
 
-            await service.close()
+                if banner_url and not anime.banner_image:
+                    banner_data = await service.download_image(banner_url)
+                    if banner_data:
+                        filename = f"{anime.slug}_banner.jpg"
+                        await service._save_image(anime, "banner_image", filename, banner_data)
+            finally:
+                await service.close()
 
         asyncio.run(_download_job())
 
-        return {"anime_id": anime_id, "status": "success"}
+        return {"anime_id": anime_id, "status": "success", "storage_retry": storage_retry}
 
     except Anime.DoesNotExist:
         logger.error(f"Anime with ID {anime_id} not found")
         return {"status": "error", "reason": "anime_not_found"}
     except Exception as e:
+        if _is_storage_endpoint_error(e):
+            if storage_retry >= _STORAGE_RETRY_ATTEMPT_LIMIT:
+                logger.error(
+                    f"Storage remained unavailable for anime {anime_id} after "
+                    f"{_STORAGE_RETRY_ATTEMPT_LIMIT} attempts; waiting for periodic self-heal"
+                )
+                return {
+                    "anime_id": anime_id,
+                    "status": "error",
+                    "reason": "storage_unavailable_retry_limit",
+                    "storage_retry": storage_retry,
+                }
+
+            delay = _storage_retry_delay_seconds(storage_retry)
+            queued = _queue_image_fetch(
+                anime_id=anime_id,
+                cover_url=cover_url,
+                banner_url=banner_url,
+                mal_id=mal_id,
+                countdown=delay,
+                storage_retry=storage_retry + 1,
+            )
+            logger.warning(
+                f"Storage unavailable while fetching images for anime {anime_id}; "
+                f"scheduled self-heal retry in {delay}s (queued={queued}, attempt={storage_retry + 1})"
+            )
+            return {
+                "anime_id": anime_id,
+                "status": "deferred",
+                "reason": "storage_unavailable",
+                "retry_in_seconds": delay,
+                "queued": queued,
+                "storage_retry": storage_retry + 1,
+            }
+
         logger.error(f"Error fetching images for anime {anime_id}: {e}")
         raise self.retry(exc=e, countdown=60)
+
+
+@shared_task(
+    bind=True,
+    max_retries=0,
+    time_limit=300,
+)
+def heal_missing_anime_media(self, batch_size: int = 100):
+    """Periodic self-heal task for anime missing local media files."""
+    from apps.animes.models import Anime
+
+    if not _is_storage_available():
+        logger.warning("Skipping media self-heal run because storage is unavailable")
+        return {"status": "skipped", "reason": "storage_unavailable"}
+
+    missing_cover = (Q(cover_image__isnull=True) | Q(cover_image="")) & Q(
+        cover_image_external_url__isnull=False
+    ) & ~Q(cover_image_external_url="")
+    missing_banner = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
+        banner_image_external_url__isnull=False
+    ) & ~Q(banner_image_external_url="")
+    missing_banner_with_mal = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
+        mal_id__isnull=False
+    )
+
+    queryset = Anime.objects.filter(
+        missing_cover | missing_banner | missing_banner_with_mal
+    ).order_by("-member_count", "id")[:batch_size]
+
+    inspected = 0
+    queued = 0
+    for anime in queryset:
+        inspected += 1
+        cover_url = "" if anime.cover_image else (anime.cover_image_external_url or "")
+        banner_url = "" if anime.banner_image else (anime.banner_image_external_url or "")
+
+        if not cover_url and not banner_url and not anime.mal_id:
+            continue
+
+        if _queue_image_fetch(
+            anime_id=anime.id,
+            cover_url=cover_url,
+            banner_url=banner_url,
+            mal_id=anime.mal_id,
+            force=False,
+        ):
+            queued += 1
+
+    logger.info(f"Media self-heal run complete: inspected={inspected}, queued={queued}")
+    return {"status": "success", "inspected": inspected, "queued": queued}
+
 
 @shared_task(
     bind=True,
