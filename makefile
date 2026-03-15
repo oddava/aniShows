@@ -6,7 +6,7 @@ EXEC = docker compose exec web python manage.py
 
 .PHONY: help up down restart build ps logs web-logs celery-logs celery-priority-logs \
         celery-images-logs celery-analytics-logs beat-logs \
-        front-logs db-logs mig shell superuser test lint collectstatic \
+        front-logs db-logs mig migrate shell superuser test lint collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
         sync-themes sync-full sync-franchises sync-recs populate-themes \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
@@ -71,6 +71,9 @@ mig:                            ## Run makemigrations + migrate
 	$(EXEC) makemigrations
 	$(EXEC) migrate
 
+migrate:                        ## Run migrate only (safe for runtime/startup)
+	$(EXEC) migrate
+
 shell:                          ## Open Django shell
 	$(EXEC) shell
 
@@ -101,21 +104,27 @@ icomp:                          ## Compile message translations
 # ============================================================================
 
 sync-catalog:                   ## Sync anime catalog from AniList (--sync-type=trending)
+	$(EXEC) migrate
 	$(EXEC) sync_anime sync-catalog --async
 
 sync-airing:                    ## Sync airing schedule + backfill dates
+	$(EXEC) migrate
 	$(EXEC) sync_anime sync-airing --async
 
 sync-metadata:                  ## Enrich anime metadata
+	$(EXEC) migrate
 	$(EXEC) sync_anime enrich-metadata --async
 
 sync-themes:                    ## Sync theme songs via Celery
+	$(EXEC) migrate
 	$(EXEC) sync_anime sync-themes --async
 
 sync-recs:                      ## Generate recommendations for all users
+	$(EXEC) migrate
 	$(EXEC) sync_anime generate-recommendations --async
 
 sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + themes + recs)
+	$(EXEC) migrate
 	$(EXEC) sync_anime full-sync --async
 
 ## ============================================================================
@@ -178,12 +187,14 @@ backup:                         ## Trigger manual database backup
 backups:                        ## List available backups
 	docker compose exec backup ls -lh /backups
 
-restore:                        ## Restore from backup (Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS)
+restore:                        ## Restore from backup (Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS or full dir)
 	@if [ -z "$(TIMESTAMP)" ]; then \
-		echo "Error: TIMESTAMP is required. Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS"; \
+		echo "Error: TIMESTAMP is required. Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS (or full backup dir)"; \
 		exit 1; \
 	fi
 	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP)
+	docker compose exec web python manage.py migrate --noinput
+	docker compose restart pgbouncer web daphne celery celery_priority celery_images celery_analytics beat
 
 # ============================================================================
 # Help

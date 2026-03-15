@@ -1,16 +1,22 @@
+import glob
+import os
+
 from celery.signals import (
+    celeryd_init,
     task_failure,
     task_prerun,
     task_retry,
     task_revoked,
     task_success,
     worker_ready,
-    celeryd_init,
 )
 from django.utils import timezone
-import os
-import glob
 
+from apps.core.db_safety import (
+    is_missing_relation_error,
+    model_table_exists,
+    warn_missing_table_once,
+)
 from apps.shared.logger import logger
 
 
@@ -33,10 +39,17 @@ def clean_multiproc_dir(sender, instance, **kwargs):
 def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
     from apps.core.models import CeleryTaskResult
 
+    if not model_table_exists(CeleryTaskResult):
+        warn_missing_table_once(
+            CeleryTaskResult._meta.db_table,
+            "Celery task pre-run tracking",
+        )
+        return
+
     try:
         task_name = getattr(task, "name", "unknown")
         # Handle cases where the view already created a PENDING result
-        job, created = CeleryTaskResult.objects.get_or_create(
+        job, created = CeleryTaskResult.objects.using("default").get_or_create(
             task_id=task_id,
             defaults={
                 "task_name": task_name,
@@ -61,6 +74,12 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
                 update_fields=["status", "date_started", "task_name", "task_args", "task_kwargs"]
             )
     except Exception as e:
+        if is_missing_relation_error(e):
+            warn_missing_table_once(
+                CeleryTaskResult._meta.db_table,
+                "Celery task pre-run tracking",
+            )
+            return
         logger.error(f"Error in task_prerun signal for task {task_id}: {e}")
 
 
@@ -68,10 +87,17 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
 def on_task_success(sender=None, result=None, **kwargs):
     from apps.core.models import CeleryTaskResult
 
+    if not model_table_exists(CeleryTaskResult):
+        warn_missing_table_once(
+            CeleryTaskResult._meta.db_table,
+            "Celery task success tracking",
+        )
+        return
+
     task_id = sender.request.id if sender and hasattr(sender, "request") else kwargs.get("task_id")
     if task_id:
         try:
-            job = CeleryTaskResult.objects.get(task_id=task_id)
+            job = CeleryTaskResult.objects.using("default").get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.SUCCESS
 
             # Make sure result is JSON serializable
@@ -89,6 +115,12 @@ def on_task_success(sender=None, result=None, **kwargs):
         except CeleryTaskResult.DoesNotExist:
             logger.warning(f"CeleryTaskResult not found for task_success (id: {task_id})")
         except Exception as e:
+            if is_missing_relation_error(e):
+                warn_missing_table_once(
+                    CeleryTaskResult._meta.db_table,
+                    "Celery task success tracking",
+                )
+                return
             logger.error(f"Error in task_success signal for task {task_id}: {e}")
 
 
@@ -96,8 +128,15 @@ def on_task_success(sender=None, result=None, **kwargs):
 def on_task_failure(task_id, exception, traceback, **kwargs):
     from apps.core.models import CeleryTaskResult
 
+    if not model_table_exists(CeleryTaskResult):
+        warn_missing_table_once(
+            CeleryTaskResult._meta.db_table,
+            "Celery task failure tracking",
+        )
+        return
+
     try:
-        job = CeleryTaskResult.objects.get(task_id=task_id)
+        job = CeleryTaskResult.objects.using("default").get(task_id=task_id)
         job.status = CeleryTaskResult.TaskStatus.FAILURE
         job.error_message = str(exception)
         job.traceback = str(traceback)
@@ -116,6 +155,12 @@ def on_task_failure(task_id, exception, traceback, **kwargs):
             ]
         )
     except Exception as e:
+        if is_missing_relation_error(e):
+            warn_missing_table_once(
+                CeleryTaskResult._meta.db_table,
+                "Celery task failure tracking",
+            )
+            return
         logger.error(f"Error in task_failure signal for task {task_id}: {e}")
 
 
@@ -123,13 +168,26 @@ def on_task_failure(task_id, exception, traceback, **kwargs):
 def on_task_retry(request, reason, einfo, **kwargs):
     from apps.core.models import CeleryTaskResult
 
+    if not model_table_exists(CeleryTaskResult):
+        warn_missing_table_once(
+            CeleryTaskResult._meta.db_table,
+            "Celery task retry tracking",
+        )
+        return
+
     try:
-        job = CeleryTaskResult.objects.get(task_id=request.id)
+        job = CeleryTaskResult.objects.using("default").get(task_id=request.id)
         job.status = CeleryTaskResult.TaskStatus.RETRY
         job.retries += 1
         job.error_message = f"Retrying: {reason}"
         job.save(update_fields=["status", "retries", "error_message"])
     except Exception as e:
+        if is_missing_relation_error(e):
+            warn_missing_table_once(
+                CeleryTaskResult._meta.db_table,
+                "Celery task retry tracking",
+            )
+            return
         logger.error(f"Error in task_retry signal for task {request.id}: {e}")
 
     # Emit Prometheus retry metric
@@ -146,9 +204,16 @@ def on_task_retry(request, reason, einfo, **kwargs):
 def on_task_revoked(request, terminated, signum, expired, **kwargs):
     from apps.core.models import CeleryTaskResult
 
+    if not model_table_exists(CeleryTaskResult):
+        warn_missing_table_once(
+            CeleryTaskResult._meta.db_table,
+            "Celery task revoke tracking",
+        )
+        return
+
     task_id = request.id if hasattr(request, "id") else request.task_id
     try:
-        job = CeleryTaskResult.objects.get(task_id=task_id)
+        job = CeleryTaskResult.objects.using("default").get(task_id=task_id)
         job.status = CeleryTaskResult.TaskStatus.REVOKED
         job.error_message = "Task revoked/terminated"
         job.date_completed = timezone.now()
@@ -158,6 +223,12 @@ def on_task_revoked(request, terminated, signum, expired, **kwargs):
 
         job.save(update_fields=["status", "error_message", "date_completed", "execution_time"])
     except Exception as e:
+        if is_missing_relation_error(e):
+            warn_missing_table_once(
+                CeleryTaskResult._meta.db_table,
+                "Celery task revoke tracking",
+            )
+            return
         logger.error(f"Error in task_revoked signal for task {task_id}: {e}")
 
 
@@ -205,7 +276,7 @@ def start_queue_monitor(sender, **kwargs):
     path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
     if path:
         try:
-            from prometheus_client import start_http_server, CollectorRegistry, multiprocess
+            from prometheus_client import CollectorRegistry, multiprocess, start_http_server
 
             registry = CollectorRegistry()
             multiprocess.MultiProcessCollector(registry, path=path)
