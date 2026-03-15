@@ -449,10 +449,20 @@ export default function AnimeDetail() {
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
-    const watchedEpisodes = anime?.user_list_status?.episodes_watched || 0;
-    const episodeDuration = anime?.duration_minutes || 24;
-    const watchedMinutes = watchedEpisodes * episodeDuration;
-    const watchTimeLabel = `${Math.floor(watchedMinutes / 60)}h ${watchedMinutes % 60}m`;
+
+    const toSafeInt = (value, fallback = 0) => {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+    };
+
+    const watchedEpisodes = toSafeInt(anime?.user_list_status?.episodes_watched);
+    const episodeDuration = toSafeInt(anime?.duration_minutes, 24) || 24;
+    const totalEpisodes = toSafeInt(anime?.episode_count);
+    const hasTrackedProgress = anime?.user_list_status != null;
+    const minutesToDisplay = (hasTrackedProgress ? watchedEpisodes : totalEpisodes) * episodeDuration;
+    const watchTimeLabel = minutesToDisplay > 0
+        ? `${Math.floor(minutesToDisplay / 60)}h ${minutesToDisplay % 60}m`
+        : 'Unknown';
 
     return (
         <div

@@ -112,6 +112,39 @@
   <div id="root">
     <div class="initial-loader" id="initial-loader"></div>
   </div>
+  <script>
+    // Safety net for stale service-worker caches after deployments.
+    (function () {
+      var pwaEnabledMeta = document.querySelector('meta[name="pwa-enabled"]');
+      var pwaEnabled = pwaEnabledMeta && pwaEnabledMeta.getAttribute('content') === 'true';
+      if (pwaEnabled) {
+        return;
+      }
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            return Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            }));
+          })
+          .catch(function () {});
+      }
+      if ('caches' in window) {
+        caches.keys()
+          .then(function (keys) {
+            return Promise.all(keys
+              .filter(function (key) {
+                return key.includes('workbox') || key.includes('precache') || key.includes('vite-pwa');
+              })
+              .map(function (key) {
+                return caches.delete(key);
+              }));
+          })
+          .catch(function () {});
+      }
+    })();
+  </script>
   <script type="module" src="/src/main.jsx"></script>
   <script>
     // Hide initial loader once React mounts

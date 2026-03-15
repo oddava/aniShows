@@ -9,6 +9,7 @@ const allowedHosts = process.env.ALLOWED_HOSTS
 
 // Deployment timestamp for cache busting and debugging
 const deploymentTime = new Date().toISOString()
+const enablePWA = process.env.VITE_ENABLE_PWA === 'true'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -33,12 +34,12 @@ export default defineConfig(({ mode }) => ({
       transformIndexHtml(html) {
         return html.replace(
           '</head>',
-          `  <meta name="deployment-time" content="${deploymentTime}">\n  </head>`
+          `  <meta name="deployment-time" content="${deploymentTime}">\n  <meta name="pwa-enabled" content="${enablePWA ? 'true' : 'false'}">\n  </head>`
         )
       }
     },
-    // PWA support with service worker for caching
-    VitePWA({
+    // PWA support is opt-in in production to avoid stale SW asset incidents.
+    enablePWA && VitePWA({
       registerType: 'autoUpdate',
       workbox: {
         // Activate new SW immediately without waiting for tabs to close
@@ -91,13 +92,8 @@ export default defineConfig(({ mode }) => ({
     // Optimize chunking
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunks - separate frequently used libraries
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-query': ['@tanstack/react-query', '@tanstack/react-virtual'],
-          // Icons chunk - lucide is large
-          'vendor-icons': ['lucide-react'],
-        },
+        // Keep default chunking. Custom vendor chunking introduced a circular
+        // dependency that could make React undefined at runtime.
         // Optimize chunk naming
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',

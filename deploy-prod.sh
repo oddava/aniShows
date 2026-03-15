@@ -220,7 +220,35 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}Step 8: Pruning old images...${NC}"
+# =========================================================================
+# FRONTEND SMOKE CHECK
+# =========================================================================
+echo -e "${BLUE}Step 8: Verifying frontend is servable...${NC}"
+FRONTEND_HTML="$(curl -fsS --retry 3 --retry-delay 2 http://localhost:80/ || true)"
+
+if [ -z "$FRONTEND_HTML" ]; then
+    echo -e "${RED}Frontend health check failed: could not fetch homepage HTML.${NC}"
+    exit 1
+fi
+
+if ! echo "$FRONTEND_HTML" | grep -q 'id="root"'; then
+    echo -e "${RED}Frontend health check failed: root element not found in homepage HTML.${NC}"
+    exit 1
+fi
+
+FRONTEND_ASSET_PATH="$(echo "$FRONTEND_HTML" | grep -oE '/assets/[^" ]+\.js' | head -n1)"
+if [ -n "$FRONTEND_ASSET_PATH" ]; then
+    if ! curl -fsS --retry 3 --retry-delay 2 "http://localhost:80${FRONTEND_ASSET_PATH}" >/dev/null; then
+        echo -e "${RED}Frontend health check failed: asset ${FRONTEND_ASSET_PATH} is not reachable.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}Frontend health warning: no /assets/*.js script found in index HTML.${NC}"
+fi
+echo -e "${GREEN}Frontend health check passed!${NC}"
+echo ""
+
+echo -e "${BLUE}Step 9: Pruning old images...${NC}"
 docker image prune -f --filter "until=24h" --filter "label=org.opencontainers.image.source=https://github.com/oddava/anishows"
 echo -e "${GREEN}Old images pruned!${NC}"
 echo ""
