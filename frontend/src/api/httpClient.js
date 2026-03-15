@@ -63,6 +63,18 @@ const shouldRefreshToken = (token) => {
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isMaintenanceResponse = (error) => {
+    if (error.response?.status !== 503) return false;
+
+    const detail = String(error.response?.data?.detail || '').toLowerCase();
+    const maintenanceModeFlag = error.response?.data?.maintenance_mode === true;
+    const hasMaintenanceText = detail.includes('maintenance');
+    const retryAfter = error.response?.headers?.['retry-after'];
+
+    // Treat as global maintenance only when the backend explicitly signals it.
+    return maintenanceModeFlag || (hasMaintenanceText && Boolean(retryAfter));
+};
+
 export const refreshAccessToken = async (retryCount = 0) => {
     const maxRetries = 3;
     const retryDelayMs = 1000;
@@ -230,7 +242,7 @@ api.interceptors.response.use(
             }
         }
 
-        if (error.response?.status === 503) {
+        if (isMaintenanceResponse(error)) {
             const detail = error.response?.data?.detail || 'The service is temporarily unavailable.';
             emitMaintenanceMode(true, {
                 message: detail,
