@@ -1,5 +1,6 @@
 """Serializer mixins for common functionality."""
 
+import html
 import re
 from urllib.parse import urlparse
 
@@ -177,7 +178,9 @@ class UserProfileMixin:
 
     def get_bio(self, obj):
         profile = getattr(obj, "userprofile", None)
-        return profile.bio if profile else None
+        if not profile or profile.bio is None:
+            return None
+        return html.unescape(profile.bio)
 
     def get_is_private(self, obj):
         profile = getattr(obj, "userprofile", None)

@@ -118,7 +118,7 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(len(self.profile.social_links), 0)
 
     def test_profile_update_basic_info(self):
-        """Test updating bio and ensure XSS sanitization."""
+        """Test updating bio and ensure unsafe tags are removed."""
         # 1. Normal Update
         data = {"bio": "Hello world"}
         res = self.client.patch(self.profile_url, data)
@@ -131,9 +131,29 @@ class ProfileFeaturesTest(APITestCase):
         res = self.client.patch(self.profile_url, data)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.profile.refresh_from_db()
-        # Should be escaped
-        self.assertNotEqual(self.profile.bio, '<script>alert("xss")</script>')
-        self.assertIn("&lt;script&gt;", self.profile.bio)
+        self.assertNotIn("<script>", self.profile.bio)
+        self.assertIn('alert("xss")', self.profile.bio)
+
+    def test_profile_update_bio_preserves_allowed_html(self):
+        """Test that safe formatting tags remain intact after save."""
+        data = {
+            "bio": '<p align="center"><img src="https://example.com/banner.jpg" width="280" alt="banner"></p>'
+        }
+        res = self.client.patch(self.profile_url, data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertIn('<p align="center">', self.profile.bio)
+        self.assertIn("<img", self.profile.bio)
+        self.assertNotIn("&lt;img", self.profile.bio)
+
+    def test_profile_update_bio_decodes_legacy_escaped_html(self):
+        """Escaped legacy bios should be normalized back to valid HTML on save."""
+        data = {"bio": '&lt;p align=&quot;center&quot;&gt;hello&lt;/p&gt;'}
+        res = self.client.patch(self.profile_url, data)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertIn('<p align="center">hello</p>', self.profile.bio)
+        self.assertNotIn("&lt;p", self.profile.bio)
 
     def test_username_change_constraints(self):
         """Test username change logic and cooldown."""

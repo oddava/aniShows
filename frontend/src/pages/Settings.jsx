@@ -13,6 +13,13 @@ import RichTextEditor from '../components/forums/RichTextEditor';
 import ImageCropModal from '../components/ImageCropModal';
 import BadgesSettings from '../components/profile/BadgesSettings';
 
+function decodeHtmlEntities(text = '') {
+    if (!text || typeof text !== 'string') return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+}
+
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile } = useAuth();
     const queryClient = useQueryClient();
@@ -73,7 +80,7 @@ export default function Settings() {
     // Initialize state from user data
     useEffect(() => {
         if (user) {
-            setBio(user.bio || '');
+            setBio(decodeHtmlEntities(user.bio || ''));
             setUsername(user.username || '');
             // Convert backend 'url' field to frontend 'value' field for compatibility
             const normalizedLinks = (user.social_links || []).map(link => ({
@@ -150,8 +157,9 @@ export default function Settings() {
         }
 
         // Check if anything actually changed
+        const normalizedUserBio = decodeHtmlEntities(user.bio || '');
         const hasChanges = (
-            bio !== user.bio ||
+            bio !== normalizedUserBio ||
             username.trim() !== user.username ||
             JSON.stringify(nonEmptyLinks) !== JSON.stringify(user.social_links || []) ||
             isPrivate !== user.is_private ||
@@ -173,7 +181,7 @@ export default function Settings() {
             const formData = new FormData();
 
             // Only append changed fields
-            if (bio !== user.bio) formData.append('bio', bio);
+            if (bio !== normalizedUserBio) formData.append('bio', bio);
             if (username.trim() !== user.username) formData.append('username', username.trim());
 
             // Only send social links if they changed

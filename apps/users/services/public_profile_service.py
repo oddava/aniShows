@@ -1,3 +1,4 @@
+import html
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
@@ -34,6 +35,10 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     cache_key = get_public_profile_cache_key(username, viewer_id)
     cached_data = cache.get(cache_key)
     if cached_data:
+        normalized = _normalize_public_profile_payload(cached_data)
+        if normalized != cached_data:
+            cache.set(cache_key, normalized, timeout=300)
+        cached_data = normalized
         if cached_data.get("is_private") and not is_own_profile:
             raise PublicProfileError("Profile not found", 404)
         return PublicProfileResult(data=cached_data, cache_hit=True, source="cache")
@@ -71,7 +76,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "banner": user.userprofile.banner.url
                 if user.userprofile and user.userprofile.banner
                 else None,
-                "bio": user.userprofile.bio if user.userprofile else None,
+                "bio": _normalize_bio(user.userprofile.bio if user.userprofile else None),
                 "is_private": user.userprofile.is_private if user.userprofile else False,
                 "social_links": user.userprofile.social_links if user.userprofile else [],
                 "points": user.userprofile.points if user.userprofile else 0,
@@ -99,6 +104,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
             data["badges"] = badges
             data["total_badges_count"] = total_badges_count
 
+            data = _normalize_public_profile_payload(data)
             cache.set(cache_key, data, timeout=300)
             return PublicProfileResult(data=data, cache_hit=False, source="stats")
 
@@ -118,7 +124,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
         raise PublicProfileError("Profile not found", 404)
 
     serializer = PublicUserSerializer(user, context={"request": request} if request else None)
-    data = serializer.data
+    data = _normalize_public_profile_payload(serializer.data)
     cache.set(cache_key, data, timeout=300)
 
     from apps.users.tasks import update_user_stats
@@ -126,3 +132,17 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     update_user_stats.delay(user.id)
 
     return PublicProfileResult(data=data, cache_hit=False, source="fallback")
+
+
+def _normalize_bio(value):
+    if isinstance(value, str):
+        return html.unescape(value)
+    return value
+
+
+def _normalize_public_profile_payload(data):
+    if not isinstance(data, dict):
+        return data
+    normalized = dict(data)
+    normalized["bio"] = _normalize_bio(normalized.get("bio"))
+    return normalized

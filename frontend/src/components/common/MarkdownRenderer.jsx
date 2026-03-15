@@ -162,9 +162,17 @@ const markdownComponents = {
     ),
 };
 
+const decodeHtmlEntities = (text = "") => {
+    if (!text || typeof text !== "string") return "";
+    if (!/&(?:lt|gt|quot|#39|amp);/i.test(text)) return text;
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = text;
+    return textarea.value;
+};
+
 const MarkdownRenderer = ({ content, className = "" }) => {
     // Pre-process custom syntax
-    let processedContent = content || "";
+    let processedContent = decodeHtmlEntities(content || "");
 
     // Process spoilers
     processedContent = processedContent.replace(

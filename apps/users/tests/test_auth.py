@@ -308,19 +308,18 @@ class ProfileTests(APITestCase):
         data = {"bio": "My new bio text"}
         response = self.client.patch(self.profile_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Bio should be HTML escaped
         self.user.userprofile.refresh_from_db()
         self.assertEqual(self.user.userprofile.bio, "My new bio text")
 
     def test_update_profile_bio_xss_prevention(self):
-        """Test that bio is sanitized against XSS."""
+        """Test that unsafe tags are stripped from bio."""
         self.client.force_authenticate(user=self.user)
         data = {"bio": '<script>alert("xss")</script>'}
         response = self.client.patch(self.profile_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.userprofile.refresh_from_db()
-        # Should be escaped
         self.assertNotIn("<script>", self.user.userprofile.bio)
+        self.assertIn('alert("xss")', self.user.userprofile.bio)
 
     @patch("apps.users.views.users.update_user_profile")
     def test_update_profile_returns_503_when_media_storage_unavailable(self, mock_update):

@@ -1,3 +1,6 @@
+import html
+
+import bleach
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
@@ -32,6 +35,39 @@ User = get_user_model()
 MAX_AVATAR_SIZE = getattr(settings, "MAX_AVATAR_SIZE", 2 * 1024 * 1024)
 MAX_BANNER_SIZE = getattr(settings, "MAX_BANNER_SIZE", 5 * 1024 * 1024)
 MAX_BIO_LENGTH = getattr(settings, "MAX_BIO_LENGTH", 5000)
+ALLOWED_BIO_TAGS = [
+    "p",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "br",
+    "strong",
+    "em",
+    "del",
+    "code",
+    "pre",
+    "blockquote",
+    "ul",
+    "ol",
+    "li",
+    "a",
+    "img",
+    "span",
+    "div",
+    "hr",
+    "youtube",
+    "mention",
+]
+ALLOWED_BIO_ATTRIBUTES = {
+    "*": ["class", "align"],
+    "a": ["href", "title", "target", "rel"],
+    "img": ["src", "alt", "width", "height", "data-align", "data-width"],
+    "youtube": ["src"],
+    "mention": ["username"],
+}
 
 class BadgeSerializer(ModelSerializer):
     """Serializer for a badge definition."""
@@ -313,8 +349,16 @@ class UserProfileUpdateSerializer(Serializer):
         return value
 
     def validate_bio(self, value):
-        from django.utils.html import escape
-        return escape(value)
+        # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
+        normalized_value = html.unescape(value or "")
+
+        # Keep markdown/allowed HTML intact while stripping unsafe tags/attributes.
+        return bleach.clean(
+            normalized_value,
+            tags=ALLOWED_BIO_TAGS,
+            attributes=ALLOWED_BIO_ATTRIBUTES,
+            strip=True,
+        )
 
     social_links = JSONField(required=False)
 

@@ -1,3 +1,4 @@
+import html
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
@@ -29,7 +30,10 @@ def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
     cache_key = get_user_profile_cache_key(user_id, full=is_full)
     cached_data = cache.get(cache_key)
     if cached_data:
-        return ProfileResult(data=cached_data, cache_hit=True)
+        normalized = _normalize_profile_payload(cached_data)
+        if normalized != cached_data:
+            cache.set(cache_key, normalized, timeout=300)
+        return ProfileResult(data=normalized, cache_hit=True)
 
     user = User.objects.select_related("userprofile").get(pk=user_id)
     stats_data = _get_stats_snapshot(user)
@@ -118,7 +122,7 @@ def _build_profile_data(user, stats_data):
         "date_joined": user.date_joined,
         "avatar": profile.avatar.url if profile and profile.avatar else None,
         "banner": profile.banner.url if profile and profile.banner else None,
-        "bio": profile.bio if profile else None,
+        "bio": _normalize_bio(profile.bio if profile else None),
         "is_private": profile.is_private if profile else False,
         "email_verified": profile.email_verified if profile else False,
         "social_links": profile.social_links if profile else [],
@@ -133,3 +137,17 @@ def _build_profile_data(user, stats_data):
 
     logger.debug("Built current user profile payload", extra={"user_id": user.id})
     return data
+
+
+def _normalize_bio(value):
+    if isinstance(value, str):
+        return html.unescape(value)
+    return value
+
+
+def _normalize_profile_payload(data):
+    if not isinstance(data, dict):
+        return data
+    normalized = dict(data)
+    normalized["bio"] = _normalize_bio(normalized.get("bio"))
+    return normalized
