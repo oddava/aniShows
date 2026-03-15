@@ -5,7 +5,7 @@ import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import { applyImageFallback, getImageFallbackUrl, getImageSrcSet, getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
 import SEO from '../components/SEO';
 
@@ -128,6 +128,7 @@ export default function Home() {
                                     sizes="100vw"
                                     alt={`${anime.title} banner image`}
                                     loading={index === 0 ? 'eager' : 'lazy'}
+                                    onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'banner'))}
                                     className="w-full h-full object-cover "
                                 />
                             </div>

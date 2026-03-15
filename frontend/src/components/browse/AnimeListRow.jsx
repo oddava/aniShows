@@ -1,13 +1,14 @@
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
-import { getOptimizedImageUrl } from '../../utils/imageUtils';
+import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 
 function AnimeListRow({ anime, titleLanguage = 'en' }) {
     const displayTitle = titleLanguage === 'jp' && anime.title_jp
         ? anime.title_jp
         : anime.title;
     const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
+    const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
 
     const getStatusStyle = (status) => {
         if (status === 'Airing') {
@@ -33,6 +34,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     src={imageUrl}
                     alt={anime.title}
                     loading="lazy"
+                    onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                     className="w-[85px] sm:w-[100px] h-[120px] sm:h-[140px] object-cover rounded-xl  ring-1 ring-white/5 group-hover:ring-accent/20 transition-all duration-300"
                 />
 

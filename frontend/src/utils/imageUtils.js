@@ -7,6 +7,11 @@
  * @param {string} title - The title of the anime (for placeholder text)
  * @returns {string} The processed, ready-to-use image URL
  */
+let shouldBypassCacheImages = false;
+
+const isCacheImagePath = (url) =>
+    typeof url === 'string' && url.includes('/media/CACHE/images/');
+
 export const getImageUrl = (url, title = 'Anime') => {
     if (!url) {
         return `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(title)}`;
@@ -67,8 +72,63 @@ export const getOptimizedImageUrl = (anime, type = 'cover', size = 'medium') => 
 
     const images = sizeMap[type] || sizeMap.cover;
     const imageUrl = images[size] || images.original;
+
+    if (shouldBypassCacheImages && isCacheImagePath(imageUrl) && images.original) {
+        return getImageUrl(images.original, anime.title);
+    }
     
     return getImageUrl(imageUrl, anime.title);
+};
+
+/**
+ * Get a resilient fallback image URL (non-thumbnail preferred).
+ * @param {Object} anime - Anime object with image URLs
+ * @param {string} type - 'cover' or 'banner'
+ * @returns {string} Fallback image URL
+ */
+export const getImageFallbackUrl = (anime, type = 'cover') => {
+    if (!anime) return getImageUrl(null);
+
+    if (type === 'banner') {
+        const bannerFallback =
+            anime.banner_image ||
+            anime.banner_image_external_url ||
+            anime.cover_image ||
+            anime.cover_image_external_url;
+        return getImageUrl(bannerFallback, anime.title);
+    }
+
+    const coverFallback =
+        anime.cover_image ||
+        anime.cover_image_external_url ||
+        anime.banner_image ||
+        anime.banner_image_external_url;
+    return getImageUrl(coverFallback, anime.title);
+};
+
+/**
+ * One-shot image fallback handler for <img onError>.
+ * Clears srcSet/sizes before applying fallback to avoid repeated failing candidates.
+ * @param {React.SyntheticEvent<HTMLImageElement>} event
+ * @param {string} fallbackUrl
+ */
+export const applyImageFallback = (event, fallbackUrl) => {
+    const img = event?.currentTarget;
+    if (!img || !fallbackUrl) return;
+
+    const currentSource = img.currentSrc || img.src || '';
+    if (isCacheImagePath(currentSource)) {
+        shouldBypassCacheImages = true;
+    }
+
+    if (img.dataset.fallbackApplied === '1') {
+        return;
+    }
+
+    img.dataset.fallbackApplied = '1';
+    img.removeAttribute('srcset');
+    img.removeAttribute('sizes');
+    img.src = fallbackUrl;
 };
 
 /**
@@ -98,6 +158,9 @@ export const getImageSrcSet = (anime, type = 'cover') => {
     
     Object.values(images).forEach(({ url, width }) => {
         if (url) {
+            if (shouldBypassCacheImages && isCacheImagePath(url)) {
+                return;
+            }
             urls.push(`${getImageUrl(url)} ${width}w`);
         }
     });

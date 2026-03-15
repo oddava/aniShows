@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { TrendingUp, ChevronRight, Star } from 'lucide-react';
 import PropTypes from 'prop-types';
-import { getOptimizedImageUrl } from '../../utils/imageUtils';
+import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function TrendingCarousel({
@@ -67,6 +67,7 @@ export default function TrendingCarousel({
                 src={getOptimizedImageUrl(item, 'cover', 'medium')}
                 alt={item.title}
                 loading={index < 3 ? "eager" : "lazy"}
+                onError={(event) => applyImageFallback(event, getImageFallbackUrl(item, 'cover'))}
                 className="w-full h-full object-cover transition-all duration-300 "
               />
 

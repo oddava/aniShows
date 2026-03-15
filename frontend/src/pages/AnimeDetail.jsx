@@ -18,7 +18,12 @@ import FriendsWatching from '../components/FriendsWatching';
 import SEOHelmet from '../components/SEOHelmet';
 import { OverviewTab, CharactersTab, StaffTab } from '../components/DetailTabs';
 import { AnimeDetailSkeleton } from '../components/skeletons';
-import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import {
+    applyImageFallback,
+    getImageFallbackUrl,
+    getImageSrcSet,
+    getOptimizedImageUrl,
+} from '../utils/imageUtils';
 import logger from '../utils/logger';
 
 // Memoized tab configuration to prevent re-renders
@@ -441,6 +446,8 @@ export default function AnimeDetail() {
         `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');
+    const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');
+    const coverFallbackUrl = getImageFallbackUrl(anime, 'cover');
 
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
@@ -495,6 +502,7 @@ export default function AnimeDetail() {
                     srcSet={bannerSrcSet}
                     sizes="100vw"
                     alt={anime.title}
+                    onError={(event) => applyImageFallback(event, bannerFallbackUrl)}
                     className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent" />
@@ -513,6 +521,7 @@ export default function AnimeDetail() {
                                     srcSet={coverSrcSet}
                                     sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
                                     alt={anime.title}
+                                    onError={(event) => applyImageFallback(event, coverFallbackUrl)}
                                     className="w-48 md:w-64 lg:w-full aspect-[2/3] object-cover rounded-2xl border border-gray-800 bg-dark-200"
                                 />
                             </div>

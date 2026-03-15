@@ -4,7 +4,12 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
-import { getOptimizedImageUrl, getImageSrcSet } from '../utils/imageUtils';
+import {
+    applyImageFallback,
+    getImageFallbackUrl,
+    getImageSrcSet,
+    getOptimizedImageUrl,
+} from '../utils/imageUtils';
 import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
@@ -35,6 +40,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
     // Memoized computed values - use optimized images with srcset
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
+    const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
     const displayTitle = useMemo(() =>
         titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
         [titleLanguage, anime.title_jp, anime.title]
@@ -197,6 +203,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     loading={loadingStrategy.loading}
                     decoding={loadingStrategy.decoding}
                     onLoad={() => setImageLoaded(true)}
+                    onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                     className={`w-full h-full object-cover ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -226,6 +233,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                             loading={loadingStrategy.loading}
                             decoding={loadingStrategy.decoding}
                             onLoad={() => setImageLoaded(true)}
+                            onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                             className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                         />
                     </Link>
