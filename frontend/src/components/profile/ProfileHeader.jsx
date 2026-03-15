@@ -43,11 +43,6 @@ export default function ProfileHeader({
                                 </div>
                             )}
                         </div>
-                        {displayUser?.is_online ? (
-                            <div className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-dark" title="Online" />
-                        ) : (
-                            <div className="absolute bottom-2 right-2 w-4 h-4 bg-gray-500 rounded-full border-2 border-dark" title="Offline" />
-                        )}
                     </div>
 
                     <div className="-mt-12 flex justify-end">
