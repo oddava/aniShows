@@ -216,6 +216,7 @@ else
     echo -e "${RED}Health check failed after 3 attempts!${NC}"
     echo -e "${YELLOW}Checking container logs...${NC}"
     $COMPOSE_CMD logs --tail=20 web
+    exit 1
 fi
 echo ""
 
