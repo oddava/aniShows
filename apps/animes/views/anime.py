@@ -9,6 +9,7 @@ from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
@@ -516,7 +517,13 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         serializer = AnimeStaffSerializer(staff, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["post"], url_path="franchise/fetch")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="franchise/fetch",
+        permission_classes=[AllowAny],
+        authentication_classes=[],
+    )
     def franchise_fetch(self, request):
         anilist_id = request.data.get("anilist_id")
         if not anilist_id:

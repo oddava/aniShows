@@ -1,0 +1,64 @@
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework.test import APIClient, APITestCase
+
+from apps.animes.services.franchise_import import FranchiseImportResult
+
+
+class FranchiseFetchEndpointTests(APITestCase):
+    endpoint_name = "anime-franchise-fetch"
+
+    @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
+    def test_anonymous_post_can_fetch_franchise_entry(self, mock_import):
+        mock_import.return_value = FranchiseImportResult(
+            slug="naruto-shippuuden",
+            title="Naruto: Shippuuden",
+            imported=True,
+        )
+
+        response = self.client.post(
+            reverse(self.endpoint_name),
+            {"anilist_id": 1735, "source_slug": "naruto"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["slug"], "naruto-shippuuden")
+        self.assertTrue(response.data["imported"])
+        mock_import.assert_called_once()
+
+    @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
+    def test_session_user_without_csrf_token_is_not_blocked(self, mock_import):
+        mock_import.return_value = FranchiseImportResult(
+            slug="boruto",
+            title="Boruto",
+            imported=False,
+        )
+
+        user = get_user_model().objects.create_user(username="csrf-session-user", password="pass12345")
+        client = APIClient(enforce_csrf_checks=True)
+        client.force_login(user)
+
+        response = client.post(
+            reverse(self.endpoint_name),
+            {"anilist_id": 97940, "source_slug": "naruto-shippuuden"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["slug"], "boruto")
+        mock_import.assert_called_once()
+
+    @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
+    def test_invalid_anilist_id_returns_400(self, mock_import):
+        response = self.client.post(
+            reverse(self.endpoint_name),
+            {"anilist_id": "invalid"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "anilist_id must be a valid integer")
+        mock_import.assert_not_called()
