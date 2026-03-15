@@ -18,6 +18,18 @@ export const getImageUrl = (url, title = 'Anime') => {
     if (cleanUrl.includes('localhost:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/localhost:8000/, '');
     if (cleanUrl.includes('web:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/web:8000/, '');
 
+    // Storage backends can return internal MinIO URLs in production.
+    // Normalize those to app-relative /media paths so Caddy can proxy them.
+    if (/^https?:\/\/(localhost|127\.0\.0\.1|minio|web)(:\d+)?\//.test(cleanUrl)) {
+        cleanUrl = cleanUrl.replace(/^https?:\/\/[^/]+/, '');
+    }
+
+    // Convert path-style S3/MinIO URL (/bucket/media/...) into /media/...
+    // so requests consistently route through app media proxy.
+    if (/^\/[^/]+\/media\//.test(cleanUrl)) {
+        cleanUrl = cleanUrl.replace(/^\/[^/]+\/media\//, '/media/');
+    }
+
     // If it's already a full URL (external), return it
     if (cleanUrl.startsWith('http')) return cleanUrl;
 

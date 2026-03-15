@@ -1,3 +1,5 @@
+from email.utils import parseaddr
+
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
@@ -72,12 +74,30 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
     try:
         from django.core.mail import EmailMultiAlternatives
 
+        from_email = settings.DEFAULT_FROM_EMAIL
+        _, from_addr = parseaddr(from_email or "")
+        email_host = (settings.EMAIL_HOST or "").lower()
+        email_user = (settings.EMAIL_HOST_USER or "").strip().lower()
+
+        if not from_addr:
+            logger.warning(
+                "DEFAULT_FROM_EMAIL looks invalid; SMTP providers may reject sender "
+                f"(value={from_email!r})"
+            )
+        elif "gmail.com" in email_host and email_user and from_addr.lower() != email_user:
+            logger.warning(
+                "Gmail SMTP sender mismatch: DEFAULT_FROM_EMAIL=%s differs from EMAIL_HOST_USER=%s; "
+                "Gmail may reject this sender unless alias is configured.",
+                from_email,
+                settings.EMAIL_HOST_USER,
+            )
+
         # Use EmailMultiAlternatives if HTML message is provided
         if html_message:
             email = EmailMultiAlternatives(
                 subject=subject,
                 body=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                from_email=from_email,
                 to=recipient_list,
             )
             email.attach_alternative(html_message, "text/html")
@@ -86,7 +106,7 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
             result = send_mail(
                 subject=subject,
                 message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
+                from_email=from_email,
                 recipient_list=recipient_list,
                 fail_silently=False,
             )

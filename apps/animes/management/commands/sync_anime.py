@@ -99,9 +99,21 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--queue",
-            default="default",
-            choices=["default", "low_priority"],
-            help="Queue to use for task execution",
+            default=None,
+            choices=[
+                "critical",
+                "high_priority",
+                "default",
+                "batch",
+                "images",
+                "notifications",
+                "analytics",
+                "low_priority",
+            ],
+            help=(
+                "Optional queue override. If omitted, Celery task_routes decides the queue "
+                "(recommended)."
+            ),
         )
 
     def handle(self, *args, **options):
@@ -110,7 +122,7 @@ class Command(BaseCommand):
         queue = options["queue"]
 
         self.stdout.write(f"Starting workflow: {workflow}")
-        self.stdout.write(f"Queue: {queue}")
+        self.stdout.write(f"Queue: {queue or 'auto (task_routes)'}")
         self.stdout.write(f"Async: {run_async}")
 
         if workflow == "sync-catalog":
@@ -137,12 +149,7 @@ class Command(BaseCommand):
 
         task = sync_anime_catalog.s(sync_type=sync_type, limit=limit)
 
-        if run_async:
-            result = task.apply_async(queue=queue)
-            self.stdout.write(self.style.SUCCESS(f"Task queued. ID: {result.id}"))
-        else:
-            result = task.apply(queue=queue)
-            self._print_result(result)
+        self._dispatch_task(task, run_async, queue)
 
     def _handle_sync_airing(self, options, run_async, queue):
         """Handle airing workflow."""
@@ -158,12 +165,7 @@ class Command(BaseCommand):
             batch_size=batch_size,
         )
 
-        if run_async:
-            result = task.apply_async(queue=queue)
-            self.stdout.write(self.style.SUCCESS(f"Task queued. ID: {result.id}"))
-        else:
-            result = task.apply(queue=queue)
-            self._print_result(result)
+        self._dispatch_task(task, run_async, queue)
 
     def _handle_enrich_metadata(self, options, run_async, queue):
         """Handle metadata enrichment."""
@@ -183,12 +185,7 @@ class Command(BaseCommand):
         else:
             task = enrich_metadata.s(mode="backfill", batch_size=batch_size)
 
-        if run_async:
-            result = task.apply_async(queue=queue)
-            self.stdout.write(self.style.SUCCESS(f"Task queued. ID: {result.id}"))
-        else:
-            result = task.apply(queue=queue)
-            self._print_result(result)
+        self._dispatch_task(task, run_async, queue)
 
     def _handle_sync_themes(self, options, run_async, queue):
         """Handle theme song sync."""
@@ -205,12 +202,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Syncing themes (limit: {limit}, force: {force_resync})")
             task = sync_theme_songs.s(limit=limit, force_resync=force_resync)
 
-        if run_async:
-            result = task.apply_async(queue=queue)
-            self.stdout.write(self.style.SUCCESS(f"Task queued. ID: {result.id}"))
-        else:
-            result = task.apply(queue=queue)
-            self._print_result(result)
+        self._dispatch_task(task, run_async, queue)
 
     def _handle_generate_recommendations(self, options, run_async, queue):
         """Handle recommendation generation."""
@@ -226,12 +218,7 @@ class Command(BaseCommand):
             self.stdout.write("Generating recommendations for all users")
             task = generate_recommendations.s(limit=limit)
 
-        if run_async:
-            result = task.apply_async(queue=queue)
-            self.stdout.write(self.style.SUCCESS(f"Task queued. ID: {result.id}"))
-        else:
-            result = task.apply(queue=queue)
-            self._print_result(result)
+        self._dispatch_task(task, run_async, queue)
 
     def _handle_full_sync(self, options, run_async, queue):
         """Handle full synchronization workflow."""
@@ -256,7 +243,8 @@ class Command(BaseCommand):
         )
 
         if run_async:
-            result = task_chain.apply_async(queue=queue)
+            kwargs = {"queue": queue} if queue else {}
+            result = task_chain.apply_async(**kwargs)
             self.stdout.write(self.style.SUCCESS(f"Task chain queued. ID: {result.id}"))
         else:
             self.stdout.write(
@@ -264,6 +252,16 @@ class Command(BaseCommand):
                     "Full sync cannot run synchronously. Use --async flag."
                 )
             )
+
+    def _dispatch_task(self, task, run_async, queue):
+        if run_async:
+            kwargs = {"queue": queue} if queue else {}
+            result = task.apply_async(**kwargs)
+            self.stdout.write(self.style.SUCCESS(f"Task queued. ID: {result.id}"))
+            return
+
+        result = task.apply()
+        self._print_result(result)
 
     def _print_result(self, result):
         """Pretty print task result."""

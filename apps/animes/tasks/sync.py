@@ -24,6 +24,18 @@ from apps.animes.services.anilist import AniListService, MediaSort
 
 from .base import BaseTask, run_async_in_task
 
+# Explicit airing query: AniListService.anime_query() does not filter by status.
+AIRING_MEDIA_QUERY = f"""
+    query GetAiringAnime($status: MediaStatus, $page: Int, $perPage: Int, $sort: [MediaSort]) {{
+        Page(page: $page, perPage: $perPage) {{
+            pageInfo {{ total currentPage lastPage hasNextPage }}
+            media(type: ANIME, status: $status, sort: $sort, isAdult: false) {{
+                {AniListService.MEDIA_FIELDS}
+            }}
+        }}
+    }}
+"""
+
 # Sync type configurations
 SYNC_CONFIGS = {
     "trending": {
@@ -55,6 +67,7 @@ SYNC_CONFIGS = {
                 "status": "RELEASING",
                 "sort": [MediaSort.POPULARITY.value],
             },
+            "custom_query": AIRING_MEDIA_QUERY,
         },
         "schedule": "hourly",
         "priority": "high",

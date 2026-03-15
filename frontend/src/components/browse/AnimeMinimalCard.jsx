@@ -1,10 +1,12 @@
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
+import { getOptimizedImageUrl } from '../../utils/imageUtils';
 
 function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
     const displayTitle = titleLanguage === 'jp' && anime.title_jp 
         ? anime.title_jp 
         : anime.title;
+    const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
 
     return (
         <Link
@@ -12,7 +14,7 @@ function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
             className="block aspect-[2/3] rounded-lg overflow-hidden relative group"
         >
             <img
-                src={anime.cover_image}
+                src={imageUrl}
                 alt={anime.title}
                 loading="lazy"
                 className="w-full h-full object-cover  transition-transform duration-300"
@@ -34,7 +36,9 @@ AnimeMinimalCard.propTypes = {
         slug: PropTypes.string.isRequired,
         title: PropTypes.string.isRequired,
         title_jp: PropTypes.string,
-        cover_image: PropTypes.string.isRequired
+        cover_image: PropTypes.string,
+        cover_image_small: PropTypes.string,
+        cover_image_medium: PropTypes.string
     }).isRequired,
     titleLanguage: PropTypes.oneOf(['en', 'jp'])
 };

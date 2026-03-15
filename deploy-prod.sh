@@ -27,6 +27,21 @@ SCALE_CELERY="${SCALE_CELERY:-2}"
 SCALE_CELERY_PRIORITY="${SCALE_CELERY_PRIORITY:-2}"
 SCALE_CELERY_IMAGES="${SCALE_CELERY_IMAGES:-1}"
 SCALE_CELERY_ANALYTICS="${SCALE_CELERY_ANALYTICS:-1}"
+DOMAIN_NAME_RAW="${DOMAIN_NAME:-localhost}"
+FRONTEND_HOST="${DOMAIN_NAME_RAW#http://}"
+FRONTEND_HOST="${FRONTEND_HOST#https://}"
+FRONTEND_HOST="${FRONTEND_HOST%%,*}"
+FRONTEND_HOST="${FRONTEND_HOST%% *}"
+FRONTEND_HOST="${FRONTEND_HOST%%/*}"
+FRONTEND_HOST="${FRONTEND_HOST%%:*}"
+[ -z "$FRONTEND_HOST" ] && FRONTEND_HOST="localhost"
+
+FRONTEND_BASE_URL="http://localhost:80"
+FRONTEND_CURL=(curl -fsS --retry 3 --retry-delay 2)
+if [ "$FRONTEND_HOST" != "localhost" ] && [ "$FRONTEND_HOST" != "127.0.0.1" ]; then
+    FRONTEND_BASE_URL="http://${FRONTEND_HOST}"
+    FRONTEND_CURL+=(-L --resolve "${FRONTEND_HOST}:80:127.0.0.1" --resolve "${FRONTEND_HOST}:443:127.0.0.1")
+fi
 
 echo -e "${BLUE}Starting full deployment (frontend + backend)...${NC}"
 echo ""
@@ -183,8 +198,9 @@ else
 fi
 
 echo -e "${BLUE}  Verifying Caddy HTTP endpoint...${NC}"
-if ! curl -sf --retry 3 --retry-delay 2 http://localhost:80/api/v1/health/ >/dev/null; then
+if ! "${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}/api/v1/health/" >/dev/null; then
     echo -e "${RED}Caddy endpoint health check failed.${NC}"
+    echo -e "${YELLOW}  Probe URL: ${FRONTEND_BASE_URL}/api/v1/health/ (host=${FRONTEND_HOST})${NC}"
     $COMPOSE_CMD logs --tail=50 caddy || true
     exit 1
 fi
@@ -224,10 +240,22 @@ echo ""
 # FRONTEND SMOKE CHECK
 # =========================================================================
 echo -e "${BLUE}Step 8: Verifying frontend is servable...${NC}"
-FRONTEND_HTML="$(curl -fsS --retry 3 --retry-delay 2 http://localhost:80/ || true)"
+echo -e "${BLUE}  Frontend probe URL: ${FRONTEND_BASE_URL}/ (host=${FRONTEND_HOST})${NC}"
+FRONTEND_HTML="$("${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}/" || true)"
 
 if [ -z "$FRONTEND_HTML" ]; then
     echo -e "${RED}Frontend health check failed: could not fetch homepage HTML.${NC}"
+    FRONTEND_DEBUG_CURL=(curl -sS -o /tmp/frontend-health-body.$$ -w "%{http_code}" --retry 1)
+    if [ "$FRONTEND_HOST" != "localhost" ] && [ "$FRONTEND_HOST" != "127.0.0.1" ]; then
+        FRONTEND_DEBUG_CURL+=(-L --resolve "${FRONTEND_HOST}:80:127.0.0.1" --resolve "${FRONTEND_HOST}:443:127.0.0.1")
+    fi
+    FRONTEND_STATUS="$("${FRONTEND_DEBUG_CURL[@]}" "${FRONTEND_BASE_URL}/" || true)"
+    echo -e "${YELLOW}  HTTP status: ${FRONTEND_STATUS:-unknown}${NC}"
+    if [ -f /tmp/frontend-health-body.$$ ]; then
+        echo -e "${YELLOW}  Response preview:${NC}"
+        sed -n '1,8p' /tmp/frontend-health-body.$$ || true
+        rm -f /tmp/frontend-health-body.$$
+    fi
     exit 1
 fi
 
@@ -238,7 +266,7 @@ fi
 
 FRONTEND_ASSET_PATH="$(echo "$FRONTEND_HTML" | grep -oE '/assets/[^" ]+\.js' | head -n1)"
 if [ -n "$FRONTEND_ASSET_PATH" ]; then
-    if ! curl -fsS --retry 3 --retry-delay 2 "http://localhost:80${FRONTEND_ASSET_PATH}" >/dev/null; then
+    if ! "${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}${FRONTEND_ASSET_PATH}" >/dev/null; then
         echo -e "${RED}Frontend health check failed: asset ${FRONTEND_ASSET_PATH} is not reachable.${NC}"
         exit 1
     fi

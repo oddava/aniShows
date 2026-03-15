@@ -285,10 +285,12 @@ class RecommendationService:
     def __init__(self):
         self.content_recommender = ContentBasedRecommender()
 
-    def generate_for_user(self, user, save: bool = True) -> list[UserRecommendation]:
+    def generate_for_user(
+        self, user, limit: int = 50, save: bool = True
+    ) -> list[UserRecommendation]:
         """Generate and optionally save recommendations for a user"""
         try:
-            recs = self.content_recommender.get_recommendations_for_user(user, limit=50)
+            recs = self.content_recommender.get_recommendations_for_user(user, limit=limit)
 
             if not save:
                 return recs

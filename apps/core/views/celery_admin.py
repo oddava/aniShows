@@ -480,7 +480,7 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
     # Available tasks registry
     AVAILABLE_TASKS = {
         # Anime tasks
-        "anime.tasks.sync.sync_anime_catalog": {
+        "apps.animes.tasks.sync.sync_anime_catalog": {
             "name": "Sync Anime Catalog",
             "description": "Synchronize anime catalog from AniList",
             "args_schema": {
@@ -493,7 +493,7 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "default",
         },
-        "anime.tasks.airing.sync_airing_workflow": {
+        "apps.animes.tasks.airing.sync_airing_workflow": {
             "name": "Sync Airing Workflow",
             "description": "Run the complete airing anime workflow",
             "args_schema": {
@@ -506,20 +506,20 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "default",
         },
-        "anime.tasks.metadata.enrich_metadata": {
+        "apps.animes.tasks.metadata.enrich_metadata": {
             "name": "Enrich Metadata",
             "description": "Enrich anime metadata from external sources",
             "args_schema": {
                 "mode": {
                     "type": "string",
-                    "enum": ["single", "batch", "backfill"],
+                    "enum": ["single", "backfill"],
                     "default": "backfill",
                 },
                 "batch_size": {"type": "integer", "default": 100},
             },
             "default_queue": "low_priority",
         },
-        "anime.tasks.themes.sync_theme_songs": {
+        "apps.animes.tasks.themes.sync_theme_songs": {
             "name": "Sync Theme Songs",
             "description": "Synchronize anime theme songs",
             "args_schema": {
@@ -528,7 +528,7 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "default",
         },
-        "anime.tasks.recommendations.generate_recommendations": {
+        "apps.animes.tasks.recommendations.generate_recommendations": {
             "name": "Generate Recommendations",
             "description": "Generate anime recommendations for users",
             "args_schema": {
@@ -536,7 +536,7 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "low_priority",
         },
-        "anime.tasks.franchises.sync_franchises": {
+        "apps.animes.tasks.franchises.sync_franchises": {
             "name": "Sync Franchises",
             "description": "Synchronize anime franchise data",
             "args_schema": {
@@ -550,7 +550,7 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "default",
         },
-        "anime.tasks.franchises.update_relation_slugs": {
+        "apps.animes.tasks.franchises.update_relation_slugs": {
             "name": "Update Relation Slugs",
             "description": "Update broken relation slugs",
             "args_schema": {
@@ -558,16 +558,16 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "low_priority",
         },
-        "anime.tasks.images.generate_image_thumbnails": {
+        "apps.animes.tasks.images.generate_image_thumbnails": {
             "name": "Generate Image Thumbnails",
             "description": "Generate WebP thumbnails for anime images",
             "args_schema": {
-                "limit": {"type": "integer", "default": 100},
+                "anime_id": {"type": "integer", "required": True},
             },
             "default_queue": "low_priority",
         },
         # User tasks
-        "users.tasks.cleanup_unverified_accounts": {
+        "apps.users.tasks.cleanup_unverified_accounts": {
             "name": "Cleanup Unverified Accounts",
             "description": "Delete unverified user accounts",
             "args_schema": {
@@ -575,7 +575,7 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
             },
             "default_queue": "low_priority",
         },
-        "users.tasks.run_user_maintenance_workflow": {
+        "apps.users.tasks.run_user_maintenance_workflow": {
             "name": "User Maintenance Workflow",
             "description": "Run comprehensive user maintenance",
             "args_schema": {

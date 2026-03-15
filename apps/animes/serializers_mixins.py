@@ -1,5 +1,7 @@
 """Serializer mixins for common functionality."""
 
+from urllib.parse import urlparse
+
 from imagekit.cachefiles import ImageCacheFile
 
 
@@ -18,6 +20,19 @@ class ImageUrlMixin:
     def _build_url(self, field):
         """Build absolute URL from an image field using request context."""
         url = field.url
+
+        # Normalize internal storage host URLs (MinIO/Docker localhost) to
+        # app-relative media paths so clients can fetch via public proxy.
+        if url and url.startswith(("http://", "https://")):
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower()
+            if host in {"localhost", "127.0.0.1", "minio", "web"}:
+                media_idx = parsed.path.find("/media/")
+                if media_idx != -1:
+                    url = parsed.path[media_idx:]
+                else:
+                    url = parsed.path
+
         # S3 storage returns full absolute URLs already — don't double-prefix
         if url and url.startswith(("http://", "https://")):
             return url

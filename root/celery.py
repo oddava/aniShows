@@ -82,6 +82,7 @@ app.conf.task_routes = {
     # =========================================================================
     # IMAGES QUEUE - Image processing
     # =========================================================================
+    "apps.animes.tasks.images.fetch_anime_images": {"queue": "images"},
     "apps.animes.tasks.images.generate_image_thumbnails": {"queue": "images"},
     # =========================================================================
     # NOTIFICATIONS QUEUE - Email/push
@@ -91,16 +92,16 @@ app.conf.task_routes = {
     # ANALYTICS QUEUE - Statistics and reporting
     # =========================================================================
     "apps.animes.tasks.recommendations.generate_recommendations": {"queue": "analytics"},
-    "apps.users.tasks.update_user_statistics": {"queue": "analytics"},
+    "apps.users.tasks.update_user_stats": {"queue": "analytics"},
     # =========================================================================
     # LOW PRIORITY - Background maintenance
     # =========================================================================
     # Metadata and maintenance
     "apps.animes.tasks.franchises.update_relation_slugs": {"queue": "low_priority"},
     # Cleanup tasks
-    "apps.animes.tasks.airing.cleanup_old_airing_data": {"queue": "low_priority"},
-    "apps.core.tasks.notifications.cleanup_old_notifications": {"queue": "low_priority"},
-    "apps.core.tasks.cleanup_old_task_results": {"queue": "low_priority"},
+    "apps.core.tasks.notifications.cleanup_old_notifications_task": {"queue": "low_priority"},
+    "apps.core.tasks.cleanup_tasks.cleanup_old_task_results": {"queue": "low_priority"},
+    "apps.animes.tasks.themes.backfill_theme_youtube_urls": {"queue": "low_priority"},
     # User maintenance
     "apps.users.tasks.warm_profile_cache": {"queue": "low_priority"},
     "apps.users.tasks.update_all_user_stats": {"queue": "low_priority"},

@@ -77,7 +77,7 @@ class RecommendationTask(BaseTask):
             service = RecommendationService()
 
             # Generate recommendations
-            recs = service.generate_for_user(user)
+            recs = service.generate_for_user(user, limit=limit)
 
             # Record Prometheus metric
             try:
@@ -140,7 +140,7 @@ class RecommendationTask(BaseTask):
             for user_id in active_user_ids:
                 try:
                     user = User.objects.get(id=user_id)
-                    recs = service.generate_for_user(user)
+                    recs = service.generate_for_user(user, limit=limit)
                     total_recs += len(recs)
                     processed += 1
 

@@ -270,7 +270,7 @@ class AnimeAdmin(admin.ModelAdmin):
             try:
                 # Trigger franchise sync for this anime
                 current_app.send_task(
-                    "anime.tasks.franchises.sync_franchises",
+                    "apps.animes.tasks.franchises.sync_franchises",
                     kwargs={"anime_id": anime.id},
                     queue="default",
                 )
@@ -295,15 +295,13 @@ class AnimeAdmin(admin.ModelAdmin):
         anime_ids = list(queryset.values_list("id", flat=True))
 
         try:
-            # Trigger metadata task for batch
-            current_app.send_task(
-                "anime.tasks.metadata.enrich_metadata",
-                kwargs={
-                    "mode": "batch",
-                    "anime_ids": anime_ids,
-                },
-                queue="low_priority",
-            )
+            # Trigger one metadata task per selected anime.
+            for anime_id in anime_ids:
+                current_app.send_task(
+                    "apps.animes.tasks.metadata.enrich_metadata",
+                    kwargs={"mode": "single", "anime_id": anime_id},
+                    queue="batch",
+                )
             self.message_user(
                 request,
                 f"Metadata enrichment triggered for {len(anime_ids)} anime.",

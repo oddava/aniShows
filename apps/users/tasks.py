@@ -247,7 +247,7 @@ def fetch_anime_by_external_id(
         # Try to search by title as last resort
         if title:
             logger.info(f"Searching anime by title: {title}")
-            results = asyncio.run(service.search_anime(query=title, limit=1))
+            results = asyncio.run(service.search_anime(title))
             if results:
                 anime_data = results[0]
                 anime = asyncio.run(service._save_anime_to_db_async(anime_data))
