@@ -378,17 +378,17 @@ jobs:
             echo '📂 Navigating to project directory...'
             APP_DIR=''
             for dir in /root/aniShows /home/root/aniShows /home/ubuntu/aniShows; do
-              if [ -d \"$dir\" ]; then
-                APP_DIR=\"$dir\"
+              if [ -d \"\$dir\" ]; then
+                APP_DIR=\"\$dir\"
                 break
               fi
             done
-            if [ -z \"$APP_DIR\" ]; then
+            if [ -z \"\$APP_DIR\" ]; then
               echo 'Could not find aniShows directory on server.'
               exit 1
             fi
-            echo \"Using app directory: $APP_DIR\"
-            cd \"$APP_DIR\"
+            echo \"Using app directory: \$APP_DIR\"
+            cd \"\$APP_DIR\"
             
             echo '🔄 Pulling latest compose files from GitHub...'
             git stash || true
