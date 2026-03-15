@@ -1,5 +1,6 @@
 import time
 
+from botocore.exceptions import EndpointConnectionError
 from django.contrib.auth import get_user_model
 from rest_framework import permissions
 from rest_framework.exceptions import ValidationError
@@ -57,7 +58,9 @@ class UserProfileView(APIView):
         return Response(result.data)
 
     def patch(self, request):
-        serializer = UserProfileUpdateSerializer(data=request.data)
+        serializer = UserProfileUpdateSerializer(
+            data=request.data, context={"request": request}
+        )
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
 
@@ -66,6 +69,21 @@ class UserProfileView(APIView):
                 request.user,
                 serializer.validated_data,
                 ip_address=request.META.get("REMOTE_ADDR"),
+            )
+        except EndpointConnectionError as exc:
+            logger.warning(
+                "Media storage unavailable during profile update for user %s: %s",
+                request.user.id,
+                exc,
+            )
+            return Response(
+                {
+                    "detail": (
+                        "Media storage is temporarily unavailable. "
+                        "Please try again shortly."
+                    )
+                },
+                status=503,
             )
         except ValidationError as exc:
             return Response(exc.detail, status=400)

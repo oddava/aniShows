@@ -20,21 +20,30 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
     _handle_username_change(user, validated_data)
 
     profile, _ = UserProfile.objects.get_or_create(user=user)
+    update_fields = []
 
     if "avatar" in validated_data:
         profile.avatar = validated_data["avatar"]
+        update_fields.append("avatar")
     if "banner" in validated_data:
         profile.banner = validated_data["banner"]
+        update_fields.append("banner")
     if validated_data.get("remove_banner"):
         profile.banner = None
+        if "banner" not in update_fields:
+            update_fields.append("banner")
     if "bio" in validated_data:
         profile.bio = validated_data["bio"]
+        update_fields.append("bio")
     if "is_private" in validated_data:
         profile.is_private = validated_data["is_private"]
+        update_fields.append("is_private")
     if "social_links" in validated_data:
-        _apply_social_links(profile, user, validated_data["social_links"], ip_address)
+        if _apply_social_links(profile, user, validated_data["social_links"], ip_address):
+            update_fields.append("social_links")
 
-    profile.save()
+    if update_fields:
+        profile.save(update_fields=update_fields)
     invalidate_user_caches(user.id, user.username)
 
 
@@ -72,11 +81,11 @@ def _handle_username_change(user, validated_data) -> None:
     profile.save(update_fields=["last_username_change"])
 
 
-def _apply_social_links(profile, user, new_links, ip_address: str | None) -> None:
+def _apply_social_links(profile, user, new_links, ip_address: str | None) -> bool:
     old_links = profile.social_links if profile.social_links else []
 
     if _hash_links(old_links) == _hash_links(new_links):
-        return
+        return False
 
     service = SocialLinksService()
     try:
@@ -86,6 +95,7 @@ def _apply_social_links(profile, user, new_links, ip_address: str | None) -> Non
 
     processed_links = service.validate_and_process(new_links, user, skip_metadata=True)
     profile.social_links = processed_links
+    return True
 
 
 def _hash_links(links) -> str:

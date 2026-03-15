@@ -9,6 +9,9 @@ Tests for:
 - Profile retrieval
 """
 
+from unittest.mock import patch
+
+from botocore.exceptions import EndpointConnectionError
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -318,6 +321,19 @@ class ProfileTests(APITestCase):
         self.user.userprofile.refresh_from_db()
         # Should be escaped
         self.assertNotIn("<script>", self.user.userprofile.bio)
+
+    @patch("apps.users.views.users.update_user_profile")
+    def test_update_profile_returns_503_when_media_storage_unavailable(self, mock_update):
+        """Storage connectivity failures should return a clear 503 response."""
+        mock_update.side_effect = EndpointConnectionError(
+            endpoint_url="http://anishows-minio:9000"
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(self.profile_url, {"bio": "updated"})
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("detail", response.data)
 
 class ChangePasswordTests(APITestCase):
     """Tests for password change endpoint."""
