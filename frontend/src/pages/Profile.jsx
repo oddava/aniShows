@@ -69,7 +69,7 @@ export default function Profile({ forcedUsername }) {
         }
     }, [targetUsername, isOwnProfile, currentUser, queryClient]);
 
-    const { data: publicProfile, isLoading: profileLoading, isError, refetch: refetchProfile } = useQuery({
+    const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
         queryKey: ['profile', targetUsername],
         queryFn: () => authApi.getByUsername(targetUsername).then(res => res.data),
         enabled: isPublicView,
@@ -225,9 +225,7 @@ export default function Profile({ forcedUsername }) {
                 <ProfileHeader
                     displayUser={displayUser}
                     isPublicView={isPublicView}
-                    isOwnProfile={isOwnProfile}
                     targetUsername={targetUsername}
-                    onRefetchProfile={refetchProfile}
                     onOpenFollowersModal={openFollowersModal}
                 />
 
