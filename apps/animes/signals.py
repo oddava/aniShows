@@ -315,6 +315,10 @@ def _schedule_recommendations_debounced(user_id, countdown=300):
 def handle_user_anime_list_change(sender, instance, **kwargs):
     """Update stats and regenerate recommendations when a user updates their anime list."""
     if instance and instance.user:
+        # Bulk imports explicitly skip per-entry fan-out work.
+        if getattr(instance, "_skip_activity", False):
+            return
+
         # Skip if user is being deleted (cascade deletion)
         if not _user_exists(instance.user):
             return

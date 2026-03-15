@@ -1,5 +1,7 @@
 import asyncio
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
+
+from django.core.cache import cache
 
 from apps.animes.models import Anime
 from apps.shared.logger import logger
@@ -41,6 +43,7 @@ class BaseImporter:
 
     # How often to flush progress to DB (every N entries)
     PROGRESS_FLUSH_INTERVAL = 10
+    MISSING_ANIME_CACHE_TTL_SECONDS = 6 * 60 * 60
 
     def __init__(self, job: UserImportJob):
         self.job = job
@@ -85,6 +88,7 @@ class BaseImporter:
         mal_id: int | None = None,
         anilist_id: int | None = None,
         title: str | None = None,
+        allow_title_search: bool = False,
     ) -> Anime | None:
         """
         Try to find anime by external ID, if not found fetch it synchronously.
@@ -111,6 +115,17 @@ class BaseImporter:
             except Anime.DoesNotExist:
                 pass
 
+        if not anilist_id and not mal_id and not allow_title_search:
+            logger.debug(f"Skipping external fetch without stable IDs for title '{title}'")
+            return None
+
+        missing_cache_key = self._missing_anime_cache_key(mal_id=mal_id, anilist_id=anilist_id)
+        if missing_cache_key and cache.get(missing_cache_key):
+            logger.debug(
+                f"Skipping known-missing anime fetch: MAL={mal_id}, AniList={anilist_id}, Title={title}"
+            )
+            return None
+
         # Anime not found - fetch it using shared service and event loop
         service = self._get_anilist_service()
 
@@ -135,10 +150,11 @@ class BaseImporter:
                     self.fetched_count += 1
                     return anime
 
-            # Try to search by title as last resort
-            if title:
+            # External title search is disabled by default to avoid false matches and
+            # unnecessary API pressure during bulk imports.
+            if title and allow_title_search:
                 logger.info(f"Searching anime by title: {title}")
-                results = self._run_async(service.search_anime(query=title, limit=1))
+                results = self._run_async(service.search_anime(title))
                 if results:
                     anime_data = results[0]
                     anime = self._run_async(service._save_anime_to_db_async(anime_data))
@@ -149,11 +165,23 @@ class BaseImporter:
             logger.warning(
                 f"Could not find anime: MAL={mal_id}, AniList={anilist_id}, Title={title}"
             )
+            if missing_cache_key:
+                cache.set(missing_cache_key, True, timeout=self.MISSING_ANIME_CACHE_TTL_SECONDS)
             return None
 
         except Exception as e:
             logger.error(f"Error fetching anime: {e}")
             return None
+
+    def _missing_anime_cache_key(
+        self, mal_id: int | None = None, anilist_id: int | None = None
+    ) -> str | None:
+        """Build a cache key for known-missing external IDs."""
+        if anilist_id:
+            return f"import:missing:anilist:{anilist_id}"
+        if mal_id:
+            return f"import:missing:mal:{mal_id}"
+        return None
 
     def import_entry(self, entry_data: Dict) -> Tuple[bool, str]:
         """
@@ -175,6 +203,7 @@ class BaseImporter:
 
             if existing:
                 # Update existing entry
+                existing._skip_activity = True
                 existing.status = status
                 existing.score = score
                 existing.episodes_watched = episodes_watched
@@ -182,19 +211,34 @@ class BaseImporter:
                 return True, "Updated existing entry"
 
             # Create new entry
-            UserAnimeList.objects.create(
+            created = UserAnimeList(
                 user=self.user,
                 anime=anime,
                 status=status,
                 score=score,
                 episodes_watched=episodes_watched,
             )
+            created._skip_activity = True
+            created.save()
 
             return True, "Imported successfully"
 
         except Exception as e:
             logger.error(f"Error saving entry: {e}")
             return False, f"Error: {str(e)}"
+
+    def trigger_post_import_refresh(self):
+        """Trigger expensive derived-data refresh once per import job."""
+        try:
+            from apps.animes.tasks.recommendations import generate_recommendations
+            from apps.users.tasks import update_user_stats
+
+            update_user_stats.delay(user_id=self.user.id)
+            generate_recommendations.apply_async(kwargs={"user_id": self.user.id}, countdown=30)
+        except Exception as e:
+            logger.warning(
+                f"Failed to queue post-import refresh tasks for user {self.user.id}: {e}"
+            )
 
     def update_job_progress(self, force: bool = False):
         """Update the job's progress in the database.

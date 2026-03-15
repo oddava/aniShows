@@ -184,8 +184,10 @@ def process_import_job(self, job_id: int, **kwargs):
         logger.error(f"Import job {job_id} failed: {exc}")
 
         # Update job status to failed
+        error_message = str(exc)
         job.status = UserImportJob.ImportStatus.failed
-        job.errors.append(str(exc))
+        if not job.errors or job.errors[-1] != error_message:
+            job.errors.append(error_message)
         job.save(update_fields=["status", "errors"])
 
         # Record Prometheus metric
@@ -198,8 +200,16 @@ def process_import_job(self, job_id: int, **kwargs):
         except Exception:
             pass
 
-        # Retry the task
-        raise self.retry(exc=exc, countdown=60)
+        # Retry only for transient DB connectivity errors. Importer-level API retries
+        # already handle external rate limits and network issues.
+        if isinstance(exc, RETRYABLE_DB_ERRORS):
+            raise self.retry(exc=exc, countdown=60)
+
+        return {
+            "job_id": job_id,
+            "status": "failed",
+            "reason": "import_failed",
+        }
 
 @shared_task(
     max_retries=3,

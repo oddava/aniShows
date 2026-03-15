@@ -67,7 +67,11 @@ class MyAnimeListXMLImporter(BaseImporter):
         episodes_watched = entry_data.get("episodes_watched", 0)
 
         # Try to get or fetch anime (SYNCHRONOUS)
-        anime = self.get_or_fetch_anime_sync(mal_id=mal_id, title=title)
+        anime = self.get_or_fetch_anime_sync(
+            mal_id=mal_id,
+            title=title,
+            allow_title_search=False,
+        )
 
         if not anime:
             return False, f"Anime not found or could not be fetched (MAL ID: {mal_id})"
@@ -111,6 +115,7 @@ class MyAnimeListXMLImporter(BaseImporter):
 
             # Final flush of progress
             self.update_job_progress(force=True)
+            self.trigger_post_import_refresh()
 
             # Mark as completed
             self.job.status = UserImportJob.ImportStatus.completed
