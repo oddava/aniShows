@@ -326,6 +326,20 @@ USE_S3 = os.getenv("USE_S3") == "True"
 CDN_BASE_URL = os.getenv("CDN_BASE_URL", "").strip().rstrip("/")
 STATIC_CDN_URL = os.getenv("STATIC_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
 MEDIA_CDN_URL = os.getenv("MEDIA_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
+DEFAULT_IMAGEKIT_CACHEFILE_DIR = "CACHE/images-v2"
+IMAGEKIT_CACHEFILE_DIR = os.getenv(
+    "IMAGEKIT_CACHEFILE_DIR", DEFAULT_IMAGEKIT_CACHEFILE_DIR
+).strip().strip("/")
+if not IMAGEKIT_CACHEFILE_DIR:
+    IMAGEKIT_CACHEFILE_DIR = DEFAULT_IMAGEKIT_CACHEFILE_DIR
+IMAGEKIT_CACHE_PREFIX = os.getenv("IMAGEKIT_CACHE_PREFIX", IMAGEKIT_CACHEFILE_DIR).strip()
+if not IMAGEKIT_CACHE_PREFIX:
+    IMAGEKIT_CACHE_PREFIX = IMAGEKIT_CACHEFILE_DIR
+IMAGEKIT_LEGACY_CACHEFILE_DIRS = tuple(
+    prefix
+    for prefix in _parse_csv(os.getenv("IMAGEKIT_LEGACY_CACHEFILE_DIRS", "CACHE/images"))
+    if prefix.strip("/")
+)
 
 if USE_S3:
     from botocore.config import Config
@@ -366,7 +380,6 @@ if USE_S3:
     # ImageKit configuration - store generated thumbnails in MinIO
     IMAGEKIT_DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
     IMAGEKIT_CACHE_BACKEND = "default"
-    IMAGEKIT_CACHE_PREFIX = "CACHE/images"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
     # Static files are always served by whitenoise locally in app containers.
@@ -400,7 +413,6 @@ else:
     # ImageKit configuration for local development
     IMAGEKIT_DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     IMAGEKIT_CACHE_BACKEND = "default"
-    IMAGEKIT_CACHE_PREFIX = "CACHE/images"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
 # Django 5.x uses STORAGES dict for storage backends

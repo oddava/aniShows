@@ -44,7 +44,8 @@ class Command(BaseCommand):
             )
             return
 
-        cache_dir = Path(settings.BASE_DIR) / "CACHE" / "images"
+        cache_prefix = Path(settings.IMAGEKIT_CACHEFILE_DIR)
+        cache_dir = Path(settings.BASE_DIR) / cache_prefix
 
         if not cache_dir.exists():
             self.stdout.write(
@@ -70,9 +71,9 @@ class Command(BaseCommand):
         failed = 0
 
         for file_path in webp_files:
-            # Calculate the relative path from CACHE/images
+            # Preserve the configured cache prefix so uploaded keys match ImageKit URLs.
             relative_path = file_path.relative_to(cache_dir)
-            storage_path = str(relative_path)
+            storage_path = str(cache_prefix / relative_path)
 
             # Check if file already exists in storage
             if default_storage.exists(storage_path):

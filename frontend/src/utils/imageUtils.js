@@ -10,7 +10,7 @@
 let shouldBypassCacheImages = false;
 
 const isCacheImagePath = (url) =>
-    typeof url === 'string' && url.includes('/media/CACHE/images/');
+    typeof url === 'string' && url.includes('/media/CACHE/');
 
 export const getImageUrl = (url, title = 'Anime') => {
     if (!url) {

@@ -175,6 +175,62 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
             "https://img.anilist.co/cover-internal-host-fix.jpg",
         )
 
+    @override_settings(
+        ALLOWED_HOSTS=["testserver", "localhost", "ani.example"],
+        IMAGEKIT_CACHEFILE_DIR="CACHE/images-v2",
+        IMAGEKIT_LEGACY_CACHEFILE_DIRS=("CACHE/images",),
+    )
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_retrieve_refreshes_cached_payload_with_legacy_thumbnail_prefix(self, _mock_delay):
+        anime = Anime.objects.create(
+            title="Cached Legacy Prefix Anime",
+            slug="cached-legacy-prefix-anime",
+            synopsis="desc",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.anilist.co/cover-legacy-prefix-fix.jpg",
+            banner_image_external_url="https://img.anilist.co/banner-legacy-prefix-fix.jpg",
+        )
+
+        cache_key = f"anime_detail_base:{anime.slug}"
+        cache.set(
+            cache_key,
+            {
+                "id": anime.id,
+                "slug": anime.slug,
+                "cover_image": "/media/CACHE/images/anime/covers/stale.jpg",
+                "cover_image_small": "/media/CACHE/images/anime/covers/stale-small.webp",
+                "cover_image_medium": "/media/CACHE/images/anime/covers/stale-medium.webp",
+                "cover_image_large": "/media/CACHE/images/anime/covers/stale-large.webp",
+                "banner_image": "/media/CACHE/images/anime/banners/stale.jpg",
+                "banner_image_small": "/media/CACHE/images/anime/banners/stale-banner-small.webp",
+                "banner_image_medium": "/media/CACHE/images/anime/banners/stale-banner-medium.webp",
+                "banner_image_large": "/media/CACHE/images/anime/banners/stale-banner-large.webp",
+            },
+            timeout=3600,
+        )
+
+        response = self.client.get(
+            reverse("anime-detail", args=[anime.slug]),
+            HTTP_HOST="ani.example",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data.get("cover_image"),
+            "https://img.anilist.co/cover-legacy-prefix-fix.jpg",
+        )
+        self.assertEqual(
+            response.data.get("banner_image"),
+            "https://img.anilist.co/banner-legacy-prefix-fix.jpg",
+        )
+
+        refreshed_cached = cache.get(cache_key)
+        self.assertEqual(
+            refreshed_cached.get("cover_image"),
+            "https://img.anilist.co/cover-legacy-prefix-fix.jpg",
+        )
+
 
 class DummyImageSerializer(ImageUrlMixin):
     def __init__(self, request=None):

@@ -3,6 +3,7 @@ import json
 from datetime import date
 from urllib.parse import urlparse
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
 from django.db.models.functions import Coalesce
@@ -283,7 +284,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         if cached_base:
             data = cached_base.copy()
             # Self-heal stale cache entries that were stored before image refs existed.
-            if not self._has_cover_media(data) or self._item_has_internal_media_urls(data):
+            if (
+                not self._has_cover_media(data)
+                or self._item_has_internal_media_urls(data)
+                or self._item_has_stale_imagekit_cache_urls(data)
+            ):
                 needs_refresh = True
                 cache.delete(base_cache_key)
 
@@ -374,6 +379,58 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         return False
 
+    @classmethod
+    def _current_imagekit_cache_path_prefix(cls) -> str:
+        return f"/media/{settings.IMAGEKIT_CACHEFILE_DIR.strip('/')}/"
+
+    @classmethod
+    def _legacy_imagekit_cache_path_prefixes(cls) -> tuple[str, ...]:
+        return tuple(
+            f"/media/{prefix.strip('/')}/"
+            for prefix in getattr(settings, "IMAGEKIT_LEGACY_CACHEFILE_DIRS", ())
+            if prefix.strip("/")
+        )
+
+    @classmethod
+    def _item_has_stale_imagekit_cache_urls(cls, item: dict) -> bool:
+        """Detect cached payloads pointing at legacy ImageKit cache namespaces."""
+        if not isinstance(item, dict):
+            return False
+
+        current_prefix = cls._current_imagekit_cache_path_prefix()
+        legacy_prefixes = cls._legacy_imagekit_cache_path_prefixes()
+
+        for field in cls._MEDIA_URL_FIELDS:
+            value = item.get(field)
+            if not isinstance(value, str):
+                continue
+
+            path = urlparse(value).path if value.startswith(("http://", "https://")) else value
+            if "/media/CACHE/" not in path:
+                continue
+            if path.startswith(current_prefix):
+                continue
+            if legacy_prefixes and any(
+                path.startswith(prefix) for prefix in legacy_prefixes
+            ):
+                return True
+            return True
+
+        return False
+
+    @classmethod
+    def _payload_has_stale_imagekit_cache_urls(cls, payload) -> bool:
+        if isinstance(payload, list):
+            return any(cls._item_has_stale_imagekit_cache_urls(item) for item in payload)
+
+        if isinstance(payload, dict):
+            results = payload.get("results")
+            if isinstance(results, list):
+                return any(cls._item_has_stale_imagekit_cache_urls(item) for item in results)
+            return cls._item_has_stale_imagekit_cache_urls(payload)
+
+        return False
+
     def list(self, request, *args, **kwargs):
         """Override to add caching for anime list endpoint"""
         if request.user.is_authenticated:
@@ -385,7 +442,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         cache_key = f"anime_list:{cache_key_hash}"
 
         cached_data = cache.get(cache_key)
-        if cached_data and not self._payload_has_internal_media_urls(cached_data):
+        if (
+            cached_data
+            and not self._payload_has_internal_media_urls(cached_data)
+            and not self._payload_has_stale_imagekit_cache_urls(cached_data)
+        ):
             return Response(cached_data)
         if cached_data:
             cache.delete(cache_key)
@@ -400,7 +461,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         """Shared helper for trending/top_rated shelves."""
         data = cache.get(cache_key)
 
-        if data and self._payload_has_internal_media_urls(data):
+        if data and (
+            self._payload_has_internal_media_urls(data)
+            or self._payload_has_stale_imagekit_cache_urls(data)
+        ):
             cache.delete(cache_key)
             data = None
 
