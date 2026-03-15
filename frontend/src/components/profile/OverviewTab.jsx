@@ -34,7 +34,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
     if (!watchingItems || watchingItems.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="text-sm font-bold text-white mb-4">Currently Watching</h3>
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Currently Watching</h3>
                 <div className="ui-surface-subtle p-8 text-center">
                     <p className="text-sm text-gray-500">Not watching anything right now</p>
                 </div>
@@ -44,7 +44,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
 
     return (
         <div className="mb-10">
-            <h3 className="text-sm font-bold text-white mb-4">Currently Watching</h3>
+            <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Currently Watching</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {watchingItems.map((item) => {
@@ -95,7 +95,7 @@ function FavoritesGrid({ favoritesData }) {
     if (!favorites || favorites.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="text-sm font-bold text-white mb-4">Favorites</h3>
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Favorites</h3>
                 <div className="ui-surface-subtle p-8 text-center">
                     <p className="text-sm text-gray-500">No favorites yet</p>
                 </div>
@@ -105,7 +105,7 @@ function FavoritesGrid({ favoritesData }) {
 
     return (
         <div className="mb-10">
-            <h3 className="text-sm font-bold text-white mb-4">Favorites</h3>
+            <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Favorites</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {favorites.map((fav) => (
@@ -392,7 +392,7 @@ export default function OverviewTab({
 
                     <div className="mt-8 ui-surface-subtle p-5">
                         <div className="mb-5 flex items-center justify-between gap-4">
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-200">Watching Activity</h3>
+                            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Watching Activity</h3>
                             <button
                                 type="button"
                                 onClick={() => onTabChange && onTabChange('activity')}

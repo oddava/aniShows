@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Flame } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 // Tooltip Portal component
@@ -25,7 +24,7 @@ export default function ActivityHeatmap({ activityData = [] }) {
     const [hoveredDay, setHoveredDay] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
     const [persistedDay, setPersistedDay] = useState(null);
-    const containerRef = useRef(null);
+    const scrollRef = useRef(null);
 
     // Keep tooltip content stable during fade out
     useEffect(() => {
@@ -37,8 +36,8 @@ export default function ActivityHeatmap({ activityData = [] }) {
         const today = new Date();
         const result = [];
 
-        // Create 26 weeks of data (approx 6 months) - newest first
-        for (let week = 0; week < 26; week++) {
+        // Create 26 weeks of data in chronological order (oldest -> newest)
+        for (let week = 25; week >= 0; week--) {
             const weekData = [];
             for (let day = 0; day < 7; day++) {
                 const date = new Date(today);
@@ -63,6 +62,14 @@ export default function ActivityHeatmap({ activityData = [] }) {
 
         return result;
     }, [activityData]);
+
+    // Keep the newest weeks visible by default when horizontal overflow exists.
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+        el.scrollLeft = maxScrollLeft;
+    }, [weeks]);
 
     // Calculate stats
     const stats = useMemo(() => {
@@ -132,18 +139,13 @@ export default function ActivityHeatmap({ activityData = [] }) {
     };
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
     return (
-        <div className="p-4 sm:p-6 relative w-full max-w-full" ref={containerRef}>
+        <div className="relative w-full max-w-full p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-                <div>
-                    <h3 className="text-gray-400 font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
-                        <Flame className="w-3.5 h-3.5 text-accent" />
-                        Watching Activity
-                    </h3>
-                    <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Consistency over the past year</p>
-                </div>
+                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                    Watching Activity
+                </h3>
 
                 {stats.totalActivity > 0 ? (
                     <div className="flex items-center gap-6">
@@ -153,10 +155,7 @@ export default function ActivityHeatmap({ activityData = [] }) {
                         </div>
                         <div className="w-px h-6 bg-gray-700/30" />
                         <div className="flex flex-col items-end">
-                            <div className="flex items-center gap-1">
-                                <Flame className="w-3 h-3 text-accent" />
-                                <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
-                            </div>
+                            <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
                             <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Day Streak</span>
                         </div>
                     </div>
@@ -165,26 +164,27 @@ export default function ActivityHeatmap({ activityData = [] }) {
                 )}
             </div>
 
-            <div className="flex gap-3 min-h-[140px] overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div ref={scrollRef} className="flex gap-3 min-h-[140px] overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
 
                 {/* Overflown Content Area */}
                 <div className="py-1 min-w-full">
                     <div className="inline-block min-w-max">
                         {/* Month labels */}
-                        <div className="flex text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 h-6 items-end mb-1 relative">
+                        <div className="mb-1 flex h-6 gap-[4px] text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
                             {weeks.map((week, i) => {
                                 const firstDay = new Date(week[0].date);
                                 const isNewMonth = firstDay.getDate() <= 7;
-                                if (isNewMonth) {
-                                    return (
-                                        <div key={i} className="absolute" style={{ left: `${i * 18}px` }}>
-                                            <span className="whitespace-nowrap">
+                                const alignRight = i >= weeks.length - 2;
+
+                                return (
+                                    <div key={week[0].date} className="relative w-[14px]">
+                                        {isNewMonth && (
+                                            <span className={`absolute top-0 whitespace-nowrap ${alignRight ? 'right-0 text-right' : 'left-0'}`}>
                                                 {months[firstDay.getMonth()]}
                                             </span>
-                                        </div>
-                                    );
-                                }
-                                return null;
+                                        )}
+                                    </div>
+                                );
                             })}
                         </div>
 
@@ -192,28 +192,30 @@ export default function ActivityHeatmap({ activityData = [] }) {
                         <div className="flex gap-[4px]">
                             {weeks.map((week, weekIndex) => (
                                 <div key={weekIndex} className="flex flex-col gap-[4px]">
-                                    {week.map((day) => {
-                                        const [isHovered, setIsHovered] = useState(false);
-                                        return (
-                                            <div
-                                                key={day.date}
-                                                onMouseMove={(e) => {
-                                                    setHoveredDay(day);
-                                                    setTooltipPos({
-                                                        x: e.clientX,
-                                                        y: e.clientY
-                                                    });
-                                                }}
-                                                onMouseEnter={() => setIsHovered(true)}
-                                                onMouseLeave={() => {
-                                                    setHoveredDay(null);
-                                                    setIsHovered(false);
-                                                }}
-                                                className="w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer"
-                                                style={isHovered ? getHoverStyle(day.count) : getColorStyle(day.count)}
-                                            />
-                                        );
-                                    })}
+                                    {week.map((day) => (
+                                        <div
+                                            key={day.date}
+                                            onMouseMove={(e) => {
+                                                setHoveredDay(day);
+                                                setTooltipPos({
+                                                    x: e.clientX,
+                                                    y: e.clientY
+                                                });
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                setHoveredDay(day);
+                                                setTooltipPos({
+                                                    x: e.clientX,
+                                                    y: e.clientY
+                                                });
+                                            }}
+                                            onMouseLeave={() => {
+                                                setHoveredDay(null);
+                                            }}
+                                            className="w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer"
+                                            style={hoveredDay?.date === day.date ? getHoverStyle(day.count) : getColorStyle(day.count)}
+                                        />
+                                    ))}
                                 </div>
                             ))}
                         </div>
