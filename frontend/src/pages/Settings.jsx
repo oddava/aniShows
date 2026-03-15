@@ -13,6 +13,13 @@ import RichTextEditor from '../components/forums/RichTextEditor';
 import ImageCropModal from '../components/ImageCropModal';
 import BadgesSettings from '../components/profile/BadgesSettings';
 
+function getResponsiveBannerAspect(width) {
+    if (width >= 1536) return 6;
+    if (width >= 1280) return 5;
+    if (width >= 640) return 4;
+    return 2.2;
+}
+
 function decodeHtmlEntities(text = '') {
     if (!text || typeof text !== 'string') return '';
     const textarea = document.createElement('textarea');
@@ -42,6 +49,10 @@ export default function Settings() {
         isOpen: false,
         imageSrc: null,
         type: 'avatar' // 'avatar' or 'banner'
+    });
+    const [bannerCropAspect, setBannerCropAspect] = useState(() => {
+        if (typeof window === 'undefined') return 4;
+        return getResponsiveBannerAspect(window.innerWidth);
     });
     // Temporary ObjectURLs for previewing without storing in memory permanently
     const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
@@ -98,6 +109,16 @@ export default function Settings() {
             setActiveTab('profile');
         }
     }, [activeTab, user]);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setBannerCropAspect(getResponsiveBannerAspect(window.innerWidth));
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Load notification preferences
     useEffect(() => {
@@ -488,7 +509,7 @@ export default function Settings() {
                                 {/* Banner */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                <div className="relative aspect-[3/1] max-w-2xl max-h-48 rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
+                                    <div className="relative w-full aspect-[2.2/1] sm:aspect-[4/1] xl:aspect-[5/1] 2xl:aspect-[6/1] rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
                                         {bannerPreviewUrl ? (
                                             <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.banner && !removeBanner ? (
@@ -1184,7 +1205,8 @@ export default function Settings() {
             <ImageCropModal
                 isOpen={cropModal.isOpen}
                 imageSrc={cropModal.imageSrc}
-                aspect={cropModal.type === 'banner' ? 3 : 1}
+                aspect={cropModal.type === 'banner' ? bannerCropAspect : 1}
+                mediaType={cropModal.type}
                 cropShape={cropModal.type === 'banner' ? 'rect' : 'rect'}
                 title={cropModal.type === 'banner' ? 'Edit banner' : 'Edit profile picture'}
                 onClose={() => {
