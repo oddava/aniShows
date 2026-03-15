@@ -15,6 +15,26 @@ def _env_bool(name: str, default: bool = False) -> bool:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
+def _env_int(name: str, default: int) -> int:
+    """Parse an integer env value with a safe default."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw.strip())
+    except (TypeError, ValueError):
+        return default
+
+def _env_float(name: str, default: float) -> float:
+    """Parse a float env value with a safe default."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw.strip())
+    except (TypeError, ValueError):
+        return default
+
 def _parse_csv(value: str) -> list[str]:
     """Parse comma-separated env values into a cleaned list."""
     return [item.strip() for item in value.split(",") if item.strip()]
@@ -48,6 +68,20 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+# Runtime controls for request logging overhead and policy checks
+REQUEST_LOGGING_ENABLED = _env_bool("REQUEST_LOGGING_ENABLED", True)
+REQUEST_LOG_SUCCESS_SAMPLE_RATE = min(
+    max(_env_float("REQUEST_LOG_SUCCESS_SAMPLE_RATE", 0.05), 0.0),
+    1.0,
+)
+REQUEST_LOG_INCLUDE_QUERY_PARAMS = _env_bool("REQUEST_LOG_INCLUDE_QUERY_PARAMS", False)
+REQUEST_LOG_INCLUDE_USER_AGENT = _env_bool("REQUEST_LOG_INCLUDE_USER_AGENT", True)
+ADMIN_SETTINGS_USE_CACHE = _env_bool("ADMIN_SETTINGS_USE_CACHE", True)
+ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS = max(
+    _env_float("ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS", 2.0),
+    0.0,
+)
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -492,6 +526,7 @@ REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
+REDIS_CACHE_MAX_CONNECTIONS = _env_int("REDIS_CACHE_MAX_CONNECTIONS", 500)
 REDIS_SENTINEL_ENABLED = _env_bool("REDIS_SENTINEL_ENABLED", False)
 REDIS_SENTINEL_SERVICE_NAME = os.getenv("REDIS_SENTINEL_SERVICE_NAME", "mymaster")
 REDIS_SENTINEL_NODES = _parse_sentinel_nodes(
@@ -519,7 +554,7 @@ if REDIS_SENTINEL_ENABLED:
         "SOCKET_TIMEOUT": 5,
         "RETRY_ON_TIMEOUT": True,
         "CONNECTION_POOL_KWARGS": {
-            "max_connections": 100,
+            "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
         },
         "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
     }
@@ -549,7 +584,7 @@ else:
         "SOCKET_TIMEOUT": 5,
         "RETRY_ON_TIMEOUT": True,
         "CONNECTION_POOL_KWARGS": {
-            "max_connections": 50,
+            "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
         },
         "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
     }
@@ -573,8 +608,9 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": channel_layer_hosts,
-            "capacity": 1500,
-            "expiry": 10,
+            "capacity": _env_int("REDIS_CHANNEL_LAYER_CAPACITY", 3000),
+            "expiry": _env_int("REDIS_CHANNEL_LAYER_EXPIRY", 15),
+            "group_expiry": _env_int("REDIS_CHANNEL_LAYER_GROUP_EXPIRY", 86400),
         },
     },
 }
@@ -598,6 +634,7 @@ CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
 
 from celery.schedules import crontab
 

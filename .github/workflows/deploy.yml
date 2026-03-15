@@ -376,7 +376,7 @@ jobs:
             set -e
             
             echo '📂 Navigating to project directory...'
-            cd /home/ubuntu/aniShows
+            cd /home/root/aniShows
             
             echo '🔄 Pulling latest compose files from GitHub...'
             git stash || true
