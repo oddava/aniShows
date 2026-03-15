@@ -1,6 +1,5 @@
 from copy import deepcopy
 
-from django.core.cache import cache
 from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
@@ -9,10 +8,10 @@ from rest_framework.views import APIView
 from apps.core.models import AdminPanelSettings
 from apps.core.permissions import IsAdminUser
 from apps.core.services.admin_settings_service import (
-    ADMIN_SETTINGS_CACHE_KEY,
-    ADMIN_SETTINGS_CACHE_TTL_SECONDS,
     ADMIN_SETTINGS_DB_KEY,
     DEFAULT_ADMIN_SETTINGS,
+    cache_admin_settings,
+    get_admin_settings,
     merge_admin_settings,
 )
 
@@ -112,10 +111,6 @@ class AdminSettingsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
-        if isinstance(cached, dict):
-            return Response(cached)
-
         settings_obj, _ = AdminPanelSettings.objects.get_or_create(
             key=ADMIN_SETTINGS_DB_KEY,
             defaults={"data": deepcopy(DEFAULT_ADMIN_SETTINGS), "updated_by": request.user},
@@ -126,8 +121,8 @@ class AdminSettingsView(APIView):
             settings_obj.data = merged
             settings_obj.save(update_fields=["data", "updated_at"])
 
-        cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
-        return Response(merged)
+        cache_admin_settings(merged)
+        return Response(get_admin_settings())
 
     def put(self, request):
         incoming = request.data
@@ -150,5 +145,5 @@ class AdminSettingsView(APIView):
             settings_obj.updated_by = request.user
             settings_obj.save(update_fields=["data", "updated_by", "updated_at"])
 
-        cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+        cache_admin_settings(merged)
         return Response({"message": "Settings saved successfully.", "settings": merged})

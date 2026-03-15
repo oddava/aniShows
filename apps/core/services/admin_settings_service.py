@@ -84,6 +84,25 @@ def _set_local_cached_settings(payload: dict) -> None:
         _LOCAL_SETTINGS_CACHE = deepcopy(payload)
         _LOCAL_SETTINGS_CACHE_EXPIRES_AT = time.monotonic() + ttl
 
+def _clear_local_cached_settings() -> None:
+    with _LOCAL_SETTINGS_LOCK:
+        global _LOCAL_SETTINGS_CACHE, _LOCAL_SETTINGS_CACHE_EXPIRES_AT
+        _LOCAL_SETTINGS_CACHE = None
+        _LOCAL_SETTINGS_CACHE_EXPIRES_AT = 0.0
+
+def cache_admin_settings(payload: dict) -> None:
+    """Write merged admin settings to shared cache and local micro-cache."""
+    if _admin_settings_cache_enabled():
+        cache.set(ADMIN_SETTINGS_CACHE_KEY, payload, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+        _set_local_cached_settings(payload)
+    else:
+        _clear_local_cached_settings()
+
+def clear_admin_settings_cache() -> None:
+    """Clear both shared and local settings caches."""
+    cache.delete(ADMIN_SETTINGS_CACHE_KEY)
+    _clear_local_cached_settings()
+
 
 def merge_admin_settings(payload: dict | None) -> dict:
     merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
@@ -102,7 +121,7 @@ def merge_admin_settings(payload: dict | None) -> dict:
 
 def get_admin_settings(*, force_refresh: bool = False) -> dict:
     use_cache = _admin_settings_cache_enabled()
-    if not force_refresh:
+    if use_cache and not force_refresh:
         local_cached = _get_local_cached_settings()
         if isinstance(local_cached, dict):
             return local_cached
@@ -123,8 +142,9 @@ def get_admin_settings(*, force_refresh: bool = False) -> dict:
         merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
 
     if use_cache:
-        cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
-    _set_local_cached_settings(merged)
+        cache_admin_settings(merged)
+    else:
+        _clear_local_cached_settings()
     return deepcopy(merged)
 
 
