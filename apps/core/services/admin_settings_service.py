@@ -1,4 +1,6 @@
 from copy import deepcopy
+import threading
+import time
 
 from django.conf import settings
 from django.core.cache import cache
@@ -10,6 +12,9 @@ from apps.core.models import AdminPanelSettings
 ADMIN_SETTINGS_CACHE_KEY = "admin:panel_settings:v1"
 ADMIN_SETTINGS_DB_KEY = "global"
 ADMIN_SETTINGS_CACHE_TTL_SECONDS = 300
+_LOCAL_SETTINGS_CACHE: dict | None = None
+_LOCAL_SETTINGS_CACHE_EXPIRES_AT = 0.0
+_LOCAL_SETTINGS_LOCK = threading.Lock()
 
 DEFAULT_ADMIN_SETTINGS = {
     "general": {
@@ -50,6 +55,35 @@ DEFAULT_ADMIN_SETTINGS = {
 def _admin_settings_cache_enabled() -> bool:
     return bool(getattr(settings, "ADMIN_SETTINGS_USE_CACHE", True))
 
+def _admin_settings_local_cache_ttl_seconds() -> float:
+    raw = getattr(settings, "ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS", 2.0)
+    try:
+        return max(float(raw), 0.0)
+    except (TypeError, ValueError):
+        return 2.0
+
+def _get_local_cached_settings() -> dict | None:
+    ttl = _admin_settings_local_cache_ttl_seconds()
+    if ttl <= 0:
+        return None
+
+    now = time.monotonic()
+    with _LOCAL_SETTINGS_LOCK:
+        global _LOCAL_SETTINGS_CACHE, _LOCAL_SETTINGS_CACHE_EXPIRES_AT
+        if _LOCAL_SETTINGS_CACHE is None or now >= _LOCAL_SETTINGS_CACHE_EXPIRES_AT:
+            return None
+        return deepcopy(_LOCAL_SETTINGS_CACHE)
+
+def _set_local_cached_settings(payload: dict) -> None:
+    ttl = _admin_settings_local_cache_ttl_seconds()
+    if ttl <= 0:
+        return
+
+    with _LOCAL_SETTINGS_LOCK:
+        global _LOCAL_SETTINGS_CACHE, _LOCAL_SETTINGS_CACHE_EXPIRES_AT
+        _LOCAL_SETTINGS_CACHE = deepcopy(payload)
+        _LOCAL_SETTINGS_CACHE_EXPIRES_AT = time.monotonic() + ttl
+
 
 def merge_admin_settings(payload: dict | None) -> dict:
     merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
@@ -68,9 +102,15 @@ def merge_admin_settings(payload: dict | None) -> dict:
 
 def get_admin_settings(*, force_refresh: bool = False) -> dict:
     use_cache = _admin_settings_cache_enabled()
+    if not force_refresh:
+        local_cached = _get_local_cached_settings()
+        if isinstance(local_cached, dict):
+            return local_cached
+
     if use_cache and not force_refresh:
         cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
         if isinstance(cached, dict):
+            _set_local_cached_settings(cached)
             return deepcopy(cached)
 
     merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
@@ -84,6 +124,7 @@ def get_admin_settings(*, force_refresh: bool = False) -> dict:
 
     if use_cache:
         cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+    _set_local_cached_settings(merged)
     return deepcopy(merged)
 
 

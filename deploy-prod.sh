@@ -21,6 +21,12 @@ NC='\033[0m'
 COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:latest"
 FRONTEND_VOLUME="anishows_frontend_dist"
+SCALE_WEB="${SCALE_WEB:-2}"
+SCALE_DAPHNE="${SCALE_DAPHNE:-2}"
+SCALE_CELERY="${SCALE_CELERY:-2}"
+SCALE_CELERY_PRIORITY="${SCALE_CELERY_PRIORITY:-2}"
+SCALE_CELERY_IMAGES="${SCALE_CELERY_IMAGES:-1}"
+SCALE_CELERY_ANALYTICS="${SCALE_CELERY_ANALYTICS:-1}"
 
 echo -e "${BLUE}Starting full deployment (frontend + backend)...${NC}"
 echo ""
@@ -66,7 +72,7 @@ echo ""
 # BACKEND DEPLOYMENT
 # =========================================================================
 echo -e "${BLUE}Step 2: Pulling latest backend images from GHCR...${NC}"
-$COMPOSE_CMD pull web celery celery_priority beat daphne
+$COMPOSE_CMD pull web celery celery_priority celery_images celery_analytics beat daphne
 echo -e "${GREEN}Backend images pulled!${NC}"
 echo ""
 
@@ -117,10 +123,19 @@ echo ""
 # =========================================================================
 echo -e "${BLUE}Step 4: Restarting services...${NC}"
 # Restart workers first, then web (reverse proxy keeps serving old containers until healthy)
-$COMPOSE_CMD up -d --no-deps celery celery_priority beat daphne
+$COMPOSE_CMD up -d --no-deps \
+  --scale celery=$SCALE_CELERY \
+  --scale celery_priority=$SCALE_CELERY_PRIORITY \
+  --scale celery_images=$SCALE_CELERY_IMAGES \
+  --scale celery_analytics=$SCALE_CELERY_ANALYTICS \
+  celery celery_priority celery_images celery_analytics beat
 sleep 2
-$COMPOSE_CMD up -d --no-deps web
+$COMPOSE_CMD up -d --no-deps \
+  --scale web=$SCALE_WEB \
+  --scale daphne=$SCALE_DAPHNE \
+  web daphne
 echo -e "${GREEN}All containers started!${NC}"
+echo -e "${BLUE}  Scale profile: web=$SCALE_WEB daphne=$SCALE_DAPHNE celery=$SCALE_CELERY celery_priority=$SCALE_CELERY_PRIORITY celery_images=$SCALE_CELERY_IMAGES celery_analytics=$SCALE_CELERY_ANALYTICS${NC}"
 echo ""
 
 # =========================================================================

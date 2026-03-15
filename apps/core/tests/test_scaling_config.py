@@ -2,7 +2,7 @@
 
 Tests cover:
 - PrimaryReplicaRouter (read/write routing)
-- Environment parsing helpers (_env_bool, _parse_csv, _parse_sentinel_nodes)
+- Environment parsing helpers (_env_bool, _env_int, _env_float, _parse_csv, _parse_sentinel_nodes)
 - CDN URL construction
 - Celery queue routing consistency
 - PgBouncer compatibility settings
@@ -10,7 +10,6 @@ Tests cover:
 
 from unittest.mock import patch
 
-import pytest
 from django.test import TestCase, override_settings
 
 
@@ -46,6 +45,24 @@ class TestEnvParsers(TestCase):
         from root.settings.base import _parse_csv
 
         assert _parse_csv("a, b , c") == ["a", "b", "c"]
+
+    def test_env_int_valid_and_invalid_values(self):
+        """Integer parser should accept valid values and fall back on invalid ones."""
+        from root.settings.base import _env_int
+
+        with patch.dict("os.environ", {"TEST_INT_VAR": "42"}):
+            assert _env_int("TEST_INT_VAR", 7) == 42
+        with patch.dict("os.environ", {"TEST_INT_VAR": "not-an-int"}):
+            assert _env_int("TEST_INT_VAR", 7) == 7
+
+    def test_env_float_valid_and_invalid_values(self):
+        """Float parser should accept valid values and fall back on invalid ones."""
+        from root.settings.base import _env_float
+
+        with patch.dict("os.environ", {"TEST_FLOAT_VAR": "0.125"}):
+            assert abs(_env_float("TEST_FLOAT_VAR", 1.0) - 0.125) < 1e-9
+        with patch.dict("os.environ", {"TEST_FLOAT_VAR": "not-a-float"}):
+            assert abs(_env_float("TEST_FLOAT_VAR", 1.0) - 1.0) < 1e-9
 
     def test_parse_csv_empty(self):
         """Empty string should return empty list."""
@@ -277,3 +294,18 @@ class TestRedisConfig(TestCase):
 
         assert "default" in settings.CHANNEL_LAYERS
         assert settings.CHANNEL_LAYERS["default"]["BACKEND"] == "channels_redis.core.RedisChannelLayer"
+
+class TestRuntimeScalingToggles(TestCase):
+    """Verify high-throughput runtime toggles are available and bounded."""
+
+    def test_request_log_sample_rate_is_bounded(self):
+        from django.conf import settings
+
+        sample_rate = float(getattr(settings, "REQUEST_LOG_SUCCESS_SAMPLE_RATE", 0.0))
+        assert 0.0 <= sample_rate <= 1.0
+
+    def test_notification_unread_cache_ttl_is_positive(self):
+        from django.conf import settings
+
+        ttl = int(getattr(settings, "NOTIFICATION_UNREAD_CACHE_TTL", 0))
+        assert ttl > 0

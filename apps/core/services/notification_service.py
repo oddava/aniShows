@@ -1,13 +1,17 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
 from apps.core.models import Notification, PushSubscription
 from apps.shared.logger import logger
 from apps.users.models import UserProfile
+
+UNREAD_COUNT_CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
 class NotificationService:
@@ -53,8 +57,10 @@ class NotificationService:
                 )
                 logger.info(f"Created {notification_type} notification for user {user.id}")
 
+                unread_count = cls._increment_unread_count(user.id)
+
                 # Broadcast via WebSocket channel layer
-                cls._broadcast_notification(notification)
+                cls._broadcast_notification(notification, unread_count=unread_count)
 
                 return notification
         except Exception as e:
@@ -74,7 +80,7 @@ class NotificationService:
         return True
 
     @classmethod
-    def _broadcast_notification(cls, notification):
+    def _broadcast_notification(cls, notification, unread_count: int | None = None):
         """Push a notification to the user's WebSocket channel group.
 
         This is called synchronously from Django views/services. It uses
@@ -87,9 +93,8 @@ class NotificationService:
                 return
 
             group_name = f"notifications_user_{notification.user_id}"
-            unread_count = Notification.objects.filter(
-                user_id=notification.user_id, is_read=False
-            ).count()
+            if unread_count is None:
+                unread_count = cls.get_unread_count_for_user_id(notification.user_id)
 
             async_to_sync(channel_layer.group_send)(
                 group_name,
@@ -113,14 +118,90 @@ class NotificationService:
             logger.exception("Failed to broadcast notification via WebSocket")
 
     @classmethod
+    def _unread_count_cache_key(cls, user_id: int) -> str:
+        return f"notifications:unread_count:{user_id}"
+
+    @classmethod
+    def _unread_count_ttl(cls) -> int:
+        ttl = getattr(settings, "NOTIFICATION_UNREAD_CACHE_TTL", UNREAD_COUNT_CACHE_TTL_SECONDS)
+        try:
+            return max(int(ttl), 60)
+        except (TypeError, ValueError):
+            return UNREAD_COUNT_CACHE_TTL_SECONDS
+
+    @classmethod
+    def _set_unread_count_cache(cls, user_id: int, count: int) -> None:
+        try:
+            cache.set(
+                cls._unread_count_cache_key(user_id),
+                max(int(count), 0),
+                timeout=cls._unread_count_ttl(),
+            )
+        except Exception:
+            logger.debug("Failed to set unread notification count cache for user %s", user_id)
+
+    @classmethod
+    def _increment_unread_count(cls, user_id: int, delta: int = 1) -> int:
+        key = cls._unread_count_cache_key(user_id)
+        try:
+            cache.add(key, 0, timeout=cls._unread_count_ttl())
+            return int(cache.incr(key, delta))
+        except ValueError:
+            # Cache key contains invalid data, rebuild from source of truth.
+            count = Notification.objects.filter(user_id=user_id, is_read=False).count()
+            cls._set_unread_count_cache(user_id, count)
+            return count
+        except Exception:
+            return Notification.objects.filter(user_id=user_id, is_read=False).count()
+
+    @classmethod
+    def _decrement_unread_count(cls, user_id: int, delta: int = 1) -> int:
+        key = cls._unread_count_cache_key(user_id)
+        try:
+            cache.add(key, 0, timeout=cls._unread_count_ttl())
+            value = int(cache.decr(key, delta))
+            if value < 0:
+                cls._set_unread_count_cache(user_id, 0)
+                return 0
+            return value
+        except ValueError:
+            count = Notification.objects.filter(user_id=user_id, is_read=False).count()
+            cls._set_unread_count_cache(user_id, count)
+            return count
+        except Exception:
+            return Notification.objects.filter(user_id=user_id, is_read=False).count()
+
+    @classmethod
+    def get_unread_count_for_user_id(cls, user_id: int) -> int:
+        key = cls._unread_count_cache_key(user_id)
+        try:
+            cached = cache.get(key)
+            if cached is not None:
+                return max(int(cached), 0)
+        except (TypeError, ValueError):
+            pass
+        except Exception:
+            logger.debug("Failed to read unread notification count cache for user %s", user_id)
+
+        count = Notification.objects.filter(user_id=user_id, is_read=False).count()
+        cls._set_unread_count_cache(user_id, count)
+        return count
+
+    @classmethod
     def mark_as_read(cls, notification_id: int, user) -> bool:
         """Mark a notification as read."""
-        try:
-            notification = Notification.objects.get(id=notification_id, user=user)
-            notification.mark_as_read()
+        updated = Notification.objects.filter(
+            id=notification_id,
+            user_id=user.id,
+            is_read=False,
+        ).update(
+            is_read=True,
+            read_at=timezone.now(),
+        )
+        if updated:
+            cls._decrement_unread_count(user.id)
             return True
-        except Notification.DoesNotExist:
-            return False
+        return Notification.objects.filter(id=notification_id, user_id=user.id).exists()
 
     @classmethod
     def mark_all_as_read(cls, user) -> int:
@@ -128,13 +209,14 @@ class NotificationService:
         count = Notification.objects.filter(user=user, is_read=False).update(
             is_read=True, read_at=timezone.now()
         )
+        cls._set_unread_count_cache(user.id, 0)
         logger.info(f"Marked {count} notifications as read for user {user.id}")
         return count
 
     @classmethod
     def get_unread_count(cls, user) -> int:
         """Get count of unread notifications for a user."""
-        return Notification.objects.filter(user=user, is_read=False).count()
+        return cls.get_unread_count_for_user_id(user.id)
 
     @classmethod
     def cleanup_old_notifications(cls, days: int = 90) -> int:

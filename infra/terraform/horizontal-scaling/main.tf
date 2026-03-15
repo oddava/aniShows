@@ -70,6 +70,7 @@ resource "aws_autoscaling_group" "app" {
   min_size            = var.min_size
   max_size            = var.max_size
   desired_capacity    = var.desired_capacity
+  default_instance_warmup = var.default_instance_warmup
   health_check_type   = "ELB"
   health_check_grace_period = 120
 
@@ -105,7 +106,7 @@ resource "aws_autoscaling_policy" "cpu_target" {
     predefined_metric_specification {
       predefined_metric_type = "ASGAverageCPUUtilization"
     }
-    target_value = 60
+    target_value = var.asg_cpu_target_percent
   }
 }
 
@@ -119,7 +120,7 @@ resource "aws_autoscaling_policy" "alb_requests" {
       predefined_metric_type = "ALBRequestCountPerTarget"
       resource_label         = "${aws_lb.app.arn_suffix}/${aws_lb_target_group.web.arn_suffix}"
     }
-    target_value = 600
+    target_value = var.asg_requests_per_target
   }
 }
 
@@ -133,9 +134,9 @@ resource "aws_db_instance" "primary" {
   identifier             = "${local.prefix}-db-primary"
   engine                 = "postgres"
   engine_version         = "17.4"
-  instance_class         = "db.t4g.medium"
-  allocated_storage      = 100
-  max_allocated_storage  = 500
+  instance_class         = var.db_instance_class
+  allocated_storage      = var.db_allocated_storage
+  max_allocated_storage  = var.db_max_allocated_storage
   storage_encrypted      = true
   multi_az               = true
   db_name                = var.db_name
@@ -154,7 +155,7 @@ resource "aws_db_instance" "primary" {
 resource "aws_db_instance" "read_replica" {
   identifier             = "${local.prefix}-db-replica-1"
   replicate_source_db    = aws_db_instance.primary.identifier
-  instance_class         = "db.t4g.medium"
+  instance_class         = var.db_replica_instance_class
   publicly_accessible    = false
   auto_minor_version_upgrade = true
   vpc_security_group_ids = [var.db_security_group_id]
@@ -172,11 +173,11 @@ resource "aws_elasticache_replication_group" "redis" {
   replication_group_id       = "${local.prefix}-redis"
   description                = "Redis HA for ${var.project_name}"
   engine                     = "redis"
-  engine_version             = "7.1"
-  node_type                  = "cache.t4g.small"
+  engine_version             = var.redis_engine_version
+  node_type                  = var.redis_node_type
   parameter_group_name       = "default.redis7"
   port                       = 6379
-  num_cache_clusters         = 2
+  num_cache_clusters         = var.redis_num_cache_clusters
   automatic_failover_enabled = true
   multi_az_enabled           = true
   subnet_group_name          = aws_elasticache_subnet_group.redis.name

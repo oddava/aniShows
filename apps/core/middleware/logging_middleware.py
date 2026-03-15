@@ -1,3 +1,4 @@
+import random
 import time
 from uuid import UUID
 
@@ -21,6 +22,19 @@ class LoggingMiddleware:
             "/media/",
             "/admin/logs/",
         ]
+        self.always_log_prefixes = [
+            "/api/v1/admin/",
+            "/api/v1/auth/",
+        ]
+        self.request_logging_enabled = bool(getattr(settings, "REQUEST_LOGGING_ENABLED", True))
+        raw_sample_rate = getattr(settings, "REQUEST_LOG_SUCCESS_SAMPLE_RATE", 0.05)
+        try:
+            sample_rate = float(raw_sample_rate)
+        except (TypeError, ValueError):
+            sample_rate = 0.05
+        self.success_sample_rate = min(max(sample_rate, 0.0), 1.0)
+        self.include_query_params = bool(getattr(settings, "REQUEST_LOG_INCLUDE_QUERY_PARAMS", False))
+        self.include_user_agent = bool(getattr(settings, "REQUEST_LOG_INCLUDE_USER_AGENT", True))
 
     def __call__(self, request):
         # Skip logging for excluded paths
@@ -56,11 +70,20 @@ class LoggingMiddleware:
         else:
             log_type = SystemLog.LogType.REQUEST
 
+        if not self._should_log_request(request.path, response.status_code):
+            return response
+
         # Get client IP
         ip = get_client_ip(request)
 
         # Fire and forget - log asynchronously via Celery
         try:
+            details = {}
+            if self.include_user_agent:
+                details["user_agent"] = request.META.get("HTTP_USER_AGENT", "")
+            if self.include_query_params:
+                details["query_params"] = dict(request.GET)
+
             log_data = {
                 "level": level,
                 "log_type": log_type,
@@ -70,10 +93,7 @@ class LoggingMiddleware:
                 "path": request.path[:500],
                 "status_code": response.status_code,
                 "message": f"{request.method} {request.path} - {response.status_code}",
-                "details": {
-                    "user_agent": request.META.get("HTTP_USER_AGENT", ""),
-                    "query_params": dict(request.GET),
-                },
+                "details": details,
                 "duration_ms": duration_ms,
             }
             log_request_async.delay(log_data)
@@ -82,6 +102,18 @@ class LoggingMiddleware:
             logger.error(f"Failed to queue async log entry: {e}")
 
         return response
+
+    def _should_log_request(self, path: str, status_code: int) -> bool:
+        if status_code >= 400:
+            return True
+
+        if any(path.startswith(prefix) for prefix in self.always_log_prefixes):
+            return True
+
+        if not self.request_logging_enabled:
+            return False
+
+        return random.random() < self.success_sample_rate
 
 class AdminAuditMiddleware:
     """Middleware to audit admin actions."""

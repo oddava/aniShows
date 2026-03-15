@@ -11,7 +11,7 @@ EXEC = docker compose exec web python manage.py
         sync-themes sync-full sync-franchises sync-recs populate-themes \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
-        clean prune backup backups restore
+        clean prune backup backups restore load-browse
 
 # ============================================================================
 # Service Management
@@ -161,6 +161,12 @@ clean:                          ## Remove .pyc and __pycache__ files
 
 prune:                          ## Docker system prune (removes all unused data)
 	docker system prune -a --volumes -f
+
+load-browse:                    ## Run read-heavy k6 browse load profile (set BASE_URL=...)
+	docker run --rm -i \
+		-e BASE_URL=$${BASE_URL:-http://localhost} \
+		-v $(PWD)/monitoring/load-tests:/load-tests \
+		grafana/k6 run /load-tests/k6-browse.js
 
 # ============================================================================
 # Backups

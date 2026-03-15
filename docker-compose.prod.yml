@@ -43,7 +43,7 @@ services:
 
   redis:
     command: >
-      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory 200mb --maxmemory-policy allkeys-lru --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000 --tcp-backlog 511 --hz 10
+      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory ${REDIS_MAXMEMORY:-2gb} --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru} --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000 --tcp-backlog 511 --hz 10
     healthcheck:
       test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "ping" ]
       interval: 10s
@@ -90,6 +90,78 @@ services:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
     command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications,images", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
+    env_file:
+      - .env
+    environment:
+      DEBUG: "False"
+      DJANGO_ENV: "production"
+      DJANGO_SETTINGS_MODULE: "root.settings"
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "production"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 192M
+
+  celery_images:
+    image: ghcr.io/oddava/anishows-backend:latest
+    restart: always
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=250", "-O", "fair" ]
+    env_file:
+      - .env
+    environment:
+      DEBUG: "False"
+      DJANGO_ENV: "production"
+      DJANGO_SETTINGS_MODULE: "root.settings"
+      DB_NAME: "${DB_NAME}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_HOST: "${DB_HOST:-pgbouncer}"
+      DB_PORT: "${DB_PORT:-6432}"
+      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
+      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
+      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_DB: "${REDIS_DB:-0}"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      SENTRY_ENVIRONMENT: "production"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 192M
+
+  celery_analytics:
+    image: ghcr.io/oddava/anishows-backend:latest
+    restart: always
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -261,3 +333,4 @@ services:
 
 volumes:
   frontend_dist:
+  prometheus_multiproc:

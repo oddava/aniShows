@@ -10,38 +10,52 @@ Usage: gunicorn root.asgi:application -c gunicorn.conf.py
 import multiprocessing
 import os
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
 # =============================================================================
 # Server Socket
 # =============================================================================
 bind = "0.0.0.0:8000"
+backlog = _env_int("GUNICORN_BACKLOG", 4096)
 
 # =============================================================================
 # Worker Processes
 # =============================================================================
-# Use 2 * CPU + 1 as baseline, but cap for memory-constrained containers.
+# Use 2 * CPU + 1 as baseline with a practical upper cap.
 # Override via GUNICORN_WORKERS env var if needed.
-workers = int(os.getenv("GUNICORN_WORKERS", min(multiprocessing.cpu_count() * 2 + 1, 3)))
+cpu_count = max(multiprocessing.cpu_count(), 1)
+default_workers = min(cpu_count * 2 + 1, 16)
+workers = _env_int("GUNICORN_WORKERS", default_workers)
 worker_class = os.getenv("GUNICORN_WORKER_CLASS", "uvicorn.workers.UvicornWorker")
+reuse_port = os.getenv("GUNICORN_REUSE_PORT", "True").strip().lower() in {"1", "true", "yes", "on"}
 
 # =============================================================================
 # Worker Lifecycle
 # =============================================================================
 # Restart workers after N requests to prevent memory leaks
-max_requests = 500
-max_requests_jitter = 50
+max_requests = _env_int("GUNICORN_MAX_REQUESTS", 2000)
+max_requests_jitter = _env_int("GUNICORN_MAX_REQUESTS_JITTER", 200)
 
 # =============================================================================
 # Timeouts
 # =============================================================================
 timeout = int(os.getenv("GUNICORN_TIMEOUT", "60"))
 graceful_timeout = int(os.getenv("GUNICORN_GRACEFUL_TIMEOUT", "30"))
-keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "5"))
+keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "15"))
 
 # =============================================================================
 # Preloading
 # =============================================================================
 # Preload app to share memory across workers (copy-on-write)
 preload_app = True
+worker_tmp_dir = os.getenv("GUNICORN_WORKER_TMP_DIR", "/dev/shm")
 
 # =============================================================================
 # Logging

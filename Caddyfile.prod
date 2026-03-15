@@ -28,27 +28,54 @@
 
     # API
     handle /api/* {
-        reverse_proxy web:8000
+        reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+            lb_policy least_conn
+            lb_try_duration 10s
+            lb_try_interval 250ms
+            fail_duration 30s
+            max_fails 3
+            health_uri /api/v1/health/
+            health_interval 15s
+            health_timeout 5s
+            transport http {
+                dial_timeout 5s
+                read_timeout 30s
+                write_timeout 30s
+                keepalive 120s
+            }
+        }
     }
 
     # WebSocket connections - proxy to Daphne ASGI server
     handle /ws/* {
-        reverse_proxy daphne:8001
+        reverse_proxy {$WS_UPSTREAMS:daphne:8001} {
+            lb_policy random_choose 2
+            lb_try_duration 10s
+            lb_try_interval 500ms
+            fail_duration 30s
+            max_fails 3
+            transport http {
+                dial_timeout 5s
+                read_timeout 120s
+                write_timeout 120s
+                keepalive 120s
+            }
+        }
     }
 
     # Django Admin (backend)
     handle /django-admin/* {
-        reverse_proxy web:8000
+        reverse_proxy {$WEB_UPSTREAMS:web:8000}
     }
 
     # Django static (optional)
     handle /static/* {
-        reverse_proxy web:8000
+        reverse_proxy {$WEB_UPSTREAMS:web:8000}
     }
 
     # Prometheus metrics - only accessible from internal network
     handle /metrics {
-        reverse_proxy web:8000
+        reverse_proxy {$WEB_UPSTREAMS:web:8000}
     }
 
     # MinIO Media - proxy /media/* to MinIO bucket
@@ -95,7 +122,7 @@
     # Image optimization endpoint - proxy to Django for on-demand resizing
     handle_path /media/resize/* {
         rewrite * /api/v1/media/resize/{path}
-        reverse_proxy web:8000
+        reverse_proxy {$WEB_UPSTREAMS:web:8000}
     }
 
     # Service worker - never cache to ensure updates are detected
@@ -168,5 +195,4 @@
         output file /var/log/caddy/access.log
     }
 }
-
 

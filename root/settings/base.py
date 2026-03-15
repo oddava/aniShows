@@ -82,6 +82,7 @@ ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS = max(
     _env_float("ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS", 2.0),
     0.0,
 )
+NOTIFICATION_UNREAD_CACHE_TTL = _env_int("NOTIFICATION_UNREAD_CACHE_TTL", 86400)
 
 # =============================================================================
 # APPLICATION DEFINITION

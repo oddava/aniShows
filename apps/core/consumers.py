@@ -11,6 +11,8 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.core.cache import cache
 from django.utils import timezone
 
+from apps.core.services.notification_service import NotificationService
+
 ONLINE_TIMEOUT = 300
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
@@ -40,7 +42,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4401)
             return
 
-        self.group_name = f"notifications_user_{self.user.id}"
+        self.user_id = self.user.id
+        self.group_name = f"notifications_user_{self.user_id}"
 
         # Join personal notification group
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -59,7 +62,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             }
         )
 
-        logger.info("WebSocket connected: user=%s", self.user.id)
+        logger.info("WebSocket connected: user=%s", self.user_id)
 
     async def disconnect(self, code):
         """Leave notification group and mark user offline."""
@@ -68,7 +71,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
 
         if hasattr(self, "user") and self.user and not self.user.is_anonymous:
             await self._set_offline()
-            logger.info("WebSocket disconnected: user=%s code=%s", self.user.id, code)
+            logger.info("WebSocket disconnected: user=%s code=%s", self.user_id, code)
 
     async def receive_json(self, content, **kwargs):
         """Handle messages from the client.
@@ -146,28 +149,15 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _get_unread_count(self):
-        from apps.core.models import Notification
-
-        return Notification.objects.filter(user=self.user, is_read=False).count()
+        return NotificationService.get_unread_count_for_user_id(self.user_id)
 
     @database_sync_to_async
     def _mark_as_read(self, notification_id):
-        from apps.core.models import Notification
-
-        try:
-            notification = Notification.objects.get(id=notification_id, user=self.user)
-            notification.mark_as_read()
-            return True
-        except Notification.DoesNotExist:
-            return False
+        return NotificationService.mark_as_read(notification_id, self.user)
 
     @database_sync_to_async
     def _mark_all_read(self):
-        from apps.core.models import Notification
-
-        Notification.objects.filter(user=self.user, is_read=False).update(
-            is_read=True, read_at=timezone.now()
-        )
+        NotificationService.mark_all_as_read(self.user)
 
     # ------------------------------------------------------------------
     # Presence helpers
@@ -177,12 +167,12 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
     def _set_online(self):
         from apps.users.services.cache import get_user_online_cache_key
 
-        cache_key = get_user_online_cache_key(self.user.id)
+        cache_key = get_user_online_cache_key(self.user_id)
         cache.set(cache_key, timezone.now().isoformat(), timeout=ONLINE_TIMEOUT)
 
     @database_sync_to_async
     def _set_offline(self):
         from apps.users.services.cache import get_user_online_cache_key
 
-        cache_key = get_user_online_cache_key(self.user.id)
+        cache_key = get_user_online_cache_key(self.user_id)
         cache.delete(cache_key)
