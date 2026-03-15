@@ -217,6 +217,20 @@ async def fetch_themes_from_jikan(
                 )
                 return None
 
+            # Handle non-retryable client errors (invalid/missing MAL mapping, etc.)
+            if 400 <= response.status_code < 500:
+                _status = "not_found" if response.status_code == 404 else "client_error"
+                if response.status_code == 404:
+                    logger.info(
+                        f"Jikan MAL ID {mal_id} not found (404) - skipping retries"
+                    )
+                else:
+                    logger.warning(
+                        f"Jikan client error {response.status_code} for MAL ID {mal_id} - "
+                        "skipping retries"
+                    )
+                return None
+
             response.raise_for_status()
             data = response.json().get("data", {})
 

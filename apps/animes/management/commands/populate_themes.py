@@ -320,6 +320,19 @@ class Command(BaseCommand):
                     await asyncio.sleep(wait_time)
                     continue
 
+                # 4xx errors (except 429 handled above) are non-retryable.
+                if 400 <= response.status_code < 500:
+                    if response.status_code == 404:
+                        logger.info(
+                            f"Jikan MAL ID {mal_id} not found (404) - skipping retries"
+                        )
+                    else:
+                        logger.warning(
+                            f"Jikan client error {response.status_code} for MAL ID {mal_id} - "
+                            "skipping retries"
+                        )
+                    return None
+
                 response.raise_for_status()
                 data = response.json().get("data", {})
                 return data
