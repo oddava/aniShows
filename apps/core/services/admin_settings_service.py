@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db import DatabaseError
 from django.db.utils import OperationalError, ProgrammingError
@@ -46,6 +47,10 @@ DEFAULT_ADMIN_SETTINGS = {
 }
 
 
+def _admin_settings_cache_enabled() -> bool:
+    return bool(getattr(settings, "ADMIN_SETTINGS_USE_CACHE", True))
+
+
 def merge_admin_settings(payload: dict | None) -> dict:
     merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
     if not isinstance(payload, dict):
@@ -62,7 +67,8 @@ def merge_admin_settings(payload: dict | None) -> dict:
 
 
 def get_admin_settings(*, force_refresh: bool = False) -> dict:
-    if not force_refresh:
+    use_cache = _admin_settings_cache_enabled()
+    if use_cache and not force_refresh:
         cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
         if isinstance(cached, dict):
             return deepcopy(cached)
@@ -76,7 +82,8 @@ def get_admin_settings(*, force_refresh: bool = False) -> dict:
         # Fall back to defaults during startup, migrations, or transient DB issues.
         merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
 
-    cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+    if use_cache:
+        cache.set(ADMIN_SETTINGS_CACHE_KEY, merged, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
     return deepcopy(merged)
 
 

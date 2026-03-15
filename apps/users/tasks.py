@@ -407,7 +407,7 @@ def update_user_stats(self, user_id: int = None):
             .values("user_id")
             .annotate(
                 anime_count=Count("id", distinct=True),
-                episodes_watched=Coalesce(Sum("episodes_watched"), 0),
+                episodes_watched_total=Coalesce(Sum("episodes_watched"), 0),
                 mean_score=Avg("score", filter=Q(score__gt=0)),
                 total_minutes=Coalesce(Sum(minutes_expr), 0),
             )
@@ -441,7 +441,7 @@ def update_user_stats(self, user_id: int = None):
                 "followers_count": int(followers_counts.get(uid, 0)),
                 "following_count": int(following_counts.get(uid, 0)),
                 "anime_count": int(anime_data.get("anime_count") or 0),
-                "episodes_watched": int(anime_data.get("episodes_watched") or 0),
+                "episodes_watched": int(anime_data.get("episodes_watched_total") or 0),
                 "total_minutes": total_minutes,
                 "days_watched": round(total_minutes / 1440.0, 1),
                 "mean_score": anime_data.get("mean_score"),

@@ -55,6 +55,8 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
+# Avoid cross-test pollution from cached runtime policy settings.
+ADMIN_SETTINGS_USE_CACHE = False
 
 # Speed up password hashing in tests
 PASSWORD_HASHERS = [
