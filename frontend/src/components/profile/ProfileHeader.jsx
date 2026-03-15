@@ -15,7 +15,7 @@ export default function ProfileHeader({
     return (
         <div className="relative mb-8 profile-header">
             {/* Banner */}
-            <div className="relative w-full aspect-[2.2/1] sm:aspect-[4/1] xl:aspect-[5/1] 2xl:aspect-[6/1] overflow-hidden bg-dark-200">
+            <div className="relative w-full aspect-[2.2/1] sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1] overflow-hidden bg-dark-200">
                 {displayUser?.banner ? (
                     <>
                         <img

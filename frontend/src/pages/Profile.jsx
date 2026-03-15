@@ -268,7 +268,7 @@ export default function Profile({ forcedUsername }) {
 function ProfileSkeleton() {
     return (
         <div className="min-h-screen pb-20">
-            <div className="relative w-full aspect-[2.2/1] sm:aspect-[4/1] xl:aspect-[5/1] 2xl:aspect-[6/1] overflow-hidden">
+            <div className="relative w-full aspect-[2.2/1] sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1] overflow-hidden">
                 <div className="w-full h-full bg-dark-50 animate-pulse" />
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-transparent" />
             </div>

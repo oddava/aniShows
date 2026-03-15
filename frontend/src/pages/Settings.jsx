@@ -14,9 +14,9 @@ import ImageCropModal from '../components/ImageCropModal';
 import BadgesSettings from '../components/profile/BadgesSettings';
 
 function getResponsiveBannerAspect(width) {
-    if (width >= 1536) return 6;
-    if (width >= 1280) return 5;
-    if (width >= 640) return 4;
+    if (width >= 1536) return 5.5;
+    if (width >= 1280) return 4.5;
+    if (width >= 640) return 3.5;
     return 2.2;
 }
 
@@ -509,7 +509,7 @@ export default function Settings() {
                                 {/* Banner */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                    <div className="relative w-full aspect-[2.2/1] sm:aspect-[4/1] xl:aspect-[5/1] 2xl:aspect-[6/1] rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
+                                    <div className="relative w-full aspect-[2.2/1] sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1] rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
                                         {bannerPreviewUrl ? (
                                             <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.banner && !removeBanner ? (
