@@ -89,7 +89,7 @@ services:
   celery_priority:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications,images", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500", "-O", "fair" ]
     env_file:
       - .env
     environment:

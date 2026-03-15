@@ -79,6 +79,7 @@ class ImageTaskSelfHealTests(TestCase):
         mock_apply_async.assert_called_once()
         self.assertEqual(mock_apply_async.call_args.kwargs["countdown"], 300)
         self.assertEqual(mock_apply_async.call_args.kwargs["kwargs"]["anime_id"], anime.id)
+        service.close.assert_awaited_once()
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)
     @patch("apps.animes.tasks.images.fetch_anime_images.delay")
