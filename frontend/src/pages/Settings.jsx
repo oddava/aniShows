@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { Download, Upload } from 'lucide-react';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
-import SmartLinkInput from '../components/SmartLinkInput';
+import SmartLinkInput, { normalizeUrl } from '../components/SmartLinkInput';
 import RichTextEditor from '../components/forums/RichTextEditor';
 import ImageCropModal from '../components/ImageCropModal';
 import BadgesSettings from '../components/profile/BadgesSettings';
@@ -25,6 +25,38 @@ function decodeHtmlEntities(text = '') {
     const textarea = document.createElement('textarea');
     textarea.innerHTML = text;
     return textarea.value;
+}
+
+function canonicalizeSocialUrl(url = '') {
+    const trimmed = String(url).trim();
+    if (!trimmed) return '';
+
+    const normalizedProtocol = trimmed.replace(/^http:\/\//i, 'https://');
+
+    try {
+        const parsed = new URL(normalizedProtocol);
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+        const path = parsed.pathname.replace(/\/+$/, '');
+        const search = parsed.search || '';
+        return `https://${host}${path}${search}`;
+    } catch {
+        return normalizedProtocol.toLowerCase().replace(/\/+$/, '');
+    }
+}
+
+function getSocialLinkDuplicateKey(link = {}) {
+    const platform = link.platform?.trim().toLowerCase() || '';
+    const value = link.value?.trim() || '';
+    if (!value) return '';
+
+    const normalized = normalizeUrl(platform, value).trim();
+    const lowered = normalized.toLowerCase();
+
+    if (lowered.startsWith('http://') || lowered.startsWith('https://')) {
+        return `url:${canonicalizeSocialUrl(lowered)}`;
+    }
+
+    return `platform:${platform}|value:${value.toLowerCase()}`;
 }
 
 export default function Settings() {
@@ -169,9 +201,9 @@ export default function Settings() {
         }
 
         // Check for duplicate links
-        const linkValues = nonEmptyLinks.map(link => link.value?.toLowerCase()?.trim()).filter(Boolean);
-        const uniqueValues = new Set(linkValues);
-        if (linkValues.length !== uniqueValues.size) {
+        const dedupeKeys = nonEmptyLinks.map(getSocialLinkDuplicateKey).filter(Boolean);
+        const uniqueKeys = new Set(dedupeKeys);
+        if (dedupeKeys.length !== uniqueKeys.size) {
             setProfileError('Duplicate links detected. Please remove duplicates before saving.');
             setIsSavingProfile(false);
             return;
@@ -632,11 +664,9 @@ export default function Settings() {
                                             <>
                                                 {socialLinks.map((link, index) => {
                                                     // Check for duplicates
-                                                    const isDuplicate = socialLinks.some((l, i) =>
-                                                        i !== index &&
-                                                        l.value &&
-                                                        link.value &&
-                                                        l.value.toLowerCase() === link.value.toLowerCase()
+                                                    const currentKey = getSocialLinkDuplicateKey(link);
+                                                    const isDuplicate = Boolean(currentKey) && socialLinks.some((l, i) =>
+                                                        i !== index && getSocialLinkDuplicateKey(l) === currentKey
                                                     );
 
                                                     // Check for empty platform

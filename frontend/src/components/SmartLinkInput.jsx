@@ -116,7 +116,7 @@ const isValidUrl = (url) => {
 };
 
 // Normalize username to URL based on platform
-const normalizeUrl = (platform, input) => {
+export const normalizeUrl = (platform, input) => {
     if (!input) return '';
 
     let value = input.trim();
