@@ -91,9 +91,18 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
     );
 };
 
-const RichTextEditor = ({ value, onChange, placeholder = "Write something...", className = "", hideDesktopPreview = false }) => {
+const RichTextEditor = ({
+    value,
+    onChange,
+    placeholder = "Write something...",
+    className = "",
+    hideDesktopPreview = false,
+    editorMinRows = 10,
+    editorMaxRows,
+}) => {
     const [modalConfig, setModalConfig] = useState({ isOpen: false, type: 'link' });
     const [activeTab, setActiveTab] = useState('write');
+    const [syncedPreviewMaxHeight, setSyncedPreviewMaxHeight] = useState(null);
     const editorId = useId();
     const textareaRef = useRef(null);
 
@@ -181,6 +190,36 @@ const RichTextEditor = ({ value, onChange, placeholder = "Write something...", c
         }
     };
 
+    useEffect(() => {
+        if (!editorMaxRows || !textareaRef.current) {
+            setSyncedPreviewMaxHeight(null);
+            return;
+        }
+
+        let rafId = null;
+        const updateHeight = () => {
+            const textareaHeight = textareaRef.current?.offsetHeight;
+            if (!textareaHeight) return;
+            // Include preview panel vertical padding (p-4 => 32px) for parity.
+            setSyncedPreviewMaxHeight(textareaHeight + 32);
+        };
+
+        updateHeight();
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(updateHeight);
+        });
+        resizeObserver.observe(textareaRef.current);
+
+        window.addEventListener('resize', updateHeight);
+        return () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            resizeObserver.disconnect();
+            window.removeEventListener('resize', updateHeight);
+        };
+    }, [editorMaxRows, value]);
+
     return (
         <div className={`flex flex-col rounded-2xl overflow-hidden bg-dark-200 transition-all ${className}`}>
             <UrlModal
@@ -240,7 +279,8 @@ const RichTextEditor = ({ value, onChange, placeholder = "Write something...", c
                         onChange={(e) => onChange(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder={placeholder}
-                        minRows={10}
+                        minRows={editorMinRows}
+                        maxRows={editorMaxRows}
                         className="w-full bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none resize-none font-sans text-[15px] leading-relaxed"
                     />
                     {!value && (
@@ -249,7 +289,10 @@ const RichTextEditor = ({ value, onChange, placeholder = "Write something...", c
                 </div>
 
                 {/* Preview (Right): Visible if desktop (unless hidden) OR (mobile AND preview tab is active) */}
-                <div className={`w-full p-4 bg-dark-100/20 overflow-y-auto border-l border-white/[0.03] ${activeTab === 'preview' ? 'block' : 'hidden'} ${hideDesktopPreview ? 'md:hidden' : 'md:w-1/2 md:block'}`} style={{ maxHeight: '600px' }}>
+                <div
+                    className={`w-full p-4 bg-dark-100/20 overflow-y-auto border-l border-white/[0.03] ${activeTab === 'preview' ? 'block' : 'hidden'} ${hideDesktopPreview ? 'md:hidden' : 'md:w-1/2 md:block'}`}
+                    style={{ maxHeight: syncedPreviewMaxHeight ? `${syncedPreviewMaxHeight}px` : '600px' }}
+                >
                     {value ? (
                         <MarkdownRenderer content={value} className="text-[15px]" />
                     ) : (

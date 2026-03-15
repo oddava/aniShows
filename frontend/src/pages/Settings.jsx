@@ -589,6 +589,8 @@ export default function Settings() {
                                                 }
                                             }}
                                             placeholder="Tell us about yourself..."
+                                            editorMinRows={8}
+                                            editorMaxRows={14}
                                         />
                                     </div>
                                     {bio.length > 4900 && (
