@@ -155,13 +155,40 @@ else
 fi
 echo ""
 
-echo -e "${BLUE}Step 6: Reloading Caddy...${NC}"
-sleep 2
+echo -e "${BLUE}Step 6: Ensuring Caddy is running...${NC}"
+$COMPOSE_CMD up -d --no-deps caddy
+
+CADDY_RUNNING=false
+for i in $(seq 1 10); do
+    if $COMPOSE_CMD ps --status running caddy | grep -q "caddy"; then
+        CADDY_RUNNING=true
+        break
+    fi
+    sleep 2
+done
+
+if [ "$CADDY_RUNNING" != "true" ]; then
+    echo -e "${RED}Caddy failed to start.${NC}"
+    $COMPOSE_CMD logs --tail=50 caddy || true
+    exit 1
+fi
+
+echo -e "${BLUE}  Reloading Caddy config...${NC}"
 if $COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force; then
     echo -e "${GREEN}Caddy reloaded successfully!${NC}"
 else
-    echo -e "${YELLOW}Caddy reload warning (may already be up to date)${NC}"
+    echo -e "${RED}Caddy reload failed.${NC}"
+    $COMPOSE_CMD logs --tail=50 caddy || true
+    exit 1
 fi
+
+echo -e "${BLUE}  Verifying Caddy HTTP endpoint...${NC}"
+if ! curl -sf --retry 3 --retry-delay 2 http://localhost:80/api/v1/health/ >/dev/null; then
+    echo -e "${RED}Caddy endpoint health check failed.${NC}"
+    $COMPOSE_CMD logs --tail=50 caddy || true
+    exit 1
+fi
+echo -e "${GREEN}Caddy is running and serving traffic.${NC}"
 echo ""
 
 # =========================================================================
