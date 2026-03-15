@@ -281,6 +281,20 @@ class TestRuntimePolicyControls(APITestCase):
         admin_response = self.client.get("/api/v1/admin/settings/")
         self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
 
+    def test_maintenance_mode_allows_authenticated_profile_lookup(self):
+        self._set_settings({"general": {"maintenanceMode": True}})
+
+        self.client.force_authenticate(user=self.admin)
+        profile_response = self.client.get("/api/v1/users/me/")
+        self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile_response.data["username"], self.admin.username)
+
+    def test_maintenance_mode_keeps_me_endpoint_protected_for_anonymous(self):
+        self._set_settings({"general": {"maintenanceMode": True}})
+
+        profile_response = self.client.get("/api/v1/users/me/")
+        self.assertEqual(profile_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_health_endpoint_reports_maintenance_without_failing_liveness(self):
         self._set_settings({"general": {"maintenanceMode": True}})
 

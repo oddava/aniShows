@@ -21,6 +21,8 @@ const decodeToken = (token) => {
                 bio: '',
                 is_private: false,
                 email_verified: true,
+                is_staff: Boolean(decoded.is_staff),
+                is_superuser: Boolean(decoded.is_superuser),
                 _needsApiFetch: true, // Flag to indicate we need API data
             };
         }
@@ -33,6 +35,8 @@ const decodeToken = (token) => {
             bio: '',
             is_private: false,
             email_verified: true,
+            is_staff: Boolean(decoded.is_staff),
+            is_superuser: Boolean(decoded.is_superuser),
             _needsApiFetch: false,
         };
     } catch (error) {

@@ -13,15 +13,16 @@ export function Login() {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login, isAuthenticated } = useAuth();
+    const { login, isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
 
     // Redirect if already authenticated
     useEffect(() => {
         if (isAuthenticated) {
-            navigate('/browse');
+            const isAdminUser = Boolean(user?.is_staff || user?.is_superuser);
+            navigate(isAdminUser ? '/admin' : '/browse');
         }
-    }, [isAuthenticated, navigate]);
+    }, [isAuthenticated, navigate, user?.is_staff, user?.is_superuser]);
 
     // Show loading spinner during redirect
     if (isAuthenticated) {
@@ -38,8 +39,9 @@ export function Login() {
         setLoading(true);
 
         try {
-            await login(formData.username.trim(), formData.password.trim());
-            navigate('/browse');
+            const loggedInUser = await login(formData.username.trim(), formData.password.trim());
+            const isAdminUser = Boolean(loggedInUser?.is_staff || loggedInUser?.is_superuser);
+            navigate(isAdminUser ? '/admin' : '/browse');
         } catch (err) {
             logger.error('Login error:', err);
             let msg = 'Invalid username or password';

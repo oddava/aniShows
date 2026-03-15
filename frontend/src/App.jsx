@@ -8,6 +8,11 @@ import MaintenanceScreen from './components/MaintenanceScreen';
 const DEFAULT_MAINTENANCE_MESSAGE =
     'The service is temporarily unavailable due to maintenance. Please try again later.';
 
+const MAINTENANCE_BYPASS_PREFIXES = ['/admin', '/login', '/auth/google/callback'];
+
+const isMaintenanceBypassRoute = (path) =>
+    MAINTENANCE_BYPASS_PREFIXES.some((prefix) => path.startsWith(prefix));
+
 function App() {
     const [maintenance, setMaintenance] = useState(() => {
         if (typeof window === 'undefined') {
@@ -98,7 +103,10 @@ function App() {
         }
     }, [checkServiceHealth]);
 
-    if (maintenance.enabled) {
+    const currentPath = typeof window === 'undefined' ? '' : window.location.pathname;
+    const shouldBypassMaintenanceScreen = isMaintenanceBypassRoute(currentPath);
+
+    if (maintenance.enabled && !shouldBypassMaintenanceScreen) {
         return (
             <MaintenanceScreen
                 message={maintenance.message}

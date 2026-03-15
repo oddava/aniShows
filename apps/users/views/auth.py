@@ -38,6 +38,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token["user_id"] = user.id
         token["username"] = user.username
         token["email"] = user.email
+        token["is_staff"] = user.is_staff
+        token["is_superuser"] = user.is_superuser
         return token
 
     def validate(self, attrs):
