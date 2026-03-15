@@ -59,6 +59,23 @@ function getSocialLinkDuplicateKey(link = {}) {
     return `platform:${platform}|value:${value.toLowerCase()}`;
 }
 
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+const PROFILE_COLOR_PRESETS = [
+    '#8b5cf6',
+    '#ef4444',
+    '#f97316',
+    '#eab308',
+    '#22c55e',
+    '#06b6d4',
+    '#3b82f6',
+    '#ec4899',
+];
+
+function normalizeProfilePrimaryColor(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
+}
+
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile } = useAuth();
     const queryClient = useQueryClient();
@@ -72,6 +89,7 @@ export default function Settings() {
     const [removeBanner, setRemoveBanner] = useState(false);
     const [socialLinks, setSocialLinks] = useState([]);
     const [isPrivate, setIsPrivate] = useState(false);
+    const [profilePrimaryColor, setProfilePrimaryColor] = useState(DEFAULT_PROFILE_PRIMARY_COLOR);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileSuccess, setProfileSuccess] = useState('');
@@ -132,6 +150,7 @@ export default function Settings() {
             }));
             setSocialLinks(normalizedLinks);
             setIsPrivate(user.is_private || false);
+            setProfilePrimaryColor(normalizeProfilePrimaryColor(user.profile_primary_color));
         }
     }, [user]);
 
@@ -211,11 +230,14 @@ export default function Settings() {
 
         // Check if anything actually changed
         const normalizedUserBio = decodeHtmlEntities(user.bio || '');
+        const normalizedCurrentProfileColor = normalizeProfilePrimaryColor(user.profile_primary_color);
+        const normalizedSelectedProfileColor = normalizeProfilePrimaryColor(profilePrimaryColor);
         const hasChanges = (
             bio !== normalizedUserBio ||
             username.trim() !== user.username ||
             JSON.stringify(nonEmptyLinks) !== JSON.stringify(user.social_links || []) ||
             isPrivate !== user.is_private ||
+            normalizedSelectedProfileColor !== normalizedCurrentProfileColor ||
             avatarFile !== null ||
             bannerFile !== null ||
             removeBanner
@@ -245,12 +267,19 @@ export default function Settings() {
             }
 
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
+            // Always send the selected profile color so stale client state cannot drop the field.
+            formData.append('profile_primary_color', normalizedSelectedProfileColor);
             if (avatarFile) formData.append('avatar', avatarFile);
             if (bannerFile) formData.append('banner', bannerFile);
             if (removeBanner) formData.append('remove_banner', 'true');
 
-            await authApi.updateProfile(formData);
+            const response = await authApi.updateProfile(formData);
+            const updatedProfile = response?.data;
+            const savedProfileColor = normalizeProfilePrimaryColor(
+                updatedProfile?.profile_primary_color || normalizedSelectedProfileColor
+            );
             setProfileSuccess('Profile updated successfully!');
+            setProfilePrimaryColor(savedProfileColor);
 
             // Clear file inputs immediately for better UX
             setAvatarFile(null);
@@ -259,8 +288,13 @@ export default function Settings() {
             setBannerPreviewUrl(null);
             setRemoveBanner(false);
 
-            // Refresh profile data in background (don't block UI)
-            refreshProfile();
+            // Use PATCH response as source of truth to avoid stale re-fetch fallback
+            if (updatedProfile && typeof updatedProfile === 'object') {
+                refreshProfile(updatedProfile);
+                queryClient.setQueryData(['ownProfile'], updatedProfile);
+            } else {
+                refreshProfile();
+            }
 
             // Invalidate React Query profile caches so Profile page shows fresh data
             // (avatar, banner, bio, username changes etc.)
@@ -630,6 +664,50 @@ export default function Settings() {
                                             {5000 - bio.length} characters remaining
                                         </p>
                                     )}
+                                </div>
+
+                                {/* Profile Primary Color */}
+                                <div className="pt-4 border-t border-gray-800">
+                                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                                        Profile Primary Color
+                                    </label>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="color"
+                                                value={normalizeProfilePrimaryColor(profilePrimaryColor)}
+                                                onChange={(e) => setProfilePrimaryColor(normalizeProfilePrimaryColor(e.target.value))}
+                                                className="h-11 w-14 rounded-lg border border-gray-700 bg-dark-50 p-1 cursor-pointer"
+                                                aria-label="Choose profile primary color"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={normalizeProfilePrimaryColor(profilePrimaryColor)}
+                                                readOnly
+                                                className="input w-32 font-mono uppercase cursor-default"
+                                                aria-label="Selected profile color hex value"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {PROFILE_COLOR_PRESETS.map((color) => {
+                                                const isSelected = normalizeProfilePrimaryColor(profilePrimaryColor) === color;
+                                                return (
+                                                    <button
+                                                        key={color}
+                                                        type="button"
+                                                        onClick={() => setProfilePrimaryColor(color)}
+                                                        className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${isSelected ? 'border-white' : 'border-transparent'}`}
+                                                        style={{ backgroundColor: color }}
+                                                        title={color}
+                                                        aria-label={`Set profile color ${color}`}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        This color is used as the accent across your profile page.
+                                    </p>
                                 </div>
 
                                 {/* Social Links */}

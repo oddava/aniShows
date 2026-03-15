@@ -42,6 +42,11 @@ class UserProfile(Model):
     email_verified = BooleanField(default=False)
     points = IntegerField(default=0)
     social_links = JSONField(default=list, blank=True)
+    profile_primary_color = CharField(
+        max_length=7,
+        default="#8b5cf6",
+        help_text="Hex color for profile accent (e.g., #8b5cf6)",
+    )
     last_activity = DateTimeField(null=True, blank=True)
     email_new_episodes = BooleanField(default=True)
     push_new_episodes = BooleanField(default=True)

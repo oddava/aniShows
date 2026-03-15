@@ -38,6 +38,9 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
     if "is_private" in validated_data:
         profile.is_private = validated_data["is_private"]
         update_fields.append("is_private")
+    if "profile_primary_color" in validated_data:
+        profile.profile_primary_color = validated_data["profile_primary_color"]
+        update_fields.append("profile_primary_color")
     if "social_links" in validated_data:
         if _apply_social_links(profile, user, validated_data["social_links"], ip_address):
             update_fields.append("social_links")

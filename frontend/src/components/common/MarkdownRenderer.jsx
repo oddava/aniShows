@@ -75,17 +75,28 @@ const markdownComponents = {
             {...props}
         />
     ),
-    code: ({ node, inline, ...props }) =>
-        inline ? (
+    pre: ({ node, ...props }) => (
+        <pre
+            className="inline-block bg-dark p-4 rounded-xl text-sm font-mono text-gray-200 overflow-x-auto border border-gray-800 my-4 max-w-full"
+            {...props}
+        />
+    ),
+    code: ({ node, inline, className, ...props }) => {
+        if (inline) {
+            return (
+                <code
+                    className="bg-dark text-accent-light px-1.5 py-1 rounded text-[13px] font-mono border border-gray-800"
+                    {...props}
+                />
+            );
+        }
+        return (
             <code
-                className="bg-dark text-accent-light px-1.5 py-1 rounded text-[13px] font-mono border border-gray-800"
+                className={className ? `${className} text-gray-200` : "text-gray-200"}
                 {...props}
             />
-        ) : (
-            <pre className="inline-block bg-dark p-4 rounded-xl text-sm font-mono text-gray-200 overflow-x-auto border border-gray-800 my-4 max-w-full">
-                <code {...props} />
-            </pre>
-        ),
+        );
+    },
     img: ({ node, ...props }) => {
         // Get align and width from data attributes
         const alignValue = props['data-align'] || node?.properties?.dataAlign;

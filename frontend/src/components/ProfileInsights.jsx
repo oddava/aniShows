@@ -4,17 +4,41 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { TrendingUp, Star, Tv, Clock, BarChart3, Activity } from 'lucide-react';
 import ActivityHeatmap from './ActivityHeatmap';
 
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+
+function normalizeProfilePrimaryColor(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
+}
+
+function adjustHexBrightness(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const red = Math.min(255, Math.max(0, (num >> 16) + amt));
+    const green = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
+    const blue = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
+    return `#${(0x1000000 + red * 0x10000 + green * 0x100 + blue).toString(16).slice(1)}`;
+}
+
+function hexToRgb(hex) {
+    const normalized = normalizeProfilePrimaryColor(hex).replace('#', '');
+    return {
+        red: parseInt(normalized.slice(0, 2), 16),
+        green: parseInt(normalized.slice(2, 4), 16),
+        blue: parseInt(normalized.slice(4, 6), 16),
+    };
+}
+
+function toRgba(hex, alpha) {
+    const { red, green, blue } = hexToRgb(hex);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 // Color palette for charts
 const GENRE_COLORS = [
     '#8b5cf6', '#ec4899', '#06b6d4', '#22c55e', '#f59e0b',
     '#ef4444', '#3b82f6', '#a855f7', '#14b8a6', '#f97316'
 ];
-
-const SCORE_COLORS = {
-    10: '#22c55e', 9: '#4ade80', 8: '#86efac',
-    7: '#3b82f6', 6: '#60a5fa', 5: '#93c5fd',
-    4: '#f59e0b', 3: '#fbbf24', 2: '#ef4444', 1: '#dc2626'
-};
 
 // Flat Stat Card stripped of Icons and Gradients
 const StatCard = ({ icon: Icon, label, value, subtext, color = 'accent' }) => {
@@ -50,7 +74,7 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 // Activity Heatmap Section
-const ActivityHeatmapSection = ({ username, isPrivate }) => {
+const ActivityHeatmapSection = ({ username, isPrivate, accentColor }) => {
     const { data: heatmapData, isLoading, isError, refetch } = useQuery({
         queryKey: ['activity-heatmap', username],
         queryFn: () => activityApi.getHeatmap({ username }).then(res => res.data),
@@ -82,12 +106,16 @@ const ActivityHeatmapSection = ({ username, isPrivate }) => {
 
     return (
         <div className="bg-dark-100/50 rounded-xl border border-gray-800 w-full overflow-hidden mx-auto lg:mx-0">
-            <ActivityHeatmap activityData={heatmapData || []} />
+            <ActivityHeatmap activityData={heatmapData || []} accentColor={accentColor} />
         </div>
     );
 };
 
-export default function ProfileInsights({ username, isPrivate }) {
+export default function ProfileInsights({ username, isPrivate, accentColor }) {
+    const profileAccentColor = normalizeProfilePrimaryColor(accentColor);
+    const profileAccentLight = adjustHexBrightness(profileAccentColor, 18);
+    const profileAccentDark = adjustHexBrightness(profileAccentColor, -18);
+
     // Fetch all anime lists
     const {
         data: listsData,
@@ -221,7 +249,16 @@ export default function ProfileInsights({ username, isPrivate }) {
         .map(([score, count]) => ({
             score: parseInt(score),
             count,
-            fill: SCORE_COLORS[score] || '#6b7280'
+            fill:
+                parseInt(score) >= 9
+                    ? profileAccentColor
+                    : parseInt(score) >= 7
+                        ? profileAccentLight
+                        : parseInt(score) >= 5
+                            ? toRgba(profileAccentColor, 0.7)
+                            : parseInt(score) >= 3
+                                ? toRgba(profileAccentDark, 0.8)
+                                : profileAccentDark
         }))
         .sort((a, b) => a.score - b.score);
 
@@ -265,11 +302,11 @@ export default function ProfileInsights({ username, isPrivate }) {
                                         <Radar
                                             name="Genre Profile"
                                             dataKey="value"
-                                            stroke="#8b5cf6"
+                                            stroke={profileAccentColor}
                                             strokeWidth={3}
-                                            fill="#8b5cf6"
+                                            fill={profileAccentColor}
                                             fillOpacity={0.3}
-                                            dot={{ r: 4, fill: '#8b5cf6', stroke: '#fff', strokeWidth: 1.5 }}
+                                            dot={{ r: 4, fill: profileAccentColor, stroke: '#fff', strokeWidth: 1.5 }}
                                             animationDuration={1500}
                                         />
                                         <Tooltip content={<CustomTooltip />} />
@@ -303,8 +340,10 @@ export default function ProfileInsights({ username, isPrivate }) {
                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">How you evaluate anime quality</p>
                         </div>
                         {reviews.length > 0 && (
-                            <div className="px-3 py-1 bg-yellow-500/10 border border-yellow-500/20 rounded-full">
-                                <span className="text-[10px] text-yellow-500 font-black uppercase tracking-widest">{avgScore} Average</span>
+                            <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-accent">
+                                    {avgScore} Average
+                                </span>
                             </div>
                         )}
                     </div>
@@ -356,7 +395,11 @@ export default function ProfileInsights({ username, isPrivate }) {
             <div className="grid lg:grid-cols-12 md:grid-cols-2 gap-6 items-start w-full">
                 {/* Heatmap - 5 cols on desktop */}
                 <div className="lg:col-span-5 md:col-span-2 min-w-0 relative z-10">
-                    <ActivityHeatmapSection username={username} isPrivate={isPrivate} />
+                    <ActivityHeatmapSection
+                        username={username}
+                        isPrivate={isPrivate}
+                        accentColor={profileAccentColor}
+                    />
                 </div>
 
                 {/* Watching Progress - 7 cols on desktop */}

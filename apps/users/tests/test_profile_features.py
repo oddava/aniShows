@@ -134,6 +134,21 @@ class ProfileFeaturesTest(APITestCase):
         self.assertNotIn("<script>", self.profile.bio)
         self.assertIn('alert("xss")', self.profile.bio)
 
+    def test_profile_update_primary_color(self):
+        """Test setting profile primary color."""
+        res = self.client.patch(self.profile_url, {"profile_primary_color": "#EF4444"})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.profile_primary_color, "#ef4444")
+        self.assertEqual(res.data["profile_primary_color"], "#ef4444")
+
+    def test_profile_update_primary_color_validation(self):
+        """Invalid profile primary color should be rejected."""
+        res = self.client.patch(self.profile_url, {"profile_primary_color": "red"})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("profile_primary_color", res.data)
+
     def test_profile_update_bio_preserves_allowed_html(self):
         """Test that safe formatting tags remain intact after save."""
         data = {

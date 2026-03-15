@@ -1,4 +1,5 @@
 import html
+import re
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
@@ -18,6 +19,8 @@ except ImportError:
         return f"user_online:{user_id}"
 
 User = get_user_model()
+DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
+HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 @dataclass(slots=True)
@@ -126,6 +129,9 @@ def _build_profile_data(user, stats_data):
         "is_private": profile.is_private if profile else False,
         "email_verified": profile.email_verified if profile else False,
         "social_links": profile.social_links if profile else [],
+        "profile_primary_color": _normalize_profile_primary_color(
+            profile.profile_primary_color if profile else None
+        ),
         "points": profile.points if profile else 0,
         "has_password": user.has_usable_password(),
         "is_staff": user.is_staff,
@@ -150,4 +156,15 @@ def _normalize_profile_payload(data):
         return data
     normalized = dict(data)
     normalized["bio"] = _normalize_bio(normalized.get("bio"))
+    normalized["profile_primary_color"] = _normalize_profile_primary_color(
+        normalized.get("profile_primary_color")
+    )
     return normalized
+
+
+def _normalize_profile_primary_color(value):
+    if isinstance(value, str):
+        candidate = value.strip().lower()
+        if HEX_COLOR_PATTERN.match(candidate):
+            return candidate
+    return DEFAULT_PROFILE_PRIMARY_COLOR

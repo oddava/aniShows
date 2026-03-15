@@ -301,7 +301,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
     );
 }
 
-function ActivityHistorySidebar({ username, isPrivate }) {
+function ActivityHistorySidebar({ username, isPrivate, accentColor }) {
     const { data: heatmapData, isLoading, isError } = useQuery({
         queryKey: ['activity-heatmap', username],
         queryFn: () => activityApi.getHeatmap({ username }).then(res => res.data),
@@ -314,7 +314,7 @@ function ActivityHistorySidebar({ username, isPrivate }) {
 
     return (
         <div className="ui-surface-subtle w-full overflow-hidden">
-            <ActivityHeatmap activityData={heatmapData} />
+            <ActivityHeatmap activityData={heatmapData} accentColor={accentColor} />
         </div>
     );
 }
@@ -380,7 +380,11 @@ export default function OverviewTab({
 
                     <FriendsGrid username={targetUsername} isPrivate={isPrivate} onTabChange={onTabChange} />
 
-                    <ActivityHistorySidebar username={targetUsername} isPrivate={isPrivate} />
+                    <ActivityHistorySidebar
+                        username={targetUsername}
+                        isPrivate={isPrivate}
+                        accentColor={displayUser?.profile_primary_color}
+                    />
 
                     <GenreOverviewSidebar username={targetUsername} isPrivate={isPrivate} />
                 </div>

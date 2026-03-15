@@ -201,6 +201,12 @@ class UserProfileMixin:
         profile = getattr(obj, "userprofile", None)
         return profile.points if profile else 0
 
+    def get_profile_primary_color(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        if profile and profile.profile_primary_color:
+            return profile.profile_primary_color
+        return "#8b5cf6"
+
 class BadgesMixin:
     """Mixin for serializers that display user badges.
     Used by UserSerializer and PublicUserSerializer.

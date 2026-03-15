@@ -5,7 +5,6 @@ import { Navigate, Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
 import FollowersModal from '../components/FollowersModal';
-import useColorExtraction from '../hooks/useColorExtraction';
 import {
     ProfileErrorBoundary,
     ProfileHeader,
@@ -18,6 +17,22 @@ import { setUserContext } from '../sentry';
 
 import MarkdownRenderer from '../components/common/MarkdownRenderer';
 import OverviewTab from '../components/profile/OverviewTab';
+
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+
+function normalizeProfilePrimaryColor(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
+}
+
+function adjustHexBrightness(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const red = Math.min(255, Math.max(0, (num >> 16) + amt));
+    const green = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amt));
+    const blue = Math.min(255, Math.max(0, (num & 0x0000FF) + amt));
+    return `#${(0x1000000 + red * 0x10000 + green * 0x100 + blue).toString(16).slice(1)}`;
+}
 
 export default function Profile({ forcedUsername }) {
     const { username: paramsUsername } = useParams();
@@ -144,23 +159,32 @@ export default function Profile({ forcedUsername }) {
         }
     }, [displayUser]);
 
-    const { colors: extractedColors } = useColorExtraction(displayUser?.banner);
+    const selectedPrimaryColor = normalizeProfilePrimaryColor(displayUser?.profile_primary_color);
 
     useEffect(() => {
-        if (extractedColors) {
-            const root = document.documentElement;
-            root.style.setProperty('--profile-accent', extractedColors.primary);
-            root.style.setProperty('--profile-accent-light', extractedColors.accent);
-            root.style.setProperty('--profile-secondary', extractedColors.secondary);
-        }
+        const root = document.documentElement;
+        const baseColor = selectedPrimaryColor || DEFAULT_PROFILE_PRIMARY_COLOR;
+        const lightColor = adjustHexBrightness(baseColor, 20);
+        const darkColor = adjustHexBrightness(baseColor, -18);
+
+        root.style.setProperty('--color-accent', baseColor);
+        root.style.setProperty('--color-accent-light', lightColor);
+        root.style.setProperty('--color-accent-dark', darkColor);
+
+        root.style.setProperty('--profile-accent', baseColor);
+        root.style.setProperty('--profile-accent-light', lightColor);
+        root.style.setProperty('--profile-secondary', darkColor);
 
         return () => {
             const root = document.documentElement;
+            root.style.removeProperty('--color-accent');
+            root.style.removeProperty('--color-accent-light');
+            root.style.removeProperty('--color-accent-dark');
             root.style.removeProperty('--profile-accent');
             root.style.removeProperty('--profile-accent-light');
             root.style.removeProperty('--profile-secondary');
         };
-    }, [extractedColors]);
+    }, [selectedPrimaryColor]);
 
     // Handle loading states first
     if (isPublicView && profileLoading) {

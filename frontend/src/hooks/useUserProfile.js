@@ -12,7 +12,7 @@ export function useUserProfile() {
     const { user, isAuthenticated } = useAuth();
 
     return useQuery({
-        queryKey: ['user', 'profile', user?.id],
+        queryKey: ['ownProfile'],
         queryFn: async () => {
             const response = await authApi.getProfile(true); // Fetch full profile with stats
             return response.data;

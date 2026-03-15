@@ -58,11 +58,32 @@ class UserProfileView(APIView):
         return Response(result.data)
 
     def patch(self, request):
+        logger.info(
+            "Profile patch request received for user %s",
+            request.user.id,
+            extra={
+                "user_id": request.user.id,
+                "raw_profile_primary_color": request.data.get("profile_primary_color"),
+                "request_keys": sorted(request.data.keys()),
+            },
+        )
         serializer = UserProfileUpdateSerializer(
             data=request.data, context={"request": request}
         )
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
+
+        logger.info(
+            "Profile patch validated for user %s",
+            request.user.id,
+            extra={
+                "user_id": request.user.id,
+                "validated_profile_primary_color": serializer.validated_data.get(
+                    "profile_primary_color"
+                ),
+                "validated_keys": sorted(serializer.validated_data.keys()),
+            },
+        )
 
         try:
             update_user_profile(

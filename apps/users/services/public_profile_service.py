@@ -1,4 +1,5 @@
 import html
+import re
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
@@ -11,6 +12,8 @@ from apps.users.services.profile_service import get_featured_badges, is_user_onl
 from apps.users.services.user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
+DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
+HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 class PublicProfileError(Exception):
@@ -79,6 +82,9 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "bio": _normalize_bio(user.userprofile.bio if user.userprofile else None),
                 "is_private": user.userprofile.is_private if user.userprofile else False,
                 "social_links": user.userprofile.social_links if user.userprofile else [],
+                "profile_primary_color": _normalize_profile_primary_color(
+                    user.userprofile.profile_primary_color if user.userprofile else None
+                ),
                 "points": user.userprofile.points if user.userprofile else 0,
                 "followers_count": stats.followers_count,
                 "following_count": stats.following_count,
@@ -145,4 +151,15 @@ def _normalize_public_profile_payload(data):
         return data
     normalized = dict(data)
     normalized["bio"] = _normalize_bio(normalized.get("bio"))
+    normalized["profile_primary_color"] = _normalize_profile_primary_color(
+        normalized.get("profile_primary_color")
+    )
     return normalized
+
+
+def _normalize_profile_primary_color(value):
+    if isinstance(value, str):
+        candidate = value.strip().lower()
+        if HEX_COLOR_PATTERN.match(candidate):
+            return candidate
+    return DEFAULT_PROFILE_PRIMARY_COLOR

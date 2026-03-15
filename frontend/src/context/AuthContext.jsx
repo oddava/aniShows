@@ -186,7 +186,12 @@ export function AuthProvider({ children }) {
         setUser(null);
     }, []);
 
-    const refreshProfile = useCallback(async () => {
+    const refreshProfile = useCallback(async (profileData = null) => {
+        if (profileData && typeof profileData === 'object') {
+            setUser(profileData);
+            return profileData;
+        }
+
         try {
             const response = await authApi.getProfile();
             setUser(response.data);

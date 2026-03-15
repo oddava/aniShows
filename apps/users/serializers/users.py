@@ -1,4 +1,5 @@
 import html
+import re
 
 import bleach
 from django.conf import settings
@@ -68,6 +69,7 @@ ALLOWED_BIO_ATTRIBUTES = {
     "youtube": ["src"],
     "mention": ["username"],
 }
+HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 class BadgeSerializer(ModelSerializer):
     """Serializer for a badge definition."""
@@ -136,6 +138,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     has_password = SerializerMethodField()
 
     points = SerializerMethodField()
+    profile_primary_color = SerializerMethodField()
     followers_count = IntegerField(read_only=True, source="_followers_count")
     following_count = IntegerField(read_only=True, source="_following_count")
 
@@ -164,6 +167,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "is_staff",
             "is_superuser",
             "points",
+            "profile_primary_color",
             "followers_count",
             "following_count",
             "badges",
@@ -187,6 +191,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
     email_verified = SerializerMethodField()
     has_password = SerializerMethodField()
     social_links = SerializerMethodField()
+    profile_primary_color = SerializerMethodField()
 
     anime_count = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
@@ -204,6 +209,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
             "email_verified",
             "has_password",
             "social_links",
+            "profile_primary_color",
             "anime_count",
             "episodes_watched",
             "days_watched",
@@ -249,6 +255,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     social_links = SerializerMethodField()
 
     points = SerializerMethodField()
+    profile_primary_color = SerializerMethodField()
     followers_count = SerializerMethodField()
     following_count = SerializerMethodField()
     is_following = SerializerMethodField()
@@ -274,6 +281,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "episodes_watched",
             "social_links",
             "points",
+            "profile_primary_color",
             "followers_count",
             "following_count",
             "is_following",
@@ -337,6 +345,7 @@ class UserProfileUpdateSerializer(Serializer):
     remove_banner = BooleanField(required=False, default=False)
     bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
     is_private = BooleanField(required=False, default=False)
+    profile_primary_color = CharField(required=False, max_length=7)
 
     def validate_is_private(self, value):
         if isinstance(value, str):
@@ -359,6 +368,14 @@ class UserProfileUpdateSerializer(Serializer):
             attributes=ALLOWED_BIO_ATTRIBUTES,
             strip=True,
         )
+
+    def validate_profile_primary_color(self, value):
+        normalized = (value or "").strip().lower()
+        if not HEX_COLOR_PATTERN.match(normalized):
+            raise ValidationError(
+                "Profile primary color must be a valid hex color (e.g., #8b5cf6)."
+            )
+        return normalized
 
     social_links = JSONField(required=False)
 

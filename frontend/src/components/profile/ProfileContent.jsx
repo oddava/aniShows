@@ -125,7 +125,11 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <ProfileInsights username={targetUsername} isPrivate={isPrivate} />
+                    <ProfileInsights
+                        username={targetUsername}
+                        isPrivate={isPrivate}
+                        accentColor={displayUser?.profile_primary_color}
+                    />
                 </ProfileErrorBoundary>
             );
 

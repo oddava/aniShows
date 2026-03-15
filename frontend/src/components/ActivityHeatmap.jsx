@@ -2,6 +2,36 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '../context/ThemeContext';
 
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+
+function normalizeProfilePrimaryColor(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
+}
+
+function adjustHexBrightness(hex, percent) {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const red = Math.min(255, Math.max(0, (num >> 16) + amt));
+    const green = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
+    const blue = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
+    return `#${(0x1000000 + red * 0x10000 + green * 0x100 + blue).toString(16).slice(1)}`;
+}
+
+function hexToRgb(hex) {
+    const normalized = normalizeProfilePrimaryColor(hex).replace('#', '');
+    return {
+        red: parseInt(normalized.slice(0, 2), 16),
+        green: parseInt(normalized.slice(2, 4), 16),
+        blue: parseInt(normalized.slice(4, 6), 16),
+    };
+}
+
+function toRgba(hex, alpha) {
+    const { red, green, blue } = hexToRgb(hex);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 // Tooltip Portal component
 function TooltipPortal({ children }) {
     const [mounted, setMounted] = useState(false);
@@ -17,9 +47,11 @@ function TooltipPortal({ children }) {
  * ActivityHeatmap - GitHub-style contribution/watching activity graph
  * Shows user's anime watching activity over the past year
  */
-export default function ActivityHeatmap({ activityData = [] }) {
+export default function ActivityHeatmap({ activityData = [], accentColor }) {
     const { theme } = useTheme();
     const isPastel = theme === 'retro-anime';
+    const profileAccentColor = normalizeProfilePrimaryColor(accentColor);
+    const profileAccentLight = adjustHexBrightness(profileAccentColor, 20);
     
     const [hoveredDay, setHoveredDay] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -120,9 +152,9 @@ export default function ActivityHeatmap({ activityData = [] }) {
             if (count <= 6) return { backgroundColor: 'rgba(232, 90, 156, 0.85)' };
             return { backgroundColor: 'rgb(232, 90, 156)' };
         }
-        if (count <= 4) return { backgroundColor: 'rgba(139, 92, 246, 0.6)' };
-        if (count <= 6) return { backgroundColor: 'rgba(139, 92, 246, 0.85)' };
-        return { backgroundColor: 'rgb(139, 92, 246)' };
+        if (count <= 4) return { backgroundColor: toRgba(profileAccentColor, 0.6) };
+        if (count <= 6) return { backgroundColor: toRgba(profileAccentColor, 0.85) };
+        return { backgroundColor: profileAccentColor };
     };
 
     const getHoverStyle = (count) => {
@@ -133,9 +165,9 @@ export default function ActivityHeatmap({ activityData = [] }) {
             if (count <= 6) return { backgroundColor: 'rgba(232, 90, 156, 1)' };
             return { backgroundColor: 'rgba(255, 133, 184, 1)' };
         }
-        if (count <= 4) return { backgroundColor: 'rgba(139, 92, 246, 0.8)' };
-        if (count <= 6) return { backgroundColor: 'rgba(139, 92, 246, 1)' };
-        return { backgroundColor: 'rgba(167, 139, 250, 1)' };
+        if (count <= 4) return { backgroundColor: toRgba(profileAccentColor, 0.8) };
+        if (count <= 6) return { backgroundColor: profileAccentColor };
+        return { backgroundColor: profileAccentLight };
     };
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -272,9 +304,9 @@ export default function ActivityHeatmap({ activityData = [] }) {
                     <div className="flex gap-1">
                         <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.25)' }} />
                         <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.45)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : 'rgba(139, 92, 246, 0.6)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.85)' : 'rgba(139, 92, 246, 0.85)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : 'rgb(139, 92, 246)' }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : toRgba(profileAccentColor, 0.6) }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.85)' : toRgba(profileAccentColor, 0.85) }} />
+                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : profileAccentColor }} />
                     </div>
                     <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
                 </div>
