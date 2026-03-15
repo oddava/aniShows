@@ -7,10 +7,182 @@ import DOMPurify from "dompurify";
 
 const ReactMarkdown = lazy(() => import("react-markdown"));
 
+const codeFencePlaceholderPrefix = "ANI_SHOWS_CODE_FENCE_";
+const alignedBlockClassNames = {
+    left: "text-left",
+    center: "text-center",
+    right: "text-right",
+};
+
 const extractYouTubeId = (url) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return match && match[2].length === 11 ? match[2] : null;
+};
+
+const extractTextContent = (children) =>
+    React.Children.toArray(children)
+        .map((child) => {
+            if (typeof child === "string" || typeof child === "number") {
+                return String(child);
+            }
+            if (React.isValidElement(child)) {
+                return extractTextContent(child.props.children);
+            }
+            return "";
+        })
+        .join("");
+
+const encodeAlignedContent = (value = "") => encodeURIComponent(value);
+
+const decodeAlignedContent = (value = "") => {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+};
+
+const protectCodeFences = (content = "") => {
+    const codeFences = [];
+    const protectedContent = content.replace(/```[\s\S]*?```/g, (match) => {
+        const placeholder = `[[${codeFencePlaceholderPrefix}${codeFences.length}]]`;
+        codeFences.push(match);
+        return placeholder;
+    });
+
+    return { protectedContent, codeFences };
+};
+
+const restoreCodeFences = (content = "", codeFences = []) =>
+    content.replace(
+        new RegExp(`\\[\\[${codeFencePlaceholderPrefix}(\\d+)\\]\\]`, "g"),
+        (match, index) => codeFences[Number(index)] || match,
+    );
+
+const autoLinkPattern = /(^|[\s>(])((?:https?:\/\/|www\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s<]*)?)/gi;
+
+const autoLinkPlainDomains = (content = "") => {
+    const segments = content.split(/(<[^>]+>)/g);
+    let isInsideAnchor = false;
+
+    return segments
+        .map((segment) => {
+            const isTag = /^<[^>]+>$/.test(segment);
+            if (isTag) {
+                if (/^<a\b/i.test(segment)) isInsideAnchor = true;
+                if (/^<\/a>/i.test(segment)) isInsideAnchor = false;
+                return segment;
+            }
+
+            if (isInsideAnchor || !segment) return segment;
+
+            return segment.replace(autoLinkPattern, (fullMatch, prefix, rawUrl, offset, originalText) => {
+                const urlStart = offset + prefix.length;
+                if (originalText.slice(Math.max(0, urlStart - 2), urlStart) === "](") {
+                    return fullMatch;
+                }
+
+                let normalizedUrl = rawUrl;
+                let trailingPunctuation = "";
+                while (/[),.!?:;]$/.test(normalizedUrl)) {
+                    trailingPunctuation = normalizedUrl.slice(-1) + trailingPunctuation;
+                    normalizedUrl = normalizedUrl.slice(0, -1);
+                }
+
+                if (!normalizedUrl.includes(".")) {
+                    return fullMatch;
+                }
+
+                const href = /^https?:\/\//i.test(normalizedUrl)
+                    ? normalizedUrl
+                    : `https://${normalizedUrl}`;
+
+                return `${prefix}<a href="${href}">${normalizedUrl}</a>${trailingPunctuation}`;
+            });
+        })
+        .join("");
+};
+
+const preprocessMarkdown = (content = "") => {
+    let processedContent = decodeHtmlEntities(content || "");
+    const { protectedContent, codeFences } = protectCodeFences(processedContent);
+    processedContent = protectedContent;
+
+    processedContent = processedContent.replace(
+        /<(p|div)\s+align=["'](left|center|right)["']\s*>([\s\S]*?)<\/\1>/gi,
+        (match, tagName, align, innerContent) => {
+            const restoredInnerContent = restoreCodeFences(innerContent.trim(), codeFences);
+            return `<alignedblock align="${align.toLowerCase()}" data-md="${encodeAlignedContent(restoredInnerContent)}"></alignedblock>`;
+        },
+    );
+
+    processedContent = processedContent.replace(
+        /\|\|(.*?)\|\|/g,
+        '<span class="is-spoiler">$1</span>',
+    );
+
+    processedContent = processedContent.replace(
+        /@([a-zA-Z0-9_]+)/g,
+        '<mention username="$1"></mention>',
+    );
+
+    processedContent = processedContent.replace(
+        /@\[[^\]]*\]\((.*?)\)/g,
+        (match, url) => {
+            if (url.includes("youtube.com") || url.includes("youtu.be")) {
+                return `<youtube src="${url}"></youtube>`;
+            }
+            return match;
+        },
+    );
+
+    processedContent = processedContent.replace(
+        /!\[([^\]]*)\]\(([^|)]+)(?:\|(\d+[px%]?))?(?:\|([LlCcRr]))?\)/g,
+        (match, alt, url, width, align) => {
+            const attrs = [`src="${url}"`, `alt="${alt}"`];
+            if (width) {
+                const widthValue = width.match(/\d+/) ? (width.includes('%') ? width : width + 'px') : width;
+                attrs.push(`data-width="${widthValue}"`);
+            }
+            if (align) {
+                const alignUpper = align.toUpperCase();
+                const alignMap = { 'L': 'left', 'C': 'center', 'R': 'right' };
+                attrs.push(`data-align="${alignMap[alignUpper] || 'center'}"`);
+            }
+            return `<img ${attrs.join(' ')} />`;
+        },
+    );
+
+    processedContent = autoLinkPlainDomains(processedContent);
+
+    processedContent = restoreCodeFences(processedContent, codeFences);
+
+    return DOMPurify.sanitize(processedContent, {
+        ADD_TAGS: ['youtube', 'mention', 'alignedblock'],
+        ADD_ATTR: ['src', 'username', 'data-align', 'data-width', 'align', 'data-md'],
+    });
+};
+
+const MarkdownContent = ({ content }) => (
+    <ReactMarkdown
+        remarkPlugins={markdownRemarkPlugins}
+        rehypePlugins={markdownRehypePlugins}
+        components={markdownComponents}
+    >
+        {content}
+    </ReactMarkdown>
+);
+
+const AlignedBlock = ({ children, align = "left", sourceContent = "" }) => {
+    const nestedContent = sourceContent || extractTextContent(children);
+    const alignmentClassName = alignedBlockClassNames[align] || alignedBlockClassNames.left;
+
+    return (
+        <div className={`my-4 ${alignmentClassName}`}>
+            <MarkdownContent content={preprocessMarkdown(nestedContent)} />
+        </div>
+    );
 };
 
 const Spoiler = ({ children }) => {
@@ -171,6 +343,10 @@ const markdownComponents = {
             @{username}
         </Link>
     ),
+    alignedblock: ({ node, align, children, ...props }) => {
+        const encodedContent = props['data-md'] || node?.properties?.['data-md'] || node?.properties?.dataMd || "";
+        return <AlignedBlock align={align} sourceContent={decodeAlignedContent(encodedContent)}>{children}</AlignedBlock>;
+    },
 };
 
 const decodeHtmlEntities = (text = "") => {
@@ -182,67 +358,12 @@ const decodeHtmlEntities = (text = "") => {
 };
 
 const MarkdownRenderer = ({ content, className = "" }) => {
-    // Pre-process custom syntax
-    let processedContent = decodeHtmlEntities(content || "");
-
-    // Process spoilers
-    processedContent = processedContent.replace(
-        /\|\|(.*?)\|\|/g,
-        '<span class="is-spoiler">$1</span>',
-    );
-
-    // Process mentions: @username -> <mention username="username"></mention>
-    processedContent = processedContent.replace(
-        /@([a-zA-Z0-9_]+)/g,
-        '<mention username="$1"></mention>',
-    );
-
-    // Process YouTube: @[youtube](url) -> <youtube url="url"></youtube>
-    processedContent = processedContent.replace(
-        /@\[[^\]]*\]\((.*?)\)/g,
-        (match, url) => {
-            if (url.includes("youtube.com") || url.includes("youtu.be")) {
-                return `<youtube src="${url}"></youtube>`;
-            }
-            return match;
-        },
-    );
-
-    // Process images with size and alignment: ![alt](url|220|L) -> <img src="url" data-width="220" data-align="left" />
-    // Format: ![alt](url) or ![alt](url|width) or ![alt](url|width|alignment)
-    // Alignment options: L/l (left), C/c (center), R/r (right)
-    processedContent = processedContent.replace(
-        /!\[([^\]]*)\]\(([^|)]+)(?:\|(\d+[px%]?))?(?:\|([LlCcRr]))?\)/g,
-        (match, alt, url, width, align) => {
-            const attrs = [`src="${url}"`, `alt="${alt}"`];
-            if (width) {
-                const widthValue = width.match(/\d+/) ? (width.includes('%') ? width : width + 'px') : width;
-                attrs.push(`data-width="${widthValue}"`);
-            }
-            if (align) {
-                const alignUpper = align.toUpperCase();
-                const alignMap = { 'L': 'left', 'C': 'center', 'R': 'right' };
-                attrs.push(`data-align="${alignMap[alignUpper] || 'center'}"`);
-            }
-            return `<img ${attrs.join(' ')} />`;
-        },
-    );
-
-    const cleanContent = DOMPurify.sanitize(processedContent, {
-        ADD_TAGS: ['youtube', 'mention'],
-        ADD_ATTR: ['src', 'username', 'data-align', 'data-width'],
-    });
+    const cleanContent = preprocessMarkdown(content || "");
 
     return (
         <div className={`markdown-preview max-w-none ${className}`}>
             <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
-                <ReactMarkdown
-                    remarkPlugins={markdownRemarkPlugins}
-                    rehypePlugins={markdownRehypePlugins}
-                    components={markdownComponents}
-                >
-                    {cleanContent}
-                </ReactMarkdown>
+                <MarkdownContent content={cleanContent} />
             </Suspense>
         </div>
     );
