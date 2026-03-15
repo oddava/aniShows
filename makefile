@@ -11,7 +11,8 @@ EXEC = docker compose exec web python manage.py
         sync-themes sync-full sync-franchises sync-recs populate-themes \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
-        clean prune backup backups restore load-browse
+        clean prune backup backups backup-export backup-import exports \
+        verify-backup restore restore-db-only restore-media-only load-browse
 
 # ============================================================================
 # Service Management
@@ -184,17 +185,91 @@ load-browse:                    ## Run read-heavy k6 browse load profile (set BA
 backup:                         ## Trigger manual database backup
 	docker compose exec backup /app/shell/backup.sh manual
 
-backups:                        ## List available backups
-	docker compose exec backup ls -lh /backups
+backups:                        ## List available backups with metadata
+	docker compose exec backup /app/shell/list.sh
 
-restore:                        ## Restore from backup (Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS or full dir)
+backup-export:                  ## Export backup as portable bundle (Usage: make backup-export TIMESTAMP=... [NAME=file.tar.gz])
 	@if [ -z "$(TIMESTAMP)" ]; then \
-		echo "Error: TIMESTAMP is required. Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS (or full backup dir)"; \
+		echo "Error: TIMESTAMP is required. Usage: make backup-export TIMESTAMP=YYYYMMDD_HHMMSS (or full backup dir)"; \
 		exit 1; \
 	fi
-	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP)
+	docker compose exec -e EXPORT_NAME="$(NAME)" backup /app/shell/export.sh $(TIMESTAMP)
+
+exports:                        ## List portable backup bundles
+	docker compose exec backup sh -lc 'ls -lh /backups/exports 2>/dev/null || echo "No exports found."'
+
+backup-import:                  ## Import portable bundle (Usage: make backup-import FILE=your-backup.portable.tar.gz)
+	@if [ -z "$(FILE)" ]; then \
+		echo "Error: FILE is required. Usage: make backup-import FILE=your-backup.portable.tar.gz"; \
+		exit 1; \
+	fi
+	docker compose exec backup /app/shell/import.sh $(FILE)
+
+verify-backup:                  ## Validate backup integrity + test restore (Usage: make verify-backup TIMESTAMP=...)
+	@if [ -z "$(TIMESTAMP)" ]; then \
+		echo "Error: TIMESTAMP is required. Usage: make verify-backup TIMESTAMP=YYYYMMDD_HHMMSS (or full backup dir)"; \
+		exit 1; \
+	fi
+	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP) --check
+
+restore:                        ## Safe full restore (Usage: make restore TIMESTAMP=... FORCE=1)
+	@if [ -z "$(TIMESTAMP)" ]; then \
+		echo "Error: TIMESTAMP is required. Usage: make restore TIMESTAMP=YYYYMMDD_HHMMSS (or full backup dir) FORCE=1"; \
+		exit 1; \
+	fi
+	@if [ "$(FORCE)" != "1" ]; then \
+		echo "Error: Restore is destructive. Re-run with FORCE=1 after verifying the backup."; \
+		echo "Tip: make verify-backup TIMESTAMP=$(TIMESTAMP)"; \
+		exit 1; \
+	fi
+	@services="pgbouncer web daphne celery celery_priority celery_images celery_analytics beat minio"; \
+	set -e; \
+	echo "Stopping app services for restore: $$services"; \
+	docker compose stop $$services; \
+	restore_status=0; \
+	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP) --yes || restore_status=$$?; \
+	echo "Starting app services: $$services"; \
+	docker compose start $$services; \
+	if [ $$restore_status -ne 0 ]; then \
+		echo "Restore failed. Services were started back up."; \
+		exit $$restore_status; \
+	fi
 	docker compose exec web python manage.py migrate --noinput
-	docker compose restart pgbouncer web daphne celery celery_priority celery_images celery_analytics beat
+
+restore-db-only:                ## Restore DB only (Usage: make restore-db-only TIMESTAMP=... FORCE=1)
+	@if [ -z "$(TIMESTAMP)" ]; then \
+		echo "Error: TIMESTAMP is required. Usage: make restore-db-only TIMESTAMP=... FORCE=1"; \
+		exit 1; \
+	fi
+	@if [ "$(FORCE)" != "1" ]; then \
+		echo "Error: Restore is destructive. Re-run with FORCE=1."; \
+		exit 1; \
+	fi
+	@services="pgbouncer web daphne celery celery_priority celery_images celery_analytics beat"; \
+	set -e; \
+	docker compose stop $$services; \
+	restore_status=0; \
+	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP) --yes --skip-media || restore_status=$$?; \
+	docker compose start $$services; \
+	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi
+	docker compose exec web python manage.py migrate --noinput
+
+restore-media-only:             ## Restore media only (Usage: make restore-media-only TIMESTAMP=... FORCE=1)
+	@if [ -z "$(TIMESTAMP)" ]; then \
+		echo "Error: TIMESTAMP is required. Usage: make restore-media-only TIMESTAMP=... FORCE=1"; \
+		exit 1; \
+	fi
+	@if [ "$(FORCE)" != "1" ]; then \
+		echo "Error: Restore is destructive. Re-run with FORCE=1."; \
+		exit 1; \
+	fi
+	@services="minio"; \
+	set -e; \
+	docker compose stop $$services; \
+	restore_status=0; \
+	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP) --yes --skip-db || restore_status=$$?; \
+	docker compose start $$services; \
+	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi
 
 # ============================================================================
 # Help

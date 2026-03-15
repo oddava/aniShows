@@ -1,35 +1,232 @@
-#!/bin/bash
-set -e
-set -o pipefail
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/backups"
-TYPE=${1:-manual} # manual, daily, weekly
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="${BACKUP_DIR:-/backups}"
+TYPE="${1:-manual}" # manual, daily, weekly, pre-restore
+LOCK_DIR="$BACKUP_DIR/.backup.lock"
 
-echo "[$(date)] Starting $TYPE backup..."
+DB_HOST="${POSTGRES_HOST:-db}"
+DB_PORT="${POSTGRES_PORT:-5432}"
+DB_NAME="${POSTGRES_DB:?POSTGRES_DB is required}"
+DB_USER="${POSTGRES_USER:?POSTGRES_USER is required}"
+DB_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 
-# Create directory for this backup
-CURRENT_BACKUP_DIR="$BACKUP_DIR/$TIMESTAMP-$TYPE"
-mkdir -p "$CURRENT_BACKUP_DIR"
+INCLUDE_DB="${BACKUP_INCLUDE_DB:-1}"
+INCLUDE_MEDIA="${BACKUP_INCLUDE_MEDIA:-1}"
+INCLUDE_ENV="${BACKUP_INCLUDE_ENV:-1}"
+SKIP_LOCK="${BACKUP_SKIP_LOCK:-0}"
+OUTPUT_PATH_FILE="${BACKUP_OUTPUT_PATH_FILE:-}"
 
-# 1. Backup Database
-echo "Backing up PostgreSQL database..."
-PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h db -U $POSTGRES_USER -d $POSTGRES_DB --clean --if-exists | gzip > "$CURRENT_BACKUP_DIR/db_dump.sql.gz"
+CURRENT_BACKUP_DIR=""
+WORK_DIR=""
+LOCK_ACQUIRED=0
 
-# 2. Backup MinIO Data
-echo "Backing up MinIO data..."
-# create tar of minio_data directory, excluding .minio.sys
-tar -czf "$CURRENT_BACKUP_DIR/minio_data.tar.gz" -C /minio_data --exclude='.minio.sys' .
+log() {
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
+}
 
-echo "[$(date)] Backup completed successfully at $CURRENT_BACKUP_DIR"
+cleanup() {
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
+        rm -rf "$WORK_DIR"
+    fi
+    if [ "$LOCK_ACQUIRED" = "1" ] && [ -d "$LOCK_DIR" ]; then
+        rmdir "$LOCK_DIR" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
 
-# Cleanup old backups
-# Keep daily backups for 7 days
-if [ "$TYPE" == "daily" ]; then
-    find "$BACKUP_DIR" -maxdepth 1 -name "*daily" -mtime +7 -exec rm -rf {} +
-fi
+require_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "Error: Required command '$1' is not available." >&2
+        exit 1
+    fi
+}
 
-# Keep weekly backups for 4 weeks
-if [ "$TYPE" == "weekly" ]; then
-    find "$BACKUP_DIR" -maxdepth 1 -name "*weekly" -mtime +28 -exec rm -rf {} +
-fi
+acquire_lock() {
+    if [ "$SKIP_LOCK" = "1" ]; then
+        return
+    fi
+
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "Error: Another backup/restore operation is currently running (lock: $LOCK_DIR)." >&2
+        exit 1
+    fi
+    LOCK_ACQUIRED=1
+}
+
+assert_numeric_nonnegative() {
+    local value="$1"
+    local name="$2"
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        echo "Error: $name must be a non-negative integer. Got '$value'." >&2
+        exit 1
+    fi
+}
+
+prune_backups() {
+    local backup_type="$1"
+    local retention_days="$2"
+
+    if [ "$retention_days" -eq 0 ]; then
+        return
+    fi
+
+    log "Pruning *-${backup_type} backups older than ${retention_days} days..."
+    find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name "*-${backup_type}" -mtime +"$retention_days" -exec rm -rf {} +
+}
+
+backup_db() {
+    local out_file="$WORK_DIR/postgres.dump"
+    log "Backing up PostgreSQL database '$DB_NAME' from $DB_HOST:$DB_PORT..."
+    PGPASSWORD="$DB_PASSWORD" pg_dump \
+        -h "$DB_HOST" \
+        -p "$DB_PORT" \
+        -U "$DB_USER" \
+        -d "$DB_NAME" \
+        --format=custom \
+        --no-owner \
+        --no-privileges \
+        --file "$out_file"
+}
+
+backup_media() {
+    local out_file="$WORK_DIR/minio_data.tar.gz"
+    if [ ! -d /minio_data ]; then
+        echo "Error: /minio_data directory not found in backup container." >&2
+        exit 1
+    fi
+    log "Backing up MinIO data volume..."
+    tar -czf "$out_file" -C /minio_data --exclude=".minio.sys" .
+}
+
+backup_env_snapshot() {
+    local out_file="$WORK_DIR/runtime_env.snapshot"
+    log "Capturing runtime environment snapshot..."
+    env | sort >"$out_file"
+}
+
+write_manifest() {
+    local created_at db_sha db_size media_sha media_size env_sha env_size
+    created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    db_sha="none"
+    db_size="0"
+    media_sha="none"
+    media_size="0"
+    env_sha="none"
+    env_size="0"
+
+    if [ "$INCLUDE_DB" = "1" ] && [ -f "$WORK_DIR/postgres.dump" ]; then
+        db_sha="$(sha256sum "$WORK_DIR/postgres.dump" | awk '{print $1}')"
+        db_size="$(wc -c <"$WORK_DIR/postgres.dump" | tr -d '[:space:]')"
+    fi
+    if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/minio_data.tar.gz" ]; then
+        media_sha="$(sha256sum "$WORK_DIR/minio_data.tar.gz" | awk '{print $1}')"
+        media_size="$(wc -c <"$WORK_DIR/minio_data.tar.gz" | tr -d '[:space:]')"
+    fi
+    if [ "$INCLUDE_ENV" = "1" ] && [ -f "$WORK_DIR/runtime_env.snapshot" ]; then
+        env_sha="$(sha256sum "$WORK_DIR/runtime_env.snapshot" | awk '{print $1}')"
+        env_size="$(wc -c <"$WORK_DIR/runtime_env.snapshot" | tr -d '[:space:]')"
+    fi
+
+    cat >"$WORK_DIR/backup_manifest.env" <<EOF
+BACKUP_VERSION=2
+TIMESTAMP=$TIMESTAMP
+TYPE=$TYPE
+CREATED_AT_UTC=$created_at
+HOSTNAME=$(hostname 2>/dev/null || echo unknown)
+DB_DUMP_FILE=postgres.dump
+DB_DUMP_SHA256=$db_sha
+DB_DUMP_SIZE_BYTES=$db_size
+MINIO_ARCHIVE_FILE=minio_data.tar.gz
+MINIO_ARCHIVE_SHA256=$media_sha
+MINIO_ARCHIVE_SIZE_BYTES=$media_size
+ENV_SNAPSHOT_FILE=runtime_env.snapshot
+ENV_SNAPSHOT_SHA256=$env_sha
+ENV_SNAPSHOT_SIZE_BYTES=$env_size
+POSTGRES_HOST=$DB_HOST
+POSTGRES_PORT=$DB_PORT
+POSTGRES_DB=$DB_NAME
+POSTGRES_USER=$DB_USER
+EOF
+
+    : >"$WORK_DIR/checksums.sha256"
+    if [ "$INCLUDE_DB" = "1" ] && [ -f "$WORK_DIR/postgres.dump" ]; then
+        (cd "$WORK_DIR" && sha256sum "postgres.dump" >>"checksums.sha256")
+    fi
+    if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/minio_data.tar.gz" ]; then
+        (cd "$WORK_DIR" && sha256sum "minio_data.tar.gz" >>"checksums.sha256")
+    fi
+    if [ "$INCLUDE_ENV" = "1" ] && [ -f "$WORK_DIR/runtime_env.snapshot" ]; then
+        (cd "$WORK_DIR" && sha256sum "runtime_env.snapshot" >>"checksums.sha256")
+    fi
+}
+
+main() {
+    require_command pg_dump
+    require_command tar
+    require_command sha256sum
+    require_command mktemp
+    require_command find
+
+    if [ "$INCLUDE_DB" != "1" ] && [ "$INCLUDE_MEDIA" != "1" ]; then
+        echo "Error: At least one of BACKUP_INCLUDE_DB or BACKUP_INCLUDE_MEDIA must be 1." >&2
+        exit 1
+    fi
+
+    mkdir -p "$BACKUP_DIR"
+    acquire_lock
+
+    log "Starting backup (type=$TYPE)..."
+    WORK_DIR="$(mktemp -d "$BACKUP_DIR/.tmp-backup-${TIMESTAMP}-${TYPE}.XXXXXX")"
+    CURRENT_BACKUP_DIR="$BACKUP_DIR/${TIMESTAMP}-${TYPE}"
+
+    if [ "$INCLUDE_DB" = "1" ]; then
+        backup_db
+    fi
+
+    if [ "$INCLUDE_MEDIA" = "1" ]; then
+        backup_media
+    fi
+    if [ "$INCLUDE_ENV" = "1" ]; then
+        backup_env_snapshot
+    fi
+
+    write_manifest
+
+    mv "$WORK_DIR" "$CURRENT_BACKUP_DIR"
+    WORK_DIR=""
+
+    log "Backup completed successfully at $CURRENT_BACKUP_DIR"
+    if [ -n "$OUTPUT_PATH_FILE" ]; then
+        printf '%s\n' "$CURRENT_BACKUP_DIR" >"$OUTPUT_PATH_FILE"
+    fi
+
+    local retention_daily retention_weekly retention_manual retention_pre_restore
+    retention_daily="${BACKUP_RETENTION_DAILY_DAYS:-7}"
+    retention_weekly="${BACKUP_RETENTION_WEEKLY_DAYS:-28}"
+    retention_manual="${BACKUP_RETENTION_MANUAL_DAYS:-0}"
+    retention_pre_restore="${BACKUP_RETENTION_PRE_RESTORE_DAYS:-14}"
+
+    assert_numeric_nonnegative "$retention_daily" "BACKUP_RETENTION_DAILY_DAYS"
+    assert_numeric_nonnegative "$retention_weekly" "BACKUP_RETENTION_WEEKLY_DAYS"
+    assert_numeric_nonnegative "$retention_manual" "BACKUP_RETENTION_MANUAL_DAYS"
+    assert_numeric_nonnegative "$retention_pre_restore" "BACKUP_RETENTION_PRE_RESTORE_DAYS"
+
+    case "$TYPE" in
+    daily)
+        prune_backups "daily" "$retention_daily"
+        ;;
+    weekly)
+        prune_backups "weekly" "$retention_weekly"
+        ;;
+    manual)
+        prune_backups "manual" "$retention_manual"
+        ;;
+    pre-restore)
+        prune_backups "pre-restore" "$retention_pre_restore"
+        ;;
+    esac
+}
+
+main "$@"

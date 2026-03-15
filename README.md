@@ -54,6 +54,11 @@ That's it! Your local instance should now be running:
 - **Frontend App:** http://localhost:5173
 - **Backend API:** http://localhost:8000
 
+## Backups and Disaster Recovery
+
+Automated backup/restore, portable export/import commands, and safety checks are documented in [`docs/backups.md`](docs/backups.md).
+Use `make verify-backup TIMESTAMP=...` before any restore.
+
 ## Contributing
 
 We love contributions! Whether you're fixing a bug, adding a feature, or just improving some documentation, we'd be thrilled to review your Pull Request. 
