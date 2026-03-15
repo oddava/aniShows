@@ -1,4 +1,3 @@
-import html
 import re
 
 import bleach
@@ -70,6 +69,16 @@ ALLOWED_BIO_ATTRIBUTES = {
     "mention": ["username"],
 }
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _decode_escaped_html_entities(value: str) -> str:
+    return (
+        value.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+    )
 
 class BadgeSerializer(ModelSerializer):
     """Serializer for a badge definition."""
@@ -359,7 +368,7 @@ class UserProfileUpdateSerializer(Serializer):
 
     def validate_bio(self, value):
         # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
-        normalized_value = html.unescape(value or "")
+        normalized_value = _decode_escaped_html_entities(value or "")
 
         # Keep markdown/allowed HTML intact while stripping unsafe tags/attributes.
         return bleach.clean(

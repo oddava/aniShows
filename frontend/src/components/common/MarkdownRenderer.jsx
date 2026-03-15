@@ -225,9 +225,28 @@ const markdownComponents = {
             {...props}
         />
     ),
-    p: ({ node, ...props }) => (
-        <p className="mb-4 last:mb-0 text-gray-200 leading-relaxed" {...props} />
-    ),
+    p: ({ node, children, ...props }) => {
+        const hasAlignedBlockChild = React.Children.toArray(children).some(
+            (child) =>
+                React.isValidElement(child) &&
+                ((typeof child.type === "string" && child.type.toLowerCase() === "alignedblock") ||
+                    Object.prototype.hasOwnProperty.call(child.props || {}, "align")),
+        );
+
+        if (hasAlignedBlockChild) {
+            return (
+                <div className="mb-4 last:mb-0 text-gray-200 leading-relaxed" {...props}>
+                    {children}
+                </div>
+            );
+        }
+
+        return (
+            <p className="mb-4 last:mb-0 text-gray-200 leading-relaxed" {...props}>
+                {children}
+            </p>
+        );
+    },
     ul: ({ node, ...props }) => (
         <ul
             className="list-disc list-outside ml-6 mb-4 text-gray-200 space-y-1"
@@ -351,10 +370,12 @@ const markdownComponents = {
 
 const decodeHtmlEntities = (text = "") => {
     if (!text || typeof text !== "string") return "";
-    if (!/&(?:lt|gt|quot|#39|amp);/i.test(text)) return text;
-    const textarea = document.createElement("textarea");
-    textarea.innerHTML = text;
-    return textarea.value;
+    return text
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&amp;/gi, "&");
 };
 
 const MarkdownRenderer = ({ content, className = "" }) => {

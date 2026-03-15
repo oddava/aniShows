@@ -51,9 +51,12 @@ const PlatformIcon = ({ platform }) => {
 
 const decodeHtmlEntities = (text) => {
     if (!text) return '';
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = text;
-    return textarea.value;
+    return String(text)
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/&amp;/gi, '&');
 };
 
 export default function SocialLinks({ links = [] }) {

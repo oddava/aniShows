@@ -1,4 +1,3 @@
-import html
 import re
 from dataclasses import dataclass
 
@@ -21,6 +20,16 @@ except ImportError:
 User = get_user_model()
 DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _decode_escaped_html_entities(value: str) -> str:
+    return (
+        value.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+    )
 
 
 @dataclass(slots=True)
@@ -147,7 +156,7 @@ def _build_profile_data(user, stats_data):
 
 def _normalize_bio(value):
     if isinstance(value, str):
-        return html.unescape(value)
+        return _decode_escaped_html_entities(value)
     return value
 
 

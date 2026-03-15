@@ -1,4 +1,3 @@
-import html
 import re
 from dataclasses import dataclass
 
@@ -14,6 +13,16 @@ from apps.users.services.user_queryset import get_annotated_user_queryset
 User = get_user_model()
 DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _decode_escaped_html_entities(value: str) -> str:
+    return (
+        value.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+    )
 
 
 class PublicProfileError(Exception):
@@ -142,7 +151,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
 
 def _normalize_bio(value):
     if isinstance(value, str):
-        return html.unescape(value)
+        return _decode_escaped_html_entities(value)
     return value
 
 

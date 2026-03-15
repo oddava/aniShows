@@ -1,10 +1,19 @@
 """Serializer mixins for common functionality."""
 
-import html
 import re
 from urllib.parse import urlparse
 
 from imagekit.cachefiles import ImageCacheFile
+
+
+def _decode_escaped_html_entities(value: str) -> str:
+    return (
+        value.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+        .replace("&amp;", "&")
+    )
 
 
 class ImageUrlMixin:
@@ -180,7 +189,7 @@ class UserProfileMixin:
         profile = getattr(obj, "userprofile", None)
         if not profile or profile.bio is None:
             return None
-        return html.unescape(profile.bio)
+        return _decode_escaped_html_entities(profile.bio)
 
     def get_is_private(self, obj):
         profile = getattr(obj, "userprofile", None)
