@@ -88,9 +88,20 @@ class MetadataEnrichmentTask(BaseTask):
             try:
                 anime = await sync_to_async(Anime.objects.get)(id=anime_id)
 
-                results = await service.search_anime(anime.title)
-                if results:
-                    await service.update_anime_manual(anime, results[0])
+                media = await self._resolve_media_for_anime(service, anime)
+                if media:
+                    updated = await service.update_anime_manual(anime, media)
+                    if not updated:
+                        logger.warning(
+                            f"Skipped metadata enrichment for {anime.title} due to identity mismatch"
+                        )
+                        return {
+                            "mode": "single",
+                            "anime_id": anime_id,
+                            "status": "skipped_conflict",
+                            "title": anime.title,
+                        }
+
                     logger.info(f"Metadata enriched for {anime.title}")
                     return {
                         "mode": "single",
@@ -117,6 +128,41 @@ class MetadataEnrichmentTask(BaseTask):
             except Exception as e:
                 logger.error(f"Error enriching metadata for {anime_id}: {e}")
                 raise self.retry(exc=e, countdown=60)
+
+    async def _resolve_media_for_anime(
+        self, service: AniListService, anime: Anime
+    ) -> dict | None:
+        """Resolve the best AniList media payload for a local Anime row."""
+        if anime.anilist_id:
+            item = await service.get_anime_by_id(anime.anilist_id)
+            if item:
+                return item
+
+        if anime.mal_id:
+            item = await service.search_by_mal_id(anime.mal_id)
+            if item:
+                return item
+
+        results = await service.search_anime(anime.title)
+        if not results:
+            return None
+
+        expected_titles = {anime.title.casefold()}
+        if anime.title_jp:
+            expected_titles.add(anime.title_jp.casefold())
+
+        for candidate in results:
+            titles = candidate.get("title", {})
+            candidate_titles = {
+                (titles.get("english") or "").casefold(),
+                (titles.get("romaji") or "").casefold(),
+                (titles.get("native") or "").casefold(),
+            }
+            if expected_titles.intersection(candidate_titles):
+                return candidate
+
+        # Fallback to best-effort first result when exact title matching fails.
+        return results[0]
 
     async def _enrich_batch(
         self,
@@ -156,6 +202,7 @@ class MetadataEnrichmentTask(BaseTask):
             updated_count = 0
             error_count = 0
             no_results_count = 0
+            skipped_conflicts_count = 0
 
             for i, anime in enumerate(anime_list):
                 try:
@@ -167,14 +214,20 @@ class MetadataEnrichmentTask(BaseTask):
                         continue
 
                     # Search and update
-                    results = await service.search_anime(anime.title)
-                    if results:
-                        await service.update_anime_manual(anime, results[0])
-                        updated_count += 1
+                    media = await self._resolve_media_for_anime(service, anime)
+                    if media:
+                        updated = await service.update_anime_manual(anime, media)
+                        if updated:
+                            updated_count += 1
 
-                        # Mark as updated
-                        if service.call_cache and anime.anilist_id:
-                            service.call_cache.mark_updated(anime.anilist_id)
+                            # Mark as updated
+                            if service.call_cache and anime.anilist_id:
+                                service.call_cache.mark_updated(anime.anilist_id)
+                        else:
+                            skipped_conflicts_count += 1
+                            logger.warning(
+                                f"Skipped update for {anime.title} due to identity mismatch"
+                            )
                     else:
                         no_results_count += 1
                         logger.warning(f"No results found for {anime.title}")
@@ -194,6 +247,7 @@ class MetadataEnrichmentTask(BaseTask):
                 "total": total,
                 "updated": updated_count,
                 "no_results": no_results_count,
+                "skipped_conflicts": skipped_conflicts_count,
                 "errors": error_count,
             }
 

@@ -7,6 +7,7 @@ from typing import Literal
 import httpx
 from asgiref.sync import async_to_sync, sync_to_async
 from django.core.files.base import ContentFile
+from django.db import IntegrityError
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -505,6 +506,13 @@ class AniListService:
         Updates fields but PRESERVES the existing slug to avoid integrity errors/identity shifts.
         """
         try:
+            item = await self._resolve_manual_update_item(anime, item)
+            if not item:
+                logger.warning(
+                    f"Skipped manual update for Anime ID {anime.id}: could not resolve matching AniList media"
+                )
+                return False
+
             title_romaji = item.get("title", {}).get("romaji", "")
             title_english = item.get("title", {}).get("english", "")
             title_native = item.get("title", {}).get("native", "")
@@ -531,9 +539,100 @@ class AniListService:
             logger.error(f"Error manual update anime {anime.id}: {e}")
             raise e
 
+    async def _resolve_manual_update_item(self, anime: Anime, item: dict) -> dict | None:
+        """Resolve identity mismatches before applying a manual update.
+
+        Metadata searches can return ambiguous title matches. This prevents writes that
+        would move an Anime row onto a different AniList/MAL identity.
+        """
+        incoming_anilist_id = item.get("id")
+        incoming_mal_id = item.get("idMal")
+
+        # Strongest identity: AniList ID
+        if anime.anilist_id and incoming_anilist_id and anime.anilist_id != incoming_anilist_id:
+            logger.warning(
+                f"AniList mismatch for Anime ID {anime.id}: expected {anime.anilist_id}, got {incoming_anilist_id}. Re-fetching canonical media."
+            )
+            canonical_item = await self.get_anime_by_id(anime.anilist_id)
+            return canonical_item
+
+        # Secondary identity: MAL ID (only if AniList ID is unavailable)
+        if (
+            not anime.anilist_id
+            and anime.mal_id
+            and incoming_mal_id
+            and anime.mal_id != incoming_mal_id
+        ):
+            logger.warning(
+                f"MAL mismatch for Anime ID {anime.id}: expected {anime.mal_id}, got {incoming_mal_id}. Re-fetching canonical media."
+            )
+            canonical_item = await self.search_by_mal_id(anime.mal_id)
+            return canonical_item
+
+        # Don't attach an identity already owned by another row.
+        if incoming_anilist_id and not anime.anilist_id:
+            existing = await sync_to_async(
+                lambda: Anime.objects.filter(anilist_id=incoming_anilist_id)
+                .exclude(id=anime.id)
+                .values("id", "title")
+                .first()
+            )()
+            if existing:
+                logger.warning(
+                    f"Skipped manual update for Anime ID {anime.id}: incoming AniList ID {incoming_anilist_id} belongs to Anime ID {existing['id']} ({existing['title']})."
+                )
+                return None
+
+        if incoming_mal_id and not anime.mal_id:
+            existing = await sync_to_async(
+                lambda: Anime.objects.filter(mal_id=incoming_mal_id)
+                .exclude(id=anime.id)
+                .values("id", "title")
+                .first()
+            )()
+            if existing:
+                logger.warning(
+                    f"Skipped manual update for Anime ID {anime.id}: incoming MAL ID {incoming_mal_id} belongs to Anime ID {existing['id']} ({existing['title']})."
+                )
+                return None
+
+        return item
+
+    def _lookup_existing_anime(
+        self,
+        *,
+        anilist_id: int | None = None,
+        mal_id: int | None = None,
+        slug: str | None = None,
+        title: str | None = None,
+    ) -> Anime | None:
+        if anilist_id:
+            anime = Anime.objects.filter(anilist_id=anilist_id).first()
+            if anime:
+                return anime
+
+        if mal_id:
+            anime = Anime.objects.filter(mal_id=mal_id).first()
+            if anime:
+                return anime
+
+        if slug:
+            anime = Anime.objects.filter(slug=slug).first()
+            if anime:
+                return anime
+
+        if title:
+            anime = Anime.objects.filter(title=title).first()
+            if anime:
+                return anime
+
+        return None
+
     @sync_to_async
     def _get_or_create_anime(self, slug, anime_data_dict):
         anilist_id = anime_data_dict.get("anilist_id")
+        mal_id = anime_data_dict.get("mal_id")
+        title = anime_data_dict.get("title")
 
         if anilist_id:
             try:
@@ -542,13 +641,72 @@ class AniListService:
             except Anime.DoesNotExist:
                 pass
 
-        return Anime.objects.get_or_create(slug=slug, defaults=anime_data_dict)
+        if mal_id:
+            try:
+                anime = Anime.objects.get(mal_id=mal_id)
+                return anime, False
+            except Anime.DoesNotExist:
+                pass
+
+        if title:
+            try:
+                anime = Anime.objects.get(title=title)
+                return anime, False
+            except Anime.DoesNotExist:
+                pass
+
+        try:
+            return Anime.objects.get_or_create(slug=slug, defaults=anime_data_dict)
+        except IntegrityError as exc:
+            existing = self._lookup_existing_anime(
+                anilist_id=anilist_id,
+                mal_id=mal_id,
+                slug=slug,
+                title=title,
+            )
+            if existing:
+                logger.warning(
+                    f"Recovered from create race for slug '{slug}' (AniList ID: {anilist_id}): {exc}"
+                )
+                return existing, False
+            raise
 
     @sync_to_async
     def _update_anime(self, anime, anime_data_dict):
-        for key, value in anime_data_dict.items():
+        anime_data = dict(anime_data_dict)
+        original_values = {field: getattr(anime, field, None) for field in anime_data}
+
+        # Preemptively avoid unique-constraint collisions.
+        for unique_field in ("title", "anilist_id", "mal_id", "slug"):
+            if unique_field not in anime_data:
+                continue
+            value = anime_data.get(unique_field)
+            if value in (None, ""):
+                continue
+
+            conflict_exists = Anime.objects.filter(**{unique_field: value}).exclude(
+                id=anime.id
+            ).exists()
+            if conflict_exists:
+                logger.warning(
+                    f"Skipping conflicting {unique_field} '{value}' while updating Anime ID {anime.id}"
+                )
+                anime_data[unique_field] = original_values.get(unique_field)
+
+        for key, value in anime_data.items():
             setattr(anime, key, value)
-        anime.save()
+
+        try:
+            anime.save()
+        except IntegrityError as exc:
+            # Last-resort safety: keep identity fields stable and persist remaining updates.
+            for unique_field in ("title", "anilist_id", "mal_id", "slug"):
+                if unique_field in original_values:
+                    setattr(anime, unique_field, original_values[unique_field])
+            anime.save()
+            logger.warning(
+                f"Recovered from integrity conflict while updating Anime ID {anime.id}: {exc}"
+            )
 
     def _prepare_anime_data(self, item, title, title_native, slug):
         format_map = {
@@ -1057,6 +1215,17 @@ class AniListService:
         except Anime.DoesNotExist:
             pass
 
+        # Try to find by title to avoid duplicate-key failures on unique title constraint.
+        try:
+            anime = await sync_to_async(Anime.objects.get)(title=title)
+            logger.info(
+                f"Found anime by title '{title}': {anime.title}. Adding AniList ID {anilist_id} and MAL ID {mal_id}"
+            )
+            await self._update_anime_async(anime, item, title, title_native, anime.slug)
+            return anime
+        except Anime.DoesNotExist:
+            pass
+
         # Check if slug is taken by a DIFFERENT anime (different title)
         # If so, generate a unique slug
         final_slug = base_slug
@@ -1098,6 +1267,23 @@ class AniListService:
         try:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
+        except IntegrityError as e:
+            recovered = await sync_to_async(self._lookup_existing_anime)(
+                anilist_id=anilist_id,
+                mal_id=mal_id,
+                slug=final_slug,
+                title=title,
+            )
+            if recovered:
+                logger.warning(
+                    f"Recovered from create integrity conflict for '{title}' (AniList ID: {anilist_id}): {e}"
+                )
+                await self._update_anime_async(
+                    recovered, item, title, title_native, recovered.slug
+                )
+                return recovered
+            logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
+            raise
         except Exception as e:
             logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
             raise
@@ -1132,10 +1318,7 @@ class AniListService:
                     except Anime.DoesNotExist:
                         rel["slug"] = None
 
-        for key, value in anime_data.items():
-            setattr(anime, key, value)
-
-        await sync_to_async(anime.save)()
+        await self._update_anime(anime, anime_data)
         await self._handle_relationships_async(anime, item)
         await self._download_and_save_images(anime, item)
 
