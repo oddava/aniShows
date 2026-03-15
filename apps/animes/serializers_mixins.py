@@ -1,5 +1,6 @@
 """Serializer mixins for common functionality."""
 
+import re
 from urllib.parse import urlparse
 
 from imagekit.cachefiles import ImageCacheFile
@@ -19,7 +20,13 @@ class ImageUrlMixin:
 
     def _build_url(self, field):
         """Build absolute URL from an image field using request context."""
-        url = field.url
+        try:
+            url = field.url
+        except Exception:
+            return None
+
+        if not url:
+            return None
 
         # Normalize internal storage host URLs (MinIO/Docker localhost) to
         # app-relative media paths so clients can fetch via public proxy.
@@ -32,6 +39,15 @@ class ImageUrlMixin:
                     url = parsed.path[media_idx:]
                 else:
                     url = parsed.path
+
+        # Normalize path-style S3/MinIO URLs (/bucket/media/...) to /media/...
+        if isinstance(url, str) and re.match(r"^/[^/]+/media/", url):
+            url = re.sub(r"^/[^/]+/media/", "/media/", url, count=1)
+
+        # Keep media URLs origin-agnostic to avoid localhost/mixed-content issues
+        # when requests pass through reverse proxies or alternate hostnames.
+        if isinstance(url, str) and url.startswith("/media/"):
+            return url
 
         # S3 storage returns full absolute URLs already — don't double-prefix
         if url and url.startswith(("http://", "https://")):
@@ -63,7 +79,9 @@ class ImageUrlMixin:
 
         if image_field:
             try:
-                return self._build_url(image_field)
+                image_url = self._build_url(image_field)
+                if image_url:
+                    return image_url
             except Exception:
                 pass
 
@@ -93,7 +111,9 @@ class ImageUrlMixin:
         thumbnail_field = getattr(obj, thumbnail_field_name, None)
         if thumbnail_field:
             try:
-                return self._ensure_thumbnail(thumbnail_field)
+                thumbnail_url = self._ensure_thumbnail(thumbnail_field)
+                if thumbnail_url:
+                    return thumbnail_url
             except Exception:
                 pass
 
@@ -101,7 +121,9 @@ class ImageUrlMixin:
         original_field = getattr(obj, original_field_name, None)
         if original_field:
             try:
-                return self._build_url(original_field)
+                original_url = self._build_url(original_field)
+                if original_url:
+                    return original_url
             except Exception:
                 pass
 

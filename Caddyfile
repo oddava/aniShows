@@ -48,6 +48,9 @@
             # Strip CORS headers from MinIO to avoid duplicates
             header_down -Access-Control-Allow-Origin
             header_down -Access-Control-Allow-Methods
+            # Strip upstream content type so extension-based header rules
+            # below set a single canonical Content-Type.
+            header_down -Content-Type
         }
         header {
             Access-Control-Allow-Origin "*"

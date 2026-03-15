@@ -1,12 +1,14 @@
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.cache import cache
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
-from rest_framework.test import APITestCase
+from rest_framework.test import APIRequestFactory, APITestCase
 
 from apps.animes.models import Anime
+from apps.animes.serializers_mixins import ImageUrlMixin
 from apps.animes.services.anilist import AniListService
 
 
@@ -120,3 +122,116 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
             refreshed_cached.get("cover_image_large"),
             "https://img.anilist.co/cover-stale-fix.jpg",
         )
+
+    @override_settings(ALLOWED_HOSTS=["testserver", "localhost", "ani.example"])
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_retrieve_refreshes_cached_payload_with_internal_media_host(self, _mock_delay):
+        anime = Anime.objects.create(
+            title="Cached Internal Host Anime",
+            slug="cached-internal-host-anime",
+            synopsis="desc",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.anilist.co/cover-internal-host-fix.jpg",
+            banner_image_external_url="https://img.anilist.co/banner-internal-host-fix.jpg",
+        )
+
+        cache_key = f"anime_detail_base:{anime.slug}"
+        cache.set(
+            cache_key,
+            {
+                "id": anime.id,
+                "slug": anime.slug,
+                "cover_image": "http://localhost/media/anime/covers/stale.jpg",
+                "cover_image_small": "http://localhost/media/CACHE/images/stale-small.webp",
+                "cover_image_medium": "http://localhost/media/CACHE/images/stale-medium.webp",
+                "cover_image_large": "http://localhost/media/CACHE/images/stale-large.webp",
+                "banner_image": "http://localhost/media/anime/banners/stale.jpg",
+                "banner_image_small": "http://localhost/media/CACHE/images/stale-banner-small.webp",
+                "banner_image_medium": "http://localhost/media/CACHE/images/stale-banner-medium.webp",
+                "banner_image_large": "http://localhost/media/CACHE/images/stale-banner-large.webp",
+            },
+            timeout=3600,
+        )
+
+        response = self.client.get(
+            reverse("anime-detail", args=[anime.slug]),
+            HTTP_HOST="ani.example",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data.get("cover_image"),
+            "https://img.anilist.co/cover-internal-host-fix.jpg",
+        )
+        self.assertEqual(
+            response.data.get("banner_image"),
+            "https://img.anilist.co/banner-internal-host-fix.jpg",
+        )
+
+        refreshed_cached = cache.get(cache_key)
+        self.assertEqual(
+            refreshed_cached.get("cover_image"),
+            "https://img.anilist.co/cover-internal-host-fix.jpg",
+        )
+
+
+class DummyImageSerializer(ImageUrlMixin):
+    def __init__(self, request=None):
+        self.context = {"request": request} if request is not None else {}
+
+
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost", "ani.example"])
+class ImageUrlMixinFallbackTests(SimpleTestCase):
+    def setUp(self):
+        self.request = APIRequestFactory().get("/", HTTP_HOST="ani.example")
+        self.serializer = DummyImageSerializer(request=self.request)
+
+    def test_build_url_rewrites_localhost_media_to_relative_path(self):
+        field = SimpleNamespace(url="http://localhost/media/anime/covers/test.jpg")
+
+        resolved = self.serializer._build_url(field)
+
+        self.assertEqual(resolved, "/media/anime/covers/test.jpg")
+
+    def test_thumbnail_empty_url_falls_back_to_original_image(self):
+        obj = SimpleNamespace(
+            thumb=SimpleNamespace(url=""),
+            original=SimpleNamespace(url="http://localhost/media/anime/covers/test.jpg"),
+            fallback="https://img.anilist.co/fallback.jpg",
+        )
+
+        with patch.object(self.serializer, "_ensure_thumbnail", return_value=""):
+            resolved = self.serializer.get_image_url_with_thumbnail(
+                obj,
+                "thumb",
+                "original",
+                "fallback",
+            )
+
+        self.assertEqual(resolved, "/media/anime/covers/test.jpg")
+
+
+class AnimeListImageFieldFallbackTests(APITestCase):
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_list_uses_external_cover_and_banner_when_local_images_missing(self, _mock_delay):
+        anime = Anime.objects.create(
+            title="External Image Fallback Anime",
+            slug="external-image-fallback-anime",
+            synopsis="desc",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.anilist.co/external-cover.jpg",
+            banner_image_external_url="https://img.anilist.co/external-banner.jpg",
+        )
+
+        response = self.client.get(reverse("anime-list"), {"sort": "title"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 1)
+
+        payload = response.data["results"][0]
+        self.assertEqual(payload["id"], anime.id)
+        self.assertEqual(payload["cover_image"], "https://img.anilist.co/external-cover.jpg")
+        self.assertEqual(payload["cover_image_small"], "https://img.anilist.co/external-cover.jpg")
+        self.assertEqual(payload["banner_image"], "https://img.anilist.co/external-banner.jpg")
+        self.assertEqual(payload["banner_image_small"], "https://img.anilist.co/external-banner.jpg")

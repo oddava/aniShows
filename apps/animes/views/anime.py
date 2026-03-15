@@ -1,6 +1,7 @@
 import hashlib
 import json
 from datetime import date
+from urllib.parse import urlparse
 
 from django.core.cache import cache
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
@@ -69,6 +70,17 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         "trending_rank",
         "member_count",
         "site_rank",
+    )
+    _INTERNAL_MEDIA_HOSTS = {"localhost", "127.0.0.1", "minio", "web"}
+    _MEDIA_URL_FIELDS = (
+        "cover_image",
+        "cover_image_small",
+        "cover_image_medium",
+        "cover_image_large",
+        "banner_image",
+        "banner_image_small",
+        "banner_image_medium",
+        "banner_image_large",
     )
 
     def get_queryset(self):
@@ -270,7 +282,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         if cached_base:
             data = cached_base.copy()
             # Self-heal stale cache entries that were stored before image refs existed.
-            if not self._has_cover_media(data):
+            if not self._has_cover_media(data) or self._item_has_internal_media_urls(
+                data, request
+            ):
                 needs_refresh = True
                 cache.delete(base_cache_key)
 
@@ -333,6 +347,34 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             or data.get("cover_image")
         )
 
+    @classmethod
+    def _item_has_internal_media_urls(cls, item: dict, request) -> bool:
+        """Detect stale cached payloads that still point at internal media hosts."""
+        if not isinstance(item, dict):
+            return False
+
+        for field in cls._MEDIA_URL_FIELDS:
+            value = item.get(field)
+            if not isinstance(value, str) or not value.startswith(("http://", "https://")):
+                continue
+            host = (urlparse(value).hostname or "").lower()
+            if host in cls._INTERNAL_MEDIA_HOSTS:
+                return True
+        return False
+
+    @classmethod
+    def _payload_has_internal_media_urls(cls, payload, request) -> bool:
+        if isinstance(payload, list):
+            return any(cls._item_has_internal_media_urls(item, request) for item in payload)
+
+        if isinstance(payload, dict):
+            results = payload.get("results")
+            if isinstance(results, list):
+                return any(cls._item_has_internal_media_urls(item, request) for item in results)
+            return cls._item_has_internal_media_urls(payload, request)
+
+        return False
+
     def list(self, request, *args, **kwargs):
         """Override to add caching for anime list endpoint"""
         if request.user.is_authenticated:
@@ -344,8 +386,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         cache_key = f"anime_list:{cache_key_hash}"
 
         cached_data = cache.get(cache_key)
-        if cached_data:
+        if cached_data and not self._payload_has_internal_media_urls(cached_data, request):
             return Response(cached_data)
+        if cached_data:
+            cache.delete(cache_key)
 
         response = super().list(request, *args, **kwargs)
 
@@ -356,6 +400,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def _get_cached_shelf(self, request, cache_key, queryset_fn):
         """Shared helper for trending/top_rated shelves."""
         data = cache.get(cache_key)
+
+        if data and self._payload_has_internal_media_urls(data, request):
+            cache.delete(cache_key)
+            data = None
 
         if not data:
             queryset = queryset_fn(

@@ -24,6 +24,7 @@ class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     studio_name = CharField(source="studio.name", read_only=True, default=None)
     is_favorite = SerializerMethodField()
     user_list_status = SerializerMethodField()
+    cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
 
@@ -55,6 +56,9 @@ class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             obj, "cover_image_small", "cover_image", "cover_image_external_url"
         )
 
+    def get_cover_image(self, obj):
+        return self.get_image_url(obj, "cover_image", "cover_image_external_url")
+
     def get_cover_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(
             obj, "cover_image_medium", "cover_image", "cover_image_external_url"
@@ -68,8 +72,10 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     studio_name = CharField(source="studio.name", read_only=True, default=None)
     is_favorite = SerializerMethodField()
     user_list_status = SerializerMethodField()
+    cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
+    banner_image = SerializerMethodField()
     banner_image_small = SerializerMethodField()
     banner_image_medium = SerializerMethodField()
 
@@ -105,10 +111,16 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             obj, "cover_image_small", "cover_image", "cover_image_external_url"
         )
 
+    def get_cover_image(self, obj):
+        return self.get_image_url(obj, "cover_image", "cover_image_external_url")
+
     def get_cover_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(
             obj, "cover_image_medium", "cover_image", "cover_image_external_url"
         )
+
+    def get_banner_image(self, obj):
+        return self.get_image_url(obj, "banner_image", "banner_image_external_url")
 
     def get_banner_image_small(self, obj):
         return self.get_image_url_with_thumbnail(
@@ -139,9 +151,11 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     review_count = IntegerField(read_only=True)
     avg_rating = DecimalField(max_digits=3, decimal_places=1, read_only=True)
     status_distribution = SerializerMethodField()
+    cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
     cover_image_large = SerializerMethodField()
+    banner_image = SerializerMethodField()
     banner_image_small = SerializerMethodField()
     banner_image_medium = SerializerMethodField()
     banner_image_large = SerializerMethodField()
@@ -199,6 +213,9 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             obj, "cover_image_small", "cover_image", "cover_image_external_url"
         )
 
+    def get_cover_image(self, obj):
+        return self.get_image_url(obj, "cover_image", "cover_image_external_url")
+
     def get_cover_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(
             obj, "cover_image_medium", "cover_image", "cover_image_external_url"
@@ -208,6 +225,9 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         return self.get_image_url_with_thumbnail(
             obj, "cover_image_large", "cover_image", "cover_image_external_url"
         )
+
+    def get_banner_image(self, obj):
+        return self.get_image_url(obj, "banner_image", "banner_image_external_url")
 
     def get_banner_image_small(self, obj):
         return self.get_image_url_with_thumbnail(
@@ -255,6 +275,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
     """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""
 
+    cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
 
     class Meta:
@@ -273,3 +294,6 @@ class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
         return self.get_image_url_with_thumbnail(
             obj, "cover_image_small", "cover_image", "cover_image_external_url"
         )
+
+    def get_cover_image(self, obj):
+        return self.get_image_url(obj, "cover_image", "cover_image_external_url")

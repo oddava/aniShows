@@ -139,8 +139,15 @@ export default defineConfig(({ mode }) => ({
         ws: true,
       },
       '/media': {
-        target: 'http://web:8000',
+        // Media files are served by Caddy/MinIO, not Django.
+        // Proxying to web:8000 causes 404 for /media/* in dev.
+        target: 'http://caddy:80',
         changeOrigin: true,
+        // Caddy virtual host is bound to localhost in this setup.
+        // Force host header so /media requests always hit the correct site block.
+        headers: {
+          Host: 'localhost',
+        },
       },
       '/django-admin': {
         target: 'http://web:8000',
