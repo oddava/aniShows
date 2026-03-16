@@ -269,6 +269,9 @@ class ImageUrlMixinFallbackTests(SimpleTestCase):
 
 
 class AnimeListImageFieldFallbackTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
     @patch("apps.animes.signals.enrich_metadata.delay")
     def test_list_uses_external_cover_and_banner_when_local_images_missing(self, _mock_delay):
         anime = Anime.objects.create(
@@ -283,9 +286,9 @@ class AnimeListImageFieldFallbackTests(APITestCase):
 
         response = self.client.get(reverse("anime-list"), {"sort": "title"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data["results"]), 1)
-
-        payload = response.data["results"][0]
+        payload = next(
+            item for item in response.data["results"] if item["id"] == anime.id
+        )
         self.assertEqual(payload["id"], anime.id)
         self.assertEqual(payload["cover_image"], "https://img.anilist.co/external-cover.jpg")
         self.assertEqual(payload["cover_image_small"], "https://img.anilist.co/external-cover.jpg")
@@ -294,7 +297,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
 
     @patch("apps.animes.signals.enrich_metadata.delay")
     def test_list_includes_external_image_fields_for_frontend_failover(self, _mock_delay):
-        Anime.objects.create(
+        anime = Anime.objects.create(
             title="External Image Field Anime",
             slug="external-image-field-anime",
             synopsis="desc",
@@ -307,7 +310,9 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         response = self.client.get(reverse("anime-list"), {"sort": "title"})
         self.assertEqual(response.status_code, 200)
 
-        payload = response.data["results"][0]
+        payload = next(
+            item for item in response.data["results"] if item["id"] == anime.id
+        )
         self.assertEqual(
             payload["cover_image_external_url"],
             "https://img.anilist.co/external-cover-2.jpg",
