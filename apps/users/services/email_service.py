@@ -1,6 +1,7 @@
 import httpx
 from celery import shared_task
 from django.conf import settings
+from django.core.mail import send_mail
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -72,7 +73,31 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
     try:
         from_email = settings.DEFAULT_FROM_EMAIL
         resend_api_key = settings.RESEND_API_KEY
+        email_backend = getattr(settings, "EMAIL_BACKEND", "")
         resend_base_url = settings.RESEND_API_URL.rstrip("/")
+
+        # In tests/local dev, respect Django email backend when Resend isn't configured.
+        local_backends = (
+            "django.core.mail.backends.locmem.EmailBackend",
+            "django.core.mail.backends.console.EmailBackend",
+            "django.core.mail.backends.filebased.EmailBackend",
+        )
+        if email_backend in local_backends:
+            sent_count = send_mail(
+                subject=subject,
+                message=message,
+                from_email=from_email,
+                recipient_list=recipient_list,
+                html_message=html_message,
+                fail_silently=False,
+            )
+            logger.info(
+                "Email sent via Django backend %s to %s (count=%s)",
+                email_backend,
+                recipient_list,
+                sent_count,
+            )
+            return {"backend": email_backend, "sent_count": sent_count, "to": recipient_list}
 
         if not resend_api_key:
             raise ValueError("RESEND_API_KEY is not configured")
