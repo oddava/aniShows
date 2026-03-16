@@ -769,7 +769,10 @@ export default function Navbar() {
 
             {/* Mobile Bottom Navigation Island */}
             {showMobileIsland && (
-                <div className="md:hidden fixed bottom-3 left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm">
+                <div
+                    className="md:hidden fixed bottom-3 left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm select-none"
+                    style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+                >
                     <div className="rounded-[1.6rem] border border-white/10 bg-black/70 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl px-1.5 py-1.5">
                     <div className="grid grid-cols-5 gap-1">
                         <Link
