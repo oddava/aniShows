@@ -243,7 +243,7 @@ const ForumThreadList = () => {
                     {isAuthenticated && (
                         <Link
                             to={`/forums/category/${slug}/create`}
-                            className="btn-primary flex items-center gap-2 py-2.5 px-5 font-bold text-sm rounded-xl shrink-0"
+                            className="flex items-center gap-2 py-2.5 px-5 font-bold text-sm rounded-xl shrink-0 bg-dark-100 border border-gray-800 text-gray-200 hover:border-accent transition-colors"
                         >
                             <Plus size={18} /> New Thread
                         </Link>
