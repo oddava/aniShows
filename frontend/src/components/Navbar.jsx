@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { animeApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
-import ThemeSwitcher from './ThemeSwitcher';
 import logger, { isRequestAbortError } from '../utils/logger';
 
 import Fuse from 'fuse.js';
@@ -148,9 +147,6 @@ export default function Navbar() {
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
 
-    // Hide search on browse and anime detail pages (they have their own search/filters)
-    const hideSearch = location.pathname.startsWith('/browse') || location.pathname.startsWith('/anime/');
-
     // Mock notifications (replace with real data later)
     const [notifications] = useState([
         { id: 1, type: 'episode', message: 'New episode of Attack on Titan is out!', time: '2 hours ago', read: false },
@@ -253,7 +249,7 @@ export default function Navbar() {
                     return;
                 }
                 e.preventDefault();
-                if (!hideSearch && searchInputRef.current) {
+                if (searchInputRef.current) {
                     searchInputRef.current.focus();
                     setShowSuggestions(true);
                 }
@@ -292,7 +288,7 @@ export default function Navbar() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [hideSearch, showSuggestions, searchSuggestions, selectedIndex, handleSuggestionClick, navigate]);
+    }, [showSuggestions, searchSuggestions, selectedIndex, handleSuggestionClick, navigate]);
 
     // Enhanced search with fuzzy matching - use ref to avoid dependency cycle
     const fuzzySearchRef = useRef(fuzzySearch);
@@ -453,12 +449,7 @@ export default function Navbar() {
 
                         {/* Search - Always Extended with Fuzzy Search */}
                         <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
-                            <div
-                                className={`relative w-full max-w-sm lg:max-w-xl transition-opacity ${hideSearch
-                                    ? 'opacity-0 pointer-events-none'
-                                    : 'opacity-100'
-                                    }`}
-                            >
+                            <div className="relative w-full max-w-sm lg:max-w-xl">
                                 <form onSubmit={handleSearch} className="relative">
                                     <input
                                         ref={searchInputRef}
@@ -586,7 +577,6 @@ export default function Navbar() {
 
                     {/* Right Section: Notifications + Auth */}
                     <div className="hidden md:flex items-center gap-2">
-                        <ThemeSwitcher />
                         {/* Notifications */}
                         {isAuthenticated && !authLoading && <NotificationBell />}
 
@@ -760,10 +750,6 @@ export default function Navbar() {
 
                         {/* Mobile Nav Links */}
                         <div className="space-y-1">
-                            <div className="px-3 py-2 flex justify-between items-center border-b border-gray-800 mb-2">
-                                <span className="text-sm text-gray-400 font-medium">Theme</span>
-                                <ThemeSwitcher />
-                            </div>
                             <Link
                                 to="/browse"
                                 className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/browse'
