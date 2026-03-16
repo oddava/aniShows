@@ -37,6 +37,10 @@ const pageSEO = {
     title: 'Settings | AniShows - Manage Your Account',
     description: 'Manage your AniShows account settings, preferences, and profile information.',
   },
+  notifications: {
+    title: 'Notifications | AniShows',
+    description: 'Stay updated with episode alerts, follows, replies, and platform activity.',
+  },
   terms: {
     title: 'Terms of Service | AniShows',
     description: 'Read the terms and conditions for using AniShows anime tracking platform.',

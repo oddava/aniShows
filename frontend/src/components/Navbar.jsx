@@ -1,9 +1,10 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { Search, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare, Settings } from 'lucide-react';
+import { Search, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare, Settings, Bell, House } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { animeApi } from '../api/client';
+import { animeApi, notificationApi } from '../api/client';
 import { NotificationBell } from './NotificationBell';
+import { useWebSocket } from '../hooks/useWebSocket';
 import logger, { isRequestAbortError } from '../utils/logger';
 
 import Fuse from 'fuse.js';
@@ -129,35 +130,27 @@ const useFuzzySearch = (data, options = {}) => {
 
 export default function Navbar() {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);  // eslint-disable-line no-unused-vars
     const [searchQuery, setSearchQuery] = useState('');
     const [searchSuggestions, setSearchSuggestions] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [isVisible, setIsVisible] = useState(true);
     const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
+    const [isMobileAnimeOpen, setIsMobileAnimeOpen] = useState(false);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [allAnimeCache, setAllAnimeCache] = useState([]);
     const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
     const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const profileRef = useRef(null);
-    const notificationsRef = useRef(null);
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
     const mobileAccountRef = useRef(null);
+    const mobileAnimeRef = useRef(null);
     const accountHoldTimerRef = useRef(null);
     const longPressTriggeredRef = useRef(false);
-
-    // Mock notifications (replace with real data later)
-    const [notifications] = useState([
-        { id: 1, type: 'episode', message: 'New episode of Attack on Titan is out!', time: '2 hours ago', read: false },
-        { id: 2, type: 'like', message: 'Someone liked your review', time: '5 hours ago', read: false },
-        { id: 3, type: 'system', message: 'Welcome to AniShows!', time: '1 day ago', read: true },
-    ]);
-
-    const unreadCount = notifications.filter(n => !n.read).length;  // eslint-disable-line no-unused-vars
 
     // Initialize fuzzy search with cache - options are now inside the hook
     const { search: fuzzySearch } = useFuzzySearch(allAnimeCache, {});
@@ -196,9 +189,6 @@ export default function Navbar() {
             if (profileRef.current && !profileRef.current.contains(event.target)) {
                 setIsProfileOpen(false);
             }
-            if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-                setIsNotificationsOpen(false);
-            }
             if (searchRef.current && !searchRef.current.contains(event.target)) {
                 setShowSuggestions(false);
                 setSelectedIndex(-1);
@@ -206,13 +196,55 @@ export default function Navbar() {
             if (mobileAccountRef.current && !mobileAccountRef.current.contains(event.target)) {
                 setIsMobileAccountOpen(false);
             }
+            if (mobileAnimeRef.current && !mobileAnimeRef.current.contains(event.target)) {
+                setIsMobileAnimeOpen(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     useEffect(() => {
+        const fetchUnreadCount = async () => {
+            if (!isAuthenticated) {
+                setMobileUnreadCount(0);
+                return;
+            }
+
+            try {
+                const response = await notificationApi.getUnreadCount();
+                setMobileUnreadCount(response.data?.count ?? 0);
+            } catch (error) {
+                logger.error('Failed to fetch mobile notification count:', error);
+            }
+        };
+
+        fetchUnreadCount();
+    }, [isAuthenticated]);
+
+    const handleNotificationMessage = useCallback((data) => {
+        if (data.type === 'unread_count') {
+            setMobileUnreadCount(data.count ?? 0);
+            return;
+        }
+        if (data.type === 'notification' && data.unread_count != null) {
+            setMobileUnreadCount(data.unread_count);
+            return;
+        }
+        if (data.type === 'notification_read' && data.unread_count != null) {
+            setMobileUnreadCount(data.unread_count);
+        }
+    }, []);
+
+    useWebSocket(
+        user ? '/ws/notifications/' : null,
+        { onMessage: handleNotificationMessage },
+        { autoConnect: !!user }
+    );
+
+    useEffect(() => {
         setIsMobileAccountOpen(false);
+        setIsMobileAnimeOpen(false);
     }, [location.pathname]);
 
     useEffect(() => {
@@ -283,7 +315,6 @@ export default function Navbar() {
                 } else {
                     setShowSuggestions(false);
                     setIsProfileOpen(false);
-                    setIsNotificationsOpen(false);
                 }
             }
 
@@ -435,7 +466,7 @@ export default function Navbar() {
     const mobileProfileLabel = isAuthenticated ? 'Profile' : 'Sign In';
 
     const showMobileIsland = useMemo(() => {
-        const mainPaths = ['/', '/browse', '/seasonal', '/schedule', '/forums', '/profile', '/settings'];
+        const mainPaths = ['/', '/browse', '/seasonal', '/schedule', '/forums', '/profile', '/settings', '/notifications'];
         return mainPaths.some((path) => {
             if (path === '/') return location.pathname === '/';
             return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -773,49 +804,73 @@ export default function Navbar() {
                     className="md:hidden fixed bottom-3 left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm select-none"
                     style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
                 >
-                    <div className="rounded-[1.6rem] border border-white/10 bg-black/70 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl px-1.5 py-1.5">
-                    <div className="grid grid-cols-5 gap-1">
+                    <div className="rounded-[2rem] border border-white/10 bg-black/70 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl px-1.5 py-1.5">
+                    <div className="grid grid-cols-4 gap-1">
                         <Link
-                            to="/browse"
-                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/browse')
+                            to="/"
+                            className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${location.pathname === '/'
                                 ? 'bg-white/12 text-white'
                                 : 'text-gray-300/85'
                                 }`}
                         >
-                            <Search className="w-4 h-4" />
-                            <span className="mt-0.5 text-[10px] font-medium">Browse</span>
+                            <House className="w-3.5 h-3.5" />
+                            <span className="mt-0.5 text-[9px] font-medium">Home</span>
                         </Link>
+                        <div className="relative min-w-0" ref={mobileAnimeRef}>
+                            <button
+                                type="button"
+                                onClick={() => setIsMobileAnimeOpen((prev) => !prev)}
+                                className={`w-full min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${(isPathActive('/browse') || isPathActive('/seasonal') || isPathActive('/schedule') || isPathActive('/forums'))
+                                    ? 'bg-white/12 text-white'
+                                    : 'text-gray-300/85'
+                                    }`}
+                            >
+                                <Search className="w-3.5 h-3.5" />
+                                <span className="mt-0.5 text-[9px] font-medium">Anime</span>
+                            </button>
+                            {isMobileAnimeOpen && (
+                                <div className="absolute bottom-full left-0 mb-3 w-40 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden p-1">
+                                    <div className="absolute -bottom-1.5 left-4 w-3 h-3 rotate-45 bg-[#0a0d12] border-r border-b border-white/10" />
+                                    <Link
+                                        to="/browse"
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                    >
+                                        <Search className="w-3.5 h-3.5" />
+                                        Browse
+                                    </Link>
+                                    <Link
+                                        to="/seasonal"
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                    >
+                                        <Calendar className="w-3.5 h-3.5" />
+                                        Seasonal
+                                    </Link>
+                                    <Link
+                                        to="/schedule"
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                    >
+                                        <Tv className="w-3.5 h-3.5" />
+                                        Schedule
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
                         <Link
-                            to="/seasonal"
-                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/seasonal')
+                            to="/notifications"
+                            className={`relative min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/notifications')
                                 ? 'bg-white/12 text-white'
                                 : 'text-gray-300/85'
                                 }`}
                         >
-                            <Calendar className="w-4 h-4" />
-                            <span className="mt-0.5 text-[10px] font-medium">Seasonal</span>
+                            <Bell className="w-3.5 h-3.5" />
+                            {isAuthenticated && mobileUnreadCount > 0 && (
+                                <span className="absolute top-1 right-1.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[8px] leading-[14px] text-center font-semibold">
+                                    {mobileUnreadCount > 9 ? '9+' : mobileUnreadCount}
+                                </span>
+                            )}
+                            <span className="mt-0.5 text-[9px] font-medium">Notifs</span>
                         </Link>
-                        <Link
-                            to="/schedule"
-                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/schedule')
-                                ? 'bg-white/12 text-white'
-                                : 'text-gray-300/85'
-                                }`}
-                        >
-                            <Tv className="w-4 h-4" />
-                            <span className="mt-0.5 text-[10px] font-medium">Schedule</span>
-                        </Link>
-                        <Link
-                            to="/forums"
-                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/forums')
-                                ? 'bg-white/12 text-white'
-                                : 'text-gray-300/85'
-                                }`}
-                        >
-                            <MessageSquare className="w-4 h-4" />
-                            <span className="mt-0.5 text-[10px] font-medium">Forums</span>
-                        </Link>
-                        <div className="relative" ref={mobileAccountRef}>
+                        <div className="relative min-w-0" ref={mobileAccountRef}>
                             {isAuthenticated ? (
                                 <>
                                     <button
@@ -825,7 +880,7 @@ export default function Navbar() {
                                         onPointerLeave={cancelAccountHold}
                                         onPointerCancel={cancelAccountHold}
                                         onContextMenu={(e) => e.preventDefault()}
-                                        className={`w-full flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/profile')
+                                        className={`w-full flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/profile') || isPathActive('/settings')
                                             ? 'bg-white/12 text-white'
                                             : 'text-gray-300/85'
                                             }`}
@@ -834,20 +889,20 @@ export default function Navbar() {
                                             <img
                                                 src={user.avatar}
                                                 alt={user.username}
-                                                className="w-4 h-4 rounded-full object-cover"
+                                                className="w-3.5 h-3.5 rounded-full object-cover"
                                             />
                                         ) : (
-                                            <User className="w-4 h-4" />
+                                            <User className="w-3.5 h-3.5" />
                                         )}
-                                        <span className="mt-0.5 text-[10px] font-medium">Account</span>
+                                        <span className="mt-0.5 text-[9px] font-medium">Account</span>
                                     </button>
                                     {isMobileAccountOpen && (
-                                        <div className="absolute bottom-full right-0 mb-3 w-36 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden">
+                                        <div className="absolute bottom-full right-0 mb-3 w-36 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden p-1">
                                             <div className="absolute -bottom-1.5 right-4 w-3 h-3 rotate-45 bg-[#0a0d12] border-r border-b border-white/10" />
                                             {!isPathActive('/profile') && (
                                                 <Link
                                                     to="/profile"
-                                                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
+                                                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
                                                 >
                                                     <User className="w-3.5 h-3.5" />
                                                     Profile
@@ -856,7 +911,7 @@ export default function Navbar() {
                                             {!isPathActive('/settings') && (
                                                 <Link
                                                     to="/settings"
-                                                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
+                                                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
                                                 >
                                                     <Settings className="w-3.5 h-3.5" />
                                                     Settings
@@ -868,7 +923,7 @@ export default function Navbar() {
                                                     logout();
                                                     setIsMobileAccountOpen(false);
                                                 }}
-                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-300 hover:bg-red-500/15"
+                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-300 hover:bg-red-500/15 rounded-xl"
                                             >
                                                 <LogOut className="w-3.5 h-3.5" />
                                                 Sign Out
@@ -879,13 +934,13 @@ export default function Navbar() {
                             ) : (
                                 <Link
                                     to={mobileProfilePath}
-                                    className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/login')
+                                    className={`flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/login')
                                         ? 'bg-white/12 text-white'
                                         : 'text-gray-300/85'
                                         }`}
                                 >
-                                    <User className="w-4 h-4" />
-                                    <span className="mt-0.5 text-[10px] font-medium">{mobileProfileLabel}</span>
+                                    <User className="w-3.5 h-3.5" />
+                                    <span className="mt-0.5 text-[9px] font-medium">{mobileProfileLabel}</span>
                                 </Link>
                             )}
                         </div>

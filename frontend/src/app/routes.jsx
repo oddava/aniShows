@@ -50,6 +50,7 @@ const Schedule = lazyWithRetry(() => import('../pages/Schedule'));
 const ImportPage = lazyWithRetry(() => import('../pages/ImportPage'));
 const ExportPage = lazyWithRetry(() => import('../pages/ExportPage'));
 const VoiceActorDetail = lazyWithRetry(() => import('../pages/VoiceActorDetail'));
+const Notifications = lazyWithRetry(() => import('../pages/Notifications'));
 
 const forumCategoryListImport = () => import('../pages/forums/ForumCategoryList');
 const forumThreadListImport = () => import('../pages/forums/ForumThreadList');
@@ -105,6 +106,7 @@ export default function AppRoutes() {
                     <Route path="u/:username/*" element={<Profile />} />
                     <Route path="kiyo" element={<Profile forcedUsername="kiyo" />} />
                     <Route path="settings" element={<Settings />} />
+                    <Route path="notifications" element={<Notifications />} />
                     <Route path="login" element={<Login />} />
                     <Route path="register" element={<Register />} />
                     <Route path="verification-pending" element={<VerificationPending />} />
