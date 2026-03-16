@@ -16,9 +16,9 @@ export default function Layout() {
             <Suspense fallback={<PageLoader />}>
                 <Navbar />
             </Suspense>
-            <div className="h-16" /> {/* Spacer for fixed navbar */}
+            <div className="hidden md:block h-16" /> {/* Spacer for fixed desktop navbar */}
             <VerificationBanner />
-            <main className="flex-grow">
+            <main className="flex-grow pb-24 md:pb-0">
                 <Outlet />
             </main>
             <Footer />

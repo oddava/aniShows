@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { Search, Menu, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare } from 'lucide-react';
+import { Search, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { animeApi } from '../api/client';
@@ -128,7 +128,6 @@ const useFuzzySearch = (data, options = {}) => {
 };
 
 export default function Navbar() {
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);  // eslint-disable-line no-unused-vars
     const [searchQuery, setSearchQuery] = useState('');
@@ -413,6 +412,24 @@ export default function Navbar() {
         return hours.toString();
     };
 
+    const mobileProfilePath = isAuthenticated ? '/profile' : '/login';
+    const mobileProfileLabel = isAuthenticated ? 'Profile' : 'Sign In';
+
+    const showMobileIsland = useMemo(() => {
+        const mainPaths = ['/', '/browse', '/seasonal', '/schedule', '/forums', '/profile', '/settings'];
+        return mainPaths.some((path) => {
+            if (path === '/') return location.pathname === '/';
+            return location.pathname === path || location.pathname.startsWith(`${path}/`);
+        });
+    }, [location.pathname]);
+
+    const isPathActive = (path) => {
+        if (path === '/browse' || path === '/seasonal' || path === '/schedule') {
+            return location.pathname === path;
+        }
+        return location.pathname.startsWith(path);
+    };
+
     // Highlight matching text
     const highlightMatch = (text, query) => {
         if (!query || !text) return text;
@@ -427,9 +444,10 @@ export default function Navbar() {
     };
 
     return (
-        <nav
-            className={`fixed top-0 left-0 right-0 z-[1000] border-b border-gray-800 bg-dark/95 transition-transform duration-200 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
-        >
+        <>
+            <nav
+                className={`hidden md:block fixed top-0 left-0 right-0 z-[1000] border-b border-gray-800 bg-dark/95 transition-transform duration-200 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
+            >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
@@ -694,193 +712,78 @@ export default function Navbar() {
                         )}
                     </div>
 
-                    {/* Mobile Menu Button */}
-                    <button
-                        onClick={() => setIsMenuOpen(!isMenuOpen)}
-                        aria-label="Toggle mobile menu"
-                        className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-xl transition-colors focus:outline-none"
-                    >
-                        {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                    </button>
+                    <div className="md:hidden w-6" />
                 </div>
             </div>
+            </nav>
 
-            {/* Mobile Menu - Enhanced */}
-            {isMenuOpen && (
-                <div className="md:hidden bg-dark-100 border-t border-gray-800 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                    <div className="px-4 py-4 space-y-4">
-                        {/* Mobile Search with Fuzzy */}
-                        <form onSubmit={handleSearch} className="relative">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search anime..."
-                                className="w-full pl-11 pr-4 py-3 bg-dark-50 border border-gray-700 rounded-xl text-sm text-white
-                                     placeholder:text-gray-400 focus:outline-none focus:border-accent transition-colors"
-                            />
-                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        </form>
-
-                        {/* Mobile Search Suggestions */}
-                        {searchSuggestions.length > 0 && searchQuery.trim().length >= 1 && (
-                            <div className="space-y-1 max-h-48 overflow-y-auto">
-                                {searchSuggestions.slice(0, 5).map((anime) => (
-                                    <button
-                                        key={anime.id}
-                                        onClick={() => {
-                                            handleSuggestionClick(anime.slug);
-                                            setIsMenuOpen(false);
-                                        }}
-                                        className="w-full flex items-center gap-3 p-2 hover:bg-dark-50 rounded-lg transition-colors text-left"
-                                    >
-                                        <img
-                                            src={anime.cover_image}
-                                            alt={anime.title}
-                                            className="w-8 h-12 object-cover rounded-lg flex-shrink-0"
-                                        />
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="text-sm font-medium text-white line-clamp-1">{anime.title}</h4>
-                                            <p className="text-xs text-gray-400">{anime.anime_type}</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Mobile Nav Links */}
-                        <div className="space-y-1">
-                            <Link
-                                to="/browse"
-                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/browse'
-                                    ? 'bg-accent/10 text-white'
-                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                    }`}
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                <Search className="w-5 h-5" />
-                                Browse
-                            </Link>
-                            <Link
-                                to="/seasonal"
-                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/seasonal'
-                                    ? 'bg-accent/10 text-white'
-                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                    }`}
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                <Calendar className="w-5 h-5" />
-                                Seasonal
-                            </Link>
-                            <Link
-                                to="/schedule"
-                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/schedule'
-                                    ? 'bg-accent/10 text-white'
-                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                    }`}
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                <Tv className="w-5 h-5" />
-                                Schedule
-                            </Link>
-                            <Link
-                                to="/forums"
-                                className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname.startsWith('/forums')
-                                    ? 'bg-accent/10 text-white'
-                                    : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                    }`}
-                                onClick={() => setIsMenuOpen(false)}
-                            >
-                                <MessageSquare className="w-5 h-5" />
-                                Forums
-                            </Link>
-                            {(isAuthenticated || authLoading) && (
-                                <Link
-                                    to="/profile"
-                                    className={`flex items-center gap-3 py-3 px-3 rounded-xl transition-colors ${location.pathname === '/profile'
-                                        ? 'bg-accent/10 text-white'
-                                        : 'text-gray-300 hover:text-white hover:bg-dark-50'
-                                        }`}
-                                    onClick={() => setIsMenuOpen(false)}
-                                >
-                                    <Heart className="w-5 h-5" />
-                                    My List
-                                </Link>
+            {/* Mobile Bottom Navigation Island */}
+            {showMobileIsland && (
+                <div className="md:hidden fixed bottom-3 left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm">
+                    <div className="rounded-[1.6rem] border border-white/10 bg-black/70 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl px-1.5 py-1.5">
+                    <div className="grid grid-cols-5 gap-1">
+                        <Link
+                            to="/browse"
+                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/browse')
+                                ? 'bg-white/12 text-white'
+                                : 'text-gray-300/85'
+                                }`}
+                        >
+                            <Search className="w-4 h-4" />
+                            <span className="mt-0.5 text-[10px] font-medium">Browse</span>
+                        </Link>
+                        <Link
+                            to="/seasonal"
+                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/seasonal')
+                                ? 'bg-white/12 text-white'
+                                : 'text-gray-300/85'
+                                }`}
+                        >
+                            <Calendar className="w-4 h-4" />
+                            <span className="mt-0.5 text-[10px] font-medium">Seasonal</span>
+                        </Link>
+                        <Link
+                            to="/schedule"
+                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/schedule')
+                                ? 'bg-white/12 text-white'
+                                : 'text-gray-300/85'
+                                }`}
+                        >
+                            <Tv className="w-4 h-4" />
+                            <span className="mt-0.5 text-[10px] font-medium">Schedule</span>
+                        </Link>
+                        <Link
+                            to="/forums"
+                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/forums')
+                                ? 'bg-white/12 text-white'
+                                : 'text-gray-300/85'
+                                }`}
+                        >
+                            <MessageSquare className="w-4 h-4" />
+                            <span className="mt-0.5 text-[10px] font-medium">Forums</span>
+                        </Link>
+                        <Link
+                            to={mobileProfilePath}
+                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/profile') || isPathActive('/login')
+                                ? 'bg-white/12 text-white'
+                                : 'text-gray-300/85'
+                                }`}
+                        >
+                            {isAuthenticated && user?.avatar ? (
+                                <img
+                                    src={user.avatar}
+                                    alt={user.username}
+                                    className="w-4 h-4 rounded-full object-cover"
+                                />
+                            ) : (
+                                <User className="w-4 h-4" />
                             )}
-                        </div>
-
-                        {authLoading ? (
-                            // Loading state for mobile
-                            <div className="space-y-2 pt-4 border-t border-gray-700/50">
-                                <div className="flex items-center gap-3 py-3 px-3">
-                                    <div className="w-12 h-12 rounded-xl bg-dark-50 animate-pulse" />
-                                    <div className="space-y-2">
-                                        <div className="w-24 h-4 bg-dark-50 rounded animate-pulse" />
-                                        <div className="w-32 h-3 bg-dark-50 rounded animate-pulse" />
-                                    </div>
-                                </div>
-                            </div>
-                        ) : isAuthenticated ? (
-                            <div className="space-y-1 pt-4 border-t border-gray-700/50">
-                                {/* Mobile Profile Header with Stats */}
-                                <Link to="/profile" className="flex items-center gap-3 py-3 px-3 hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                    <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-accent/30 shrink-0">
-                                        {user?.avatar ? (
-                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full bg-accent flex items-center justify-center">
-                                                <User className="w-6 h-6 text-white" />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold text-white">{user?.username}</p>
-                                        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-                                    </div>
-                                </Link>
-
-                                {/* Mobile User Stats */}
-                                <div className="grid grid-cols-3 gap-2 px-3 py-2">
-                                    <div className="text-center p-2 bg-dark-50 rounded-lg">
-                                        <p className="text-base font-bold text-white">{userStats.animeWatched}</p>
-                                        <p className="text-[10px] text-gray-500">Anime</p>
-                                    </div>
-                                    <div className="text-center p-2 bg-dark-50 rounded-lg">
-                                        <p className="text-base font-bold text-white">{userStats.episodesWatched}</p>
-                                        <p className="text-[10px] text-gray-500">Eps</p>
-                                    </div>
-                                    <div className="text-center p-2 bg-dark-50 rounded-lg">
-                                        <p className="text-base font-bold text-white">{formatHours(userStats.hoursWatched)}h</p>
-                                        <p className="text-[10px] text-gray-500">Hours</p>
-                                    </div>
-                                </div>
-
-                                <Link to="/settings" className="flex items-center gap-3 py-3 px-3 text-gray-300 hover:text-white hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
-                                    Settings
-                                </Link>
-                                <button onClick={() => { logout(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 py-3 px-3 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
-                                    <LogOut className="w-5 h-5" />
-                                    Sign Out
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="space-y-2 pt-4 border-t border-gray-700/50">
-                                <Link to="/login" className="flex items-center gap-3 py-3 px-3 text-gray-300 hover:text-white hover:bg-dark-50 rounded-xl transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                    <LogOut className="w-5 h-5 rotate-180" />
-                                    Sign In
-                                </Link>
-                                <Link to="/register" className="flex items-center justify-center gap-2 py-3 px-3 bg-accent text-dark font-semibold rounded-xl hover:bg-accent/90 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                                    Get Started
-                                </Link>
-                            </div>
-                        )}
+                            <span className="mt-0.5 text-[10px] font-medium">{mobileProfileLabel}</span>
+                        </Link>
                     </div>
                 </div>
+                </div>
             )}
-        </nav>
+        </>
     );
 }
