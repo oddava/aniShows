@@ -841,20 +841,24 @@ export default function Navbar() {
                                     {isMobileAccountOpen && (
                                         <div className="absolute bottom-full right-0 mb-3 w-36 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden">
                                             <div className="absolute -bottom-1.5 right-4 w-3 h-3 rotate-45 bg-[#0a0d12] border-r border-b border-white/10" />
-                                            <Link
-                                                to="/profile"
-                                                className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
-                                            >
-                                                <User className="w-3.5 h-3.5" />
-                                                Profile
-                                            </Link>
-                                            <Link
-                                                to="/settings"
-                                                className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
-                                            >
-                                                <Settings className="w-3.5 h-3.5" />
-                                                Settings
-                                            </Link>
+                                            {!isPathActive('/profile') && (
+                                                <Link
+                                                    to="/profile"
+                                                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
+                                                >
+                                                    <User className="w-3.5 h-3.5" />
+                                                    Profile
+                                                </Link>
+                                            )}
+                                            {!isPathActive('/settings') && (
+                                                <Link
+                                                    to="/settings"
+                                                    className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
+                                                >
+                                                    <Settings className="w-3.5 h-3.5" />
+                                                    Settings
+                                                </Link>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => {
