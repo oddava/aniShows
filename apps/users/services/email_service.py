@@ -1,9 +1,7 @@
-from email.utils import parseaddr
-
+import httpx
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -70,50 +68,45 @@ Note: Unverified accounts are automatically deleted after 7 days.
 
 @shared_task(bind=True, max_retries=3)
 def send_email_task(self, subject, message, recipient_list, html_message=None):
-    """Celery task for sending emails."""
+    """Celery task for sending emails through Resend HTTP API."""
     try:
-        from django.core.mail import EmailMultiAlternatives
-
         from_email = settings.DEFAULT_FROM_EMAIL
-        _, from_addr = parseaddr(from_email or "")
-        email_host = (settings.EMAIL_HOST or "").lower()
-        email_user = (settings.EMAIL_HOST_USER or "").strip().lower()
+        resend_api_key = settings.RESEND_API_KEY
+        resend_base_url = settings.RESEND_API_URL.rstrip("/")
 
-        if not from_addr:
-            logger.warning(
-                "DEFAULT_FROM_EMAIL looks invalid; SMTP providers may reject sender "
-                f"(value={from_email!r})"
-            )
-        elif "gmail.com" in email_host and email_user and from_addr.lower() != email_user:
-            logger.warning(
-                "Gmail SMTP sender mismatch: DEFAULT_FROM_EMAIL=%s differs from EMAIL_HOST_USER=%s; "
-                "Gmail may reject this sender unless alias is configured.",
-                from_email,
-                settings.EMAIL_HOST_USER,
-            )
+        if not resend_api_key:
+            raise ValueError("RESEND_API_KEY is not configured")
 
-        # Use EmailMultiAlternatives if HTML message is provided
+        payload = {
+            "from": from_email,
+            "to": recipient_list,
+            "subject": subject,
+            "text": message or "",
+        }
         if html_message:
-            email = EmailMultiAlternatives(
-                subject=subject,
-                body=message,
-                from_email=from_email,
-                to=recipient_list,
+            payload["html"] = html_message
+
+        headers = {
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        with httpx.Client(timeout=settings.RESEND_REQUEST_TIMEOUT) as client:
+            response = client.post(
+                f"{resend_base_url}/emails",
+                headers=headers,
+                json=payload,
             )
-            email.attach_alternative(html_message, "text/html")
-            result = email.send()
-        else:
-            result = send_mail(
-                subject=subject,
-                message=message,
-                from_email=from_email,
-                recipient_list=recipient_list,
-                fail_silently=False,
-            )
+            response.raise_for_status()
+            data = response.json()
+
+        message_id = data.get("id")
         logger.info(
-            f"Email sent successfully to {recipient_list}: {result} message(s) sent"
+            "Email sent successfully via Resend to %s (id=%s)",
+            recipient_list,
+            message_id,
         )
-        return result
+        return {"id": message_id, "to": recipient_list}
     except Exception as exc:
         logger.exception(f"Failed to send email to {recipient_list}: {exc}")
         raise self.retry(exc=exc, countdown=60)

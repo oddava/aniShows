@@ -461,16 +461,13 @@ MAX_REVIEW_LENGTH = 5000
 MAX_COMMENT_LENGTH = 2000
 
 # =============================================================================
-# EMAIL SETTINGS (base configuration)
+# EMAIL SETTINGS (Resend HTTP API)
 # =============================================================================
 
-EMAIL_HOST = os.getenv("EMAIL_HOST")
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
-EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False") == "True"
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", os.getenv("EMAIL_HOST_USER", "webmaster@localhost"))
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_API_URL = os.getenv("RESEND_API_URL", "https://api.resend.com")
+RESEND_REQUEST_TIMEOUT = _env_float("RESEND_REQUEST_TIMEOUT", 10.0)
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "AniShows <onboarding@resend.dev>")
 
 # =============================================================================
 # DJANGO REST FRAMEWORK
