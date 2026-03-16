@@ -249,13 +249,14 @@ class ThreadViewSet(ModelViewSet):
     def like(self, request, pk=None):
         """Idempotent like - creates like if not exists, returns current state if already liked."""
         thread = self.get_object()
-        like, created = ThreadLike.objects.get_or_create(thread=thread, user=request.user)
+        _, created = ThreadLike.objects.get_or_create(thread=thread, user=request.user)
+        like_count = thread.likes.count()
 
         if not created:
             return Response(
                 {
                     "status": "already_liked",
-                    "like_count": thread.like_count,
+                    "like_count": like_count,
                     "is_liked": True,
                 },
                 status=status.HTTP_200_OK,
@@ -266,22 +267,20 @@ class ThreadViewSet(ModelViewSet):
                 user=thread.author, author=request.user, instance=thread, is_thread=True
             )
 
-        thread.like_count += 1
-
         # Broadcast thread like to WebSocket subscribers
         _broadcast_to_thread(
             thread.id,
             {
                 "type": "forum.thread_liked",
                 "thread_id": thread.id,
-                "like_count": thread.like_count,
+                "like_count": like_count,
             },
         )
 
         return Response(
             {
                 "status": "liked",
-                "like_count": thread.like_count,
+                "like_count": like_count,
                 "is_liked": True,
             },
             status=status.HTTP_201_CREATED,
@@ -321,7 +320,7 @@ class ThreadViewSet(ModelViewSet):
         try:
             like = ThreadLike.objects.get(thread=thread, user=request.user)
             like.delete()
-            thread.like_count -= 1
+            like_count = thread.likes.count()
 
             # Broadcast thread unlike to WebSocket subscribers
             _broadcast_to_thread(
@@ -329,23 +328,24 @@ class ThreadViewSet(ModelViewSet):
                 {
                     "type": "forum.thread_liked",
                     "thread_id": thread.id,
-                    "like_count": thread.like_count,
+                    "like_count": like_count,
                 },
             )
 
             return Response(
                 {
                     "status": "unliked",
-                    "like_count": thread.like_count,
+                    "like_count": like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,
             )
         except ThreadLike.DoesNotExist:
+            like_count = thread.likes.count()
             return Response(
                 {
                     "status": "not_liked",
-                    "like_count": thread.like_count,
+                    "like_count": like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,
@@ -513,13 +513,14 @@ class PostViewSet(ModelViewSet):
     def like(self, request, pk=None):
         """Idempotent like - creates like if not exists, returns current state if already liked."""
         post = self.get_object()
-        like, created = PostLike.objects.get_or_create(post=post, user=request.user)
+        _, created = PostLike.objects.get_or_create(post=post, user=request.user)
+        like_count = post.likes.count()
 
         if not created:
             return Response(
                 {
                     "status": "already_liked",
-                    "like_count": post.like_count,
+                    "like_count": like_count,
                     "is_liked": True,
                 },
                 status=status.HTTP_200_OK,
@@ -530,25 +531,20 @@ class PostViewSet(ModelViewSet):
                 user=post.author, author=request.user, instance=post, is_thread=False
             )
 
-        # Update denormalized count inline — avoids extra count() query
-        new_count = post.likes.count()
-        post.like_count = new_count
-        post.save(update_fields=["like_count"])
-
         # Broadcast like to WebSocket subscribers
         _broadcast_to_thread(
             post.thread_id,
             {
                 "type": "forum.post_liked",
                 "post_id": post.id,
-                "like_count": new_count,
+                "like_count": like_count,
             },
         )
 
         return Response(
             {
                 "status": "liked",
-                "like_count": new_count,
+                "like_count": like_count,
                 "is_liked": True,
             },
             status=status.HTTP_201_CREATED,
@@ -567,10 +563,7 @@ class PostViewSet(ModelViewSet):
         try:
             like = PostLike.objects.get(post=post, user=request.user)
             like.delete()
-            # Update denormalized count inline — avoids extra count() query
-            new_count = post.likes.count()
-            post.like_count = new_count
-            post.save(update_fields=["like_count"])
+            like_count = post.likes.count()
 
             # Broadcast unlike to WebSocket subscribers
             _broadcast_to_thread(
@@ -578,23 +571,24 @@ class PostViewSet(ModelViewSet):
                 {
                     "type": "forum.post_liked",
                     "post_id": post.id,
-                    "like_count": new_count,
+                    "like_count": like_count,
                 },
             )
 
             return Response(
                 {
                     "status": "unliked",
-                    "like_count": new_count,
+                    "like_count": like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,
             )
         except PostLike.DoesNotExist:
+            like_count = post.likes.count()
             return Response(
                 {
                     "status": "not_liked",
-                    "like_count": post.like_count,
+                    "like_count": like_count,
                     "is_liked": False,
                 },
                 status=status.HTTP_200_OK,

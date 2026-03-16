@@ -101,12 +101,27 @@ class TestForumsAPI:
         like_url = reverse("forums:thread-like", args=[thread.id])
         response = authenticated_client.post(like_url)
         assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["like_count"] == 1
         assert ThreadLike.objects.filter(thread=thread).count() == 1
         # Unlike (using separate unlike endpoint)
         unlike_url = reverse("forums:thread-unlike", args=[thread.id])
         response = authenticated_client.post(unlike_url)
         assert response.status_code == status.HTTP_200_OK
+        assert response.data["like_count"] == 0
         assert ThreadLike.objects.filter(thread=thread).count() == 0
+
+    def test_like_thread_is_idempotent(self, authenticated_client, thread):
+        like_url = reverse("forums:thread-like", args=[thread.id])
+
+        first = authenticated_client.post(like_url)
+        second = authenticated_client.post(like_url)
+
+        assert first.status_code == status.HTTP_201_CREATED
+        assert first.data["like_count"] == 1
+        assert second.status_code == status.HTTP_200_OK
+        assert second.data["status"] == "already_liked"
+        assert second.data["like_count"] == 1
+        assert ThreadLike.objects.filter(thread=thread).count() == 1
 
     def test_global_feed(self, api_client, thread):
         url = reverse("forums:thread-list")
