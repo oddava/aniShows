@@ -1,168 +1,207 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-    Bell,
-    Check,
-    CheckCheck,
-    ChevronRight,
-    Loader2,
-    LogIn,
-    Trash2,
-} from 'lucide-react';
+import { Bell, Loader2, LogIn } from 'lucide-react';
 
-import { notificationApi } from '../api/client';
+import { animeApi, notificationApi } from '../api/client';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import logger from '../utils/logger';
 
-const FILTERS = [
+const NOTIFICATION_FILTERS = [
     { value: 'all', label: 'All' },
-    { value: 'unread', label: 'Unread' },
+    { value: 'new_episode', label: 'Episodes' },
+    { value: 'review_reply', label: 'Review Replies' },
+    { value: 'new_follower', label: 'Followers' },
+    { value: 'forum', label: 'Forum' },
+    { value: 'badge_awarded', label: 'Badges' },
+    { value: 'system', label: 'System' },
 ];
 
-const formatNotificationTime = (value) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return 'Just now';
+const FORUM_FILTER_TYPES = new Set(['forum_reply', 'forum_mention', 'forum_like']);
 
-    return new Intl.DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    }).format(date);
+const formatRelativeTime = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'just now';
+
+    const diffMs = date.getTime() - Date.now();
+    const absMs = Math.abs(diffMs);
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    const month = 30 * day;
+    const year = 365 * day;
+
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
+    if (absMs < hour) return rtf.format(Math.round(diffMs / minute), 'minute');
+    if (absMs < day) return rtf.format(Math.round(diffMs / hour), 'hour');
+    if (absMs < month) return rtf.format(Math.round(diffMs / day), 'day');
+    if (absMs < year) return rtf.format(Math.round(diffMs / month), 'month');
+    return rtf.format(Math.round(diffMs / year), 'year');
+};
+
+const cleanNotificationMessage = (message) => {
+    if (!message) return '';
+    return message
+        .replace(/\s*tap to[^.]*\.?\s*$/i, '')
+        .trim();
 };
 
 const getNotificationTarget = (notification) => {
     const data = notification?.data || {};
 
-    if (data.anime_slug) {
-        return `/anime/${data.anime_slug}`;
-    }
+    if (data.anime_slug) return `/anime/${data.anime_slug}`;
     if (notification.notification_type === 'new_follower' && data.follower_username) {
         return `/u/${data.follower_username}`;
     }
-    if ((notification.notification_type === 'forum_reply' || notification.notification_type === 'forum_mention' || notification.notification_type === 'forum_like') && data.thread_id) {
+    if (
+        (notification.notification_type === 'forum_reply' ||
+            notification.notification_type === 'forum_mention' ||
+            notification.notification_type === 'forum_like') &&
+        data.thread_id
+    ) {
         return `/forums/thread/${data.thread_id}`;
     }
-    if (notification.notification_type === 'badge_awarded') {
-        return '/profile';
-    }
+    if (notification.notification_type === 'badge_awarded') return '/profile';
 
     return null;
+};
+
+const getAnimeSlug = (notification) => notification?.data?.anime_slug || null;
+
+const getNotificationThumbnail = (notification, coverBySlug) => {
+    const data = notification?.data || {};
+    const animeSlug = getAnimeSlug(notification);
+
+    return (
+        (animeSlug ? coverBySlug[animeSlug] : null) ||
+        data.anime_cover_image_small ||
+        data.anime_cover_image ||
+        data.anime_cover ||
+        data.cover_image ||
+        data.follower_avatar ||
+        '/icon.svg'
+    );
+};
+
+const hasEmbeddedImage = (notification) => {
+    const data = notification?.data || {};
+    return Boolean(
+        data.anime_cover_image_small ||
+        data.anime_cover_image ||
+        data.anime_cover ||
+        data.cover_image ||
+        data.follower_avatar
+    );
 };
 
 export default function Notifications() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
-    const [filter, setFilter] = useState('all');
     const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [actionId, setActionId] = useState(null);
-    const [markingAll, setMarkingAll] = useState(false);
+    const [coverBySlug, setCoverBySlug] = useState({});
+    const [activeFilter, setActiveFilter] = useState('all');
 
-    const isUnreadMode = filter === 'unread';
-    const hasLoadedRef = useRef(false);
-
-    const fetchUnreadCount = useCallback(async () => {
-        if (!isAuthenticated) {
-            setUnreadCount(0);
-            return;
-        }
-
-        try {
-            const response = await notificationApi.getUnreadCount();
-            setUnreadCount(response.data?.count ?? 0);
-        } catch (error) {
-            logger.error('Failed to fetch unread notification count:', error);
-        }
-    }, [isAuthenticated]);
-
-    const fetchNotifications = useCallback(async (targetPage = 1, append = false) => {
+    const fetchNotifications = useCallback(async () => {
         if (!isAuthenticated) return;
 
-        if (append) {
-            setLoadingMore(true);
-        } else {
-            setLoading(true);
-        }
-
+        setLoading(true);
         try {
-            const params = {
-                page: targetPage,
-                page_size: 20,
-            };
-            if (isUnreadMode) {
-                params.is_read = false;
-            }
-
-            const response = await notificationApi.getAll(params);
-            const payload = response.data || {};
-            const nextPageExists = Boolean(payload.next);
-            const items = payload.results || [];
-
-            setNotifications((prev) => (append ? [...prev, ...items] : items));
-            setPage(targetPage);
-            setHasMore(nextPageExists);
-            hasLoadedRef.current = true;
+            const response = await notificationApi.getAll({ page_size: 60 });
+            setNotifications(response.data?.results || []);
         } catch (error) {
             logger.error('Failed to fetch notifications:', error);
         } finally {
             setLoading(false);
-            setLoadingMore(false);
         }
-    }, [isAuthenticated, isUnreadMode]);
+    }, [isAuthenticated]);
+
+    useEffect(() => {
+        fetchNotifications();
+    }, [fetchNotifications]);
+
+    useEffect(() => {
+        const animeSlugs = Array.from(
+            new Set(
+                notifications
+                    .slice(0, 24)
+                    .map((item) => (hasEmbeddedImage(item) ? null : getAnimeSlug(item)))
+                    .filter(Boolean)
+            )
+        );
+
+        const slugsToFetch = animeSlugs.filter((slug) => !(slug in coverBySlug));
+        if (slugsToFetch.length === 0) return;
+
+        let cancelled = false;
+
+        const fetchCovers = async () => {
+            const entries = [];
+            // Keep request fan-out bounded to avoid network spikes on large notification lists.
+            const maxToFetch = slugsToFetch.slice(0, 12);
+            for (const slug of maxToFetch) {
+                try {
+                    const response = await animeApi.getBySlug(slug);
+                    const anime = response.data || {};
+                    entries.push([slug, anime.cover_image_small || anime.cover_image_medium || anime.cover_image || null]);
+                } catch {
+                    entries.push([slug, null]);
+                }
+            }
+
+            if (cancelled) return;
+
+            setCoverBySlug((prev) => {
+                const next = { ...prev };
+                entries.forEach(([slug, url]) => {
+                    next[slug] = url;
+                });
+                return next;
+            });
+        };
+
+        fetchCovers();
+        return () => {
+            cancelled = true;
+        };
+    }, [notifications, coverBySlug]);
 
     useEffect(() => {
         if (!isAuthenticated) return;
-        fetchNotifications(1, false);
-        fetchUnreadCount();
-    }, [isAuthenticated, filter, fetchNotifications, fetchUnreadCount]);
+
+        const markAllReadOnOpen = async () => {
+            try {
+                await notificationApi.markAllAsRead();
+                window.dispatchEvent(
+                    new CustomEvent('notifications:unread-count', { detail: { count: 0 } })
+                );
+            } catch (error) {
+                logger.error('Failed to mark notifications as read on open:', error);
+            }
+        };
+
+        markAllReadOnOpen();
+    }, [isAuthenticated]);
 
     const handleWsMessage = useCallback((data) => {
-        if (data.type === 'unread_count') {
-            setUnreadCount(data.count ?? 0);
-            return;
-        }
-
         if (data.type === 'notification' && data.notification) {
-            if (data.unread_count != null) {
-                setUnreadCount(data.unread_count);
-            } else {
-                setUnreadCount((prev) => prev + 1);
-            }
-
-            if (filter === 'all' || filter === 'unread') {
-                setNotifications((prev) => {
-                    const exists = prev.some((item) => item.id === data.notification.id);
-                    if (exists) return prev;
-                    return [data.notification, ...prev];
-                });
-            }
+            setNotifications((prev) => {
+                const exists = prev.some((item) => item.id === data.notification.id);
+                if (exists) return prev;
+                return [data.notification, ...prev];
+            });
             return;
         }
 
         if (data.type === 'notification_read' && data.notification_id) {
-            if (data.unread_count != null) {
-                setUnreadCount(data.unread_count);
-            }
-
-            setNotifications((prev) => {
-                if (filter === 'unread') {
-                    return prev.filter((item) => item.id !== data.notification_id);
-                }
-                return prev.map((item) => {
-                    if (item.id !== data.notification_id) return item;
-                    return { ...item, is_read: true };
-                });
-            });
+            setNotifications((prev) => prev.map((item) => (
+                item.id === data.notification_id ? { ...item, is_read: true } : item
+            )));
         }
-    }, [filter]);
+    }, []);
 
     useWebSocket(
         user ? '/ws/notifications/' : null,
@@ -179,73 +218,19 @@ export default function Notifications() {
                 setNotifications((prev) => prev.map((item) => (
                     item.id === notification.id ? { ...item, is_read: true } : item
                 )));
-                setUnreadCount((prev) => Math.max(0, prev - 1));
             } catch (error) {
                 logger.error('Failed to mark notification as read:', error);
             }
         }
 
-        if (target) {
-            navigate(target);
-        }
+        if (target) navigate(target);
     }, [navigate]);
 
-    const handleMarkRead = async (notificationId) => {
-        setActionId(`read-${notificationId}`);
-        try {
-            await notificationApi.markAsRead(notificationId);
-            setNotifications((prev) => {
-                if (isUnreadMode) {
-                    return prev.filter((item) => item.id !== notificationId);
-                }
-                return prev.map((item) => (
-                    item.id === notificationId ? { ...item, is_read: true } : item
-                ));
-            });
-            setUnreadCount((prev) => Math.max(0, prev - 1));
-        } catch (error) {
-            logger.error('Failed to mark notification as read:', error);
-        } finally {
-            setActionId(null);
-        }
-    };
-
-    const handleDelete = async (notification) => {
-        setActionId(`delete-${notification.id}`);
-        try {
-            await notificationApi.delete(notification.id);
-            setNotifications((prev) => prev.filter((item) => item.id !== notification.id));
-            if (!notification.is_read) {
-                setUnreadCount((prev) => Math.max(0, prev - 1));
-            }
-        } catch (error) {
-            logger.error('Failed to delete notification:', error);
-        } finally {
-            setActionId(null);
-        }
-    };
-
-    const handleMarkAllRead = async () => {
-        setMarkingAll(true);
-        try {
-            await notificationApi.markAllAsRead();
-            if (isUnreadMode) {
-                setNotifications([]);
-            } else {
-                setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
-            }
-            setUnreadCount(0);
-        } catch (error) {
-            logger.error('Failed to mark all notifications as read:', error);
-        } finally {
-            setMarkingAll(false);
-        }
-    };
-
-    const visibleEmptyState = useMemo(() => {
-        if (!hasLoadedRef.current && loading) return false;
-        return notifications.length === 0;
-    }, [loading, notifications.length]);
+    const filteredNotifications = notifications.filter((item) => {
+        if (activeFilter === 'all') return true;
+        if (activeFilter === 'forum') return FORUM_FILTER_TYPES.has(item.notification_type);
+        return item.notification_type === activeFilter;
+    });
 
     if (authLoading) {
         return (
@@ -265,7 +250,7 @@ export default function Notifications() {
                 <div className="rounded-2xl border border-gray-800 bg-dark-100/80 p-8 text-center">
                     <Bell className="w-12 h-12 mx-auto text-gray-500 mb-4" />
                     <h1 className="text-2xl font-semibold text-white">Notifications</h1>
-                    <p className="text-gray-400 mt-2 mb-6">Sign in to see alerts and updates for your anime activity.</p>
+                    <p className="text-gray-400 mt-2 mb-6">Sign in to see your notifications.</p>
                     <Link to="/login" className="inline-flex items-center gap-2 btn-primary">
                         <LogIn className="w-4 h-4" />
                         Sign in
@@ -276,148 +261,72 @@ export default function Notifications() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8">
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
             <SEO page="notifications" noIndex />
 
-            <section className="rounded-2xl border border-gray-800 bg-dark-100/70 backdrop-blur-xl overflow-hidden">
-                <header className="border-b border-gray-800 p-4 sm:p-6">
-                    <div className="flex items-start justify-between gap-3">
-                        <div>
-                            <h1 className="text-xl sm:text-2xl font-bold text-white">Notifications</h1>
-                            <p className="text-sm text-gray-400 mt-1">{unreadCount} unread</p>
-                        </div>
-                        <Link
-                            to="/settings"
-                            className="text-xs sm:text-sm text-accent hover:text-accent/80 transition-colors"
-                        >
-                            Notification settings
-                        </Link>
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
-                        <div className="inline-flex rounded-xl border border-gray-700 bg-dark-50 p-1">
-                            {FILTERS.map((item) => (
+            {loading ? (
+                <div className="min-h-[40vh] flex items-center justify-center text-gray-400">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+            ) : (
+                <>
+                    <div className="mb-9 sm:mb-10 overflow-x-auto scrollbar-hide">
+                        <div className="inline-flex items-center gap-1.5 min-w-max">
+                            {NOTIFICATION_FILTERS.map((filter) => (
                                 <button
-                                    key={item.value}
+                                    key={filter.value}
                                     type="button"
-                                    onClick={() => setFilter(item.value)}
-                                    className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg transition-colors ${filter === item.value
+                                    onClick={() => setActiveFilter(filter.value)}
+                                    className={`px-2.5 py-1.5 rounded-lg text-xs sm:text-sm transition-colors ${activeFilter === filter.value
                                         ? 'bg-accent text-white'
-                                        : 'text-gray-300 hover:text-white'
+                                        : 'bg-dark-100 text-gray-300 hover:text-white'
                                         }`}
                                 >
-                                    {item.label}
+                                    {filter.label}
                                 </button>
                             ))}
                         </div>
-
-                        <button
-                            type="button"
-                            disabled={markingAll || unreadCount === 0}
-                            onClick={handleMarkAllRead}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-700 text-xs sm:text-sm text-gray-200 hover:text-white hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {markingAll ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
-                            Mark all read
-                        </button>
                     </div>
-                </header>
 
-                <div className="divide-y divide-gray-800">
-                    {loading ? (
-                        <div className="p-8 text-center text-gray-400">
-                            <Loader2 className="w-6 h-6 mx-auto animate-spin mb-3" />
-                            Loading notifications...
-                        </div>
-                    ) : visibleEmptyState ? (
-                        <div className="p-8 text-center text-gray-400">
-                            <Bell className="w-9 h-9 mx-auto mb-3 text-gray-600" />
-                            <p className="text-sm text-gray-300">No notifications found</p>
-                            <p className="text-xs mt-1 text-gray-500">You are all caught up.</p>
-                        </div>
-                    ) : (
-                        notifications.map((notification) => {
-                            const target = getNotificationTarget(notification);
-                            const isDeleting = actionId === `delete-${notification.id}`;
-                            const isReading = actionId === `read-${notification.id}`;
-
-                            return (
-                                <article
-                                    key={notification.id}
-                                    className={`group px-4 sm:px-6 py-4 transition-colors ${notification.is_read ? 'bg-transparent' : 'bg-accent/5'
-                                        }`}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${notification.is_read ? 'bg-gray-600' : 'bg-accent'}`} />
-                                        <button
-                                            type="button"
-                                            onClick={() => handleNotificationOpen(notification)}
-                                            className="flex-1 text-left min-w-0"
-                                        >
-                                            <h2 className="text-sm sm:text-base font-semibold text-white line-clamp-1">{notification.title}</h2>
-                                            <p className="text-xs sm:text-sm text-gray-300 mt-1 line-clamp-2">{notification.message}</p>
-                                            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500">
-                                                <span>{formatNotificationTime(notification.created_at)}</span>
-                                                {target && (
-                                                    <span className="inline-flex items-center gap-1 text-accent/90">
-                                                        Open
-                                                        <ChevronRight className="w-3 h-3" />
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </button>
-
-                                        <div className="flex items-center gap-1.5">
-                                            {!notification.is_read && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMarkRead(notification.id)}
-                                                    disabled={isReading || isDeleting}
-                                                    className="inline-flex items-center justify-center p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 disabled:opacity-50"
-                                                    aria-label="Mark as read"
-                                                    title="Mark as read"
-                                                >
-                                                    {isReading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDelete(notification)}
-                                                disabled={isReading || isDeleting}
-                                                className="inline-flex items-center justify-center p-2 rounded-lg text-gray-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-50"
-                                                aria-label="Delete notification"
-                                                title="Delete"
-                                            >
-                                                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </article>
-                            );
-                        })
-                    )}
+                    {filteredNotifications.length === 0 ? (
+                <div className="min-h-[40vh] flex flex-col items-center justify-center text-gray-400">
+                    <Bell className="w-10 h-10 mb-3 text-gray-600" />
+                    <p className="text-sm text-gray-300">No notifications for this filter</p>
                 </div>
-
-                {hasMore && !loading && (
-                    <div className="p-4 sm:p-5 border-t border-gray-800">
+            ) : (
+                <div className="mt-4 sm:mt-6 space-y-3 sm:space-y-5">
+                    {filteredNotifications.map((notification) => (
                         <button
+                            key={notification.id}
                             type="button"
-                            onClick={() => fetchNotifications(page + 1, true)}
-                            disabled={loadingMore}
-                            className="w-full rounded-xl border border-gray-700 px-4 py-2.5 text-sm text-gray-200 hover:text-white hover:border-gray-600 disabled:opacity-50"
+                            onClick={() => handleNotificationOpen(notification)}
+                            className="w-full text-left"
                         >
-                            {loadingMore ? (
-                                <span className="inline-flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Loading more...
-                                </span>
-                            ) : (
-                                'Load more'
-                            )}
+                            <div className="flex overflow-hidden rounded-md bg-dark-100/80">
+                                <img
+                                    src={getNotificationThumbnail(notification, coverBySlug)}
+                                    alt=""
+                                    onError={(e) => { e.currentTarget.src = '/icon.svg'; }}
+                                    className="w-16 h-24 sm:w-20 sm:h-28 object-cover bg-dark-50 flex-shrink-0"
+                                    loading="lazy"
+                                />
+
+                                <div className="min-w-0 flex-1 px-3 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
+                                    <p className="min-w-0 text-sm sm:text-[20px] leading-snug text-gray-300 line-clamp-2 pr-1 sm:pr-2">
+                                        <span className="text-accent">{notification.title}</span>
+                                        <span>{notification.message ? ` ${cleanNotificationMessage(notification.message)}` : ''}</span>
+                                    </p>
+                                    <span className="text-[11px] sm:text-[14px] text-gray-500 whitespace-nowrap self-end sm:self-auto sm:mt-0.5">
+                                        {formatRelativeTime(notification.created_at)}
+                                    </span>
+                                </div>
+                            </div>
                         </button>
-                    </div>
-                )}
-            </section>
+                    ))}
+                </div>
+            )}
+                </>
+            )}
         </div>
     );
 }

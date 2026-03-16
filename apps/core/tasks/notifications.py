@@ -1,5 +1,6 @@
 from celery import shared_task
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.animes.models import Anime, ReviewComment
@@ -14,13 +15,14 @@ from apps.users.services.email_service import send_email_task
 @shared_task
 def send_pending_notifications():
     """Send pending notifications via email and push."""
-    # Get unsent notifications (last 24 hours only)
+    # Get notifications with at least one unsent delivery channel (last 24 hours only)
     from datetime import timedelta
 
     cutoff = timezone.now() - timedelta(hours=24)
 
     notifications = (
-        Notification.objects.filter(is_email_sent=False, created_at__gte=cutoff)
+        Notification.objects.filter(created_at__gte=cutoff)
+        .filter(Q(is_email_sent=False) | Q(is_push_sent=False))
         .select_related("user", "user__userprofile")
         .iterator(chunk_size=200)
     )
@@ -32,13 +34,22 @@ def send_pending_notifications():
             email_sent = notification.is_email_sent
             push_sent = notification.is_push_sent
 
-            # Send email if enabled
-            if _should_send_email(notification, profile):
+            should_email = _should_send_email(notification, profile)
+            should_push = _should_send_push(notification, profile)
+
+            # Finalize channels that are not applicable to avoid perpetual retries.
+            if not should_email:
+                email_sent = True
+            if not should_push:
+                push_sent = True
+
+            # Send email if applicable and not already sent
+            if should_email and not email_sent:
                 _send_notification_email(notification)
                 email_sent = True
 
-            # Send push if enabled
-            if _should_send_push(notification, profile):
+            # Send push if applicable and not already sent
+            if should_push and not push_sent:
                 sent = PushService.send_to_user(
                     user=notification.user,
                     title=notification.title,

@@ -82,7 +82,7 @@ export const notificationApi = {
     getPreferences: () => api.get('/notifications/preferences/'),
     updatePreferences: (data) => api.put('/notifications/preferences/', data),
     subscribe: (data) => api.post('/notifications/subscribe/', data),
-    unsubscribe: (endpoint) => api.delete('/notifications/subscribe/', { data: { endpoint } }),
+    unsubscribe: (endpoint) => api.delete('/notifications/unsubscribe/', { data: { endpoint } }),
     getSubscriptions: () => api.get('/notifications/subscribe/'),
 };
 

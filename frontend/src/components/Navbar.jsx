@@ -222,6 +222,24 @@ export default function Navbar() {
         fetchUnreadCount();
     }, [isAuthenticated]);
 
+    useEffect(() => {
+        if (location.pathname === '/notifications') {
+            setMobileUnreadCount(0);
+        }
+    }, [location.pathname]);
+
+    useEffect(() => {
+        const handleUnreadCountEvent = (event) => {
+            const nextCount = event?.detail?.count;
+            if (typeof nextCount === 'number') {
+                setMobileUnreadCount(nextCount);
+            }
+        };
+
+        window.addEventListener('notifications:unread-count', handleUnreadCountEvent);
+        return () => window.removeEventListener('notifications:unread-count', handleUnreadCountEvent);
+    }, []);
+
     const handleNotificationMessage = useCallback((data) => {
         if (data.type === 'unread_count') {
             setMobileUnreadCount(data.count ?? 0);
@@ -857,17 +875,19 @@ export default function Navbar() {
                         </div>
                         <Link
                             to="/notifications"
-                            className={`relative min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/notifications')
+                            className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/notifications')
                                 ? 'bg-white/12 text-white'
                                 : 'text-gray-300/85'
                                 }`}
                         >
-                            <Bell className="w-3.5 h-3.5" />
-                            {isAuthenticated && mobileUnreadCount > 0 && (
-                                <span className="absolute top-1 right-1.5 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[8px] leading-[14px] text-center font-semibold">
-                                    {mobileUnreadCount > 9 ? '9+' : mobileUnreadCount}
-                                </span>
-                            )}
+                            <span className="relative inline-flex">
+                                <Bell className="w-3.5 h-3.5" />
+                                {isAuthenticated && mobileUnreadCount > 0 && (
+                                    <span className="absolute -top-2 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[8px] leading-[14px] text-center font-semibold">
+                                        {mobileUnreadCount > 9 ? '9+' : mobileUnreadCount}
+                                    </span>
+                                )}
+                            </span>
                             <span className="mt-0.5 text-[9px] font-medium">Notifs</span>
                         </Link>
                         <div className="relative min-w-0" ref={mobileAccountRef}>

@@ -118,6 +118,25 @@ class NotificationService:
             logger.exception("Failed to broadcast notification via WebSocket")
 
     @classmethod
+    def _broadcast_unread_count(cls, user_id: int, count: int):
+        """Push unread-count updates to all active WebSocket sessions for a user."""
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer is None:
+                return
+
+            group_name = f"notifications_user_{user_id}"
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "notification.count_update",
+                    "count": max(int(count), 0),
+                },
+            )
+        except Exception:
+            logger.exception("Failed to broadcast unread count via WebSocket")
+
+    @classmethod
     def _unread_count_cache_key(cls, user_id: int) -> str:
         return f"notifications:unread_count:{user_id}"
 
@@ -199,7 +218,8 @@ class NotificationService:
             read_at=timezone.now(),
         )
         if updated:
-            cls._decrement_unread_count(user.id)
+            unread_count = cls._decrement_unread_count(user.id)
+            cls._broadcast_unread_count(user.id, unread_count)
             return True
         return Notification.objects.filter(id=notification_id, user_id=user.id).exists()
 
@@ -210,6 +230,7 @@ class NotificationService:
             is_read=True, read_at=timezone.now()
         )
         cls._set_unread_count_cache(user.id, 0)
+        cls._broadcast_unread_count(user.id, 0)
         logger.info(f"Marked {count} notifications as read for user {user.id}")
         return count
 

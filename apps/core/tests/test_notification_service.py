@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from unittest.mock import Mock, patch
 
 from apps.core.models import Notification
 from apps.core.services.notification_service import NotificationService
@@ -53,3 +54,45 @@ class TestNotificationUnreadCountCache(TestCase):
         self.assertEqual(NotificationService.get_unread_count(self.user), 2)
         self.assertEqual(NotificationService.mark_all_as_read(self.user), 2)
         self.assertEqual(NotificationService.get_unread_count(self.user), 0)
+
+    @patch("apps.core.services.notification_service.async_to_sync")
+    @patch("apps.core.services.notification_service.get_channel_layer")
+    def test_mark_as_read_broadcasts_unread_count_update(self, mock_get_channel_layer, mock_async_to_sync):
+        notification = Notification.objects.create(
+            user=self.user,
+            notification_type=Notification.NotificationType.SYSTEM,
+            title="Test",
+            message="Message",
+        )
+        mock_layer = Mock()
+        mock_get_channel_layer.return_value = mock_layer
+        mock_sender = Mock()
+        mock_async_to_sync.return_value = mock_sender
+
+        self.assertTrue(NotificationService.mark_as_read(notification.id, self.user))
+
+        mock_sender.assert_called_with(
+            f"notifications_user_{self.user.id}",
+            {"type": "notification.count_update", "count": 0},
+        )
+
+    @patch("apps.core.services.notification_service.async_to_sync")
+    @patch("apps.core.services.notification_service.get_channel_layer")
+    def test_mark_all_as_read_broadcasts_unread_count_update(self, mock_get_channel_layer, mock_async_to_sync):
+        Notification.objects.create(
+            user=self.user,
+            notification_type=Notification.NotificationType.SYSTEM,
+            title="Test 1",
+            message="Message 1",
+        )
+        mock_layer = Mock()
+        mock_get_channel_layer.return_value = mock_layer
+        mock_sender = Mock()
+        mock_async_to_sync.return_value = mock_sender
+
+        NotificationService.mark_all_as_read(self.user)
+
+        mock_sender.assert_called_with(
+            f"notifications_user_{self.user.id}",
+            {"type": "notification.count_update", "count": 0},
+        )

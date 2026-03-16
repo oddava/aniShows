@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Bell, Tv, MessageCircle, Check, X, Loader2 } from 'lucide-react';
+import { Mail, Bell, Tv, MessageCircle, Users, Check, X, Loader2 } from 'lucide-react';
 import { notificationApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
@@ -39,9 +39,9 @@ const NotificationPreferences = () => {
     const { user } = useAuth();
     const [preferences, setPreferences] = useState({
         email_new_episodes: true,
-        email_review_replies: true,
         push_new_episodes: true,
         push_review_replies: true,
+        push_new_follower: true,
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -159,14 +159,6 @@ const NotificationPreferences = () => {
                     
                     <div className="border-t border-gray-700/30" />
                     
-                    <PreferenceItem
-                        icon={MessageCircle}
-                        label="Review Replies"
-                        description="Notify me when someone replies to my reviews"
-                        enabled={preferences.email_review_replies}
-                        onToggle={() => handleToggle('email_review_replies')}
-                        loading={saving}
-                    />
                 </div>
             </div>
 
@@ -202,6 +194,17 @@ const NotificationPreferences = () => {
                         description="Send push notification when someone replies to my reviews"
                         enabled={preferences.push_review_replies}
                         onToggle={() => handleToggle('push_review_replies')}
+                        loading={saving}
+                    />
+
+                    <div className="border-t border-gray-700/30" />
+
+                    <PreferenceItem
+                        icon={Users}
+                        label="New Followers"
+                        description="Send push notification when someone follows me"
+                        enabled={preferences.push_new_follower}
+                        onToggle={() => handleToggle('push_new_follower')}
                         loading={saving}
                     />
                 </div>

@@ -94,14 +94,19 @@ class NotificationViewSet(GenericViewSet):
         """Mark a specific notification as read."""
         success = NotificationService.mark_as_read(pk, request.user)
         if success:
-            return Response({"status": "marked as read"})
+            return Response(
+                {
+                    "status": "marked as read",
+                    "unread_count": NotificationService.get_unread_count(request.user),
+                }
+            )
         return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
         """Mark all notifications as read."""
         count = NotificationService.mark_all_as_read(request.user)
-        return Response({"marked_as_read": count})
+        return Response({"marked_as_read": count, "unread_count": 0})
 
     def destroy(self, request, pk=None):
         """Delete a notification."""

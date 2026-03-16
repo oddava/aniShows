@@ -56,7 +56,7 @@ urlpatterns = [
     ),
     path(
         "notifications/subscribe/",
-        PushSubscriptionViewSet.as_view({"post": "create"}),
+        PushSubscriptionViewSet.as_view({"post": "create", "get": "list", "delete": "unsubscribe"}),
         name="push_subscribe",
     ),
     path(
