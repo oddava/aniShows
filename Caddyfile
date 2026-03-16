@@ -51,6 +51,16 @@
             # below set a single canonical Content-Type.
             header_down -Content-Type
         }
+        @media_success {
+            status 200 206
+        }
+        header @media_success Cache-Control "public, max-age=31536000, immutable"
+
+        @media_error {
+            status 400 401 403 404 405 408 409 410 429 500 502 503 504
+        }
+        header @media_error Cache-Control "no-store"
+
         header {
             Access-Control-Allow-Origin "*"
             Access-Control-Allow-Methods "GET, HEAD, OPTIONS"

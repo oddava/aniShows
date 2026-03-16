@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { followApi } from '../api/client';
-import { X, Users, UserCheck, UserPlus, UserMinus, Loader2, Sparkles, Search } from 'lucide-react';
+import { X, Users, UserCheck, UserPlus, UserMinus, Loader2, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -437,13 +437,9 @@ function UserInfo({ user, isFollowing, isFollower }) {
                 </p>
                 {isMutual && (
                     <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 font-medium">
-                        Mutual
+                        Moot
                     </span>
                 )}
-            </div>
-            <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500">
-                <Sparkles className="w-3 h-3 text-yellow-500/70" />
-                <span>{(user.points || 0).toLocaleString()} pts</span>
             </div>
         </div>
     );

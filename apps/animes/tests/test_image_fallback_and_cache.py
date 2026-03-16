@@ -291,3 +291,28 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         self.assertEqual(payload["cover_image_small"], "https://img.anilist.co/external-cover.jpg")
         self.assertEqual(payload["banner_image"], "https://img.anilist.co/external-banner.jpg")
         self.assertEqual(payload["banner_image_small"], "https://img.anilist.co/external-banner.jpg")
+
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_list_includes_external_image_fields_for_frontend_failover(self, _mock_delay):
+        Anime.objects.create(
+            title="External Image Field Anime",
+            slug="external-image-field-anime",
+            synopsis="desc",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.anilist.co/external-cover-2.jpg",
+            banner_image_external_url="https://img.anilist.co/external-banner-2.jpg",
+        )
+
+        response = self.client.get(reverse("anime-list"), {"sort": "title"})
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.data["results"][0]
+        self.assertEqual(
+            payload["cover_image_external_url"],
+            "https://img.anilist.co/external-cover-2.jpg",
+        )
+        self.assertEqual(
+            payload["banner_image_external_url"],
+            "https://img.anilist.co/external-banner-2.jpg",
+        )

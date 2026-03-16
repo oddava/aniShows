@@ -11,6 +11,14 @@ let shouldBypassCacheImages = false;
 
 const isCacheImagePath = (url) =>
     typeof url === 'string' && url.includes('/media/CACHE/');
+const isMediaPath = (url) =>
+    typeof url === 'string' && url.includes('/media/');
+
+const appendCacheBuster = (url) => {
+    if (!url) return url;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}cb=${Date.now()}`;
+};
 
 export const getImageUrl = (url, title = 'Anime') => {
     if (!url) {
@@ -91,18 +99,18 @@ export const getImageFallbackUrl = (anime, type = 'cover') => {
 
     if (type === 'banner') {
         const bannerFallback =
-            anime.banner_image ||
             anime.banner_image_external_url ||
-            anime.cover_image ||
-            anime.cover_image_external_url;
+            anime.cover_image_external_url ||
+            anime.banner_image ||
+            anime.cover_image;
         return getImageUrl(bannerFallback, anime.title);
     }
 
     const coverFallback =
-        anime.cover_image ||
         anime.cover_image_external_url ||
-        anime.banner_image ||
-        anime.banner_image_external_url;
+        anime.banner_image_external_url ||
+        anime.cover_image ||
+        anime.banner_image;
     return getImageUrl(coverFallback, anime.title);
 };
 
@@ -122,6 +130,15 @@ export const applyImageFallback = (event, fallbackUrl) => {
     }
 
     if (img.dataset.fallbackApplied === '1') {
+        return;
+    }
+
+    // First retry: bust CDN cache for local media URLs that might have a stale cached 403.
+    if (isMediaPath(currentSource) && img.dataset.cacheBusted !== '1') {
+        img.dataset.cacheBusted = '1';
+        img.removeAttribute('srcset');
+        img.removeAttribute('sizes');
+        img.src = appendCacheBuster(currentSource);
         return;
     }
 
