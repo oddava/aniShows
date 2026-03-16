@@ -330,7 +330,7 @@ function CurrentlyWatchingSection() {
                     <div>
                         <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Currently Watching</h2>
                     </div>
-                    <Link to="/profile?tab=animelist&status=Watching" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
+                    <Link to="/profile/anime_list" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
                         View All <ChevronRight className="w-4 h-4" />
                     </Link>
                 </div>

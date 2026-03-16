@@ -123,7 +123,7 @@ export const NotificationBell = () => {
             if (notification.data?.anime_slug) {
                 window.location.href = `/anime/${notification.data.anime_slug}`;
             } else if (notification.notification_type === 'new_follower' && notification.data?.follower_username) {
-                window.location.href = `/profile/${notification.data.follower_username}`;
+                window.location.href = `/u/${notification.data.follower_username}`;
             }
         } catch (error) {
             logger.error('Failed to handle notification click:', error);

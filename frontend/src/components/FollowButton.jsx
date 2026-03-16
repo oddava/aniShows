@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { followApi } from '../api/client';
-import { UserPlus, UserMinus, UserCheck, Users, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
 
@@ -20,6 +20,8 @@ export default function FollowButton({
     onUnfollow,
     onSuccess,
     variant = 'default', // 'default' | 'compact'
+    tone = 'default', // 'default' | 'dark'
+    showLabelOnMobile = false,
     className = ''
 }) {
     const { user } = useAuth();
@@ -205,8 +207,7 @@ export default function FollowButton({
         if (isFriends) {
             return (
                 <>
-                    <Users className="w-4 h-4" />
-                    <span className="hidden sm:inline">Friends</span>
+                    <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Friends</span>
                 </>
             );
         }
@@ -214,8 +215,7 @@ export default function FollowButton({
         if (isFollowing) {
             return (
                 <>
-                    <UserMinus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Following</span>
+                    <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Following</span>
                 </>
             );
         }
@@ -223,22 +223,37 @@ export default function FollowButton({
         if (isFollowBack) {
             return (
                 <>
-                    <UserCheck className="w-4 h-4" />
-                    <span className="hidden sm:inline">Follow Back</span>
+                    <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Follow Back</span>
                 </>
             );
         }
 
         return (
             <>
-                <UserPlus className="w-4 h-4" />
-                <span className="hidden sm:inline">Follow</span>
+                <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Follow</span>
             </>
         );
     };
 
     // Get button styles based on state
     const getButtonStyles = () => {
+        if (tone === 'dark') {
+            if (isFriends) {
+                return 'bg-dark-100 text-gray-200 border border-gray-700 hover:bg-dark-50 hover:border-accent';
+            }
+
+            if (isFollowing) {
+                return 'bg-dark-100 text-gray-300 border border-gray-700 hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/40';
+            }
+
+            if (isFollowBack) {
+                return 'bg-dark-100 text-white border border-accent/50 hover:bg-dark-50 hover:border-accent';
+            }
+
+            // Unfollowed state: lighter surface to stand out as primary action.
+            return 'bg-gray-100 text-dark border border-gray-200 hover:bg-white';
+        }
+
         if (isFriends) {
             return 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50';
         }

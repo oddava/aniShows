@@ -1,7 +1,7 @@
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { User } from 'lucide-react';
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Navigate, Link, useParams } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
 import FollowersModal from '../components/FollowersModal';
@@ -19,6 +19,21 @@ import MarkdownRenderer from '../components/common/MarkdownRenderer';
 import OverviewTab from '../components/profile/OverviewTab';
 
 const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
+
+function normalizeProfileTab(tab) {
+    const normalized = String(tab || '').trim().toLowerCase().replace(/-/g, '_');
+    if (!normalized) return 'overview';
+    if (normalized === 'animelist') return 'anime_list';
+    if (normalized === 'stats') return 'insights';
+    return PROFILE_TABS.has(normalized) ? normalized : 'overview';
+}
+
+function isTabSegment(segment) {
+    if (!segment) return false;
+    const normalized = String(segment).trim().toLowerCase().replace(/-/g, '_');
+    return normalized === 'animelist' || normalized === 'stats' || PROFILE_TABS.has(normalized);
+}
 
 function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -35,16 +50,56 @@ function adjustHexBrightness(hex, percent) {
 }
 
 export default function Profile({ forcedUsername }) {
-    const { username: paramsUsername } = useParams();
-    const username = forcedUsername || paramsUsername;
+    const location = useLocation();
+    const navigate = useNavigate();
     const { user: currentUser, isAuthenticated, loading } = useAuth();
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState('overview');
     const [viewMode, setViewMode] = useState('grid');
     const [searchQuery, setSearchQuery] = useState('');
     const [listStatusFilter, setListStatusFilter] = useState('Watching');
     const [showFollowersModal, setShowFollowersModal] = useState(false);
     const [followersModalType, setFollowersModalType] = useState('followers');
+
+    const pathSegments = useMemo(
+        () => location.pathname.split('/').filter(Boolean),
+        [location.pathname]
+    );
+
+    const { username, activeTab } = useMemo(() => {
+        if (forcedUsername) {
+            const forcedTab = isTabSegment(pathSegments[1]) ? normalizeProfileTab(pathSegments[1]) : 'overview';
+            return { username: forcedUsername, activeTab: forcedTab };
+        }
+
+        if (pathSegments[0] === 'u') {
+            const publicUsername = pathSegments[1];
+            const tabSegment = pathSegments[2];
+            return {
+                username: publicUsername,
+                activeTab: isTabSegment(tabSegment) ? normalizeProfileTab(tabSegment) : 'overview',
+            };
+        }
+
+        if (pathSegments[0] !== 'profile') {
+            return { username: undefined, activeTab: 'overview' };
+        }
+
+        const first = pathSegments[1];
+        const second = pathSegments[2];
+
+        if (!first) {
+            return { username: undefined, activeTab: 'overview' };
+        }
+
+        if (isTabSegment(first)) {
+            return { username: undefined, activeTab: normalizeProfileTab(first) };
+        }
+
+        return {
+            username: first,
+            activeTab: isTabSegment(second) ? normalizeProfileTab(second) : 'overview',
+        };
+    }, [forcedUsername, pathSegments]);
 
     const isPublicView = !!username && username.toLowerCase() !== currentUser?.username?.toLowerCase();
     const isOwnProfile = !isPublicView;
@@ -53,10 +108,21 @@ export default function Profile({ forcedUsername }) {
     // Track previous targetUsername to detect profile navigation changes
     const prevTargetUsernameRef = useRef(targetUsername);
 
+    const handleTabChange = useCallback((nextTab, options = {}) => {
+        const normalizedTab = normalizeProfileTab(nextTab);
+        const { replace = false } = options;
+        const basePath = isPublicView ? `/u/${targetUsername}` : '/profile';
+        const nextPath = normalizedTab === 'overview' ? basePath : `${basePath}/${normalizedTab}`;
+
+        if (nextPath !== location.pathname) {
+            navigate(nextPath, { replace });
+        }
+    }, [isPublicView, targetUsername, location.pathname, navigate]);
+
     // Reset tab state and refetch when navigating between different profiles
     useEffect(() => {
         if (prevTargetUsernameRef.current !== targetUsername) {
-            setActiveTab('overview');
+            handleTabChange('overview', { replace: true });
             setSearchQuery('');
             setListStatusFilter('Watching');
             prevTargetUsernameRef.current = targetUsername;
@@ -67,7 +133,25 @@ export default function Profile({ forcedUsername }) {
                 queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             }
         }
-    }, [targetUsername, isOwnProfile, currentUser, queryClient]);
+    }, [targetUsername, isOwnProfile, currentUser, queryClient, handleTabChange]);
+
+    // Backward compatibility: redirect legacy /profile/:username[/tab] to /u/:username[/tab]
+    useEffect(() => {
+        if (forcedUsername) return;
+        if (pathSegments[0] !== 'profile') return;
+
+        const candidateUsername = pathSegments[1];
+        if (!candidateUsername || isTabSegment(candidateUsername)) return;
+
+        const legacyTab = isTabSegment(pathSegments[2]) ? normalizeProfileTab(pathSegments[2]) : 'overview';
+        const nextPath = legacyTab === 'overview'
+            ? `/u/${candidateUsername}`
+            : `/u/${candidateUsername}/${legacyTab}`;
+
+        if (location.pathname !== nextPath) {
+            navigate(nextPath, { replace: true });
+        }
+    }, [forcedUsername, pathSegments, location.pathname, navigate]);
 
     const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
         queryKey: ['profile', targetUsername],
@@ -231,7 +315,7 @@ export default function Profile({ forcedUsername }) {
 
                 <ProfileTabs
                     activeTab={activeTab}
-                    onTabChange={setActiveTab}
+                    onTabChange={handleTabChange}
                     counts={tabCounts}
                 />
 
@@ -241,7 +325,7 @@ export default function Profile({ forcedUsername }) {
                             displayUser={displayUser}
                             targetUsername={targetUsername}
                             isPrivate={isPrivate}
-                            onTabChange={setActiveTab}
+                            onTabChange={handleTabChange}
                         />
                     ) : (
                         <ProfileContent

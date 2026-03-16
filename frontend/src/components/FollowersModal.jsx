@@ -387,7 +387,7 @@ function UserListItem({ user, onClose, isFollowing, isFollower, onFollowToggle }
     return (
         <div className="group flex h-full items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-gray-800/50">
             <Link
-                to={`/profile/${user.username}`}
+                to={`/u/${user.username}`}
                 onClick={onClose}
                 className="flex items-center gap-3 flex-1 min-w-0"
             >

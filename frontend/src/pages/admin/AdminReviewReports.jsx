@@ -111,7 +111,7 @@ const AdminReviewReports = () => {
                       </span>
                     </div>
                     <p className="text-white font-medium">
-                      <Link to={`/profile/${report.user.username}`} className="text-violet-400 hover:text-violet-300">
+                      <Link to={`/u/${report.user.username}`} className="text-violet-400 hover:text-violet-300">
                         {report.user.username}
                       </Link>
                       {' '}on{' '}

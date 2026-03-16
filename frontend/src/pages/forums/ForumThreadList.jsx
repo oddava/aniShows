@@ -84,7 +84,7 @@ const ThreadCard = memo(({ thread, slug }) => {
                 <div className="flex items-center justify-between gap-4 mt-0.5">
                     <div className="flex items-center gap-2 min-w-0">
                         <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                            <Link to={`/profile/${thread.author?.username}`} className="flex items-center gap-2 group/author">
+                            <Link to={`/u/${thread.author?.username}`} className="flex items-center gap-2 group/author">
                                 <Avatar user={thread.author} size="xs" />
                                 <span className="text-[12px] font-bold text-accent-light group-hover/author:text-accent transition-colors truncate">{thread.author?.username}</span>
                             </Link>

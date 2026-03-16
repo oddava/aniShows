@@ -37,7 +37,7 @@ function FriendAvatar({ friend, accentColor }) {
             onMouseLeave={() => setShowTooltip(false)}
         >
             <Link
-                to={`/profile/${user.username}`}
+                to={`/u/${user.username}`}
                 className="block w-10 h-10 rounded-full overflow-hidden bg-gray-700 ring-2 ring-transparent hover:ring-gray-600 transition-all"
             >
                 {user.avatar ? (

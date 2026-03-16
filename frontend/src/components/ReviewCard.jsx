@@ -136,14 +136,14 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     if (compact || (!hasText && !showAnime)) {
         return (
             <div className="bg-dark-100/50 rounded-lg px-4 py-3 border border-gray-800/50 flex items-center gap-3">
-                <Link to={`/profile/${review.user?.username}`} className="shrink-0">
+                <Link to={`/u/${review.user?.username}`} className="shrink-0">
                     {review.user?.avatar ? (
                         <img src={review.user.avatar} alt={review.user.username} className="w-8 h-8 rounded-full object-cover border border-gray-700" />
                     ) : (
                         <LetterAvatar name={review.user?.username} size="sm" />
                     )}
                 </Link>
-                <Link to={`/profile/${review.user?.username}`} className="text-sm text-gray-400 hover:text-white transition-colors font-medium truncate">
+                <Link to={`/u/${review.user?.username}`} className="text-sm text-gray-400 hover:text-white transition-colors font-medium truncate">
                     {review.user?.username}
                 </Link>
                 <div className="flex items-center gap-0.5 ml-auto">
@@ -197,7 +197,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                     )}
                                 </Link>
                             ) : (
-                                <Link to={`/profile/${review.user?.username}`} className="block">
+                                <Link to={`/u/${review.user?.username}`} className="block">
                                     {review.user?.avatar ? (
                                         <img src={review.user.avatar} alt={review.user.username} className="w-9 h-9 rounded-full object-cover border border-gray-700" />
                                     ) : (
@@ -214,7 +214,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                         {review.anime?.title}
                                     </Link>
                                 ) : (
-                                    <Link to={`/profile/${review.user?.username}`} className="font-medium text-white text-sm hover:text-accent transition-colors">
+                                    <Link to={`/u/${review.user?.username}`} className="font-medium text-white text-sm hover:text-accent transition-colors">
                                         {review.user?.username}
                                     </Link>
                                 )}

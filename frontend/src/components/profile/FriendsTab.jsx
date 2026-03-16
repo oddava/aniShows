@@ -8,7 +8,7 @@ function FriendItem({ item }) {
 
     return (
         <Link
-            to={`/profile/${user.username}`}
+            to={`/u/${user.username}`}
             className="flex flex-col items-center gap-2"
             title={user.username}
         >

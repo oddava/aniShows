@@ -356,7 +356,7 @@ const markdownComponents = {
     },
     mention: ({ node, username, ...props }) => (
         <Link
-            to={`/profile/${username}`}
+            to={`/u/${username}`}
             className="text-accent-light hover:text-accent font-medium transition-colors"
         >
             @{username}

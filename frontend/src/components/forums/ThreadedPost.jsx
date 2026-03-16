@@ -94,12 +94,12 @@ const ThreadedPost = ({
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                         <div className="flex items-center gap-3.5">
-                            <Link to={`/profile/${post.author.username}`} className="shrink-0">
+                            <Link to={`/u/${post.author.username}`} className="shrink-0">
                                 <Avatar user={post.author} />
                             </Link>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <Link to={`/profile/${post.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
+                                    <Link to={`/u/${post.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
                                         {post.author.username}
                                     </Link>
                                     {isOP && (

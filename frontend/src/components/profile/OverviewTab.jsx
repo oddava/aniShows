@@ -19,11 +19,15 @@ function TopStatsRow({ user }) {
     ];
 
     return (
-        <div className="flex items-center justify-center gap-8 sm:gap-12 flex-wrap py-4 border-b border-gray-800/60 mb-8">
+        <div className="flex items-center justify-center gap-8 sm:gap-12 flex-wrap py-4 border-b border-accent/30 mb-8">
             {stats.map((stat, i) => (
                 <div key={i} className="text-center">
-                    <span className="text-xl sm:text-2xl font-bold text-white">{stat.value}</span>
-                    <span className="block text-[11px] text-gray-500 uppercase tracking-wider mt-1">{stat.label}</span>
+                    <span className="text-xl sm:text-2xl font-bold text-white">
+                        {stat.value}
+                    </span>
+                    <span className="block text-[11px] uppercase tracking-wider mt-1 text-gray-500">
+                        {stat.label}
+                    </span>
                 </div>
             ))}
         </div>
@@ -177,7 +181,7 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
                     {displayedFriends.map((item) => (
                         <Link
                             key={item.user.id}
-                            to={`/profile/${item.user.username}`}
+                            to={`/u/${item.user.username}`}
                             className="flex w-14 flex-col items-center gap-1.5"
                             title={item.user.username}
                         >

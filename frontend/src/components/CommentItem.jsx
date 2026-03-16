@@ -24,7 +24,7 @@ const CommentItem = ({
     <div className="flex gap-3 py-3">
       {/* Avatar */}
       <div className="flex-shrink-0">
-        <Link to={`/profile/${comment.user?.username}`}>
+        <Link to={`/u/${comment.user?.username}`}>
           {comment.user?.avatar ? (
             <img
               src={comment.user.avatar}
@@ -43,7 +43,7 @@ const CommentItem = ({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <Link
-            to={`/profile/${comment.user?.username}`}
+            to={`/u/${comment.user?.username}`}
             className="font-medium text-sm text-gray-300 hover:text-accent transition-colors"
           >
             {comment.user?.username}

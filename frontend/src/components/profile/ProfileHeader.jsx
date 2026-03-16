@@ -63,7 +63,9 @@ export default function ProfileHeader({
                                     username={targetUsername}
                                     initialIsFollowing={displayUser?.is_following}
                                     initialIsFollower={displayUser?.is_follower}
-                                    className="px-5 py-2 font-semibold rounded-full transition-colors duration-200"
+                                    tone="dark"
+                                    showLabelOnMobile
+                                    className="px-3 py-1 text-sm font-semibold rounded-full transition-colors duration-200"
                                 />
                             )}
                         </div>
@@ -160,6 +162,7 @@ export default function ProfileHeader({
                                     username={targetUsername}
                                     initialIsFollowing={displayUser?.is_following}
                                     initialIsFollower={displayUser?.is_follower}
+                                    tone="dark"
                                     className="px-6 py-2.5 font-semibold transition-colors duration-200"
                                 />
                             )}

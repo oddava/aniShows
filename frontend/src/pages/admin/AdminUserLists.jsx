@@ -86,7 +86,7 @@ const AdminUserLists = () => {
       key: 'user',
       title: 'User',
       render: (item) => (
-        <Link to={`/profile/${item.user.username}`} className="text-violet-400 hover:text-violet-300">
+        <Link to={`/u/${item.user.username}`} className="text-violet-400 hover:text-violet-300">
           {item.user.username}
         </Link>
       ),

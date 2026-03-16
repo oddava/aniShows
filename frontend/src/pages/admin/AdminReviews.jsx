@@ -170,7 +170,7 @@ const AdminReviews = () => {
                                 {reviews.map((review) => (
                                     <tr key={review.id}>
                                         <td>
-                                            <Link to={`/profile/${review.user.username}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: '500' }}>
+                                            <Link to={`/u/${review.user.username}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: '500' }}>
                                                 {review.user.username}
                                             </Link>
                                         </td>
