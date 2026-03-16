@@ -1,5 +1,7 @@
 {
-    email {$EMAIL_HOST_USER}
+    # ACME account email for certificate issuance/recovery notifications.
+    # Keep separate from application mail settings (e.g., RESEND/SMTP users).
+    email {$CADDY_ACME_EMAIL:admin@anishows.local}
 }
 
 {$DOMAIN_NAME:localhost} {
