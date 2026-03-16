@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { Search, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare } from 'lucide-react';
+import { Search, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, Tv, MessageSquare, Settings } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { animeApi } from '../api/client';
@@ -135,6 +135,7 @@ export default function Navbar() {
     const [isSearching, setIsSearching] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [isVisible, setIsVisible] = useState(true);
+    const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [allAnimeCache, setAllAnimeCache] = useState([]);
     const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -145,6 +146,9 @@ export default function Navbar() {
     const notificationsRef = useRef(null);
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
+    const mobileAccountRef = useRef(null);
+    const accountHoldTimerRef = useRef(null);
+    const longPressTriggeredRef = useRef(false);
 
     // Mock notifications (replace with real data later)
     const [notifications] = useState([
@@ -199,9 +203,24 @@ export default function Navbar() {
                 setShowSuggestions(false);
                 setSelectedIndex(-1);
             }
+            if (mobileAccountRef.current && !mobileAccountRef.current.contains(event.target)) {
+                setIsMobileAccountOpen(false);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        setIsMobileAccountOpen(false);
+    }, [location.pathname]);
+
+    useEffect(() => {
+        return () => {
+            if (accountHoldTimerRef.current) {
+                clearTimeout(accountHoldTimerRef.current);
+            }
+        };
     }, []);
 
     // Hide/show navbar on scroll
@@ -428,6 +447,37 @@ export default function Navbar() {
             return location.pathname === path;
         }
         return location.pathname.startsWith(path);
+    };
+
+    const startAccountHold = () => {
+        longPressTriggeredRef.current = false;
+        if (accountHoldTimerRef.current) {
+            clearTimeout(accountHoldTimerRef.current);
+        }
+        accountHoldTimerRef.current = setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            setIsMobileAccountOpen(true);
+        }, 350);
+    };
+
+    const endAccountHold = () => {
+        if (accountHoldTimerRef.current) {
+            clearTimeout(accountHoldTimerRef.current);
+            accountHoldTimerRef.current = null;
+        }
+        if (!longPressTriggeredRef.current) {
+            setIsMobileAccountOpen(false);
+            if (location.pathname !== '/profile') {
+                navigate('/profile');
+            }
+        }
+    };
+
+    const cancelAccountHold = () => {
+        if (accountHoldTimerRef.current) {
+            clearTimeout(accountHoldTimerRef.current);
+            accountHoldTimerRef.current = null;
+        }
     };
 
     // Highlight matching text
@@ -762,24 +812,76 @@ export default function Navbar() {
                             <MessageSquare className="w-4 h-4" />
                             <span className="mt-0.5 text-[10px] font-medium">Forums</span>
                         </Link>
-                        <Link
-                            to={mobileProfilePath}
-                            className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/profile') || isPathActive('/login')
-                                ? 'bg-white/12 text-white'
-                                : 'text-gray-300/85'
-                                }`}
-                        >
-                            {isAuthenticated && user?.avatar ? (
-                                <img
-                                    src={user.avatar}
-                                    alt={user.username}
-                                    className="w-4 h-4 rounded-full object-cover"
-                                />
+                        <div className="relative" ref={mobileAccountRef}>
+                            {isAuthenticated ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        onPointerDown={startAccountHold}
+                                        onPointerUp={endAccountHold}
+                                        onPointerLeave={cancelAccountHold}
+                                        onPointerCancel={cancelAccountHold}
+                                        onContextMenu={(e) => e.preventDefault()}
+                                        className={`w-full flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/profile')
+                                            ? 'bg-white/12 text-white'
+                                            : 'text-gray-300/85'
+                                            }`}
+                                    >
+                                        {user?.avatar ? (
+                                            <img
+                                                src={user.avatar}
+                                                alt={user.username}
+                                                className="w-4 h-4 rounded-full object-cover"
+                                            />
+                                        ) : (
+                                            <User className="w-4 h-4" />
+                                        )}
+                                        <span className="mt-0.5 text-[10px] font-medium">Account</span>
+                                    </button>
+                                    {isMobileAccountOpen && (
+                                        <div className="absolute bottom-full right-0 mb-3 w-36 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden">
+                                            <div className="absolute -bottom-1.5 right-4 w-3 h-3 rotate-45 bg-[#0a0d12] border-r border-b border-white/10" />
+                                            <Link
+                                                to="/profile"
+                                                className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
+                                            >
+                                                <User className="w-3.5 h-3.5" />
+                                                Profile
+                                            </Link>
+                                            <Link
+                                                to="/settings"
+                                                className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10"
+                                            >
+                                                <Settings className="w-3.5 h-3.5" />
+                                                Settings
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    logout();
+                                                    setIsMobileAccountOpen(false);
+                                                }}
+                                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-300 hover:bg-red-500/15"
+                                            >
+                                                <LogOut className="w-3.5 h-3.5" />
+                                                Sign Out
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
                             ) : (
-                                <User className="w-4 h-4" />
+                                <Link
+                                    to={mobileProfilePath}
+                                    className={`flex flex-col items-center justify-center rounded-xl py-1.5 transition-all ${isPathActive('/login')
+                                        ? 'bg-white/12 text-white'
+                                        : 'text-gray-300/85'
+                                        }`}
+                                >
+                                    <User className="w-4 h-4" />
+                                    <span className="mt-0.5 text-[10px] font-medium">{mobileProfileLabel}</span>
+                                </Link>
                             )}
-                            <span className="mt-0.5 text-[10px] font-medium">{mobileProfileLabel}</span>
-                        </Link>
+                        </div>
                     </div>
                 </div>
                 </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Lock, Shield, Award, Eye, EyeOff, AlertCircle, Check, Plus, Trash2, Mail, Bell, Tv, MessageCircle, Users, Loader2 } from 'lucide-react';
+import { User, Lock, Shield, Award, Eye, EyeOff, AlertCircle, Check, Plus, Trash2, Mail, Bell, Tv, MessageCircle, Users, Loader2, LogOut } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { authApi, notificationApi } from '../api/client';
@@ -80,7 +80,7 @@ function normalizeProfilePrimaryColor(value) {
 }
 
 export default function Settings() {
-    const { user, isAuthenticated, loading, refreshProfile } = useAuth();
+    const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState('profile');
 
@@ -438,6 +438,10 @@ export default function Settings() {
         } finally {
             setIsDeleting(false);
         }
+    };
+
+    const handleSignOut = () => {
+        logout();
     };
 
     // Notification preferences handlers
@@ -1073,6 +1077,21 @@ export default function Settings() {
                                         <Download className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
                                     </Link>
                                 </div>
+                            </div>
+
+                            {/* Sign Out */}
+                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
+                                <h2 className="text-xl font-semibold text-white mb-2">Session</h2>
+                                <p className="text-gray-400 text-sm mb-6">
+                                    Sign out from this device.
+                                </p>
+                                <button
+                                    onClick={handleSignOut}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition-colors font-medium text-sm"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    Sign Out
+                                </button>
                             </div>
 
                             {/* Delete Account */}
