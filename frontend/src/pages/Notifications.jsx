@@ -81,7 +81,7 @@ const getNotificationThumbnail = (notification, coverBySlug) => {
         data.anime_cover ||
         data.cover_image ||
         data.follower_avatar ||
-        '/icon.svg'
+        null
     );
 };
 
@@ -295,34 +295,39 @@ export default function Notifications() {
                 </div>
             ) : (
                 <div className="mt-4 sm:mt-6 space-y-3 sm:space-y-5">
-                    {filteredNotifications.map((notification) => (
-                        <button
-                            key={notification.id}
-                            type="button"
-                            onClick={() => handleNotificationOpen(notification)}
-                            className="w-full text-left"
-                        >
-                            <div className="flex overflow-hidden rounded-md bg-dark-100/80">
-                                <img
-                                    src={getNotificationThumbnail(notification, coverBySlug)}
-                                    alt=""
-                                    onError={(e) => { e.currentTarget.src = '/icon.svg'; }}
-                                    className="w-16 h-24 sm:w-20 sm:h-28 object-cover bg-dark-50 flex-shrink-0"
-                                    loading="lazy"
-                                />
+                    {filteredNotifications.map((notification) => {
+                        const thumbnail = getNotificationThumbnail(notification, coverBySlug);
+                        return (
+                            <button
+                                key={notification.id}
+                                type="button"
+                                onClick={() => handleNotificationOpen(notification)}
+                                className="w-full text-left"
+                            >
+                                <div className="flex overflow-hidden rounded-md bg-dark-100/80">
+                                    {thumbnail && (
+                                        <img
+                                            src={thumbnail}
+                                            alt=""
+                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                            className="w-16 h-24 sm:w-20 sm:h-28 object-cover bg-dark-50 flex-shrink-0"
+                                            loading="lazy"
+                                        />
+                                    )}
 
-                                <div className="min-w-0 flex-1 px-3 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
-                                    <p className="min-w-0 text-sm sm:text-[20px] leading-snug text-gray-300 line-clamp-2 pr-1 sm:pr-2">
-                                        <span className="text-accent">{notification.title}</span>
-                                        <span>{notification.message ? ` ${cleanNotificationMessage(notification.message)}` : ''}</span>
-                                    </p>
-                                    <span className="text-[11px] sm:text-[14px] text-gray-500 whitespace-nowrap self-end sm:self-auto sm:mt-0.5">
-                                        {formatRelativeTime(notification.created_at)}
-                                    </span>
+                                    <div className="min-w-0 flex-1 px-3 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
+                                        <p className="min-w-0 text-sm sm:text-[20px] leading-snug text-gray-300 line-clamp-2 pr-1 sm:pr-2">
+                                            <span className="text-accent">{notification.title}</span>
+                                            <span>{notification.message ? ` ${cleanNotificationMessage(notification.message)}` : ''}</span>
+                                        </p>
+                                        <span className="text-[11px] sm:text-[14px] text-gray-500 whitespace-nowrap self-end sm:self-auto sm:mt-0.5">
+                                            {formatRelativeTime(notification.created_at)}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                        </button>
-                    ))}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
                 </>
