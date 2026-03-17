@@ -108,19 +108,19 @@
             # Fail gracefully if MinIO is unavailable - serve placeholder or return 404
             lb_try_duration 5s
             lb_try_interval 1s
-        }
-        # Cache media aggressively only on successful fetches.
-        # Avoid poisoning CDN cache with transient MinIO 4xx/5xx responses.
-        @media_success {
-            status 200 206
-        }
-        header @media_success Cache-Control "public, max-age=31536000, immutable"
-        header @media_success Vary "Accept"
 
-        @media_error {
-            status 400 401 403 404 405 408 409 410 429 500 502 503 504
+            # Cache policy based on upstream response status.
+            @media_success status 200 206
+            handle_response @media_success {
+                header Cache-Control "public, max-age=31536000, immutable"
+                header Vary "Accept"
+            }
+
+            @media_error status 400 401 403 404 405 408 409 410 429 500 502 503 504
+            handle_response @media_error {
+                header Cache-Control "no-store"
+            }
         }
-        header @media_error Cache-Control "no-store"
         # Add cross-origin headers for images
         header Access-Control-Allow-Origin "*"
         header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
