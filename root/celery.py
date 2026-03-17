@@ -148,8 +148,12 @@ app.conf.task_time_limit = 600  # 10 minutes hard limit (default)
 app.conf.task_soft_time_limit = 540  # 9 minutes soft limit (default)
 
 # Worker settings
-app.conf.worker_max_tasks_per_child = 1000  # Restart worker after 1000 tasks
-app.conf.worker_max_memory_per_child = 200000  # 200MB memory limit per worker
+app.conf.worker_max_tasks_per_child = int(
+    os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "500")
+)  # Restart worker subprocesses periodically to limit leaks
+app.conf.worker_max_memory_per_child = int(
+    os.getenv("CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB", "160000")
+)  # 160MB memory ceiling per worker subprocess
 
 # ============================================================================
 # RETRY AND ERROR HANDLING
