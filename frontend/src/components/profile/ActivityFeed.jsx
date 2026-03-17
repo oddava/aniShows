@@ -69,6 +69,78 @@ const ACTIVITY_CONFIG = {
     },
 };
 
+function renderActivityDescription(activity) {
+    const description = activity?.activity_description || '';
+    if (!description) return '';
+    const ranges = [];
+    const pushRange = (start, end, className, priority = 1, linkTo = null) => {
+        if (start < 0 || end <= start) return;
+        ranges.push({ start, end, className, priority, linkTo });
+    };
+
+    // Highlight anime title with accent and make it clickable.
+    const animeTitle = activity?.anime?.title || '';
+    const animeSlug = activity?.anime?.slug;
+    if (animeTitle) {
+        const titleIndex = description.toLowerCase().indexOf(animeTitle.toLowerCase());
+        if (titleIndex >= 0) {
+            pushRange(
+                titleIndex,
+                titleIndex + animeTitle.length,
+                'font-semibold text-accent',
+                3,
+                animeSlug ? `/anime/${animeSlug}` : null
+            );
+        }
+    }
+
+    if (ranges.length === 0) return description;
+
+    const boundaries = new Set([0, description.length]);
+    ranges.forEach((range) => {
+        boundaries.add(range.start);
+        boundaries.add(range.end);
+    });
+    const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
+
+    const nodes = [];
+    for (let i = 0; i < sortedBoundaries.length - 1; i += 1) {
+        const start = sortedBoundaries[i];
+        const end = sortedBoundaries[i + 1];
+        const text = description.slice(start, end);
+        if (!text) continue;
+
+        const activeRanges = ranges.filter((range) => range.start <= start && range.end >= end);
+        const winner = activeRanges.sort((a, b) => b.priority - a.priority)[0];
+
+        if (!winner) {
+            nodes.push(<span key={`${start}-${end}`}>{text}</span>);
+            continue;
+        }
+
+        if (winner.linkTo) {
+            nodes.push(
+                <Link
+                    key={`${start}-${end}`}
+                    to={winner.linkTo}
+                    className={`${winner.className} cursor-pointer hover:text-accent/80 transition-colors`}
+                >
+                    {text}
+                </Link>
+            );
+            continue;
+        }
+
+        nodes.push(
+            <span key={`${start}-${end}`} className={winner.className}>
+                {text}
+            </span>
+        );
+    }
+
+    return nodes;
+}
+
 function timeAgo(dateStr) {
     const now = new Date();
     const date = new Date(dateStr);
@@ -178,23 +250,16 @@ function ActivityCard({ activity }) {
     const title = anime?.title || 'Unknown title';
 
     return (
-        <article className="group relative overflow-hidden rounded-xl border border-gray-800/70 bg-gradient-to-br from-dark-100/85 to-dark-200/85 p-3 transition-colors hover:border-gray-700">
-            <div className="absolute left-0 top-0 h-full w-1 bg-gray-700/80">
-                <span className={`block h-full w-full ${config.marker}`} />
-            </div>
-
-            <div className="flex gap-3 pl-2">
-                <div className="flex-1 min-w-0">
-                    <div className="mb-1">
-                        <p className="text-sm leading-5 text-gray-100">
-                            {activity.activity_description}
+        <article className="group relative overflow-hidden rounded-lg border border-gray-800/70 bg-gradient-to-br from-dark-100/85 to-dark-200/85 p-1.5 transition-colors hover:border-gray-700">
+            <div className="flex items-stretch gap-2">
+                <div className="flex min-w-0 flex-1 flex-col px-1 py-0.5">
+                    <div className="mb-0">
+                        <p className="text-sm leading-tight text-gray-100">
+                            {renderActivityDescription(activity)}
                         </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] text-gray-500">
-                            {timeAgo(activity.created_at)}
-                        </span>
                         {metadata && (
                             <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${config.chip}`}>
                                 {metadata}
@@ -203,35 +268,31 @@ function ActivityCard({ activity }) {
                     </div>
 
                     {activity.notes && (
-                        <p className="mt-2 line-clamp-2 rounded-lg border border-gray-800/80 bg-dark-200/60 px-2.5 py-2 text-xs italic text-gray-400">
+                        <p className="mt-1.5 line-clamp-2 rounded-lg border border-gray-800/80 bg-dark-200/60 px-2 py-1.5 text-xs italic text-gray-400">
                             "{activity.notes}"
                         </p>
                     )}
+                    <div className="mt-0.5">
+                        <span className="text-[10px] text-gray-500">
+                            {timeAgo(activity.created_at)}
+                        </span>
+                    </div>
                 </div>
 
                 {anime?.slug && coverImage && (
                     <Link
                         to={`/anime/${anime.slug}`}
-                        className="shrink-0 overflow-hidden rounded-lg border border-gray-800/80 transition-colors group-hover:border-gray-700"
+                        className="w-10 shrink-0 overflow-hidden rounded-md border border-gray-800/80 bg-dark-50 transition-colors group-hover:border-gray-700"
                     >
                         <img
                             src={coverImage}
                             alt={title}
-                            className="h-16 w-11 object-cover"
+                            className="h-full w-full object-cover"
                             loading="lazy"
                         />
                     </Link>
                 )}
             </div>
-
-            {anime?.slug && (
-                <Link
-                    to={`/anime/${anime.slug}`}
-                    className="mt-1 ml-2 block truncate text-xs font-medium text-gray-400 transition-colors hover:text-gray-200"
-                >
-                    {title}
-                </Link>
-            )}
         </article>
     );
 }
