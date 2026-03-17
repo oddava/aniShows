@@ -53,7 +53,7 @@ services:
   celery:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,low_priority", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=200", "--max-memory-per-child=160000", "-O", "fair" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,low_priority", "--concurrency=${CELERY_DEFAULT_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -89,7 +89,7 @@ services:
   celery_priority:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=200", "--max-memory-per-child=160000", "-O", "fair" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=${CELERY_PRIORITY_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -125,7 +125,7 @@ services:
   celery_images:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=100", "--max-memory-per-child=180000", "-O", "fair" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=${CELERY_IMAGES_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_IMAGES_MAX_TASKS_PER_CHILD:-100}", "--max-memory-per-child=${CELERY_IMAGES_MAX_MEMORY_PER_CHILD_KB:-512000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -161,7 +161,7 @@ services:
   celery_analytics:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=200", "--max-memory-per-child=160000", "-O", "fair" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=${CELERY_ANALYTICS_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
     env_file:
       - .env
     environment:

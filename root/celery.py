@@ -152,8 +152,8 @@ app.conf.worker_max_tasks_per_child = int(
     os.getenv("CELERY_WORKER_MAX_TASKS_PER_CHILD", "500")
 )  # Restart worker subprocesses periodically to limit leaks
 app.conf.worker_max_memory_per_child = int(
-    os.getenv("CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB", "160000")
-)  # 160MB memory ceiling per worker subprocess
+    os.getenv("CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB", "384000")
+)  # 384MB memory ceiling per worker subprocess
 
 # ============================================================================
 # RETRY AND ERROR HANDLING
