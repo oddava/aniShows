@@ -510,9 +510,9 @@ export default function Notifications() {
                                 <div className="flex overflow-hidden rounded-md bg-dark-100/80">
                                     {(thumbnail || followerNotification) && (
                                         <div
-                                            className={`w-14 h-20 sm:w-16 sm:h-24 flex-shrink-0 ${followerNotification
-                                                ? ''
-                                                : 'bg-dark-50 flex items-center justify-center'
+                                            className={`flex-shrink-0 ${followerNotification
+                                                ? 'w-14 h-14 sm:w-16 sm:h-16'
+                                                : 'w-14 h-20 sm:w-16 sm:h-24 bg-dark-50 flex items-center justify-center'
                                                 }`}
                                         >
                                             {followerNotification ? (
