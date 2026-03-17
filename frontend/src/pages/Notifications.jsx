@@ -48,6 +48,35 @@ const cleanNotificationMessage = (message) => {
         .trim();
 };
 
+const getDisplayText = (notification) => {
+    const message = cleanNotificationMessage(notification.message);
+    return `${notification.title || ''}${message ? ` ${message}` : ''}`.trim();
+};
+
+const inferEntityFromTitle = (title) => {
+    if (!title || !title.includes(':')) return null;
+    const match = title.match(/:\s*([^.,!]+?)(?:\s+Episode\s+\d+|\s+airs\b|$)/i);
+    return match?.[1]?.trim() || null;
+};
+
+const getHighlightEntity = (notification) => {
+    const data = notification?.data || {};
+    const candidateFields = [
+        data.anime_title,
+        data.badge_name,
+        data.follower_username,
+        data.replier_username,
+        data.mentioner_username,
+        data.liker_username,
+        data.thread_title,
+    ];
+
+    const fromData = candidateFields.find((value) => typeof value === 'string' && value.trim().length > 0);
+    if (fromData) return fromData;
+
+    return inferEntityFromTitle(notification?.title || '');
+};
+
 const getNotificationTarget = (notification) => {
     const data = notification?.data || {};
 
@@ -261,7 +290,7 @@ export default function Notifications() {
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
+        <div className="max-w-5xl mx-auto px-4 py-5 sm:py-6">
             <SEO page="notifications" noIndex />
 
             {loading ? (
@@ -294,38 +323,60 @@ export default function Notifications() {
                     <p className="text-sm text-gray-300">No notifications for this filter</p>
                 </div>
             ) : (
-                <div className="mt-4 sm:mt-6 space-y-3 sm:space-y-5">
+                <div className="mt-4 sm:mt-5 max-w-4xl mx-auto space-y-2.5 sm:space-y-3.5">
                     {filteredNotifications.map((notification) => {
                         const thumbnail = getNotificationThumbnail(notification, coverBySlug);
+                        const displayText = getDisplayText(notification);
+                        const highlightEntity = getHighlightEntity(notification);
+                        const highlightStart = highlightEntity ? displayText.indexOf(highlightEntity) : -1;
+                        const hasHighlightedChunk = highlightStart >= 0;
+                        const target = getNotificationTarget(notification);
+
+                        const handleEntityClick = async () => {
+                            await handleNotificationOpen(notification);
+                        };
+
                         return (
-                            <button
-                                key={notification.id}
-                                type="button"
-                                onClick={() => handleNotificationOpen(notification)}
-                                className="w-full text-left"
-                            >
+                            <div key={notification.id} className="w-full">
                                 <div className="flex overflow-hidden rounded-md bg-dark-100/80">
                                     {thumbnail && (
                                         <img
                                             src={thumbnail}
                                             alt=""
                                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                            className="w-16 h-24 sm:w-20 sm:h-28 object-cover bg-dark-50 flex-shrink-0"
+                                            className="w-14 h-20 sm:w-16 sm:h-24 object-cover bg-dark-50 flex-shrink-0"
                                             loading="lazy"
                                         />
                                     )}
 
-                                    <div className="min-w-0 flex-1 px-3 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
-                                        <p className="min-w-0 text-sm sm:text-[20px] leading-snug text-gray-300 line-clamp-2 pr-1 sm:pr-2">
-                                            <span className="text-accent">{notification.title}</span>
-                                            <span>{notification.message ? ` ${cleanNotificationMessage(notification.message)}` : ''}</span>
+                                    <div className="min-w-0 flex-1 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-2.5">
+                                        <p className="min-w-0 text-sm sm:text-base leading-snug text-gray-300 line-clamp-2 pr-1 sm:pr-2">
+                                            {hasHighlightedChunk ? (
+                                                <>
+                                                    <span>{displayText.slice(0, highlightStart)}</span>
+                                                    {target ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleEntityClick}
+                                                            className="text-accent hover:text-accent/80 transition-colors"
+                                                        >
+                                                            {highlightEntity}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-accent">{highlightEntity}</span>
+                                                    )}
+                                                    <span>{displayText.slice(highlightStart + highlightEntity.length)}</span>
+                                                </>
+                                            ) : (
+                                                <span>{displayText}</span>
+                                            )}
                                         </p>
-                                        <span className="text-[11px] sm:text-[14px] text-gray-500 whitespace-nowrap self-end sm:self-auto sm:mt-0.5">
+                                        <span className="text-[11px] sm:text-[13px] text-gray-500 whitespace-nowrap self-end sm:self-auto sm:mt-0.5">
                                             {formatRelativeTime(notification.created_at)}
                                         </span>
                                     </div>
                                 </div>
-                            </button>
+                            </div>
                         );
                     })}
                 </div>
