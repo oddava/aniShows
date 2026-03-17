@@ -509,11 +509,16 @@ export default function Notifications() {
                             <div key={notification.id} className="w-full">
                                 <div className="flex overflow-hidden rounded-md bg-dark-100/80">
                                     {(thumbnail || followerNotification) && (
-                                        <div className="w-14 h-20 sm:w-16 sm:h-24 bg-dark-50 flex-shrink-0 flex items-center justify-center">
+                                        <div
+                                            className={`w-14 h-20 sm:w-16 sm:h-24 flex-shrink-0 ${followerNotification
+                                                ? ''
+                                                : 'bg-dark-50 flex items-center justify-center'
+                                                }`}
+                                        >
                                             {followerNotification ? (
                                                 brokenFollowerThumb || !thumbnail ? (
                                                     <div
-                                                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-accent/15 flex items-center justify-center font-semibold text-accent-light"
+                                                        className="w-full h-full bg-accent/15 flex items-center justify-center font-semibold text-accent-light"
                                                         aria-label={`${followerName} avatar fallback`}
                                                         title={followerName}
                                                     >
@@ -530,7 +535,7 @@ export default function Notifications() {
                                                                 return next;
                                                             });
                                                         }}
-                                                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover"
+                                                        className="w-full h-full object-cover"
                                                         loading="lazy"
                                                     />
                                                 )
