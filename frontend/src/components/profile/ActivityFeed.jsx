@@ -14,59 +14,28 @@ import {
     Workflow,
 } from 'lucide-react';
 
+const STATUS_FILTERS = [
+    { value: 'watching', label: 'Watching', color: '#16a34a' },
+    { value: 'completed', label: 'Completed', color: '#3b82f6' },
+    { value: 'on_hold', label: 'On Hold', color: '#f59e0b' },
+    { value: 'dropped', label: 'Dropped', color: '#ef4444' },
+    { value: 'plan_to_watch', label: 'Plan to Watch', color: '#6b7280' },
+];
+
 const FILTER_OPTIONS = [
     { value: 'all', label: 'All', icon: CircleDashed },
-    { value: 'progress', label: 'Progress', icon: PlayCircle },
-    { value: 'completed', label: 'Completed', icon: CheckCircle2 },
-    { value: 'status_change', label: 'Status', icon: Workflow },
-    { value: 'added', label: 'Added', icon: ListPlus },
-    { value: 'removed', label: 'Removed', icon: Trash2 },
-    { value: 'score', label: 'Score', icon: Star },
-    { value: 'rewatching', label: 'Rewatch', icon: Repeat2 },
-    { value: 'notes_update', label: 'Notes', icon: StickyNote },
+    ...STATUS_FILTERS,
 ];
 
 const ACTIVITY_CONFIG = {
-    completed: {
-        icon: CheckCircle2,
-        marker: 'bg-emerald-400',
-        chip: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10',
-    },
-    added: {
-        icon: ListPlus,
-        marker: 'bg-blue-400',
-        chip: 'text-blue-300 border-blue-500/30 bg-blue-500/10',
-    },
-    progress: {
-        icon: PlayCircle,
-        marker: 'bg-accent',
-        chip: 'text-accent-light border-accent/30 bg-accent/10',
-    },
-    status_change: {
-        icon: Workflow,
-        marker: 'bg-yellow-400',
-        chip: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10',
-    },
-    score: {
-        icon: Star,
-        marker: 'bg-amber-400',
-        chip: 'text-amber-300 border-amber-500/30 bg-amber-500/10',
-    },
-    removed: {
-        icon: Trash2,
-        marker: 'bg-rose-400',
-        chip: 'text-rose-300 border-rose-500/30 bg-rose-500/10',
-    },
-    rewatching: {
-        icon: Repeat2,
-        marker: 'bg-cyan-400',
-        chip: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10',
-    },
-    notes_update: {
-        icon: StickyNote,
-        marker: 'bg-pink-400',
-        chip: 'text-pink-300 border-pink-500/30 bg-pink-500/10',
-    },
+    completed: { icon: CheckCircle2, marker: 'bg-emerald-400', chip: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
+    added: { icon: ListPlus, marker: 'bg-blue-400', chip: 'text-blue-300 border-blue-500/30 bg-blue-500/10' },
+    progress: { icon: PlayCircle, marker: 'bg-accent', chip: 'text-accent-light border-accent/30 bg-accent/10' },
+    status_change: { icon: Workflow, marker: 'bg-yellow-400', chip: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10' },
+    score: { icon: Star, marker: 'bg-amber-400', chip: 'text-amber-300 border-amber-500/30 bg-amber-500/10' },
+    removed: { icon: Trash2, marker: 'bg-rose-400', chip: 'text-rose-300 border-rose-500/30 bg-rose-500/10' },
+    rewatching: { icon: Repeat2, marker: 'bg-cyan-400', chip: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10' },
+    notes_update: { icon: StickyNote, marker: 'bg-pink-400', chip: 'text-pink-300 border-pink-500/30 bg-pink-500/10' },
 };
 
 function renderActivityDescription(activity) {
@@ -333,13 +302,27 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
     }
 
     const activities = data?.pages?.flatMap(page => page?.results || []) || [];
-    const dateGroups = groupActivitiesByDate(activities);
+
+    const filteredActivities = filterType === 'all'
+        ? activities
+        : activities.filter((activity) => {
+            const status = (activity.new_status || activity.status || activity.status_label || '').toLowerCase();
+            const value = filterType.toLowerCase();
+            if (!status) return false;
+            if (value === 'watching') return status === 'watching';
+            if (value === 'completed') return status === 'completed';
+            if (value === 'on_hold') return status === 'on hold' || status === 'on_hold';
+            if (value === 'dropped') return status === 'dropped';
+            if (value === 'plan_to_watch') return status === 'plan to watch' || status === 'plan_to_watch';
+            return false;
+        });
+
+    const dateGroups = groupActivitiesByDate(filteredActivities);
 
     return (
         <section className="space-y-4">
             <div className="flex flex-wrap gap-2">
                 {FILTER_OPTIONS.map((filter) => {
-                    const Icon = filter.icon;
                     const isActive = filterType === filter.value;
                     return (
                         <button
@@ -351,7 +334,14 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                                 : 'border-gray-700/80 bg-dark-100/70 text-gray-400 hover:border-gray-600 hover:text-gray-200'
                                 }`}
                         >
-                            <Icon className="h-3.5 w-3.5" />
+                            {filter.color ? (
+                                <span
+                                    className="h-3 w-3 rounded-[6px]"
+                                    style={{ backgroundColor: filter.color }}
+                                />
+                            ) : (
+                                <CircleDashed className="h-3.5 w-3.5" />
+                            )}
                             {filter.label}
                         </button>
                     );
