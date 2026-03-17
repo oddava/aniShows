@@ -3,7 +3,6 @@ import { Search, X, User, LogOut, ChevronDown, Star, Loader2, Calendar, Heart, T
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { animeApi, notificationApi } from '../api/client';
-import { NotificationBell } from './NotificationBell';
 import { useWebSocket } from '../hooks/useWebSocket';
 import logger, { isRequestAbortError } from '../utils/logger';
 
@@ -679,11 +678,8 @@ export default function Navbar() {
                         </div>
                     </div>
 
-                    {/* Right Section: Notifications + Auth */}
+                    {/* Right Section: Auth */}
                     <div className="hidden md:flex items-center gap-2">
-                        {/* Notifications */}
-                        {isAuthenticated && !authLoading && <NotificationBell />}
-
                         {authLoading ? (
                             // Loading state - show skeleton instead of "Sign In" buttons
                             <div className="flex items-center gap-2">
