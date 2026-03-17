@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Loader2, LogIn } from 'lucide-react';
 
-import { animeApi, notificationApi } from '../api/client';
+import { animeApi, authApi, notificationApi } from '../api/client';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -72,7 +72,9 @@ const inferEntityFromTitle = (title) => {
 const getHighlightEntityData = (notification) => {
     const data = notification?.data || {};
     const displayText = getDisplayText(notification);
-    const quotedTitleMatch = displayText.match(/'([^']+)'/);
+    const quotedPhrases = Array.from(
+        displayText.matchAll(/(?:^|\s)'([^']+)'(?=\s|$|[.,!?])/g)
+    ).map((match) => match[1]);
     const candidateFields = [
         data.anime_title,
         data.badge_name,
@@ -81,7 +83,7 @@ const getHighlightEntityData = (notification) => {
         data.mentioner_username,
         data.liker_username,
         data.thread_title,
-        quotedTitleMatch?.[1],
+        ...quotedPhrases,
         inferEntityFromTitle(notification?.title || ''),
     ];
     const uniqueCandidates = Array.from(
@@ -125,16 +127,22 @@ const getNotificationTarget = (notification) => {
 
 const getAnimeSlug = (notification) => notification?.data?.anime_slug || null;
 
-const getNotificationThumbnail = (notification, coverBySlug) => {
+const getNotificationThumbnail = (notification, coverBySlug, followerAvatarByUsername) => {
     const data = notification?.data || {};
     const animeSlug = getAnimeSlug(notification);
+    const followerUsername = data.follower_username;
+    const fetchedFollowerAvatar = followerUsername ? followerAvatarByUsername[followerUsername] : null;
     const rawUrl =
         (animeSlug ? coverBySlug[animeSlug] : null) ||
         data.anime_cover_image_small ||
         data.anime_cover_image ||
         data.anime_cover ||
         data.cover_image ||
+        data.follower_avatar_url ||
         data.follower_avatar ||
+        data.avatar ||
+        data.user_avatar ||
+        fetchedFollowerAvatar ||
         null;
 
     return rawUrl ? getImageUrl(rawUrl, data.anime_title || data.follower_username || 'Notification') : null;
@@ -187,6 +195,7 @@ export default function Notifications() {
     const [fetchError, setFetchError] = useState('');
     const [actionError, setActionError] = useState('');
     const [brokenThumbIds, setBrokenThumbIds] = useState(new Set());
+    const [followerAvatarByUsername, setFollowerAvatarByUsername] = useState({});
 
     const fetchNotifications = useCallback(async ({ page = 1, append = false } = {}) => {
         if (!isAuthenticated) return;
@@ -270,6 +279,50 @@ export default function Notifications() {
             cancelled = true;
         };
     }, [notifications, coverBySlug]);
+
+    useEffect(() => {
+        const usernamesToFetch = Array.from(
+            new Set(
+                notifications
+                    .filter((item) => item.notification_type === 'new_follower')
+                    .map((item) => item?.data?.follower_username)
+                    .filter((username) => typeof username === 'string' && username.trim().length > 0)
+                    .filter((username) => followerAvatarByUsername[username] === undefined)
+            )
+        ).slice(0, 8);
+
+        if (usernamesToFetch.length === 0) return;
+
+        let cancelled = false;
+
+        const fetchFollowerAvatars = async () => {
+            const entries = await Promise.all(
+                usernamesToFetch.map(async (username) => {
+                    try {
+                        const response = await authApi.getByUsername(username);
+                        return [username, response.data?.avatar || null];
+                    } catch {
+                        return [username, null];
+                    }
+                })
+            );
+
+            if (cancelled) return;
+
+            setFollowerAvatarByUsername((prev) => {
+                const next = { ...prev };
+                entries.forEach(([username, avatar]) => {
+                    next[username] = avatar;
+                });
+                return next;
+            });
+        };
+
+        fetchFollowerAvatars();
+        return () => {
+            cancelled = true;
+        };
+    }, [notifications, followerAvatarByUsername]);
 
     const handleWsMessage = useCallback((data) => {
         if (data.type === 'notification' && data.notification) {
@@ -436,7 +489,7 @@ export default function Notifications() {
                 <>
                 <div className="mt-4 sm:mt-5 max-w-4xl mx-auto space-y-2.5 sm:space-y-3.5">
                     {filteredNotifications.map((notification) => {
-                        const thumbnail = getNotificationThumbnail(notification, coverBySlug);
+                        const thumbnail = getNotificationThumbnail(notification, coverBySlug, followerAvatarByUsername);
                         const { displayText, entity: highlightEntity, startIndex: highlightStart } = getHighlightEntityData(notification);
                         const hasHighlightedChunk = highlightStart >= 0;
                         const target = getNotificationTarget(notification);
@@ -455,10 +508,10 @@ export default function Notifications() {
                         return (
                             <div key={notification.id} className="w-full">
                                 <div className="flex overflow-hidden rounded-md bg-dark-100/80">
-                                    {thumbnail && (
+                                    {(thumbnail || followerNotification) && (
                                         <div className="w-14 h-20 sm:w-16 sm:h-24 bg-dark-50 flex-shrink-0 flex items-center justify-center">
                                             {followerNotification ? (
-                                                brokenFollowerThumb ? (
+                                                brokenFollowerThumb || !thumbnail ? (
                                                     <div
                                                         className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-accent/15 flex items-center justify-center font-semibold text-accent-light"
                                                         aria-label={`${followerName} avatar fallback`}
