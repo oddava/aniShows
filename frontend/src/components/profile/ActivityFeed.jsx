@@ -217,11 +217,11 @@ function activityMetadata(activity) {
     }
 
     if (activity.activity_type === 'score' && activity.new_score != null) {
-        return `${activity.new_score}/10`;
+        return null;
     }
 
     if (activity.activity_type === 'completed' && activity.new_score != null) {
-        return `${activity.new_score}/10`;
+        return null;
     }
 
     return null;
