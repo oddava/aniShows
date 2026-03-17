@@ -467,19 +467,6 @@ export default function Navbar() {
         }
     };
 
-    // Calculate user stats from API response
-    const userStats = {
-        animeWatched: user?.anime_count || 0,
-        episodesWatched: user?.episodes_watched || 0,
-        hoursWatched: Math.round((user?.days_watched || 0) * 24),
-    };
-
-    // Format hours
-    const formatHours = (hours) => {
-        if (hours >= 1000) return `${(hours / 1000).toFixed(1)}k`;
-        return hours.toString();
-    };
-
     const mobileProfilePath = isAuthenticated ? '/profile' : '/login';
     const mobileProfileLabel = isAuthenticated ? 'Profile' : 'Sign In';
 
@@ -748,24 +735,6 @@ export default function Navbar() {
                                             </div>
                                         </div>
 
-                                        {/* User Stats */}
-                                        <div className="px-4 py-3 border-b border-gray-700">
-                                            <div className="grid grid-cols-3 gap-2 text-center">
-                                                <div className="rounded-lg border border-gray-700 bg-dark-50 p-2">
-                                                    <p className="text-lg font-bold text-accent">{userStats.animeWatched}</p>
-                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Anime</p>
-                                                </div>
-                                                <div className="rounded-lg border border-gray-700 bg-dark-50 p-2">
-                                                    <p className="text-lg font-bold text-accent">{userStats.episodesWatched}</p>
-                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Episodes</p>
-                                                </div>
-                                                <div className="rounded-lg border border-gray-700 bg-dark-50 p-2">
-                                                    <p className="text-lg font-bold text-accent">{formatHours(userStats.hoursWatched)}h</p>
-                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Hours</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         {/* Menu Items */}
                                         <div className="py-1">
                                             <Link
@@ -775,6 +744,14 @@ export default function Navbar() {
                                             >
                                                 <User className="w-4 h-4" />
                                                 <span className="text-sm font-medium">Profile</span>
+                                            </Link>
+                                            <Link
+                                                to="/notifications"
+                                                onClick={() => setIsProfileOpen(false)}
+                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                            >
+                                                <Bell className="w-4 h-4" />
+                                                <span className="text-sm font-medium">Notifications</span>
                                             </Link>
                                             <Link
                                                 to="/settings"
