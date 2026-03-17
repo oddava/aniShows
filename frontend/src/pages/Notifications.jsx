@@ -487,7 +487,7 @@ export default function Notifications() {
                 </div>
             ) : (
                 <>
-                <div className="mt-4 sm:mt-5 max-w-4xl mx-auto space-y-2.5 sm:space-y-3.5">
+                <div className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5">
                     {filteredNotifications.map((notification) => {
                         const thumbnail = getNotificationThumbnail(notification, coverBySlug, followerAvatarByUsername);
                         const { displayText, entity: highlightEntity, startIndex: highlightStart } = getHighlightEntityData(notification);
