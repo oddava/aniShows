@@ -796,7 +796,7 @@ export default function Navbar() {
                     style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
                 >
                     <div className="rounded-[2rem] border border-white/10 bg-black/70 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl px-1.5 py-1.5">
-                    <div className="grid grid-cols-4 gap-1">
+                    <div className="grid grid-cols-5 gap-1">
                         <Link
                             to="/"
                             className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${location.pathname === '/'
@@ -811,7 +811,7 @@ export default function Navbar() {
                             <button
                                 type="button"
                                 onClick={() => setIsMobileAnimeOpen((prev) => !prev)}
-                                className={`w-full min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${(isPathActive('/browse') || isPathActive('/seasonal') || isPathActive('/schedule') || isPathActive('/forums'))
+                                className={`w-full min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${(isPathActive('/browse') || isPathActive('/seasonal') || isPathActive('/schedule'))
                                     ? 'bg-white/12 text-white'
                                     : 'text-gray-300/85'
                                     }`}
@@ -846,6 +846,16 @@ export default function Navbar() {
                                 </div>
                             )}
                         </div>
+                        <Link
+                            to="/forums"
+                            className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/forums')
+                                ? 'bg-white/12 text-white'
+                                : 'text-gray-300/85'
+                                }`}
+                        >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            <span className="mt-0.5 text-[9px] font-medium">Forums</span>
+                        </Link>
                         <Link
                             to="/notifications"
                             className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/notifications')
