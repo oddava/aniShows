@@ -11,7 +11,7 @@ EXEC = docker compose exec web python manage.py
         sync-themes sync-full sync-franchises sync-recs populate-themes \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
-        clean prune backup backups backup-export backup-import exports \
+        clean prune cleanup-media backup backups backup-export backup-import exports \
         verify-backup restore restore-db-only restore-media-only load-browse
 
 # ============================================================================
@@ -168,6 +168,9 @@ seed-forums:                    ## Seed forum categories and tags
 clean:                          ## Remove .pyc and __pycache__ files
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+
+cleanup-media:                  ## Clear missing anime media refs (add QUEUE=1 to re-fetch)
+	$(EXEC) cleanup_anime_media $(if $(QUEUE),--queue-fetch,) $(if $(LIMIT),--limit $(LIMIT),)
 
 prune:                          ## Docker system prune (removes all unused data)
 	docker system prune -a --volumes -f
