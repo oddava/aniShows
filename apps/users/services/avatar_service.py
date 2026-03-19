@@ -1,5 +1,7 @@
 from allauth.socialaccount.models import SocialAccount
 
+from apps.shared.media_urls import normalize_media_url
+
 GOOGLE_AVATAR_KEYS = ("picture", "avatar_url", "photoURL", "photoUrl")
 
 
@@ -12,9 +14,10 @@ def get_user_avatar_url(user):
     profile = getattr(user, "userprofile", None)
     if profile and profile.avatar:
         try:
-            avatar_url = profile.avatar.url
-            user._resolved_avatar_url = avatar_url
-            return avatar_url
+            avatar_url = normalize_media_url(profile.avatar.url)
+            if avatar_url:
+                user._resolved_avatar_url = avatar_url
+                return avatar_url
         except Exception:
             pass
 

@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.db.models import Prefetch
 
 from apps.shared.logger import logger
+from apps.shared.media_urls import normalize_media_url
 from apps.users.models import UserBadge, UserStats
 from apps.users.services.avatar_service import get_user_avatar_url
 from allauth.socialaccount.models import SocialAccount
@@ -19,6 +20,7 @@ except ImportError:
 
     def get_user_online_cache_key(user_id):
         return f"user_online:{user_id}"
+
 
 User = get_user_model()
 DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
@@ -86,7 +88,7 @@ def get_featured_badges(user):
             "name": ub.badge.name,
             "slug": ub.badge.slug,
             "icon": ub.badge.icon,
-            "image": ub.badge.image.url if ub.badge.image else None,
+            "image": normalize_media_url(ub.badge.image.url) if ub.badge.image else None,
             "color": ub.badge.color,
             "description": ub.badge.description,
         }
@@ -148,7 +150,7 @@ def _build_profile_data(user, stats_data):
         "email": user.email,
         "date_joined": user.date_joined,
         "avatar": get_user_avatar_url(user),
-        "banner": profile.banner.url if profile and profile.banner else None,
+        "banner": normalize_media_url(profile.banner.url) if profile and profile.banner else None,
         "bio": _normalize_bio(profile.bio if profile else None),
         "is_private": profile.is_private if profile else False,
         "email_verified": profile.email_verified if profile else False,

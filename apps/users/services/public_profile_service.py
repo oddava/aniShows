@@ -6,8 +6,9 @@ from django.core.cache import cache
 from django.db.models import Prefetch
 from allauth.socialaccount.models import SocialAccount
 
-from apps.users.serializers.users import PublicUserSerializer
 from apps.shared.logger import logger
+from apps.shared.media_urls import normalize_media_url
+from apps.users.serializers.users import PublicUserSerializer
 from apps.users.services.avatar_service import get_user_avatar_url
 from apps.users.services.cache import get_public_profile_cache_key
 from apps.users.services.profile_service import get_featured_badges, is_user_online
@@ -98,7 +99,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "username": user.username,
                 "date_joined": user.date_joined,
                 "avatar": get_user_avatar_url(user),
-                "banner": user.userprofile.banner.url
+                "banner": normalize_media_url(user.userprofile.banner.url)
                 if user.userprofile and user.userprofile.banner
                 else None,
                 "bio": _normalize_bio(user.userprofile.bio if user.userprofile else None),
@@ -143,7 +144,9 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     except Exception as exc:
         logger.warning("Stats table lookup failed for %s: %s", username, exc)
 
-    queryset = get_annotated_user_queryset(viewer if is_authenticated else None).filter(username=username)
+    queryset = get_annotated_user_queryset(viewer if is_authenticated else None).filter(
+        username=username
+    )
     user = queryset.first()
     if user is None:
         raise PublicProfileError("User not found", 404)

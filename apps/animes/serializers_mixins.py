@@ -1,10 +1,8 @@
 """Serializer mixins for common functionality."""
 
-import re
-from urllib.parse import urlparse
-
 from imagekit.cachefiles import ImageCacheFile
 
+from apps.shared.media_urls import normalize_media_url
 from apps.users.services.avatar_service import get_user_avatar_url
 
 
@@ -37,24 +35,9 @@ class ImageUrlMixin:
         except Exception:
             return None
 
+        url = normalize_media_url(url)
         if not url:
             return None
-
-        # Normalize internal storage host URLs (MinIO/Docker localhost) to
-        # app-relative media paths so clients can fetch via public proxy.
-        if url and url.startswith(("http://", "https://")):
-            parsed = urlparse(url)
-            host = (parsed.hostname or "").lower()
-            if host in {"localhost", "127.0.0.1", "minio", "web"}:
-                media_idx = parsed.path.find("/media/")
-                if media_idx != -1:
-                    url = parsed.path[media_idx:]
-                else:
-                    url = parsed.path
-
-        # Normalize path-style S3/MinIO URLs (/bucket/media/...) to /media/...
-        if isinstance(url, str) and re.match(r"^/[^/]+/media/", url):
-            url = re.sub(r"^/[^/]+/media/", "/media/", url, count=1)
 
         # Keep media URLs origin-agnostic to avoid localhost/mixed-content issues
         # when requests pass through reverse proxies or alternate hostnames.
@@ -184,7 +167,12 @@ class UserProfileMixin:
 
     def get_banner(self, obj):
         profile = getattr(obj, "userprofile", None)
-        return profile.banner.url if profile and profile.banner else None
+        if not profile or not profile.banner:
+            return None
+        try:
+            return normalize_media_url(profile.banner.url)
+        except Exception:
+            return None
 
     def get_bio(self, obj):
         profile = getattr(obj, "userprofile", None)
@@ -242,7 +230,7 @@ class BadgesMixin:
                 "name": ub.badge.name,
                 "slug": ub.badge.slug,
                 "icon": ub.badge.icon,
-                "image": ub.badge.image.url if ub.badge.image else None,
+                "image": normalize_media_url(ub.badge.image.url) if ub.badge.image else None,
                 "color": ub.badge.color,
                 "description": ub.badge.description,
             }
