@@ -6,6 +6,7 @@ from rest_framework.serializers import ModelSerializer
 
 from apps.core.models import AuditLog, SystemLog
 from apps.users.models import UserProfile
+from apps.users.services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 
@@ -35,13 +36,7 @@ class AdminUserSerializer(ModelSerializer):
         return profile.email_verified if profile else False
 
     def get_avatar(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        if profile and profile.avatar:
-            try:
-                return profile.avatar.url
-            except ValueError:
-                return None
-        return None
+        return get_user_avatar_url(obj)
 
     def get_banner(self, obj):
         profile = getattr(obj, "userprofile", None)

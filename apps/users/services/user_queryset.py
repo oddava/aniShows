@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
+from allauth.socialaccount.models import SocialAccount
 
 from apps.users.models import UserAnimeList, UserBadge, UserFollow
 
@@ -16,7 +17,14 @@ def get_annotated_user_queryset(user=None, lightweight=False):
             .select_related("badge")
             .order_by("-granted_at")[:3],
             to_attr="_prefetched_badges",
-        )
+        ),
+        Prefetch(
+            "socialaccount_set",
+            queryset=SocialAccount.objects.filter(provider="google").only(
+                "user_id", "provider", "extra_data"
+            ),
+            to_attr="_prefetched_social_accounts",
+        ),
     )
 
     queryset = queryset.annotate(

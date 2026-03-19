@@ -5,6 +5,8 @@ from urllib.parse import urlparse
 
 from imagekit.cachefiles import ImageCacheFile
 
+from apps.users.services.avatar_service import get_user_avatar_url
+
 
 def _decode_escaped_html_entities(value: str) -> str:
     return (
@@ -178,8 +180,7 @@ class UserProfileMixin:
     """
 
     def get_avatar(self, obj):
-        profile = getattr(obj, "userprofile", None)
-        return profile.avatar.url if profile and profile.avatar else None
+        return get_user_avatar_url(obj)
 
     def get_banner(self, obj):
         profile = getattr(obj, "userprofile", None)

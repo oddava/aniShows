@@ -5,6 +5,8 @@ from rest_framework.fields import CharField, IntegerField, SerializerMethodField
 from rest_framework.relations import PrimaryKeyRelatedField
 from rest_framework.serializers import ModelSerializer
 
+from apps.users.services.avatar_service import get_user_avatar_url
+
 from .models import Category, Post, Tag, Thread
 
 User = get_user_model()
@@ -37,8 +39,7 @@ class CustomUserSerializer(ModelSerializer):
 
     def get_avatar(self, obj):
         try:
-            profile = obj.userprofile
-            return profile.avatar.url if profile and profile.avatar else None
+            return get_user_avatar_url(obj)
         except Exception:
             return None
 

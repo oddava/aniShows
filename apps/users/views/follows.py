@@ -1,12 +1,13 @@
 from django.contrib.auth import get_user_model
 from django.db import models
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from allauth.socialaccount.models import SocialAccount
 from apps.animes.models import Anime
 from apps.users.serializers.users import (
     FollowSerializer,
@@ -25,6 +26,16 @@ class FollowViewSet(GenericViewSet):
 
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     pagination_class = StandardPagination
+
+    @staticmethod
+    def _google_accounts_prefetch(lookup: str) -> Prefetch:
+        return Prefetch(
+            f"{lookup}__socialaccount_set",
+            queryset=SocialAccount.objects.filter(provider="google").only(
+                "user_id", "provider", "extra_data"
+            ),
+            to_attr="_prefetched_social_accounts",
+        )
 
     @action(detail=False, methods=["POST"])
     def toggle(self, request):
@@ -122,7 +133,7 @@ class FollowViewSet(GenericViewSet):
 
         queryset = UserFollow.objects.filter(following=target_user).select_related(
             "follower__userprofile"
-        )
+        ).prefetch_related(self._google_accounts_prefetch("follower"))
 
         # Annotate is_following and is_follower to avoid N+1 queries
         if request.user.is_authenticated:
@@ -176,7 +187,7 @@ class FollowViewSet(GenericViewSet):
 
         queryset = UserFollow.objects.filter(follower=target_user).select_related(
             "following__userprofile"
-        )
+        ).prefetch_related(self._google_accounts_prefetch("following"))
 
         # Annotate is_following and is_follower to avoid N+1 queries
         if request.user.is_authenticated:
@@ -239,6 +250,7 @@ class FollowViewSet(GenericViewSet):
                 following__following__following=target_user,
             )
             .select_related("following__userprofile")
+            .prefetch_related(self._google_accounts_prefetch("following"))
             .order_by("-created_at")
         )
 
@@ -318,6 +330,7 @@ class FollowViewSet(GenericViewSet):
                 user__following__following=request.user,
             )
             .select_related("user__userprofile", "anime")
+            .prefetch_related(self._google_accounts_prefetch("user"))
             .order_by("-updated_at")[:50]  # Cap to prevent unbounded results
         )
 

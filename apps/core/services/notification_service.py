@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.core.models import Notification, PushSubscription
 from apps.shared.logger import logger
 from apps.users.models import UserProfile
+from apps.users.services.avatar_service import get_user_avatar_url
 
 UNREAD_COUNT_CACHE_TTL_SECONDS = 24 * 60 * 60
 
@@ -297,7 +298,7 @@ class NotificationService:
             data={
                 "follower_id": follower.id,
                 "follower_username": follower.username,
-                "follower_avatar": follower.avatar if hasattr(follower, "avatar") else None,
+                "follower_avatar": get_user_avatar_url(follower),
             },
             priority="medium",
         )

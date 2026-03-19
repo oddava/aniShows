@@ -29,6 +29,7 @@ from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from apps.core.services.admin_settings_service import username_length_limits
 from apps.shared.logger import logger
 from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
+from apps.users.services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 
@@ -705,7 +706,7 @@ class UserFollowListSerializer(ModelSerializer):
         return {
             "id": user_obj.id,
             "username": user_obj.username,
-            "avatar": profile.avatar.url if profile and profile.avatar else None,
+            "avatar": get_user_avatar_url(user_obj),
             "points": profile.points if profile else 0,
         }
 
@@ -743,11 +744,10 @@ class FriendWatchingSerializer(ModelSerializer):
     def get_user(self, obj):
         """Return user details with avatar"""
         user_obj = obj.user
-        profile = getattr(user_obj, "userprofile", None)
         return {
             "id": user_obj.id,
             "username": user_obj.username,
-            "avatar": profile.avatar.url if profile and profile.avatar else None,
+            "avatar": get_user_avatar_url(user_obj),
         }
 
     def get_anime(self, obj):

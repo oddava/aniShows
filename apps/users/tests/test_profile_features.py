@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
@@ -116,6 +117,75 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.profile.refresh_from_db()
         self.assertEqual(len(self.profile.social_links), 0)
+
+    def test_current_profile_falls_back_to_google_avatar_for_email_signup(self):
+        """Email-first users should still expose linked Google avatars."""
+        google_avatar = "https://lh3.googleusercontent.com/a/notjony-avatar=s96-c"
+        SocialAccount.objects.create(
+            user=self.user,
+            provider="google",
+            uid="google-mainuser",
+            extra_data={"picture": google_avatar},
+        )
+
+        res = self.client.get(self.profile_url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["avatar"], google_avatar)
+
+    def test_public_profile_falls_back_to_google_avatar_for_email_signup(self):
+        """Public profile payload should use linked Google avatars when no upload exists."""
+        other_user = User.objects.create_user(
+            username="notJony",
+            email="notjony@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=other_user, defaults={"email_verified": True})
+        google_avatar = "https://lh3.googleusercontent.com/a/notjony-public=s96-c"
+        SocialAccount.objects.create(
+            user=other_user,
+            provider="google",
+            uid="google-notjony",
+            extra_data={"picture": google_avatar},
+        )
+
+        res = self.client.get(self.public_profile_url("notJony"))
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["avatar"], google_avatar)
+
+    def test_followers_list_falls_back_to_google_avatar_for_email_signup(self):
+        """Follower cards should use the same avatar fallback as profile views."""
+        target_user = User.objects.create_user(
+            username="targetuser",
+            email="target@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=target_user, defaults={"email_verified": True})
+
+        follower = User.objects.create_user(
+            username="notJony",
+            email="notjony@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=follower, defaults={"email_verified": True})
+
+        google_avatar = "https://lh3.googleusercontent.com/a/notjony-follow=s96-c"
+        SocialAccount.objects.create(
+            user=follower,
+            provider="google",
+            uid="google-notjony-follow",
+            extra_data={"picture": google_avatar},
+        )
+
+        from apps.users.models import UserFollow
+
+        UserFollow.objects.create(follower=follower, following=target_user)
+
+        res = self.client.get(f"/api/v1/follows/followers/{target_user.username}/")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["results"][0]["user"]["avatar"], google_avatar)
 
     def test_profile_update_basic_info(self):
         """Test updating bio and ensure unsafe tags are removed."""

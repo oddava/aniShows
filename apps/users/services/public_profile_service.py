@@ -3,9 +3,12 @@ from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db.models import Prefetch
+from allauth.socialaccount.models import SocialAccount
 
 from apps.users.serializers.users import PublicUserSerializer
 from apps.shared.logger import logger
+from apps.users.services.avatar_service import get_user_avatar_url
 from apps.users.services.cache import get_public_profile_cache_key
 from apps.users.services.profile_service import get_featured_badges, is_user_online
 from apps.users.services.user_queryset import get_annotated_user_queryset
@@ -56,7 +59,19 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
         return PublicProfileResult(data=cached_data, cache_hit=True, source="cache")
 
     try:
-        user = User.objects.select_related("userprofile", "stats").get(username=username)
+        user = (
+            User.objects.select_related("userprofile", "stats")
+            .prefetch_related(
+                Prefetch(
+                    "socialaccount_set",
+                    queryset=SocialAccount.objects.filter(provider="google").only(
+                        "user_id", "provider", "extra_data"
+                    ),
+                    to_attr="_prefetched_social_accounts",
+                )
+            )
+            .get(username=username)
+        )
         is_private = user.userprofile.is_private if user.userprofile else False
         if is_private and not is_own_profile:
             raise PublicProfileError("Profile not found", 404)
@@ -82,9 +97,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "id": user.id,
                 "username": user.username,
                 "date_joined": user.date_joined,
-                "avatar": user.userprofile.avatar.url
-                if user.userprofile and user.userprofile.avatar
-                else None,
+                "avatar": get_user_avatar_url(user),
                 "banner": user.userprofile.banner.url
                 if user.userprofile and user.userprofile.banner
                 else None,

@@ -2,9 +2,11 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from unittest.mock import Mock, patch
+from allauth.socialaccount.models import SocialAccount
 
 from apps.core.models import Notification
 from apps.core.services.notification_service import NotificationService
+from apps.users.models import UserProfile
 
 User = get_user_model()
 
@@ -75,6 +77,26 @@ class TestNotificationUnreadCountCache(TestCase):
             f"notifications_user_{self.user.id}",
             {"type": "notification.count_update", "count": 0},
         )
+
+    def test_new_follower_notification_uses_google_avatar_fallback(self):
+        follower = User.objects.create_user(
+            username="notJony",
+            email="notjony@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=follower, defaults={"email_verified": True})
+        google_avatar = "https://lh3.googleusercontent.com/a/notjony-notif=s96-c"
+        SocialAccount.objects.create(
+            user=follower,
+            provider="google",
+            uid="google-notjony-notif",
+            extra_data={"picture": google_avatar},
+        )
+
+        notification = NotificationService.create_new_follower_notification(self.user, follower)
+
+        self.assertIsNotNone(notification)
+        self.assertEqual(notification.data["follower_avatar"], google_avatar)
 
     @patch("apps.core.services.notification_service.async_to_sync")
     @patch("apps.core.services.notification_service.get_channel_layer")

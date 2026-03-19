@@ -3,9 +3,12 @@ from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db.models import Prefetch
 
 from apps.shared.logger import logger
 from apps.users.models import UserBadge, UserStats
+from apps.users.services.avatar_service import get_user_avatar_url
+from allauth.socialaccount.models import SocialAccount
 
 try:
     from apps.users.services.cache import get_user_online_cache_key, get_user_profile_cache_key
@@ -47,7 +50,19 @@ def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
             cache.set(cache_key, normalized, timeout=300)
         return ProfileResult(data=normalized, cache_hit=True)
 
-    user = User.objects.select_related("userprofile").get(pk=user_id)
+    user = (
+        User.objects.select_related("userprofile")
+        .prefetch_related(
+            Prefetch(
+                "socialaccount_set",
+                queryset=SocialAccount.objects.filter(provider="google").only(
+                    "user_id", "provider", "extra_data"
+                ),
+                to_attr="_prefetched_social_accounts",
+            )
+        )
+        .get(pk=user_id)
+    )
     stats_data = _get_stats_snapshot(user)
     data = _build_profile_data(user, stats_data)
 
@@ -132,7 +147,7 @@ def _build_profile_data(user, stats_data):
         "username": user.username,
         "email": user.email,
         "date_joined": user.date_joined,
-        "avatar": profile.avatar.url if profile and profile.avatar else None,
+        "avatar": get_user_avatar_url(user),
         "banner": profile.banner.url if profile and profile.banner else None,
         "bio": _normalize_bio(profile.bio if profile else None),
         "is_private": profile.is_private if profile else False,
