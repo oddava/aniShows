@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { authApi } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function ConfirmEmailChange() {
     const { uid, token, new_email } = useParams();
+    const { isAuthenticated, refreshProfile } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('Confirming your new email address...');
 
@@ -13,6 +15,15 @@ export default function ConfirmEmailChange() {
             try {
                 // Decode base64 email for display if needed (but API handles token validation)
                 await authApi.confirmEmailChange(uid, token, new_email);
+
+                if (isAuthenticated) {
+                    try {
+                        await refreshProfile();
+                    } catch {
+                        pass
+                    }
+                }
+
                 setStatus('success');
                 setMessage('Your email has been successfully updated!');
             } catch (err) {
@@ -27,7 +38,7 @@ export default function ConfirmEmailChange() {
             setStatus('error');
             setMessage('Invalid verification link.');
         }
-    }, [uid, token, new_email]);
+    }, [uid, token, new_email, isAuthenticated, refreshProfile]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
