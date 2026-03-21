@@ -8,9 +8,20 @@ import { forumsApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import Pagination from '../../components/common/Pagination';
 import { preloadForumChunks } from '../../App';
-import { ThreadListSkeleton, CategorySkeleton } from '../../components/forums/ForumSkeletons';
+import { ThreadListSkeleton } from '../../components/forums/ForumSkeletons';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
+
+const getThreadPreview = (content) => {
+    const plainText = content?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
+    if (!plainText) {
+        return 'No content yet.';
+    }
+
+    return plainText.length > 180
+        ? `${plainText.substring(0, 180)}...`
+        : plainText;
+};
 
 const PinnedThreadRow = memo(({ thread }) => {
     const navigate = useNavigate();
@@ -25,21 +36,32 @@ const PinnedThreadRow = memo(({ thread }) => {
                     navigate(`/forums/thread/${thread.id}`);
                 }
             }}
-            className="group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-yellow-500/[0.04] transition-colors border-b border-yellow-500/10 last:border-b-0"
+            className="forums-thread-card group cursor-pointer p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
+            style={{
+                borderColor: 'var(--forums-accent-weak)',
+                background: 'linear-gradient(180deg, var(--forums-surface-soft), var(--forums-surface))',
+            }}
         >
-            <Pin size={12} className="text-yellow-500 shrink-0" />
-            {thread.is_locked && <Lock size={12} className="text-gray-500 shrink-0" />}
-            <h3 className="text-sm font-semibold text-gray-300 group-hover:text-yellow-400 transition-colors truncate flex-1">
-                {thread.title}
-            </h3>
-            <div className="flex items-center gap-3 text-gray-500 shrink-0">
-                <div className="flex items-center gap-1" title={`${thread.reply_count} replies`}>
-                    <MessageSquare size={11} />
-                    <span className="text-[11px] font-bold">{thread.reply_count}</span>
+            <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <Pin size={14} className="forums-accent-text shrink-0" />
+                        {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
+                        <h3 className="forums-thread-title truncate transition-colors group-hover:text-[var(--forums-accent)]">
+                            {thread.title}
+                        </h3>
+                    </div>
+                    <p className="forums-meta-text">Pinned discussion</p>
                 </div>
-                <div className="flex items-center gap-1" title={`${thread.view_count} views`}>
-                    <Eye size={11} />
-                    <span className="text-[11px] font-bold">{thread.view_count}</span>
+                <div className="forums-meta-text flex shrink-0 items-center gap-4">
+                    <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
+                        <MessageSquare size={14} />
+                        <span className="text-sm font-semibold">{thread.reply_count}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
+                        <Eye size={14} />
+                        <span className="text-sm font-semibold">{thread.view_count}</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -47,7 +69,7 @@ const PinnedThreadRow = memo(({ thread }) => {
 });
 PinnedThreadRow.displayName = 'PinnedThreadRow';
 
-const ThreadCard = memo(({ thread, slug }) => {
+const ThreadCard = memo(({ thread }) => {
     const navigate = useNavigate();
     return (
         <div
@@ -60,46 +82,44 @@ const ThreadCard = memo(({ thread, slug }) => {
                     navigate(`/forums/thread/${thread.id}`);
                 }
             }}
-            className="group p-4 rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none active:scale-[0.99] bg-white/[0.02] border-white/10 hover:bg-white/[0.04] hover:border-white/20 shadow-sm"
+            className="forums-thread-card group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
         >
-            <div className="flex flex-col gap-2">
-                {/* Title */}
-                <div className="flex items-center gap-2 min-w-0">
-                    {thread.is_locked && <Lock size={12} className="text-gray-500 shrink-0" />}
-                    <h3 className="text-[15px] sm:text-base font-semibold text-white group-hover:text-accent transition-colors truncate">
+            <div className="flex flex-col gap-4">
+                <div className="flex min-w-0 items-center gap-2">
+                    {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
+                    <h3 className="forums-thread-title line-clamp-2 transition-colors group-hover:text-[var(--forums-accent)]">
                         {thread.title}
                     </h3>
                 </div>
 
-                {/* Content Preview */}
-                <p className="text-sm text-gray-400 line-clamp-1 mb-1 leading-relaxed">
-                    {thread.content
-                        ? (thread.content.replace(/[#*`]/g, '').length > 150
-                            ? thread.content.replace(/[#*`]/g, '').substring(0, 150) + '...'
-                            : thread.content.replace(/[#*`]/g, ''))
-                        : 'No content...'}
+                <p className="forums-body-text line-clamp-2">
+                    {getThreadPreview(thread.content)}
                 </p>
 
-                {/* Footer Info */}
-                <div className="flex items-center justify-between gap-4 mt-0.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                            <Link to={`/u/${thread.author?.username}`} className="flex items-center gap-2 group/author">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <Link to={`/u/${thread.author?.username}`} className="group/author flex items-center gap-2">
                                 <Avatar user={thread.author} size="xs" />
-                                <span className="text-[12px] font-bold text-accent-light group-hover/author:text-accent transition-colors truncate">{thread.author?.username}</span>
+                                <span className="truncate text-sm font-semibold text-[var(--forums-accent)] transition-colors group-hover/author:text-[var(--forums-accent-hover)]">
+                                    {thread.author?.username}
+                                </span>
                             </Link>
                         </div>
-                        <span className="text-[10px] text-gray-700">•</span>
-                        <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                        <span className="forums-meta-text">•</span>
+                        <span className="forums-meta-text whitespace-nowrap">
                             {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
                         </span>
-
-                        <div className="hidden sm:flex items-center gap-1.5 ml-1">
+                        <div className="flex flex-wrap items-center gap-2">
                             {thread.tags?.map(tag => (
                                 <span
                                     key={tag.id}
-                                    className="px-1 py-0 text-[10px] font-extrabold uppercase tracking-tight"
-                                    style={{ color: tag.color }}
+                                    className="rounded-lg border px-2 py-1 text-sm font-semibold leading-none"
+                                    style={{
+                                        color: tag.color,
+                                        borderColor: `${tag.color}66`,
+                                        backgroundColor: `${tag.color}1a`,
+                                    }}
                                 >
                                     {tag.name}
                                 </span>
@@ -107,14 +127,14 @@ const ThreadCard = memo(({ thread, slug }) => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 text-gray-400 shrink-0">
+                    <div className="forums-meta-text flex shrink-0 items-center gap-4">
                         <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
-                            <MessageSquare size={11} />
-                            <span className="text-[11px] font-bold leading-none">{thread.reply_count}</span>
+                            <MessageSquare size={14} />
+                            <span className="text-sm font-semibold">{thread.reply_count}</span>
                         </div>
                         <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
-                            <Eye size={11} />
-                            <span className="text-[11px] font-bold leading-none">{thread.view_count}</span>
+                            <Eye size={14} />
+                            <span className="text-sm font-semibold">{thread.view_count}</span>
                         </div>
                     </div>
                 </div>
@@ -180,27 +200,27 @@ const ForumThreadList = () => {
     // 1. If loading for 500ms+ with no cached data, show skeleton
     if (showCategoryLoading) {
         return (
-            <div className="min-h-screen">
-                <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
+            <div className="forums-page">
+                <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
                     {/* Breadcrumb skeleton */}
-                    <div className="flex items-center gap-2 mb-6">
-                        <div className="h-4 bg-gray-800/40 rounded w-24"></div>
-                        <ChevronRight size={12} className="text-gray-700" />
-                        <div className="h-4 bg-gray-800/40 rounded w-32"></div>
+                    <div className="mb-6 flex items-center gap-2">
+                        <div className="h-4 w-24 rounded bg-[var(--forums-surface-soft)]"></div>
+                        <ChevronRight size={12} className="forums-meta-text" />
+                        <div className="h-4 w-32 rounded bg-[var(--forums-surface-soft)]"></div>
                     </div>
 
                     {/* Header skeleton */}
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+                    <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                         <div>
-                            <div className="h-8 bg-gray-800/40 rounded w-48 mb-2"></div>
-                            <div className="h-4 bg-gray-800/40 rounded w-72"></div>
+                            <div className="mb-2 h-8 w-48 rounded bg-[var(--forums-surface-soft)]"></div>
+                            <div className="h-4 w-72 rounded bg-[var(--forums-surface-soft)]"></div>
                         </div>
-                        <div className="h-10 bg-gray-800/40 rounded-xl w-32 shrink-0"></div>
+                        <div className="h-10 w-32 shrink-0 rounded-xl bg-[var(--forums-surface-soft)]"></div>
                     </div>
 
                     {/* Tags skeleton */}
-                    <div className="flex gap-2 mb-6">
-                        {[1, 2, 3, 4].map(i => <div key={i} className="h-6 w-16 bg-gray-800/40 rounded-lg"></div>)}
+                    <div className="mb-6 flex gap-2">
+                        {[1, 2, 3, 4].map((i) => <div key={i} className="h-8 w-20 rounded-lg bg-[var(--forums-surface-soft)]"></div>)}
                     </div>
 
                     {/* Thread list skeleton */}
@@ -212,38 +232,38 @@ const ForumThreadList = () => {
 
     // 2. If no data yet but still within 500ms delay, show nothing (prevents flash)
     if (!category) {
-        return <div className="min-h-screen"></div>;
+        return <div className="forums-page"></div>;
     }
 
     // 3. Have data - render content immediately
     return (
-        <div className="min-h-screen">
+        <div className="forums-page">
             <Helmet>
                 <title>{category ? `${category.name}` : 'Category'} | aniShows Forums</title>
             </Helmet>
 
-            <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
+            <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
                 {/* Breadcrumb */}
-                <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-                    <Link to="/forums" className="flex items-center gap-1 hover:text-accent transition-colors">
+                <div className="forums-meta-text mb-8 flex items-center gap-2">
+                    <Link to="/forums" className="flex items-center gap-1 transition-colors hover:text-[var(--forums-accent)]">
                         <ArrowLeft size={14} /> Forums
                     </Link>
                     <ChevronRight size={12} />
-                    <span className="text-white font-medium">{category?.name}</span>
+                    <span className="font-semibold text-[var(--forums-text)]">{category?.name}</span>
                 </div>
 
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+                <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">{category?.name}</h1>
+                        <h1 className="forums-heading">{category?.name}</h1>
                         {category?.description && (
-                            <p className="mt-1 text-sm text-gray-500">{category.description}</p>
+                            <p className="forums-body-text mt-2 max-w-2xl">{category.description}</p>
                         )}
                     </div>
                     {isAuthenticated && (
                         <Link
                             to={`/forums/category/${slug}/create`}
-                            className="flex items-center gap-2 py-2.5 px-5 font-bold text-sm rounded-xl shrink-0 bg-dark-100 border border-gray-800 text-gray-200 hover:border-accent transition-colors"
+                            className="forums-primary-action flex shrink-0 items-center gap-2 px-5 py-3"
                         >
                             <Plus size={18} /> New Thread
                         </Link>
@@ -252,12 +272,12 @@ const ForumThreadList = () => {
 
                 {/* Tags */}
                 {tagsData?.results && tagsData.results.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 mb-6">
+                    <div className="mb-8 flex flex-wrap items-center gap-2">
                         <button
                             onClick={() => { setSelectedTag(''); setPage(1); }}
-                            className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors ${selectedTag === ''
-                                ? 'bg-accent text-white'
-                                : 'bg-dark-100 text-gray-400 border border-gray-800 hover:border-gray-600'
+                            className={`forums-pill px-4 py-2 ${selectedTag === ''
+                                ? 'forums-pill-active'
+                                : 'hover:border-[var(--forums-accent-weak)] hover:text-[var(--forums-text)]'
                                 }`}
                         >
                             All
@@ -266,7 +286,7 @@ const ForumThreadList = () => {
                             <button
                                 key={tag.id}
                                 onClick={() => { setSelectedTag(tag.slug); setPage(1); }}
-                                className="px-3 py-1 text-xs font-bold rounded-lg transition-colors border"
+                                className="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
                                 style={{
                                     backgroundColor: selectedTag === tag.slug ? tag.color : `${tag.color}15`,
                                     borderColor: selectedTag === tag.slug ? tag.color : 'transparent',
@@ -280,16 +300,16 @@ const ForumThreadList = () => {
                 )}
 
                 {/* Threads */}
-                <div className="space-y-2 relative min-h-[400px]">
+                <div className="forums-thread-list relative min-h-[400px]">
                     {showThreadsLoading ? (
                         <ThreadListSkeleton />
                     ) : threadsError ? (
-                        <div className="py-16 text-center">
-                            <h3 className="text-lg font-semibold text-gray-400">Failed to load threads</h3>
-                            <p className="mt-1 text-sm text-gray-600 mb-4">Please try again later</p>
+                        <div className="forums-surface py-16 text-center">
+                            <h3 className="forums-section-title">Failed to load threads</h3>
+                            <p className="forums-meta-text mb-4 mt-2">Please try again later.</p>
                             <button
                                 onClick={() => window.location.reload()}
-                                className="text-accent hover:underline"
+                                className="text-sm font-semibold text-[var(--forums-accent)] hover:underline"
                             >
                                 Retry
                             </button>
@@ -297,17 +317,17 @@ const ForumThreadList = () => {
                     ) : (
                         <>
                             {isFetching && (
-                                <div className="absolute inset-0 bg-dark/30 z-10 flex items-center justify-center rounded-xl backdrop-blur-sm">
-                                    <div className="flex items-center gap-2 text-gray-400">
-                                        <div className="w-5 h-5 border-2 border-accent/30 border-t-accent rounded-full" />
-                                        <span className="text-sm">Updating...</span>
+                                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/30 backdrop-blur-sm">
+                                    <div className="forums-surface-soft flex items-center gap-2 px-4 py-3">
+                                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--forums-accent-weak)] border-t-[var(--forums-accent)]" />
+                                        <span className="forums-meta-text">Updating...</span>
                                     </div>
                                 </div>
                             )}
 
                             {/* Pinned Threads — compact section at top, only page 1 */}
                             {page === 1 && threadsData?.results?.filter(t => t.is_pinned).length > 0 && (
-                                <div className="mb-3 rounded-xl border border-yellow-500/15 bg-yellow-500/[0.02] overflow-hidden">
+                                <div className="forums-thread-list">
                                     {threadsData.results.filter(t => t.is_pinned).map(thread => (
                                         <PinnedThreadRow key={thread.id} thread={thread} />
                                     ))}
@@ -316,14 +336,14 @@ const ForumThreadList = () => {
 
                             {/* Regular Threads */}
                             {threadsData?.results?.filter(t => !t.is_pinned).map((thread) => (
-                                <ThreadCard key={thread.id} thread={thread} slug={slug} />
+                                <ThreadCard key={thread.id} thread={thread} />
                             ))}
 
                             {(!threadsData?.results || threadsData.results.length === 0) && (
-                                <div className="py-16 text-center">
-                                    <MessageSquare size={48} className="mx-auto mb-4 text-gray-700" />
-                                    <h3 className="text-lg font-semibold text-gray-400">No threads yet</h3>
-                                    <p className="mt-1 text-sm text-gray-600">Be the first to start a discussion!</p>
+                                <div className="forums-surface py-16 text-center">
+                                    <MessageSquare size={48} className="mx-auto mb-4 text-[var(--forums-meta)]" />
+                                    <h3 className="forums-section-title">No threads yet</h3>
+                                    <p className="forums-meta-text mt-2">Be the first to start a discussion.</p>
                                 </div>
                             )}
                         </>

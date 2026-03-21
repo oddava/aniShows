@@ -2,6 +2,7 @@
 @import "./styles/components/utilities.css";
 @import "./styles/components/cards.css";
 @import "./styles/components/animations.css";
+@import "./styles/pages/forums.css";
 
 @theme {
   --color-dark: #0f0f0f;

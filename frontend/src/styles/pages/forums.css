@@ -1,0 +1,158 @@
+@layer components {
+  .forums-page {
+    --forums-bg: #121212;
+    --forums-surface: #1b1b1b;
+    --forums-surface-soft: #202020;
+    --forums-border: #2d2d2d;
+    --forums-text: #f3f4f6;
+    --forums-text-muted: #a3a3a3;
+    --forums-meta: #8c8c8c;
+    --forums-accent: var(--color-accent);
+    --forums-accent-weak: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    --forums-accent-hover: var(--color-accent-dark);
+
+    min-height: 100vh;
+    background: var(--forums-bg);
+    color: var(--forums-text);
+    font-family: "Inter", "Plus Jakarta Sans", system-ui, sans-serif;
+  }
+
+  .forums-surface {
+    background-color: var(--forums-surface);
+    border: 1px solid var(--forums-border);
+    border-radius: 16px;
+  }
+
+  .forums-surface-soft {
+    background-color: var(--forums-surface-soft);
+    border: 1px solid var(--forums-border);
+    border-radius: 16px;
+  }
+
+  .forums-heading {
+    font-size: clamp(1.875rem, 2.8vw, 2.375rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--forums-text);
+  }
+
+  .forums-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--forums-text);
+  }
+
+  .forums-thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .forums-thread-card {
+    background-color: var(--forums-surface);
+    border: 1px solid var(--forums-border);
+    border-radius: 16px;
+    padding: 24px;
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .forums-thread-card:hover {
+    border-color: var(--forums-accent-weak);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+  }
+
+  .forums-thread-title {
+    font-size: clamp(1.125rem, 1.8vw, 1.25rem);
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--forums-text);
+  }
+
+  .forums-body-text {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--forums-text-muted);
+  }
+
+  .forums-meta-text {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    color: var(--forums-meta);
+  }
+
+  .forums-accent-text {
+    color: var(--forums-accent);
+  }
+
+  .forums-pill {
+    border-radius: 10px;
+    border: 1px solid var(--forums-border);
+    background-color: var(--forums-surface-soft);
+    color: var(--forums-text-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 180ms ease;
+  }
+
+  .forums-pill-active {
+    border-color: var(--forums-accent);
+    background-color: var(--forums-accent);
+    color: #fff;
+  }
+
+  .forums-primary-action {
+    border-radius: 12px;
+    border: 1px solid var(--forums-accent);
+    background-color: var(--forums-accent);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+
+  .forums-primary-action:hover {
+    border-color: var(--forums-accent-hover);
+    background-color: var(--forums-accent-hover);
+  }
+
+  .forums-search {
+    border-radius: 12px;
+    border: 1px solid var(--forums-border);
+    background-color: var(--forums-surface-soft);
+    color: var(--forums-text);
+  }
+
+  .forums-search::placeholder {
+    color: var(--forums-meta);
+  }
+
+  html[data-theme="light"] .forums-page {
+    --forums-bg: #f8f9fa;
+    --forums-surface: #ffffff;
+    --forums-surface-soft: #f1f3f5;
+    --forums-border: #d8dee4;
+    --forums-text: #111827;
+    --forums-text-muted: #374151;
+    --forums-meta: #6b7280;
+    --forums-accent: var(--color-accent);
+    --forums-accent-weak: color-mix(in srgb, var(--color-accent) 26%, transparent);
+    --forums-accent-hover: var(--color-accent-dark);
+  }
+
+  @media (prefers-color-scheme: light) {
+    .forums-page {
+      --forums-bg: #f8f9fa;
+      --forums-surface: #ffffff;
+      --forums-surface-soft: #f1f3f5;
+      --forums-border: #d8dee4;
+      --forums-text: #111827;
+      --forums-text-muted: #374151;
+      --forums-meta: #6b7280;
+      --forums-accent: var(--color-accent);
+      --forums-accent-weak: color-mix(in srgb, var(--color-accent) 26%, transparent);
+      --forums-accent-hover: var(--color-accent-dark);
+    }
+  }
+}
