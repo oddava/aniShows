@@ -179,10 +179,8 @@ function parseNextPage(lastPage) {
 }
 
 function activityMetadata(activity) {
-    if (activity.activity_type === 'status_change' && activity.new_status) {
-        return activity.old_status
-            ? `${activity.old_status} -> ${activity.new_status}`
-            : activity.new_status;
+    if (activity.activity_type === 'status_change') {
+        return null;
     }
 
     if (activity.activity_type === 'score' && activity.new_score != null) {
