@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewApi } from '../api/client';
 import ReviewComments from './ReviewComments';
+import MiniProfileHoverCard from './common/MiniProfileHoverCard';
 
 // Generate consistent color from string
 const stringToColor = (str) => {
@@ -136,13 +137,15 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     if (compact || (!hasText && !showAnime)) {
         return (
             <div className="bg-dark-100/50 rounded-lg px-4 py-3 border border-gray-800/50 flex items-center gap-3">
-                <Link to={`/u/${review.user?.username}`} className="shrink-0">
-                    {review.user?.avatar ? (
-                        <img src={review.user.avatar} alt={review.user.username} className="w-8 h-8 rounded-full object-cover border border-gray-700" />
-                    ) : (
-                        <LetterAvatar name={review.user?.username} size="sm" />
-                    )}
-                </Link>
+                <MiniProfileHoverCard user={review.user}>
+                    <Link to={`/u/${review.user?.username}`} className="shrink-0">
+                        {review.user?.avatar ? (
+                            <img src={review.user.avatar} alt={review.user.username} className="w-8 h-8 rounded-full object-cover border border-gray-700" />
+                        ) : (
+                            <LetterAvatar name={review.user?.username} size="sm" />
+                        )}
+                    </Link>
+                </MiniProfileHoverCard>
                 <Link to={`/u/${review.user?.username}`} className="text-sm text-gray-400 hover:text-white transition-colors font-medium truncate">
                     {review.user?.username}
                 </Link>
@@ -181,13 +184,13 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     };
 
     return (
-        <div className="bg-dark-100 rounded-xl border border-gray-800 animate-fade-in mb-3 overflow-hidden">
+        <div className="bg-dark-100 rounded-xl border border-gray-800 animate-fade-in mb-3 overflow-visible">
             <div className="flex items-start">
                 {/* Left Column: Main Content */}
                 <div className="flex-1 p-4 min-w-0">
                     {/* Header */}
                     <div className="flex items-start gap-3 mb-3">
-                        <div className={`overflow-hidden shrink-0 ${showAnime ? 'w-10 h-14 rounded-md border border-gray-700' : ''}`}>
+                        <div className={`shrink-0 ${showAnime ? 'w-10 h-14 overflow-hidden rounded-md border border-gray-700' : 'overflow-visible'}`}>
                             {showAnime ? (
                                 <Link to={`/anime/${review.anime?.slug}`} className="block w-full h-full">
                                     {review.anime?.cover_image ? (
@@ -197,13 +200,15 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                     )}
                                 </Link>
                             ) : (
-                                <Link to={`/u/${review.user?.username}`} className="block">
-                                    {review.user?.avatar ? (
-                                        <img src={review.user.avatar} alt={review.user.username} className="w-9 h-9 rounded-full object-cover border border-gray-700" />
-                                    ) : (
-                                        <LetterAvatar name={review.user?.username} size="md" />
-                                    )}
-                                </Link>
+                                <MiniProfileHoverCard user={review.user}>
+                                    <Link to={`/u/${review.user?.username}`} className="block">
+                                        {review.user?.avatar ? (
+                                            <img src={review.user.avatar} alt={review.user.username} className="w-9 h-9 rounded-full object-cover border border-gray-700" />
+                                        ) : (
+                                            <LetterAvatar name={review.user?.username} size="md" />
+                                        )}
+                                    </Link>
+                                </MiniProfileHoverCard>
                             )}
                         </div>
 
