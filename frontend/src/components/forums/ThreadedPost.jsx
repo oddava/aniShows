@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Pencil, Trash2, ChevronDown, ChevronUp, CornerDownRight, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import Avatar from './Avatar';
+import MiniProfileHoverCard from '../common/MiniProfileHoverCard';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import RichTextEditor from './RichTextEditor';
 
@@ -94,9 +95,11 @@ const ThreadedPost = ({
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                         <div className="flex items-center gap-3.5">
-                            <Link to={`/u/${post.author.username}`} className="shrink-0">
-                                <Avatar user={post.author} />
-                            </Link>
+                            <MiniProfileHoverCard user={post.author}>
+                                <Link to={`/u/${post.author.username}`} className="shrink-0">
+                                    <Avatar user={post.author} />
+                                </Link>
+                            </MiniProfileHoverCard>
                             <div>
                                 <div className="flex items-center gap-2">
                                     <Link to={`/u/${post.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">

@@ -11,6 +11,7 @@ import Pagination from '../../components/common/Pagination';
 import { preloadForumChunks } from '../../App';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
+import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 
 const TABS = [
     { key: 'active', label: 'Active', icon: Flame },
@@ -106,12 +107,19 @@ const ThreadRow = memo(({ thread }) => {
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <div onClick={(e) => e.stopPropagation()}>
-                            <Link to={`/u/${thread.author?.username}`} className="group/author flex items-center gap-2">
-                                <Avatar user={thread.author} size="xs" />
-                                <span className="truncate text-sm font-semibold text-[var(--forums-accent)] transition-colors group-hover/author:text-[var(--forums-accent-hover)]">
+                            <div className="flex items-center gap-2">
+                                <MiniProfileHoverCard user={thread.author}>
+                                    <Link to={`/u/${thread.author?.username}`} className="shrink-0">
+                                        <Avatar user={thread.author} size="xs" />
+                                    </Link>
+                                </MiniProfileHoverCard>
+                                <Link
+                                    to={`/u/${thread.author?.username}`}
+                                    className="truncate text-sm font-semibold text-[var(--forums-accent)] transition-colors hover:text-[var(--forums-accent-hover)]"
+                                >
                                     {thread.author?.username}
-                                </span>
-                            </Link>
+                                </Link>
+                            </div>
                         </div>
                         <span className="forums-meta-text">•</span>
                         <span className="forums-meta-text whitespace-nowrap">

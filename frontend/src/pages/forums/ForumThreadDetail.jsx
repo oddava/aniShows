@@ -32,6 +32,7 @@ import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import { useForumWebSocket } from '../../hooks/useForumWebSocket';
 import ThreadedPost from '../../components/forums/ThreadedPost';
 import Avatar from '../../components/forums/Avatar';
+import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 
 // Breadcrumb skeleton component - static, no animations
 const BreadcrumbSkeleton = () => (
@@ -600,9 +601,11 @@ const ForumThreadDetail = () => {
                         <div className="bg-accent/[0.02] rounded-[20px] p-4 border border-accent/20 shadow-sm shadow-accent/5 relative">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                                 <div className="flex items-center gap-3.5">
-                                    <Link to={`/u/${thread.author.username}`} className="shrink-0">
-                                        <Avatar user={thread.author} />
-                                    </Link>
+                                    <MiniProfileHoverCard user={thread.author}>
+                                        <Link to={`/u/${thread.author.username}`} className="shrink-0">
+                                            <Avatar user={thread.author} />
+                                        </Link>
+                                    </MiniProfileHoverCard>
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <Link to={`/u/${thread.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
