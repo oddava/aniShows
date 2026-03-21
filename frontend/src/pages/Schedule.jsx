@@ -66,18 +66,6 @@ const getTimeRemaining = (dateString) => {
   return `${days}d ${hours % 24}h`;
 };
 
-// Check if airing is within 24 hours
-const isWithin24Hours = (dateString) => {
-  if (!dateString) return false;
-  const target = new Date(dateString);
-  // Check if date is valid
-  if (isNaN(target.getTime())) return false;
-
-  const now = new Date();
-  const diff = target - now;
-  return diff > 0 && diff < 24 * 60 * 60 * 1000;
-};
-
 // Day Selector Component
 const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
   const scrollRef = useRef(null);
@@ -136,7 +124,6 @@ const ScheduleCard = ({ anime }) => {
   }, [imageUrl]);
 
   const timeRemaining = getTimeRemaining(anime.next_airing_date);
-  const isUrgent = isWithin24Hours(anime.next_airing_date);
   const watchingEntry = anime.user_list_status?.status === 'watching' ? anime.user_list_status : null;
 
   // Safely check if anime has aired
@@ -150,11 +137,8 @@ const ScheduleCard = ({ anime }) => {
     <div className="group relative block h-full overflow-visible hover:z-[150]">
       <div
         className={`
-          bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300
-          ${isUrgent
-            ? 'border-green-500/35 hover:border-green-500/55'
-            : 'border-gray-800 hover:border-accent/40'
-          }
+          bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative transition-all duration-300
+          hover:border-gray-700
         `}
       >
         {/* Cover Image */}
@@ -178,13 +162,7 @@ const ScheduleCard = ({ anime }) => {
 
           {/* Bottom Schedule Status Bar */}
           <div className="absolute bottom-2 left-2 right-2 z-[100]">
-            <div className={`
-              h-7 px-2.5 rounded-md border backdrop-blur-md flex items-center justify-start gap-1.5
-              ${isUrgent
-                ? 'bg-black/65 border-green-400/35 text-gray-100'
-                : 'bg-black/65 border-accent/35 text-gray-100'
-              }
-            `}>
+            <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center justify-start gap-1.5 bg-black/65 text-gray-100">
               {!hasAired && (
                 <Clock className="w-3 h-3 text-gray-100/90" />
               )}
