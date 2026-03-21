@@ -123,8 +123,8 @@ describe('Schedule Component', () => {
     });
 
     expect(screen.getByText('Demon Slayer')).toBeInTheDocument();
-    expect(screen.getByText('EP 5')).toBeInTheDocument();
-    expect(screen.getByText('EP 12')).toBeInTheDocument();
+    expect(screen.getByText(/EP 5 in|EP 5 Aired/)).toBeInTheDocument();
+    expect(screen.getByText(/EP 12 in|EP 12 Aired/)).toBeInTheDocument();
   });
 
   it('handles API error gracefully', async () => {
@@ -408,8 +408,8 @@ describe('Schedule Component', () => {
       expect(screen.getByText('Aired Anime Today')).toBeInTheDocument();
     }, { timeout: 3000 });
 
-    // Should show "Aired" status for past episodes
-    expect(screen.getByText('Aired')).toBeInTheDocument();
+    // Should show aired status in the top schedule status bar
+    expect(screen.getByText(/EP 5 Aired/)).toBeInTheDocument();
   });
 
   it('handles retry button click on error', async () => {

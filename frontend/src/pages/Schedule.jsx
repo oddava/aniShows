@@ -1,20 +1,23 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Tv,
   Bell,
   CheckCircle2
 } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { getImageUrl, applyImageFallback, getImageFallbackUrl } from '../utils/imageUtils';
+import {
+  applyImageFallback,
+  getImageFallbackUrl,
+  getImageSrcSet,
+  getOptimizedImageUrl
+} from '../utils/imageUtils';
 import { ScheduleGridSkeleton } from '../components/skeletons';
-import { Link } from 'react-router-dom';
+import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
 
@@ -121,10 +124,20 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
 };
 
 // Schedule Card Component
-const ScheduleCard = ({ anime, onUpdate }) => {
+const ScheduleCard = ({ anime }) => {
   const { isAuthenticated } = useAuth();
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
+  const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
+  const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
+
+  useEffect(() => {
+    setImageLoaded(false);
+  }, [imageUrl]);
+
   const timeRemaining = getTimeRemaining(anime.next_airing_date);
   const isUrgent = isWithin24Hours(anime.next_airing_date);
+  const watchingEntry = anime.user_list_status?.status === 'watching' ? anime.user_list_status : null;
 
   // Safely check if anime has aired
   const hasAired = (() => {
@@ -139,7 +152,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
         className={`
           bg-dark-100 rounded-xl border h-full flex flex-col relative transition-all duration-300
           ${isUrgent
-            ? 'border-green-500/40 hover:border-green-500'
+            ? 'border-green-500/35 hover:border-green-500/55'
             : 'border-gray-800 hover:border-accent/40'
           }
         `}
@@ -147,53 +160,48 @@ const ScheduleCard = ({ anime, onUpdate }) => {
         {/* Cover Image */}
         <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
           <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
+            {!imageLoaded && (
+              <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
+            )}
             <img
-              src={getImageUrl(anime.cover_image)}
+              src={imageUrl}
+              srcSet={imageSrcSet}
+              sizes="(max-width: 767px) 46vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 18vw"
               alt={anime.title}
-              className="w-full h-full object-cover transition-opacity duration-300"
-              onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'cover'))}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setImageLoaded(true)}
+              onError={(event) => applyImageFallback(event, fallbackImageUrl)}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
+          </Link>
 
-            {/* Episode Badge - Top Right */}
-            <div className="absolute top-2 right-2 z-[100]">
-              <div className={`
-                px-2 py-1 rounded-md text-xs font-bold shadow-sm backdrop-blur-md
-                ${isUrgent
-                  ? 'bg-green-500 text-white'
-                  : 'bg-black/60 text-white border border-white/20'
-                }
-              `}>
-                EP {anime.next_airing_episode}
-              </div>
-            </div>
-
-            {/* Airing Info Overlay - Bottom */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-8 pb-2 px-2.5 z-[100]">
+          {/* Bottom Schedule Status Bar */}
+          <div className="absolute bottom-2 left-2 right-2 z-[100]">
+            <div className={`
+              h-7 px-2.5 rounded-md border backdrop-blur-md flex items-center justify-start gap-1.5
+              ${isUrgent
+                ? 'bg-black/65 border-green-400/35 text-gray-100'
+                : 'bg-black/65 border-accent/35 text-gray-100'
+              }
+            `}>
+              {!hasAired && (
+                <Clock className="w-3 h-3 text-gray-100/90" />
+              )}
               {hasAired ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20">
-                    <CheckCircle2 className="w-2.5 h-2.5 text-green-400" />
-                  </div>
-                  <span className="text-xs font-semibold text-green-400">Aired</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <div className={`
-                    flex items-center justify-center w-4 h-4 rounded-full
-                    ${isUrgent ? 'bg-green-500/20' : 'bg-white/10'}
-                  `}>
-                    <Clock className={`w-2.5 h-2.5 ${isUrgent ? 'text-green-400' : 'text-white'}`} />
-                  </div>
-                  <span className={`
-                    text-xs font-semibold
-                    ${isUrgent ? 'text-green-400' : 'text-white'}
-                  `}>
-                    {timeRemaining}
+                <>
+                  <CheckCircle2 className="w-3 h-3 text-gray-100/90" />
+                  <span className="text-[11px] font-medium tracking-wide text-gray-100">
+                    EP {anime.next_airing_episode} Aired
                   </span>
-                </div>
+                </>
+              ) : (
+                <span className="text-[11px] font-medium tracking-wide text-gray-100">
+                  EP {anime.next_airing_episode} in {timeRemaining}
+                </span>
               )}
             </div>
-          </Link>
+          </div>
         </div>
 
         {/* Content */}
@@ -204,11 +212,11 @@ const ScheduleCard = ({ anime, onUpdate }) => {
 
           <div className="flex items-center justify-between text-[11px] text-gray-400 mt-auto">
             <span className="font-medium text-accent-light">{anime.anime_type || 'TV'}</span>
-            
+
             <div className="flex items-center gap-1 text-gray-400">
-              {isAuthenticated && anime.user_list_status?.status === 'watching' ? (
+              {isAuthenticated && watchingEntry ? (
                 <>
-                  <span className="text-accent-light font-bold">{anime.user_list_status.episodes_watched}</span>
+                  <span className="text-accent-light font-bold">{watchingEntry.episodes_watched}</span>
                   <span className="text-gray-500">/</span>
                   <span>{anime.episode_count || '?'}</span>
                   <span className="text-[10px] text-gray-500 ml-0.5">eps</span>
@@ -269,7 +277,6 @@ const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday }) => {
 export default function Schedule() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
-  const queryClient = useQueryClient();
 
   // Get initial week from URL or use current week
   const [currentWeek, setCurrentWeek] = useState(() => {
@@ -316,7 +323,7 @@ export default function Schedule() {
   }, [currentWeek, selectedDay, setSearchParams]);
 
   // Fetch schedule data
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['schedule', currentWeek.toISOString(), isAuthenticated],
     queryFn: async () => {
       // For now, fetch airing anime and filter client-side
@@ -413,12 +420,6 @@ export default function Schedule() {
     setSelectedDay(today.getDay());
   };
 
-  // Handle list update
-  const handleListUpdate = () => {
-    // Refetch data
-    queryClient.invalidateQueries({ queryKey: ['schedule'] });
-  };
-
   if (error) {
     return (
       <ErrorBoundary>
@@ -441,6 +442,7 @@ export default function Schedule() {
   return (
     <ErrorBoundary>
       <SEO page="schedule" />
+      <LoadingBar isLoading={isLoading || isFetching} />
       <div className="min-h-screen pb-20">
         {/* Header */}
         <div className="bg-dark-100/50 border-b border-gray-800">
@@ -497,12 +499,11 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 lg:gap-5">
               {selectedDayAnime.map((anime) => (
                 <ScheduleCard
                   key={anime.id}
                   anime={anime}
-                  onUpdate={handleListUpdate}
                 />
               ))}
             </div>

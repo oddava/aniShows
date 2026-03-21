@@ -2,7 +2,7 @@ import React from 'react';
 
 /**
  * Schedule card skeleton component
- * Mimics the structure of ScheduleCard with episode badge, time overlay, and info
+ * Mimics the compact schedule card structure with bottom status bar and info
  */
 export function ScheduleCardSkeleton({ delay = 0 }) {
     return (
@@ -10,29 +10,16 @@ export function ScheduleCardSkeleton({ delay = 0 }) {
             className="relative overflow-hidden rounded-xl bg-dark-100 skeleton-fade-in border border-gray-800 h-full flex flex-col"
             style={{ animationDelay: `${delay}ms` }}
         >
-            {/* Shimmer overlay */}
-            <div className="absolute inset-0 z-20 pointer-events-none shimmer-gradient" />
-
             {/* Cover image placeholder - aspect ratio 2:3 */}
             <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
                 <div className="absolute inset-0 bg-dark-200">
                     <div className="absolute inset-0 skeleton-wave" />
                 </div>
 
-                {/* Episode badge placeholder - Top Right */}
-                <div className="absolute top-2 right-2 z-[100]">
-                    <div className="h-6 w-12 bg-black/60 rounded-md relative overflow-hidden border border-white/20">
-                        <div className="absolute inset-0 skeleton-wave" />
-                    </div>
-                </div>
-
-                {/* Time overlay placeholder - Bottom with larger display */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-8 pb-2 px-2.5 z-[100]">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-4 h-4 rounded-full bg-white/10 relative overflow-hidden">
-                            <div className="absolute inset-0 skeleton-wave" />
-                        </div>
-                        <div className="h-3 w-16 bg-white/10 rounded relative overflow-hidden">
+                {/* Bottom status bar placeholder */}
+                <div className="absolute bottom-2 left-2 right-2 z-[100]">
+                    <div className="h-7 rounded-md border border-accent/30 bg-black/55 relative overflow-hidden flex items-center justify-start px-2.5">
+                        <div className="h-2.5 w-28 bg-white/10 rounded relative overflow-hidden">
                             <div className="absolute inset-0 skeleton-wave" />
                         </div>
                     </div>
@@ -71,7 +58,7 @@ export function ScheduleCardSkeleton({ delay = 0 }) {
  */
 export function ScheduleGridSkeleton({ count = 10 }) {
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 lg:gap-5">
             {Array.from({ length: count }).map((_, i) => (
                 <ScheduleCardSkeleton key={i} delay={i * 50} />
             ))}
