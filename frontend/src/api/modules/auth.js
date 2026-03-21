@@ -24,7 +24,7 @@ export const authApi = {
     resendVerification: (email) => api.post('/auth/resend-verification/', { email }),
     changeEmail: (data) => api.post('/auth/change-email/', data),
     confirmEmailChange: (uid, token, newEmail) =>
-        api.get(`/confirm-email-change/${uid}/${token}/${newEmail}/`),
+        api.post('/auth/confirm-email-change/', { uid, token, new_email: newEmail }),
     googleLogin: (code, callbackUrl) =>
         api.post('/auth/google/', { code, callback_url: callbackUrl }),
     deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),

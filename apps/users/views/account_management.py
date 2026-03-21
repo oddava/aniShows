@@ -24,6 +24,12 @@ class AccountManagementViewSet(ViewSet):
 
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_permissions(self):
+        """Allow unauthenticated access only for email change confirmation links."""
+        if self.action == "confirm_email_change":
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+
     # Specific actions might need specific rate limiting
     def get_throttles(self):
         if self.action in ["delete_account", "change_email", "confirm_email_change"]:

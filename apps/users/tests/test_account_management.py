@@ -1,5 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -69,6 +72,27 @@ class AccountManagementTests(APITestCase):
         }
         response = self.client.post(self.change_email_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_confirm_email_change_allows_unauthenticated_requests(self):
+        """Email confirmation link should work even when user is not logged in."""
+        new_email = 'updated@example.com'
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = default_token_generator.make_token(self.user)
+        encoded_email = urlsafe_base64_encode(force_bytes(new_email))
+
+        self.client.force_authenticate(user=None)
+        response = self.client.post(
+            self.confirm_email_url,
+            {'uid': uid, 'token': token, 'new_email': encoded_email},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+        self.profile.refresh_from_db()
+        self.assertEqual(self.user.email, new_email)
+        self.assertTrue(self.profile.email_verified)
 
     def test_resend_verification(self):
         """Test resending verification email."""

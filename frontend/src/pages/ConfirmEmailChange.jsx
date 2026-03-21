@@ -12,7 +12,7 @@ export default function ConfirmEmailChange() {
         const confirmChange = async () => {
             try {
                 // Decode base64 email for display if needed (but API handles token validation)
-                await authApi.confirmEmailChange({ uid, token, new_email });
+                await authApi.confirmEmailChange(uid, token, new_email);
                 setStatus('success');
                 setMessage('Your email has been successfully updated!');
             } catch (err) {
