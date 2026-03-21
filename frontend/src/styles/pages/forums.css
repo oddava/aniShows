@@ -18,13 +18,13 @@
   }
 
   .forums-surface {
-    background-color: var(--forums-surface);
+    background-color: transparent;
     border: 1px solid var(--forums-border);
     border-radius: 16px;
   }
 
   .forums-surface-soft {
-    background-color: var(--forums-surface-soft);
+    background-color: transparent;
     border: 1px solid var(--forums-border);
     border-radius: 16px;
   }
@@ -50,16 +50,15 @@
   }
 
   .forums-thread-card {
-    background-color: var(--forums-surface);
-    border: 1px solid var(--forums-border);
-    border-radius: 16px;
-    padding: 24px;
-    transition: border-color 180ms ease, box-shadow 180ms ease;
+    background-color: color-mix(in srgb, var(--forums-surface-soft) 78%, transparent);
+    border: 0;
+    border-radius: 10px;
+    padding: 18px;
+    transition: background-color 180ms ease;
   }
 
   .forums-thread-card:hover {
-    border-color: var(--forums-accent-weak);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+    background-color: color-mix(in srgb, var(--forums-surface-soft) 78%, transparent);
   }
 
   .forums-thread-title {
@@ -68,6 +67,27 @@
     line-height: 1.35;
     letter-spacing: -0.01em;
     color: var(--forums-text);
+  }
+
+  .forums-pinned-row {
+    border: 1px solid var(--forums-border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--forums-surface-soft) 82%, transparent),
+      color-mix(in srgb, var(--forums-surface) 88%, transparent)
+    );
+    transition: border-color 180ms ease, background-color 180ms ease;
+  }
+
+  .forums-pinned-row:hover {
+    border-color: var(--forums-border);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--forums-surface-soft) 82%, transparent),
+      color-mix(in srgb, var(--forums-surface) 88%, transparent)
+    );
   }
 
   .forums-body-text {
@@ -87,13 +107,13 @@
   }
 
   .forums-pill {
-    border-radius: 10px;
+    border-radius: 8px;
     border: 1px solid var(--forums-border);
-    background-color: var(--forums-surface-soft);
+    background-color: transparent;
     color: var(--forums-text-muted);
     font-size: 0.875rem;
     font-weight: 600;
-    transition: all 180ms ease;
+    transition: border-color 180ms ease, color 180ms ease, background-color 180ms ease;
   }
 
   .forums-pill-active {
@@ -118,14 +138,64 @@
   }
 
   .forums-search {
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid var(--forums-border);
-    background-color: var(--forums-surface-soft);
+    background-color: transparent;
     color: var(--forums-text);
   }
 
   .forums-search::placeholder {
     color: var(--forums-meta);
+  }
+
+  .forums-left-strip {
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .forums-left-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 0;
+    border-left: 2px solid transparent;
+    padding: 7px 8px;
+    font-size: 0.8125rem;
+    color: var(--forums-meta);
+    transition: border-color 160ms ease, color 160ms ease;
+  }
+
+  .forums-left-item:hover {
+    background-color: transparent;
+    color: var(--forums-text);
+  }
+
+  .forums-left-item.is-active {
+    background-color: transparent;
+    border-left-color: var(--forums-accent);
+    color: var(--forums-text);
+  }
+
+  .forums-rail-card {
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .forums-rail-row {
+    border-radius: 0;
+    border: 0;
+    border-bottom: 1px solid var(--forums-border);
+    background: transparent;
+    padding: 8px 0;
+    transition: border-color 160ms ease, color 160ms ease;
+  }
+
+  .forums-rail-row:hover {
+    border-color: var(--forums-accent-weak);
   }
 
   html[data-theme="light"] .forums-page {
