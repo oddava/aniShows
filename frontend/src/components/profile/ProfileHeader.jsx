@@ -36,12 +36,19 @@ export default function ProfileHeader({
                     <div className="relative shrink-0 -mt-14">
                         <div className="w-28 h-28 rounded-full bg-dark border-4 border-dark overflow-hidden">
                             {displayUser?.avatar ? (
-                                <img src={displayUser.avatar} alt={displayUser.username} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full bg-dark-200 flex items-center justify-center">
-                                    <User className="w-16 h-16 text-gray-600" />
-                                </div>
-                            )}
+                                <img
+                                    src={displayUser.avatar}
+                                    alt={displayUser.username}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextElementSibling?.style && (e.target.nextElementSibling.style.display = 'flex');
+                                    }}
+                                />
+                            ) : null}
+                            <div className={`w-full h-full bg-dark-200 items-center justify-center ${displayUser?.avatar ? 'hidden' : 'flex'}`}>
+                                <User className="w-16 h-16 text-gray-600" />
+                            </div>
                         </div>
                     </div>
 
@@ -103,12 +110,19 @@ export default function ProfileHeader({
                     <div className="relative shrink-0 -mt-24">
                         <div className="w-40 h-40 rounded-2xl bg-dark overflow-hidden">
                             {displayUser?.avatar ? (
-                                <img src={displayUser.avatar} alt={displayUser.username} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full bg-dark-200 flex items-center justify-center">
-                                    <User className="w-20 h-20 text-gray-600" />
-                                </div>
-                            )}
+                                <img
+                                    src={displayUser.avatar}
+                                    alt={displayUser.username}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextElementSibling?.style && (e.target.nextElementSibling.style.display = 'flex');
+                                    }}
+                                />
+                            ) : null}
+                            <div className={`w-full h-full bg-dark-200 items-center justify-center ${displayUser?.avatar ? 'hidden' : 'flex'}`}>
+                                <User className="w-20 h-20 text-gray-600" />
+                            </div>
                         </div>
                         {displayUser?.is_online ? (
                             <div className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-dark" title="Online" />

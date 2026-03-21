@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { getImageUrl } from '../utils/imageUtils';
+import { getImageUrl, applyImageFallback, getImageFallbackUrl } from '../utils/imageUtils';
 import { ScheduleGridSkeleton } from '../components/skeletons';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
@@ -151,6 +151,7 @@ const ScheduleCard = ({ anime, onUpdate }) => {
               src={getImageUrl(anime.cover_image)}
               alt={anime.title}
               className="w-full h-full object-cover transition-opacity duration-300"
+              onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'cover'))}
             />
 
             {/* Episode Badge - Top Right */}

@@ -256,7 +256,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
-            title=f"New Episode: {anime.title}",
+            title="New Episode",
             message=f"Episode {episode_number} of {anime.title} is now available!",
             data={
                 "anime_id": anime.id,
@@ -273,7 +273,7 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.REVIEW_REPLY,
-            title="New reply to your review",
+            title="Review Reply",
             message=f"{comment.user.username} replied to your review of {review.anime.title}",
             data={
                 "review_id": review.id,
@@ -309,8 +309,8 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_REPLY,
-            title="New reply to your thread",
-            message=f"{post.author.username} replied to your thread '{thread.title}'",
+            title="Forum Reply",
+            message=f"{post.author.username} replied to your thread {thread.title}",
             data={
                 "thread_id": thread.id,
                 "post_id": post.id,
@@ -326,8 +326,8 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_REPLY,
-            title="New reply to your post",
-            message=f"{reply.author.username} replied to your post in '{reply.thread.title}'",
+            title="Forum Reply",
+            message=f"{reply.author.username} replied to your post in {reply.thread.title}",
             data={
                 "thread_id": reply.thread.id,
                 "post_id": reply.id,
@@ -349,8 +349,8 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_MENTION,
-            title="You were mentioned",
-            message=f"{author.username} mentioned you in a {item_type} in '{title}'",
+            title="Mentioned",
+            message=f"{author.username} mentioned you in a {item_type} in {title}",
             data={
                 "thread_id": thread_id,
                 "mentioner_username": author.username,
@@ -371,7 +371,7 @@ class NotificationService:
             user=user,
             notification_type=Notification.NotificationType.FORUM_LIKE,
             title="New Like",
-            message=f"{author.username} liked your {item_type} in '{title}'",
+            message=f"{author.username} liked your {item_type} in {title}",
             data={
                 "thread_id": thread_id,
                 "liker_username": author.username,
@@ -387,8 +387,8 @@ class NotificationService:
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.BADGE_AWARDED,
-            title=f"New Badge: {badge.name}",
-            message=f"You've been awarded the '{badge.name}' badge!",
+            title="Badge Awarded",
+            message=f"You've been awarded the {badge.name} badge!",
             data={
                 "badge_id": badge.id,
                 "badge_name": badge.name,

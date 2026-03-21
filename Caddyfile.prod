@@ -120,6 +120,7 @@
             @media_error status 400 401 403 404 405 408 409 410 429 500 502 503 504
             handle_response @media_error {
                 header Cache-Control "no-store"
+                header CDN-Cache-Control "no-store"
                 copy_response
             }
         }

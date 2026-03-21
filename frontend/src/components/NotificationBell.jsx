@@ -5,6 +5,7 @@ import { notificationApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import logger from '../utils/logger';
+import { getHighlightEntityData } from '../utils/notificationUtils';
 
 export const NotificationBell = () => {
     const { user } = useAuth();
@@ -184,12 +185,22 @@ export const NotificationBell = () => {
                                 >
                                     <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-accent" />
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium text-white line-clamp-1">
-                                            {notification.title}
-                                        </p>
-                                        <p className="text-xs text-gray-400 line-clamp-2 mt-0.5">
-                                            {notification.message}
-                                        </p>
+                                        {(() => {
+                                            const { displayText, entity, startIndex } = getHighlightEntityData(notification);
+                                            return (
+                                                <p className="text-sm text-gray-200 leading-snug line-clamp-3">
+                                                    {startIndex >= 0 ? (
+                                                        <>
+                                                            <span>{displayText.slice(0, startIndex)}</span>
+                                                            <span className="text-accent font-semibold">{entity}</span>
+                                                            <span>{displayText.slice(startIndex + entity.length)}</span>
+                                                        </>
+                                                    ) : (
+                                                        displayText
+                                                    )}
+                                                </p>
+                                            );
+                                        })()}
                                         <p className="text-[10px] text-gray-500 mt-1">
                                             {new Date(notification.created_at).toLocaleDateString(undefined, {
                                                 month: 'short',

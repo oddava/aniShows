@@ -8,6 +8,12 @@ import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
+import { 
+    getNotificationDisplayText,
+    getHighlightEntityData,
+    getNotificationTarget,
+    cleanNotificationMessage
+} from '../utils/notificationUtils';
 
 const NOTIFICATION_FILTERS = [
     { value: 'all', label: 'All' },
@@ -43,87 +49,7 @@ const formatRelativeTime = (value) => {
     return rtf.format(Math.round(diffMs / year), 'year');
 };
 
-const cleanNotificationMessage = (message) => {
-    if (!message) return '';
-    return message
-        .replace(/\s*tap to[^.]*\.?\s*$/i, '')
-        .trim();
-};
-
-const getDisplayText = (notification) => {
-    const message = cleanNotificationMessage(notification.message);
-    return `${notification.title || ''}${message ? ` ${message}` : ''}`.trim();
-};
-
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const findTextIndex = (source, needle) => {
-    if (!source || !needle) return -1;
-    const match = source.match(new RegExp(escapeRegex(needle), 'i'));
-    return match ? match.index : -1;
-};
-
-const inferEntityFromTitle = (title) => {
-    if (!title || !title.includes(':')) return null;
-    const match = title.match(/:\s*([^.,!]+?)(?:\s+Episode\s+\d+|\s+airs\b|$)/i);
-    return match?.[1]?.trim() || null;
-};
-
-const getHighlightEntityData = (notification) => {
-    const data = notification?.data || {};
-    const displayText = getDisplayText(notification);
-    const quotedPhrases = Array.from(
-        displayText.matchAll(/(?:^|\s)'([^']+)'(?=\s|$|[.,!?])/g)
-    ).map((match) => match[1]);
-    const candidateFields = [
-        data.anime_title,
-        data.badge_name,
-        data.follower_username,
-        data.replier_username,
-        data.mentioner_username,
-        data.liker_username,
-        data.thread_title,
-        ...quotedPhrases,
-        inferEntityFromTitle(notification?.title || ''),
-    ];
-    const uniqueCandidates = Array.from(
-        new Set(
-            candidateFields
-                .filter((value) => typeof value === 'string')
-                .map((value) => value.trim())
-                .filter(Boolean)
-        )
-    ).sort((a, b) => b.length - a.length);
-
-    for (const candidate of uniqueCandidates) {
-        const startIndex = findTextIndex(displayText, candidate);
-        if (startIndex >= 0) {
-            return { displayText, entity: displayText.slice(startIndex, startIndex + candidate.length), startIndex };
-        }
-    }
-
-    return { displayText, entity: uniqueCandidates[0] || null, startIndex: -1 };
-};
-
-const getNotificationTarget = (notification) => {
-    const data = notification?.data || {};
-
-    if (data.anime_slug) return `/anime/${data.anime_slug}`;
-    if (notification.notification_type === 'new_follower' && data.follower_username) {
-        return `/u/${data.follower_username}`;
-    }
-    if (
-        (notification.notification_type === 'forum_reply' ||
-            notification.notification_type === 'forum_mention' ||
-            notification.notification_type === 'forum_like') &&
-        data.thread_id
-    ) {
-        return `/forums/thread/${data.thread_id}`;
-    }
-    if (notification.notification_type === 'badge_awarded') return '/profile';
-
-    return null;
-};
+// These functions are now in notificationUtils
 
 const getAnimeSlug = (notification) => notification?.data?.anime_slug || null;
 
@@ -565,7 +491,7 @@ export default function Notifications() {
                                                             {highlightEntity}
                                                         </button>
                                                     ) : (
-                                                        <span className="text-accent">{highlightEntity}</span>
+                                                        <span className="text-accent font-semibold">{highlightEntity}</span>
                                                     )}
                                                     <span>{displayText.slice(highlightStart + highlightEntity.length)}</span>
                                                 </>
