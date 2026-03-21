@@ -3,6 +3,7 @@
     --forums-bg: #121212;
     --forums-surface: #1b1b1b;
     --forums-surface-soft: #202020;
+    --forums-thread-bg: var(--forums-surface);
     --forums-border: #2d2d2d;
     --forums-text: #f3f4f6;
     --forums-text-muted: #a3a3a3;
@@ -50,7 +51,7 @@
   }
 
   .forums-thread-card {
-    background-color: color-mix(in srgb, var(--forums-surface-soft) 78%, transparent);
+    background-color: var(--forums-thread-bg);
     border: 0;
     border-radius: 10px;
     padding: 18px;
@@ -73,21 +74,13 @@
     border: 1px solid var(--forums-border);
     border-radius: 10px;
     padding: 8px 10px;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--forums-surface-soft) 82%, transparent),
-      color-mix(in srgb, var(--forums-surface) 88%, transparent)
-    );
+    background-color: var(--forums-surface-soft);
     transition: border-color 180ms ease, background-color 180ms ease;
   }
 
   .forums-pinned-row:hover {
     border-color: var(--forums-border);
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--forums-surface-soft) 82%, transparent),
-      color-mix(in srgb, var(--forums-surface) 88%, transparent)
-    );
+    background-color: var(--forums-surface-soft);
   }
 
   .forums-body-text {
@@ -202,6 +195,7 @@
     --forums-bg: #f8f9fa;
     --forums-surface: #ffffff;
     --forums-surface-soft: #f1f3f5;
+    --forums-thread-bg: var(--forums-surface);
     --forums-border: #d8dee4;
     --forums-text: #111827;
     --forums-text-muted: #374151;
@@ -216,6 +210,7 @@
       --forums-bg: #f8f9fa;
       --forums-surface: #ffffff;
       --forums-surface-soft: #f1f3f5;
+      --forums-thread-bg: var(--forums-surface);
       --forums-border: #d8dee4;
       --forums-text: #111827;
       --forums-text-muted: #374151;
