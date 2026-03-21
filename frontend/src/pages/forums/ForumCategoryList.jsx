@@ -1,7 +1,7 @@
 import React, { useState, useEffect, memo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Pin, Lock, Plus, ChevronRight, Clock, Flame, Search, MessageSquare, Eye } from 'lucide-react';
+import { Pin, Lock, Plus, Search, MessageSquare, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { forumsApi } from '../../api/client';
 import { Helmet } from 'react-helmet-async';
@@ -13,11 +13,6 @@ import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 
-const TABS = [
-    { key: 'active', label: 'Active', icon: Flame },
-    { key: 'new', label: 'Newest', icon: Clock },
-];
-
 const getThreadPreview = (content) => {
     const plainText = content?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
     if (!plainText) {
@@ -28,8 +23,6 @@ const getThreadPreview = (content) => {
         ? `${plainText.substring(0, 180)}...`
         : plainText;
 };
-
-const getActivityTimestamp = (thread) => thread.updated_at || thread.created_at;
 
 const PinnedThreadRow = memo(({ thread }) => {
     const navigate = useNavigate();
@@ -44,32 +37,23 @@ const PinnedThreadRow = memo(({ thread }) => {
                     navigate(`/forums/thread/${thread.id}`);
                 }
             }}
-            className="forums-thread-card group cursor-pointer p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
-            style={{
-                borderColor: 'var(--forums-accent-weak)',
-                background: 'linear-gradient(180deg, var(--forums-surface-soft), var(--forums-surface))',
-            }}
+            className="group flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-[var(--forums-accent-weak)] bg-[var(--forums-surface-soft)] px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
         >
-            <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                        <Pin size={14} className="forums-accent-text shrink-0" />
-                        {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
-                        <h3 className="forums-thread-title truncate transition-colors group-hover:text-[var(--forums-accent)]">
-                            {thread.title}
-                        </h3>
-                    </div>
-                    <p className="forums-meta-text">Pinned discussion</p>
+            <div className="flex min-w-0 items-center gap-2">
+                <Pin size={12} className="forums-accent-text shrink-0" />
+                {thread.is_locked && <Lock size={12} className="forums-meta-text shrink-0" />}
+                <h3 className="truncate text-sm font-semibold text-[var(--forums-text)] transition-colors group-hover:text-[var(--forums-accent)]">
+                    {thread.title}
+                </h3>
+            </div>
+            <div className="forums-meta-text flex shrink-0 items-center gap-3 text-xs">
+                <div className="flex items-center gap-1" title={`${thread.reply_count} replies`}>
+                    <MessageSquare size={12} />
+                    <span className="font-semibold">{thread.reply_count}</span>
                 </div>
-                <div className="forums-meta-text flex shrink-0 items-center gap-4">
-                    <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
-                        <MessageSquare size={14} />
-                        <span className="text-sm font-semibold">{thread.reply_count}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
-                        <Eye size={14} />
-                        <span className="text-sm font-semibold">{thread.view_count}</span>
-                    </div>
+                <div className="flex items-center gap-1" title={`${thread.view_count} views`}>
+                    <Eye size={12} />
+                    <span className="font-semibold">{thread.view_count}</span>
                 </div>
             </div>
         </div>
@@ -159,31 +143,6 @@ const ThreadRow = memo(({ thread }) => {
 });
 ThreadRow.displayName = 'ThreadRow';
 
-const TrendingThreadItem = memo(({ thread }) => {
-    const navigate = useNavigate();
-    const activityTime = getActivityTimestamp(thread);
-    const activityLabel = activityTime
-        ? formatDistanceToNow(new Date(activityTime), { addSuffix: true })
-        : 'just now';
-
-    return (
-        <button
-            type="button"
-            onClick={() => navigate(`/forums/thread/${thread.id}`)}
-            className="forums-surface-soft w-full cursor-pointer rounded-xl p-4 text-left transition-colors hover:border-[var(--forums-accent-weak)]"
-        >
-            <p className="forums-thread-title line-clamp-2 text-[1.0625rem] leading-snug">{thread.title}</p>
-            <div className="forums-meta-text mt-2 flex items-center gap-2">
-                <MessageSquare size={13} />
-                <span>{thread.reply_count ?? 0}</span>
-                <span>•</span>
-                <span>{activityLabel}</span>
-            </div>
-        </button>
-    );
-});
-TrendingThreadItem.displayName = 'TrendingThreadItem';
-
 const ForumCategoryList = () => {
     const { isAuthenticated } = useAuth();
     const [activeTab, setActiveTab] = useState('active');
@@ -221,17 +180,6 @@ const ForumCategoryList = () => {
         placeholderData: keepPreviousData,
     });
 
-    const {
-        data: trendingData,
-        isLoading: trendingLoading,
-        isPlaceholderData: trendingPlaceholder
-    } = useQuery({
-        queryKey: ['forumTrendingThreads'],
-        queryFn: () => forumsApi.getGlobalFeed(1),
-        staleTime: 30 * 1000,
-        placeholderData: keepPreviousData,
-    });
-
     const { data: newThreads, isLoading: newLoading, isFetching: newFetching, isPlaceholderData: newPlaceholder } = useQuery({
         queryKey: ['forumNewThreads', page],
         queryFn: () => forumsApi.getThreads({ ordering: '-created_at', page }),
@@ -259,29 +207,23 @@ const ForumCategoryList = () => {
     const totalPages = displayedData?.count ? Math.ceil(displayedData.count / 20) : 0;
 
     // AniList-style loading pattern
-    const renderCategories = () => {
+    const renderCategorySidebar = () => {
         if (showCategoriesLoading) {
             return (
-                <section>
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-                        <div>
-                            <h2 className="forums-section-title mb-4">Categories</h2>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="h-[116px] rounded-2xl border border-[var(--forums-border)] bg-[var(--forums-surface)]"></div>
-                                ))}
-                            </div>
-                        </div>
-                        <aside>
-                            <h2 className="forums-section-title mb-4">Trending Now</h2>
-                            <div className="space-y-3">
-                                {[1, 2, 3, 4, 5].map((i) => (
-                                    <div key={i} className="h-[84px] rounded-xl border border-[var(--forums-border)] bg-[var(--forums-surface)]"></div>
-                                ))}
-                            </div>
-                        </aside>
+                <aside className="h-fit lg:sticky lg:top-24">
+                    <div className="mb-3 h-9 rounded-lg border border-[var(--forums-border)] bg-[var(--forums-surface-soft)]" />
+                    <div className="mb-4 h-9 rounded-lg border border-[var(--forums-border)] bg-[var(--forums-surface-soft)]" />
+                    <div className="space-y-1.5">
+                        {[1, 2, 3].map((i) => (
+                            <div key={`feed-${i}`} className="h-7 rounded-md border border-[var(--forums-border)] bg-[var(--forums-surface-soft)]" />
+                        ))}
                     </div>
-                </section>
+                    <div className="mt-4 space-y-1.5">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div key={`cat-${i}`} className="h-6 rounded-md border border-[var(--forums-border)] bg-[var(--forums-surface-soft)]" />
+                        ))}
+                    </div>
+                </aside>
             );
         }
 
@@ -291,63 +233,79 @@ const ForumCategoryList = () => {
         }
 
         if (categories.results?.length > 0) {
-            const trendingThreads = trendingData?.results?.slice(0, 5) || [];
-            const showTrendingLoading = trendingLoading && !trendingPlaceholder;
-
             return (
-                <section>
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-                        <div>
-                            <h2 className="forums-section-title mb-4">Categories</h2>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                {categories.results.map(cat => (
-                                    <Link
-                                        key={cat.id}
-                                        to={`/forums/category/${cat.slug}`}
-                                        className="forums-thread-card group p-5"
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <h3 className="text-[1.125rem] font-bold tracking-tight text-[var(--forums-text)] transition-colors group-hover:text-[var(--forums-accent)]">
-                                                    {cat.name}
-                                                </h3>
-                                                {cat.description && (
-                                                    <p className="forums-meta-text mt-2 line-clamp-2">{cat.description}</p>
-                                                )}
-                                            </div>
-                                            <ChevronRight size={16} className="forums-meta-text mt-1 shrink-0 transition-colors group-hover:text-[var(--forums-accent)]" />
-                                        </div>
-                                        <p className="forums-meta-text mt-4">{cat.thread_count || 0} threads</p>
-                                    </Link>
-                                ))}
-                            </div>
-                        </div>
-                        <aside>
-                            <div className="forums-surface p-4">
-                                <div className="mb-4 flex items-center gap-2">
-                                    <Flame size={16} className="text-[var(--forums-accent)]" />
-                                    <h2 className="forums-section-title text-[1.1rem]">Trending Now</h2>
-                                </div>
+                <aside className="h-fit lg:sticky lg:top-24">
+                    {isAuthenticated ? (
+                        <Link
+                            to="/forums/create"
+                            className="forums-primary-action mb-3 flex w-full items-center justify-center gap-2 px-3 py-2 text-xs"
+                        >
+                            <Plus size={14} /> Create Thread
+                        </Link>
+                    ) : (
+                        <Link
+                            to="/login"
+                            className="forums-pill mb-3 flex w-full items-center justify-center gap-2 px-3 py-2 text-xs hover:border-[var(--forums-accent-weak)] hover:text-[var(--forums-text)]"
+                        >
+                            Sign In to Discuss
+                        </Link>
+                    )}
 
-                                {showTrendingLoading ? (
-                                    <div className="space-y-3">
-                                        {[1, 2, 3, 4, 5].map((i) => (
-                                            <div key={i} className="h-[84px] rounded-xl border border-[var(--forums-border)] bg-[var(--forums-surface-soft)]"></div>
-                                        ))}
-                                    </div>
-                                ) : trendingThreads.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {trendingThreads.map((thread) => (
-                                            <TrendingThreadItem key={thread.id} thread={thread} />
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="forums-meta-text">No trending threads yet.</p>
-                                )}
-                            </div>
-                        </aside>
+                    <div className="relative mb-4">
+                        <Search size={14} className="forums-meta-text absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search forum"
+                            className="forums-search w-full py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[var(--forums-accent)]"
+                        />
                     </div>
-                </section>
+
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">Feed</p>
+                    <div className="space-y-1.5">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('active')}
+                            className={`w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors ${activeTab === 'active'
+                                ? 'bg-[var(--forums-surface-soft)] text-[var(--forums-text)]'
+                                : 'text-[var(--forums-meta)] hover:bg-[var(--forums-surface-soft)] hover:text-[var(--forums-text)]'
+                                }`}
+                        >
+                            Overview
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('new')}
+                            className={`w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors ${activeTab === 'new'
+                                ? 'bg-[var(--forums-surface-soft)] text-[var(--forums-text)]'
+                                : 'text-[var(--forums-meta)] hover:bg-[var(--forums-surface-soft)] hover:text-[var(--forums-text)]'
+                                }`}
+                        >
+                            New Threads
+                        </button>
+                    </div>
+
+                    <p className="mb-1 mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">Categories</p>
+                    <div className="space-y-1">
+                        <Link
+                            to="/forums"
+                            className="block rounded-md px-3 py-1 text-sm text-[var(--forums-text)] hover:bg-[var(--forums-surface-soft)]"
+                        >
+                            All
+                        </Link>
+                        {categories.results.map(cat => (
+                            <Link
+                                key={cat.id}
+                                to={`/forums/category/${cat.slug}`}
+                                className="group flex items-center justify-between gap-2 rounded-md px-3 py-1 text-sm text-[var(--forums-meta)] transition-colors hover:bg-[var(--forums-surface-soft)] hover:text-[var(--forums-text)]"
+                            >
+                                <span className="truncate">{cat.name}</span>
+                                <span className="text-xs text-[var(--forums-meta)]">{cat.thread_count || 0}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </aside>
             );
         }
 
@@ -361,72 +319,35 @@ const ForumCategoryList = () => {
                 <meta name="description" content="Join the discussion! Talk about your favorite anime, share recommendations, and meet other fans." />
             </Helmet>
 
-            {/* Header */}
-            <div className="border-b border-[var(--forums-border)]">
-                <div className="mx-auto max-w-6xl px-4 pb-10 pt-12 md:px-6">
-                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                        <div>
-                            <h1 className="forums-heading">Forums</h1>
-                            <p className="forums-body-text mt-2">
-                                Discuss your favorite anime, share recommendations, and meet fans.
-                            </p>
-                        </div>
-                        {isAuthenticated ? (
-                            <Link
-                                to="/forums/create"
-                                className="forums-primary-action flex shrink-0 items-center gap-2 px-6 py-3"
-                            >
-                                <Plus size={18} /> New Thread
-                            </Link>
-                        ) : (
-                            <Link
-                                to="/login"
-                                className="forums-pill flex shrink-0 items-center gap-2 px-5 py-3 hover:border-[var(--forums-accent-weak)] hover:text-[var(--forums-text)]"
-                            >
-                                Sign In to Discuss
-                            </Link>
+            <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+                    {/* Categories Sidebar */}
+                    {renderCategorySidebar()}
+
+                    {/* Right Content */}
+                    <section className="min-w-0">
+                        {page === 1 && !isSearching && displayedData?.results?.filter(t => t.is_pinned).length > 0 && (
+                            <div className="mb-6 grid gap-2 md:grid-cols-2">
+                                {displayedData.results.filter(t => t.is_pinned).map(thread => (
+                                    <PinnedThreadRow key={thread.id} thread={thread} />
+                                ))}
+                            </div>
                         )}
-                    </div>
-                </div>
-            </div>
 
-            <div className="mx-auto max-w-6xl space-y-12 px-4 py-10 md:px-6">
-                {/* Categories */}
-                {renderCategories()}
-
-                {/* Threads */}
-                <section>
-                    <div className="mb-6 flex items-center justify-between">
-                        <h2 className="forums-section-title">Threads</h2>
-                        {/* Tabs */}
-                        <div className="forums-surface-soft flex items-center gap-1 p-1">
-                            {TABS.map(tab => (
+                        <div className="mb-4 flex items-center justify-between">
+                            <h2 className="forums-section-title">
+                                {isSearching ? 'Search Results' : activeTab === 'new' ? 'New Threads' : 'Recently Active Threads'}
+                            </h2>
+                            {!isSearching && (
                                 <button
-                                    key={tab.key}
-                                    onClick={() => setActiveTab(tab.key)}
-                                    className={`forums-pill flex items-center gap-1.5 px-4 py-2 ${activeTab === tab.key
-                                        ? 'forums-pill-active'
-                                        : 'hover:border-[var(--forums-accent-weak)] hover:text-[var(--forums-text)]'
-                                        }`}
+                                    type="button"
+                                    onClick={() => setPage(1)}
+                                    className="forums-meta-text text-sm hover:text-[var(--forums-text)]"
                                 >
-                                    <tab.icon size={14} />
-                                    {tab.label}
+                                    View All
                                 </button>
-                            ))}
+                            )}
                         </div>
-                    </div>
-
-                    {/* Search */}
-                    <div className="relative mb-6 max-w-md">
-                        <Search size={16} className="forums-meta-text absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search threads..."
-                            className="forums-search w-full py-3 pl-10 pr-4 text-base outline-none transition-colors focus:border-[var(--forums-accent)]"
-                        />
-                    </div>
 
                     {/* Thread List */}
                     <div className="relative min-h-[240px]">
@@ -451,14 +372,6 @@ const ForumCategoryList = () => {
 
                         {displayedData?.results?.length > 0 ? (
                             <div className="forums-thread-list">
-                                {/* Pinned Threads — compact section at top, only page 1 */}
-                                {page === 1 && displayedData.results.filter(t => t.is_pinned).length > 0 && (
-                                    <div className="forums-thread-list">
-                                        {displayedData.results.filter(t => t.is_pinned).map(thread => (
-                                            <PinnedThreadRow key={thread.id} thread={thread} />
-                                        ))}
-                                    </div>
-                                )}
                                 {/* Regular Threads */}
                                 {displayedData.results.filter(t => !t.is_pinned).map(thread => (
                                     <ThreadRow key={thread.id} thread={thread} />
@@ -486,7 +399,8 @@ const ForumCategoryList = () => {
                             />
                         </div>
                     )}
-                </section>
+                    </section>
+                </div>
             </div>
         </div>
     );
