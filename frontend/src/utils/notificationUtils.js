@@ -31,20 +31,27 @@ const GENERIC_TITLES = new Set([
  * @returns {string}
  */
 export const getNotificationDisplayText = (notification) => {
-    const title = notification.title || '';
-    const message = cleanNotificationMessage(notification.message);
+    let title = notification.title || '';
+    let message = cleanNotificationMessage(notification.message);
     
-    if (!title) return message;
-    if (!message) return title;
-
-    // If the title is just a category or generic name, skip it in the display
-    // unless the message is missing. This follows the user's request for conciseness.
-    if (GENERIC_TITLES.has(title)) return message;
+    // Check if the title is redundant because entity is in the message
+    if (title && message && message.toLowerCase().includes(title.toLowerCase())) {
+        title = '';
+    } else if (title && title.includes(':')) {
+        const parts = title.split(':');
+        // Example: "New Badge: Top Reviewer" -> parts[1] is "Top Reviewer"
+        if (parts.length === 2 && message.toLowerCase().includes(parts[1].trim().toLowerCase())) {
+            title = '';
+        }
+    }
     
-    // Check if the title is already part of the message to avoid redundancy
-    if (message.toLowerCase().includes(title.toLowerCase())) return message;
+    let combined = title && message && !GENERIC_TITLES.has(title) ? `${title} ${message}`.trim() : (message || title);
     
-    return `${title} ${message}`.trim();
+    // Strip single or double quotes around entities for cleaner display 
+    // e.g. "awarded the 'Top Reviewer' badge" -> "awarded the Top Reviewer badge"
+    combined = combined.replace(/(^|\s)["']([^"']+)["'](?=\s|$|[.,!?])/g, '$1$2');
+    
+    return combined;
 };
 
 /**
@@ -77,12 +84,14 @@ export const inferEntityFromTitle = (title) => {
  */
 export const getHighlightEntityData = (notification) => {
     const data = notification?.data || {};
-    const displayText = getNotificationDisplayText(notification);
     
-    // Match quoted phrases like 'Staff' or 'One Piece' (though quotes are being removed)
+    // Get raw message to extract quoted phrases before quotes are stripped in displayText
+    const rawMessage = notification?.message || '';
     const quotedPhrases = Array.from(
-        displayText.matchAll(/(?:^|\s)['"]([^'"]+)['"](?=\s|$|[.,!?])/g)
+        rawMessage.matchAll(/(?:^|\s)["']([^"']+)["'](?=\s|$|[.,!?])/g)
     ).map((match) => match[1]);
+
+    const displayText = getNotificationDisplayText(notification);
 
     const candidateFields = [
         data.anime_title,
