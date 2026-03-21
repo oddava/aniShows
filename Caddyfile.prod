@@ -114,11 +114,13 @@
             handle_response @media_success {
                 header Cache-Control "public, max-age=31536000, immutable"
                 header Vary "Accept"
+                copy_response
             }
 
             @media_error status 400 401 403 404 405 408 409 410 429 500 502 503 504
             handle_response @media_error {
                 header Cache-Control "no-store"
+                copy_response
             }
         }
         # Add cross-origin headers for images
