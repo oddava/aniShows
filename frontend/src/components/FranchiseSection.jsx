@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Film, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
+import AnimeMediaImage from './common/AnimeMediaImage';
 
 export default function FranchiseSection({ relations, accentColor, sourceSlug }) {
     const navigate = useNavigate();
@@ -131,12 +132,19 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
 }
 
 function FranchiseCard({ rel, label, onFetch }) {
+    const relationAnime = {
+        title: rel.title,
+        cover_image: rel.cover || null,
+    };
+
     const cardContent = (
         <>
             <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200 relative">
                 {rel.cover ? (
-                    <img
-                        src={rel.cover}
+                    <AnimeMediaImage
+                        anime={relationAnime}
+                        kind="cover"
+                        size="small"
                         alt={rel.title}
                         className="w-full h-full object-cover"
                         loading="lazy"

@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { User } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
@@ -201,10 +201,11 @@ export default function Profile({ forcedUsername }) {
         refetchOnMount: true,
     });
 
-    const { data: currentListData, isLoading: listsLoading } = useQuery({
+    const { data: currentListData, isLoading: listsLoading, isFetching: listsFetching } = useQuery({
         queryKey: ['lists', targetUsername, listStatusFilter],
         queryFn: () => listApi.getAll({ status: listStatusFilter, username: targetUsername }).then(res => res.data.results || res.data || []),
         enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
+        placeholderData: keepPreviousData,
         staleTime: 60 * 1000, // 1 minute
         gcTime: 10 * 60 * 1000,
         refetchOnMount: true,
@@ -349,6 +350,7 @@ export default function Profile({ forcedUsername }) {
                             setViewMode={setViewMode}
                             currentListData={currentListData}
                             listsLoading={listsLoading}
+                            listsFetching={listsFetching}
                             reviewsData={reviewsData}
                             reviewsLoading={reviewsLoading}
                             isFetchingNextReviews={isFetchingNextReviews}
