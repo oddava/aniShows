@@ -1,20 +1,17 @@
 import React, { useMemo, lazy, Suspense } from 'react';
 import { Heart, List, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
 import ProfileAnimeCard, { ProfileAnimeCardSkeleton } from '../ProfileAnimeCard';
 import ReviewCard from '../ReviewCard';
 import DraggableFavoritesGrid from '../DraggableFavoritesGrid';
 import ProfileStats from './ProfileStats';
-import { listApi } from '../../api/client';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import {
     applyImageFallback,
     getImageFallbackUrl,
     getOptimizedImageUrl,
 } from '../../utils/imageUtils';
-import logger from '../../utils/logger';
 import ProfileInsights from '../ProfileInsights';
 import FriendsTab from './FriendsTab';
 
@@ -49,14 +46,13 @@ export default function ProfileContent({
     setViewMode,
     currentListData,
     listsLoading,
+    listsFetching,
     reviewsData,
     reviewsLoading,
     isFetchingNextReviews,
     hasNextReviews,
     fetchNextReviews,
 }) {
-    const queryClient = useQueryClient();
-
     if (isPrivate) {
         return (
             <div className="flex flex-col items-center justify-center py-20 text-gray-500">
@@ -99,10 +95,8 @@ export default function ProfileContent({
                     setViewMode={setViewMode}
                     currentListData={currentListData}
                     listsLoading={listsLoading}
-                    isOwnProfile={isOwnProfile}
+                    listsFetching={listsFetching}
                     isPublicView={isPublicView}
-                    targetUsername={targetUsername}
-                    queryClient={queryClient}
                 />
             );
 
@@ -214,10 +208,8 @@ function AnimeListContent({
     setViewMode,
     currentListData,
     listsLoading,
-    isOwnProfile,
+    listsFetching,
     isPublicView,
-    targetUsername,
-    queryClient,
 }) {
     const filteredListItems = React.useMemo(() => {
         if (!currentListData || !searchQuery.trim()) return currentListData || [];
@@ -276,18 +268,24 @@ function AnimeListContent({
             </div>
 
             {filteredListItems && filteredListItems.length > 0 && (
-                <div className="text-sm text-gray-500">
+                <div className="flex items-center gap-3 text-sm text-gray-500">
                     Showing {filteredListItems.length} anime in {listStatusFilter}
+                    {listsFetching && !listsLoading && (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
+                            <span className="w-3 h-3 border border-gray-400/50 border-t-gray-200 rounded-full animate-spin" />
+                            Updating...
+                        </span>
+                    )}
                 </div>
             )}
 
             <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Anime List">
                 <AnimeListView
                     listsLoading={listsLoading}
+                    listsFetching={listsFetching}
                     filteredListItems={filteredListItems}
                     viewMode={viewMode}
                     listStatusFilter={listStatusFilter}
-                    isOwnProfile={isOwnProfile}
                     isPublicView={isPublicView}
                     searchQuery={searchQuery}
                 />
@@ -298,10 +296,10 @@ function AnimeListContent({
 
 function AnimeListView({
     listsLoading,
+    listsFetching,
     filteredListItems,
     viewMode,
     listStatusFilter,
-    isOwnProfile,
     isPublicView,
     searchQuery,
 }) {
@@ -326,72 +324,82 @@ function AnimeListView({
 
     if (viewMode === 'grid') {
         return (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3">
-                {filteredListItems.map((item) => (
-                    <ProfileAnimeCard
-                        key={item.id}
-                        anime={item.anime}
-                        episodesWatched={item.episodes_watched}
-                        showProgress={listStatusFilter === 'Watching'}
-                    />
-                ))}
+            <div className="relative">
+                <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3 transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
+                    {filteredListItems.map((item) => (
+                        <ProfileAnimeCard
+                            key={item.id}
+                            anime={item.anime}
+                            episodesWatched={item.episodes_watched}
+                            showProgress={listStatusFilter === 'Watching'}
+                        />
+                    ))}
+                </div>
+                {listsFetching && (
+                    <div className="pointer-events-none absolute inset-0 rounded-xl bg-dark/25 backdrop-blur-[1px]" aria-hidden="true" />
+                )}
             </div>
         );
     }
 
     return (
-        <div className="space-y-2">
-            {filteredListItems.map((item) => {
-                const imageUrl = getOptimizedImageUrl(item.anime, 'cover', 'small');
-                const fallbackImageUrl = getImageFallbackUrl(item.anime, 'cover');
+        <div className="relative">
+            <div className={`space-y-2 transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
+                {filteredListItems.map((item) => {
+                    const imageUrl = getOptimizedImageUrl(item.anime, 'cover', 'small');
+                    const fallbackImageUrl = getImageFallbackUrl(item.anime, 'cover');
 
-                return (
-                    <Link
-                        key={item.id}
-                        to={`/anime/${item.anime?.slug}`}
-                        className="flex items-center gap-4 bg-dark-100 rounded-lg p-3 border border-gray-800/60"
-                    >
-                        <img
-                            src={imageUrl}
-                            alt={item.anime?.title}
-                            onError={(event) => applyImageFallback(event, fallbackImageUrl)}
-                            className="w-12 h-16 rounded object-cover shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-white truncate">
-                                {item.anime?.title}
-                            </h4>
-                            <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                                <span>{item.anime?.anime_type || 'TV'}</span>
-                                <span>•</span>
-                                <span>{item.anime?.episode_count || '?'} eps</span>
-                                {item.score > 0 && (
-                                    <>
-                                        <span>•</span>
-                                        <span className="flex items-center gap-1 text-yellow-500">
-                                            <Star className="w-3 h-3 fill-current" />
-                                            {item.score}
-                                        </span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                        {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
-                            <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
-                                <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent'}`}
-                                        style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
-                                    />
+                    return (
+                        <Link
+                            key={item.id}
+                            to={`/anime/${item.anime?.slug}`}
+                            className="flex items-center gap-4 bg-dark-100 rounded-lg p-3 border border-gray-800/60"
+                        >
+                            <img
+                                src={imageUrl}
+                                alt={item.anime?.title}
+                                onError={(event) => applyImageFallback(event, fallbackImageUrl)}
+                                className="w-12 h-16 rounded object-cover shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-white truncate">
+                                    {item.anime?.title}
+                                </h4>
+                                <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                    <span>{item.anime?.anime_type || 'TV'}</span>
+                                    <span>•</span>
+                                    <span>{item.anime?.episode_count || '?'} eps</span>
+                                    {item.score > 0 && (
+                                        <>
+                                            <span>•</span>
+                                            <span className="flex items-center gap-1 text-yellow-500">
+                                                <Star className="w-3 h-3 fill-current" />
+                                                {item.score}
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
-                                <span className="text-[11px] text-gray-400">
-                                    {item.episodes_watched || 0}/{item.anime.episode_count}
-                                </span>
                             </div>
-                        )}
-                    </Link>
-                );
-            })}
+                            {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
+                                <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
+                                    <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent'}`}
+                                            style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[11px] text-gray-400">
+                                        {item.episodes_watched || 0}/{item.anime.episode_count}
+                                    </span>
+                                </div>
+                            )}
+                        </Link>
+                    );
+                })}
+            </div>
+            {listsFetching && (
+                <div className="pointer-events-none absolute inset-0 rounded-xl bg-dark/25 backdrop-blur-[1px]" aria-hidden="true" />
+            )}
         </div>
     );
 }
