@@ -108,12 +108,15 @@ class Anime(TimestampMixin, SlugMixin, Model):
         tv = "TV"
         movie = "Movie"
         ova = "OVA"
+        ona = "ONA"
         special = "Special"
+        unknown = "Unknown"
 
     class AnimeStatus(TextChoices):
         airing = "Airing"
         finished = "Finished"
         upcoming = "Upcoming"
+        unknown = "Unknown"
 
     class SourceMaterial(TextChoices):
         original = "Original", "Original"
@@ -213,6 +216,12 @@ class Anime(TimestampMixin, SlugMixin, Model):
     external_links = JSONField(default=list, blank=True)
     relations = JSONField(default=list, blank=True)
     status_distribution = JSONField(default=dict, blank=True)
+    provider_ids = JSONField(default=dict, blank=True)
+    synonyms = JSONField(default=list, blank=True)
+    producers = JSONField(default=list, blank=True)
+    tags = JSONField(default=list, blank=True)
+    source_urls = JSONField(default=list, blank=True)
+    offline_db_payload = JSONField(default=dict, blank=True)
 
     site_rank = IntegerField(null=True, blank=True)
     popularity_rank = IntegerField(null=True, blank=True)
@@ -239,6 +248,8 @@ class Anime(TimestampMixin, SlugMixin, Model):
 
     mal_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
     anilist_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
+    offline_db_last_seen_at = DateTimeField(null=True, blank=True, db_index=True)
+    offline_db_last_update = DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-release_date", "-created_at"]
@@ -556,3 +567,38 @@ class ThemeSong(TimestampMixin, Model):
 
     def __str__(self):
         return f"{self.anime.title} - {self.song_type.upper()} {self.track_number}: {self.title}"
+
+
+class OfflineCatalogImport(TimestampMixin, Model):
+    class Status(TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    source_name = CharField(max_length=100, default="anime-offline-database")
+    release_tag = CharField(max_length=50, blank=True)
+    asset_name = CharField(max_length=100, default="anime-offline-database.jsonl.zst")
+    source_url = URLField(max_length=500, blank=True)
+    status = CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    started_at = DateTimeField(null=True, blank=True)
+    completed_at = DateTimeField(null=True, blank=True)
+    last_processed_line = IntegerField(default=0)
+    records_seen = IntegerField(default=0)
+    records_created = IntegerField(default=0)
+    records_updated = IntegerField(default=0)
+    records_marked_stale = IntegerField(default=0)
+    records_failed = IntegerField(default=0)
+    summary = JSONField(default=dict, blank=True)
+    error_message = TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            Index(fields=["source_name", "-created_at"]),
+            Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self):
+        release = self.release_tag or "latest"
+        return f"{self.source_name} import {release} ({self.status})"

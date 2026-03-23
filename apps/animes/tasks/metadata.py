@@ -58,6 +58,7 @@ class MetadataEnrichmentTask(BaseTask):
         batch_size: int = 50,
         filters: dict | None = None,
         priority_field: str = "-popularity_rank",
+        anime_ids: list[int] | None = None,
     ):
         """Run metadata enrichment.
 
@@ -77,7 +78,7 @@ class MetadataEnrichmentTask(BaseTask):
             return run_async_in_task(self._enrich_single(anime_id))
         elif mode == "backfill":
             return run_async_in_task(
-                self._enrich_batch(batch_size, filters, priority_field)
+                self._enrich_batch(batch_size, filters, priority_field, anime_ids)
             )
         else:
             raise ValueError(f"Invalid mode: {mode}. Use 'single' or 'backfill'")
@@ -169,6 +170,7 @@ class MetadataEnrichmentTask(BaseTask):
         batch_size: int,
         filters: dict | None,
         priority_field: str,
+        anime_ids: list[int] | None,
     ) -> dict:
         """Batch enrich metadata for multiple anime."""
         async with self.service_context() as service:
@@ -176,6 +178,9 @@ class MetadataEnrichmentTask(BaseTask):
             queryset = Anime.objects.filter(
                 Q(characters__isnull=True) | Q(staff__isnull=True)
             ).distinct()
+
+            if anime_ids:
+                queryset = queryset.filter(id__in=anime_ids)
 
             # Apply custom filters
             if filters:
@@ -269,6 +274,7 @@ def enrich_metadata(
     batch_size: int = 50,
     filters: dict | None = None,
     priority_field: str = "-popularity_rank",
+    anime_ids: list[int] | None = None,
 ):
     """Enrich anime metadata from AniList.
 
@@ -282,4 +288,4 @@ def enrich_metadata(
     Returns:
         Dict with enrichment results
     """
-    return self.execute(anime_id, mode, batch_size, filters, priority_field)
+    return self.execute(anime_id, mode, batch_size, filters, priority_field, anime_ids)

@@ -32,6 +32,7 @@ class FranchiseSyncTask(BaseTask):
         priority_field: str = "-popularity_rank",
         skip_recently_updated: bool = True,
         update_window: int = 3600,
+        anime_ids: list[int] | None = None,
     ):
         """Run franchise sync."""
         self.metrics.start()
@@ -44,7 +45,7 @@ class FranchiseSyncTask(BaseTask):
             return run_async_in_task(
                 self._sync_batch(
                     batch_size, import_missing, max_imports, priority_field,
-                    skip_recently_updated, update_window
+                    skip_recently_updated, update_window, anime_ids
                 )
             )
         else:
@@ -69,13 +70,17 @@ class FranchiseSyncTask(BaseTask):
 
     async def _sync_batch(
         self, batch_size: int, import_missing: bool, max_imports: int,
-        priority_field: str, skip_recently_updated: bool, update_window: int
+        priority_field: str, skip_recently_updated: bool, update_window: int,
+        anime_ids: list[int] | None,
     ) -> dict:
         """Batch sync franchises for multiple anime."""
         async with self.service_context() as service:
             queryset = Anime.objects.filter(
                 Q(relations__isnull=True) | Q(relations=[])
-            ).order_by(priority_field)[:batch_size]
+            )
+            if anime_ids:
+                queryset = queryset.filter(id__in=anime_ids)
+            queryset = queryset.order_by(priority_field)[:batch_size]
 
             anime_list = await sync_to_async(list)(queryset)
             total = len(anime_list)
@@ -334,13 +339,14 @@ def sync_franchises(
     priority_field: str = "-popularity_rank",
     skip_recently_updated: bool = True,
     update_window: int = 3600,
+    anime_ids: list[int] | None = None,
 ):
     """Sync anime franchise/relations data from AniList."""
     return self.execute(
         anime_id=anime_id, mode=mode, batch_size=batch_size,
         import_missing=import_missing, max_imports=max_imports,
         priority_field=priority_field, skip_recently_updated=skip_recently_updated,
-        update_window=update_window,
+        update_window=update_window, anime_ids=anime_ids,
     )
 
 @shared_task(

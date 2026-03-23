@@ -52,6 +52,7 @@ class ThemeSongSyncTask(BaseTask):
         force_resync: bool = False,
         retry_failed: bool = False,
         base_delay: float = 0.35,
+        anime_ids: list[int] | None = None,
     ):
         """Run theme song synchronization.
 
@@ -71,7 +72,7 @@ class ThemeSongSyncTask(BaseTask):
             return run_async_in_task(self._sync_single(anime_id, base_delay))
         else:
             return run_async_in_task(
-                self._sync_batch(limit, force_resync, retry_failed, base_delay)
+                self._sync_batch(limit, force_resync, retry_failed, base_delay, anime_ids)
             )
 
     async def _sync_single(self, anime_id: int, base_delay: float) -> dict:
@@ -167,6 +168,7 @@ class ThemeSongSyncTask(BaseTask):
         force_resync: bool,
         retry_failed: bool,
         base_delay: float,
+        anime_ids: list[int] | None,
     ) -> dict:
         """Sync themes for multiple anime."""
         rate_limiter = JikanRateLimiter(base_delay=base_delay)
@@ -201,6 +203,9 @@ class ThemeSongSyncTask(BaseTask):
                 mal_id__isnull=False,
                 status__in=[Anime.AnimeStatus.finished, Anime.AnimeStatus.airing],
             ).distinct()
+
+        if anime_ids:
+            queryset = queryset.filter(id__in=anime_ids)
 
         anime_list = await sync_to_async(list)(queryset[:limit])
         total = len(anime_list)
@@ -518,6 +523,7 @@ def sync_theme_songs(
     force_resync: bool = False,
     retry_failed: bool = False,
     base_delay: float = 0.35,
+    anime_ids: list[int] | None = None,
 ):
     """Sync theme songs from Jikan API.
 
@@ -531,7 +537,7 @@ def sync_theme_songs(
     Returns:
         Dict with sync results
     """
-    return self.execute(anime_id, limit, force_resync, retry_failed, base_delay)
+    return self.execute(anime_id, limit, force_resync, retry_failed, base_delay, anime_ids)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def backfill_theme_youtube_urls(self, limit: int = 100):

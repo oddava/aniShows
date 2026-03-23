@@ -79,6 +79,7 @@ app.conf.task_routes = {
     # BATCH QUEUE - Import/export operations
     # =========================================================================
     "apps.animes.tasks.metadata.enrich_metadata": {"queue": "batch"},
+    "apps.animes.tasks.offline_catalog.import_offline_catalog": {"queue": "batch"},
     # =========================================================================
     # IMAGES QUEUE - Image processing
     # =========================================================================

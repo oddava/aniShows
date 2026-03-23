@@ -18,6 +18,7 @@ class Command(BaseCommand):
                 "sync-airing",
                 "enrich-metadata",
                 "sync-themes",
+                "import-offline-catalog",
                 "generate-recommendations",
                 "full-sync",
             ],
@@ -70,6 +71,48 @@ class Command(BaseCommand):
             "--force-resync",
             action="store_true",
             help="Force re-sync of themes even if already present",
+        )
+        parser.add_argument(
+            "--release-tag",
+            default="latest",
+            help="Anime Offline Database release tag or 'latest'",
+        )
+        parser.add_argument(
+            "--asset-name",
+            default="anime-offline-database.jsonl.zst",
+            help="Anime Offline Database release asset to import",
+        )
+        parser.add_argument(
+            "--source-url",
+            default=None,
+            help="Override download URL for Anime Offline Database import",
+        )
+        parser.add_argument(
+            "--source-path",
+            default=None,
+            help="Local path to Anime Offline Database asset for import/testing",
+        )
+        parser.add_argument(
+            "--resume",
+            action="store_true",
+            help="Resume the latest incomplete Anime Offline Database import",
+        )
+        parser.add_argument(
+            "--enqueue-enrichment",
+            action="store_true",
+            help="Queue metadata, franchise, and theme enrichment after offline import",
+        )
+        parser.add_argument(
+            "--enrichment-chunk-size",
+            type=int,
+            default=100,
+            help="Chunk size for follow-up enrichment jobs after offline import",
+        )
+        parser.add_argument(
+            "--import-limit",
+            type=int,
+            default=None,
+            help="Optional row limit for Anime Offline Database imports",
         )
 
         # Recommendation options
@@ -133,6 +176,8 @@ class Command(BaseCommand):
             self._handle_enrich_metadata(options, run_async, queue)
         elif workflow == "sync-themes":
             self._handle_sync_themes(options, run_async, queue)
+        elif workflow == "import-offline-catalog":
+            self._handle_import_offline_catalog(options, run_async, queue)
         elif workflow == "generate-recommendations":
             self._handle_generate_recommendations(options, run_async, queue)
         elif workflow == "full-sync":
@@ -201,6 +246,37 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Syncing themes (limit: {limit}, force: {force_resync})")
             task = sync_theme_songs.s(limit=limit, force_resync=force_resync)
+
+        self._dispatch_task(task, run_async, queue)
+
+    def _handle_import_offline_catalog(self, options, run_async, queue):
+        """Handle Anime Offline Database import."""
+        from apps.animes.tasks import import_offline_catalog
+
+        release_tag = options["release_tag"]
+        asset_name = options["asset_name"]
+        source_url = options.get("source_url")
+        source_path = options.get("source_path")
+        limit = options["import_limit"]
+        resume = options["resume"]
+        enqueue_enrichment = options["enqueue_enrichment"]
+        enrichment_chunk_size = options["enrichment_chunk_size"]
+
+        self.stdout.write(
+            f"Importing Anime Offline Database: {release_tag} ({asset_name})"
+        )
+
+        task = import_offline_catalog.s(
+            release_tag=release_tag,
+            asset_name=asset_name,
+            source_url=source_url,
+            source_path=source_path,
+            limit=limit,
+            resume=resume,
+            enqueue_enrichment=enqueue_enrichment,
+            batch_size=options["batch_size"],
+            enrichment_chunk_size=enrichment_chunk_size,
+        )
 
         self._dispatch_task(task, run_async, queue)
 
