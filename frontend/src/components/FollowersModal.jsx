@@ -104,6 +104,8 @@ export default function FollowersModal({
 
     // Infinite scroll: trigger fetch when sentinel row is visible
     useEffect(() => {
+        if (!isOpen) return;
+
         const items = virtualizer.getVirtualItems();
         if (items.length === 0) return;
 
@@ -116,7 +118,7 @@ export default function FollowersModal({
         ) {
             fetchNextPage();
         }
-    }, [virtualizer.getVirtualItems(), hasNextPage, isFetchingNextPage, fetchNextPage, filteredUsers.length]);
+    }, [isOpen, virtualizer, hasNextPage, isFetchingNextPage, fetchNextPage, filteredUsers.length]);
 
     // On close: invalidate queries so the profile page gets fresh data
     const handleClose = useCallback(() => {

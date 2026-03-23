@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../../api/client';
 import { Link } from 'react-router-dom';
 import {
@@ -303,11 +303,15 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         );
     }
 
-    const activities = data?.pages?.flatMap(page => page?.results || []) || [];
+    const activities = useMemo(
+        () => data?.pages?.flatMap(page => page?.results || []) || [],
+        [data]
+    );
 
-    const filteredActivities = filterType === 'all'
-        ? activities
-        : activities.filter((activity) => {
+    const filteredActivities = useMemo(() => {
+        if (filterType === 'all') return activities;
+
+        return activities.filter((activity) => {
             const status = (activity.new_status || activity.status || activity.status_label || '').toLowerCase();
             const value = filterType.toLowerCase();
             if (!status) return false;
@@ -318,8 +322,12 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
             if (value === 'plan_to_watch') return status === 'plan to watch' || status === 'plan_to_watch';
             return false;
         });
+    }, [activities, filterType]);
 
-    const dateGroups = groupActivitiesByDate(filteredActivities);
+    const dateGroups = useMemo(
+        () => groupActivitiesByDate(filteredActivities),
+        [filteredActivities]
+    );
     const isFilterUpdating = isFetching && !isFetchingNextPage;
     const [stableDateGroups, setStableDateGroups] = useState([]);
 
