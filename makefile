@@ -8,7 +8,8 @@ EXEC = docker compose exec web python manage.py
         celery-images-logs celery-analytics-logs beat-logs \
         front-logs db-logs mig migrate shell superuser test lint collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
-        sync-themes sync-full sync-franchises sync-recs populate-themes \
+        sync-themes sync-full sync-franchises sync-recs import-offline \
+        import-offline-async import-offline-resume import-offline-full populate-themes \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
@@ -127,6 +128,35 @@ sync-recs:                      ## Generate recommendations for all users
 sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + themes + recs)
 	$(EXEC) migrate
 	$(EXEC) sync_anime full-sync --async
+
+import-offline:                 ## Import Anime Offline Database (sync). Override RELEASE=..., IMPORT_LIMIT=..., SOURCE_PATH=...
+	$(EXEC) migrate
+	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} \
+		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
+		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
+		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
+
+import-offline-async:           ## Queue Anime Offline Database import. Override RELEASE=..., IMPORT_LIMIT=..., SOURCE_PATH=...
+	$(EXEC) migrate
+	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --async --queue batch \
+		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
+		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
+		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
+
+import-offline-resume:          ## Resume latest incomplete Anime Offline Database import
+	$(EXEC) migrate
+	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --resume \
+		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
+		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
+		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
+
+import-offline-full:            ## Import Anime Offline Database and queue enrichment jobs
+	$(EXEC) migrate
+	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --enqueue-enrichment \
+		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
+		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
+		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),) \
+		$(if $(ENRICHMENT_CHUNK_SIZE),--enrichment-chunk-size $(ENRICHMENT_CHUNK_SIZE),)
 
 ## ============================================================================
 ## Data Population & Backfill
