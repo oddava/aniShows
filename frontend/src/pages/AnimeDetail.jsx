@@ -18,6 +18,7 @@ import FriendsWatching from '../components/FriendsWatching';
 import SEOHelmet from '../components/SEOHelmet';
 import { OverviewTab, CharactersTab, StaffTab } from '../components/DetailTabs';
 import { AnimeDetailSkeleton } from '../components/skeletons';
+import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -147,13 +148,12 @@ const useShare = () => {
 };
 
 // Memoized related anime card component
-const RelatedAnimeCard = memo(({ anime, getImageUrl }) => {
+const RelatedAnimeCard = memo(({ anime }) => {
     const [isLoaded, setIsLoaded] = useState(false);
-    const imageSrc = getImageUrl(anime.cover_image) || getCoverPlaceholder(anime.title);
 
     useEffect(() => {
         setIsLoaded(false);
-    }, [imageSrc]);
+    }, [anime?.id, anime?.cover_image, anime?.cover_image_small, anime?.cover_image_external_url]);
 
     return (
         <Link
@@ -167,22 +167,14 @@ const RelatedAnimeCard = memo(({ anime, getImageUrl }) => {
                         className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
                     />
                 )}
-                <img
-                    src={imageSrc}
+                <AnimeMediaImage
+                    anime={anime}
+                    kind="cover"
+                    size="small"
                     alt={anime.title}
                     className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
                     loading="lazy"
                     onLoad={() => setIsLoaded(true)}
-                    onError={(event) => {
-                        const img = event.currentTarget;
-                        if (img.dataset.fallbackApplied !== '1') {
-                            img.dataset.fallbackApplied = '1';
-                            setIsLoaded(false);
-                            img.src = getCoverPlaceholder(anime.title);
-                            return;
-                        }
-                        setIsLoaded(true);
-                    }}
                 />
             </div>
             <div className="flex-1 py-1 min-w-0">
@@ -205,13 +197,12 @@ const RelatedAnimeCard = memo(({ anime, getImageUrl }) => {
 RelatedAnimeCard.displayName = 'RelatedAnimeCard';
 
 // Memoized mobile related anime card
-const MobileRelatedCard = memo(({ anime, getImageUrl }) => {
+const MobileRelatedCard = memo(({ anime }) => {
     const [isLoaded, setIsLoaded] = useState(false);
-    const imageSrc = getImageUrl(anime.cover_image) || getCoverPlaceholder(anime.title);
 
     useEffect(() => {
         setIsLoaded(false);
-    }, [imageSrc]);
+    }, [anime?.id, anime?.cover_image, anime?.cover_image_small, anime?.cover_image_external_url]);
 
     return (
         <Link
@@ -225,22 +216,14 @@ const MobileRelatedCard = memo(({ anime, getImageUrl }) => {
                         className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
                     />
                 )}
-                <img
-                    src={imageSrc}
+                <AnimeMediaImage
+                    anime={anime}
+                    kind="cover"
+                    size="small"
                     alt={anime.title}
                     className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
                     loading="lazy"
                     onLoad={() => setIsLoaded(true)}
-                    onError={(event) => {
-                        const img = event.currentTarget;
-                        if (img.dataset.fallbackApplied !== '1') {
-                            img.dataset.fallbackApplied = '1';
-                            setIsLoaded(false);
-                            img.src = getCoverPlaceholder(anime.title);
-                            return;
-                        }
-                        setIsLoaded(true);
-                    }}
                 />
             </div>
             <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
@@ -461,23 +444,6 @@ export default function AnimeDetail() {
 
     const handleTabClick = useCallback((tabId) => {
         setActiveTab(tabId);
-    }, []);
-
-    // Helpers
-    const getImageUrl = useCallback((url) => {
-        if (!url) return null;
-        let cleanUrl = url;
-        if (cleanUrl.includes('localhost:8000')) {
-            cleanUrl = cleanUrl.replace(/^https?:\/\/localhost:8000/, '');
-        }
-        if (cleanUrl.includes('web:8000')) {
-            cleanUrl = cleanUrl.replace(/^https?:\/\/web:8000/, '');
-        }
-        if (cleanUrl.startsWith('http')) return cleanUrl;
-        if (!cleanUrl.startsWith('/')) {
-            cleanUrl = `/${cleanUrl}`;
-        }
-        return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
     }, []);
 
     useEffect(() => {
@@ -899,7 +865,6 @@ export default function AnimeDetail() {
                                             <RelatedAnimeCard
                                                 key={rel.id}
                                                 anime={rel}
-                                                getImageUrl={getImageUrl}
                                             />
                                         ))}
                                     </div>
@@ -908,7 +873,6 @@ export default function AnimeDetail() {
                                             <MobileRelatedCard
                                                 key={rel.id}
                                                 anime={rel}
-                                                getImageUrl={getImageUrl}
                                             />
                                         ))}
                                     </div>
