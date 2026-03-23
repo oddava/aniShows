@@ -17,7 +17,7 @@ function FriendAvatar({ user }) {
         return (
             <img
                 src={user.avatar}
-                alt={user.username}
+                alt=""
                 className="h-11 w-11 rounded-full border-2 border-gray-700 object-cover"
                 loading="lazy"
                 onError={() => setAvatarFailed(true)}

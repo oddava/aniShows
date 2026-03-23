@@ -18,7 +18,7 @@ function FriendItem({ item }) {
             {showAvatarImage ? (
                 <img
                     src={user.avatar}
-                    alt={user.username}
+                    alt=""
                     onError={() => setAvatarFailed(true)}
                     className="h-20 w-20 rounded-md border border-gray-700 object-cover"
                 />
