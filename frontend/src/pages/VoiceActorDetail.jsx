@@ -4,6 +4,7 @@ import { Mic, Film, Users, ArrowLeft, ExternalLink } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { staffApi } from '../api/client';
+import AnimeMediaImage from '../components/common/AnimeMediaImage';
 
 // Parse markdown-style links [text](url) into React elements
 function parseMarkdownLinks(text) {
@@ -299,8 +300,10 @@ function VoiceRolesSection({ voiceRoles }) {
                             </p>
                         </div>
                         <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-lg overflow-hidden border border-gray-800 flex-shrink-0">
-                            <img
-                                src={vr.anime?.cover_image_small || '/placeholder-cover.png'}
+                            <AnimeMediaImage
+                                anime={vr.anime}
+                                kind="cover"
+                                size="small"
                                 alt={vr.anime?.title}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
@@ -333,8 +336,10 @@ function ProductionCreditsSection({ credits }) {
                 >
                     {/* Anime cover */}
                     <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden border border-gray-800 flex-shrink-0">
-                        <img
-                            src={credit.anime?.cover_image_small || '/placeholder-cover.png'}
+                        <AnimeMediaImage
+                            anime={credit.anime}
+                            kind="cover"
+                            size="small"
                             alt={credit.anime?.title}
                             className="w-full h-full object-cover"
                             loading="lazy"

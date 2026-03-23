@@ -5,6 +5,7 @@ import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
 import HorizontalCarousel from '../common/HorizontalCarousel';
+import AnimeMediaImage from '../common/AnimeMediaImage';
 import { activityApi, listApi, favoriteApi, followApi } from '../../api/client';
 
 function TopStatsRow({ user }) {
@@ -62,8 +63,10 @@ function CurrentlyWatchingGrid({ watchingItems }) {
                                 to={`/anime/${item.anime?.slug}`}
                                 className="relative aspect-[2/3] rounded-xl overflow-hidden border border-gray-800 bg-dark-200"
                             >
-                                <img
-                                    src={item.anime?.cover_image_small || item.anime?.cover_image}
+                                <AnimeMediaImage
+                                    anime={item.anime}
+                                    kind="cover"
+                                    size="small"
                                     alt={item.anime?.title}
                                     className="w-full h-full object-cover"
                                 />
@@ -118,8 +121,10 @@ function FavoritesGrid({ favoritesData }) {
                             to={`/anime/${fav.anime?.slug}`}
                             className="relative aspect-[2/3] rounded-xl overflow-hidden border border-gray-800 bg-dark-200"
                         >
-                            <img
-                                src={fav.anime?.cover_image_small || fav.anime?.cover_image}
+                            <AnimeMediaImage
+                                anime={fav.anime}
+                                kind="cover"
+                                size="small"
                                 alt={fav.anime?.title}
                                 className="w-full h-full object-cover"
                             />

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/client';
 import logger from '../../utils/logger';
+import AnimeMediaImage from '../../components/common/AnimeMediaImage';
 
 const AdminAnime = () => {
     const [animeList, setAnimeList] = useState([]);
@@ -185,7 +186,13 @@ const AdminAnime = () => {
                                             <div className="flex items-center gap-4">
                                                 <div className="w-14 h-20 rounded-lg bg-white/5 flex items-center justify-center text-2xl overflow-hidden shadow-lg flex-shrink-0 border border-white/5">
                                                     {anime.cover_image ? (
-                                                        <img src={anime.cover_image} alt={anime.title} className="w-full h-full object-cover" />
+                                                        <AnimeMediaImage
+                                                            anime={anime}
+                                                            kind="cover"
+                                                            size="small"
+                                                            alt={anime.title}
+                                                            className="w-full h-full object-cover"
+                                                        />
                                                     ) : (
                                                         '🎬'
                                                     )}

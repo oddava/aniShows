@@ -2,17 +2,20 @@
  * Helper to get the full image URL.
  * Handles placeholder generation if URL is missing.
  * Cleans up localhost/docker internal URLs.
- * 
+ *
  * @param {string} url - The image URL path (absolute or relative)
  * @param {string} title - The title of the anime (for placeholder text)
  * @returns {string} The processed, ready-to-use image URL
  */
-let shouldBypassCacheImages = false;
 
-const isCacheImagePath = (url) =>
-    typeof url === 'string' && url.includes('/media/CACHE/');
 const isMediaPath = (url) =>
     typeof url === 'string' && url.includes('/media/');
+const isBlankLike = (value) => {
+    if (typeof value !== 'string') return true;
+    const normalized = value.trim().toLowerCase();
+    return !normalized || normalized === 'null' || normalized === 'undefined';
+};
+const coerceUrl = (value) => (isBlankLike(value) ? null : value.trim());
 
 const appendCacheBuster = (url) => {
     if (!url) return url;
@@ -21,11 +24,12 @@ const appendCacheBuster = (url) => {
 };
 
 export const getImageUrl = (url, title = 'Anime') => {
-    if (!url) {
+    const normalizedUrl = coerceUrl(url);
+    if (!normalizedUrl) {
         return `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(title)}`;
     }
 
-    let cleanUrl = url;
+    let cleanUrl = normalizedUrl;
 
     // Clean up internal docker networking URLs if they leak to frontend
     if (cleanUrl.includes('localhost:8000')) cleanUrl = cleanUrl.replace(/^https?:\/\/localhost:8000/, '');
@@ -79,12 +83,11 @@ export const getOptimizedImageUrl = (anime, type = 'cover', size = 'medium') => 
     };
 
     const images = sizeMap[type] || sizeMap.cover;
-    const imageUrl = images[size] || images.original;
+    const imageUrl =
+        images[size] ||
+        images.original ||
+        (type === 'banner' ? anime.banner_image_external_url : anime.cover_image_external_url);
 
-    if (shouldBypassCacheImages && isCacheImagePath(imageUrl) && images.original) {
-        return getImageUrl(images.original, anime.title);
-    }
-    
     return getImageUrl(imageUrl, anime.title);
 };
 
@@ -122,12 +125,11 @@ export const getImageFallbackUrl = (anime, type = 'cover') => {
  */
 export const applyImageFallback = (event, fallbackUrl) => {
     const img = event?.currentTarget;
-    if (!img || !fallbackUrl) return;
+    if (!img) return;
 
     const currentSource = img.currentSrc || img.src || '';
-    if (isCacheImagePath(currentSource)) {
-        shouldBypassCacheImages = true;
-    }
+    const resolvedFallback = getImageUrl(fallbackUrl);
+    const placeholderFallback = getImageUrl(null);
 
     if (img.dataset.fallbackApplied === '1') {
         return;
@@ -145,7 +147,7 @@ export const applyImageFallback = (event, fallbackUrl) => {
     img.dataset.fallbackApplied = '1';
     img.removeAttribute('srcset');
     img.removeAttribute('sizes');
-    img.src = fallbackUrl;
+    img.src = currentSource !== resolvedFallback ? resolvedFallback : placeholderFallback;
 };
 
 /**
@@ -172,12 +174,10 @@ export const getImageSrcSet = (anime, type = 'cover') => {
     };
 
     const images = sizeMap[type] || sizeMap.cover;
-    
+
     Object.values(images).forEach(({ url, width }) => {
-        if (url) {
-            if (shouldBypassCacheImages && isCacheImagePath(url)) {
-                return;
-            }
+        const normalized = coerceUrl(url);
+        if (normalized) {
             urls.push(`${getImageUrl(url)} ${width}w`);
         }
     });

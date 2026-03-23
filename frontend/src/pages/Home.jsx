@@ -5,9 +5,9 @@ import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { animeApi, listApi, recommendationsApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { applyImageFallback, getImageFallbackUrl, getImageSrcSet, getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
 import SEO from '../components/SEO';
+import AnimeMediaImage from '../components/common/AnimeMediaImage';
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
@@ -122,13 +122,14 @@ export default function Home() {
                                 key={anime.id}
                                 className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`}
                             >
-                                <img
-                                    src={getImageUrl(anime.banner_image || anime.cover_image)}
-                                    srcSet={getImageSrcSet(anime, 'banner')}
-                                    sizes="100vw"
+                                <AnimeMediaImage
+                                    anime={anime}
+                                    kind="banner"
+                                    size="large"
                                     alt={`${anime.title} banner image`}
+                                    responsive
+                                    sizes="100vw"
                                     loading={index === 0 ? 'eager' : 'lazy'}
-                                    onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'banner'))}
                                     className="w-full h-full object-cover "
                                 />
                             </div>

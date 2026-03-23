@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { favoriteApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import logger from '../utils/logger';
+import AnimeMediaImage from './common/AnimeMediaImage';
 
 /**
  * DraggableFavoritesGrid - Unified grid layout with consistent card sizing
@@ -139,8 +140,10 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                     }}
                 >
                     <div className="relative aspect-[2/3] bg-dark-50 overflow-hidden">
-                        <img
-                            src={fav.anime?.cover_image}
+                        <AnimeMediaImage
+                            anime={fav.anime}
+                            kind="cover"
+                            size="small"
                             alt={fav.anime?.title}
                             className="w-full h-full object-cover transition-transform duration-500"
                             loading="lazy"

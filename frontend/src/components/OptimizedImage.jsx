@@ -1,4 +1,5 @@
 import React, { useState, useCallback, memo } from 'react';
+import { getOptimizedImageUrl as getCanonicalOptimizedImageUrl } from '../utils/imageUtils';
 
 /**
  * OptimizedImage Component
@@ -183,27 +184,7 @@ export function useOptimalImageSize(containerRef) {
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function getOptimizedImageUrl(anime, type = 'cover', preferredSize = 'medium') {
-  if (!anime) return null;
-
-  const sizeMap = {
-    cover: {
-      small: anime.cover_image_small,
-      medium: anime.cover_image_medium,
-      large: anime.cover_image_large,
-      original: anime.cover_image,
-    },
-    banner: {
-      small: anime.banner_image_small,
-      medium: anime.banner_image_medium,
-      large: anime.banner_image_large,
-      original: anime.banner_image,
-    },
-  };
-
-  const images = sizeMap[type] || sizeMap.cover;
-  
-  // Try preferred size first, fallback to original
-  return images[preferredSize] || images.original || null;
+  return getCanonicalOptimizedImageUrl(anime, type, preferredSize);
 }
 
 export default OptimizedImage;

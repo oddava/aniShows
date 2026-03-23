@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { authApi, favoriteApi, listApi } from '../../api/client';
 import FollowButton from '../FollowButton';
+import AnimeMediaImage from './AnimeMediaImage';
 
 const WATCHING_LIMIT = 3;
 const FAVORITES_LIMIT = 3;
@@ -25,19 +26,16 @@ const formatStat = (value, type = 'int') => {
 };
 
 const PosterThumb = ({ anime }) => {
-    const poster = anime?.cover_image_small || anime?.cover_image;
     const content = (
         <>
-            {poster ? (
-                <img
-                    src={poster}
-                    alt={anime?.title || 'Anime'}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                />
-            ) : (
-                <div className="h-full w-full bg-dark-200" />
-            )}
+            <AnimeMediaImage
+                anime={anime}
+                kind="cover"
+                size="small"
+                alt={anime?.title || 'Anime'}
+                className="h-full w-full object-cover"
+                loading="lazy"
+            />
         </>
     );
 

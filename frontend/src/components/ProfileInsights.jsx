@@ -3,6 +3,7 @@ import { listApi, reviewApi, activityApi } from '../api/client';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { TrendingUp, Star, Tv, Clock, BarChart3, Activity } from 'lucide-react';
 import ActivityHeatmap from './ActivityHeatmap';
+import AnimeMediaImage from './common/AnimeMediaImage';
 
 const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
 
@@ -419,8 +420,10 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                     <div key={item.id} className="group relative bg-white/[0.02] border border-white/5 rounded-xl p-3">
                                         <div className="flex items-center gap-3">
                                             <div className="relative shrink-0">
-                                                <img
-                                                    src={item.anime?.cover_image}
+                                                <AnimeMediaImage
+                                                    anime={item.anime}
+                                                    kind="cover"
+                                                    size="small"
                                                     alt={item.anime?.title}
                                                     className="w-10 h-14 rounded-lg object-cover shadow-2xl"
                                                 />

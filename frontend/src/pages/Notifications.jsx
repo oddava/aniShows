@@ -6,7 +6,7 @@ import { animeApi, authApi, notificationApi } from '../api/client';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { getImageUrl } from '../utils/imageUtils';
+import { applyImageFallback, getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
 import { 
     getNotificationDisplayText,
@@ -426,6 +426,10 @@ export default function Notifications() {
                         const thumbnailAlt = highlightEntity
                             ? `${highlightEntity} notification image`
                             : 'Notification image';
+                        const thumbnailFallback = getImageUrl(
+                            null,
+                            notification?.data?.anime_title || notification?.data?.follower_username || 'Notification'
+                        );
 
                         const handleEntityClick = async () => {
                             await handleNotificationOpen(notification);
@@ -469,7 +473,7 @@ export default function Notifications() {
                                                 <img
                                                     src={thumbnail}
                                                     alt={thumbnailAlt}
-                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                    onError={(event) => applyImageFallback(event, thumbnailFallback)}
                                                     className="w-14 h-20 sm:w-16 sm:h-24 object-cover"
                                                     loading="lazy"
                                                 />

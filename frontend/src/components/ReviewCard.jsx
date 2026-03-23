@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewApi } from '../api/client';
 import ReviewComments from './ReviewComments';
 import MiniProfileHoverCard from './common/MiniProfileHoverCard';
+import AnimeMediaImage from './common/AnimeMediaImage';
 
 // Generate consistent color from string
 const stringToColor = (str) => {
@@ -193,8 +194,14 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                         <div className={`shrink-0 ${showAnime ? 'w-10 h-14 overflow-hidden rounded-md border border-gray-700' : 'overflow-visible'}`}>
                             {showAnime ? (
                                 <Link to={`/anime/${review.anime?.slug}`} className="block w-full h-full">
-                                    {review.anime?.cover_image ? (
-                                        <img src={review.anime.cover_image} alt={review.anime.title} className="w-full h-full object-cover" />
+                                    {review.anime ? (
+                                        <AnimeMediaImage
+                                            anime={review.anime}
+                                            kind="cover"
+                                            size="small"
+                                            alt={review.anime.title}
+                                            className="w-full h-full object-cover"
+                                        />
                                     ) : (
                                         <div className="w-full h-full bg-dark-50" />
                                     )}

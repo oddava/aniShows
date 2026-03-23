@@ -13,6 +13,7 @@ import {
     Trash2,
     Workflow,
 } from 'lucide-react';
+import AnimeMediaImage from '../common/AnimeMediaImage';
 
 const STATUS_FILTERS = [
     { value: 'watching', label: 'Watching', color: '#16a34a' },
@@ -212,7 +213,6 @@ function EmptyState({ filterType }) {
 function ActivityCard({ activity }) {
     const config = ACTIVITY_CONFIG[activity.activity_type] || ACTIVITY_CONFIG.added;
     const anime = activity.anime;
-    const coverImage = anime?.cover_image_small || anime?.cover_image;
     const metadata = activityMetadata(activity);
     const title = anime?.title || 'Unknown title';
 
@@ -246,13 +246,15 @@ function ActivityCard({ activity }) {
                     </div>
                 </div>
 
-                {anime?.slug && coverImage && (
+                {anime?.slug && (
                     <Link
                         to={`/anime/${anime.slug}`}
                         className="w-10 shrink-0 overflow-hidden rounded-md border border-gray-800/80 bg-dark-50 transition-colors group-hover:border-gray-700"
                     >
-                        <img
-                            src={coverImage}
+                        <AnimeMediaImage
+                            anime={anime}
+                            kind="cover"
+                            size="small"
                             alt={title}
                             className="h-full w-full object-cover"
                             loading="lazy"
