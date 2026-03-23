@@ -1,5 +1,5 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { activityApi } from '../../api/client';
 import { Link } from 'react-router-dom';
 import {
@@ -275,6 +275,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         fetchNextPage,
         hasNextPage,
         isFetchingNextPage,
+        isFetching,
         isLoading,
         isError,
         refetch,
@@ -290,6 +291,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         initialPageParam: 1,
         getNextPageParam: parseNextPage,
         enabled: !isPrivate && !!username,
+        placeholderData: keepPreviousData,
         staleTime: 2 * 60 * 1000,
     });
 
@@ -318,6 +320,22 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         });
 
     const dateGroups = groupActivitiesByDate(filteredActivities);
+    const isFilterUpdating = isFetching && !isFetchingNextPage;
+    const [stableDateGroups, setStableDateGroups] = useState([]);
+
+    useEffect(() => {
+        if (!isLoading && !isError && !isFilterUpdating) {
+            setStableDateGroups(dateGroups);
+        }
+    }, [dateGroups, isError, isFilterUpdating, isLoading]);
+
+    const visibleDateGroups = isFilterUpdating && stableDateGroups.length > 0
+        ? stableDateGroups
+        : dateGroups;
+    const visibleActivityCount = visibleDateGroups.reduce(
+        (total, group) => total + group.activities.length,
+        0
+    );
 
     return (
         <section className="space-y-4">
@@ -346,9 +364,15 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                         </button>
                     );
                 })}
+                {isFilterUpdating && (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700/80 bg-dark-100/70 px-3 py-1.5 text-xs font-semibold text-gray-300">
+                        <span className="h-3.5 w-3.5 rounded-full border border-gray-400/50 border-t-gray-100 animate-spin" />
+                        Updating...
+                    </span>
+                )}
             </div>
 
-            {isLoading && (
+            {isLoading && activities.length === 0 && (
                 <div className="space-y-2">
                     {Array.from({ length: compact ? 3 : 5 }).map((_, index) => (
                         <div key={index} className="h-20 animate-pulse rounded-xl border border-gray-800/60 bg-dark-100/60" />
@@ -369,24 +393,29 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                 </div>
             )}
 
-            {!isLoading && !isError && activities.length === 0 && (
+            {!isLoading && !isError && !isFilterUpdating && visibleActivityCount === 0 && (
                 <EmptyState filterType={filterType} />
             )}
 
-            {!isLoading && !isError && activities.length > 0 && (
-                <div className="space-y-5">
-                    {dateGroups.map((group) => (
-                        <div key={group.key}>
-                            <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
-                                {group.label}
-                            </h4>
-                            <div className="space-y-2">
-                                {group.activities.map((activity) => (
-                                    <ActivityCard key={activity.id} activity={activity} />
-                                ))}
+            {!isLoading && !isError && visibleActivityCount > 0 && (
+                <div className="relative">
+                    <div className={`space-y-5 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
+                        {visibleDateGroups.map((group) => (
+                            <div key={group.key}>
+                                <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+                                    {group.label}
+                                </h4>
+                                <div className="space-y-2">
+                                    {group.activities.map((activity) => (
+                                        <ActivityCard key={activity.id} activity={activity} />
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
+                    {isFilterUpdating && (
+                        <div className="pointer-events-none absolute inset-0 rounded-xl bg-dark/20 backdrop-blur-[1px]" aria-hidden="true" />
+                    )}
                 </div>
             )}
 

@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { Star } from 'lucide-react';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -29,15 +28,6 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
                         loading="lazy"
                         decoding="async"
                     />
-
-
-                    {/* Rating badge - simplified */}
-                    {anime.rating && (
-                        <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px]">
-                            <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                            <span className="text-white font-medium">{anime.rating}</span>
-                        </div>
-                    )}
 
                     {/* Simple progress bar - no animations */}
                     {showProgress && (

@@ -1,10 +1,13 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { followApi } from '../../api/client';
 import { Link } from 'react-router-dom';
-import { Users } from 'lucide-react';
+import { UserRound, Users } from 'lucide-react';
+import { useState } from 'react';
 
 function FriendItem({ item }) {
     const user = item.user;
+    const [avatarFailed, setAvatarFailed] = useState(false);
+    const showAvatarImage = !!user.avatar && !avatarFailed;
 
     return (
         <Link
@@ -12,17 +15,16 @@ function FriendItem({ item }) {
             className="flex flex-col items-center gap-2"
             title={user.username}
         >
-            {user.avatar ? (
+            {showAvatarImage ? (
                 <img
                     src={user.avatar}
                     alt={user.username}
+                    onError={() => setAvatarFailed(true)}
                     className="h-20 w-20 rounded-md border border-gray-700 object-cover"
                 />
             ) : (
                 <div className="flex h-20 w-20 items-center justify-center rounded-md border border-gray-700 bg-dark-50">
-                    <span className="text-xl font-bold text-white">
-                        {user.username[0].toUpperCase()}
-                    </span>
+                    <UserRound className="h-10 w-10 text-slate-500" aria-hidden="true" />
                 </div>
             )}
             <span className="max-w-[88px] truncate text-xs font-medium text-gray-400">

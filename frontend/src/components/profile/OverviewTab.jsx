@@ -1,12 +1,36 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Users } from 'lucide-react';
+import { UserRound, Users } from 'lucide-react';
+import { useState } from 'react';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
 import HorizontalCarousel from '../common/HorizontalCarousel';
 import AnimeMediaImage from '../common/AnimeMediaImage';
 import { activityApi, listApi, favoriteApi, followApi } from '../../api/client';
+
+function FriendAvatar({ user }) {
+    const [avatarFailed, setAvatarFailed] = useState(false);
+    const showAvatarImage = !!user.avatar && !avatarFailed;
+
+    if (showAvatarImage) {
+        return (
+            <img
+                src={user.avatar}
+                alt={user.username}
+                className="h-11 w-11 rounded-full border-2 border-gray-700 object-cover"
+                loading="lazy"
+                onError={() => setAvatarFailed(true)}
+            />
+        );
+    }
+
+    return (
+        <div className="ui-avatar-fallback h-11 w-11">
+            <UserRound className="h-5 w-5 text-slate-500" aria-hidden="true" />
+        </div>
+    );
+}
 
 function TopStatsRow({ user }) {
     if (!user) return null;
@@ -190,20 +214,7 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
                             className="flex w-14 flex-col items-center gap-1.5"
                             title={item.user.username}
                         >
-                            {item.user.avatar ? (
-                                <img
-                                    src={item.user.avatar}
-                                    alt={item.user.username}
-                                    className="h-11 w-11 rounded-full border-2 border-gray-700 object-cover"
-                                    loading="lazy"
-                                />
-                            ) : (
-                                <div className="ui-avatar-fallback h-11 w-11">
-                                    <span className="text-sm font-bold text-white">
-                                        {item.user.username[0].toUpperCase()}
-                                    </span>
-                                </div>
-                            )}
+                            <FriendAvatar user={item.user} />
                             <span className="w-full truncate text-center text-[10px] text-gray-400">
                                 {item.user.username}
                             </span>
