@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -165,6 +166,61 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertTrue(Anime.objects.filter(id=stale_anime.id).exists())
         self.assertLess(stale_anime.offline_db_last_seen_at, timezone.now())
         self.assertEqual(OfflineCatalogImport.objects.count(), 1)
+
+    def test_run_import_avoids_generated_title_variant_collision(self):
+        Anime.objects.create(
+            title="Doraemon",
+            slug="doraemon",
+            synopsis="Legacy",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            season_year=1979,
+        )
+        Anime.objects.create(
+            title="Doraemon (2005)",
+            slug="doraemon-2005",
+            synopsis="Legacy",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            season_year=2005,
+        )
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Doraemon",
+                sources=["https://anime-planet.com/anime/doraemon-2005"],
+                animeSeason={"season": "SPRING", "year": 2005},
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertEqual(result["records_failed"], 0)
+        self.assertEqual(result["records_created"], 1)
+        self.assertTrue(Anime.objects.filter(title="Doraemon (2)").exists())
+
+    @patch("apps.animes.services.offline_catalog.Anime.objects.bulk_create")
+    def test_run_import_falls_back_to_row_saves_when_bulk_create_fails(self, mock_bulk_create):
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Fallback Save",
+                episodes=12,
+                animeSeason={"season": "SUMMER", "year": 2023},
+            )
+        )
+        mock_bulk_create.side_effect = IntegrityError("forced conflict")
+
+        result = OfflineCatalogImportService(batch_size=10).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertEqual(result["records_failed"], 0)
+        self.assertEqual(result["records_created"], 1)
+        self.assertTrue(Anime.objects.filter(title="Fallback Save").exists())
+        mock_bulk_create.assert_called_once()
 
     @patch("apps.animes.services.offline_catalog.httpx.Client")
     def test_open_remote_stream_uses_stream_context_response(self, mock_client_cls):

@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -22,6 +22,30 @@ DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250
 DEFAULT_ENRICHMENT_CHUNK_SIZE = 100
 PLACEHOLDER_SYNOPSIS = "Imported from Anime Offline Database. Metadata enrichment pending."
+OFFLINE_UPDATE_FIELDS = [
+    "anime_type",
+    "status",
+    "episode_count",
+    "duration_minutes",
+    "release_date",
+    "rating",
+    "cover_image_external_url",
+    "banner_image_external_url",
+    "season",
+    "season_year",
+    "mal_id",
+    "anilist_id",
+    "studio",
+    "provider_ids",
+    "synonyms",
+    "producers",
+    "tags",
+    "source_urls",
+    "offline_db_payload",
+    "offline_db_last_seen_at",
+    "offline_db_last_update",
+    "updated_at",
+]
 LATEST_DOWNLOAD_URL = (
     "https://github.com/manami-project/anime-offline-database/releases/latest/download/"
     f"{DEFAULT_ASSET_NAME}"
@@ -431,6 +455,15 @@ class OfflineCatalogImportService:
         mal_ids = {entry.mal_id for entry in entries if entry.mal_id}
         titles = {entry.title for entry in entries}
         slugs = {entry.base_slug for entry in entries if entry.base_slug}
+        title_candidates = {
+            candidate
+            for entry in entries
+            for candidate in self._title_candidates(entry)
+            if candidate
+        }
+        slug_candidates = {
+            slug for candidate in title_candidates if (slug := slugify(candidate))
+        }
         studio_names = {entry.primary_studio for entry in entries if entry.primary_studio}
 
         anilist_map = (
@@ -441,10 +474,16 @@ class OfflineCatalogImportService:
         slug_map = {anime.slug: anime for anime in Anime.objects.filter(slug__in=slugs)}
         studio_map = self._resolve_studios(studio_names)
 
-        reserved_titles = set(Anime.objects.filter(title__in=titles).values_list("title", flat=True))
-        reserved_slugs = set(Anime.objects.filter(slug__in=slugs).values_list("slug", flat=True))
+        reserved_titles = set(
+            Anime.objects.filter(title__in=(title_candidates or titles)).values_list(
+                "title", flat=True
+            )
+        )
+        reserved_slugs = set(
+            Anime.objects.filter(slug__in=(slug_candidates or slugs)).values_list("slug", flat=True)
+        )
 
-        to_create: list[Anime] = []
+        to_create: list[tuple[Anime, OfflineCatalogEntry, Studio | None]] = []
         to_update: list[Anime] = []
         created_ids: list[int] = []
         updated_ids: list[int] = []
@@ -489,8 +528,7 @@ class OfflineCatalogImportService:
                             offline_db_last_update=last_update,
                             slug=slug,
                         )
-                        to_create.append(anime)
-                        created_count += 1
+                        to_create.append((anime, entry, studio))
                         reserved_titles.add(title)
                         reserved_slugs.add(slug)
                     else:
@@ -503,37 +541,24 @@ class OfflineCatalogImportService:
                     logger.error("Failed to prepare offline catalog entry", exc_info=True)
 
             if to_create:
-                Anime.objects.bulk_create(to_create, batch_size=self.batch_size)
-                created_ids.extend(anime.id for anime in to_create if anime.id)
-                touched_slugs.extend(anime.slug for anime in to_create)
+                persist_result = self._persist_creates(
+                    to_create,
+                    last_update=last_update,
+                    seen_at=seen_at,
+                    reserved_titles=reserved_titles,
+                    reserved_slugs=reserved_slugs,
+                )
+                created_count += persist_result["created"]
+                updated_count += persist_result["updated"]
+                failed_count += persist_result["failed"]
+                created_ids.extend(persist_result["created_ids"])
+                updated_ids.extend(persist_result["updated_ids"])
+                touched_slugs.extend(persist_result["touched_slugs"])
 
             if to_update:
                 Anime.objects.bulk_update(
                     to_update,
-                    [
-                        "anime_type",
-                        "status",
-                        "episode_count",
-                        "duration_minutes",
-                        "release_date",
-                        "rating",
-                        "cover_image_external_url",
-                        "banner_image_external_url",
-                        "season",
-                        "season_year",
-                        "mal_id",
-                        "anilist_id",
-                        "studio",
-                        "provider_ids",
-                        "synonyms",
-                        "producers",
-                        "tags",
-                        "source_urls",
-                        "offline_db_payload",
-                        "offline_db_last_seen_at",
-                        "offline_db_last_update",
-                        "updated_at",
-                    ],
+                    OFFLINE_UPDATE_FIELDS,
                     batch_size=self.batch_size,
                 )
                 updated_ids.extend(anime.id for anime in to_update if anime.id)
@@ -548,6 +573,135 @@ class OfflineCatalogImportService:
             "created_ids": created_ids,
             "updated_ids": updated_ids,
         }
+
+    def _persist_creates(
+        self,
+        rows: list[tuple[Anime, OfflineCatalogEntry, Studio | None]],
+        *,
+        last_update: date | None,
+        seen_at,
+        reserved_titles: set[str],
+        reserved_slugs: set[str],
+    ) -> dict[str, Any]:
+        anime_rows = [anime for anime, _, _ in rows]
+        try:
+            with transaction.atomic():
+                Anime.objects.bulk_create(anime_rows, batch_size=self.batch_size)
+            return {
+                "created": len(anime_rows),
+                "updated": 0,
+                "failed": 0,
+                "created_ids": [anime.id for anime in anime_rows if anime.id],
+                "updated_ids": [],
+                "touched_slugs": [anime.slug for anime in anime_rows],
+            }
+        except IntegrityError:
+            logger.warning(
+                "Bulk create hit uniqueness conflict, falling back to row-by-row recovery",
+                exc_info=True,
+            )
+
+        summary = {
+            "created": 0,
+            "updated": 0,
+            "failed": 0,
+            "created_ids": [],
+            "updated_ids": [],
+            "touched_slugs": [],
+        }
+        for anime, entry, studio in rows:
+            outcome = self._persist_single_create_with_recovery(
+                anime=anime,
+                entry=entry,
+                studio=studio,
+                last_update=last_update,
+                seen_at=seen_at,
+                reserved_titles=reserved_titles,
+                reserved_slugs=reserved_slugs,
+            )
+            for key in ("created", "updated", "failed"):
+                summary[key] += outcome[key]
+            summary["created_ids"].extend(outcome["created_ids"])
+            summary["updated_ids"].extend(outcome["updated_ids"])
+            summary["touched_slugs"].extend(outcome["touched_slugs"])
+
+        return summary
+
+    def _persist_single_create_with_recovery(
+        self,
+        *,
+        anime: Anime,
+        entry: OfflineCatalogEntry,
+        studio: Studio | None,
+        last_update: date | None,
+        seen_at,
+        reserved_titles: set[str],
+        reserved_slugs: set[str],
+    ) -> dict[str, Any]:
+        attempts_remaining = 3
+        while attempts_remaining > 0:
+            attempts_remaining -= 1
+            try:
+                with transaction.atomic():
+                    anime.save(force_insert=True)
+                return {
+                    "created": 1,
+                    "updated": 0,
+                    "failed": 0,
+                    "created_ids": [anime.id] if anime.id else [],
+                    "updated_ids": [],
+                    "touched_slugs": [anime.slug],
+                }
+            except IntegrityError:
+                existing = self._find_conflicting_existing(entry, anime)
+                if existing is not None:
+                    self._apply_offline_updates(existing, entry, studio, last_update, seen_at)
+                    existing.save(update_fields=OFFLINE_UPDATE_FIELDS)
+                    return {
+                        "created": 0,
+                        "updated": 1,
+                        "failed": 0,
+                        "created_ids": [],
+                        "updated_ids": [existing.id] if existing.id else [],
+                        "touched_slugs": [existing.slug],
+                    }
+
+                reserved_titles.add(anime.title)
+                reserved_slugs.add(anime.slug)
+                anime.title = self._ensure_unique_title(entry, reserved_titles)
+                anime.slug = self._ensure_unique_slug(slugify(anime.title), reserved_slugs)
+                reserved_titles.add(anime.title)
+                reserved_slugs.add(anime.slug)
+
+        logger.error(
+            "Failed to persist anime row after conflict recovery",
+            extra={"title": entry.title},
+        )
+        return {
+            "created": 0,
+            "updated": 0,
+            "failed": 1,
+            "created_ids": [],
+            "updated_ids": [],
+            "touched_slugs": [],
+        }
+
+    def _find_conflicting_existing(self, entry: OfflineCatalogEntry, anime: Anime) -> Anime | None:
+        if entry.anilist_id:
+            existing = Anime.objects.filter(anilist_id=entry.anilist_id).first()
+            if existing:
+                return existing
+
+        if entry.mal_id:
+            existing = Anime.objects.filter(mal_id=entry.mal_id).first()
+            if existing:
+                return existing
+
+        by_title = Anime.objects.filter(title=anime.title).first()
+        if by_title:
+            return by_title
+
+        return Anime.objects.filter(slug=anime.slug).first()
 
     def _apply_offline_updates(
         self,
@@ -645,13 +799,7 @@ class OfflineCatalogImportService:
         if entry.title not in reserved_titles:
             return entry.title
 
-        variants = []
-        if entry.season_year:
-            variants.append(f"{entry.title} ({entry.season_year})")
-        if entry.anilist_id:
-            variants.append(f"{entry.title} [anilist-{entry.anilist_id}]")
-        if entry.mal_id:
-            variants.append(f"{entry.title} [mal-{entry.mal_id}]")
+        variants = self._title_candidates(entry)[1:]
 
         for variant in variants:
             if variant not in reserved_titles:
@@ -675,6 +823,16 @@ class OfflineCatalogImportService:
             if candidate not in reserved_slugs:
                 return candidate
             counter += 1
+
+    def _title_candidates(self, entry: OfflineCatalogEntry) -> list[str]:
+        candidates = [entry.title]
+        if entry.season_year:
+            candidates.append(f"{entry.title} ({entry.season_year})")
+        if entry.anilist_id:
+            candidates.append(f"{entry.title} [anilist-{entry.anilist_id}]")
+        if entry.mal_id:
+            candidates.append(f"{entry.title} [mal-{entry.mal_id}]")
+        return candidates
 
     def _enqueue_enrichment(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, int]:
         changed_ids = list(dict.fromkeys([*created_ids, *updated_ids]))
