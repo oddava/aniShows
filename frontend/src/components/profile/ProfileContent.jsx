@@ -9,6 +9,11 @@ import DraggableFavoritesGrid from '../DraggableFavoritesGrid';
 import ProfileStats from './ProfileStats';
 import { listApi } from '../../api/client';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
+import {
+    applyImageFallback,
+    getImageFallbackUrl,
+    getOptimizedImageUrl,
+} from '../../utils/imageUtils';
 import logger from '../../utils/logger';
 import ProfileInsights from '../ProfileInsights';
 import FriendsTab from './FriendsTab';
@@ -336,51 +341,57 @@ function AnimeListView({
 
     return (
         <div className="space-y-2">
-            {filteredListItems.map((item) => (
-                <Link
-                    key={item.id}
-                    to={`/anime/${item.anime?.slug}`}
-                    className="flex items-center gap-4 bg-dark-100 rounded-lg p-3 border border-gray-800/60"
-                >
-                    <img
-                        src={item.anime?.cover_image}
-                        alt={item.anime?.title}
-                        className="w-12 h-16 rounded object-cover shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-white truncate">
-                            {item.anime?.title}
-                        </h4>
-                        <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                            <span>{item.anime?.anime_type || 'TV'}</span>
-                            <span>•</span>
-                            <span>{item.anime?.episode_count || '?'} eps</span>
-                            {item.score > 0 && (
-                                <>
-                                    <span>•</span>
-                                    <span className="flex items-center gap-1 text-yellow-500">
-                                        <Star className="w-3 h-3 fill-current" />
-                                        {item.score}
-                                    </span>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
-                        <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
-                            <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent'}`}
-                                    style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
-                                />
+            {filteredListItems.map((item) => {
+                const imageUrl = getOptimizedImageUrl(item.anime, 'cover', 'small');
+                const fallbackImageUrl = getImageFallbackUrl(item.anime, 'cover');
+
+                return (
+                    <Link
+                        key={item.id}
+                        to={`/anime/${item.anime?.slug}`}
+                        className="flex items-center gap-4 bg-dark-100 rounded-lg p-3 border border-gray-800/60"
+                    >
+                        <img
+                            src={imageUrl}
+                            alt={item.anime?.title}
+                            onError={(event) => applyImageFallback(event, fallbackImageUrl)}
+                            className="w-12 h-16 rounded object-cover shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-white truncate">
+                                {item.anime?.title}
+                            </h4>
+                            <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                <span>{item.anime?.anime_type || 'TV'}</span>
+                                <span>•</span>
+                                <span>{item.anime?.episode_count || '?'} eps</span>
+                                {item.score > 0 && (
+                                    <>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1 text-yellow-500">
+                                            <Star className="w-3 h-3 fill-current" />
+                                            {item.score}
+                                        </span>
+                                    </>
+                                )}
                             </div>
-                            <span className="text-[11px] text-gray-400">
-                                {item.episodes_watched || 0}/{item.anime.episode_count}
-                            </span>
                         </div>
-                    )}
-                </Link>
-            ))}
+                        {listStatusFilter === 'Watching' && item.anime?.episode_count > 0 && (
+                            <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
+                                <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent'}`}
+                                        style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
+                                    />
+                                </div>
+                                <span className="text-[11px] text-gray-400">
+                                    {item.episodes_watched || 0}/{item.anime.episode_count}
+                                </span>
+                            </div>
+                        )}
+                    </Link>
+                );
+            })}
         </div>
     );
 }

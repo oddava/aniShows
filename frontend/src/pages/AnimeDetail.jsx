@@ -64,6 +64,9 @@ const getUniqueStaffCount = (staff) => {
     return seen.size;
 };
 
+const getCoverPlaceholder = (title = 'Anime') =>
+    `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(title)}`;
+
 // Extract and memoize color from image
 const useAccentColor = (coverImage, bannerImage) => {
     const [accentColor, setAccentColor] = useState(null);
@@ -144,64 +147,116 @@ const useShare = () => {
 };
 
 // Memoized related anime card component
-const RelatedAnimeCard = memo(({ anime, getImageUrl, accentColor }) => (
-    <Link
-        to={`/anime/${anime.slug}`}
-        className="flex gap-4 group bg-dark-100/30 p-2 rounded-xl border border-transparent hover:border-gray-800 hover:bg-dark-100/50 transition-all"
-    >
-        <div className="w-20 h-28 flex-shrink-0 overflow-hidden rounded-lg">
-            <img
-                src={getImageUrl(anime.cover_image)}
-                alt={anime.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-            />
-        </div>
-        <div className="flex-1 py-1 min-w-0">
-            <h3 className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
-                {anime.title}
-            </h3>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{anime.anime_type}</span>
-                <span>•</span>
-                <div className="flex items-center gap-1 bg-yellow-500/10 px-1.5 py-0.5 rounded text-yellow-500 font-bold">
-                    <Star className="w-3 h-3 fill-current" />
-                    <span>{anime.rating || 'N/A'}</span>
+const RelatedAnimeCard = memo(({ anime, getImageUrl }) => {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const imageSrc = getImageUrl(anime.cover_image) || getCoverPlaceholder(anime.title);
+
+    useEffect(() => {
+        setIsLoaded(false);
+    }, [imageSrc]);
+
+    return (
+        <Link
+            to={`/anime/${anime.slug}`}
+            className="flex gap-4 group bg-dark-100/30 p-2 rounded-xl border border-transparent hover:border-gray-800 hover:bg-dark-100/50 transition-all"
+        >
+            <div className="relative w-20 h-28 flex-shrink-0 overflow-hidden rounded-lg bg-dark-200">
+                {!isLoaded && (
+                    <div
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
+                    />
+                )}
+                <img
+                    src={imageSrc}
+                    alt={anime.title}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    loading="lazy"
+                    onLoad={() => setIsLoaded(true)}
+                    onError={(event) => {
+                        const img = event.currentTarget;
+                        if (img.dataset.fallbackApplied !== '1') {
+                            img.dataset.fallbackApplied = '1';
+                            setIsLoaded(false);
+                            img.src = getCoverPlaceholder(anime.title);
+                            return;
+                        }
+                        setIsLoaded(true);
+                    }}
+                />
+            </div>
+            <div className="flex-1 py-1 min-w-0">
+                <h3 className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
+                    {anime.title}
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span>{anime.anime_type}</span>
+                    <span>•</span>
+                    <div className="flex items-center gap-1 bg-yellow-500/10 px-1.5 py-0.5 rounded text-yellow-500 font-bold">
+                        <Star className="w-3 h-3 fill-current" />
+                        <span>{anime.rating || 'N/A'}</span>
+                    </div>
                 </div>
             </div>
-        </div>
-    </Link>
-));
+        </Link>
+    );
+});
 
 RelatedAnimeCard.displayName = 'RelatedAnimeCard';
 
 // Memoized mobile related anime card
-const MobileRelatedCard = memo(({ anime, getImageUrl }) => (
-    <Link
-        to={`/anime/${anime.slug}`}
-        className="flex-shrink-0 w-28 sm:w-32 snap-start group"
-    >
-        <div className="aspect-[2/3] rounded-lg overflow-hidden mb-2 border border-gray-800 bg-dark-200">
-            <img
-                src={getImageUrl(anime.cover_image)}
-                alt={anime.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-            />
-        </div>
-        <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
-            {anime.title}
-        </h3>
-        <div className="flex items-center gap-1 text-[10px] text-gray-500">
-            <span>{anime.anime_type}</span>
-            <span>•</span>
-            <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1 py-0.5 rounded text-yellow-500 font-bold">
-                <Star className="w-2.5 h-2.5 fill-current" />
-                <span>{anime.rating || 'N/A'}</span>
+const MobileRelatedCard = memo(({ anime, getImageUrl }) => {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const imageSrc = getImageUrl(anime.cover_image) || getCoverPlaceholder(anime.title);
+
+    useEffect(() => {
+        setIsLoaded(false);
+    }, [imageSrc]);
+
+    return (
+        <Link
+            to={`/anime/${anime.slug}`}
+            className="flex-shrink-0 w-28 sm:w-32 snap-start group"
+        >
+            <div className="relative aspect-[2/3] rounded-lg overflow-hidden mb-2 border border-gray-800 bg-dark-200">
+                {!isLoaded && (
+                    <div
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
+                    />
+                )}
+                <img
+                    src={imageSrc}
+                    alt={anime.title}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    loading="lazy"
+                    onLoad={() => setIsLoaded(true)}
+                    onError={(event) => {
+                        const img = event.currentTarget;
+                        if (img.dataset.fallbackApplied !== '1') {
+                            img.dataset.fallbackApplied = '1';
+                            setIsLoaded(false);
+                            img.src = getCoverPlaceholder(anime.title);
+                            return;
+                        }
+                        setIsLoaded(true);
+                    }}
+                />
             </div>
-        </div>
-    </Link>
-));
+            <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
+                {anime.title}
+            </h3>
+            <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                <span>{anime.anime_type}</span>
+                <span>•</span>
+                <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1 py-0.5 rounded text-yellow-500 font-bold">
+                    <Star className="w-2.5 h-2.5 fill-current" />
+                    <span>{anime.rating || 'N/A'}</span>
+                </div>
+            </div>
+        </Link>
+    );
+});
 
 MobileRelatedCard.displayName = 'MobileRelatedCard';
 
@@ -248,6 +303,8 @@ export default function AnimeDetail() {
     const [hideSpoilersGlobal, setHideSpoilersGlobal] = useState(false);
     const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [selectedStaff, setSelectedStaff] = useState(null);
+    const [isBannerLoaded, setIsBannerLoaded] = useState(false);
+    const [isCoverLoaded, setIsCoverLoaded] = useState(false);
     const containerRef = useRef(null);
 
     // Queries
@@ -423,6 +480,11 @@ export default function AnimeDetail() {
         return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
     }, []);
 
+    useEffect(() => {
+        setIsBannerLoaded(false);
+        setIsCoverLoaded(false);
+    }, [slug]);
+
     // Loading & Error states
     if (isLoading) return <AnimeDetailSkeleton />;
 
@@ -497,13 +559,23 @@ export default function AnimeDetail() {
 
             {/* Banner */}
             <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200">
+                {!isBannerLoaded && (
+                    <div
+                        aria-hidden="true"
+                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
+                    />
+                )}
                 <img
                     src={bannerUrl}
                     srcSet={bannerSrcSet}
                     sizes="100vw"
                     alt={anime.title}
-                    onError={(event) => applyImageFallback(event, bannerFallbackUrl)}
-                    className="w-full h-full object-cover"
+                    onLoad={() => setIsBannerLoaded(true)}
+                    onError={(event) => {
+                        setIsBannerLoaded(false);
+                        applyImageFallback(event, bannerFallbackUrl);
+                    }}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isBannerLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-transparent to-transparent" />
@@ -516,14 +588,26 @@ export default function AnimeDetail() {
                         {/* Column 1: Poster & Mobile Info */}
                         <div className="flex flex-col gap-6">
                             <div className="flex-shrink-0 mx-auto lg:mx-0">
-                                <img
-                                    src={coverUrl}
-                                    srcSet={coverSrcSet}
-                                    sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
-                                    alt={anime.title}
-                                    onError={(event) => applyImageFallback(event, coverFallbackUrl)}
-                                    className="w-48 md:w-64 lg:w-full aspect-[2/3] object-cover rounded-2xl border border-gray-800 bg-dark-200"
-                                />
+                                <div className="relative w-48 md:w-64 lg:w-full aspect-[2/3] overflow-hidden rounded-2xl border border-gray-800 bg-dark-200">
+                                    {!isCoverLoaded && (
+                                        <div
+                                            aria-hidden="true"
+                                            className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
+                                        />
+                                    )}
+                                    <img
+                                        src={coverUrl}
+                                        srcSet={coverSrcSet}
+                                        sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
+                                        alt={anime.title}
+                                        onLoad={() => setIsCoverLoaded(true)}
+                                        onError={(event) => {
+                                            setIsCoverLoaded(false);
+                                            applyImageFallback(event, coverFallbackUrl);
+                                        }}
+                                        className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                    />
+                                </div>
                             </div>
 
                             <InformationBox anime={anime} accentColor={accentColor} className="hidden lg:flex" />
@@ -816,7 +900,6 @@ export default function AnimeDetail() {
                                                 key={rel.id}
                                                 anime={rel}
                                                 getImageUrl={getImageUrl}
-                                                accentColor={accentColor}
                                             />
                                         ))}
                                     </div>

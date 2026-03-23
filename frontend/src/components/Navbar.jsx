@@ -5,6 +5,11 @@ import { useAuth } from '../context/AuthContext';
 import { animeApi, notificationApi } from '../api/client';
 import { useWebSocket } from '../hooks/useWebSocket';
 import logger, { isRequestAbortError } from '../utils/logger';
+import {
+    applyImageFallback,
+    getImageFallbackUrl,
+    getOptimizedImageUrl,
+} from '../utils/imageUtils';
 
 import Fuse from 'fuse.js';
 import Logo from './Logo';
@@ -615,48 +620,54 @@ export default function Navbar() {
                                         </div>
                                     ) : searchSuggestions.length > 0 ? (
                                         <>
-                                            {searchSuggestions.map((anime, index) => (
-                                                <button
-                                                    key={anime.id}
-                                                    onClick={() => handleSuggestionClick(anime.slug)}
-                                                    onMouseEnter={() => setSelectedIndex(index)}
-                                                    className={`w-full flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
-                                                        ? 'bg-accent/10 border-accent'
-                                                        : 'border-transparent hover:bg-dark-50'
-                                                        }`}
-                                                >
-                                                    <img
-                                                        src={anime.cover_image}
-                                                        alt={anime.title}
-                                                        className="w-10 h-14 object-cover rounded-md flex-shrink-0 shadow-sm"
-                                                    />
-                                                    <div className="flex-1 min-w-0">
-                                                        <h4 className="text-sm font-semibold text-white line-clamp-1">
-                                                            {highlightMatch(anime.title, searchQuery)}
-                                                        </h4>
-                                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
-                                                            <span className="text-gray-500">{anime.anime_type}</span>
-                                                            {anime.episode_count && (
-                                                                <>
-                                                                    <span className="text-gray-600">•</span>
-                                                                    <span>{anime.episode_count} eps</span>
-                                                                </>
-                                                            )}
+                                            {searchSuggestions.map((anime, index) => {
+                                                const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
+                                                const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
+
+                                                return (
+                                                    <button
+                                                        key={anime.id}
+                                                        onClick={() => handleSuggestionClick(anime.slug)}
+                                                        onMouseEnter={() => setSelectedIndex(index)}
+                                                        className={`w-full flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
+                                                            ? 'bg-accent/10 border-accent'
+                                                            : 'border-transparent hover:bg-dark-50'
+                                                            }`}
+                                                    >
+                                                        <img
+                                                            src={imageUrl}
+                                                            alt={anime.title}
+                                                            onError={(event) => applyImageFallback(event, fallbackImageUrl)}
+                                                            className="w-10 h-14 object-cover rounded-md flex-shrink-0 shadow-sm"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="text-sm font-semibold text-white line-clamp-1">
+                                                                {highlightMatch(anime.title, searchQuery)}
+                                                            </h4>
+                                                            <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
+                                                                <span className="text-gray-500">{anime.anime_type}</span>
+                                                                {anime.episode_count && (
+                                                                    <>
+                                                                        <span className="text-gray-600">•</span>
+                                                                        <span>{anime.episode_count} eps</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    {anime.rating && (
-                                                        <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-md flex-shrink-0">
-                                                            <Star className="w-3 h-3 text-yellow-500 fill-current" />
-                                                            <span className="text-xs font-semibold text-yellow-500">{anime.rating}</span>
-                                                        </div>
-                                                    )}
-                                                    {anime.isExactMatch && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">
-                                                            Exact
-                                                        </span>
-                                                    )}
-                                                </button>
-                                            ))}
+                                                        {anime.rating && (
+                                                            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-md flex-shrink-0">
+                                                                <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                                                <span className="text-xs font-semibold text-yellow-500">{anime.rating}</span>
+                                                            </div>
+                                                        )}
+                                                        {anime.isExactMatch && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">
+                                                                Exact
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
 
                                             <button
                                                 onClick={handleSearch}

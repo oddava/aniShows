@@ -1,6 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
-import { getImageUrl } from '../utils/imageUtils';
+import {
+    applyImageFallback,
+    getImageFallbackUrl,
+    getOptimizedImageUrl,
+} from '../utils/imageUtils';
 
 /**
  * ProfileAnimeCard - Ultra-lightweight card for profile anime lists
@@ -9,6 +13,8 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
     if (!anime) return null;
 
     const progress = anime.episode_count ? (episodesWatched / anime.episode_count) * 100 : 0;
+    const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
+    const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
 
     return (
         <div className="bg-dark-100 rounded-lg border border-gray-800/60 overflow-hidden">
@@ -16,8 +22,9 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
                 {/* Image Container */}
                 <div className="relative aspect-[2/3] bg-dark-50">
                     <img
-                        src={getImageUrl(anime.cover_image, anime.title)}
+                        src={imageUrl}
                         alt={anime.title}
+                        onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                         className="w-full h-full object-cover"
                         loading="lazy"
                         decoding="async"
