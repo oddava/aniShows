@@ -165,3 +165,43 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertTrue(Anime.objects.filter(id=stale_anime.id).exists())
         self.assertLess(stale_anime.offline_db_last_seen_at, timezone.now())
         self.assertEqual(OfflineCatalogImport.objects.count(), 1)
+
+    @patch("apps.animes.services.offline_catalog.httpx.Client")
+    def test_open_remote_stream_uses_stream_context_response(self, mock_client_cls):
+        flags = {"entered": False, "exited": False, "closed": False}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def iter_bytes(self):
+                yield b'{"hello":"world"}\n'
+
+        class FakeStreamContext:
+            def __enter__(self):
+                flags["entered"] = True
+                return FakeResponse()
+
+            def __exit__(self, exc_type, exc, tb):
+                flags["exited"] = True
+                return False
+
+        class FakeClient:
+            def stream(self, method, url):
+                self.method = method
+                self.url = url
+                return FakeStreamContext()
+
+            def close(self):
+                flags["closed"] = True
+
+        mock_client_cls.return_value = FakeClient()
+
+        service = OfflineCatalogImportService()
+        with service._open_remote_stream("https://example.com/offline.jsonl") as text_stream:
+            line = next(text_stream).strip()
+
+        self.assertEqual(line, '{"hello":"world"}')
+        self.assertTrue(flags["entered"])
+        self.assertTrue(flags["exited"])
+        self.assertTrue(flags["closed"])

@@ -357,8 +357,8 @@ class OfflineCatalogImportService:
 
     def _open_remote_stream(self, source_url: str):
         client = httpx.Client(timeout=60.0, follow_redirects=True)
-        response = client.stream("GET", source_url)
-        response.__enter__()
+        stream_context = client.stream("GET", source_url)
+        response = stream_context.__enter__()
         response.raise_for_status()
 
         stream = _IteratorStream(response.iter_bytes())
@@ -376,7 +376,7 @@ class OfflineCatalogImportService:
                 try:
                     text_stream.close()
                 finally:
-                    response.__exit__(exc_type, exc, tb)
+                    stream_context.__exit__(exc_type, exc, tb)
                     client.close()
                 return False
 
