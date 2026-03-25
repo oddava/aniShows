@@ -26,12 +26,12 @@ import SakuraAnimation from '../components/SakuraAnimation';
 import { useTheme } from '../context/ThemeContext';
 
 const BROWSE_TABS = [
-  { key: 'popular', label: 'Most Popular', icon: Users },
-  { key: 'current', label: 'This Season', icon: Play },
-  { key: 'upcoming', label: 'Upcoming', icon: Clock },
-  { key: 'top', label: 'All Time Best', icon: Trophy },
-  { key: 'newest', label: 'Newest', icon: Sparkles },
-  { key: 'title', label: 'A-Z', icon: ArrowDownAZ },
+  { key: 'popular', label: 'Most Popular' },
+  { key: 'current', label: 'This Season' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'top', label: 'All Time Best' },
+  { key: 'newest', label: 'Newest' },
+  { key: 'title', label: 'A-Z' },
 ];
 
 const SORT_OPTIONS = [
@@ -664,7 +664,6 @@ export default function Browse() {
                       : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
                     }`}
                 >
-                  <Search className={`w-4 h-4 ${activeTab === 'search' ? 'text-white' : 'text-gray-500'}`} />
                   All Results
                 </button>
               )}
@@ -681,7 +680,6 @@ export default function Browse() {
                         : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
                       }`}
                   >
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                     {tab.label}
                   </button>
                 );

@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from apps.animes.serializers.anime import (
     AnimeCompactSerializer,
     AnimeDetailSerializer,
@@ -27,21 +29,35 @@ from apps.animes.serializers.reviews import (
     ReviewSerializer,
     ReviewUserSerializer,
 )
-from apps.users.serializers.users import (
-    BadgeSerializer,
-    ChangePasswordSerializer,
-    FavoriteCompactSerializer,
-    FavoriteSerializer,
-    FollowSerializer,
-    FriendWatchingSerializer,
-    PublicUserSerializer,
-    RegisterSerializer,
-    UserActivitySerializer,
-    UserAnimeListSerializer,
-    UserBadgeSerializer,
-    UserFollowListSerializer,
-    UserLightweightSerializer,
-    UserProfileUpdateSerializer,
-    UserRecommendationSerializer,
-    UserSerializer,
-)
+
+_USER_SERIALIZER_EXPORTS = {
+    "BadgeSerializer",
+    "ChangePasswordSerializer",
+    "FavoriteCompactSerializer",
+    "FavoriteSerializer",
+    "FollowSerializer",
+    "FriendWatchingSerializer",
+    "PublicUserSerializer",
+    "RegisterSerializer",
+    "UserActivitySerializer",
+    "UserAnimeListSerializer",
+    "UserBadgeSerializer",
+    "UserFollowListSerializer",
+    "UserLightweightSerializer",
+    "UserProfileUpdateSerializer",
+    "UserRecommendationSerializer",
+    "UserSerializer",
+}
+
+
+def __getattr__(name: str):
+    if name in _USER_SERIALIZER_EXPORTS:
+        module = import_module("apps.users.serializers.users")
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted([*globals().keys(), *_USER_SERIALIZER_EXPORTS])

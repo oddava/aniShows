@@ -371,15 +371,15 @@ class OfflineCatalogImportServiceTests(TestCase):
             "$schema": "https://example.com/schema.json",
             "lastUpdate": "2026-03-23",
         }
-        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
-        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
-        with handle:
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as handle:
+            fixture_path = handle.name
             handle.write(json.dumps(metadata) + "\n")
             handle.write("{invalid-json\n")
             handle.write(json.dumps(self._entry(title="Valid After Broken Line")) + "\n")
+        self.addCleanup(lambda: Path(fixture_path).unlink(missing_ok=True))
 
         result = OfflineCatalogImportService(batch_size=1).run_import(
-            source_path=handle.name,
+            source_path=fixture_path,
             asset_name="anime-offline-database.jsonl",
         )
 
@@ -392,15 +392,15 @@ class OfflineCatalogImportServiceTests(TestCase):
             "$schema": "https://example.com/schema.json",
             "lastUpdate": "2026-03-23",
         }
-        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
-        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
-        with handle:
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as handle:
+            fixture_path = handle.name
             handle.write(json.dumps(metadata) + "\n")
             handle.write(json.dumps(["not", "an", "object"]) + "\n")
             handle.write(json.dumps(self._entry(title="Valid After Array Line")) + "\n")
+        self.addCleanup(lambda: Path(fixture_path).unlink(missing_ok=True))
 
         result = OfflineCatalogImportService(batch_size=1).run_import(
-            source_path=handle.name,
+            source_path=fixture_path,
             asset_name="anime-offline-database.jsonl",
         )
 

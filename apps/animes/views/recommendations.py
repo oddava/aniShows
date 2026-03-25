@@ -4,8 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.animes.serializers import UserRecommendationSerializer
 from apps.shared.logger import logger
+from apps.users.serializers.users import UserRecommendationSerializer
 
 
 class RecommendationsViewSet(ViewSet):

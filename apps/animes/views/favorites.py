@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.animes.models import Anime, UserFavorite
-from apps.animes.serializers import FavoriteSerializer
 from apps.users.permissions import EmailVerificationMixin
+from apps.users.serializers.users import FavoriteCompactSerializer, FavoriteSerializer
 from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()
@@ -20,7 +20,6 @@ class FavoriteViewSet(EmailVerificationMixin, ModelViewSet):
 
     def get_serializer_class(self):
         if self.request and self.request.query_params.get("compact") == "true":
-            from apps.animes.serializers import FavoriteCompactSerializer
             return FavoriteCompactSerializer
         return super().get_serializer_class()
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
