@@ -6,8 +6,10 @@ Image processing tasks for anime.
 Includes thumbnail generation for anime images.
 """
 import asyncio
+import hashlib
 
 import httpx
+from asgiref.sync import sync_to_async
 from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
@@ -74,6 +76,12 @@ def _storage_retry_delay_seconds(storage_retry: int) -> int:
     )
 
 
+def _image_filename(slug: str, kind: str, source_url: str) -> str:
+    digest = hashlib.sha256((source_url or "").encode("utf-8")).hexdigest()[:10]
+    safe_slug = (slug or "anime").strip() or "anime"
+    return f"{safe_slug}_{kind}_{digest}.jpg"
+
+
 def _queue_image_fetch(
     anime_id: int,
     cover_url: str,
@@ -83,6 +91,7 @@ def _queue_image_fetch(
     countdown: int = 0,
     storage_retry: int = 0,
     force: bool = False,
+    force_replace: bool = False,
 ) -> bool:
     """Queue image fetch task with per-anime dedupe to prevent retry storms."""
     dedupe_ttl = max(_FETCH_DEDUP_TTL_SECONDS, countdown + 60)
@@ -98,6 +107,8 @@ def _queue_image_fetch(
         "mal_id": mal_id,
         "storage_retry": storage_retry,
     }
+    if force_replace:
+        kwargs["force_replace"] = True
     if countdown > 0:
         fetch_anime_images.apply_async(kwargs=kwargs, countdown=countdown)
     else:
@@ -115,7 +126,7 @@ def _is_storage_available() -> bool:
     try:
         default_storage.exists("health-check/storage-probe")
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if _is_storage_endpoint_error(exc):
             return False
 
@@ -170,6 +181,7 @@ def fetch_anime_images(
     banner_url: str,
     mal_id: int | None = None,
     storage_retry: int = 0,
+    force_replace: bool = False,
 ):
     """Background task to download and save cover/banner images without blocking the main sync loop.
     Implements a Jikan fallback for missing banner images.
@@ -202,17 +214,34 @@ def fetch_anime_images(
                         anime.banner_image_external_url = banner_url
                         await service._save_external_url(anime, "banner_image_external_url", banner_url)
 
+                async def _clear_local_image(field_name: str):
+                    image_field = getattr(anime, field_name, None)
+                    if not image_field:
+                        return
+                    try:
+                        await sync_to_async(image_field.delete)(save=False)
+                    except Exception as exc:
+                        logger.warning(
+                            f"Failed deleting existing {field_name} for anime {anime.id}: {exc}"
+                        )
+                    setattr(anime, field_name, "")
+                    await sync_to_async(anime.save)(update_fields=[field_name])
+
                 # Step 2: Download the Images natively
-                if cover_url and not anime.cover_image:
+                if cover_url and (force_replace or not anime.cover_image):
+                    if force_replace and anime.cover_image:
+                        await _clear_local_image("cover_image")
                     cover_data = await service.download_image(cover_url)
                     if cover_data:
-                        filename = f"{anime.slug}_cover.jpg"
+                        filename = _image_filename(anime.slug, "cover", cover_url)
                         await service._save_image(anime, "cover_image", filename, cover_data)
 
-                if banner_url and not anime.banner_image:
+                if banner_url and (force_replace or not anime.banner_image):
+                    if force_replace and anime.banner_image:
+                        await _clear_local_image("banner_image")
                     banner_data = await service.download_image(banner_url)
                     if banner_data:
-                        filename = f"{anime.slug}_banner.jpg"
+                        filename = _image_filename(anime.slug, "banner", banner_url)
                         await service._save_image(anime, "banner_image", filename, banner_data)
             finally:
                 await service.close()
@@ -246,6 +275,7 @@ def fetch_anime_images(
                 mal_id=mal_id,
                 countdown=delay,
                 storage_retry=storage_retry + 1,
+                force_replace=force_replace,
             )
             logger.warning(
                 f"Storage unavailable while fetching images for anime {anime_id}; "

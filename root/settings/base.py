@@ -718,6 +718,18 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"limit": 200, "retry_failed": True},
         "options": {"queue": "low_priority"},
     },
+    "reconcile-offline-catalog-sync-hourly": {
+        "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync",
+        "schedule": crontab(minute=45),  # Hourly at :45
+        "kwargs": {
+            "anime_ids": [],
+            "batch_size": 500,
+            "chunk_size": 100,
+            "require_themes": True,
+            "strict": False,
+        },
+        "options": {"queue": "batch"},
+    },
     # YouTube URL Backfill Task - Runs twice daily to catch missed themes
     "backfill-theme-youtube-urls-morning": {
         "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",

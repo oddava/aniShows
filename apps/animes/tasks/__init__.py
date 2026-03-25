@@ -35,7 +35,7 @@ from .franchises import sync_franchises, update_relation_slugs
 # Import legacy tasks from tasks.py (kept for backward compatibility)
 from .images import generate_image_thumbnails, heal_missing_anime_media
 from .metadata import enrich_metadata
-from .offline_catalog import import_offline_catalog
+from .offline_catalog import import_offline_catalog, reconcile_offline_catalog_sync
 from .recommendations import generate_recommendations
 from .sync import sync_anime_catalog
 from .themes import backfill_theme_youtube_urls, sync_theme_songs
@@ -50,6 +50,7 @@ __all__ = [
     "generate_recommendations",
     "heal_missing_anime_media",
     "import_offline_catalog",
+    "reconcile_offline_catalog_sync",
     "sync_airing_workflow",
     "sync_anime_catalog",
     "sync_franchises",

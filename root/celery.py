@@ -80,6 +80,7 @@ app.conf.task_routes = {
     # =========================================================================
     "apps.animes.tasks.metadata.enrich_metadata": {"queue": "batch"},
     "apps.animes.tasks.offline_catalog.import_offline_catalog": {"queue": "batch"},
+    "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync": {"queue": "batch"},
     # =========================================================================
     # IMAGES QUEUE - Image processing
     # =========================================================================

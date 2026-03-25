@@ -19,6 +19,7 @@ class Command(BaseCommand):
                 "enrich-metadata",
                 "sync-themes",
                 "import-offline-catalog",
+                "reconcile-offline-sync",
                 "generate-recommendations",
                 "full-sync",
             ],
@@ -114,6 +115,29 @@ class Command(BaseCommand):
             default=None,
             help="Optional row limit for Anime Offline Database imports",
         )
+        parser.add_argument(
+            "--strict",
+            action="store_true",
+            help="For offline reconciliation: keep scheduling rounds until completion cap",
+        )
+        parser.add_argument(
+            "--max-rounds",
+            type=int,
+            default=24,
+            help="Maximum reconciliation rounds in strict mode",
+        )
+        parser.add_argument(
+            "--round-interval-minutes",
+            type=int,
+            default=15,
+            help="Delay between strict reconciliation rounds",
+        )
+        parser.add_argument(
+            "--chunk-size",
+            type=int,
+            default=100,
+            help="Chunk size for reconciliation enqueue batches",
+        )
 
         # Recommendation options
         parser.add_argument(
@@ -178,6 +202,8 @@ class Command(BaseCommand):
             self._handle_sync_themes(options, run_async, queue)
         elif workflow == "import-offline-catalog":
             self._handle_import_offline_catalog(options, run_async, queue)
+        elif workflow == "reconcile-offline-sync":
+            self._handle_reconcile_offline_sync(options, run_async, queue)
         elif workflow == "generate-recommendations":
             self._handle_generate_recommendations(options, run_async, queue)
         elif workflow == "full-sync":
@@ -274,8 +300,37 @@ class Command(BaseCommand):
             limit=limit,
             resume=resume,
             enqueue_enrichment=enqueue_enrichment,
+            enforce_full_sync=True,
             batch_size=options["batch_size"],
             enrichment_chunk_size=enrichment_chunk_size,
+        )
+
+        self._dispatch_task(task, run_async, queue)
+
+    def _handle_reconcile_offline_sync(self, options, run_async, queue):
+        """Reconcile metadata/themes for all offline-imported anime."""
+        from apps.animes.tasks import reconcile_offline_catalog_sync
+
+        batch_size = options["batch_size"]
+        chunk_size = options["chunk_size"]
+        strict = options["strict"]
+        max_rounds = options["max_rounds"]
+        round_interval_minutes = options["round_interval_minutes"]
+
+        self.stdout.write(
+            "Reconciling Offline Catalog sync "
+            f"(batch_size={batch_size}, chunk_size={chunk_size}, strict={strict})"
+        )
+
+        task = reconcile_offline_catalog_sync.s(
+            anime_ids=[],
+            batch_size=batch_size,
+            chunk_size=chunk_size,
+            require_themes=True,
+            strict=strict,
+            max_rounds=max_rounds,
+            round_number=1,
+            round_interval_minutes=round_interval_minutes,
         )
 
         self._dispatch_task(task, run_async, queue)

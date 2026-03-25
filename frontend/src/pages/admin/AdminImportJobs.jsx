@@ -16,8 +16,12 @@ const AdminImportJobs = () => {
 
   // Trigger modal state
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
+  const [triggerSource, setTriggerSource] = useState('anilist_sync');
   const [triggerSyncType, setTriggerSyncType] = useState('trending');
   const [triggerLimit, setTriggerLimit] = useState(50);
+  const [triggerReleaseTag, setTriggerReleaseTag] = useState('latest');
+  const [triggerImportLimit, setTriggerImportLimit] = useState('');
+  const [triggerEnrichment, setTriggerEnrichment] = useState(true);
   const [isTriggering, setIsTriggering] = useState(false);
 
   const statusOptions = [
@@ -83,10 +87,20 @@ const AdminImportJobs = () => {
     e.preventDefault();
     setIsTriggering(true);
     try {
-      await api.post('/admin/import-jobs/trigger/', {
-        sync_type: triggerSyncType,
-        limit: Number(triggerLimit),
-      });
+      const payload = triggerSource === 'offline_catalog'
+        ? {
+          source: 'offline_catalog',
+          release_tag: triggerReleaseTag || 'latest',
+          import_limit: triggerImportLimit === '' ? null : Number(triggerImportLimit),
+          enqueue_enrichment: triggerEnrichment,
+        }
+        : {
+          source: 'anilist_sync',
+          sync_type: triggerSyncType,
+          limit: Number(triggerLimit),
+        };
+
+      await api.post('/admin/import-jobs/trigger/', payload);
       toast.success('Import job triggered successfully');
       setIsTriggerModalOpen(false);
       fetchJobs();
@@ -135,6 +149,13 @@ const AdminImportJobs = () => {
     return `${secs}s`;
   };
 
+  const getProgressPercent = (processed, total) => {
+    if (!total || total <= 0) return 0;
+    return Math.min(100, Math.round((processed / total) * 100));
+  };
+
+  const selectedOfflineEnrichment = selectedJob?.metadata?.offline_import?.enrichment;
+
   const columns = [
     {
       key: 'id',
@@ -166,7 +187,7 @@ const AdminImportJobs = () => {
         <div className="w-full">
           <div className="flex justify-between text-xs text-white/60 mb-1">
             <span>{item.processed_items} / {item.total_items || '?'}</span>
-            <span>{item.total_items ? Math.round((item.processed_items / item.total_items) * 100) : 0}%</span>
+            <span>{getProgressPercent(item.processed_items, item.total_items)}%</span>
           </div>
           <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
             <div
@@ -174,7 +195,7 @@ const AdminImportJobs = () => {
                   item.status === 'completed' ? 'bg-green-500' :
                     'bg-violet-500'
                 }`}
-              style={{ width: `${item.total_items ? (item.processed_items / item.total_items) * 100 : 0}%` }}
+              style={{ width: `${getProgressPercent(item.processed_items, item.total_items)}%` }}
             />
           </div>
         </div>
@@ -343,7 +364,7 @@ const AdminImportJobs = () => {
                 <div className="flex justify-between text-sm">
                   <span className="text-white/60">Success Rate</span>
                   <span className="text-green-400">
-                    {selectedJob.total_items && selectedJob.processed_items > 0
+                    {selectedJob.processed_items > 0
                       ? Math.round(((selectedJob.processed_items - (selectedJob.error_count || 0)) / selectedJob.processed_items) * 100)
                       : 0}%
                   </span>
@@ -360,11 +381,46 @@ const AdminImportJobs = () => {
                         selectedJob.status === 'completed' ? 'bg-green-500' :
                           'bg-violet-500'
                       }`}
-                    style={{ width: `${selectedJob.total_items ? (selectedJob.processed_items / selectedJob.total_items) * 100 : 0}%` }}
+                    style={{ width: `${getProgressPercent(selectedJob.processed_items, selectedJob.total_items)}%` }}
                   />
                 </div>
               </div>
             </div>
+
+            {selectedOfflineEnrichment && (
+              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                <h4 className="text-white font-medium mb-4">Enrichment Progress</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Overall</span>
+                    <span className="text-white">
+                      {selectedOfflineEnrichment.overall.completed} / {selectedOfflineEnrichment.overall.queued}
+                      {selectedOfflineEnrichment.overall.completion_percent != null
+                        ? ` (${selectedOfflineEnrichment.overall.completion_percent}%)`
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Metadata</span>
+                    <span className="text-white">
+                      {selectedOfflineEnrichment.metadata.completed} / {selectedOfflineEnrichment.metadata.queued}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Franchises</span>
+                    <span className="text-white">
+                      {selectedOfflineEnrichment.franchises.completed} / {selectedOfflineEnrichment.franchises.queued}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/60">Themes</span>
+                    <span className="text-white">
+                      {selectedOfflineEnrichment.themes.completed} / {selectedOfflineEnrichment.themes.queued}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Timestamps */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -432,35 +488,93 @@ const AdminImportJobs = () => {
         <form onSubmit={handleTriggerJob} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-white/70 mb-1">
-              Sync Type
+              Source
             </label>
             <select
-              value={triggerSyncType}
-              onChange={(e) => setTriggerSyncType(e.target.value)}
+              value={triggerSource}
+              onChange={(e) => setTriggerSource(e.target.value)}
               disabled={isTriggering}
               className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
             >
-              <option value="trending">Trending Anime</option>
-              <option value="seasonal">Current Season</option>
-              <option value="next_season">Next Season</option>
-              <option value="airing">Currently Airing</option>
-              <option value="full_catalog">Full Catalog (top 1000)</option>
+              <option value="anilist_sync">AniList Sync</option>
+              <option value="offline_catalog">Anime Offline Database</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-white/70 mb-1">
-              Limit (Number of Anime)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="1000"
-              value={triggerLimit}
-              onChange={(e) => setTriggerLimit(e.target.value)}
-              disabled={isTriggering}
-              className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-            />
-          </div>
+          {triggerSource === 'anilist_sync' ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Sync Type
+                </label>
+                <select
+                  value={triggerSyncType}
+                  onChange={(e) => setTriggerSyncType(e.target.value)}
+                  disabled={isTriggering}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                >
+                  <option value="trending">Trending Anime</option>
+                  <option value="seasonal">Current Season</option>
+                  <option value="next_season">Next Season</option>
+                  <option value="airing">Currently Airing</option>
+                  <option value="full_catalog">Full Catalog (top 1000)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Limit (Number of Anime)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value={triggerLimit}
+                  onChange={(e) => setTriggerLimit(e.target.value)}
+                  disabled={isTriggering}
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Release Tag
+                </label>
+                <input
+                  type="text"
+                  value={triggerReleaseTag}
+                  onChange={(e) => setTriggerReleaseTag(e.target.value)}
+                  disabled={isTriggering}
+                  placeholder="latest"
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Import Limit (optional)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={triggerImportLimit}
+                  onChange={(e) => setTriggerImportLimit(e.target.value)}
+                  disabled={isTriggering}
+                  placeholder="Leave blank to import full dataset"
+                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-white/80 text-sm">
+                <input
+                  type="checkbox"
+                  checked={triggerEnrichment}
+                  onChange={(e) => setTriggerEnrichment(e.target.checked)}
+                  disabled={isTriggering}
+                  className="rounded border-white/20 bg-[#1a1a1a]"
+                />
+                Queue metadata enrichment after import (synopsis, characters, staff, stats)
+              </label>
+            </>
+          )}
           <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
             <button
               type="button"

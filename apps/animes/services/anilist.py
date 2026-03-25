@@ -1084,6 +1084,11 @@ class AniListService:
                 "coverImage", {}
             ).get("large")
             banner_url = item.get("bannerImage")
+            existing_cover_url = anime.cover_image_external_url or ""
+            existing_banner_url = anime.banner_image_external_url or ""
+            cover_url_changed = bool(cover_url and cover_url != existing_cover_url)
+            banner_url_changed = bool(banner_url and banner_url != existing_banner_url)
+            force_replace = cover_url_changed or banner_url_changed
 
             # Queue background task to download cover and banner images
             has_cover = await sync_to_async(lambda: bool(anime.cover_image))()
@@ -1096,12 +1101,17 @@ class AniListService:
                 (cover_url and not has_cover)
                 or (banner_url and not has_banner)
                 or (not has_banner and mal_id)
+                or force_replace
             ):
                 from apps.animes.tasks.images import fetch_anime_images
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
                 await sync_to_async(fetch_anime_images.delay)(
-                    anime_id=anime.id, cover_url=cover_url, banner_url=banner_url, mal_id=mal_id
+                    anime_id=anime.id,
+                    cover_url=cover_url,
+                    banner_url=banner_url,
+                    mal_id=mal_id,
+                    force_replace=force_replace,
                 )
 
             # Check if anime already has a trailer URL

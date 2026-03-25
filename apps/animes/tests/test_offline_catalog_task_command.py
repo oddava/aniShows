@@ -106,8 +106,10 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
     @patch("apps.animes.tasks.sync_theme_songs.delay")
     @patch("apps.animes.tasks.sync_franchises.delay")
     @patch("apps.animes.tasks.enrich_metadata.delay")
+    @patch("apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync.delay")
     def test_task_execute_enqueues_enrichment_in_chunks(
         self,
+        mock_reconcile_delay,
         mock_enrich_delay,
         mock_franchise_delay,
         mock_theme_delay,
@@ -132,6 +134,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         self.assertEqual(mock_enrich_delay.call_count, 2)
         self.assertEqual(mock_franchise_delay.call_count, 2)
         self.assertEqual(mock_theme_delay.call_count, 2)
+        mock_reconcile_delay.assert_called_once()
 
     def test_management_command_runs_import_synchronously(self):
         source_path = self._write_jsonl_fixture(
@@ -188,6 +191,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             limit=2,
             resume=False,
             enqueue_enrichment=True,
+            enforce_full_sync=True,
             batch_size=50,
             enrichment_chunk_size=25,
         )

@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from django.test import TestCase
@@ -79,6 +80,53 @@ class ImageTaskSelfHealTests(TestCase):
         mock_apply_async.assert_called_once()
         self.assertEqual(mock_apply_async.call_args.kwargs["countdown"], 300)
         self.assertEqual(mock_apply_async.call_args.kwargs["kwargs"]["anime_id"], anime.id)
+        service.close.assert_awaited_once()
+
+    @patch("apps.animes.models.Anime.objects.get")
+    @patch("apps.animes.tasks.images.AniListService")
+    def test_fetch_task_force_replace_redownloads_existing_images(
+        self, mock_service_cls, mock_anime_get
+    ):
+        cover_field = SimpleNamespace(delete=lambda save=False: None)
+        banner_field = SimpleNamespace(delete=lambda save=False: None)
+        anime = SimpleNamespace(
+            id=1234,
+            title="Force Replace Anime",
+            slug="force-replace-anime",
+            cover_image=cover_field,
+            banner_image=banner_field,
+            cover_image_external_url="https://img.old/cover.jpg",
+            banner_image_external_url="https://img.old/banner.jpg",
+            save=lambda **kwargs: None,
+        )
+        mock_anime_get.return_value = anime
+
+        service = mock_service_cls.return_value
+        service.download_image = AsyncMock(return_value=b"image-bytes")
+        service._save_external_url = AsyncMock()
+        service._save_image = AsyncMock()
+        service.close = AsyncMock()
+
+        result = fetch_anime_images.run(
+            anime_id=1234,
+            cover_url="https://img.new/cover.jpg",
+            banner_url="https://img.new/banner.jpg",
+            mal_id=None,
+            force_replace=True,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(service.download_image.await_count, 2)
+        self.assertEqual(service._save_image.await_count, 2)
+        saved_filenames = [call.args[2] for call in service._save_image.await_args_list]
+        self.assertIn("force-replace-anime_cover_", saved_filenames[0])
+        self.assertIn("force-replace-anime_banner_", saved_filenames[1])
+        service._save_external_url.assert_any_await(
+            anime, "cover_image_external_url", "https://img.new/cover.jpg"
+        )
+        service._save_external_url.assert_any_await(
+            anime, "banner_image_external_url", "https://img.new/banner.jpg"
+        )
         service.close.assert_awaited_once()
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)

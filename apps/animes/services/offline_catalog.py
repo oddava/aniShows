@@ -192,6 +192,9 @@ class OfflineCatalogImportService:
             "metadata_queued": 0,
             "franchises_queued": 0,
             "themes_queued": 0,
+            "metadata_task_ids": [],
+            "franchises_task_ids": [],
+            "themes_task_ids": [],
         }
 
         metadata_line: dict[str, Any] | None = None
@@ -303,6 +306,9 @@ class OfflineCatalogImportService:
                 "metadata_queued": summary["metadata_queued"],
                 "franchises_queued": summary["franchises_queued"],
                 "themes_queued": summary["themes_queued"],
+                "metadata_task_ids": summary["metadata_task_ids"],
+                "franchises_task_ids": summary["franchises_task_ids"],
+                "themes_task_ids": summary["themes_task_ids"],
             }
             import_run.save(
                 update_fields=[
@@ -935,10 +941,17 @@ class OfflineCatalogImportService:
             candidates.append(self._compose_title_variant(base_title, f" [mal-{entry.mal_id}]"))
         return candidates
 
-    def _enqueue_enrichment(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, int]:
+    def _enqueue_enrichment(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, Any]:
         changed_ids = list(dict.fromkeys([*created_ids, *updated_ids]))
         if not changed_ids:
-            return {"metadata_queued": 0, "franchises_queued": 0, "themes_queued": 0}
+            return {
+                "metadata_queued": 0,
+                "franchises_queued": 0,
+                "themes_queued": 0,
+                "metadata_task_ids": [],
+                "franchises_task_ids": [],
+                "themes_task_ids": [],
+            }
 
         from apps.animes.tasks import enrich_metadata, sync_franchises, sync_theme_songs
 
@@ -949,11 +962,11 @@ class OfflineCatalogImportService:
         franchise_ids = [row["id"] for row in anime_rows if row["anilist_id"]]
         theme_ids = [row["id"] for row in anime_rows if row["mal_id"]]
 
-        metadata_jobs = self._dispatch_chunks(
+        metadata_result = self._dispatch_chunks(
             metadata_ids,
             lambda chunk: enrich_metadata.delay(mode="backfill", anime_ids=chunk, batch_size=len(chunk)),
         )
-        franchise_jobs = self._dispatch_chunks(
+        franchise_result = self._dispatch_chunks(
             franchise_ids,
             lambda chunk: sync_franchises.delay(
                 mode="backfill",
@@ -962,7 +975,7 @@ class OfflineCatalogImportService:
                 import_missing=True,
             ),
         )
-        theme_jobs = self._dispatch_chunks(
+        theme_result = self._dispatch_chunks(
             theme_ids,
             lambda chunk: sync_theme_songs.delay(
                 anime_ids=chunk,
@@ -972,26 +985,33 @@ class OfflineCatalogImportService:
         )
 
         return {
-            "metadata_queued": metadata_jobs,
-            "franchises_queued": franchise_jobs,
-            "themes_queued": theme_jobs,
+            "metadata_queued": metadata_result["jobs"],
+            "franchises_queued": franchise_result["jobs"],
+            "themes_queued": theme_result["jobs"],
+            "metadata_task_ids": metadata_result["task_ids"],
+            "franchises_task_ids": franchise_result["task_ids"],
+            "themes_task_ids": theme_result["task_ids"],
         }
 
-    def _dispatch_chunks(self, anime_ids: list[int], dispatch) -> int:
+    def _dispatch_chunks(self, anime_ids: list[int], dispatch) -> dict[str, Any]:
         jobs = 0
+        task_ids: list[str] = []
         for chunk in self._chunked(anime_ids, self.enrichment_chunk_size):
             if not chunk:
                 continue
             try:
-                dispatch(chunk)
+                dispatch_result = dispatch(chunk)
                 jobs += 1
+                task_id = getattr(dispatch_result, "id", None)
+                if task_id:
+                    task_ids.append(str(task_id))
             except Exception:
                 logger.error(
                     "Failed to dispatch enrichment chunk",
                     exc_info=True,
                     extra={"chunk_size": len(chunk)},
                 )
-        return jobs
+        return {"jobs": jobs, "task_ids": task_ids}
 
     def _extract_provider_ids(self, source_urls: list[str]) -> dict[str, Any]:
         provider_ids: dict[str, Any] = {}
