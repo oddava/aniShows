@@ -150,8 +150,8 @@ class OfflineCatalogImportService:
         batch_size: int = DEFAULT_BATCH_SIZE,
         enrichment_chunk_size: int = DEFAULT_ENRICHMENT_CHUNK_SIZE,
     ):
-        self.batch_size = batch_size
-        self.enrichment_chunk_size = enrichment_chunk_size
+        self.batch_size = max(1, int(batch_size))
+        self.enrichment_chunk_size = max(1, int(enrichment_chunk_size))
 
     def run_import(
         self,
@@ -212,7 +212,25 @@ class OfflineCatalogImportService:
                     if not raw_line:
                         continue
 
-                    payload = json.loads(raw_line)
+                    try:
+                        payload = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Skipping malformed JSON line in offline catalog import",
+                            extra={"line_number": line_number},
+                        )
+                        import_run.records_failed += 1
+                        import_run.last_processed_line = line_number
+                        continue
+                    if not isinstance(payload, dict):
+                        logger.warning(
+                            "Skipping non-object JSON payload in offline catalog import",
+                            extra={"line_number": line_number},
+                        )
+                        import_run.records_failed += 1
+                        import_run.last_processed_line = line_number
+                        continue
+
                     if metadata_line is None and payload.get("$schema"):
                         metadata_line = payload
                         summary["last_update"] = payload.get("lastUpdate")
@@ -525,6 +543,8 @@ class OfflineCatalogImportService:
         updated_count = 0
         failed_count = 0
         touched_slugs: list[str] = []
+        pending_create_index: dict[int, int] = {}
+        queued_update_ids: set[int] = set()
 
         with transaction.atomic():
             for entry in entries:
@@ -563,13 +583,35 @@ class OfflineCatalogImportService:
                             slug=slug,
                         )
                         to_create.append((anime, entry, studio))
+                        pending_create_index[id(anime)] = len(to_create) - 1
                         reserved_titles.add(title)
                         reserved_slugs.add(slug)
+                        if anime.anilist_id:
+                            anilist_map[anime.anilist_id] = anime
+                        if anime.mal_id:
+                            mal_map[anime.mal_id] = anime
+                        title_map[anime.title] = anime
+                        if anime.slug:
+                            slug_map[anime.slug] = anime
                     else:
                         self._apply_offline_updates(anime, entry, studio, last_update, seen_at)
-                        to_update.append(anime)
-                        updated_count += 1
-                        touched_slugs.append(anime.slug)
+                        if anime.pk is None:
+                            row_idx = pending_create_index.get(id(anime))
+                            if row_idx is not None:
+                                to_create[row_idx] = (anime, entry, studio)
+                        elif anime.pk not in queued_update_ids:
+                            queued_update_ids.add(anime.pk)
+                            to_update.append(anime)
+                            updated_count += 1
+                            touched_slugs.append(anime.slug)
+
+                        if anime.anilist_id:
+                            anilist_map[anime.anilist_id] = anime
+                        if anime.mal_id:
+                            mal_map[anime.mal_id] = anime
+                        title_map[anime.title] = anime
+                        if anime.slug:
+                            slug_map[anime.slug] = anime
                 except Exception:
                     failed_count += 1
                     logger.error("Failed to prepare offline catalog entry", exc_info=True)
@@ -940,8 +982,15 @@ class OfflineCatalogImportService:
         for chunk in self._chunked(anime_ids, self.enrichment_chunk_size):
             if not chunk:
                 continue
-            dispatch(chunk)
-            jobs += 1
+            try:
+                dispatch(chunk)
+                jobs += 1
+            except Exception:
+                logger.error(
+                    "Failed to dispatch enrichment chunk",
+                    exc_info=True,
+                    extra={"chunk_size": len(chunk)},
+                )
         return jobs
 
     def _extract_provider_ids(self, source_urls: list[str]) -> dict[str, Any]:
@@ -1145,5 +1194,6 @@ class OfflineCatalogImportService:
         return None
 
     def _chunked(self, values: list[int], size: int):
+        size = max(1, int(size))
         for index in range(0, len(values), size):
             yield values[index : index + size]

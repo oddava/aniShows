@@ -40,7 +40,7 @@ class ProfileSharePreviewViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("secret's profile is private on AniShows.", content)
+        self.assertIn("profile is private on AniShows.", content)
         self.assertNotIn("This should not appear", content)
 
     def test_missing_profile_returns_not_found_metadata(self):

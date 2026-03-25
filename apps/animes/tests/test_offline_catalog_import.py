@@ -366,6 +366,144 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertLessEqual(len(anime.cover_image_external_url), 200)
         self.assertLessEqual(len(anime.banner_image_external_url), 200)
 
+    def test_run_import_skips_malformed_json_lines(self):
+        metadata = {
+            "$schema": "https://example.com/schema.json",
+            "lastUpdate": "2026-03-23",
+        }
+        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
+        with handle:
+            handle.write(json.dumps(metadata) + "\n")
+            handle.write("{invalid-json\n")
+            handle.write(json.dumps(self._entry(title="Valid After Broken Line")) + "\n")
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=handle.name,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertEqual(result["records_failed"], 1)
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(OfflineCatalogImport.objects.get().status, OfflineCatalogImport.Status.COMPLETED)
+
+    def test_run_import_skips_non_object_json_payload_lines(self):
+        metadata = {
+            "$schema": "https://example.com/schema.json",
+            "lastUpdate": "2026-03-23",
+        }
+        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
+        with handle:
+            handle.write(json.dumps(metadata) + "\n")
+            handle.write(json.dumps(["not", "an", "object"]) + "\n")
+            handle.write(json.dumps(self._entry(title="Valid After Array Line")) + "\n")
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=handle.name,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertEqual(result["records_failed"], 1)
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(OfflineCatalogImport.objects.get().status, OfflineCatalogImport.Status.COMPLETED)
+
+    def test_run_import_merges_duplicate_ids_within_same_batch(self):
+        first = self._entry(
+            title="Duplicate Identity",
+            sources=[
+                "https://anilist.co/anime/777777",
+                "https://myanimelist.net/anime/888888",
+            ],
+            synonyms=["First Alias"],
+            tags=["mystery"],
+        )
+        second = self._entry(
+            title="Duplicate Identity",
+            sources=[
+                "https://anilist.co/anime/777777",
+                "https://myanimelist.net/anime/888888",
+            ],
+            synonyms=["Second Alias"],
+            tags=["thriller"],
+        )
+        fixture_path = self._write_jsonl_fixture(first, second)
+
+        result = OfflineCatalogImportService(batch_size=10).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        anime = Anime.objects.get(anilist_id=777777)
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(result["records_updated"], 0)
+        self.assertEqual(result["records_failed"], 0)
+        self.assertEqual(Anime.objects.count(), 1)
+        self.assertIn("First Alias", anime.synonyms)
+        self.assertIn("Second Alias", anime.synonyms)
+        self.assertIn("mystery", anime.tags)
+        self.assertIn("thriller", anime.tags)
+
+    @patch("apps.animes.tasks.sync_theme_songs.delay")
+    @patch("apps.animes.tasks.sync_franchises.delay")
+    @patch("apps.animes.tasks.enrich_metadata.delay")
+    def test_run_import_continues_when_enrichment_dispatch_fails(
+        self,
+        mock_enrich_delay,
+        mock_franchise_delay,
+        mock_theme_delay,
+    ):
+        mock_enrich_delay.side_effect = RuntimeError("broker unavailable")
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Dispatch Failure Safety",
+                sources=[
+                    "https://anilist.co/anime/909090",
+                    "https://myanimelist.net/anime/909090",
+                ],
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1, enrichment_chunk_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+            enqueue_enrichment=True,
+        )
+
+        import_run = OfflineCatalogImport.objects.get()
+        self.assertEqual(import_run.status, OfflineCatalogImport.Status.COMPLETED)
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(result["metadata_queued"], 0)
+        self.assertEqual(result["franchises_queued"], 1)
+        self.assertEqual(result["themes_queued"], 1)
+        mock_enrich_delay.assert_called_once()
+        mock_franchise_delay.assert_called_once()
+        mock_theme_delay.assert_called_once()
+
+    @patch("apps.animes.tasks.sync_theme_songs.delay")
+    @patch("apps.animes.tasks.sync_franchises.delay")
+    @patch("apps.animes.tasks.enrich_metadata.delay")
+    def test_zero_enrichment_chunk_size_is_safely_clamped(
+        self,
+        mock_enrich_delay,
+        mock_franchise_delay,
+        mock_theme_delay,
+    ):
+        fixture_path = self._write_jsonl_fixture(self._entry(title="Chunk Clamp Safety"))
+
+        result = OfflineCatalogImportService(batch_size=1, enrichment_chunk_size=0).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+            enqueue_enrichment=True,
+        )
+
+        self.assertEqual(result["metadata_queued"], 1)
+        self.assertEqual(result["franchises_queued"], 1)
+        self.assertEqual(result["themes_queued"], 1)
+        mock_enrich_delay.assert_called_once()
+        mock_franchise_delay.assert_called_once()
+        mock_theme_delay.assert_called_once()
+
     @patch("apps.animes.services.offline_catalog.httpx.Client")
     def test_open_remote_stream_uses_stream_context_response(self, mock_client_cls):
         flags = {"entered": False, "exited": False, "closed": False}

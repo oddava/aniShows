@@ -1,3 +1,4 @@
+import json
 from html import escape, unescape
 from urllib.parse import quote
 
@@ -169,6 +170,7 @@ class ProfileSharePreviewView(View):
         canonical_esc = escape(canonical_url, quote=True)
         image_esc = escape(image_url, quote=True)
         redirect_esc = escape(redirect_url, quote=True)
+        redirect_js = json.dumps(redirect_url)
 
         return f"""<!doctype html>
 <html lang=\"en\">
@@ -192,7 +194,7 @@ class ProfileSharePreviewView(View):
   <meta name=\"twitter:image\" content=\"{image_esc}\" />
 
   <meta http-equiv=\"refresh\" content=\"0;url={redirect_esc}\" />
-  <script>window.location.replace({redirect_esc!r});</script>
+  <script>window.location.replace({redirect_js});</script>
 </head>
 <body>
   <p><a href=\"{redirect_esc}\">Continue to profile</a></p>
