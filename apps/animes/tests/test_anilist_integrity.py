@@ -133,3 +133,23 @@ class AniListIntegrityTests(TestCase):
 
         self.assertEqual(result["id"], 2)
         service.search_anime.assert_awaited_once_with("Exact Match")
+
+    def test_process_theme_songs_handles_none_theme_lists(self):
+        anime = Anime.objects.create(
+            title="Theme Null Guard",
+            slug="theme-null-guard",
+            synopsis="resolver",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.airing,
+            anilist_id=98765,
+        )
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
+        self.addCleanup(lambda: async_to_sync(service.close)())
+
+        service._process_theme_songs(
+            anime,
+            {
+                "openings": None,
+                "endings": None,
+            },
+        )

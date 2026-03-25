@@ -11,8 +11,11 @@ import random
 import time
 
 import httpx
+from django.core.cache import cache
 
 JIKAN_BASE_URL = "https://api.jikan.moe/v4"
+JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
+
 
 class JikanRateLimiter:
     """Adaptive rate limiter for Jikan API.
@@ -27,7 +30,7 @@ class JikanRateLimiter:
     - Thread-safe timing
 
     Usage:
-        limiter = JikanRateLimiter(base_delay=0.35)
+        limiter = JikanRateLimiter(base_delay=0.8)
 
         async with httpx.AsyncClient() as client:
             await limiter.acquire()
@@ -41,7 +44,7 @@ class JikanRateLimiter:
 
     def __init__(
         self,
-        base_delay: float = 0.35,
+        base_delay: float = 0.8,
         min_delay: float = 0.25,
         max_delay: float = 5.0,
         success_streak_threshold: int = 10,
@@ -72,6 +75,15 @@ class JikanRateLimiter:
         Waits if necessary to maintain rate limit compliance.
         """
         now = time.time()
+        try:
+            global_cooldown_until = float(cache.get(JIKAN_COOLDOWN_CACHE_KEY) or 0.0)
+        except Exception:
+            global_cooldown_until = 0.0
+
+        if global_cooldown_until > now:
+            await asyncio.sleep(global_cooldown_until - now)
+
+        now = time.time()
         elapsed = now - self.last_request_time
 
         # Ensure minimum time between requests
@@ -100,7 +112,7 @@ class JikanRateLimiter:
                     f"after {self.success_streak_threshold} successes"
                 )
 
-    def record_429(self) -> None:
+    def record_429(self, *, cooldown_hint: float | None = None) -> None:
         """Record 429 (Too Many Requests) error.
 
         Applies exponential backoff with jitter.
@@ -113,6 +125,15 @@ class JikanRateLimiter:
         backoff = min(2**self.consecutive_429s, 60)  # Cap at 60 seconds
         jitter = random.uniform(0, backoff * 0.3)  # 0-30% jitter
         self.current_delay = min(self.max_delay, self.base_delay + backoff + jitter)
+        cooldown_seconds = max(self.current_delay, float(cooldown_hint or 0.0))
+        try:
+            now = time.time()
+            existing = float(cache.get(JIKAN_COOLDOWN_CACHE_KEY) or 0.0)
+            target = now + cooldown_seconds
+            if target > existing:
+                cache.set(JIKAN_COOLDOWN_CACHE_KEY, target, timeout=int(cooldown_seconds) + 5)
+        except Exception:
+            pass
 
         logger.warning(
             f"Jikan 429 hit (consecutive: {self.consecutive_429s}, "
@@ -179,13 +200,12 @@ async def fetch_themes_from_jikan(
             # Handle rate limiting with exponential backoff
             if response.status_code == 429:
                 _status = "rate_limited"
-                rate_limiter.record_429()
-
                 retry_after = response.headers.get("Retry-After")
                 if retry_after:
                     wait_time = float(retry_after)
                 else:
                     wait_time = min(2**attempt + random.uniform(0, 2), 60)
+                rate_limiter.record_429(cooldown_hint=wait_time)
 
                 if attempt < max_retries:
                     logger.warning(

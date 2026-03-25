@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import DataError, IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -21,7 +21,15 @@ from apps.shared.logger import logger
 DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250
 DEFAULT_ENRICHMENT_CHUNK_SIZE = 100
+DEFAULT_THEME_BASE_DELAY_SECONDS = 1.0
 PLACEHOLDER_SYNOPSIS = "Imported from Anime Offline Database. Metadata enrichment pending."
+ANIME_TITLE_MAX_LENGTH = Anime._meta.get_field("title").max_length
+ANIME_TITLE_JP_MAX_LENGTH = Anime._meta.get_field("title_jp").max_length
+ANIME_SLUG_MAX_LENGTH = Anime._meta.get_field("slug").max_length
+ANIME_URL_MAX_LENGTH = Anime._meta.get_field("cover_image_external_url").max_length
+ANIME_SEASON_MAX_LENGTH = Anime._meta.get_field("season").max_length
+ANIME_META_DESCRIPTION_MAX_LENGTH = Anime._meta.get_field("meta_description").max_length
+STUDIO_NAME_MAX_LENGTH = Studio._meta.get_field("name").max_length
 OFFLINE_UPDATE_FIELDS = [
     "anime_type",
     "status",
@@ -373,13 +381,35 @@ class OfflineCatalogImportService:
             raise FileNotFoundError(path)
 
         if path.suffix == ".zst":
+            try:
+                zstandard = self._get_zstandard()
+            except ModuleNotFoundError as exc:
+                raise ModuleNotFoundError(
+                    "zstandard is required to import local .zst files. "
+                    "Install dependencies or use a .jsonl source asset."
+                ) from exc
             compressed = path.open("rb")
-            reader = self._get_zstandard().ZstdDecompressor().stream_reader(compressed)
+            reader = zstandard.ZstdDecompressor().stream_reader(compressed)
             return io.TextIOWrapper(reader, encoding="utf-8")
 
         return path.open("r", encoding="utf-8")
 
     def _open_remote_stream(self, source_url: str):
+        zstandard = None
+        if source_url.endswith(".zst"):
+            try:
+                zstandard = self._get_zstandard()
+            except ModuleNotFoundError:
+                fallback_url = self._fallback_uncompressed_source_url(source_url)
+                if fallback_url:
+                    logger.warning(
+                        "zstandard unavailable; falling back to uncompressed import asset",
+                        extra={"source_url": source_url, "fallback_url": fallback_url},
+                    )
+                    source_url = fallback_url
+                else:
+                    raise
+
         client = httpx.Client(timeout=60.0, follow_redirects=True)
         stream_context = client.stream("GET", source_url)
         response = stream_context.__enter__()
@@ -387,7 +417,7 @@ class OfflineCatalogImportService:
 
         stream = _IteratorStream(response.iter_bytes())
         if source_url.endswith(".zst"):
-            reader = self._get_zstandard().ZstdDecompressor().stream_reader(stream)
+            reader = zstandard.ZstdDecompressor().stream_reader(stream)
             text_stream = io.TextIOWrapper(reader, encoding="utf-8")
         else:
             text_stream = io.TextIOWrapper(stream, encoding="utf-8")
@@ -407,7 +437,7 @@ class OfflineCatalogImportService:
         return _ManagedTextStream()
 
     def _prepare_entry(self, payload: dict[str, Any]) -> OfflineCatalogEntry | None:
-        title = (payload.get("title") or "").strip()
+        title = self._truncate_text(payload.get("title"), ANIME_TITLE_MAX_LENGTH)
         if not title:
             return None
 
@@ -415,10 +445,14 @@ class OfflineCatalogImportService:
         anime_type = self._map_type(payload.get("type"))
         status = self._map_status(payload.get("status"))
         season_info = payload.get("animeSeason") or {}
-        season = season_info.get("season") or ""
+        season = self._truncate_text(season_info.get("season") or "", ANIME_SEASON_MAX_LENGTH)
         season_year = season_info.get("year")
-        picture = payload.get("picture") or ""
-        thumbnail = payload.get("thumbnail") or ""
+        picture = self._truncate_text(payload.get("picture") or "", ANIME_URL_MAX_LENGTH)
+        thumbnail = self._truncate_text(payload.get("thumbnail") or "", ANIME_URL_MAX_LENGTH)
+        studio = self._truncate_text(
+            self._pick_primary_studio(payload.get("studios") or []),
+            STUDIO_NAME_MAX_LENGTH,
+        )
 
         return OfflineCatalogEntry(
             raw=payload,
@@ -434,7 +468,7 @@ class OfflineCatalogImportService:
             release_date=self._season_to_date(season, season_year),
             cover_url=picture,
             banner_url=thumbnail or picture,
-            primary_studio=self._pick_primary_studio(payload.get("studios") or []),
+            primary_studio=studio,
             anilist_id=self._coerce_int(provider_ids.get("anilist")),
             mal_id=self._coerce_int(provider_ids.get("myanimelist")),
             provider_ids=provider_ids,
@@ -595,11 +629,8 @@ class OfflineCatalogImportService:
                 "updated_ids": [],
                 "touched_slugs": [anime.slug for anime in anime_rows],
             }
-        except IntegrityError:
-            logger.warning(
-                "Bulk create hit uniqueness conflict, falling back to row-by-row recovery",
-                exc_info=True,
-            )
+        except (IntegrityError, DataError):
+            logger.warning("Bulk create hit uniqueness conflict, falling back to row-by-row recovery")
 
         summary = {
             "created": 0,
@@ -642,6 +673,7 @@ class OfflineCatalogImportService:
         while attempts_remaining > 0:
             attempts_remaining -= 1
             try:
+                self._sanitize_anime_for_insert(anime)
                 with transaction.atomic():
                     anime.save(force_insert=True)
                 return {
@@ -652,6 +684,14 @@ class OfflineCatalogImportService:
                     "updated_ids": [],
                     "touched_slugs": [anime.slug],
                 }
+            except DataError as exc:
+                logger.warning(
+                    "Offline import row exceeds model limits; retrying with sanitized fields",
+                    extra={"title": entry.title, "error": str(exc)},
+                )
+                if attempts_remaining <= 0:
+                    break
+                continue
             except IntegrityError:
                 existing = self._find_conflicting_existing(entry, anime)
                 if existing is not None:
@@ -698,10 +738,14 @@ class OfflineCatalogImportService:
                 return existing
 
         by_title = Anime.objects.filter(title=anime.title).first()
-        if by_title:
+        if by_title and self._is_conflict_match(by_title, entry):
             return by_title
 
-        return Anime.objects.filter(slug=anime.slug).first()
+        by_slug = Anime.objects.filter(slug=anime.slug).first()
+        if by_slug and self._is_conflict_match(by_slug, entry):
+            return by_slug
+
+        return None
 
     def _apply_offline_updates(
         self,
@@ -790,48 +834,63 @@ class OfflineCatalogImportService:
         return None
 
     def _is_reasonable_fallback_match(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
+        # If we have canonical provider IDs, only trust ID-based matching.
+        if entry.anilist_id or entry.mal_id:
+            return False
+
         anime_year = anime.season_year or (anime.release_date.year if anime.release_date else None)
         if anime_year and entry.season_year:
-            return anime_year == entry.season_year
+            return anime_year == entry.season_year and anime.title.casefold() == entry.title.casefold()
+        if anime_year or entry.season_year:
+            return False
         return anime.title.casefold() == entry.title.casefold()
 
     def _ensure_unique_title(self, entry: OfflineCatalogEntry, reserved_titles: set[str]) -> str:
-        if entry.title not in reserved_titles:
-            return entry.title
+        base_title = self._truncate_text(entry.title, ANIME_TITLE_MAX_LENGTH)
+        if not self._is_title_taken(base_title, reserved_titles):
+            return base_title
 
         variants = self._title_candidates(entry)[1:]
 
         for variant in variants:
-            if variant not in reserved_titles:
+            if not self._is_title_taken(variant, reserved_titles):
                 return variant
 
         counter = 2
         while True:
-            variant = f"{entry.title} ({counter})"
-            if variant not in reserved_titles:
+            variant = self._compose_title_variant(base_title, f" ({counter})")
+            if not self._is_title_taken(variant, reserved_titles):
                 return variant
             counter += 1
 
     def _ensure_unique_slug(self, base_slug: str, reserved_slugs: set[str]) -> str:
-        slug = base_slug or "anime"
-        if slug not in reserved_slugs:
+        slug = self._truncate_text(base_slug or "anime", ANIME_SLUG_MAX_LENGTH).strip("-")
+        if not slug:
+            slug = "anime"
+        if not self._is_slug_taken(slug, reserved_slugs):
             return slug
 
         counter = 2
         while True:
-            candidate = f"{slug}-{counter}"
-            if candidate not in reserved_slugs:
+            suffix = f"-{counter}"
+            max_base_length = max(1, ANIME_SLUG_MAX_LENGTH - len(suffix))
+            candidate_base = slug[:max_base_length].rstrip("-")
+            if not candidate_base:
+                candidate_base = "anime"[:max_base_length]
+            candidate = f"{candidate_base}{suffix}"
+            if not self._is_slug_taken(candidate, reserved_slugs):
                 return candidate
             counter += 1
 
     def _title_candidates(self, entry: OfflineCatalogEntry) -> list[str]:
-        candidates = [entry.title]
+        base_title = self._truncate_text(entry.title, ANIME_TITLE_MAX_LENGTH)
+        candidates = [base_title]
         if entry.season_year:
-            candidates.append(f"{entry.title} ({entry.season_year})")
+            candidates.append(self._compose_title_variant(base_title, f" ({entry.season_year})"))
         if entry.anilist_id:
-            candidates.append(f"{entry.title} [anilist-{entry.anilist_id}]")
+            candidates.append(self._compose_title_variant(base_title, f" [anilist-{entry.anilist_id}]"))
         if entry.mal_id:
-            candidates.append(f"{entry.title} [mal-{entry.mal_id}]")
+            candidates.append(self._compose_title_variant(base_title, f" [mal-{entry.mal_id}]"))
         return candidates
 
     def _enqueue_enrichment(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, int]:
@@ -844,8 +903,8 @@ class OfflineCatalogImportService:
         anime_rows = list(
             Anime.objects.filter(id__in=changed_ids).values("id", "anilist_id", "mal_id")
         )
-        metadata_ids = [row["id"] for row in anime_rows if row["anilist_id"]]
-        franchise_ids = metadata_ids[:]
+        metadata_ids = [row["id"] for row in anime_rows if row["anilist_id"] or row["mal_id"]]
+        franchise_ids = [row["id"] for row in anime_rows if row["anilist_id"]]
         theme_ids = [row["id"] for row in anime_rows if row["mal_id"]]
 
         metadata_jobs = self._dispatch_chunks(
@@ -863,7 +922,11 @@ class OfflineCatalogImportService:
         )
         theme_jobs = self._dispatch_chunks(
             theme_ids,
-            lambda chunk: sync_theme_songs.delay(anime_ids=chunk, limit=len(chunk)),
+            lambda chunk: sync_theme_songs.delay(
+                anime_ids=chunk,
+                limit=len(chunk),
+                base_delay=DEFAULT_THEME_BASE_DELAY_SECONDS,
+            ),
         )
 
         return {
@@ -892,10 +955,17 @@ class OfflineCatalogImportService:
 
             extracted: str | int | None = None
             path_parts = [part for part in parsed.path.split("/") if part]
-            if provider in {"anidb", "animecountdown", "anisearch", "kitsu", "livechart", "myanimelist", "simkl"}:
-                extracted = path_parts[-1] if path_parts else None
-            elif provider == "anilist":
-                extracted = path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
+            if provider in {
+                "anidb",
+                "anilist",
+                "animecountdown",
+                "anisearch",
+                "kitsu",
+                "livechart",
+                "myanimelist",
+                "simkl",
+            }:
+                extracted = self._extract_numeric_path_id(path_parts)
             elif provider == "anime_planet":
                 extracted = path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
             elif provider == "animenewsnetwork":
@@ -909,6 +979,37 @@ class OfflineCatalogImportService:
             provider_ids[provider] = self._coerce_int(extracted, default=extracted)
 
         return provider_ids
+
+    def _extract_numeric_path_id(self, path_parts: list[str]) -> int | None:
+        for part in path_parts:
+            if part.isdigit():
+                return int(part)
+        return None
+
+    def _is_title_taken(self, candidate: str, reserved_titles: set[str]) -> bool:
+        if candidate in reserved_titles:
+            return True
+        exists = Anime.objects.filter(title=candidate).exists()
+        if exists:
+            reserved_titles.add(candidate)
+        return exists
+
+    def _is_slug_taken(self, candidate: str, reserved_slugs: set[str]) -> bool:
+        if candidate in reserved_slugs:
+            return True
+        exists = Anime.objects.filter(slug=candidate).exists()
+        if exists:
+            reserved_slugs.add(candidate)
+        return exists
+
+    def _is_conflict_match(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
+        if entry.anilist_id and anime.anilist_id == entry.anilist_id:
+            return True
+        if entry.mal_id and anime.mal_id == entry.mal_id:
+            return True
+        if entry.anilist_id or entry.mal_id:
+            return False
+        return self._is_reasonable_fallback_match(anime, entry)
 
     def _coerce_int(self, value: Any, default: Any = None) -> int | Any | None:
         if value in (None, ""):
@@ -1007,8 +1108,41 @@ class OfflineCatalogImportService:
         except ValueError:
             return None
 
+    def _truncate_text(self, value: Any, max_length: int) -> str:
+        text = str(value or "").strip()
+        if len(text) <= max_length:
+            return text
+        return text[:max_length].rstrip()
+
+    def _sanitize_anime_for_insert(self, anime: Anime) -> None:
+        anime.title = self._truncate_text(anime.title, ANIME_TITLE_MAX_LENGTH)
+        anime.title_jp = self._truncate_text(anime.title_jp, ANIME_TITLE_JP_MAX_LENGTH)
+        anime.slug = self._truncate_text(anime.slug, ANIME_SLUG_MAX_LENGTH).strip("-")
+        if not anime.slug:
+            anime.slug = self._ensure_unique_slug(slugify(anime.title), set())
+        anime.meta_description = self._truncate_text(
+            anime.meta_description, ANIME_META_DESCRIPTION_MAX_LENGTH
+        )
+        anime.season = self._truncate_text(anime.season, ANIME_SEASON_MAX_LENGTH)
+        anime.cover_image_external_url = self._truncate_text(
+            anime.cover_image_external_url, ANIME_URL_MAX_LENGTH
+        )
+        anime.banner_image_external_url = self._truncate_text(
+            anime.banner_image_external_url, ANIME_URL_MAX_LENGTH
+        )
+
+    def _compose_title_variant(self, base_title: str, suffix: str) -> str:
+        max_base_length = max(1, ANIME_TITLE_MAX_LENGTH - len(suffix))
+        base = self._truncate_text(base_title, max_base_length)
+        return f"{base}{suffix}"
+
     def _get_zstandard(self):
         return import_module("zstandard")
+
+    def _fallback_uncompressed_source_url(self, source_url: str) -> str | None:
+        if source_url.endswith(".jsonl.zst"):
+            return source_url.removesuffix(".zst")
+        return None
 
     def _chunked(self, values: list[int], size: int):
         for index in range(0, len(values), size):

@@ -54,7 +54,7 @@ class MediaFormat(StrEnum):
     MUSIC = "MUSIC"
 
 class AniListService:
-    BASE_URL = "https://graphql.anilist.co/"
+    BASE_URL = "https://graphql.anilist.co"
     MAX_PER_PAGE = 50
 
     # Common GraphQL fields for anime media queries.
@@ -241,6 +241,21 @@ class AniListService:
 
                 except httpx.HTTPError as e:
                     _status = "failure"
+                    if (
+                        isinstance(e, httpx.HTTPStatusError)
+                        and e.response is not None
+                        and 400 <= e.response.status_code < 500
+                        and e.response.status_code != 429
+                    ):
+                        logger.warning(
+                            "AniList non-retryable client error %s (attempt %s): %s",
+                            e.response.status_code,
+                            attempt + 1,
+                            e,
+                        )
+                        self._record_failure()
+                        return {}
+
                     logger.error(f"Request error (Attempt {attempt + 1}): {e}")
                     if attempt < retry_count - 1:
                         wait = (attempt + 1) * 2
@@ -985,8 +1000,8 @@ class AniListService:
         from apps.animes.models import ThemeSong
 
         # Get openings and endings from AniList
-        openings = item.get("openings", [])
-        endings = item.get("endings", [])
+        openings = item.get("openings") or []
+        endings = item.get("endings") or []
 
         # Only process if there's actual theme data
         # AniList doesn't provide themes, so this will typically be empty
@@ -1012,7 +1027,6 @@ class AniListService:
                 )
 
         # Process endings
-        endings = item.get("endings", [])
         for idx, ending_text in enumerate(endings, 1):
             if ending_text:
                 parsed = self._parse_theme_song(ending_text)

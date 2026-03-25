@@ -11,6 +11,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 from apps.core.views import MetricsView
+from apps.users.views.share_preview import ProfileSharePreviewView
 
 urlpatterns = [
     # API v1 - includes all domain app URLs
@@ -24,6 +25,12 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("i18n/", include("django.conf.urls.i18n")),
     path("metrics", MetricsView.as_view(), name="metrics"),
+    path("u/<str:username>", ProfileSharePreviewView.as_view(), name="profile_share_preview"),
+    path(
+        "u/<str:username>/<path:section>",
+        ProfileSharePreviewView.as_view(),
+        name="profile_share_preview_section",
+    ),
 ]
 
 # Only serve media files if DEBUG is True

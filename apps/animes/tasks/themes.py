@@ -51,7 +51,7 @@ class ThemeSongSyncTask(BaseTask):
         limit: int = 500,
         force_resync: bool = False,
         retry_failed: bool = False,
-        base_delay: float = 0.35,
+        base_delay: float = 0.8,
         anime_ids: list[int] | None = None,
     ):
         """Run theme song synchronization.
@@ -522,7 +522,7 @@ def sync_theme_songs(
     limit: int = 500,
     force_resync: bool = False,
     retry_failed: bool = False,
-    base_delay: float = 0.35,
+    base_delay: float = 0.8,
     anime_ids: list[int] | None = None,
 ):
     """Sync theme songs from Jikan API.

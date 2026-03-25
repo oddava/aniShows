@@ -4,7 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from django.db import IntegrityError
+from django.db import DataError, IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -62,8 +62,8 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         provider_ids = service._extract_provider_ids(
             [
-                "https://anilist.co/anime/1535",
-                "https://myanimelist.net/anime/1535",
+                "https://anilist.co/anime/1535/death-note",
+                "https://myanimelist.net/anime/1535/Death_Note",
                 "https://animenewsnetwork.com/encyclopedia/anime.php?id=6592",
                 "https://notify.moe/anime/0-A-5Fimg",
             ]
@@ -73,6 +73,38 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(provider_ids["myanimelist"], 1535)
         self.assertEqual(provider_ids["animenewsnetwork"], 6592)
         self.assertEqual(provider_ids["notify_moe"], "0-A-5Fimg")
+
+    def test_run_import_matches_existing_by_ids_extracted_from_slugged_urls(self):
+        anime = Anime.objects.create(
+            title="Local Placeholder",
+            slug="local-placeholder",
+            synopsis="Existing synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            anilist_id=1535,
+            mal_id=1535,
+        )
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Death Note",
+                sources=[
+                    "https://anilist.co/anime/1535/death-note",
+                    "https://myanimelist.net/anime/1535/Death_Note",
+                ],
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        anime.refresh_from_db()
+        self.assertEqual(result["records_created"], 0)
+        self.assertEqual(result["records_updated"], 1)
+        self.assertEqual(Anime.objects.count(), 1)
+        self.assertEqual(anime.provider_ids["anilist"], 1535)
+        self.assertEqual(anime.provider_ids["myanimelist"], 1535)
 
     def test_run_import_updates_existing_row_without_overwriting_anilist_owned_fields(self):
         anime = Anime.objects.create(
@@ -145,6 +177,36 @@ class OfflineCatalogImportServiceTests(TestCase):
         mock_franchise_delay.assert_called_once()
         mock_theme_delay.assert_called_once()
 
+    @patch("apps.animes.tasks.sync_theme_songs.delay")
+    @patch("apps.animes.tasks.sync_franchises.delay")
+    @patch("apps.animes.tasks.enrich_metadata.delay")
+    def test_run_import_queues_metadata_for_mal_only_entries(
+        self,
+        mock_enrich_delay,
+        mock_franchise_delay,
+        mock_theme_delay,
+    ):
+        entry = self._entry(
+            title="MAL Only Entry",
+            sources=["https://myanimelist.net/anime/19"],
+            animeSeason={"season": "SPRING", "year": 2004},
+        )
+        fixture_path = self._write_jsonl_fixture(entry)
+
+        result = OfflineCatalogImportService(batch_size=1, enrichment_chunk_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+            enqueue_enrichment=True,
+        )
+
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(result["metadata_queued"], 1)
+        self.assertEqual(result["franchises_queued"], 0)
+        self.assertEqual(result["themes_queued"], 1)
+        mock_enrich_delay.assert_called_once()
+        mock_franchise_delay.assert_not_called()
+        mock_theme_delay.assert_called_once()
+
     def test_run_import_tracks_stale_rows_without_deleting_them(self):
         stale_anime = Anime.objects.create(
             title="Old Catalog Entry",
@@ -201,6 +263,40 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(result["records_created"], 1)
         self.assertTrue(Anime.objects.filter(title="Doraemon (2)").exists())
 
+    def test_run_import_does_not_fallback_match_when_only_one_side_has_year(self):
+        Anime.objects.create(
+            title="The Same Name",
+            slug="the-same-name",
+            synopsis="Legacy",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+        )
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="The Same Name",
+                sources=["https://anime-planet.com/anime/the-same-name-2020"],
+                animeSeason={"season": "SPRING", "year": 2020},
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(result["records_updated"], 0)
+        self.assertEqual(Anime.objects.filter(title__startswith="The Same Name").count(), 2)
+
+    def test_ensure_unique_slug_keeps_length_with_numeric_suffix(self):
+        service = OfflineCatalogImportService()
+        reserved = {"a" * 200}
+
+        slug = service._ensure_unique_slug("a" * 260, reserved)
+
+        self.assertLessEqual(len(slug), 200)
+        self.assertTrue(slug.endswith("-2"))
+
     @patch("apps.animes.services.offline_catalog.Anime.objects.bulk_create")
     def test_run_import_falls_back_to_row_saves_when_bulk_create_fails(self, mock_bulk_create):
         fixture_path = self._write_jsonl_fixture(
@@ -221,6 +317,54 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(result["records_created"], 1)
         self.assertTrue(Anime.objects.filter(title="Fallback Save").exists())
         mock_bulk_create.assert_called_once()
+
+    @patch("apps.animes.services.offline_catalog.Anime.objects.bulk_create")
+    def test_run_import_falls_back_to_row_saves_when_bulk_create_raises_data_error(
+        self, mock_bulk_create
+    ):
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Fallback Data Error",
+                episodes=12,
+                animeSeason={"season": "SUMMER", "year": 2023},
+            )
+        )
+        mock_bulk_create.side_effect = DataError("forced overflow")
+
+        result = OfflineCatalogImportService(batch_size=10).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertEqual(result["records_failed"], 0)
+        self.assertEqual(result["records_created"], 1)
+        self.assertTrue(Anime.objects.filter(title="Fallback Data Error").exists())
+        mock_bulk_create.assert_called_once()
+
+    def test_run_import_truncates_overlong_fields_to_fit_model_limits(self):
+        long_title = "Very Long Title " * 30
+        long_cover = "https://cdn.example.com/" + ("a" * 400)
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title=long_title,
+                picture=long_cover,
+                thumbnail=long_cover,
+                animeSeason={"season": "SPRING", "year": 2024},
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        anime = Anime.objects.get()
+        self.assertEqual(result["records_failed"], 0)
+        self.assertEqual(result["records_created"], 1)
+        self.assertLessEqual(len(anime.title), 200)
+        self.assertLessEqual(len(anime.slug), 200)
+        self.assertLessEqual(len(anime.cover_image_external_url), 200)
+        self.assertLessEqual(len(anime.banner_image_external_url), 200)
 
     @patch("apps.animes.services.offline_catalog.httpx.Client")
     def test_open_remote_stream_uses_stream_context_response(self, mock_client_cls):
@@ -261,3 +405,39 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertTrue(flags["entered"])
         self.assertTrue(flags["exited"])
         self.assertTrue(flags["closed"])
+
+    @patch("apps.animes.services.offline_catalog.httpx.Client")
+    def test_open_remote_stream_falls_back_to_jsonl_when_zstandard_missing(self, mock_client_cls):
+        calls = {"url": None}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def iter_bytes(self):
+                yield b'{"hello":"world"}\n'
+
+        class FakeStreamContext:
+            def __enter__(self):
+                return FakeResponse()
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class FakeClient:
+            def stream(self, method, url):
+                calls["url"] = url
+                return FakeStreamContext()
+
+            def close(self):
+                return None
+
+        mock_client_cls.return_value = FakeClient()
+
+        service = OfflineCatalogImportService()
+        with patch.object(service, "_get_zstandard", side_effect=ModuleNotFoundError("zstandard")):
+            with service._open_remote_stream("https://example.com/offline.jsonl.zst") as text_stream:
+                line = next(text_stream).strip()
+
+        self.assertEqual(line, '{"hello":"world"}')
+        self.assertEqual(calls["url"], "https://example.com/offline.jsonl")

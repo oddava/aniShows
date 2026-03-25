@@ -3,9 +3,13 @@ import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import skipUnless
 from unittest.mock import Mock, patch
 
-import zstandard
+try:
+    import zstandard
+except ModuleNotFoundError:  # pragma: no cover - depends on runtime image
+    zstandard = None
 from django.core.management import call_command
 from django.test import TestCase
 
@@ -51,6 +55,8 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         return handle.name
 
     def _write_zst_fixture(self, entries: list[dict], last_update: str = "2026-03-23") -> str:
+        if zstandard is None:
+            self.skipTest("zstandard not available in runtime")
         metadata = {"$schema": "https://example.com/schema.json", "lastUpdate": last_update}
         payload_lines = [json.dumps(metadata), *[json.dumps(entry) for entry in entries]]
         payload = ("\n".join(payload_lines) + "\n").encode("utf-8")
@@ -81,6 +87,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             OfflineCatalogImport.Status.COMPLETED,
         )
 
+    @skipUnless(zstandard is not None, "zstandard not available in runtime")
     def test_task_execute_imports_from_zst_source(self):
         source_path = self._write_zst_fixture(
             [self._entry(title="Task Import Zst", anilist_id=1002, mal_id=2002)]

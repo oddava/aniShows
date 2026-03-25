@@ -20,6 +20,7 @@ from django.db.models import Q
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
+from apps.animes.services.offline_catalog import PLACEHOLDER_SYNOPSIS
 
 from .base import BaseTask, run_async_in_task
 
@@ -175,12 +176,15 @@ class MetadataEnrichmentTask(BaseTask):
         """Batch enrich metadata for multiple anime."""
         async with self.service_context() as service:
             # Build queryset
-            queryset = Anime.objects.filter(
-                Q(characters__isnull=True) | Q(staff__isnull=True)
-            ).distinct()
-
             if anime_ids:
-                queryset = queryset.filter(id__in=anime_ids)
+                # Explicit IDs are passed by workflows like offline import; process all of them.
+                queryset = Anime.objects.filter(id__in=anime_ids)
+            else:
+                queryset = Anime.objects.filter(
+                    Q(characters__isnull=True)
+                    | Q(staff__isnull=True)
+                    | Q(synopsis=PLACEHOLDER_SYNOPSIS)
+                ).distinct()
 
             # Apply custom filters
             if filters:
