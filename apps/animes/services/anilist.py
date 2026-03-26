@@ -256,7 +256,8 @@ class AniListService:
                         logger.error(f"GraphQL Error: {error_msg}")
                         self._set_last_error(self._parse_graphql_error_code(error_msg), error_msg)
                         _status = "failure"
-                        self._record_failure()
+                        if self.last_error_code == "transport_error":
+                            self._record_failure()
                         return {}
 
                     # Success - record it
@@ -314,7 +315,8 @@ class AniListService:
                             self._set_last_error("invalid_variable", response_excerpt or str(e))
                         else:
                             self._set_last_error("transport_error", response_excerpt or str(e))
-                        self._record_failure()
+                        if self.last_error_code == "transport_error":
+                            self._record_failure()
                         return {}
 
                     logger.error(f"Request error (Attempt {attempt + 1}): {e}")
@@ -1281,7 +1283,7 @@ class AniListService:
         query = f"""
             query SearchByMalId($idMal: Int) {{
                 Media(idMal: $idMal, type: ANIME) {{
-                    {self.MEDIA_FIELDS_WITH_THEMES}
+                    {self.MEDIA_FIELDS}
                 }}
             }}
         """
