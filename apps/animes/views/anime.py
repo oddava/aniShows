@@ -49,6 +49,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     pagination_class = StandardPagination
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
+    _PUBLIC_CACHE_VERSION = "v2"
 
     _LIST_FIELDS = (
         "id",
@@ -88,7 +89,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         is_list = self.action == "list"
 
-        queryset = Anime.objects.select_related("studio")
+        queryset = Anime.public_queryset().select_related("studio")
 
         if is_list:
             queryset = queryset.only(*self._LIST_FIELDS, "studio__id", "studio__name")
@@ -278,7 +279,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         is_auth = request.user.is_authenticated
 
         # Cache the BASE data (same for all users)
-        base_cache_key = f"anime_detail_base:{slug}"
+        base_cache_key = f"anime_detail_base:{self._PUBLIC_CACHE_VERSION}:{slug}"
         cached_base = cache.get(base_cache_key)
         needs_refresh = not cached_base
         if cached_base:
@@ -439,7 +440,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         params = dict(request.query_params)
         param_string = json.dumps(sorted(params.items()), separators=(",", ":"))
         cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
-        cache_key = f"anime_list:{cache_key_hash}"
+        cache_key = f"anime_list:{self._PUBLIC_CACHE_VERSION}:{cache_key_hash}"
 
         cached_data = cache.get(cache_key)
         if (
@@ -459,6 +460,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     def _get_cached_shelf(self, request, cache_key, queryset_fn):
         """Shared helper for trending/top_rated shelves."""
+        cache_key = f"{cache_key}:{self._PUBLIC_CACHE_VERSION}"
         data = cache.get(cache_key)
 
         if data and (
@@ -470,7 +472,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         if not data:
             queryset = queryset_fn(
-                Anime.objects.select_related("studio").prefetch_related("genres")
+                Anime.public_queryset().select_related("studio").prefetch_related("genres")
             )
             serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
             data = serializer.data
@@ -553,7 +555,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         anime = self.get_object()
         genre_ids = anime.genres.values_list("id", flat=True)
         related = (
-            Anime.objects.filter(genres__in=genre_ids)
+            Anime.public_queryset()
+            .filter(genres__in=genre_ids)
             .exclude(id=anime.id)
             .select_related("studio")
             .prefetch_related("genres")

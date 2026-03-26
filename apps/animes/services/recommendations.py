@@ -182,7 +182,8 @@ class ContentBasedRecommender:
 
         # Get candidates (exclude already watched/completed)
         candidates = (
-            Anime.objects.exclude(id__in=preferences["watched_anime_ids"])
+            Anime.public_queryset()
+            .exclude(id__in=preferences["watched_anime_ids"])
             .filter(rating__isnull=False)
             .prefetch_related("genres", "studio")
         )
@@ -247,9 +248,11 @@ class ContentBasedRecommender:
         recommendations = []
 
         # Get trending
-        trending = Anime.objects.filter(trending_rank__isnull=False).order_by("trending_rank")[
-            : limit // 2
-        ]
+        trending = (
+            Anime.public_queryset()
+            .filter(trending_rank__isnull=False)
+            .order_by("trending_rank")[: limit // 2]
+        )
 
         for anime in trending:
             recommendations.append(
@@ -262,9 +265,11 @@ class ContentBasedRecommender:
             )
 
         # Get top rated
-        top_rated = Anime.objects.filter(rating__isnull=False, site_rank__isnull=False).order_by(
-            "site_rank"
-        )[: limit // 2]
+        top_rated = (
+            Anime.public_queryset()
+            .filter(rating__isnull=False, site_rank__isnull=False)
+            .order_by("site_rank")[: limit // 2]
+        )
 
         for anime in top_rated:
             if anime not in [r["anime"] for r in recommendations]:
@@ -326,6 +331,7 @@ class RecommendationService:
         # Check if we have recent recommendations
         recs = (
             UserRecommendation.objects.filter(user=user, is_dismissed=False)
+            .exclude(anime__offline_sync_state__quarantined=True)
             .select_related("anime")
             .prefetch_related("anime__genres")[:limit]
         )
@@ -335,6 +341,7 @@ class RecommendationService:
             self.generate_for_user(user)
             recs = (
                 UserRecommendation.objects.filter(user=user, is_dismissed=False)
+                .exclude(anime__offline_sync_state__quarantined=True)
                 .select_related("anime")
                 .prefetch_related("anime__genres")[:limit]
             )

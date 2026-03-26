@@ -287,6 +287,11 @@ class Anime(TimestampMixin, SlugMixin, Model):
     def get_absolute_url(self):
         return f"/anime/{self.slug}/"
 
+    @classmethod
+    def public_queryset(cls):
+        """Anime visible on public user-facing surfaces."""
+        return cls.objects.exclude(offline_sync_state__quarantined=True)
+
 
 class AnimeCharacter(Model):
     class Role(TextChoices):
