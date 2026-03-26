@@ -37,7 +37,7 @@ export default function MobileFilterDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] lg:hidden" ref={drawerRef}>
+    <div className="fixed inset-0 z-[2000]" ref={drawerRef}>
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/70  animate-fade-in"

@@ -63,7 +63,7 @@ const SEASON_OPTIONS = [
 
 const YEAR_OPTIONS = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 
-const QUICK_FILTER_GENRES = ['action', 'romance', 'comedy', 'fantasy', 'drama', 'sci-fi'];
+
 
 export default function Browse() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -591,117 +591,12 @@ export default function Browse() {
 
       <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4 lg:px-6">
         <div className="max-w-[1600px] mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8 sm:mb-10">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-3 sm:mb-4 tracking-tight">
-              Discover Anime
-            </h1>
-            <p className="text-gray-400 max-w-xl mx-auto text-sm sm:text-base px-4">
-              Explore our collection of anime series and find your next favorite.
-            </p>
-          </div>
 
-          {/* Search Bar */}
-          <div className="relative max-w-2xl mx-auto mb-4 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search anime..."
-              className="w-full bg-dark-100 border border-gray-700 rounded-2xl pl-12 pr-12 py-4 text-white placeholder:text-gray-600 focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition-all"
-            />
-            {searchInput && (
-              <button
-                onClick={() => setSearchInput('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-
-          {/* Quick Filters */}
-          <div className="max-w-2xl mx-auto mb-6">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {QUICK_FILTER_GENRES.map((genreSlug) => {
-                const genre = genres?.find(g => g.slug === genreSlug);
-                if (!genre) return null;
-                const isActive = currentGenres.includes(genreSlug);
-                return (
-                  <button
-                    key={genreSlug}
-                    onClick={() => toggleArrayParam('genre', genreSlug)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 ${isActive
-                      ? 'bg-accent text-white  '
-                      : 'bg-dark-100 text-gray-400 hover:text-white border border-gray-700 hover:border-gray-600'
-                      }`}
-                  >
-                    {genre.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Browse Tabs */}
-          <div className="mb-6 -mx-3 sm:-mx-4 px-3 sm:px-4 overflow-x-auto scrollbar-hide">
-            <div className="flex gap-2 animate-fade-in min-w-max sm:justify-center">
-              {currentSearch && (
-                <button
-                  onClick={() => {
-                    const newParams = new URLSearchParams(searchParams);
-                    newParams.delete('sort');
-                    newParams.delete('season');
-                    newParams.delete('year');
-                    setSearchParams(newParams);
-                    setActiveTab('search');
-                  }}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all whitespace-nowrap
-                    ${activeTab === 'search'
-                      ? 'bg-accent text-white   '
-                      : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
-                    }`}
-                >
-                  All Results
-                </button>
-              )}
-              {BROWSE_TABS.map((tab) => {
-                const isActive = activeTab === tab.key;
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => handleTabChange(tab.key)}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all whitespace-nowrap
-                      ${isActive
-                        ? 'bg-accent text-white   '
-                        : 'bg-dark-100 text-gray-400 border border-gray-700 hover:text-white hover:border-gray-600'
-                      }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Main Layout */}
-          <div className="flex gap-6 lg:gap-8">
-            {/* Filter Sidebar - Desktop */}
-            <aside className="hidden lg:block w-60 flex-shrink-0">
-              <div className="sticky top-24 bg-dark-100 rounded-2xl border border-gray-800 p-5 h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar">
-                <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-800">
-                  <Filter className="w-5 h-5 text-accent" />
-                  <h2 className="text-base font-bold text-accent">Filters</h2>
-                </div>
-                <FilterSidebar {...filterSidebarProps} />
-              </div>
-            </aside>
-
+          <div className="w-full">
             {/* Main Content */}
-            <main className="flex-1 min-w-0">
+            <main className="flex-1 min-w-0 pb-24">
               {/* Trending Carousel */}
               {showHero && (
                 <TrendingCarousel
@@ -720,17 +615,7 @@ export default function Browse() {
                     <span className="text-gray-500 text-sm">results</span>
                   </p>
 
-                  {/* Mobile Filter Toggle */}
-                  <button
-                    onClick={() => setShowFilters(true)}
-                    className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 bg-dark-100 border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-accent transition-colors"
-                  >
-                    <Filter className="w-4 h-4" />
-                    Filters
-                    {(hasActiveFilters || hasUnappliedChanges) && (
-                      <span className="w-2 h-2 bg-accent rounded-full" />
-                    )}
-                  </button>
+
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -780,6 +665,83 @@ export default function Browse() {
         </div>
       </div>
 
+      {/* Floating Island Navigation */}
+      <div className="fixed bottom-24 sm:bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-[95%] sm:w-auto overflow-hidden">
+        <div className="flex items-center gap-1.5 px-2 py-2 sm:px-6 sm:py-3 rounded-full bg-dark-100/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+          {/* Filter Toggle */}
+          <button
+            onClick={() => setShowFilters(true)}
+            className="relative flex items-center gap-2 px-3 py-2 rounded-full text-gray-300 hover:text-white hover:bg-white/5 transition-all"
+          >
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-medium hidden md:inline">Filters</span>
+            {(hasActiveFilters || hasUnappliedChanges) && (
+              <span className="w-2 h-2 bg-accent rounded-full absolute top-1.5 right-1.5" />
+            )}
+          </button>
+
+          <div className="w-px h-6 bg-white/10 mx-1 sm:mx-2" />
+
+          {/* Browse Tabs */}
+          <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide flex-1 sm:flex-none max-w-[65vw] sm:max-w-none mask-fade-edges">
+            {currentSearch && (
+              <button
+                onClick={() => {
+                  const newParams = new URLSearchParams(searchParams);
+                  newParams.delete('sort');
+                  newParams.delete('season');
+                  newParams.delete('year');
+                  setSearchParams(newParams);
+                  setActiveTab('search');
+                }}
+                className={`flex items-center px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  activeTab === 'search' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                All Results
+              </button>
+            )}
+            {BROWSE_TABS.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`flex items-center px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                    isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="w-px h-6 bg-white/10 mx-1 sm:mx-2" />
+
+          {/* Compact Search */}
+          <div className="relative flex items-center group">
+            <Search className="absolute left-3 w-4 h-4 text-gray-400 group-focus-within:text-white" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search..."
+              className="w-24 sm:w-40 md:w-48 bg-transparent text-white text-sm border-none pl-9 pr-6 py-2 focus:ring-0 outline-none placeholder:text-gray-500"
+            />
+            {searchInput && (
+              <button
+                onClick={() => setSearchInput('')}
+                className="absolute right-2 text-gray-400 hover:text-white"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Mobile Filter Drawer */}
       <MobileFilterDrawer
         isOpen={showFilters}
@@ -825,7 +787,7 @@ export default function Browse() {
             />
           ) : (
             <>
-              <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 lg:gap-5">
+              <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4 lg:gap-5">
                 {allAnime.map((anime, index) => (
                   <AnimeCard
                     key={anime.id}

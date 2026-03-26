@@ -25,8 +25,8 @@ export function useSkeletonCount(viewMode = 'grid', options = {}) {
         if (width < 640) return 3;      // xs breakpoint
         if (width < 768) return 3;      // sm
         if (width < 1024) return 4;     // md
-        if (width < 1280) return 5;     // lg
-        return 6;                        // xl
+        if (width < 1280) return 6;     // lg
+        return 7;                        // xl
     }, []);
 
     const calculateCount = useCallback(() => {
