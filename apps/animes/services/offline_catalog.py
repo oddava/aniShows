@@ -656,7 +656,13 @@ class OfflineCatalogImportService:
                 updated_ids.extend(anime.id for anime in to_update if anime.id)
 
         if touched_slugs:
-            cache.delete_many([f"anime_detail_base:{slug}" for slug in touched_slugs])
+            cache.delete_many(
+                [
+                    key
+                    for slug in touched_slugs
+                    for key in (f"anime_detail_base:v2:{slug}", f"anime_detail_base:{slug}")
+                ]
+            )
 
         return {
             "created": created_count,

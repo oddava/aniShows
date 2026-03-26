@@ -86,6 +86,18 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         "banner_image_large",
     )
 
+    @classmethod
+    def _detail_cache_key(cls, slug: str) -> str:
+        return f"anime_detail_base:{cls._PUBLIC_CACHE_VERSION}:{slug}"
+
+    @staticmethod
+    def _legacy_detail_cache_key(slug: str) -> str:
+        return f"anime_detail_base:{slug}"
+
+    @classmethod
+    def _detail_cache_keys(cls, slug: str) -> tuple[str, str]:
+        return (cls._detail_cache_key(slug), cls._legacy_detail_cache_key(slug))
+
     def get_queryset(self):
         is_list = self.action == "list"
 
@@ -279,8 +291,15 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         is_auth = request.user.is_authenticated
 
         # Cache the BASE data (same for all users)
-        base_cache_key = f"anime_detail_base:{self._PUBLIC_CACHE_VERSION}:{slug}"
-        cached_base = cache.get(base_cache_key)
+        cache_keys = self._detail_cache_keys(slug)
+        primary_cache_key = cache_keys[0]
+        cached_base = None
+        cache_hit_key = None
+        for key in cache_keys:
+            cached_base = cache.get(key)
+            if cached_base:
+                cache_hit_key = key
+                break
         needs_refresh = not cached_base
         if cached_base:
             data = cached_base.copy()
@@ -291,7 +310,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 or self._item_has_stale_imagekit_cache_urls(data)
             ):
                 needs_refresh = True
-                cache.delete(base_cache_key)
+                cache.delete_many(cache_keys)
+            elif cache_hit_key != primary_cache_key:
+                cache.set(primary_cache_key, data, 3600 if self._has_cover_media(data) else 60)
 
         if needs_refresh:
             try:
@@ -301,7 +322,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 data = serializer.data
                 # Avoid long-lived cache for still-incomplete media payloads.
                 ttl = 3600 if self._has_cover_media(data) else 60
-                cache.set(base_cache_key, data, ttl)
+                cache.set(primary_cache_key, data, ttl)
+                cache.set(self._legacy_detail_cache_key(slug), data, ttl)
             except Anime.DoesNotExist:
                 return Response({"error": "Anime not found"}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:

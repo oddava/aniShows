@@ -334,8 +334,13 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
             source = "Offline Sync Reconcile"
             source_type = "metadata+themes"
             if isinstance(result.result_data, dict):
-                processed_items = result.result_data.get("complete", 0)
-                total_items = result.result_data.get("pending", 0) + processed_items
+                complete_items = self._coerce_int_or_none(result.result_data.get("complete")) or 0
+                pending_items = self._coerce_int_or_none(result.result_data.get("pending")) or 0
+                quarantined_items = (
+                    self._coerce_int_or_none(result.result_data.get("quarantined_count")) or 0
+                )
+                processed_items = complete_items + quarantined_items
+                total_items = pending_items + processed_items
                 blocked = result.result_data.get("blocked_without_ids", 0)
                 error_count = blocked if blocked > 0 else (1 if result.status == "FAILURE" else 0)
 

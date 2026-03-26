@@ -39,7 +39,12 @@ class FranchiseImportService:
                 self._refresh_existing_anime(existing, anilist_id)
                 existing.refresh_from_db(fields=["title", "slug"])
 
-            cache.delete(f"anime_detail_base:{existing.slug}")
+            cache.delete_many(
+                [
+                    f"anime_detail_base:v2:{existing.slug}",
+                    f"anime_detail_base:{existing.slug}",
+                ]
+            )
             return FranchiseImportResult(
                 slug=existing.slug,
                 title=existing.title,
@@ -57,7 +62,12 @@ class FranchiseImportService:
             imported = self._will_create_new_anime(item)
             anime = service.save_anime_to_db(item)
             self._ensure_external_image_refs(anime, item)
-            cache.delete(f"anime_detail_base:{anime.slug}")
+            cache.delete_many(
+                [
+                    f"anime_detail_base:v2:{anime.slug}",
+                    f"anime_detail_base:{anime.slug}",
+                ]
+            )
 
             if anime.mal_id:
                 from apps.animes.tasks.themes import sync_theme_songs

@@ -74,13 +74,23 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Anime)
 def invalidate_anime_detail_cache(sender, instance, **kwargs):
     """Invalidate cached anime detail payload when anime fields change."""
-    cache.delete(f"anime_detail_base:{instance.slug}")
+    cache.delete_many(
+        [
+            f"anime_detail_base:v2:{instance.slug}",
+            f"anime_detail_base:{instance.slug}",
+        ]
+    )
 
 
 @receiver(post_delete, sender=Anime)
 def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
     """Invalidate cached anime detail payload on delete."""
-    cache.delete(f"anime_detail_base:{instance.slug}")
+    cache.delete_many(
+        [
+            f"anime_detail_base:v2:{instance.slug}",
+            f"anime_detail_base:{instance.slug}",
+        ]
+    )
 
 
 # =============================================================================

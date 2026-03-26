@@ -153,7 +153,7 @@ class MetadataEnrichmentTask(BaseTask):
             if item:
                 return item
 
-        results = await service.search_anime(anime.title, per_page=5)
+        results = await service.search_anime(anime.title)
         if not results:
             return None
 
