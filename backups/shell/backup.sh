@@ -17,6 +17,8 @@ INCLUDE_MEDIA="${BACKUP_INCLUDE_MEDIA:-1}"
 INCLUDE_ENV="${BACKUP_INCLUDE_ENV:-1}"
 SKIP_LOCK="${BACKUP_SKIP_LOCK:-0}"
 OUTPUT_PATH_FILE="${BACKUP_OUTPUT_PATH_FILE:-}"
+MEDIA_COMPRESS_LEVEL="${BACKUP_MEDIA_COMPRESS_LEVEL:-1}"
+MEDIA_RSYNC_PASSES="${BACKUP_MEDIA_RSYNC_PASSES:-2}"
 
 CURRENT_BACKUP_DIR=""
 WORK_DIR=""
@@ -64,6 +66,15 @@ assert_numeric_nonnegative() {
     fi
 }
 
+assert_numeric_positive() {
+    local value="$1"
+    local name="$2"
+    if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+        echo "Error: $name must be a positive integer. Got '$value'." >&2
+        exit 1
+    fi
+}
+
 prune_backups() {
     local backup_type="$1"
     local retention_days="$2"
@@ -92,12 +103,34 @@ backup_db() {
 
 backup_media() {
     local out_file="$WORK_DIR/minio_data.tar.gz"
+    local snapshot_dir="$WORK_DIR/minio_snapshot"
+    local pass=1
     if [ ! -d /minio_data ]; then
         echo "Error: /minio_data directory not found in backup container." >&2
         exit 1
     fi
-    log "Backing up MinIO data volume..."
-    tar -czf "$out_file" -C /minio_data --exclude=".minio.sys" .
+    mkdir -p "$snapshot_dir"
+
+    log "Staging MinIO data snapshot (passes=$MEDIA_RSYNC_PASSES)..."
+    while [ "$pass" -le "$MEDIA_RSYNC_PASSES" ]; do
+        rsync \
+            -a \
+            --delete \
+            --exclude=".minio.sys/" \
+            /minio_data/ "$snapshot_dir/"
+        local rsync_status=$?
+        if [ "$rsync_status" -ne 0 ]; then
+            if [ "$rsync_status" -ne 24 ]; then
+                echo "Error: rsync failed while staging MinIO data (exit=$rsync_status)." >&2
+                exit "$rsync_status"
+            fi
+            log "MinIO snapshot pass $pass completed with transient file changes (rsync exit 24); retrying if passes remain."
+        fi
+        pass=$((pass + 1))
+    done
+
+    log "Creating MinIO archive from staged snapshot..."
+    GZIP="-${MEDIA_COMPRESS_LEVEL}" tar -czf "$out_file" -C "$snapshot_dir" .
 }
 
 backup_env_snapshot() {
@@ -165,6 +198,7 @@ EOF
 main() {
     require_command pg_dump
     require_command tar
+    require_command rsync
     require_command sha256sum
     require_command mktemp
     require_command find
@@ -173,6 +207,12 @@ main() {
         echo "Error: At least one of BACKUP_INCLUDE_DB or BACKUP_INCLUDE_MEDIA must be 1." >&2
         exit 1
     fi
+
+    if ! [[ "$MEDIA_COMPRESS_LEVEL" =~ ^[1-9]$ ]]; then
+        echo "Error: BACKUP_MEDIA_COMPRESS_LEVEL must be 1..9. Got '$MEDIA_COMPRESS_LEVEL'." >&2
+        exit 1
+    fi
+    assert_numeric_positive "$MEDIA_RSYNC_PASSES" "BACKUP_MEDIA_RSYNC_PASSES"
 
     mkdir -p "$BACKUP_DIR"
     acquire_lock

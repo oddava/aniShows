@@ -11,6 +11,7 @@ Each backup directory now includes:
 - `checksums.sha256`: integrity checks for artifacts
 
 Backups are created atomically in a temp directory and moved into place only after success.
+Media backups are staged through an internal `rsync` snapshot before archiving, so active uploads no longer abort the job with `tar: file changed as we read it`.
 `runtime_env.snapshot` can contain secrets; store backups securely.
 
 ## Commands
@@ -115,3 +116,8 @@ Retention is configurable through env vars in the backup container:
 - `BACKUP_RETENTION_WEEKLY_DAYS` (default `28`)
 - `BACKUP_RETENTION_MANUAL_DAYS` (default `0`, keep forever)
 - `BACKUP_RETENTION_PRE_RESTORE_DAYS` (default `14`)
+
+Media backup performance is also configurable:
+
+- `BACKUP_MEDIA_COMPRESS_LEVEL` (default `1`) lowers CPU overhead for large image-heavy archives while keeping `tar.gz` compatibility
+- `BACKUP_MEDIA_RSYNC_PASSES` (default `2`) controls how many sync passes are used to settle the staged media snapshot before it is archived

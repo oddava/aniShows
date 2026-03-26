@@ -92,11 +92,19 @@ echo -e "${GREEN}Backend images pulled!${NC}"
 echo ""
 
 # =========================================================================
+# BUILD LOCAL-ONLY SERVICES
+# =========================================================================
+echo -e "${BLUE}Step 2b: Building local infrastructure images...${NC}"
+$COMPOSE_CMD build backup
+echo -e "${GREEN}Local infrastructure images built!${NC}"
+echo ""
+
+# =========================================================================
 # RUN MIGRATIONS BEFORE RESTARTING (new code must handle old+new schema)
 # =========================================================================
 echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
-# Ensure DB, PgBouncer, and Redis are up before running migrations
-$COMPOSE_CMD up -d --no-deps db redis
+# Ensure core infra is up before running migrations and backups
+$COMPOSE_CMD up -d --no-deps db redis minio
 echo -e "${BLUE}  Waiting for database to be ready...${NC}"
 for i in $(seq 1 30); do
     if $COMPOSE_CMD exec -T db pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
@@ -137,6 +145,7 @@ echo ""
 # RESTART SERVICES (rolling restart for zero-downtime)
 # =========================================================================
 echo -e "${BLUE}Step 4: Restarting services...${NC}"
+$COMPOSE_CMD up -d --no-deps backup
 # Restart workers first, then web (reverse proxy keeps serving old containers until healthy)
 $COMPOSE_CMD up -d --no-deps \
   --scale celery=$SCALE_CELERY \
