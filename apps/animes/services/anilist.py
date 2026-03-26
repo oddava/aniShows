@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+import json
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
@@ -247,11 +249,34 @@ class AniListService:
                         and 400 <= e.response.status_code < 500
                         and e.response.status_code != 429
                     ):
+                        response_excerpt = ""
+                        try:
+                            payload = e.response.json()
+                            response_excerpt = json.dumps(payload, ensure_ascii=False)[:500]
+                        except Exception:
+                            response_excerpt = (e.response.text or "")[:500]
+
+                        # Some AniList edge throttling paths return 400 with a rate-limit style payload.
+                        lowered = response_excerpt.lower()
+                        if any(marker in lowered for marker in ("too many requests", "rate limit")):
+                            _status = "rate_limited"
+                            wait_time = min(60.0 * (attempt + 1), 300.0)
+                            logger.warning(
+                                "AniList 400 rate-limit style response. Waiting %.2fs before retry (attempt %s/%s). Body: %s",
+                                wait_time,
+                                attempt + 1,
+                                retry_count,
+                                response_excerpt,
+                            )
+                            await asyncio.sleep(wait_time)
+                            continue
+
                         logger.warning(
-                            "AniList non-retryable client error %s (attempt %s): %s",
+                            "AniList non-retryable client error %s (attempt %s): %s | body=%s",
                             e.response.status_code,
                             attempt + 1,
                             e,
+                            response_excerpt,
                         )
                         self._record_failure()
                         return {}
@@ -428,11 +453,32 @@ class AniListService:
             limit=limit,
         )
 
-    async def search_anime(self, query_string: str) -> list[dict]:
-        """Search for a single anime by title to get detailed info"""
+    def _sanitize_search_query(self, query_string: str) -> str:
+        cleaned = (query_string or "").strip()
+        if not cleaned:
+            return ""
+        cleaned = "".join(ch for ch in cleaned if ch.isprintable())
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned[:120]
+
+    def _search_variants(self, query_string: str) -> list[str]:
+        primary = self._sanitize_search_query(query_string)
+        if not primary:
+            return []
+
+        variants = [primary]
+        simplified = re.sub(r"[^0-9A-Za-z\u00C0-\u024F\u0400-\u04FF\u3040-\u30FF\u4E00-\u9FFF\s]", " ", primary)
+        simplified = re.sub(r"\s+", " ", simplified).strip()
+        if simplified and simplified not in variants:
+            variants.append(simplified[:120])
+
+        return variants
+
+    async def search_anime(self, query_string: str, *, per_page: int = 5) -> list[dict]:
+        """Search anime by title with lightweight sanitization."""
         query = f"""
-            query SearchAnime($search: String) {{
-                Page(page: 1, perPage: 1) {{
+            query SearchAnime($search: String, $perPage: Int) {{
+                Page(page: 1, perPage: $perPage) {{
                     media(type: ANIME, search: $search, isAdult: false) {{
                         {self.MEDIA_FIELDS}
                     }}
@@ -440,12 +486,16 @@ class AniListService:
             }}
         """
 
-        variables = {"search": query_string}
-        data = await self._query(query, variables)
-        if not data:
-            return []
+        for variant in self._search_variants(query_string):
+            variables = {"search": variant, "perPage": max(1, min(per_page, 10))}
+            data = await self._query(query, variables)
+            if not data:
+                continue
+            media = data.get("Page", {}).get("media", [])
+            if media:
+                return media
 
-        return data.get("Page", {}).get("media", [])
+        return []
 
     async def close(self):
         with contextlib.suppress(Exception):
@@ -1158,6 +1208,9 @@ class AniListService:
 
     async def get_anime_by_id(self, anilist_id: int) -> dict | None:
         """Fetch a single anime by AniList ID"""
+        if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > 2_147_483_647:
+            return None
+
         query = f"""
             query GetAnimeById($id: Int) {{
                 Media(id: $id, type: ANIME) {{
@@ -1175,6 +1228,9 @@ class AniListService:
 
     async def search_by_mal_id(self, mal_id: int) -> dict | None:
         """Search for anime by MyAnimeList ID"""
+        if not isinstance(mal_id, int) or mal_id <= 0 or mal_id > 2_147_483_647:
+            return None
+
         query = f"""
             query SearchByMalId($idMal: Int) {{
                 Media(idMal: $idMal, type: ANIME) {{

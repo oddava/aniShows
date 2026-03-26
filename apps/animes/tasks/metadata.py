@@ -134,7 +134,15 @@ class MetadataEnrichmentTask(BaseTask):
     async def _resolve_media_for_anime(
         self, service: AniListService, anime: Anime
     ) -> dict | None:
-        """Resolve the best AniList media payload for a local Anime row."""
+        """Resolve the best AniList media payload for a local Anime row.
+
+        Identity safety rules:
+        - Prefer direct ID lookups (AniList, then MAL).
+        - If IDs exist but direct fetch fails, title search is used only when
+          candidates match known IDs.
+        - For title-only rows (no IDs), require an exact title match in one of
+          AniList title variants; never accept arbitrary first result.
+        """
         if anime.anilist_id:
             item = await service.get_anime_by_id(anime.anilist_id)
             if item:
@@ -145,7 +153,7 @@ class MetadataEnrichmentTask(BaseTask):
             if item:
                 return item
 
-        results = await service.search_anime(anime.title)
+        results = await service.search_anime(anime.title, per_page=5)
         if not results:
             return None
 
@@ -154,6 +162,15 @@ class MetadataEnrichmentTask(BaseTask):
             expected_titles.add(anime.title_jp.casefold())
 
         for candidate in results:
+            candidate_anilist_id = candidate.get("id")
+            candidate_mal_id = candidate.get("idMal")
+
+            # If local IDs exist, never accept candidate with mismatched identity.
+            if anime.anilist_id and candidate_anilist_id != anime.anilist_id:
+                continue
+            if anime.mal_id and candidate_mal_id != anime.mal_id:
+                continue
+
             titles = candidate.get("title", {})
             candidate_titles = {
                 (titles.get("english") or "").casefold(),
@@ -163,8 +180,16 @@ class MetadataEnrichmentTask(BaseTask):
             if expected_titles.intersection(candidate_titles):
                 return candidate
 
-        # Fallback to best-effort first result when exact title matching fails.
-        return results[0]
+        # As a last safe fallback, if IDs are known and candidate matched by ID
+        # but title variant comparison missed, still allow the ID match.
+        if anime.anilist_id or anime.mal_id:
+            for candidate in results:
+                if anime.anilist_id and candidate.get("id") == anime.anilist_id:
+                    return candidate
+                if anime.mal_id and candidate.get("idMal") == anime.mal_id:
+                    return candidate
+
+        return None
 
     async def _enrich_batch(
         self,
