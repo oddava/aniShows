@@ -63,9 +63,11 @@ function CurrentlyWatchingGrid({ watchingItems }) {
     if (!watchingItems || watchingItems.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Currently Watching</h3>
-                <div className="ui-surface-subtle p-8 text-center">
-                    <p className="text-sm text-gray-500">Not watching anything right now</p>
+                <div className="ui-surface-subtle p-5">
+                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
+                    <div className="text-center py-6 text-gray-500">
+                        <p className="text-sm">Not watching anything right now</p>
+                    </div>
                 </div>
             </div>
         );
@@ -73,8 +75,8 @@ function CurrentlyWatchingGrid({ watchingItems }) {
 
     return (
         <div className="mb-10">
-            <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Currently Watching</h3>
             <div className="ui-surface-subtle p-5">
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {watchingItems.map((item) => {
                         const eps = item.episodes_watched || 0;
@@ -126,9 +128,11 @@ function FavoritesGrid({ favoritesData }) {
     if (!favorites || favorites.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Favorites</h3>
-                <div className="ui-surface-subtle p-8 text-center">
-                    <p className="text-sm text-gray-500">No favorites yet</p>
+                <div className="ui-surface-subtle p-5">
+                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
+                    <div className="text-center py-6 text-gray-500">
+                        <p className="text-sm">No favorites yet</p>
+                    </div>
                 </div>
             </div>
         );
@@ -136,8 +140,8 @@ function FavoritesGrid({ favoritesData }) {
 
     return (
         <div className="mb-10">
-            <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Favorites</h3>
             <div className="ui-surface-subtle p-5">
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                     {favorites.map((fav) => (
                         <Link
@@ -191,9 +195,8 @@ function FriendsGrid({ username, isPrivate, onTabChange }) {
             <div className="flex items-center justify-between mb-4">
                 <button
                     onClick={() => onTabChange && onTabChange('friends')}
-                    className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-wider flex items-center gap-2"
+                    className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-[0.16em]"
                 >
-                    <Users className="w-3.5 h-3.5" />
                     Friends
                 </button>
                 {totalCount > 0 && (
@@ -276,7 +279,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
     return (
         <div className="mb-8">
             <div className="ui-surface-subtle p-5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Top Genres</h3>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">Top Genres</h3>
 
                 <div className="mb-4 pb-4 border-b border-gray-800/30">
                     <div className="flex items-baseline justify-between mb-2">
@@ -372,7 +375,7 @@ export default function OverviewTab({
                 <div className="lg:col-span-5 space-y-8">
                     {displayUser?.bio ? (
                         <div className="ui-surface-subtle p-6">
-                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">About</h3>
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">About</h3>
                             <div className="text-sm text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar pr-3">
                                 <MarkdownRenderer content={displayUser.bio} />
                             </div>
@@ -380,8 +383,8 @@ export default function OverviewTab({
                     ) : null}
 
                     {displayUser?.social_links && displayUser.social_links.length > 0 ? (
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Links</h3>
+                        <div className="ui-surface-subtle p-5">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">Links</h3>
                             <div className="flex flex-wrap gap-2">
                                 {displayUser.social_links.map((link, i) => (
                                     <a
@@ -416,7 +419,7 @@ export default function OverviewTab({
 
                     <div className="mt-8 ui-surface-subtle p-5">
                         <div className="mb-5 flex items-center justify-between gap-4">
-                            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Watching Activity</h3>
+                            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Watching Activity</h3>
                             <button
                                 type="button"
                                 onClick={() => onTabChange && onTabChange('activity')}

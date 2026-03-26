@@ -175,7 +175,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     return (
         <div className="relative w-full max-w-full p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">
                     Watching Activity
                 </h3>
 
