@@ -268,10 +268,10 @@ function AnimeListContent({
             </div>
 
             {filteredListItems && filteredListItems.length > 0 && (
-                <div className="flex items-center gap-3 text-sm text-gray-500">
-                    Showing {filteredListItems.length} anime in {listStatusFilter}
+                <div className="flex items-center gap-3 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
+                    {filteredListItems.length} Anime in {listStatusFilter}
                     {listsFetching && !listsLoading && (
-                        <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
+                        <span className="inline-flex items-center gap-1.5 text-[10px] text-gray-400 opacity-60">
                             <span className="w-3 h-3 border border-gray-400/50 border-t-gray-200 rounded-full animate-spin" />
                             Updating...
                         </span>

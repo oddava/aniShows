@@ -46,10 +46,10 @@ const StatCard = ({ icon: Icon, label, value, subtext, color = 'accent' }) => {
     return (
         <div className="bg-dark-100/50 rounded-xl border border-gray-800 p-6">
             <div className="flex flex-col gap-1">
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.1em] mb-2">{label}</div>
+                <div className="text-xs text-gray-500 font-bold uppercase tracking-[0.16em] mb-4">{label}</div>
                 <div className="flex items-baseline gap-2">
                     <div className="text-2xl font-black text-white tracking-tight">{value}</div>
-                    {subtext && <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">{subtext}</span>}
+                    {subtext && <span className="text-xs text-gray-500 font-bold uppercase tracking-[0.16em] opacity-60">{subtext}</span>}
                 </div>
             </div>
         </div>
@@ -283,10 +283,10 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                 <div className="lg:col-span-5 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-1">
                                 Anime DNA
                             </h3>
-                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Your unique taste profile</p>
+                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">Your unique taste profile</p>
                         </div>
                     </div>
                     {genreData.length > 0 ? (
@@ -318,7 +318,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                 {genreData.slice(0, 6).map((genre) => (
                                     <div key={genre.name} className="flex cursor-default items-center gap-2">
                                         <div className="h-2 w-2 rounded-full ring-2 ring-white/5" style={{ backgroundColor: genre.color }} />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{genre.name}</span>
+                                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">{genre.name}</span>
                                         <span className="text-[10px] font-bold text-gray-600">({genre.value})</span>
                                     </div>
                                 ))}
@@ -326,7 +326,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <p className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em]">Build your list to see DNA</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Build your list to see DNA</p>
                         </div>
                     )}
                 </div>
@@ -335,10 +335,10 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                 <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-1">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-1">
                                 Ratings Matrix
                             </h3>
-                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">How you evaluate anime quality</p>
+                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">How you evaluate anime quality</p>
                         </div>
                         {reviews.length > 0 && (
                             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1">
@@ -386,7 +386,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <p className="text-sm font-bold text-gray-500 uppercase tracking-[0.2em]">Write reviews to see distribution</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Write reviews to see distribution</p>
                         </div>
                     )}
                 </div>
@@ -405,7 +405,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
 
                 {/* Watching Progress - 7 cols on desktop */}
                 <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
-                    <h3 className="text-white font-black uppercase tracking-widest text-[10px] flex items-center gap-2 mb-6">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-6">
                         Live Progress
                     </h3>
                     <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
@@ -451,7 +451,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                             })
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-30">
-                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">No active progress</p>
+                                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">No active progress</p>
                             </div>
                         )}
                     </div>

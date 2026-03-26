@@ -123,8 +123,8 @@ export default function FriendsTab({ username, isPrivate }) {
 
     return (
         <div className="animate-tab-content pb-8">
-            <div className="flex items-center justify-end mb-6 border-b border-gray-800/60 pb-4">
-                <span className="text-sm text-gray-400 font-medium">
+            <div className="flex items-center justify-end mb-6">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
                     {totalCount} {totalCount === 1 ? 'Friend' : 'Friends'}
                 </span>
             </div>

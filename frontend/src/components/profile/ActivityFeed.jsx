@@ -217,10 +217,10 @@ function ActivityCard({ activity }) {
     const title = anime?.title || 'Unknown title';
 
     return (
-        <article className="group relative overflow-hidden rounded-lg border border-gray-800/70 bg-gradient-to-br from-dark-100/85 to-dark-200/85 p-1.5 transition-colors hover:border-gray-700">
-            <div className="flex items-stretch gap-2">
-                <div className="flex min-w-0 flex-1 flex-col px-1 py-0.5">
-                    <div className="mb-0">
+        <article className="group relative overflow-hidden rounded-lg border border-gray-800/70 bg-gradient-to-br from-dark-100/85 to-dark-200/85 p-2 transition-colors hover:border-gray-700">
+            <div className="flex items-stretch gap-3">
+                <div className="flex min-w-0 flex-1 flex-col px-1 py-1">
+                    <div className="mb-1">
                         <p className="text-sm leading-tight text-gray-100">
                             {renderActivityDescription(activity)}
                         </p>
@@ -239,7 +239,7 @@ function ActivityCard({ activity }) {
                             "{activity.notes}"
                         </p>
                     )}
-                    <div className="mt-0.5">
+                    <div className="mt-1.5">
                         <span className="text-[10px] text-gray-500">
                             {timeAgo(activity.created_at)}
                         </span>
