@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.animes.models import Anime, OfflineCatalogImport, Studio
+from apps.animes.services.offline_sync import OfflineSyncService
 from apps.shared.logger import logger
 
 DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
@@ -195,6 +196,9 @@ class OfflineCatalogImportService:
             "metadata_task_ids": [],
             "franchises_task_ids": [],
             "themes_task_ids": [],
+            "sync_states_created": 0,
+            "sync_states_updated": 0,
+            "sync_states_total": 0,
         }
 
         metadata_line: dict[str, Any] | None = None
@@ -295,6 +299,9 @@ class OfflineCatalogImportService:
             ).count()
             import_run.records_marked_stale = stale_count
 
+            sync_state_summary = self._initialize_sync_states(created_ids, updated_ids)
+            summary.update(sync_state_summary)
+
             if enqueue_enrichment:
                 queued = self._enqueue_enrichment(created_ids, updated_ids)
                 summary.update(queued)
@@ -309,6 +316,9 @@ class OfflineCatalogImportService:
                 "metadata_task_ids": summary["metadata_task_ids"],
                 "franchises_task_ids": summary["franchises_task_ids"],
                 "themes_task_ids": summary["themes_task_ids"],
+                "sync_states_created": summary["sync_states_created"],
+                "sync_states_updated": summary["sync_states_updated"],
+                "sync_states_total": summary["sync_states_total"],
             }
             import_run.save(
                 update_fields=[
@@ -953,44 +963,33 @@ class OfflineCatalogImportService:
                 "themes_task_ids": [],
             }
 
-        from apps.animes.tasks import enrich_metadata, sync_franchises, sync_theme_songs
-
-        anime_rows = list(
-            Anime.objects.filter(id__in=changed_ids).values("id", "anilist_id", "mal_id")
-        )
-        metadata_ids = [row["id"] for row in anime_rows if row["anilist_id"] or row["mal_id"]]
-        franchise_ids = [row["id"] for row in anime_rows if row["anilist_id"]]
-        theme_ids = [row["id"] for row in anime_rows if row["mal_id"]]
-
-        metadata_result = self._dispatch_chunks(
-            metadata_ids,
-            lambda chunk: enrich_metadata.delay(mode="backfill", anime_ids=chunk, batch_size=len(chunk)),
-        )
-        franchise_result = self._dispatch_chunks(
-            franchise_ids,
-            lambda chunk: sync_franchises.delay(
-                mode="backfill",
-                anime_ids=chunk,
-                batch_size=len(chunk),
-                import_missing=True,
-            ),
-        )
-        theme_result = self._dispatch_chunks(
-            theme_ids,
-            lambda chunk: sync_theme_songs.delay(
-                anime_ids=chunk,
-                limit=len(chunk),
-                base_delay=DEFAULT_THEME_BASE_DELAY_SECONDS,
-            ),
-        )
-
+        # Reconciliation is state-driven now. The import task only prepares state.
         return {
-            "metadata_queued": metadata_result["jobs"],
-            "franchises_queued": franchise_result["jobs"],
-            "themes_queued": theme_result["jobs"],
-            "metadata_task_ids": metadata_result["task_ids"],
-            "franchises_task_ids": franchise_result["task_ids"],
-            "themes_task_ids": theme_result["task_ids"],
+            "metadata_queued": 0,
+            "franchises_queued": 0,
+            "themes_queued": 0,
+            "metadata_task_ids": [],
+            "franchises_task_ids": [],
+            "themes_task_ids": [],
+        }
+
+    def _initialize_sync_states(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, int]:
+        changed_ids = list(dict.fromkeys([*created_ids, *updated_ids]))
+        if not changed_ids:
+            return {
+                "sync_states_created": 0,
+                "sync_states_updated": 0,
+                "sync_states_total": 0,
+            }
+
+        state_summary = OfflineSyncService().ensure_states_for_anime_ids(
+            changed_ids,
+            reset_pipeline=True,
+        )
+        return {
+            "sync_states_created": state_summary["created"],
+            "sync_states_updated": state_summary["updated"],
+            "sync_states_total": len(changed_ids),
         }
 
     def _dispatch_chunks(self, anime_ids: list[int], dispatch) -> dict[str, Any]:

@@ -1,13 +1,10 @@
 from celery import shared_task
-from django.db.models import Count
 
-from apps.animes.models import Anime
 from apps.animes.services.offline_catalog import (
     DEFAULT_ASSET_NAME,
-    PLACEHOLDER_SYNOPSIS,
     OfflineCatalogImportService,
 )
-from apps.shared.logger import logger
+from apps.animes.services.offline_sync import OfflineSyncService
 
 from .base import BaseTask
 
@@ -69,45 +66,6 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
     enable_locking = True
     lock_timeout = 7200
 
-    def _iter_pending_rows(self, *, anime_ids: list[int] | None, batch_size: int):
-        queryset = Anime.objects.filter(offline_db_last_seen_at__isnull=False)
-        if anime_ids:
-            queryset = queryset.filter(id__in=anime_ids)
-
-        return (
-            queryset.annotate(
-                cast_count=Count("cast", distinct=True),
-                staff_count=Count("production_staff", distinct=True),
-                theme_count=Count("theme_songs", distinct=True),
-            )
-            .order_by("-popularity_rank", "id")[:batch_size]
-        )
-
-    def _dispatch_chunks(self, ids: list[int], chunk_size: int, dispatch) -> tuple[int, list[str]]:
-        jobs = 0
-        task_ids: list[str] = []
-        if chunk_size <= 0:
-            chunk_size = 100
-
-        for idx in range(0, len(ids), chunk_size):
-            chunk = ids[idx : idx + chunk_size]
-            if not chunk:
-                continue
-            try:
-                result = dispatch(chunk)
-                jobs += 1
-                task_id = getattr(result, "id", None)
-                if task_id:
-                    task_ids.append(str(task_id))
-            except Exception:
-                logger.error(
-                    "Failed to enqueue reconciliation sync chunk",
-                    exc_info=True,
-                    extra={"chunk_size": len(chunk)},
-                )
-
-        return jobs, task_ids
-
     def execute(
         self,
         anime_ids: list[int] | None = None,
@@ -119,92 +77,33 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
         round_number: int = 1,
         round_interval_minutes: int = 15,
     ):
-        from .franchises import sync_franchises
-        from .metadata import enrich_metadata
-        from .themes import sync_theme_songs
-
         self.metrics.start()
         scoped_ids = anime_ids or None
+        service = OfflineSyncService()
+        if scoped_ids:
+            service.ensure_states_for_anime_ids(scoped_ids, reset_pipeline=False)
 
-        metadata_candidates: set[int] = set()
-        franchise_candidates: set[int] = set()
-        theme_candidates: set[int] = set()
-        blocked_without_ids_set: set[int] = set()
-        waiting_for_mal_id = 0
-        pending = 0
-        complete = 0
-
-        for anime in self._iter_pending_rows(anime_ids=scoped_ids, batch_size=batch_size):
-            needs_metadata = (
-                anime.synopsis == PLACEHOLDER_SYNOPSIS
-                or (anime.cast_count or 0) == 0
-                or (anime.staff_count or 0) == 0
-            )
-            needs_themes = bool(require_themes and (anime.theme_count or 0) == 0)
-
-            # If themes are required and MAL ID is missing but AniList ID exists,
-            # force metadata refresh to backfill MAL identity from AniList.
-            if needs_themes and anime.mal_id is None and anime.anilist_id:
-                needs_metadata = True
-
-            if not needs_metadata and not needs_themes:
-                complete += 1
-                continue
-
-            pending += 1
-
-            has_metadata_identity = bool(anime.anilist_id or anime.mal_id)
-            if needs_metadata:
-                if has_metadata_identity:
-                    metadata_candidates.add(anime.id)
-                    if anime.anilist_id:
-                        franchise_candidates.add(anime.id)
-                else:
-                    blocked_without_ids_set.add(anime.id)
-
-            if needs_themes:
-                if anime.mal_id:
-                    theme_candidates.add(anime.id)
-                elif anime.anilist_id:
-                    waiting_for_mal_id += 1
-                else:
-                    blocked_without_ids_set.add(anime.id)
-
-        metadata_jobs, metadata_task_ids = self._dispatch_chunks(
-            sorted(metadata_candidates),
-            chunk_size,
-            lambda chunk: enrich_metadata.delay(
-                mode="backfill",
-                anime_ids=chunk,
-                batch_size=len(chunk),
-            ),
-        )
-        franchise_jobs, franchise_task_ids = self._dispatch_chunks(
-            sorted(franchise_candidates),
-            chunk_size,
-            lambda chunk: sync_franchises.delay(
-                mode="backfill",
-                anime_ids=chunk,
-                batch_size=len(chunk),
-                import_missing=True,
-            ),
-        )
-        theme_jobs, theme_task_ids = self._dispatch_chunks(
-            sorted(theme_candidates),
-            chunk_size,
-            lambda chunk: sync_theme_songs.delay(
-                anime_ids=chunk,
-                limit=len(chunk),
-                base_delay=1.0,
-            ),
+        reconcile_result = service.reconcile_due(
+            batch_size=max(1, int(batch_size)),
+            anime_ids=scoped_ids,
         )
 
-        dispatched_jobs = metadata_jobs + franchise_jobs + theme_jobs
+        stage_counts = reconcile_result.get("stage_counts", {})
+        reason_counts = reconcile_result.get("reason_counts", {})
+        metadata_counts = stage_counts.get("metadata", {})
+        franchise_counts = stage_counts.get("franchise", {})
+        themes_counts = stage_counts.get("themes", {})
+        pending = reconcile_result.get("pending", 0)
+        complete = reconcile_result.get("complete", 0)
+        blocked_without_ids = sum(
+            reason_counts.get(code, 0)
+            for code in ("missing_ids", "invalid_ids", "invalid_variable", "not_found")
+        )
+        dispatched_jobs = reconcile_result.get("processed", 0)
         should_schedule_next = (
             strict
             and round_number < max_rounds
             and (pending > 0 or dispatched_jobs > 0)
-            and (metadata_jobs > 0 or theme_jobs > 0)
         )
 
         next_round_task_id = None
@@ -224,7 +123,7 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             )
             next_round_task_id = getattr(next_result, "id", None)
 
-        self.metrics.record_records(complete)
+        self.metrics.record_records(reconcile_result.get("processed", 0))
         return {
             "round_number": round_number,
             "max_rounds": max_rounds,
@@ -234,17 +133,36 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             "scoped_anime_count": len(anime_ids or []),
             "pending": pending,
             "complete": complete,
-            "blocked_without_ids": len(blocked_without_ids_set),
-            "waiting_for_mal_id": waiting_for_mal_id,
-            "metadata_candidates": len(metadata_candidates),
-            "franchise_candidates": len(franchise_candidates),
-            "theme_candidates": len(theme_candidates),
-            "metadata_jobs": metadata_jobs,
-            "franchise_jobs": franchise_jobs,
-            "theme_jobs": theme_jobs,
-            "metadata_task_ids": metadata_task_ids,
-            "franchise_task_ids": franchise_task_ids,
-            "theme_task_ids": theme_task_ids,
+            "processed": reconcile_result.get("processed", 0),
+            "claimed": reconcile_result.get("claimed", 0),
+            "blocked_without_ids": blocked_without_ids,
+            "waiting_for_mal_id": 0,
+            "metadata_candidates": metadata_counts.get("synced", 0)
+            + metadata_counts.get("transient_error", 0)
+            + metadata_counts.get("blocked_identity", 0)
+            + metadata_counts.get("blocked_no_ids", 0)
+            + metadata_counts.get("quarantined", 0),
+            "franchise_candidates": franchise_counts.get("synced", 0)
+            + franchise_counts.get("transient_error", 0)
+            + franchise_counts.get("blocked_identity", 0)
+            + franchise_counts.get("blocked_no_ids", 0)
+            + franchise_counts.get("quarantined", 0),
+            "theme_candidates": themes_counts.get("synced", 0)
+            + themes_counts.get("transient_error", 0)
+            + themes_counts.get("blocked_identity", 0)
+            + themes_counts.get("blocked_no_ids", 0)
+            + themes_counts.get("quarantined", 0),
+            "metadata_jobs": 0,
+            "franchise_jobs": 0,
+            "theme_jobs": 0,
+            "metadata_task_ids": [],
+            "franchise_task_ids": [],
+            "theme_task_ids": [],
+            "stage_counts": stage_counts,
+            "reason_counts": reason_counts,
+            "transient_backlog": reconcile_result.get("transient_backlog", 0),
+            "quarantined_count": reconcile_result.get("quarantined_count", 0),
+            "top_quarantine_reasons": reconcile_result.get("top_quarantine_reasons", []),
             "next_round_scheduled": bool(next_round_task_id),
             "next_round_task_id": next_round_task_id,
             "rounds_exhausted": strict and round_number >= max_rounds,

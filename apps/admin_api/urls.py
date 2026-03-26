@@ -16,6 +16,7 @@ from .views.anime import (
     AdminAnimeViewSet,
     AdminCharacterViewSet,
     AdminGenreViewSet,
+    AdminOfflineAnimeSyncStateViewSet,
     AdminStaffViewSet,
     AdminStudioViewSet,
 )
@@ -35,6 +36,11 @@ admin_router.register(r"genres", AdminGenreViewSet, basename="admin-genres")
 admin_router.register(r"studios", AdminStudioViewSet, basename="admin-studios")
 admin_router.register(r"characters", AdminCharacterViewSet, basename="admin-characters")
 admin_router.register(r"staff", AdminStaffViewSet, basename="admin-staff")
+admin_router.register(
+    r"offline-sync-states",
+    AdminOfflineAnimeSyncStateViewSet,
+    basename="admin-offline-sync-states",
+)
 admin_router.register(r"user-lists", AdminUserListViewSet, basename="admin-user-lists")
 admin_router.register(r"favorites", AdminFavoritesViewSet, basename="admin-favorites")
 admin_router.register(r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs")

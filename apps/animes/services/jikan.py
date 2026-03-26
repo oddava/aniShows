@@ -9,12 +9,22 @@ Provides adaptive rate limiting with exponential backoff for 429 errors.
 import asyncio
 import random
 import time
+from dataclasses import dataclass
 
 import httpx
 from django.core.cache import cache
 
 JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
+
+
+@dataclass(slots=True)
+class JikanThemesFetchResult:
+    success: bool
+    themes: dict | None = None
+    reason_code: str = ""
+    message: str = ""
+    transient: bool = False
 
 
 class JikanRateLimiter:
@@ -165,6 +175,23 @@ async def fetch_themes_from_jikan(
     rate_limiter: JikanRateLimiter,
     max_retries: int = 3,
 ) -> dict | None:
+    result = await fetch_themes_from_jikan_with_reason(
+        http_client=http_client,
+        mal_id=mal_id,
+        rate_limiter=rate_limiter,
+        max_retries=max_retries,
+    )
+    if result.success:
+        return result.themes or {"openings": [], "endings": []}
+    return None
+
+
+async def fetch_themes_from_jikan_with_reason(
+    http_client: httpx.AsyncClient,
+    mal_id: int,
+    rate_limiter: JikanRateLimiter,
+    max_retries: int = 3,
+) -> JikanThemesFetchResult:
     """Fetch theme songs from Jikan API with smart retry logic.
 
     Args:
@@ -174,7 +201,7 @@ async def fetch_themes_from_jikan(
         max_retries: Maximum number of retries
 
     Returns:
-        Dictionary with 'openings' and 'endings' lists, or None on failure
+        JikanThemesFetchResult with stable reason_code and transient classification.
 
     Usage:
         limiter = JikanRateLimiter()
@@ -216,7 +243,12 @@ async def fetch_themes_from_jikan(
                     continue
 
                 logger.error(f"Jikan 429 max retries exceeded for MAL ID {mal_id}")
-                return None
+                return JikanThemesFetchResult(
+                    success=False,
+                    reason_code="rate_limited",
+                    message="http_429",
+                    transient=True,
+                )
 
             # Handle transient upstream/server errors with retry
             if response.status_code in transient_status_codes:
@@ -235,7 +267,12 @@ async def fetch_themes_from_jikan(
                     f"Jikan transient error {response.status_code} max retries exceeded "
                     f"for MAL ID {mal_id}"
                 )
-                return None
+                return JikanThemesFetchResult(
+                    success=False,
+                    reason_code="transport_error",
+                    message=f"http_{response.status_code}",
+                    transient=True,
+                )
 
             # Handle non-retryable client errors (invalid/missing MAL mapping, etc.)
             if 400 <= response.status_code < 500:
@@ -244,22 +281,37 @@ async def fetch_themes_from_jikan(
                     logger.info(
                         f"Jikan MAL ID {mal_id} not found (404) - skipping retries"
                     )
+                    return JikanThemesFetchResult(
+                        success=False,
+                        reason_code="not_found",
+                        message="http_404",
+                        transient=False,
+                    )
                 else:
                     logger.warning(
                         f"Jikan client error {response.status_code} for MAL ID {mal_id} - "
                         "skipping retries"
                     )
-                return None
+                    code = "invalid_variable" if response.status_code in {400, 422} else "transport_error"
+                    return JikanThemesFetchResult(
+                        success=False,
+                        reason_code=code,
+                        message=f"http_{response.status_code}",
+                        transient=False,
+                    )
 
             response.raise_for_status()
             data = response.json().get("data", {})
 
             rate_limiter.record_success()
 
-            return {
-                "openings": data.get("openings", []),
-                "endings": data.get("endings", []),
-            }
+            return JikanThemesFetchResult(
+                success=True,
+                themes={
+                    "openings": data.get("openings", []),
+                    "endings": data.get("endings", []),
+                },
+            )
 
         except (httpx.TimeoutException, httpx.ConnectError) as e:
             _status = "failure"
@@ -274,7 +326,12 @@ async def fetch_themes_from_jikan(
                 continue
 
             logger.warning(f"Jikan network timeout max retries exceeded for MAL ID {mal_id}: {e}")
-            return None
+            return JikanThemesFetchResult(
+                success=False,
+                reason_code="transport_error",
+                message=str(e),
+                transient=True,
+            )
         except httpx.HTTPError as e:
             _status = "failure"
             rate_limiter.record_error()
@@ -288,11 +345,21 @@ async def fetch_themes_from_jikan(
                 continue
 
             logger.error(f"Jikan HTTP error max retries exceeded for MAL ID {mal_id}: {e}")
-            return None
+            return JikanThemesFetchResult(
+                success=False,
+                reason_code="transport_error",
+                message=str(e),
+                transient=True,
+            )
         except Exception as e:
             _status = "failure"
             logger.error(f"Unexpected error fetching themes for MAL ID {mal_id}: {e}")
-            return None
+            return JikanThemesFetchResult(
+                success=False,
+                reason_code="transport_error",
+                message=str(e),
+                transient=True,
+            )
         finally:
             _duration = time.time() - _start
             try:
@@ -305,4 +372,9 @@ async def fetch_themes_from_jikan(
             except Exception:
                 pass
 
-    return None
+    return JikanThemesFetchResult(
+        success=False,
+        reason_code="transport_error",
+        message="retries_exhausted",
+        transient=True,
+    )

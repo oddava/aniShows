@@ -1,7 +1,15 @@
 from rest_framework.fields import FloatField, IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
 
-from apps.animes.models import Anime, Character, Genre, Review, Staff, Studio
+from apps.animes.models import (
+    Anime,
+    Character,
+    Genre,
+    OfflineAnimeSyncState,
+    Review,
+    Staff,
+    Studio,
+)
 
 
 class AdminGenreSerializer(ModelSerializer):
@@ -157,3 +165,40 @@ class AdminStaffSerializer(ModelSerializer):
             except ValueError:
                 return None
         return obj.image_url or None
+
+
+class AdminOfflineAnimeSyncStateSerializer(ModelSerializer):
+    anime = SerializerMethodField()
+
+    class Meta:
+        model = OfflineAnimeSyncState
+        fields = [
+            "id",
+            "anime",
+            "metadata_status",
+            "franchise_status",
+            "themes_status",
+            "metadata_attempt_count",
+            "franchise_attempt_count",
+            "themes_attempt_count",
+            "attempt_count",
+            "last_attempt_at",
+            "next_attempt_at",
+            "last_error_code",
+            "last_error_message",
+            "quarantined",
+            "quarantine_reason",
+            "quarantine_context",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_anime(self, obj):
+        anime = obj.anime
+        return {
+            "id": anime.id,
+            "title": anime.title,
+            "slug": anime.slug,
+            "anilist_id": anime.anilist_id,
+            "mal_id": anime.mal_id,
+        }

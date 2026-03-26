@@ -177,6 +177,35 @@ USER_IMPORTS_PROCESSED = _safe_metric(
     ["source", "status"],
 )
 
+OFFLINE_SYNC_STAGE_SUCCESS_TOTAL = _safe_metric(
+    Counter,
+    "offline_sync_stage_success_total",
+    "Total number of successful offline sync stage executions",
+    ["stage"],
+)
+
+OFFLINE_SYNC_STAGE_FAILURE_TOTAL = _safe_metric(
+    Counter,
+    "offline_sync_stage_failure_total",
+    "Total number of failed offline sync stage executions",
+    ["stage", "reason"],
+)
+
+OFFLINE_SYNC_QUARANTINE_TOTAL = _safe_metric(
+    Counter,
+    "offline_sync_quarantine_total",
+    "Total number of offline sync records quarantined",
+    ["stage", "reason"],
+)
+
+OFFLINE_SYNC_RETRY_AGE_SECONDS = _safe_metric(
+    Histogram,
+    "offline_sync_retry_age_seconds",
+    "Age in seconds between offline sync stage attempts",
+    ["stage"],
+    buckets=[30, 60, 120, 300, 600, 900, 1800, 3600, 21600, 86400, 172800],
+)
+
 # Circuit breaker state metric (0=CLOSED, 1=OPEN, 2=HALF_OPEN)
 CIRCUIT_BREAKER_STATE = _safe_metric(
     Gauge,

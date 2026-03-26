@@ -1,7 +1,8 @@
 from datetime import timedelta
 
 from celery import current_app
-from django.db.models import Count
+from django.db.models import Count, Q
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 from django_filters import CharFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
@@ -11,7 +12,7 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.animes.models import OfflineCatalogImport
+from apps.animes.models import OfflineAnimeSyncState, OfflineCatalogImport
 from apps.core.models import CeleryTaskResult
 from apps.core.permissions import IsAdminUser
 from apps.shared.pagination import StandardPagination
@@ -148,6 +149,85 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
         }
 
     def _build_offline_enrichment_progress(self, import_run: OfflineCatalogImport):
+        try:
+            state_queryset = OfflineAnimeSyncState.objects.filter(
+                anime__offline_db_last_seen_at__isnull=False
+            )
+            total_states = state_queryset.count()
+
+            def _stage_progress(stage_field: str):
+                counts = dict(
+                    state_queryset.values_list(stage_field).annotate(count=Count("id"))
+                )
+                synced = counts.get(OfflineAnimeSyncState.StageStatus.SYNCED, 0)
+                running = counts.get(OfflineAnimeSyncState.StageStatus.IN_PROGRESS, 0)
+                failed = (
+                    counts.get(OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR, 0)
+                    + counts.get(OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY, 0)
+                    + counts.get(OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS, 0)
+                    + counts.get(OfflineAnimeSyncState.StageStatus.QUARANTINED, 0)
+                )
+                return {
+                    "queued": total_states,
+                    "tracked": total_states,
+                    "completed": synced,
+                    "successful": synced,
+                    "failed": failed,
+                    "running": running,
+                    "completion_percent": round((synced / total_states) * 100)
+                    if total_states > 0
+                    else None,
+                    "status_counts": counts,
+                }
+
+            metadata_progress = _stage_progress("metadata_status")
+            franchise_progress = _stage_progress("franchise_status")
+            theme_progress = _stage_progress("themes_status")
+
+            complete_states = state_queryset.filter(
+                metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                quarantined=False,
+            ).count()
+            transient_backlog = state_queryset.filter(quarantined=False).filter(
+                Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+                | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+                | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+            ).count()
+            quarantined_count = state_queryset.filter(quarantined=True).count()
+            top_reasons = list(
+                state_queryset.filter(quarantined=True)
+                .exclude(quarantine_reason="")
+                .values("quarantine_reason")
+                .annotate(count=Count("id"))
+                .order_by("-count")[:5]
+            )
+
+            if total_states > 0:
+                return {
+                    "metadata": metadata_progress,
+                    "franchises": franchise_progress,
+                    "themes": theme_progress,
+                    "overall": {
+                        "queued": total_states,
+                        "completed": complete_states,
+                        "running": (
+                            metadata_progress["running"]
+                            + franchise_progress["running"]
+                            + theme_progress["running"]
+                        ),
+                        "completion_percent": round((complete_states / total_states) * 100),
+                        "transient_backlog": transient_backlog,
+                        "quarantined_count": quarantined_count,
+                        "top_quarantine_reasons": top_reasons,
+                    },
+                }
+        except (ProgrammingError, OperationalError):
+            # Migration not applied yet in this runtime. Keep legacy behavior.
+            pass
+
+        # Legacy task-group fallback when no state rows exist yet.
         summary = import_run.summary or {}
 
         metadata_progress = self._summarize_task_group(

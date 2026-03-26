@@ -119,6 +119,28 @@ class AniListService:
         self.circuit_breaker = CircuitBreaker(
             "anilist_api", failure_threshold=5, recovery_timeout=300
         )
+        self.last_error_code = ""
+        self.last_error_message = ""
+
+    def _set_last_error(self, code: str, message: str):
+        self.last_error_code = code
+        self.last_error_message = (message or "")[:500]
+
+    def _reset_last_error(self):
+        self.last_error_code = ""
+        self.last_error_message = ""
+
+    def _parse_graphql_error_code(self, message: str) -> str:
+        lowered = (message or "").lower()
+        if "too many requests" in lowered or "rate limit" in lowered:
+            return "rate_limited"
+        if "variable" in lowered and any(
+            token in lowered for token in ("invalid", "expected", "cannot represent")
+        ):
+            return "invalid_variable"
+        if "not found" in lowered or "no such" in lowered:
+            return "not_found"
+        return "transport_error"
 
     async def _acquire_rate_limit(self):
         """Acquire rate limit permission if enabled."""
@@ -164,6 +186,8 @@ class AniListService:
         """
         from apps.animes.services.metrics import API_CALL_COUNT, API_CALL_DURATION
 
+        self._reset_last_error()
+
         # Generate cache key from query and variables
         cache_key = (
             f"{hash(query) & 0xFFFFFFFF}:{hash(str(sorted(variables.items()))) & 0xFFFFFFFF}"
@@ -180,6 +204,7 @@ class AniListService:
         # Check circuit breaker
         if not self._check_circuit_breaker():
             logger.error("Circuit breaker is OPEN - refusing API call")
+            self._set_last_error("transport_error", "circuit_breaker_open")
             return {}
 
         for attempt in range(retry_count):
@@ -212,6 +237,7 @@ class AniListService:
                         logger.warning(
                             f"AniList Rate Limit Hit! Waiting {wait_time:.2f}s before retry (Attempt {attempt + 1}/{retry_count})"
                         )
+                        self._set_last_error("rate_limited", "http_429")
                         _status = "rate_limited"
                         await asyncio.sleep(wait_time)
                         continue
@@ -223,16 +249,19 @@ class AniListService:
                         error_msg = data["errors"][0]["message"]
                         if "Too Many Requests" in error_msg:
                             logger.warning("AniList GraphQL Rate Limit Error. Sleeping 60s...")
+                            self._set_last_error("rate_limited", error_msg)
                             _status = "rate_limited"
                             await asyncio.sleep(60)
                             continue
                         logger.error(f"GraphQL Error: {error_msg}")
+                        self._set_last_error(self._parse_graphql_error_code(error_msg), error_msg)
                         _status = "failure"
                         self._record_failure()
                         return {}
 
                     # Success - record it
                     self._record_success()
+                    self._reset_last_error()
                     result = data.get("data", {})
 
                     # Cache successful response
@@ -261,6 +290,7 @@ class AniListService:
                         if any(marker in lowered for marker in ("too many requests", "rate limit")):
                             _status = "rate_limited"
                             wait_time = min(60.0 * (attempt + 1), 300.0)
+                            self._set_last_error("rate_limited", response_excerpt)
                             logger.warning(
                                 "AniList 400 rate-limit style response. Waiting %.2fs before retry (attempt %s/%s). Body: %s",
                                 wait_time,
@@ -278,14 +308,24 @@ class AniListService:
                             e,
                             response_excerpt,
                         )
+                        if e.response.status_code == 404:
+                            self._set_last_error("not_found", response_excerpt or str(e))
+                        elif e.response.status_code in {400, 422}:
+                            self._set_last_error("invalid_variable", response_excerpt or str(e))
+                        else:
+                            self._set_last_error("transport_error", response_excerpt or str(e))
                         self._record_failure()
                         return {}
 
                     logger.error(f"Request error (Attempt {attempt + 1}): {e}")
+                    if isinstance(e, (httpx.TimeoutException, httpx.ConnectError)):
+                        self._set_last_error("transport_error", str(e))
                     if attempt < retry_count - 1:
                         wait = (attempt + 1) * 2
                         await asyncio.sleep(wait)
                     else:
+                        if not self.last_error_code:
+                            self._set_last_error("transport_error", str(e))
                         self._record_failure()
                         return {}
                 finally:
@@ -303,10 +343,13 @@ class AniListService:
             except Exception as e:
                 logger.error(f"Unexpected error in _query (Attempt {attempt + 1}): {e}")
                 if attempt >= retry_count - 1:
+                    self._set_last_error("transport_error", str(e))
                     self._record_failure()
                     return {}
 
         # All retries exhausted
+        if not self.last_error_code:
+            self._set_last_error("transport_error", "retries_exhausted")
         self._record_failure()
         return {}
 
@@ -1209,6 +1252,7 @@ class AniListService:
     async def get_anime_by_id(self, anilist_id: int) -> dict | None:
         """Fetch a single anime by AniList ID"""
         if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > 2_147_483_647:
+            self._set_last_error("invalid_variable", "invalid_anilist_id")
             return None
 
         query = f"""
@@ -1224,11 +1268,14 @@ class AniListService:
 
         if data and data.get("Media"):
             return data["Media"]
+        if not self.last_error_code:
+            self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
     async def search_by_mal_id(self, mal_id: int) -> dict | None:
         """Search for anime by MyAnimeList ID"""
         if not isinstance(mal_id, int) or mal_id <= 0 or mal_id > 2_147_483_647:
+            self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
 
         query = f"""
@@ -1244,6 +1291,8 @@ class AniListService:
 
         if data and data.get("Media"):
             return data["Media"]
+        if not self.last_error_code:
+            self._set_last_error("not_found", f"mal_id:{mal_id}")
         return None
 
     def save_anime_to_db(self, item: dict) -> Anime:

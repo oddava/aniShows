@@ -8,7 +8,7 @@ from django.db import DataError, IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.animes.models import Anime, OfflineCatalogImport
+from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
 from apps.animes.services.offline_catalog import OfflineCatalogImportService
 
 
@@ -142,15 +142,7 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(anime.offline_db_last_update.isoformat(), "2026-03-23")
         self.assertIsNotNone(anime.offline_db_last_seen_at)
 
-    @patch("apps.animes.tasks.sync_theme_songs.delay")
-    @patch("apps.animes.tasks.sync_franchises.delay")
-    @patch("apps.animes.tasks.enrich_metadata.delay")
-    def test_run_import_creates_rows_and_queues_enrichment(
-        self,
-        mock_enrich_delay,
-        mock_franchise_delay,
-        mock_theme_delay,
-    ):
+    def test_run_import_creates_rows_and_prepares_sync_state_pipeline(self):
         second = self._entry(
             title="Monster",
             sources=[
@@ -170,22 +162,13 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(Anime.objects.count(), 2)
         self.assertEqual(result["records_created"], 2)
-        self.assertEqual(result["metadata_queued"], 1)
-        self.assertEqual(result["franchises_queued"], 1)
-        self.assertEqual(result["themes_queued"], 1)
-        mock_enrich_delay.assert_called_once()
-        mock_franchise_delay.assert_called_once()
-        mock_theme_delay.assert_called_once()
+        self.assertEqual(result["metadata_queued"], 0)
+        self.assertEqual(result["franchises_queued"], 0)
+        self.assertEqual(result["themes_queued"], 0)
+        self.assertEqual(result["sync_states_total"], 2)
+        self.assertEqual(OfflineAnimeSyncState.objects.count(), 2)
 
-    @patch("apps.animes.tasks.sync_theme_songs.delay")
-    @patch("apps.animes.tasks.sync_franchises.delay")
-    @patch("apps.animes.tasks.enrich_metadata.delay")
-    def test_run_import_queues_metadata_for_mal_only_entries(
-        self,
-        mock_enrich_delay,
-        mock_franchise_delay,
-        mock_theme_delay,
-    ):
+    def test_run_import_prepares_sync_states_for_mal_only_entries(self):
         entry = self._entry(
             title="MAL Only Entry",
             sources=["https://myanimelist.net/anime/19"],
@@ -200,12 +183,13 @@ class OfflineCatalogImportServiceTests(TestCase):
         )
 
         self.assertEqual(result["records_created"], 1)
-        self.assertEqual(result["metadata_queued"], 1)
+        self.assertEqual(result["metadata_queued"], 0)
         self.assertEqual(result["franchises_queued"], 0)
-        self.assertEqual(result["themes_queued"], 1)
-        mock_enrich_delay.assert_called_once()
-        mock_franchise_delay.assert_not_called()
-        mock_theme_delay.assert_called_once()
+        self.assertEqual(result["themes_queued"], 0)
+        state = OfflineAnimeSyncState.objects.get()
+        self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.PENDING)
+        self.assertEqual(state.franchise_status, OfflineAnimeSyncState.StageStatus.PENDING)
+        self.assertEqual(state.themes_status, OfflineAnimeSyncState.StageStatus.PENDING)
 
     def test_run_import_tracks_stale_rows_without_deleting_them(self):
         stale_anime = Anime.objects.create(
@@ -444,16 +428,7 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertIn("mystery", anime.tags)
         self.assertIn("thriller", anime.tags)
 
-    @patch("apps.animes.tasks.sync_theme_songs.delay")
-    @patch("apps.animes.tasks.sync_franchises.delay")
-    @patch("apps.animes.tasks.enrich_metadata.delay")
-    def test_run_import_continues_when_enrichment_dispatch_fails(
-        self,
-        mock_enrich_delay,
-        mock_franchise_delay,
-        mock_theme_delay,
-    ):
-        mock_enrich_delay.side_effect = RuntimeError("broker unavailable")
+    def test_run_import_completes_with_state_pipeline_enabled(self):
         fixture_path = self._write_jsonl_fixture(
             self._entry(
                 title="Dispatch Failure Safety",
@@ -474,21 +449,11 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(import_run.status, OfflineCatalogImport.Status.COMPLETED)
         self.assertEqual(result["records_created"], 1)
         self.assertEqual(result["metadata_queued"], 0)
-        self.assertEqual(result["franchises_queued"], 1)
-        self.assertEqual(result["themes_queued"], 1)
-        mock_enrich_delay.assert_called_once()
-        mock_franchise_delay.assert_called_once()
-        mock_theme_delay.assert_called_once()
+        self.assertEqual(result["franchises_queued"], 0)
+        self.assertEqual(result["themes_queued"], 0)
+        self.assertEqual(OfflineAnimeSyncState.objects.count(), 1)
 
-    @patch("apps.animes.tasks.sync_theme_songs.delay")
-    @patch("apps.animes.tasks.sync_franchises.delay")
-    @patch("apps.animes.tasks.enrich_metadata.delay")
-    def test_zero_enrichment_chunk_size_is_safely_clamped(
-        self,
-        mock_enrich_delay,
-        mock_franchise_delay,
-        mock_theme_delay,
-    ):
+    def test_zero_enrichment_chunk_size_is_ignored_by_state_pipeline(self):
         fixture_path = self._write_jsonl_fixture(self._entry(title="Chunk Clamp Safety"))
 
         result = OfflineCatalogImportService(batch_size=1, enrichment_chunk_size=0).run_import(
@@ -497,12 +462,9 @@ class OfflineCatalogImportServiceTests(TestCase):
             enqueue_enrichment=True,
         )
 
-        self.assertEqual(result["metadata_queued"], 1)
-        self.assertEqual(result["franchises_queued"], 1)
-        self.assertEqual(result["themes_queued"], 1)
-        mock_enrich_delay.assert_called_once()
-        mock_franchise_delay.assert_called_once()
-        mock_theme_delay.assert_called_once()
+        self.assertEqual(result["metadata_queued"], 0)
+        self.assertEqual(result["franchises_queued"], 0)
+        self.assertEqual(result["themes_queued"], 0)
 
     @patch("apps.animes.services.offline_catalog.httpx.Client")
     def test_open_remote_stream_uses_stream_context_response(self, mock_client_cls):

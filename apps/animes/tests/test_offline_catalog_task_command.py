@@ -13,7 +13,7 @@ except ModuleNotFoundError:  # pragma: no cover - depends on runtime image
 from django.core.management import call_command
 from django.test import TestCase
 
-from apps.animes.models import Anime, OfflineCatalogImport
+from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
 from apps.animes.tasks.offline_catalog import OfflineCatalogImportTask
 
 
@@ -103,17 +103,8 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         self.assertEqual(anime.anilist_id, 1002)
         self.assertEqual(anime.mal_id, 2002)
 
-    @patch("apps.animes.tasks.sync_theme_songs.delay")
-    @patch("apps.animes.tasks.sync_franchises.delay")
-    @patch("apps.animes.tasks.enrich_metadata.delay")
     @patch("apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync.delay")
-    def test_task_execute_enqueues_enrichment_in_chunks(
-        self,
-        mock_reconcile_delay,
-        mock_enrich_delay,
-        mock_franchise_delay,
-        mock_theme_delay,
-    ):
+    def test_task_execute_enqueues_reconcile_and_prepares_state_pipeline(self, mock_reconcile_delay):
         source_path = self._write_jsonl_fixture(
             [
                 self._entry(title="Chunk One", anilist_id=1010, mal_id=2010),
@@ -128,12 +119,11 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             enrichment_chunk_size=1,
         )
 
-        self.assertEqual(result["metadata_queued"], 2)
-        self.assertEqual(result["franchises_queued"], 2)
-        self.assertEqual(result["themes_queued"], 2)
-        self.assertEqual(mock_enrich_delay.call_count, 2)
-        self.assertEqual(mock_franchise_delay.call_count, 2)
-        self.assertEqual(mock_theme_delay.call_count, 2)
+        self.assertEqual(result["metadata_queued"], 0)
+        self.assertEqual(result["franchises_queued"], 0)
+        self.assertEqual(result["themes_queued"], 0)
+        self.assertEqual(result["sync_states_total"], 2)
+        self.assertEqual(OfflineAnimeSyncState.objects.count(), 2)
         mock_reconcile_delay.assert_called_once()
 
     def test_management_command_runs_import_synchronously(self):
