@@ -422,22 +422,6 @@ export default function Schedule() {
       <SEO page="schedule" />
       <LoadingBar isLoading={isLoading || isFetching} />
       <div className="min-h-screen pb-20">
-        {/* Header */}
-        <div className="bg-dark-100/50 border-b border-gray-800">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <div className="mb-2">
-                  <h1 className="text-2xl font-bold text-white/90">Anime Schedule</h1>
-                </div>
-                <p className="text-gray-400">
-                  Track your weekly anime releases and never miss an episode
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Week Navigator */}

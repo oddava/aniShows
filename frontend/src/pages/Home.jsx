@@ -161,7 +161,6 @@ export default function Home() {
                                 <div className="flex items-center justify-between mb-6 md:mb-8">
                                     <div>
                                         <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Trending Now</h2>
-                                        <p className="text-xs md:text-sm text-gray-500 mt-0.5">Most discussed this week</p>
                                     </div>
                                     <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-accent/40 group">
                                         View All
@@ -194,7 +193,6 @@ export default function Home() {
                                 <div className="flex items-center justify-between mb-6 md:mb-8">
                                     <div>
                                         <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Top Rated</h2>
-                                        <p className="text-xs md:text-sm text-gray-500 mt-0.5">Highest rated by community</p>
                                     </div>
                                     <Link to="/browse?sort=rating" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-yellow-400/40 group">
                                         View All <ChevronRight className="w-4 h-4" />

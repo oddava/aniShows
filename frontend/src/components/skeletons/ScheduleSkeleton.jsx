@@ -124,29 +124,6 @@ export function ScheduleListSkeleton({ count = 8 }) {
 export function ScheduleSkeleton({ viewMode = 'grid' }) {
     return (
         <div className="min-h-screen pb-20">
-            {/* Header skeleton */}
-            <div className="bg-dark-100/50 border-b border-gray-800">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-dark-300 rounded-xl relative overflow-hidden">
-                                <div className="absolute inset-0 skeleton-wave" />
-                            </div>
-                            <div className="space-y-2">
-                                <div className="h-8 bg-dark-300 rounded w-48 relative overflow-hidden">
-                                    <div className="absolute inset-0 skeleton-wave" />
-                                </div>
-                                <div className="h-4 bg-dark-300 rounded w-64 relative overflow-hidden">
-                                    <div className="absolute inset-0 skeleton-wave" />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="h-10 w-24 bg-dark-300 rounded-xl relative overflow-hidden">
-                            <div className="absolute inset-0 skeleton-wave" />
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             {/* Main content skeleton */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

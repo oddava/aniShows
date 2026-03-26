@@ -176,8 +176,8 @@ export default function Seasonal() {
                 customTitle={`${currentSeasonData?.label} ${selectedYear} Anime - AniShows`}
                 customDescription={`Discover anime airing in ${currentSeasonData?.label} ${selectedYear}. Browse the seasonal anime lineup with ratings, reviews, and community favorites.`}
             />
-            <main className="min-h-screen py-8 px-4" role="main" aria-label="Seasonal Anime Page">
-                <div className="max-w-7xl mx-auto">
+            <main className="min-h-screen pb-20" role="main" aria-label="Seasonal Anime Page">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                     {/* Header */}
                     <header className="text-center mb-12">
                         <div className="flex items-center justify-center gap-6 mb-4">
@@ -274,7 +274,7 @@ export default function Seasonal() {
                     {/* Content */}
                     {isLoading ? (
                         <div
-                            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
+                            className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 lg:gap-5"
                             role="status"
                             aria-label="Loading anime"
                         >
@@ -300,7 +300,7 @@ export default function Seasonal() {
                         </div>
                     ) : (
                         <div
-                            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6"
+                            className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 lg:gap-5"
                             role="list"
                             aria-label={`${animeList.length} anime in ${currentSeasonData?.label} ${selectedYear}`}
                         >
