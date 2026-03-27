@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { User, Lock, Shield, Award, Eye, EyeOff, AlertCircle, Check, Plus, Trash2, Mail, Bell, Tv, MessageCircle, Users, Loader2, LogOut } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { authApi, notificationApi } from '../api/client';
 import { Link } from 'react-router-dom';
-import { Download, Upload } from 'lucide-react';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
 import SmartLinkInput, { normalizeUrl } from '../components/SmartLinkInput';
@@ -486,7 +484,6 @@ export default function Settings() {
                             className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
                             ${activeTab === 'profile' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                         >
-                            <User className="w-4 h-4" />
                             Profile
                             <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
                             ${activeTab === 'profile' ? 'scale-x-100' : 'scale-x-0'}`} />
@@ -497,7 +494,6 @@ export default function Settings() {
                                 className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
                                 ${activeTab === 'badges' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                             >
-                                <Award className="w-4 h-4" />
                                 Badges
                                 <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
                                 ${activeTab === 'badges' ? 'scale-x-100' : 'scale-x-0'}`} />
@@ -508,7 +504,6 @@ export default function Settings() {
                             className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
                             ${activeTab === 'account' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                         >
-                            <Shield className="w-4 h-4" />
                             Account
                             <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
                             ${activeTab === 'account' ? 'scale-x-100' : 'scale-x-0'}`} />
@@ -518,7 +513,6 @@ export default function Settings() {
                             className={`flex items-center gap-1.5 sm:gap-2 pb-3 sm:pb-4 px-2 sm:px-3 text-sm sm:text-base font-medium transition-all duration-200 relative shrink-0
                             ${activeTab === 'notifications' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                         >
-                            <Bell className="w-4 h-4" />
                             Notifications
                             <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
                             ${activeTab === 'notifications' ? 'scale-x-100' : 'scale-x-0'}`} />
@@ -554,7 +548,9 @@ export default function Settings() {
                                             ) : user?.avatar ? (
                                                 <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
                                             ) : (
-                                                <User className="w-10 h-10 text-gray-500" />
+                                                <div className="w-full h-full bg-accent flex items-center justify-center">
+                                                    <span className="text-xl text-white font-bold">{user?.username?.charAt(0)}</span>
+                                                </div>
                                             )}
                                         </div>
                                         <input
@@ -601,7 +597,6 @@ export default function Settings() {
                                                 className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 text-sm font-medium"
                                                 title="Remove banner"
                                             >
-                                                <Trash2 className="w-4 h-4" />
                                                 <span className="hidden sm:inline">Remove</span>
                                             </button>
                                         )}
@@ -733,7 +728,6 @@ export default function Settings() {
                                                 onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
                                                 className="text-xs font-medium text-accent hover:text-accent/80 transition-colors flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 rounded-lg hover:bg-accent/20"
                                             >
-                                                <Plus className="w-3.5 h-3.5" />
                                                 Add Link
                                             </button>
                                         )}
@@ -782,7 +776,6 @@ export default function Settings() {
                                                                     className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                                                                     title="Remove link"
                                                                 >
-                                                                    <Trash2 className="w-3.5 h-3.5" />
                                                                     Remove
                                                                 </button>
                                                             </div>
@@ -997,7 +990,7 @@ export default function Settings() {
                                                 onClick={() => setShowNewPassword(!showNewPassword)}
                                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                                             >
-                                                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                {showNewPassword ? 'HIDE' : 'SHOW'}
                                             </button>
                                         </div>
                                     </div>
@@ -1026,8 +1019,7 @@ export default function Settings() {
 
                             {/* Privacy Settings */}
                             <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                    <Shield className="w-5 h-5 text-accent" />
+                                <h2 className="text-xl font-semibold text-white mb-6">
                                     Privacy
                                 </h2>
 
@@ -1049,8 +1041,7 @@ export default function Settings() {
 
                             {/* Data Import/Export */}
                             <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                                <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                    <Download className="w-5 h-5 text-accent" />
+                                <h2 className="text-xl font-semibold text-white mb-6">
                                     Data Import/Export
                                 </h2>
 
@@ -1063,7 +1054,6 @@ export default function Settings() {
                                             <p className="text-white font-medium">Import Data</p>
                                             <p className="text-gray-400 text-sm">Import from MyAnimeList or AniList</p>
                                         </div>
-                                        <Upload className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
                                     </Link>
 
                                     <Link
@@ -1074,7 +1064,6 @@ export default function Settings() {
                                             <p className="text-white font-medium">Export Data</p>
                                             <p className="text-gray-400 text-sm">Download your anime list and reviews</p>
                                         </div>
-                                        <Download className="w-5 h-5 text-gray-400 group-hover:text-accent transition-colors" />
                                     </Link>
                                 </div>
                             </div>
@@ -1089,7 +1078,6 @@ export default function Settings() {
                                     onClick={handleSignOut}
                                     className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition-colors font-medium text-sm"
                                 >
-                                    <LogOut className="w-4 h-4" />
                                     Sign Out
                                 </button>
                             </div>
@@ -1175,9 +1163,9 @@ export default function Settings() {
                                     : 'bg-red-500/10 border border-red-500/20 text-red-400'
                                     }`}>
                                     {preferencesMessage.includes('success') ? (
-                                        <Check className="w-5 h-5" />
+                                        <div className="w-5 h-5 border-2 border-green-500 rounded-full flex items-center justify-center text-[10px] font-bold">✓</div>
                                     ) : (
-                                        <AlertCircle className="w-5 h-5" />
+                                        <div className="w-5 h-5 border-2 border-red-500 rounded-full flex items-center justify-center text-[10px] font-bold">!</div>
                                     )}
                                     <span className="font-medium">{preferencesMessage}</span>
                                 </div>
@@ -1186,9 +1174,6 @@ export default function Settings() {
                             {/* Email Notifications */}
                             <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
                                 <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                                        <Mail className="w-5 h-5 text-blue-400" />
-                                    </div>
                                     <div>
                                         <h2 className="text-xl font-semibold text-white">Email Notifications</h2>
                                         <p className="text-sm text-gray-500">Get notified via email</p>
@@ -1204,9 +1189,6 @@ export default function Settings() {
                                         {/* New Episode Alerts */}
                                         <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
                                             <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${preferences.email_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                    <Tv className={`w-5 h-5 ${preferences.email_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
-                                                </div>
                                                 <div>
                                                     <p className="text-sm font-medium text-white">New Episode Alerts</p>
                                                     <p className="text-xs text-gray-500">Notify me when a new episode airs for anime in my list</p>
@@ -1230,9 +1212,6 @@ export default function Settings() {
                             {/* Push Notifications */}
                             <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
                                 <div className="flex items-center gap-3 mb-6">
-                                    <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                                        <Bell className="w-5 h-5 text-purple-400" />
-                                    </div>
                                     <div>
                                         <h2 className="text-xl font-semibold text-white">Push Notifications</h2>
                                         <p className="text-sm text-gray-500">Get notified in your browser</p>
@@ -1248,9 +1227,6 @@ export default function Settings() {
                                         {/* New Episode Alerts */}
                                         <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
                                             <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${preferences.push_new_episodes ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                    <Tv className={`w-5 h-5 ${preferences.push_new_episodes ? 'text-accent' : 'text-gray-400'}`} />
-                                                </div>
                                                 <div>
                                                     <p className="text-sm font-medium text-white">New Episode Alerts</p>
                                                     <p className="text-xs text-gray-500">Send push notification when a new episode airs</p>
@@ -1270,9 +1246,6 @@ export default function Settings() {
                                         {/* Review Replies */}
                                         <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
                                             <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${preferences.push_review_replies ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                    <MessageCircle className={`w-5 h-5 ${preferences.push_review_replies ? 'text-accent' : 'text-gray-400'}`} />
-                                                </div>
                                                 <div>
                                                     <p className="text-sm font-medium text-white">Review Replies</p>
                                                     <p className="text-xs text-gray-500">Send push notification when someone replies to my reviews</p>
@@ -1292,9 +1265,6 @@ export default function Settings() {
                                         {/* New Followers */}
                                         <div className="flex items-center justify-between py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${preferences.push_new_follower ? 'bg-accent/20' : 'bg-gray-700/50'}`}>
-                                                    <Users className={`w-5 h-5 ${preferences.push_new_follower ? 'text-accent' : 'text-gray-400'}`} />
-                                                </div>
                                                 <div>
                                                     <p className="text-sm font-medium text-white">New Followers</p>
                                                     <p className="text-xs text-gray-500">Send push notification when someone follows me</p>
@@ -1317,9 +1287,6 @@ export default function Settings() {
                             {/* Info Section */}
                             <div className="bg-dark-100/50 p-4 rounded-xl border border-gray-700/30">
                                 <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 bg-gray-700/50 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <Bell className="w-4 h-4 text-gray-400" />
-                                    </div>
                                     <div>
                                         <h3 className="text-sm font-medium text-white mb-1">About Notifications</h3>
                                         <p className="text-sm text-gray-500">
