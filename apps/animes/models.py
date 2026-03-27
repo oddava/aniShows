@@ -232,6 +232,8 @@ class Anime(TimestampMixin, SlugMixin, Model):
 
     next_airing_episode = IntegerField(null=True, blank=True)
     next_airing_date = DateTimeField(null=True, blank=True)
+    last_aired_episode = IntegerField(null=True, blank=True)
+    last_aired_at = DateTimeField(null=True, blank=True, db_index=True)
 
     source_material = CharField(
         max_length=50,

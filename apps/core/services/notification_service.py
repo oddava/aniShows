@@ -72,7 +72,7 @@ class NotificationService:
     def _should_notify_user(cls, user, notification_type: str) -> bool:
         """Check if user should receive this notification type based on preferences."""
         try:
-            profile = user.userprofile
+            _ = user.userprofile
         except UserProfile.DoesNotExist:
             return True  # Default to allowing if no profile
 
@@ -251,19 +251,23 @@ class NotificationService:
         return deleted
 
     @classmethod
-    def create_new_episode_notification(cls, user, anime, episode_number: int):
+    def create_new_episode_notification(cls, user, anime, episode_number: int, aired_at=None):
         """Create notification for new episode."""
+        data = {
+            "anime_id": anime.id,
+            "anime_slug": anime.slug,
+            "anime_title": anime.title,
+            "episode_number": episode_number,
+        }
+        if aired_at is not None:
+            data["aired_at"] = aired_at.isoformat()
+
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
             title="New Episode",
             message=f"Episode {episode_number} of {anime.title} is now available!",
-            data={
-                "anime_id": anime.id,
-                "anime_slug": anime.slug,
-                "anime_title": anime.title,
-                "episode_number": episode_number,
-            },
+            data=data,
             priority="medium",
         )
 

@@ -3,13 +3,16 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.animes.models import Anime, ReviewComment
+from apps.animes.models import Anime
 from apps.core.models import Notification
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
 from apps.shared.logger import logger
 from apps.users.models import UserProfile
 from apps.users.services.email_service import send_email_task
+
+NEW_EPISODE_LOOKBACK_HOURS = 24
+NEW_EPISODE_DEDUP_LOOKBACK_DAYS = 7
 
 
 @shared_task
@@ -50,14 +53,17 @@ def send_pending_notifications():
 
             # Send push if applicable and not already sent
             if should_push and not push_sent:
-                sent = PushService.send_to_user(
-                    user=notification.user,
-                    title=notification.title,
-                    message=notification.message,
-                    data=notification.data,
-                )
-                if sent > 0:
+                if not PushService.has_active_subscriptions(notification.user):
                     push_sent = True
+                else:
+                    sent = PushService.send_to_user(
+                        user=notification.user,
+                        title=notification.title,
+                        message=notification.message,
+                        data=notification.data,
+                    )
+                    if sent > 0:
+                        push_sent = True
 
             if (
                 email_sent != notification.is_email_sent
@@ -84,6 +90,7 @@ def send_pending_notifications():
             pending_updates, ["is_email_sent", "is_push_sent"], batch_size=200
         )
 
+
 def _should_send_email(notification, profile):
     """Check if email should be sent for this notification."""
     # Only send emails for new episodes, not for social interactions
@@ -92,6 +99,7 @@ def _should_send_email(notification, profile):
     # All other types (review_reply, new_follower, forum_reply, forum_mention,
     # forum_like, system) do not send emails.
     return False
+
 
 def _should_send_push(notification, profile):
     """Check if push should be sent for this notification."""
@@ -102,6 +110,7 @@ def _should_send_push(notification, profile):
     elif notification.notification_type == Notification.NotificationType.NEW_FOLLOWER:
         return profile.push_new_follower
     return True
+
 
 def _send_notification_email(notification):
     """Send email for a notification. Currently only NEW_EPISODE is supported."""
@@ -123,11 +132,10 @@ def _send_notification_email(notification):
         html_message=html_message,
     )
 
+
 def _build_new_episode_email(notification):
     """Build HTML email for new episode notification."""
     data = notification.data
-    anime_title = data.get("anime_title", "Unknown Anime")
-    episode_number = data.get("episode_number", "?")
     anime_slug = data.get("anime_slug", "")
 
     anime_url = f"{settings.FRONTEND_URL}/anime/{anime_slug}"
@@ -142,8 +150,8 @@ def _build_new_episode_email(notification):
             <h2 style="color: #333;">{notification.title}</h2>
             <p style="color: #666; font-size: 16px;">{notification.message}</p>
             <div style="text-align: center; margin: 30px 0;">
-                <a href="{anime_url}" 
-                   style="background: #e94560; color: white; padding: 12px 30px; 
+                <a href="{anime_url}"
+                   style="background: #e94560; color: white; padding: 12px 30px;
                           text-decoration: none; border-radius: 5px; display: inline-block;">
                     Watch Now
                 </a>
@@ -158,11 +166,65 @@ def _build_new_episode_email(notification):
     </html>
     """
 
+
+def _get_recent_episode_events(window_start, now):
+    """Return recently aired episode events keyed by anime ID."""
+    events = {}
+
+    confirmed_recently_aired = Anime.objects.filter(
+        last_aired_at__gte=window_start,
+        last_aired_at__lte=now,
+        last_aired_episode__isnull=False,
+    ).only("id", "slug", "title", "last_aired_episode", "last_aired_at")
+
+    for anime in confirmed_recently_aired:
+        events[anime.id] = {
+            "anime": anime,
+            "episode_number": anime.last_aired_episode,
+            "aired_at": anime.last_aired_at,
+        }
+
+    pending_airing_updates = Anime.objects.filter(
+        status=Anime.AnimeStatus.airing,
+        next_airing_date__gte=window_start,
+        next_airing_date__lte=now,
+        next_airing_episode__isnull=False,
+    ).only("id", "slug", "title", "next_airing_episode", "next_airing_date")
+
+    for anime in pending_airing_updates:
+        events.setdefault(
+            anime.id,
+            {
+                "anime": anime,
+                "episode_number": anime.next_airing_episode,
+                "aired_at": anime.next_airing_date,
+            },
+        )
+
+    return events
+
+
+def _get_existing_new_episode_notifications(anime_ids, cutoff):
+    """Build a dedup set for recent new-episode notifications."""
+    existing_notifications = set()
+    existing_notification_qs = Notification.objects.filter(
+        notification_type=Notification.NotificationType.NEW_EPISODE,
+        created_at__gte=cutoff,
+    ).values_list("user_id", "data")
+
+    for user_id, data in existing_notification_qs:
+        anime_id = data.get("anime_id") if data else None
+        if anime_id in anime_ids:
+            existing_notifications.add((user_id, anime_id, data.get("episode_number")))
+
+    return existing_notifications
+
+
 @shared_task
 def check_new_episodes():
     """Check for newly aired episodes and create notifications.
 
-    Optimized to avoid O(anime × users) individual queries by:
+    Optimized to avoid O(anime x users) individual queries by:
     1. Pre-fetching all recently-aired anime IDs in one query
     2. Batch-fetching all interested users across all anime in one query
     3. Batch-fetching all existing notifications to build a set for dedup
@@ -173,24 +235,16 @@ def check_new_episodes():
 
     from apps.users.models import UserAnimeList
 
-    yesterday = timezone.now() - td(hours=24)
+    now = timezone.now()
+    window_start = now - td(hours=NEW_EPISODE_LOOKBACK_HOURS)
+    notification_cutoff = now - td(days=NEW_EPISODE_DEDUP_LOOKBACK_DAYS)
 
-    recently_aired = list(
-        Anime.objects.filter(
-            status=Anime.AnimeStatus.airing,
-            next_airing_date__lte=timezone.now(),
-            next_airing_date__gte=yesterday,
-            next_airing_episode__isnull=False,
-        )
-    )
-
-    if not recently_aired:
+    episode_events = _get_recent_episode_events(window_start, now)
+    if not episode_events:
         logger.info("No recently aired episodes found")
         return 0
 
-    # Build a map of anime_id -> anime for quick lookup
-    anime_map = {anime.id: anime for anime in recently_aired}
-    anime_ids = list(anime_map.keys())
+    anime_ids = list(episode_events.keys())
 
     # Single query: all interested users across all recently-aired anime
     interested_entries = list(
@@ -207,29 +261,25 @@ def check_new_episodes():
         logger.info("No users interested in recently aired anime")
         return 0
 
-    # Build a set of (user_id, anime_id, episode_number) for existing notifications
-    # This replaces O(anime × users) individual .exists() queries with ONE query
-    existing_notification_qs = Notification.objects.filter(
-        notification_type=Notification.NotificationType.NEW_EPISODE,
-        created_at__gte=yesterday,
-    ).values_list("user_id", "data")
-
-    existing_notifications = set()
-    for user_id, data in existing_notification_qs:
-        if data and data.get("anime_id") in anime_ids:
-            existing_notifications.add((user_id, data["anime_id"], data.get("episode_number")))
+    existing_notifications = _get_existing_new_episode_notifications(
+        anime_ids=anime_ids,
+        cutoff=notification_cutoff,
+    )
 
     notifications_created = 0
 
     for user_anime in interested_entries:
-        anime = anime_map[user_anime.anime_id]
-        dedup_key = (user_anime.user_id, anime.id, anime.next_airing_episode)
+        event = episode_events[user_anime.anime_id]
+        anime = event["anime"]
+        episode_number = event["episode_number"]
+        dedup_key = (user_anime.user_id, anime.id, episode_number)
 
         if dedup_key not in existing_notifications:
             notification = NotificationService.create_new_episode_notification(
                 user=user_anime.user,
                 anime=anime,
-                episode_number=anime.next_airing_episode,
+                episode_number=episode_number,
+                aired_at=event["aired_at"],
             )
             if notification:
                 notifications_created += 1

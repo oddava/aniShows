@@ -12,6 +12,11 @@ class PushService:
     """Service for sending Web Push notifications."""
 
     @classmethod
+    def has_active_subscriptions(cls, user) -> bool:
+        """Return whether the user currently has an active push endpoint."""
+        return PushSubscription.objects.filter(user=user, is_active=True).exists()
+
+    @classmethod
     def get_vapid_claims(cls) -> dict:
         """Get VAPID claims for Web Push."""
         return {
@@ -48,7 +53,7 @@ class PushService:
         }
 
         try:
-            response = webpush(
+            webpush(
                 subscription_info={
                     "endpoint": subscription.endpoint,
                     "keys": {

@@ -784,6 +784,7 @@ class AniListService:
     @sync_to_async
     def _update_anime(self, anime, anime_data_dict):
         anime_data = dict(anime_data_dict)
+        self._apply_recent_airing_transition(anime, anime_data)
         original_values = {field: getattr(anime, field, None) for field in anime_data}
 
         # Preemptively avoid unique-constraint collisions.
@@ -817,6 +818,34 @@ class AniListService:
             logger.warning(
                 f"Recovered from integrity conflict while updating Anime ID {anime.id}: {exc}"
             )
+
+    def _apply_recent_airing_transition(self, anime: Anime, anime_data: dict) -> None:
+        """Persist the last confirmed aired episode before AniList advances the schedule."""
+        previous_episode = anime.next_airing_episode
+        previous_airing_date = anime.next_airing_date
+
+        if previous_episode is None or previous_airing_date is None:
+            return
+
+        if previous_airing_date > timezone.now():
+            return
+
+        incoming_episode = anime_data.get("next_airing_episode")
+        incoming_airing_date = anime_data.get("next_airing_date")
+
+        episode_advanced = incoming_episode is not None and incoming_episode > previous_episode
+        airing_window_closed = incoming_episode is None or incoming_airing_date is None
+
+        if not (episode_advanced or airing_window_closed):
+            return
+
+        last_aired_episode = anime.last_aired_episode
+        last_aired_at = anime.last_aired_at
+        if last_aired_episode == previous_episode and last_aired_at == previous_airing_date:
+            return
+
+        anime_data["last_aired_episode"] = previous_episode
+        anime_data["last_aired_at"] = previous_airing_date
 
     def _prepare_anime_data(self, item, title, title_native, slug):
         format_map = {
