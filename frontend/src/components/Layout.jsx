@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import React, { Suspense } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
@@ -11,6 +11,9 @@ const PageLoader = () => (
 );
 
 export default function Layout() {
+    const location = useLocation();
+    const isBrowsePage = location.pathname === '/browse';
+
     return (
         <div className="min-h-screen bg-dark flex flex-col">
             <Suspense fallback={<PageLoader />}>
@@ -18,10 +21,10 @@ export default function Layout() {
             </Suspense>
             <div className="hidden md:block h-16" /> {/* Spacer for fixed desktop navbar */}
             <VerificationBanner />
-            <main className="flex-grow pb-24 md:pb-0">
+            <main className={`${isBrowsePage ? '' : 'flex-grow'} pb-24 md:pb-0`}>
                 <Outlet />
             </main>
-            <Footer />
+            <Footer className={isBrowsePage ? '' : 'mt-auto'} />
         </div>
     );
 }

@@ -2,9 +2,9 @@ import { Github, Twitter, Coffee, Mail, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Logo from './Logo';
 
-export default function Footer() {
+export default function Footer({ className = '' }) {
     return (
-        <footer className="bg-dark-100 border-t border-gray-800 pt-16 pb-8 mt-auto">
+        <footer className={`bg-dark-100 border-t border-gray-800 pt-16 pb-8 ${className}`}>
             <div className="max-w-7xl mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                     {/* Brand */}

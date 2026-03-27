@@ -24,15 +24,8 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import SEO from '../components/SEO';
 import SakuraAnimation from '../components/SakuraAnimation';
 import { useTheme } from '../context/ThemeContext';
-
-const BROWSE_TABS = [
-  { key: 'popular', label: 'Most Popular' },
-  { key: 'current', label: 'This Season' },
-  { key: 'upcoming', label: 'Upcoming' },
-  { key: 'top', label: 'All Time Best' },
-  { key: 'newest', label: 'Newest' },
-  { key: 'title', label: 'A-Z' },
-];
+import TopFilterBar from '../components/browse/TopFilterBar';
+import BrowseRowMode from '../components/browse/BrowseRowMode';
 
 const SORT_OPTIONS = [
   { value: 'popular', label: 'Most Popular' },
@@ -70,7 +63,6 @@ export default function Browse() {
   const searchInputRef = useRef(null);
 
   // State
-  const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('browse_view_mode') || 'grid');
   const [titleLanguage, setTitleLanguage] = useState(() => localStorage.getItem('title_language') || 'en');
@@ -103,6 +95,19 @@ export default function Browse() {
   const currentMinRating = searchParams.get('min_rating') || '';
   const currentMaxRating = searchParams.get('max_rating') || '';
 
+  const isGridMode = Boolean(
+    currentSearch || 
+    currentGenres.length > 0 || 
+    currentTypes || 
+    currentStatuses || 
+    currentSeason || 
+    currentYearParam || 
+    currentMinRating || 
+    currentMaxRating || 
+    currentStudio || 
+    searchParams.has('sort')
+  );
+
   // Local filter state
   const [localFilters, setLocalFilters] = useState({
     genres: currentGenres,
@@ -120,7 +125,6 @@ export default function Browse() {
   // Clear all filters function - defined early for useKeyboardShortcuts
   const clearAllFilters = useCallback(() => {
     setSearchParams({});
-    setSearchInput('');
   }, [setSearchParams]);
 
   // Hooks
@@ -365,6 +369,7 @@ export default function Browse() {
       return undefined;
     },
     staleTime: 1000 * 60 * 5,
+    enabled: isGridMode,
   });
 
   // Reset tab switching state
@@ -412,14 +417,7 @@ export default function Browse() {
     localStorage.setItem('title_language', titleLanguage);
   }, [titleLanguage]);
 
-  // Fetch trending anime
-  const { data: trendingHero, isError: isHeroError } = useQuery({
-    queryKey: ['anime', 'hero-trending'],
-    queryFn: () => animeApi.getTrending().then(res => res.data),
-    staleTime: 1000 * 60 * 30,
-  });
-
-  const showHero = activeTab === 'popular' && !currentSearch && !currentGenres.length;
+  // Hero fetching removed since it's handled by BrowseRowMode
 
   // Flatten anime data
   const allAnime = useMemo(() =>
@@ -482,34 +480,6 @@ export default function Browse() {
 
     observer.current.observe(node);
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, isTabSwitching, data?.pages?.length, prefetchNextPage, currentGenres, currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYearParam, currentMinRating, currentMaxRating]);
-
-  // Search debounce
-  useEffect(() => {
-    let isMounted = true;
-    const timeout = setTimeout(() => {
-      if (isMounted && searchInput !== currentSearch) {
-        const newParams = new URLSearchParams(searchParams);
-        if (searchInput) {
-          newParams.set('q', searchInput);
-          if (!currentSearch) {
-            newParams.delete('sort');
-            newParams.delete('season');
-            newParams.delete('year');
-          }
-        } else {
-          newParams.delete('q');
-          if (!newParams.get('sort') && !newParams.get('season') && !newParams.get('type') && !newParams.get('status')) {
-            newParams.set('sort', 'popular');
-          }
-        }
-        setSearchParams(newParams);
-      }
-    }, 300);
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-    };
-  }, [searchInput, currentSearch, searchParams, setSearchParams]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -589,7 +559,7 @@ export default function Browse() {
       <LoadingBar isLoading={isLoading || isTabSwitching} />
       {theme === 'retro-anime' && <SakuraAnimation />}
 
-      <div className="min-h-screen py-4 sm:py-8 px-3 sm:px-4 lg:px-6">
+      <div className="py-4 sm:py-8 px-3 sm:px-4 lg:px-6">
         <div className="max-w-[1600px] mx-auto">
 
 
@@ -597,40 +567,45 @@ export default function Browse() {
           <div className="w-full">
             {/* Main Content */}
             <main className="flex-1 min-w-0 pb-24">
-              {/* Trending Carousel */}
-              {showHero && (
-                <TrendingCarousel
-                  anime={trendingHero}
-                  onSeeAll={() => handleTabChange('trending')}
-                  titleLanguage={titleLanguage}
-                  isError={isHeroError}
-                />
-              )}
-
-              {/* Controls Bar */}
-              <div className="flex items-center justify-between gap-3 mb-6">
-                <div className="flex items-center gap-3">
-                  <p className="flex items-baseline gap-1.5">
-                    <span className="text-accent font-bold text-lg">{totalCount.toLocaleString()}</span>
-                    <span className="text-gray-500 text-sm">results</span>
-                  </p>
-
-
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-
-                  {/* Title Language Toggle */}
-                  <button
-                    onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                    className="hidden sm:flex items-center justify-center w-9 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
-                    title="Toggle title language"
-                  >
-                    {titleLanguage === 'en' ? 'EN' : 'JP'}
-                  </button>
-                </div>
+              
+              <div className="max-w-7xl mx-auto w-full">
+                <TopFilterBar
+                  genres={genres}
+                  isGenresError={isGenresError}
+                  typeOptions={TYPE_OPTIONS}
+                statusOptions={STATUS_OPTIONS}
+                seasonOptions={SEASON_OPTIONS}
+                yearOptions={YEAR_OPTIONS}
+                searchInputRef={searchInputRef}
+                onOpenMobileFilters={() => setShowFilters(true)}
+                hasActiveFilters={hasActiveFilters || hasUnappliedChanges}
+              />
               </div>
+
+              {/* Controls Bar - only show result count and view mode if in grid mode */}
+              {isGridMode && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <p className="flex items-baseline gap-1.5">
+                      <span className="text-accent font-bold text-lg">{totalCount.toLocaleString()}</span>
+                      <span className="text-gray-500 text-sm">results</span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+
+                    {/* Title Language Toggle */}
+                    <button
+                      onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
+                      className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
+                      title="Toggle title language"
+                    >
+                      {titleLanguage === 'en' ? 'EN' : 'JP'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Active Filter Chips */}
               <ActiveFilterChips
@@ -659,85 +634,8 @@ export default function Browse() {
               />
 
               {/* Anime Content */}
-              {renderContent()}
+              {isGridMode ? renderContent() : <BrowseRowMode titleLanguage={titleLanguage} />}
             </main>
-          </div>
-        </div>
-      </div>
-
-      {/* Floating Island Navigation */}
-      <div className="fixed bottom-24 sm:bottom-6 left-1/2 -translate-x-1/2 z-[1000] w-[95%] sm:w-auto overflow-hidden">
-        <div className="flex items-center gap-1.5 px-2 py-2 sm:px-6 sm:py-3 rounded-full bg-dark-100/80 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-          {/* Filter Toggle */}
-          <button
-            onClick={() => setShowFilters(true)}
-            className="relative flex items-center gap-2 px-3 py-2 rounded-full text-gray-300 hover:text-white hover:bg-white/5 transition-all"
-          >
-            <Filter className="w-4 h-4" />
-            <span className="text-sm font-medium hidden md:inline">Filters</span>
-            {(hasActiveFilters || hasUnappliedChanges) && (
-              <span className="w-2 h-2 bg-accent rounded-full absolute top-1.5 right-1.5" />
-            )}
-          </button>
-
-          <div className="w-px h-6 bg-white/10 mx-1 sm:mx-2" />
-
-          {/* Browse Tabs */}
-          <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide flex-1 sm:flex-none max-w-[65vw] sm:max-w-none mask-fade-edges">
-            {currentSearch && (
-              <button
-                onClick={() => {
-                  const newParams = new URLSearchParams(searchParams);
-                  newParams.delete('sort');
-                  newParams.delete('season');
-                  newParams.delete('year');
-                  setSearchParams(newParams);
-                  setActiveTab('search');
-                }}
-                className={`flex items-center px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                  activeTab === 'search' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                All Results
-              </button>
-            )}
-            {BROWSE_TABS.map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => handleTabChange(tab.key)}
-                  className={`flex items-center px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                    isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="w-px h-6 bg-white/10 mx-1 sm:mx-2" />
-
-          {/* Compact Search */}
-          <div className="relative flex items-center group">
-            <Search className="absolute left-3 w-4 h-4 text-gray-400 group-focus-within:text-white" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search..."
-              className="w-24 sm:w-40 md:w-48 bg-transparent text-white text-sm border-none pl-9 pr-6 py-2 focus:ring-0 outline-none placeholder:text-gray-500"
-            />
-            {searchInput && (
-              <button
-                onClick={() => setSearchInput('')}
-                className="absolute right-2 text-gray-400 hover:text-white"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
           </div>
         </div>
       </div>
