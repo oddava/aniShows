@@ -1,4 +1,5 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
+import { User, Bell, Settings, LogOut, ChevronDown } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { animeApi, notificationApi } from '../api/client';
@@ -696,21 +697,25 @@ export default function Navbar() {
                                     {/* Profile Button */}
                                     <button
                                         onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                        className="group ml-2 flex items-center gap-2.5 rounded-xl border border-gray-700 bg-dark-100 px-3 py-1.5 transition-colors hover:border-gray-600 hover:bg-dark-50 focus:outline-none"
+                                        className="relative group ml-2 flex items-center gap-2.5 rounded-xl border border-gray-700 bg-dark-100 px-3 py-1.5 transition-colors hover:border-gray-600 hover:bg-dark-50 focus:outline-none"
                                     >
-                                        {/* Avatar */}
+                                        {/* Avatar or Placeholder */}
                                         <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-gray-500 transition-colors">
                                             {user?.avatar ? (
                                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                             ) : (
                                                 <div className="w-full h-full bg-accent flex items-center justify-center">
-                                                    <span className="text-sm font-bold text-white">{user?.username?.charAt(0)}</span>
+                                                    <span className="text-sm font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
                                                 </div>
                                             )}
                                         </div>
+                                        {isAuthenticated && mobileUnreadCount > 0 && (
+                                            <span className="absolute top-1.5 left-[2.2rem] w-2 h-2 bg-red-500 rounded-full ring-2 ring-dark-100 shadow-sm z-10" />
+                                        )}
                                         <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
                                             {user?.username}
                                         </span>
+                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
                                     </button>
 
                                     {/* Enhanced Dropdown Menu */}
@@ -742,6 +747,7 @@ export default function Navbar() {
                                                     onClick={() => setIsProfileOpen(false)}
                                                     className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                                 >
+                                                    <User className="w-4 h-4" />
                                                     <span className="text-sm font-medium">Profile</span>
                                                 </Link>
                                                 <Link
@@ -750,6 +756,7 @@ export default function Navbar() {
                                                     className="flex items-center justify-between gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                                 >
                                                     <span className="flex items-center gap-3 min-w-0">
+                                                        <Bell className="w-4 h-4" />
                                                         <span className="text-sm font-medium">Notifications</span>
                                                     </span>
                                                     {mobileUnreadCount > 0 && (
@@ -764,6 +771,7 @@ export default function Navbar() {
                                                     onClick={() => setIsProfileOpen(false)}
                                                     className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                                 >
+                                                    <Settings className="w-4 h-4" />
                                                     <span className="text-sm font-medium">Settings</span>
                                                 </Link>
                                                 <div className="border-t border-white/10 my-1" />
@@ -771,6 +779,7 @@ export default function Navbar() {
                                                     onClick={() => { logout(); setIsProfileOpen(false); }}
                                                     className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400 focus:outline-none"
                                                 >
+                                                    <LogOut className="w-4 h-4" />
                                                     <span className="text-sm font-medium">Sign Out</span>
                                                 </button>
                                             </div>
