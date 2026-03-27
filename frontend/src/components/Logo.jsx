@@ -1,8 +1,8 @@
-import React, { useId } from 'react';
+import React from 'react';
 
-const Logo = ({ className = "w-10 h-10", showText = true, textClassName = "text-xl font-bold text-white", text = "AniShows" }) => {
+const Logo = ({ showText = true, textClassName = "text-xl font-bold text-white", text = "AniShows" }) => {
     return (
-        <div className="flex items-center gap-1 group">
+        <div className="flex items-center group">
             {showText && (
                 <span className={textClassName}>
                     {text}

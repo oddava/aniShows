@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authApi, notificationApi } from '../api/client';
 import { Link } from 'react-router-dom';
@@ -464,6 +465,61 @@ export default function Settings() {
         } finally {
             setIsSavingPreferences(false);
         }
+    };
+
+    const emailNotificationOptions = [
+        {
+            key: 'email_new_episodes',
+            label: 'New Episode Alerts',
+            description: 'Get an email when a new episode airs for anime in your list.',
+        },
+    ];
+
+    const pushNotificationOptions = [
+        {
+            key: 'push_new_episodes',
+            label: 'New Episode Alerts',
+            description: 'Send a browser notification when a new episode airs.',
+        },
+        {
+            key: 'push_review_replies',
+            label: 'Review Replies',
+            description: 'Send a browser notification when someone replies to your reviews.',
+        },
+        {
+            key: 'push_new_follower',
+            label: 'New Followers',
+            description: 'Send a browser notification when someone follows you.',
+        },
+    ];
+
+    const renderNotificationPreference = ({ key, label, description }) => {
+        const isEnabled = Boolean(preferences[key]);
+
+        return (
+            <div key={key} className="flex items-start justify-between gap-4 py-4">
+                <div className="pr-2">
+                    <p className="text-sm font-semibold leading-5 text-gray-100 sm:text-[15px]">{label}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-400">{description}</p>
+                </div>
+
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isEnabled}
+                    aria-label={label}
+                    onClick={() => handleTogglePreference(key)}
+                    disabled={isSavingPreferences}
+                    className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-100
+                    ${isEnabled ? 'border-accent bg-accent' : 'border-gray-700 bg-dark-50'}
+                    ${isSavingPreferences ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                >
+                    <span
+                        className={`h-5 w-5 rounded-full bg-white transition-transform duration-200 ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                    />
+                </button>
+            </div>
+        );
     };
 
     return (
@@ -990,7 +1046,7 @@ export default function Settings() {
                                                 onClick={() => setShowNewPassword(!showNewPassword)}
                                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                                             >
-                                                {showNewPassword ? 'HIDE' : 'SHOW'}
+                                                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
                                     </div>
@@ -1172,11 +1228,11 @@ export default function Settings() {
                             )}
 
                             {/* Email Notifications */}
-                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                                <div className="flex items-center gap-3 mb-6">
+                            <div className="rounded-2xl border border-gray-800 bg-dark-100 p-5 sm:p-6">
+                                <div>
                                     <div>
-                                        <h2 className="text-xl font-semibold text-white">Email Notifications</h2>
-                                        <p className="text-sm text-gray-500">Get notified via email</p>
+                                        <h2 className="text-lg font-semibold text-gray-100 sm:text-xl">Email Notifications</h2>
+                                        <p className="mt-1 text-sm text-gray-400">Get notified via email</p>
                                     </div>
                                 </div>
 
@@ -1185,36 +1241,18 @@ export default function Settings() {
                                         <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        {/* New Episode Alerts */}
-                                        <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
-                                            <div className="flex items-center gap-3">
-                                                <div>
-                                                    <p className="text-sm font-medium text-white">New Episode Alerts</p>
-                                                    <p className="text-xs text-gray-500">Notify me when a new episode airs for anime in my list</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleTogglePreference('email_new_episodes')}
-                                                disabled={isSavingPreferences}
-                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.email_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            >
-                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.email_new_episodes ? 'left-8' : 'left-1'}`} />
-                                            </button>
-                                        </div>
-
+                                    <div className="mt-5 divide-y divide-gray-800/80">
+                                        {emailNotificationOptions.map(renderNotificationPreference)}
                                     </div>
                                 )}
                             </div>
 
                             {/* Push Notifications */}
-                            <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
-                                <div className="flex items-center gap-3 mb-6">
+                            <div className="rounded-2xl border border-gray-800 bg-dark-100 p-5 sm:p-6">
+                                <div>
                                     <div>
-                                        <h2 className="text-xl font-semibold text-white">Push Notifications</h2>
-                                        <p className="text-sm text-gray-500">Get notified in your browser</p>
+                                        <h2 className="text-lg font-semibold text-gray-100 sm:text-xl">Push Notifications</h2>
+                                        <p className="mt-1 text-sm text-gray-400">Get notified in your browser</p>
                                     </div>
                                 </div>
 
@@ -1223,77 +1261,20 @@ export default function Settings() {
                                         <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        {/* New Episode Alerts */}
-                                        <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
-                                            <div className="flex items-center gap-3">
-                                                <div>
-                                                    <p className="text-sm font-medium text-white">New Episode Alerts</p>
-                                                    <p className="text-xs text-gray-500">Send push notification when a new episode airs</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleTogglePreference('push_new_episodes')}
-                                                disabled={isSavingPreferences}
-                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.push_new_episodes ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            >
-                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.push_new_episodes ? 'left-8' : 'left-1'}`} />
-                                            </button>
-                                        </div>
-
-                                        {/* Review Replies */}
-                                        <div className="flex items-center justify-between py-4 border-b border-gray-700/50">
-                                            <div className="flex items-center gap-3">
-                                                <div>
-                                                    <p className="text-sm font-medium text-white">Review Replies</p>
-                                                    <p className="text-xs text-gray-500">Send push notification when someone replies to my reviews</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleTogglePreference('push_review_replies')}
-                                                disabled={isSavingPreferences}
-                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.push_review_replies ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            >
-                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.push_review_replies ? 'left-8' : 'left-1'}`} />
-                                            </button>
-                                        </div>
-
-                                        {/* New Followers */}
-                                        <div className="flex items-center justify-between py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div>
-                                                    <p className="text-sm font-medium text-white">New Followers</p>
-                                                    <p className="text-xs text-gray-500">Send push notification when someone follows me</p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleTogglePreference('push_new_follower')}
-                                                disabled={isSavingPreferences}
-                                                className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${preferences.push_new_follower ? 'bg-accent' : 'bg-dark-50 border border-gray-700'
-                                                    } ${isSavingPreferences ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            >
-                                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
-                                                ${preferences.push_new_follower ? 'left-8' : 'left-1'}`} />
-                                            </button>
-                                        </div>
+                                    <div className="mt-5 divide-y divide-gray-800/80">
+                                        {pushNotificationOptions.map(renderNotificationPreference)}
                                     </div>
                                 )}
                             </div>
 
                             {/* Info Section */}
-                            <div className="bg-dark-100/50 p-4 rounded-xl border border-gray-700/30">
-                                <div className="flex items-start gap-3">
-                                    <div>
-                                        <h3 className="text-sm font-medium text-white mb-1">About Notifications</h3>
-                                        <p className="text-sm text-gray-500">
-                                            Notifications help you stay up to date with your anime. You'll receive alerts for new episodes
-                                            of anime in your Watching or Plan to Watch lists, as well as replies to your reviews.
-                                        </p>
-                                    </div>
+                            <div className="rounded-2xl border border-gray-800/80 bg-dark-100/70 p-5">
+                                <div>
+                                    <h3 className="text-sm font-semibold text-gray-100">About Notifications</h3>
+                                    <p className="mt-2 text-sm leading-relaxed text-gray-400">
+                                        Notifications help you stay up to date with your anime. You&apos;ll receive alerts for new episodes
+                                        in your Watching or Plan to Watch lists, plus replies to your reviews.
+                                    </p>
                                 </div>
                             </div>
                         </div>
