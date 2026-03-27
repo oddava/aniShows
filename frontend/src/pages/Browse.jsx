@@ -361,6 +361,7 @@ export default function Browse() {
         max_rating: currentMaxRating || undefined,
       }).then(res => res.data),
     initialPageParam: 1,
+    placeholderData: (previousData) => previousData,
     getNextPageParam: (lastPage) => {
       if (lastPage && lastPage.next) {
         const url = new URL(lastPage.next);
