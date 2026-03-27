@@ -755,10 +755,18 @@ export default function Navbar() {
                                             <Link
                                                 to="/notifications"
                                                 onClick={() => setIsProfileOpen(false)}
-                                                className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                                className="flex items-center justify-between gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                             >
-                                                <Bell className="w-4 h-4" />
-                                                <span className="text-sm font-medium">Notifications</span>
+                                                <span className="flex items-center gap-3 min-w-0">
+                                                    <Bell className="w-4 h-4" />
+                                                    <span className="text-sm font-medium">Notifications</span>
+                                                </span>
+                                                {mobileUnreadCount > 0 && (
+                                                    <span
+                                                        className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(17,24,39,1)]"
+                                                        aria-label="New notifications"
+                                                    />
+                                                )}
                                             </Link>
                                             <Link
                                                 to="/settings"
