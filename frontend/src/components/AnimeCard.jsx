@@ -14,9 +14,9 @@ import {
 import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
-    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', dotColor: 'bg-blue-400' },
-    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-green-400', bgColor: 'bg-green-500/20 border-green-500/40', dotColor: 'bg-green-400' },
-    { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 border-yellow-500/40', dotColor: 'bg-yellow-400' },
+    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20 border-emerald-500/40', dotColor: 'bg-emerald-400' },
+    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', dotColor: 'bg-blue-400' },
+    { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-slate-300', bgColor: 'bg-slate-500/20 border-slate-400/40', dotColor: 'bg-slate-400' },
 ];
 
 function isSameOriginImageUrl(url) {
@@ -512,6 +512,11 @@ function AnimeCard({
                                 aria-hidden="true"
                                 className={`mt-[0.28rem] h-2 w-2 shrink-0 rounded-full ${currentStatusOption.dotColor}`}
                             />
+                        )}
+                        {listStatus === 'Watching' && anime.episode_count && (
+                            <span className="mt-[0.06rem] shrink-0 text-[11px] font-medium text-gray-400">
+                                {Math.min(episodesWatched, anime.episode_count)}/{anime.episode_count}
+                            </span>
                         )}
                         <h3 className="font-medium text-gray-300 text-[13px] sm:text-[13.5px] line-clamp-2 leading-[1.3] transition-colors group-hover:text-[var(--anime-title-hover-color)]"
                         >
