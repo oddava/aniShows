@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Film, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
@@ -132,6 +132,17 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
 }
 
 function FranchiseCard({ rel, label, onFetch }) {
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    useEffect(() => {
+        setIsLoaded(false);
+    }, [rel?.id, rel?.cover]);
+
+    const handleImageError = useCallback(() => {
+        // Prevent permanent skeleton state if image + fallback both fail.
+        setIsLoaded(true);
+    }, []);
+
     const relationAnime = {
         title: rel.title,
         cover_image: rel.cover || null,
@@ -141,14 +152,21 @@ function FranchiseCard({ rel, label, onFetch }) {
         <>
             <div className="aspect-[2/3] rounded-lg overflow-hidden border border-gray-800 bg-dark-200 relative">
                 {rel.cover ? (
-                    <AnimeMediaImage
-                        anime={relationAnime}
-                        kind="cover"
-                        size="small"
-                        alt={rel.title}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                    />
+                    <>
+                        {!isLoaded && (
+                            <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
+                        )}
+                        <AnimeMediaImage
+                            anime={relationAnime}
+                            kind="cover"
+                            size="small"
+                            alt={rel.title}
+                            className={`w-full h-full object-cover transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                            loading="lazy"
+                            onLoad={() => setIsLoaded(true)}
+                            onError={handleImageError}
+                        />
+                    </>
                 ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-700 bg-dark-300">
                         <Film className="w-8 h-8" />
