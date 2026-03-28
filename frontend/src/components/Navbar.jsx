@@ -318,7 +318,7 @@ export default function Navbar() {
             if (!isInteracting) {
                 setIsVisible(false);
             }
-        }, 2500); // Hide after 2.5 seconds of idle time
+        }, 1500); // Hide after 1.5 seconds of idle time
     }, []);
 
     // Watch for interactions closing to resume hide timer
