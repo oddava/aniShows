@@ -14,14 +14,14 @@ export default function Layout() {
     const location = useLocation();
     const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
     const isBrowsePage = normalizedPath === '/browse';
-    const isProfilePage = normalizedPath.startsWith('/profile') || normalizedPath.startsWith('/u/');
+    const isFlushPage = normalizedPath === '/' || normalizedPath.startsWith('/profile') || normalizedPath.startsWith('/u/');
 
     return (
         <div className="min-h-screen bg-dark flex flex-col">
             <Suspense fallback={<PageLoader />}>
                 <Navbar />
             </Suspense>
-            {!isProfilePage && <div className="hidden md:block h-16 shrink-0" />}
+            {!isFlushPage && <div className="hidden md:block h-16 shrink-0" />}
             <VerificationBanner />
             <main className={`${isBrowsePage ? '' : 'flex-grow'} pb-24 md:pb-0`}>
                 <Outlet />
