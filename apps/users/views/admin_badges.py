@@ -185,7 +185,8 @@ class AdminBadgeViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        deleted_count, _ = UserBadge.objects.filter(badge=badge, user_id__in=user_ids).delete()
+        queryset = UserBadge.objects.filter(badge=badge, user_id__in=user_ids)
+        deleted_count, _ = queryset.delete()
 
         AuditLog.objects.create(
             user=request.user,

@@ -52,7 +52,7 @@ class AdminUserViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, Ge
     ordering = ['-date_joined']
 
     def get_queryset(self):
-        return (
+        queryset = (
             User.objects.select_related("userprofile")
             .annotate(
                 _favorites_count=Count("favorites", distinct=True),
@@ -61,6 +61,7 @@ class AdminUserViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, Ge
             )
             .all()
         )
+        return queryset
 
     @action(detail=True, methods=["post"])
     def toggle_active(self, request, pk=None):
@@ -117,7 +118,8 @@ class AdminUserListViewSet(ViewSet):
 
     def retrieve(self, request, pk=None):
         try:
-            entry = UserAnimeList.objects.select_related("user", "anime").get(pk=pk)
+            queryset = UserAnimeList.objects.select_related("user", "anime")
+            entry = queryset.get(pk=pk)
         except UserAnimeList.DoesNotExist:
             return Response(
                 {"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND
@@ -127,7 +129,8 @@ class AdminUserListViewSet(ViewSet):
 
     def destroy(self, request, pk=None):
         try:
-            entry = UserAnimeList.objects.get(pk=pk)
+            queryset = UserAnimeList.objects.all()
+            entry = queryset.get(pk=pk)
         except UserAnimeList.DoesNotExist:
             return Response(
                 {"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND
@@ -142,7 +145,8 @@ class AdminUserListViewSet(ViewSet):
         if not isinstance(ids, list) or not ids:
             return Response({"detail": "ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
 
-        deleted_count, _ = UserAnimeList.objects.filter(id__in=ids).delete()
+        queryset = UserAnimeList.objects.filter(id__in=ids)
+        deleted_count, _ = queryset.delete()
         return Response({"message": f"Deleted {deleted_count} list entries."})
 
 
@@ -166,7 +170,8 @@ class AdminFavoritesViewSet(ViewSet):
 
     def destroy(self, request, pk=None):
         try:
-            fav = UserFavorite.objects.get(pk=pk)
+            queryset = UserFavorite.objects.all()
+            fav = queryset.get(pk=pk)
         except UserFavorite.DoesNotExist:
             return Response({"detail": "Favorite not found."}, status=status.HTTP_404_NOT_FOUND)
 

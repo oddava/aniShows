@@ -301,7 +301,8 @@ class RecommendationService:
                 return recs
 
             # Clear old recommendations for this user
-            UserRecommendation.objects.filter(user=user).delete()
+            queryset = UserRecommendation.objects.filter(user=user)
+            queryset.delete()
 
             # Create new recommendations using bulk_create for performance
             recommendation_objects = [

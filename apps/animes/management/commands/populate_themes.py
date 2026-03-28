@@ -355,7 +355,8 @@ class Command(BaseCommand):
     @sync_to_async
     def save_theme_songs(self, anime, themes):
         """Save theme songs to database"""
-        ThemeSong.objects.filter(anime=anime).delete()
+        queryset = ThemeSong.objects.filter(anime=anime)
+        queryset.delete()
 
         openings = themes.get("openings", [])
         for idx, opening_text in enumerate(openings, 1):

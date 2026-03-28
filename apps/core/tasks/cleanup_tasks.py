@@ -69,7 +69,8 @@ def cleanup_old_task_results(self, days=7, batch_size=1000):
                 break
 
             # Delete this batch
-            deleted_count = CeleryTaskResult.objects.filter(id__in=batch_ids).delete()[0]
+            queryset = CeleryTaskResult.objects.filter(id__in=batch_ids)
+            deleted_count = queryset.delete()[0]
             deleted_total += deleted_count
             batches += 1
 

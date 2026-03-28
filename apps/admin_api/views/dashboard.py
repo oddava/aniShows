@@ -24,26 +24,32 @@ class AdminDashboardView(APIView):
         now = timezone.now()
         last_7_days = now - timedelta(days=7)
         last_30_days = now - timedelta(days=30)
+        user_queryset = User.objects.all()
+        profile_queryset = UserProfile.objects.all()
+        anime_queryset = Anime.objects.all()
+        review_queryset = Review.objects.all()
+        favorite_queryset = UserFavorite.objects.all()
+        list_entry_queryset = UserAnimeList.objects.all()
 
         # User statistics
-        total_users = User.objects.count()
-        new_users_7d = User.objects.filter(date_joined__gte=last_7_days).count()
-        new_users_30d = User.objects.filter(date_joined__gte=last_30_days).count()
-        verified_users = UserProfile.objects.filter(email_verified=True).count()
+        total_users = user_queryset.count()
+        new_users_7d = user_queryset.filter(date_joined__gte=last_7_days).count()
+        new_users_30d = user_queryset.filter(date_joined__gte=last_30_days).count()
+        verified_users = profile_queryset.filter(email_verified=True).count()
 
         # Content statistics
-        total_anime = Anime.objects.count()
-        airing_anime = Anime.objects.filter(status="Airing").count()
-        total_reviews = Review.objects.count()
-        new_reviews_7d = Review.objects.filter(created_at__gte=last_7_days).count()
+        total_anime = anime_queryset.count()
+        airing_anime = anime_queryset.filter(status="Airing").count()
+        total_reviews = review_queryset.count()
+        new_reviews_7d = review_queryset.filter(created_at__gte=last_7_days).count()
 
         # Engagement statistics
-        total_favorites = UserFavorite.objects.count()
-        total_list_entries = UserAnimeList.objects.count()
+        total_favorites = favorite_queryset.count()
+        total_list_entries = list_entry_queryset.count()
 
         # User growth (last 30 days)
         user_growth = (
-            User.objects.filter(date_joined__gte=last_30_days)
+            user_queryset.filter(date_joined__gte=last_30_days)
             .annotate(date=TruncDate("date_joined"))
             .values("date")
             .annotate(count=Count("id"))
@@ -52,13 +58,13 @@ class AdminDashboardView(APIView):
 
         # Popular anime (most favorites)
         popular_anime = (
-            Anime.objects.annotate(favorite_count=Count("favorites"))
+            anime_queryset.annotate(favorite_count=Count("favorites"))
             .order_by("-favorite_count")[:5]
             .values("id", "title", "slug", "cover_image", "favorite_count")
         )
 
         # Recent reviews
-        recent_reviews = Review.objects.select_related("user", "anime").order_by("-created_at")[:5]
+        recent_reviews = review_queryset.select_related("user", "anime").order_by("-created_at")[:5]
 
         recent_reviews_data = [
             {
@@ -74,7 +80,7 @@ class AdminDashboardView(APIView):
         ]
 
         # Recent users
-        recent_users = User.objects.order_by("-date_joined")[:5].values(
+        recent_users = user_queryset.order_by("-date_joined")[:5].values(
             "id", "username", "email", "date_joined", "is_active", "is_staff"
         )
 
@@ -116,34 +122,42 @@ class AdminStatsExportView(APIView):
     def get(self, request):
         """Export summary statistics as JSON."""
         now = timezone.now()
+        user_queryset = User.objects.all()
+        anime_queryset = Anime.objects.all()
+        genre_queryset = Genre.objects.all()
+        studio_queryset = Studio.objects.all()
+        review_queryset = Review.objects.all()
+        favorite_queryset = UserFavorite.objects.all()
+        list_entry_queryset = UserAnimeList.objects.all()
+        history_queryset = UserHistory.objects.all()
 
         # Gather comprehensive stats
         stats = {
             "generated_at": now.isoformat(),
             "users": {
-                "total": User.objects.count(),
-                "active": User.objects.filter(is_active=True).count(),
-                "staff": User.objects.filter(is_staff=True).count(),
-                "superusers": User.objects.filter(is_superuser=True).count(),
+                "total": user_queryset.count(),
+                "active": user_queryset.filter(is_active=True).count(),
+                "staff": user_queryset.filter(is_staff=True).count(),
+                "superusers": user_queryset.filter(is_superuser=True).count(),
             },
             "content": {
                 "anime": {
-                    "total": Anime.objects.count(),
+                    "total": anime_queryset.count(),
                     "by_status": dict(
-                        Anime.objects.values_list("status").annotate(count=Count("id"))
+                        anime_queryset.values_list("status").annotate(count=Count("id"))
                     ),
                     "by_type": dict(
-                        Anime.objects.values_list("anime_type").annotate(count=Count("id"))
+                        anime_queryset.values_list("anime_type").annotate(count=Count("id"))
                     ),
                 },
-                "genres": Genre.objects.count(),
-                "studios": Studio.objects.count(),
+                "genres": genre_queryset.count(),
+                "studios": studio_queryset.count(),
             },
             "engagement": {
-                "reviews": Review.objects.count(),
-                "favorites": UserFavorite.objects.count(),
-                "list_entries": UserAnimeList.objects.count(),
-                "history_entries": UserHistory.objects.count(),
+                "reviews": review_queryset.count(),
+                "favorites": favorite_queryset.count(),
+                "list_entries": list_entry_queryset.count(),
+                "history_entries": history_queryset.count(),
             },
         }
 

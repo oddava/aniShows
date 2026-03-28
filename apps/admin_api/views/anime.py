@@ -41,11 +41,12 @@ class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, G
     ordering = ['-created_at']
 
     def get_queryset(self):
-        return Anime.objects.prefetch_related("genres").select_related("studio").annotate(
+        queryset = Anime.objects.prefetch_related("genres").select_related("studio").annotate(
             favorites_count=Count("favorites"),
             reviews_count=Count("reviews"),
-            avg_review_rating=Avg("reviews__rating")
+            avg_review_rating=Avg("reviews__rating"),
         )
+        return queryset
 
     def destroy(self, request, *args, **kwargs):
         """Delete an anime."""
@@ -70,7 +71,8 @@ class AdminGenreViewSet(ModelViewSet):
     search_fields = ['name']
 
     def get_queryset(self):
-        return Genre.objects.annotate(anime_count=Count("anime")).order_by("name")
+        queryset = Genre.objects.annotate(anime_count=Count("anime")).order_by("name")
+        return queryset
 
     def perform_create(self, serializer):
         name = serializer.validated_data.get('name')
@@ -107,7 +109,8 @@ class AdminStudioViewSet(ModelViewSet):
     search_fields = ['name']
 
     def get_queryset(self):
-        return Studio.objects.annotate(anime_count=Count("anime")).order_by("name")
+        queryset = Studio.objects.annotate(anime_count=Count("anime")).order_by("name")
+        return queryset
 
     def destroy(self, request, *args, **kwargs):
         """Delete a studio. Prevents deletion if > 0 anime assigned."""
@@ -139,7 +142,8 @@ class AdminCharacterViewSet(ModelViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        return Character.objects.annotate(anime_count=Count("animes", distinct=True))
+        queryset = Character.objects.annotate(anime_count=Count("animes", distinct=True))
+        return queryset
 
 
 class AdminStaffViewSet(ModelViewSet):
@@ -153,7 +157,8 @@ class AdminStaffViewSet(ModelViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        return Staff.objects.annotate(anime_count=Count("animes", distinct=True))
+        queryset = Staff.objects.annotate(anime_count=Count("animes", distinct=True))
+        return queryset
 
 
 class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
@@ -226,10 +231,12 @@ class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, Gene
             )
 
         with transaction.atomic():
-            anime = Anime.objects.select_for_update().get(id=anime.id)
+            anime_queryset = Anime.objects.select_for_update()
+            anime = anime_queryset.get(id=anime.id)
 
             if anilist_id is not None:
-                conflict = Anime.objects.filter(anilist_id=anilist_id).exclude(id=anime.id).first()
+                conflict_queryset = Anime.objects.filter(anilist_id=anilist_id).exclude(id=anime.id)
+                conflict = conflict_queryset.first()
                 if conflict:
                     return Response(
                         {
@@ -242,7 +249,8 @@ class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, Gene
                 anime.anilist_id = anilist_id
 
             if mal_id is not None:
-                conflict = Anime.objects.filter(mal_id=mal_id).exclude(id=anime.id).first()
+                conflict_queryset = Anime.objects.filter(mal_id=mal_id).exclude(id=anime.id)
+                conflict = conflict_queryset.first()
                 if conflict:
                     return Response(
                         {"detail": f"MAL ID {mal_id} already belongs to anime #{conflict.id}."},
@@ -272,7 +280,8 @@ class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, Gene
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not Anime.objects.filter(id=target_anime_id).exists():
+        target_queryset = Anime.objects.filter(id=target_anime_id)
+        if not target_queryset.exists():
             return Response(
                 {"detail": f"Target anime #{target_anime_id} was not found."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -280,7 +289,8 @@ class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, Gene
 
         reason = f"merged_into:{target_anime_id}"
         OfflineSyncService().mark_skipped(state, reason=reason)
-        OfflineAnimeSyncState.objects.filter(id=state.id).update(
+        state_queryset = OfflineAnimeSyncState.objects.filter(id=state.id)
+        state_queryset.update(
             quarantine_context={
                 "manual": True,
                 "action": "merge_target",

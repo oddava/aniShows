@@ -146,12 +146,12 @@ class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMi
         days = request.data.get("days")
 
         if ids:
-            deleted_count = CeleryTaskResult.objects.filter(id__in=ids).delete()[0]
+            queryset = CeleryTaskResult.objects.filter(id__in=ids)
+            deleted_count = queryset.delete()[0]
         elif days:
             cutoff_date = timezone.now() - timedelta(days=days)
-            deleted_count = CeleryTaskResult.objects.filter(date_created__lt=cutoff_date).delete()[
-                0
-            ]
+            queryset = CeleryTaskResult.objects.filter(date_created__lt=cutoff_date)
+            deleted_count = queryset.delete()[0]
         else:
             return Response(
                 {"detail": "Provide either ids or days parameter."},
@@ -165,7 +165,6 @@ class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMi
         now = timezone.now()
         last_24h = now - timedelta(hours=24)
         last_7d = now - timedelta(days=7)
-        last_30d = now - timedelta(days=30)
 
         total_tasks = CeleryTaskResult.objects.count()
         by_status = dict(CeleryTaskResult.objects.values_list("status").annotate(count=Count("id")))
@@ -665,7 +664,8 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
         try:
             if action == "revoke":
                 current_app.control.revoke(task_id, terminate=terminate)
-                CeleryTaskResult.objects.filter(task_id=task_id).update(
+                queryset = CeleryTaskResult.objects.filter(task_id=task_id)
+                queryset.update(
                     status="REVOKED", date_completed=timezone.now()
                 )
                 return Response(

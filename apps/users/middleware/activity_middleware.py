@@ -52,7 +52,8 @@ class UserActivityMiddleware:
             try:
                 from apps.users.models import UserProfile
 
-                UserProfile.objects.filter(user=user_id).update(
+                queryset = UserProfile.objects.filter(user=user_id)
+                queryset.update(
                     last_activity=timezone.now()
                 )
             except Exception as e:

@@ -337,7 +337,8 @@ class ThemeSongSyncTask(BaseTask):
         count = 0
 
         # Clear existing themes
-        ThemeSong.objects.filter(anime=anime).delete()
+        queryset = ThemeSong.objects.filter(anime=anime)
+        queryset.delete()
 
         # Parse and save openings
         openings = themes_data.get("openings", [])

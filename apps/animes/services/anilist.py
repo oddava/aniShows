@@ -1134,7 +1134,8 @@ class AniListService:
             return
 
         # Clear existing theme songs to avoid duplicates (only if we have data)
-        ThemeSong.objects.filter(anime=anime).delete()
+        queryset = ThemeSong.objects.filter(anime=anime)
+        queryset.delete()
 
         # Process openings
         for idx, opening_text in enumerate(openings, 1):

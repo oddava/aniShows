@@ -76,7 +76,8 @@ def _handle_anime_bulk(operation: str, ids, data, request_user):
         allowed_statuses = {choice for choice, _ in Anime.AnimeStatus.choices}
         if new_status not in allowed_statuses:
             raise BulkOperationError(f"Invalid status. Allowed values: {', '.join(sorted(allowed_statuses))}.", 400)
-        updated_count = Anime.objects.filter(id__in=ids).update(status=new_status)
+        queryset = Anime.objects.filter(id__in=ids)
+        updated_count = queryset.update(status=new_status)
         return BulkOperationResult(
             payload={"message": f"Updated status to {new_status} for {updated_count} anime."},
             status_code=200,
@@ -85,7 +86,8 @@ def _handle_anime_bulk(operation: str, ids, data, request_user):
     if operation == "delete":
         if not request_user.is_superuser:
             raise BulkOperationError("Only superusers can delete anime in bulk.", 403)
-        deleted_count, _ = Anime.objects.filter(id__in=ids).delete()
+        queryset = Anime.objects.filter(id__in=ids)
+        deleted_count, _ = queryset.delete()
         return BulkOperationResult(
             payload={"message": f"Deleted {deleted_count} anime."},
             status_code=200,
@@ -96,14 +98,16 @@ def _handle_anime_bulk(operation: str, ids, data, request_user):
 
 def _handle_review_bulk(operation: str, ids):
     if operation == "delete":
-        deleted_count, _ = Review.objects.filter(id__in=ids).delete()
+        queryset = Review.objects.filter(id__in=ids)
+        deleted_count, _ = queryset.delete()
         return BulkOperationResult(
             payload={"message": f"Deleted {deleted_count} reviews."},
             status_code=200,
         )
 
     if operation == "toggle_spoiler":
-        updated = Review.objects.filter(id__in=ids).update(
+        queryset = Review.objects.filter(id__in=ids)
+        updated = queryset.update(
             has_spoilers=Case(
                 When(has_spoilers=True, then=Value(False)),
                 default=Value(True),
@@ -191,7 +195,8 @@ def _handle_favorite_bulk(operation: str, ids):
     if operation != "delete":
         raise BulkOperationError(f"Unsupported favorite operation: {operation}", 400)
 
-    deleted_count, _ = UserFavorite.objects.filter(id__in=ids).delete()
+    queryset = UserFavorite.objects.filter(id__in=ids)
+    deleted_count, _ = queryset.delete()
     return BulkOperationResult(
         payload={"message": f"Deleted {deleted_count} favorites."},
         status_code=200,
@@ -202,7 +207,8 @@ def _handle_character_bulk(operation: str, ids):
     if operation != "delete":
         raise BulkOperationError(f"Unsupported character operation: {operation}", 400)
 
-    deleted_count, _ = Character.objects.filter(id__in=ids).delete()
+    queryset = Character.objects.filter(id__in=ids)
+    deleted_count, _ = queryset.delete()
     return BulkOperationResult(
         payload={"message": f"Deleted {deleted_count} characters."},
         status_code=200,
@@ -213,7 +219,8 @@ def _handle_staff_bulk(operation: str, ids):
     if operation != "delete":
         raise BulkOperationError(f"Unsupported staff operation: {operation}", 400)
 
-    deleted_count, _ = Staff.objects.filter(id__in=ids).delete()
+    queryset = Staff.objects.filter(id__in=ids)
+    deleted_count, _ = queryset.delete()
     return BulkOperationResult(
         payload={"message": f"Deleted {deleted_count} staff members."},
         status_code=200,

@@ -48,7 +48,8 @@ class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     ordering = ['-timestamp']
 
     def get_queryset(self):
-        return SystemLog.objects.all()
+        queryset = SystemLog.objects.all()
+        return queryset
 
     @action(detail=False, methods=["get"])
     def stats(self, request):
@@ -86,4 +87,5 @@ class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     ordering = ['-timestamp']
 
     def get_queryset(self):
-        return AuditLog.objects.select_related("user")
+        queryset = AuditLog.objects.select_related("user")
+        return queryset

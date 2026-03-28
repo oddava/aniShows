@@ -106,7 +106,8 @@ def cleanup_unverified_accounts(self, days: int = 7):
                 Notification.objects.filter(user_id__in=user_ids)._raw_delete(db)
                 PushSubscription.objects.filter(user_id__in=user_ids)._raw_delete(db)
 
-                User.objects.filter(id__in=user_ids).delete()
+                queryset = User.objects.filter(id__in=user_ids)
+                queryset.delete()
 
             logger.info(f"Deleted {count} unverified accounts: {usernames}")
         else:

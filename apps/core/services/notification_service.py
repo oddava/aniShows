@@ -210,11 +210,12 @@ class NotificationService:
     @classmethod
     def mark_as_read(cls, notification_id: int, user) -> bool:
         """Mark a notification as read."""
-        updated = Notification.objects.filter(
+        queryset = Notification.objects.filter(
             id=notification_id,
             user_id=user.id,
             is_read=False,
-        ).update(
+        )
+        updated = queryset.update(
             is_read=True,
             read_at=timezone.now(),
         )
@@ -222,12 +223,14 @@ class NotificationService:
             unread_count = cls._decrement_unread_count(user.id)
             cls._broadcast_unread_count(user.id, unread_count)
             return True
-        return Notification.objects.filter(id=notification_id, user_id=user.id).exists()
+        exists_queryset = Notification.objects.filter(id=notification_id, user_id=user.id)
+        return exists_queryset.exists()
 
     @classmethod
     def mark_all_as_read(cls, user) -> int:
         """Mark all unread notifications as read for a user."""
-        count = Notification.objects.filter(user=user, is_read=False).update(
+        queryset = Notification.objects.filter(user=user, is_read=False)
+        count = queryset.update(
             is_read=True, read_at=timezone.now()
         )
         cls._set_unread_count_cache(user.id, 0)
@@ -246,7 +249,8 @@ class NotificationService:
         from datetime import timedelta
 
         cutoff_date = timezone.now() - timedelta(days=days)
-        deleted, _ = Notification.objects.filter(is_read=True, created_at__lt=cutoff_date).delete()
+        queryset = Notification.objects.filter(is_read=True, created_at__lt=cutoff_date)
+        deleted, _ = queryset.delete()
         logger.info(f"Cleaned up {deleted} old notifications")
         return deleted
 

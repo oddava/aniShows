@@ -295,11 +295,13 @@ class SyncAnimeCatalogTask(BaseTask):
         def batch_update():
             with transaction.atomic():
                 # Clear all trending ranks
-                Anime.objects.filter(trending_rank__isnull=False).update(trending_rank=None)
+                clear_queryset = Anime.objects.filter(trending_rank__isnull=False)
+                clear_queryset.update(trending_rank=None)
 
                 # Update new ranks
                 for aid, rank in rank_updates.items():
-                    Anime.objects.filter(anilist_id=aid).update(trending_rank=rank)
+                    update_queryset = Anime.objects.filter(anilist_id=aid)
+                    update_queryset.update(trending_rank=rank)
 
         await batch_update()
         logger.info(f"Updated {len(rank_updates)} trending ranks")

@@ -81,51 +81,60 @@ def generate_report(report_type: str, days: int, force_refresh: bool = False) ->
 
 def _overview_payload(days: int) -> dict:
     now, start, prev_start = _period_bounds(days)
+    user_queryset = User.objects.all()
+    profile_queryset = UserProfile.objects.all()
+    anime_queryset = Anime.objects.all()
+    favorite_queryset = UserFavorite.objects.all()
+    review_queryset = Review.objects.all()
+    watchlist_queryset = UserAnimeList.objects.all()
+    studio_queryset = Studio.objects.all()
+    genre_queryset = Genre.objects.all()
+    activity_log_queryset = AuditLog.objects.select_related("user")
 
-    total_users = User.objects.count()
-    users_before_period = User.objects.filter(date_joined__lt=start).count()
-    new_users = User.objects.filter(date_joined__gte=start).count()
-    prev_new_users = User.objects.filter(date_joined__gte=prev_start, date_joined__lt=start).count()
+    total_users = user_queryset.count()
+    users_before_period = user_queryset.filter(date_joined__lt=start).count()
+    new_users = user_queryset.filter(date_joined__gte=start).count()
+    prev_new_users = user_queryset.filter(date_joined__gte=prev_start, date_joined__lt=start).count()
 
-    active_users = UserProfile.objects.filter(last_activity__gte=start).count()
-    prev_active_users = UserProfile.objects.filter(
+    active_users = profile_queryset.filter(last_activity__gte=start).count()
+    prev_active_users = profile_queryset.filter(
         last_activity__gte=prev_start, last_activity__lt=start
     ).count()
 
-    returning_users = UserProfile.objects.filter(last_activity__gte=start, user__date_joined__lt=start).count()
+    returning_users = profile_queryset.filter(last_activity__gte=start, user__date_joined__lt=start).count()
     retention = round((returning_users / active_users) * 100, 2) if active_users else 0.0
 
-    prev_returning_users = UserProfile.objects.filter(
+    prev_returning_users = profile_queryset.filter(
         last_activity__gte=prev_start, last_activity__lt=start, user__date_joined__lt=prev_start
     ).count()
     prev_retention = (
         round((prev_returning_users / prev_active_users) * 100, 2) if prev_active_users else 0.0
     )
 
-    anime_total = Anime.objects.count()
-    episodes_total = Anime.objects.aggregate(total=Coalesce(Sum("episode_count"), Value(0)))["total"]
+    anime_total = anime_queryset.count()
+    episodes_total = anime_queryset.aggregate(total=Coalesce(Sum("episode_count"), Value(0)))["total"]
 
-    favorites = UserFavorite.objects.count()
-    prev_favorites = UserFavorite.objects.filter(added_at__lt=start).count()
-    favorites_in_period = UserFavorite.objects.filter(added_at__gte=start).count()
-    prev_favorites_in_period = UserFavorite.objects.filter(
+    favorites = favorite_queryset.count()
+    prev_favorites = favorite_queryset.filter(added_at__lt=start).count()
+    favorites_in_period = favorite_queryset.filter(added_at__gte=start).count()
+    prev_favorites_in_period = favorite_queryset.filter(
         added_at__gte=prev_start, added_at__lt=start
     ).count()
 
-    reviews = Review.objects.count()
-    reviews_in_period = Review.objects.filter(created_at__gte=start).count()
-    prev_reviews_in_period = Review.objects.filter(created_at__gte=prev_start, created_at__lt=start).count()
+    reviews = review_queryset.count()
+    reviews_in_period = review_queryset.filter(created_at__gte=start).count()
+    prev_reviews_in_period = review_queryset.filter(created_at__gte=prev_start, created_at__lt=start).count()
 
-    watchlists = UserAnimeList.objects.count()
-    watchlists_in_period = UserAnimeList.objects.filter(updated_at__gte=start).count()
-    prev_watchlists_in_period = UserAnimeList.objects.filter(
+    watchlists = watchlist_queryset.count()
+    watchlists_in_period = watchlist_queryset.filter(updated_at__gte=start).count()
+    prev_watchlists_in_period = watchlist_queryset.filter(
         updated_at__gte=prev_start, updated_at__lt=start
     ).count()
 
-    avg_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"] or 0.0
+    avg_rating = review_queryset.aggregate(avg=Avg("rating"))["avg"] or 0.0
 
     growth_by_day = list(
-        User.objects.filter(date_joined__gte=start)
+        user_queryset.filter(date_joined__gte=start)
         .annotate(date=TruncDate("date_joined"))
         .values("date")
         .annotate(count=Count("id"))
@@ -134,14 +143,14 @@ def _overview_payload(days: int) -> dict:
 
     last_7_days = now - timedelta(days=min(days, 7))
     daily_signups = list(
-        User.objects.filter(date_joined__gte=last_7_days)
+        user_queryset.filter(date_joined__gte=last_7_days)
         .annotate(date=TruncDate("date_joined"))
         .values("date")
         .annotate(count=Count("id"))
         .order_by("date")
     )
 
-    activity_logs = AuditLog.objects.select_related("user").order_by("-timestamp")[:20]
+    activity_logs = activity_log_queryset.order_by("-timestamp")[:20]
     recent_activity = [
         {
             "type": log.action,
@@ -172,8 +181,8 @@ def _overview_payload(days: int) -> dict:
         "content": {
             "anime_total": anime_total,
             "episodes_total": episodes_total,
-            "studios_total": Studio.objects.count(),
-            "genres_total": Genre.objects.count(),
+            "studios_total": studio_queryset.count(),
+            "genres_total": genre_queryset.count(),
         },
         "engagement": {
             "favorites": favorites,
@@ -191,22 +200,24 @@ def _overview_payload(days: int) -> dict:
 
 def _users_payload(days: int) -> dict:
     now, start, prev_start = _period_bounds(days)
+    user_queryset = User.objects.all()
+    profile_queryset = UserProfile.objects.all()
 
-    total_users = User.objects.count()
-    new_users = User.objects.filter(date_joined__gte=start).count()
-    returning_users = UserProfile.objects.filter(last_activity__gte=start, user__date_joined__lt=start).count()
-    active_users_count = UserProfile.objects.filter(last_activity__gte=start).count()
+    total_users = user_queryset.count()
+    new_users = user_queryset.filter(date_joined__gte=start).count()
+    returning_users = profile_queryset.filter(last_activity__gte=start, user__date_joined__lt=start).count()
+    active_users_count = profile_queryset.filter(last_activity__gte=start).count()
 
     user_breakdown = {
-        "active": User.objects.filter(is_active=True).count(),
-        "inactive": User.objects.filter(is_active=False).count(),
-        "verified": UserProfile.objects.filter(email_verified=True).count(),
-        "unverified": UserProfile.objects.filter(email_verified=False).count(),
-        "staff": User.objects.filter(is_staff=True).count(),
+        "active": user_queryset.filter(is_active=True).count(),
+        "inactive": user_queryset.filter(is_active=False).count(),
+        "verified": profile_queryset.filter(email_verified=True).count(),
+        "unverified": profile_queryset.filter(email_verified=False).count(),
+        "staff": user_queryset.filter(is_staff=True).count(),
     }
 
     registration_trend = list(
-        User.objects.filter(date_joined__gte=start)
+        user_queryset.filter(date_joined__gte=start)
         .annotate(date=TruncDate("date_joined"))
         .values("date")
         .annotate(count=Count("id"))
@@ -214,7 +225,7 @@ def _users_payload(days: int) -> dict:
     )
 
     active_users = list(
-        User.objects.annotate(
+        user_queryset.annotate(
             activity_list_entries=Count("anime_lists", distinct=True),
             activity_reviews=Count("reviews", distinct=True),
             activity_favorites=Count("favorites", distinct=True),
@@ -259,45 +270,48 @@ def _users_payload(days: int) -> dict:
 
 def _content_payload(days: int) -> dict:
     _, start, _ = _period_bounds(days)
+    anime_queryset = Anime.objects.all()
+    genre_queryset = Genre.objects.all()
+    studio_queryset = Studio.objects.all()
 
-    total_anime = Anime.objects.count()
-    new_anime = Anime.objects.filter(created_at__gte=start).count()
+    total_anime = anime_queryset.count()
+    new_anime = anime_queryset.filter(created_at__gte=start).count()
 
     by_status = {
         row["status"]: row["count"]
-        for row in Anime.objects.values("status").annotate(count=Count("id")).order_by("status")
+        for row in anime_queryset.values("status").annotate(count=Count("id")).order_by("status")
     }
     by_type = {
         row["anime_type"]: row["count"]
-        for row in Anime.objects.values("anime_type").annotate(count=Count("id")).order_by("anime_type")
+        for row in anime_queryset.values("anime_type").annotate(count=Count("id")).order_by("anime_type")
     }
 
     top_genres = list(
-        Genre.objects.annotate(anime_count=Count("anime"))
+        genre_queryset.annotate(anime_count=Count("anime"))
         .order_by("-anime_count", "name")
         .values("id", "name", "anime_count")[:10]
     )
     top_studios = list(
-        Studio.objects.annotate(anime_count=Count("anime"))
+        studio_queryset.annotate(anime_count=Count("anime"))
         .order_by("-anime_count", "name")
         .values("id", "name", "anime_count")[:10]
     )
 
     content_trend = list(
-        Anime.objects.filter(created_at__gte=start)
+        anime_queryset.filter(created_at__gte=start)
         .annotate(date=TruncDate("created_at"))
         .values("date")
         .annotate(count=Count("id"))
         .order_by("date")
     )
 
-    missing_cover = Anime.objects.filter(
+    missing_cover = anime_queryset.filter(
         Q(cover_image__isnull=True) | Q(cover_image=""),
         Q(cover_image_external_url__isnull=True) | Q(cover_image_external_url=""),
     ).count()
-    missing_synopsis = Anime.objects.filter(Q(synopsis__isnull=True) | Q(synopsis="")).count()
-    missing_studio = Anime.objects.filter(studio__isnull=True).count()
-    missing_rating = Anime.objects.filter(rating__isnull=True).count()
+    missing_synopsis = anime_queryset.filter(Q(synopsis__isnull=True) | Q(synopsis="")).count()
+    missing_studio = anime_queryset.filter(studio__isnull=True).count()
+    missing_rating = anime_queryset.filter(rating__isnull=True).count()
 
     completeness = 100.0
     if total_anime:
@@ -325,29 +339,34 @@ def _content_payload(days: int) -> dict:
 
 def _engagement_payload(days: int) -> dict:
     _, start, _ = _period_bounds(days)
+    review_queryset = Review.objects.all()
+    list_entry_queryset = UserAnimeList.objects.all()
+    favorite_queryset = UserFavorite.objects.all()
+    vote_queryset = ReviewVote.objects.all()
+    anime_queryset = Anime.objects.all()
 
-    total_reviews = Review.objects.count()
-    new_reviews = Review.objects.filter(created_at__gte=start).count()
-    avg_rating = Review.objects.aggregate(avg=Avg("rating"))["avg"] or 0.0
+    total_reviews = review_queryset.count()
+    new_reviews = review_queryset.filter(created_at__gte=start).count()
+    avg_rating = review_queryset.aggregate(avg=Avg("rating"))["avg"] or 0.0
 
     reviews_by_rating = {
         row["rating"]: row["count"]
-        for row in Review.objects.values("rating").annotate(count=Count("id")).order_by("rating")
+        for row in review_queryset.values("rating").annotate(count=Count("id")).order_by("rating")
     }
     list_by_status = {
         row["status"]: row["count"]
-        for row in UserAnimeList.objects.values("status").annotate(count=Count("id")).order_by("status")
+        for row in list_entry_queryset.values("status").annotate(count=Count("id")).order_by("status")
     }
 
     reviews_trend = list(
-        Review.objects.filter(created_at__gte=start)
+        review_queryset.filter(created_at__gte=start)
         .annotate(date=TruncDate("created_at"))
         .values("date")
         .annotate(count=Count("id"))
         .order_by("date")
     )
     favorites_trend = list(
-        UserFavorite.objects.filter(added_at__gte=start)
+        favorite_queryset.filter(added_at__gte=start)
         .annotate(date=TruncDate("added_at"))
         .values("date")
         .annotate(count=Count("id"))
@@ -355,17 +374,17 @@ def _engagement_payload(days: int) -> dict:
     )
 
     review_votes = {
-        "helpful": ReviewVote.objects.filter(is_helpful=True).count(),
-        "unhelpful": ReviewVote.objects.filter(is_helpful=False).count(),
+        "helpful": vote_queryset.filter(is_helpful=True).count(),
+        "unhelpful": vote_queryset.filter(is_helpful=False).count(),
     }
 
     most_reviewed = list(
-        Anime.objects.annotate(review_count=Count("reviews"))
+        anime_queryset.annotate(review_count=Count("reviews"))
         .order_by("-review_count", "title")
         .values("id", "title", "slug", "rating", "review_count")[:10]
     )
     most_favorited = list(
-        Anime.objects.annotate(favorite_count=Count("favorites"))
+        anime_queryset.annotate(favorite_count=Count("favorites"))
         .order_by("-favorite_count", "title")
         .values("id", "title", "slug", "rating", "favorite_count")[:10]
     )

@@ -98,7 +98,8 @@ class OfflineSyncService:
 
         updated = 0
         if reset_pipeline:
-            updated = OfflineAnimeSyncState.objects.filter(anime_id__in=ids).update(
+            queryset = OfflineAnimeSyncState.objects.filter(anime_id__in=ids)
+            updated = queryset.update(
                 metadata_status=OfflineAnimeSyncState.StageStatus.PENDING,
                 franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
                 themes_status=OfflineAnimeSyncState.StageStatus.PENDING,
@@ -666,7 +667,8 @@ class OfflineSyncService:
 
     def reset_for_retry(self, state: OfflineAnimeSyncState):
         now = timezone.now()
-        OfflineAnimeSyncState.objects.filter(id=state.id).update(
+        queryset = OfflineAnimeSyncState.objects.filter(id=state.id)
+        queryset.update(
             metadata_status=(
                 OfflineAnimeSyncState.StageStatus.PENDING
                 if state.metadata_status != OfflineAnimeSyncState.StageStatus.SYNCED
@@ -692,7 +694,8 @@ class OfflineSyncService:
 
     def mark_skipped(self, state: OfflineAnimeSyncState, *, reason: str = "marked_skipped"):
         now = timezone.now() + timedelta(days=36500)
-        OfflineAnimeSyncState.objects.filter(id=state.id).update(
+        queryset = OfflineAnimeSyncState.objects.filter(id=state.id)
+        queryset.update(
             metadata_status=(
                 state.metadata_status
                 if state.metadata_status == OfflineAnimeSyncState.StageStatus.SYNCED
@@ -713,4 +716,3 @@ class OfflineSyncService:
             quarantine_context={"manual": True, "action": "mark_skipped"},
             next_attempt_at=now,
         )
-

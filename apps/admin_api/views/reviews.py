@@ -36,7 +36,8 @@ class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, 
     ordering = ['-created_at']
 
     def get_queryset(self):
-        return Review.objects.select_related("user", "anime")
+        queryset = Review.objects.select_related("user", "anime")
+        return queryset
 
     def destroy(self, request, *args, **kwargs):
         """Delete a review for moderation purposes."""
@@ -155,6 +156,7 @@ class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, 
                 }
             )
 
+        report_queryset = ReviewReport.objects.filter(status__in=unresolved_report_statuses)
         summary = {
             "total_reports": queryset.count(),
             "spoiler_reports": queryset.filter(
@@ -163,9 +165,7 @@ class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, 
             "low_rating_reports": queryset.filter(rating__lte=3).count(),
             "textless_reports": queryset.filter(Q(text__isnull=True) | Q(text="")).count(),
             "user_reported": queryset.filter(open_user_reports__gt=0).count(),
-            "open_user_reports": ReviewReport.objects.filter(
-                status__in=unresolved_report_statuses
-            ).count(),
+            "open_user_reports": report_queryset.count(),
         }
 
         if page is not None:
@@ -187,11 +187,11 @@ class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, 
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        unresolved = ReviewReport.objects.filter(
+        queryset = ReviewReport.objects.filter(
             review=review,
             status__in=[ReviewReport.Status.OPEN, ReviewReport.Status.IN_REVIEW],
         )
-        updated = unresolved.update(
+        updated = queryset.update(
             status=resolution_status,
             resolved_by=request.user,
             resolved_at=timezone.now(),

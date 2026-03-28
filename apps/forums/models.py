@@ -88,7 +88,8 @@ class Thread(TimestampMixin, Model):
         transaction.on_commit(_update)
 
     def increment_view_count(self):
-        self.__class__.objects.filter(pk=self.pk).update(view_count=F("view_count") + 1)
+        queryset = self.__class__.objects.filter(pk=self.pk)
+        queryset.update(view_count=F("view_count") + 1)
         self.refresh_from_db(fields=["view_count"])
 
 class Post(TimestampMixin, Model):
