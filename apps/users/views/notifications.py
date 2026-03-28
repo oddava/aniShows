@@ -11,7 +11,6 @@ from apps.core.models import Notification, PushSubscription
 from apps.core.services.notification_service import NotificationService
 from apps.core.services.push_service import PushService
 from apps.shared.logger import logger
-from apps.shared.pagination import StandardPagination
 
 
 class NotificationSerializer(ModelSerializer):
@@ -53,8 +52,6 @@ class NotificationViewSet(GenericViewSet):
 
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = StandardPagination
-
     def get_queryset(self):
         """Return notifications for the current user."""
         return Notification.objects.filter(user=self.request.user)

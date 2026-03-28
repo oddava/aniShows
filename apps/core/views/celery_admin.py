@@ -22,7 +22,6 @@ from rest_framework.response import Response
 
 from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
 from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
 
 
 class CeleryTaskResultFilter(FilterSet):
@@ -42,7 +41,6 @@ class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMi
     """ViewSet for Celery task results management. Read-only plus delete/stats."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = CeleryTaskResultFilter
     search_fields = ['task_id', 'task_name', 'error_message', 'result_summary']
@@ -235,7 +233,6 @@ class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
     """ViewSet for managing Celery task schedules."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_class = CeleryTaskScheduleFilter
     ordering_fields = ['name', 'created_at', 'last_run_at']

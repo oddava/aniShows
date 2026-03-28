@@ -1,3 +1,4 @@
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db.models import Count, Prefetch
@@ -7,16 +8,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from allauth.socialaccount.models import SocialAccount
 from apps.animes.models import Anime
+from apps.shared.logger import logger
+from apps.users.models import UserAnimeList, UserFollow
 from apps.users.serializers.users import (
     FollowSerializer,
     FriendWatchingSerializer,
     UserFollowListSerializer,
 )
-from apps.shared.logger import logger
-from apps.shared.pagination import StandardPagination
-from apps.users.models import UserAnimeList, UserFollow
 from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()
@@ -25,8 +24,6 @@ class FollowViewSet(GenericViewSet):
     """Handle follow/unfollow operations and listing followers/following"""
 
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    pagination_class = StandardPagination
-
     @staticmethod
     def _google_accounts_prefetch(lookup: str) -> Prefetch:
         return Prefetch(

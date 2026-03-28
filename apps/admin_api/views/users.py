@@ -6,6 +6,7 @@ from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
 from apps.admin_api.services.user_admin_service import (
@@ -25,7 +26,6 @@ from apps.admin_api.services.user_list_admin_service import (
 )
 from apps.animes.models import UserFavorite
 from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
 from apps.users.admin_serializers import AdminUserSerializer
 from apps.users.models import UserAnimeList
 
@@ -44,7 +44,6 @@ class AdminUserViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, Ge
     """User management for admins using robust DRF ViewSets."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminUserSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = UserFilter
@@ -102,12 +101,14 @@ class AdminUserListViewSet(ViewSet):
     """User list entries management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
-
     def list(self, request):
         queryset = build_user_list_queryset(request.query_params)
 
-        paginator = StandardPagination()
+        paginator_class = api_settings.DEFAULT_PAGINATION_CLASS
+        if paginator_class is None:
+            return Response(serialize_user_list_entries(queryset))
+
+        paginator = paginator_class()
         page = paginator.paginate_queryset(queryset, request)
 
         entries_data = serialize_user_list_entries(page)
@@ -149,12 +150,14 @@ class AdminFavoritesViewSet(ViewSet):
     """User favorites management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
-
     def list(self, request):
         queryset = build_user_favorites_queryset(request.query_params)
 
-        paginator = StandardPagination()
+        paginator_class = api_settings.DEFAULT_PAGINATION_CLASS
+        if paginator_class is None:
+            return Response(serialize_user_favorites(queryset))
+
+        paginator = paginator_class()
         page = paginator.paginate_queryset(queryset, request)
 
         favorites_data = serialize_user_favorites(page)

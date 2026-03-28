@@ -12,7 +12,6 @@ from rest_framework.viewsets import GenericViewSet
 
 from apps.core.models import AuditLog, SystemLog
 from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
 from apps.users.admin_serializers import AuditLogSerializer, SystemLogSerializer
 
 
@@ -41,7 +40,6 @@ class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """System error and event logs for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = SystemLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = SystemLogFilter
@@ -80,7 +78,6 @@ class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """Admin action audit logs."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AuditLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AuditLogFilter

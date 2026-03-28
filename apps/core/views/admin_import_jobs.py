@@ -15,7 +15,6 @@ from rest_framework.viewsets import GenericViewSet
 from apps.animes.models import OfflineAnimeSyncState, OfflineCatalogImport
 from apps.core.models import CeleryTaskResult
 from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
 
 ANILIST_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
 OFFLINE_IMPORT_TASK = "apps.animes.tasks.offline_catalog.import_offline_catalog"
@@ -48,7 +47,6 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """Import job monitoring for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_class = AdminImportJobFilter
     ordering_fields = ["date_created", "date_completed"]

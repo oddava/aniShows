@@ -1,3 +1,4 @@
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Prefetch
 from django.shortcuts import get_object_or_404
@@ -7,14 +8,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from allauth.socialaccount.models import SocialAccount
-from apps.users.serializers.users import BadgeSerializer
 from apps.core.models import AuditLog
 from apps.core.permissions import IsAdminUser
 from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
-from apps.shared.pagination import StandardPagination
 from apps.users.models import Badge, UserBadge
+from apps.users.serializers.users import BadgeSerializer
 from apps.users.services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
@@ -25,7 +24,6 @@ class AdminBadgeViewSet(ModelViewSet):
 
     permission_classes = [IsAdminUser]
     serializer_class = BadgeSerializer
-    pagination_class = StandardPagination
     queryset = Badge.objects.annotate(holders_count=Count("user_badges")).order_by(
         "-priority", "name"
     )
@@ -231,8 +229,8 @@ class AdminBadgeViewSet(ModelViewSet):
             .order_by("-granted_at")
         )
 
-        paginator = StandardPagination()
-        page = paginator.paginate_queryset(user_badges, request)
+        page = self.paginate_queryset(user_badges)
+        results = page if page is not None else user_badges
 
         data = [
             {
@@ -251,7 +249,9 @@ class AdminBadgeViewSet(ModelViewSet):
                 "granted_at": ub.granted_at,
                 "reason": ub.reason,
             }
-            for ub in page
+            for ub in results
         ]
 
-        return paginator.get_paginated_response(data)
+        if page is not None:
+            return self.get_paginated_response(data)
+        return Response(data)

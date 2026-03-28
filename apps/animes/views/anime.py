@@ -34,7 +34,6 @@ from apps.animes.serializers import (
 )
 from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
 from apps.shared.logger import logger
-from apps.shared.pagination import StandardPagination
 from apps.users.models import UserAnimeList
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
@@ -46,7 +45,6 @@ MIN_RATING = 0.0
 
 
 class AnimeViewSet(ReadOnlyModelViewSet):
-    pagination_class = StandardPagination
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
     _PUBLIC_CACHE_VERSION = "v2"

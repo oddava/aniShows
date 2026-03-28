@@ -11,7 +11,6 @@ from rest_framework.viewsets import GenericViewSet
 from apps.animes.admin_serializers import AdminReviewSerializer
 from apps.animes.models import Review, ReviewReport
 from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
 
 
 class ReviewFilter(FilterSet):
@@ -29,7 +28,6 @@ class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, 
     """Review moderation for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminReviewSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ReviewFilter

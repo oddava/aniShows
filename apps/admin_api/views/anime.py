@@ -19,7 +19,6 @@ from apps.animes.admin_serializers import (
 from apps.animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
 from apps.animes.services.offline_sync import OfflineSyncService
 from apps.core.permissions import IsAdminUser
-from apps.shared.pagination import StandardPagination
 
 
 class AnimeFilter(FilterSet):
@@ -34,7 +33,6 @@ class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, G
     """Anime management for admins utilizing DRF GenericViewSet."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminAnimeSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AnimeFilter
@@ -67,7 +65,6 @@ class AdminGenreViewSet(ModelViewSet):
     """Genre management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminGenreSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
@@ -105,7 +102,6 @@ class AdminStudioViewSet(ModelViewSet):
     """Studio management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminStudioSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
@@ -136,7 +132,6 @@ class AdminCharacterViewSet(ModelViewSet):
     """Character management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminCharacterSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_native", "description"]
@@ -151,7 +146,6 @@ class AdminStaffViewSet(ModelViewSet):
     """Staff management for admins."""
 
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminStaffSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_native", "description"]
@@ -164,7 +158,6 @@ class AdminStaffViewSet(ModelViewSet):
 
 class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     permission_classes = [IsAdminUser]
-    pagination_class = StandardPagination
     serializer_class = AdminOfflineAnimeSyncStateSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["anime__title", "anime__slug", "quarantine_reason", "last_error_code"]
