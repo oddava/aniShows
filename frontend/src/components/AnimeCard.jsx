@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Star, Heart, Plus, Check, Eye, Clock, Pause, X, Loader2 } from 'lucide-react';
+import { Plus, Check, Eye, Clock, Pause, X, Loader2 } from 'lucide-react';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
-import { favoriteApi, listApi } from '../api/client';
+import { listApi } from '../api/client';
 import useColorExtraction from '../hooks/useColorExtraction';
 import {
     applyImageFallback,
@@ -182,7 +182,6 @@ function AnimeCard({
     const queryClient = useQueryClient();
 
     // Simple state - no debounced hover
-    const [isFavorite, setIsFavorite] = useState(anime.is_favorite || false);
     const [isLoading, setIsLoading] = useState(false);
     const [showStatusMenu, setShowStatusMenu] = useState(false);
     const [listStatus, setListStatus] = useState(userListEntry?.status || anime.user_list_status?.status || null);
@@ -239,11 +238,6 @@ function AnimeCard({
         setImageLoaded(false);
     }, [imageUrl]);
 
-    // Keep local quick-action state in sync when fresh server data arrives.
-    useEffect(() => {
-        setIsFavorite(anime.is_favorite || false);
-    }, [anime.id, anime.is_favorite]);
-
     useEffect(() => {
         setListStatus(userListEntry?.status || anime.user_list_status?.status || null);
         setListId(userListEntry?.id || anime.user_list_status?.id || null);
@@ -287,29 +281,6 @@ function AnimeCard({
         }
         return { loading: 'lazy', decoding: 'async' };
     }, [priority, index]);
-
-    // Memoized handlers
-    const handleFavorite = useCallback(async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isAuthenticated || isLoading) return;
-
-        const previousFavorite = isFavorite;
-        setIsFavorite(!previousFavorite);
-        setIsLoading(true);
-        try {
-            const response = await favoriteApi.toggle(anime.id);
-            setIsFavorite(response.data.is_favorite);
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: ['favorites'] });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-        } catch (error) {
-            logger.error('Error toggling favorite:', error);
-            setIsFavorite(previousFavorite);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [anime.id, isAuthenticated, isLoading, isFavorite, queryClient, invalidateAnimeViews]);
 
     const handleStatusChange = useCallback(async (e, newStatus) => {
         e.preventDefault();
@@ -531,21 +502,8 @@ function AnimeCard({
                             )}
                         </button>
                     )}
-                </div>
 
-                {/* Favorite Button */}
-                {isAuthenticated && (
-                    <div className={`absolute top-2 sm:top-3 right-2 sm:right-3 z-[100] transition-opacity duration-200 ${isFavorite ? 'opacity-100' : 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
-                    >
-                        <button
-                            onClick={handleFavorite}
-                            className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-none border transition-all duration-200 hover:bg-dark-50 touch-manipulation
-                                ${isFavorite ? 'bg-red-500 text-white border-red-400' : 'bg-black/60 backdrop-blur-md text-white border-white/20 hover:bg-red-500/20 hover:border-red-400/50'}`}
-                        >
-                            <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-current' : ''}`} />
-                        </button>
-                    </div>
-                )}
+                </div>
 
                 {/* Title/Info Footer */}
                 <Link to={`/anime/${anime.slug}`} className="mt-3 block"
@@ -568,7 +526,6 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.priority !== nextProps.priority) return false;
     if (prevProps.index !== nextProps.index) return false;
     if (prevProps.useBannerAccentTitleHover !== nextProps.useBannerAccentTitleHover) return false;
-    if (prevProps.anime.is_favorite !== nextProps.anime.is_favorite) return false;
 
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
     const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;
