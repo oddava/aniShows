@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Plus, Check, Eye, Clock, Pause, X, Loader2 } from 'lucide-react';
+import { Plus, Check, Eye, Clock, X, Loader2 } from 'lucide-react';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
@@ -14,11 +14,9 @@ import {
 import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
-    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40' },
-    { value: 'Plan to Watch', label: 'Plan to Watch', icon: Clock, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 border-yellow-500/40' },
-    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-green-400', bgColor: 'bg-green-500/20 border-green-500/40' },
-    { value: 'On Hold', label: 'On Hold', icon: Pause, color: 'text-orange-400', bgColor: 'bg-orange-500/20 border-orange-500/40' },
-    { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
+    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', dotColor: 'bg-blue-400' },
+    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-green-400', bgColor: 'bg-green-500/20 border-green-500/40', dotColor: 'bg-green-400' },
+    { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 border-yellow-500/40', dotColor: 'bg-yellow-400' },
 ];
 
 function isSameOriginImageUrl(url) {
@@ -432,42 +430,42 @@ function AnimeCard({
 
 
 
-                    {/* Status Icon */}
+                    {/* Status Button */}
                     {isAuthenticated && (
-                        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-[200]">
+                        <div className="absolute bottom-2 right-2 z-[200] opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
                             <div className="relative" ref={statusMenuRef}>
                                 <button
                                     onClick={toggleStatusMenu}
                                     disabled={isLoading}
-                                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg sm:rounded-xl shadow-none border transition-all duration-200 touch-manipulation
+                                    className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg shadow-none border transition-colors duration-200 touch-manipulation
                                         ${listStatus && currentStatusOption
                                             ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                            : 'bg-black/60 backdrop-blur-md text-white border-white/20 hover:bg-black/80 hover:border-white/30 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'}`}
-                                    title={listStatus ? currentStatusOption?.label : 'Add to List'}
+                                            : 'bg-black/60 backdrop-blur-md text-white border-white/20 hover:bg-black/80 hover:border-white/30'}`}
+                                    title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
                                 >
-                                    {isLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> :
-                                        listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" /> : <Plus className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />}
+                                    {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
+                                        listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
                                 </button>
 
                                 {showStatusMenu && (
-                                    <div className="absolute left-0 top-full mt-2 w-44 bg-dark-100 border border-gray-700 rounded-xl shadow-none z-[210] animate-fade-in overflow-hidden">
-                                        <div className="p-1.5">
+                                    <div className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-none z-[210] animate-fade-in overflow-hidden">
+                                        <div className="p-1">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
-                                                    className={`w-full px-3 py-2.5 flex items-center gap-3 text-xs font-semibold rounded-lg transition-colors touch-manipulation
+                                                    className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold rounded-md transition-colors touch-manipulation
                                                         ${listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
                                                 >
-                                                    <option.icon className="w-3.5 h-3.5" />
+                                                    <option.icon className="w-3 h-3" />
                                                     {option.label}
                                                 </button>
                                             ))}
                                         </div>
                                         {listStatus && (
-                                            <div className="p-1.5 border-t border-gray-800 bg-black/20">
-                                                <button onClick={handleRemoveFromList} className="w-full px-3 py-2.5 flex items-center gap-3 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-lg touch-manipulation">
-                                                    <X className="w-3.5 h-3.5" /> Remove
+                                            <div className="p-1 border-t border-gray-800 bg-black/20">
+                                                <button onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
+                                                    <X className="w-3 h-3" /> Remove
                                                 </button>
                                             </div>
                                         )}
@@ -508,10 +506,18 @@ function AnimeCard({
                 {/* Title/Info Footer */}
                 <Link to={`/anime/${anime.slug}`} className="mt-3 block"
                 >
-                    <h3 className="font-medium text-gray-300 text-[13px] sm:text-[13.5px] line-clamp-2 leading-[1.3] transition-colors group-hover:text-[var(--anime-title-hover-color)]"
-                    >
-                        {displayTitle}
-                    </h3>
+                    <div className="flex items-start gap-1.5">
+                        {listStatus && currentStatusOption && (
+                            <span
+                                aria-hidden="true"
+                                className={`mt-[0.28rem] h-2 w-2 shrink-0 rounded-full ${currentStatusOption.dotColor}`}
+                            />
+                        )}
+                        <h3 className="font-medium text-gray-300 text-[13px] sm:text-[13.5px] line-clamp-2 leading-[1.3] transition-colors group-hover:text-[var(--anime-title-hover-color)]"
+                        >
+                            {displayTitle}
+                        </h3>
+                    </div>
                 </Link>
             </div>
         </div>
