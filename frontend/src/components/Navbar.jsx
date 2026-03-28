@@ -11,6 +11,7 @@ import {
     Compass,
     Flame,
     CalendarDays,
+    Search,
 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -34,14 +35,14 @@ const NavItem = ({ to, label, end = false }) => {
             end={end}
             title={label}
             className={({ isActive }) => `
-                flex items-center gap-2 rounded-lg px-2 lg:px-3 py-2 font-medium transition-colors border border-transparent
+                relative flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-300
                 ${isActive
-                    ? 'bg-dark-50 text-white border-gray-700'
-                    : 'text-gray-400 hover:bg-dark-100 hover:text-white'
+                    ? 'text-white bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }
             `}
         >
-            <span className="text-sm">{label}</span>
+            <span className="tracking-wide">{label}</span>
         </NavLink>
     );
 };
@@ -145,6 +146,7 @@ const useFuzzySearch = (data, options = {}) => {
 
 export default function Navbar() {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchSuggestions, setSearchSuggestions] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -207,6 +209,7 @@ export default function Navbar() {
             if (searchRef.current && !searchRef.current.contains(event.target)) {
                 setShowSuggestions(false);
                 setSelectedIndex(-1);
+                setIsSearchExpanded(false);
             }
             if (mobileAccountRef.current && !mobileAccountRef.current.contains(event.target)) {
                 setIsMobileAccountOpen(false);
@@ -317,6 +320,7 @@ export default function Navbar() {
         setSearchQuery('');
         setShowSuggestions(false);
         setSelectedIndex(-1);
+        setIsSearchExpanded(false);
         if (searchInputRef.current) {
             searchInputRef.current.blur();
         }
@@ -332,10 +336,13 @@ export default function Navbar() {
                     return;
                 }
                 e.preventDefault();
-                if (searchInputRef.current) {
-                    searchInputRef.current.focus();
-                    setShowSuggestions(true);
-                }
+                setIsSearchExpanded(true);
+                setTimeout(() => {
+                    if (searchInputRef.current) {
+                        searchInputRef.current.focus();
+                        setShowSuggestions(true);
+                    }
+                }, 50);
             }
 
             // ESC to blur search and close dropdowns
@@ -345,9 +352,11 @@ export default function Navbar() {
                     searchInputRef.current.blur();
                     setShowSuggestions(false);
                     setSelectedIndex(-1);
+                    setIsSearchExpanded(false);
                 } else {
                     setShowSuggestions(false);
                     setIsProfileOpen(false);
+                    setIsSearchExpanded(false);
                 }
             }
 
@@ -476,6 +485,7 @@ export default function Navbar() {
             setSearchQuery('');
             setShowSuggestions(false);
             setSelectedIndex(-1);
+            setIsSearchExpanded(false);
             if (searchInputRef.current) {
                 searchInputRef.current.blur();
             }
@@ -560,17 +570,17 @@ export default function Navbar() {
     return (
         <>
             <nav
-                className={`hidden md:block fixed top-0 left-0 right-0 z-[1000] border-b border-gray-800 bg-dark/95 transition-transform duration-200 ${isVisible ? 'translate-y-0' : '-translate-y-full'}`}
+                className={`hidden md:block fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-6xl rounded-2xl border border-white/10 bg-dark/70 backdrop-blur-xl transition-all duration-300 ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}
             >
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-16">
+                <div className="px-4 sm:px-6">
+                    <div className="flex items-center justify-between h-14">
                         {/* Logo */}
-                        <Link to="/" className="focus:outline-none">
+                        <Link to="/" className="focus:outline-none hover:scale-105 transition-transform duration-300">
                             <Logo />
                         </Link>
 
                         {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-1 flex-1 ml-4 lg:ml-6">
+                        <div className="hidden md:flex items-center gap-1.5 flex-1 ml-6 lg:ml-8">
                             <NavItem to="/browse" label="Browse" />
                             <NavItem to="/seasonal" label="Seasonal" />
                             <NavItem to="/schedule" label="Schedule" />
@@ -579,10 +589,26 @@ export default function Navbar() {
                                 <NavItem to="/profile" label="My List" />
                             )}
 
-                            {/* Search - Always Extended with Fuzzy Search */}
-                            <div className="flex-1 flex justify-center mx-1 lg:mx-2" ref={searchRef}>
-                                <div className="relative w-full max-w-[16rem] lg:max-w-[21rem]">
-                                    <form onSubmit={handleSearch} className="relative">
+                            {/* Search - Collapsible */}
+                            <div className="flex-1 flex justify-end mx-2 lg:mx-4" ref={searchRef}>
+                                <div className={`relative transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] ${isSearchExpanded ? 'w-full max-w-[16rem] lg:max-w-[22rem]' : 'w-10'}`}>
+                                    <form onSubmit={handleSearch} className="relative group/search flex items-center justify-end w-full h-full">
+                                        {/* Search Icon / Toggle Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (!isSearchExpanded) {
+                                                    setIsSearchExpanded(true);
+                                                    setTimeout(() => searchInputRef.current?.focus(), 50);
+                                                }
+                                            }}
+                                            className={`absolute left-0 z-10 flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-0 outline-none ${isSearchExpanded ? 'h-[36px] w-[36px] pointer-events-none' : 'w-10 h-10 rounded-full hover:bg-white/10 cursor-pointer pointer-events-auto'}`}
+                                            aria-label="Toggle Search"
+                                        >
+                                            <Search className={`w-4 h-4 transition-colors duration-300 ${isSearchExpanded ? 'text-gray-500 group-focus-within/search:text-accent' : 'text-gray-300 hover:text-white'}`} />
+                                        </button>
+
+                                        {/* Input */}
                                         <input
                                             ref={searchInputRef}
                                             type="text"
@@ -597,11 +623,11 @@ export default function Navbar() {
                                                 }
                                             }}
                                             placeholder="Search anime..."
-                                            className="w-full rounded-lg border border-gray-700 bg-dark-100 py-2 pl-3 pr-8 text-sm text-white placeholder:text-gray-400 focus:border-accent focus:outline-none"
+                                            className={`w-full rounded-full border border-white/5 bg-black/20 py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-black/40 focus:outline-none focus:ring-4 focus:ring-accent/10 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
                                         />
 
                                         {/* Clear button */}
-                                        {searchQuery && (
+                                        {searchQuery && isSearchExpanded && (
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -610,23 +636,23 @@ export default function Navbar() {
                                                     setSelectedIndex(-1);
                                                     searchInputRef.current?.focus();
                                                 }}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none"
                                             >
                                                 <span className="text-[10px] font-bold">CLEAR</span>
                                             </button>
                                         )}
 
                                         {/* Keyboard shortcut hint */}
-                                        {!searchQuery && (
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
-                                                <kbd className="px-1 py-0.5 bg-dark-50 rounded text-[10px] text-gray-500 border border-gray-700">/</kbd>
+                                        {!searchQuery && isSearchExpanded && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
+                                                <kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px] text-gray-400 border border-white/10">/</kbd>
                                             </div>
                                         )}
                                     </form>
 
                                     {/* Enhanced Search Suggestions Dropdown - Always visible when active */}
                                     <div
-                                        className={`absolute left-0 right-0 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto overflow-hidden rounded-xl border border-gray-700 bg-dark-100 shadow-lg shadow-black/30 transition-opacity ${showSuggestions ? 'opacity-100' : 'pointer-events-none opacity-0'
+                                        className={`absolute left-0 right-0 top-full z-50 mt-3 max-h-[70vh] overflow-y-auto overflow-hidden rounded-2xl border border-white/10 bg-dark/95 backdrop-blur-xl shadow-2xl transition-all duration-300 origin-top ${showSuggestions ? 'opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-95'
                                             }`}
                                     >
                                         {isSearching && searchSuggestions.length === 0 ? (
@@ -705,22 +731,22 @@ export default function Navbar() {
                         </div>
 
                         {/* Right Section: Auth */}
-                        <div className="hidden md:flex items-center gap-2">
+                        <div className="hidden md:flex items-center gap-3">
                             {authLoading ? (
                                 // Loading state - show skeleton instead of "Sign In" buttons
                                 <div className="flex items-center gap-2">
-                                    <div className="w-20 h-8 bg-dark-100 rounded-lg animate-pulse" />
-                                    <div className="w-8 h-8 bg-dark-100 rounded-lg animate-pulse" />
+                                    <div className="w-20 h-9 bg-white/5 rounded-xl animate-pulse" />
+                                    <div className="w-9 h-9 bg-white/5 rounded-full animate-pulse" />
                                 </div>
                             ) : isAuthenticated ? (
                                 <div className="relative" ref={profileRef}>
                                     {/* Profile Button */}
                                     <button
                                         onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                        className="relative group ml-2 flex items-center gap-2.5 rounded-xl border border-gray-700 bg-dark-100 px-3 py-1.5 transition-colors hover:border-gray-600 hover:bg-dark-50 focus:outline-none"
+                                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40 hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] focus:outline-none focus:ring-2 focus:ring-accent/40"
                                     >
                                         {/* Avatar or Placeholder */}
-                                        <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-gray-500 transition-colors">
+                                        <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
                                             {user?.avatar ? (
                                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                             ) : (
@@ -730,21 +756,21 @@ export default function Navbar() {
                                             )}
                                         </div>
                                         {isAuthenticated && mobileUnreadCount > 0 && (
-                                            <span className="absolute top-1.5 left-[2.2rem] w-2 h-2 bg-red-500 rounded-full ring-2 ring-dark-100 shadow-sm z-10" />
+                                            <span className="absolute top-1 left-7 w-2h-2 bg-red-500 rounded-full ring-2 ring-[#0c0c0f] shadow-sm z-10" />
                                         )}
-                                        <span className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
+                                        <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
                                             {user?.username}
                                         </span>
-                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+                                        <ChevronDown className={`w-4 h-4 text-gray-400 group-hover:text-white transition-all duration-300 ${isProfileOpen ? 'rotate-180 text-white' : ''}`} />
                                     </button>
 
                                     {/* Enhanced Dropdown Menu */}
                                     {isProfileOpen && (
-                                        <div className="absolute right-0 top-full mt-2 w-72 py-2 rounded-xl border border-gray-700 bg-dark-100 shadow-lg shadow-black/30">
+                                        <div className="absolute right-0 top-full mt-4 w-72 py-2 rounded-2xl border border-white/10 bg-dark/95 backdrop-blur-xl shadow-2xl origin-top-right animate-in fade-in zoom-in-95 duration-200 z-[1001]">
                                             {/* User Info Header */}
-                                            <div className="px-4 py-3 border-b border-gray-700">
+                                            <div className="px-4 py-3 border-b border-white/10 bg-white/5 mx-2 rounded-xl mb-2">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-gray-700">
+                                                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-sm">
                                                         {user?.avatar ? (
                                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                                         ) : (
@@ -754,34 +780,34 @@ export default function Navbar() {
                                                         )}
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-accent truncate">{user?.username}</p>
-                                                        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                                        <p className="text-sm font-bold text-white truncate drop-shadow-sm">{user?.username}</p>
+                                                        <p className="text-xs text-gray-400/80 truncate">{user?.email}</p>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* Menu Items */}
-                                            <div className="py-1">
+                                            <div className="py-1 px-2 space-y-0.5">
                                                 <Link
                                                     to="/profile"
                                                     onClick={() => setIsProfileOpen(false)}
-                                                    className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
                                                 >
-                                                    <User className="w-4 h-4" />
+                                                    <User className="w-4 h-4 group-hover:scale-110 transition-transform" />
                                                     <span className="text-sm font-medium">Profile</span>
                                                 </Link>
                                                 <Link
                                                     to="/notifications"
                                                     onClick={() => setIsProfileOpen(false)}
-                                                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                                    className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
                                                 >
                                                     <span className="flex items-center gap-3 min-w-0">
-                                                        <Bell className="w-4 h-4" />
+                                                        <Bell className="w-4 h-4 group-hover:scale-110 transition-transform" />
                                                         <span className="text-sm font-medium">Notifications</span>
                                                     </span>
                                                     {mobileUnreadCount > 0 && (
                                                         <span
-                                                            className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(17,24,39,1)]"
+                                                            className="w-2.5 h-2.5 rounded-full bg-accent shadow-[0_0_0_2px_rgba(17,24,39,1)]"
                                                             aria-label="New notifications"
                                                         />
                                                     )}
@@ -789,17 +815,17 @@ export default function Navbar() {
                                                 <Link
                                                     to="/settings"
                                                     onClick={() => setIsProfileOpen(false)}
-                                                    className="flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
                                                 >
-                                                    <Settings className="w-4 h-4" />
+                                                    <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
                                                     <span className="text-sm font-medium">Settings</span>
                                                 </Link>
-                                                <div className="border-t border-white/10 my-1" />
+                                                <div className="border-t border-white/10 my-2 mx-2" />
                                                 <button
                                                     onClick={() => { logout(); setIsProfileOpen(false); }}
-                                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400 focus:outline-none"
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-red-500/15 hover:text-red-400 focus:outline-none group"
                                                 >
-                                                    <LogOut className="w-4 h-4" />
+                                                    <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                                                     <span className="text-sm font-medium">Sign Out</span>
                                                 </button>
                                             </div>
