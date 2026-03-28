@@ -274,7 +274,7 @@ export default function Seasonal() {
                     {/* Content */}
                     {isLoading ? (
                         <div
-                            className="max-w-6xl mx-auto grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 lg:gap-10"
+                            className="max-w-6xl mx-auto grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 anime-card-grid-gap"
                             role="status"
                             aria-label="Loading anime"
                         >
@@ -300,7 +300,7 @@ export default function Seasonal() {
                         </div>
                     ) : (
                         <div
-                            className="max-w-6xl mx-auto grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 lg:gap-10"
+                            className="max-w-6xl mx-auto grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 anime-card-grid-gap"
                             role="list"
                             aria-label={`${animeList.length} anime in ${currentSeasonData?.label} ${selectedYear}`}
                         >
