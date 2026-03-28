@@ -1,5 +1,17 @@
 import { Link, useNavigate, useLocation, NavLink } from 'react-router-dom';
-import { User, Bell, Settings, LogOut, ChevronDown } from 'lucide-react';
+import {
+    User,
+    Bell,
+    Settings,
+    LogOut,
+    ChevronDown,
+    Home,
+    Clapperboard,
+    MessageSquare,
+    Compass,
+    Flame,
+    CalendarDays,
+} from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { animeApi, notificationApi } from '../api/client';
@@ -488,6 +500,19 @@ export default function Navbar() {
         return location.pathname.startsWith(path);
     };
 
+    const mobileTabClasses = (isActive) => `
+        group relative min-w-0 flex h-12 flex-col items-center justify-center rounded-xl border border-transparent px-0.5 transition-colors duration-200 outline-none
+        focus:outline-none focus-visible:outline-none focus-visible:ring-0 [-webkit-tap-highlight-color:transparent]
+        ${isActive
+            ? 'border-accent/35 bg-accent/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]'
+            : 'text-gray-300/90 hover:bg-white/[0.08] hover:text-white active:bg-white/[0.06]'
+        }
+    `;
+
+    const mobileIslandBackground = 'linear-gradient(160deg, rgba(12,12,15,0.84), rgba(8,8,10,0.78) 68%, color-mix(in srgb, var(--color-accent) 14%, transparent) 100%)';
+    const mobilePopoverBackground = 'rgba(11, 11, 14, 0.94)';
+    const mobilePopoverTipBackground = 'rgba(11, 11, 14, 0.94)';
+
     const startAccountHold = () => {
         longPressTriggeredRef.current = false;
         if (accountHoldTimerRef.current) {
@@ -806,50 +831,58 @@ export default function Navbar() {
             {/* Mobile Bottom Navigation Island */}
             {showMobileIsland && (
                 <div
-                    className="md:hidden fixed bottom-3 left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-1rem)] max-w-sm select-none"
+                    className="md:hidden fixed bottom-[max(0.4rem,env(safe-area-inset-bottom))] left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-0.9rem)] max-w-[350px] select-none"
                     style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
                 >
-                    <div className="rounded-[2rem] border border-white/10 bg-black/70 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-xl px-1.5 py-1.5">
-                        <div className="grid grid-cols-5 gap-1">
+                    <div
+                        className="rounded-[1.45rem] border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)] backdrop-blur-2xl backdrop-saturate-150"
+                        style={{ background: mobileIslandBackground }}
+                    >
+                        <div className="grid grid-cols-5 gap-0.5">
                             <Link
                                 to="/"
-                                className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${location.pathname === '/'
-                                    ? 'bg-white/12 text-white'
-                                    : 'text-gray-300/85'
-                                    }`}
+                                className={mobileTabClasses(location.pathname === '/')}
                             >
-                                <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider">Home</span>
+                                <Home className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                                <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Home</span>
                             </Link>
                             <div className="relative min-w-0" ref={mobileAnimeRef}>
                                 <button
                                     type="button"
                                     onClick={() => setIsMobileAnimeOpen((prev) => !prev)}
-                                    className={`w-full min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${(isPathActive('/browse') || isPathActive('/seasonal') || isPathActive('/schedule'))
-                                        ? 'bg-white/12 text-white'
-                                        : 'text-gray-300/85'
-                                        }`}
+                                    className={`w-full ${mobileTabClasses(isPathActive('/browse') || isPathActive('/seasonal') || isPathActive('/schedule'))}`}
                                 >
-                                    <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider">Anime</span>
+                                    <Clapperboard className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                                    <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Anime</span>
                                 </button>
                                 {isMobileAnimeOpen && (
-                                    <div className="absolute bottom-full left-0 mb-3 w-40 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden p-1">
-                                        <div className="absolute -bottom-1.5 left-4 w-3 h-3 rotate-45 bg-[#0a0d12] border-r border-b border-white/10" />
+                                    <div
+                                        className="absolute bottom-full left-0 mb-2.5 w-36 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                                        style={{ background: mobilePopoverBackground }}
+                                    >
+                                        <div
+                                            className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45 border-r border-b border-white/12"
+                                            style={{ backgroundColor: mobilePopoverTipBackground }}
+                                        />
                                         <Link
                                             to="/browse"
-                                            className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                         >
+                                            <Compass className="h-3.5 w-3.5 text-gray-300" />
                                             Browse
                                         </Link>
                                         <Link
                                             to="/seasonal"
-                                            className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                         >
+                                            <Flame className="h-3.5 w-3.5 text-gray-300" />
                                             Seasonal
                                         </Link>
                                         <Link
                                             to="/schedule"
-                                            className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                         >
+                                            <CalendarDays className="h-3.5 w-3.5 text-gray-300" />
                                             Schedule
                                         </Link>
                                     </div>
@@ -857,28 +890,24 @@ export default function Navbar() {
                             </div>
                             <Link
                                 to="/forums"
-                                className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/forums')
-                                    ? 'bg-white/12 text-white'
-                                    : 'text-gray-300/85'
-                                    }`}
+                                className={mobileTabClasses(isPathActive('/forums'))}
                             >
-                                <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider">Forums</span>
+                                <MessageSquare className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                                <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Forums</span>
                             </Link>
                             <Link
                                 to="/notifications"
-                                className={`min-w-0 flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/notifications')
-                                    ? 'bg-white/12 text-white'
-                                    : 'text-gray-300/85'
-                                    }`}
+                                className={mobileTabClasses(isPathActive('/notifications'))}
                             >
                                 <span className="relative inline-flex">
                                     {isAuthenticated && mobileUnreadCount > 0 && (
-                                        <span className="absolute -top-2 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-red-500 text-white text-[8px] leading-[14px] text-center font-semibold z-10">
+                                        <span className="absolute -right-2 -top-2 z-10 h-[13px] min-w-[13px] rounded-full bg-red-500 px-1 text-center text-[8px] font-semibold leading-[13px] text-white">
                                             {mobileUnreadCount > 9 ? '9+' : mobileUnreadCount}
                                         </span>
                                     )}
-                                    <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider">Notifs</span>
+                                    <Bell className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                                 </span>
+                                <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Notifs</span>
                             </Link>
                             <div className="relative min-w-0" ref={mobileAccountRef}>
                                 {isAuthenticated ? (
@@ -890,29 +919,32 @@ export default function Navbar() {
                                             onPointerLeave={cancelAccountHold}
                                             onPointerCancel={cancelAccountHold}
                                             onContextMenu={(e) => e.preventDefault()}
-                                            className={`w-full flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/profile') || isPathActive('/settings')
-                                                ? 'bg-white/12 text-white'
-                                                : 'text-gray-300/85'
-                                                }`}
+                                            className={`w-full ${mobileTabClasses(isPathActive('/profile') || isPathActive('/settings'))}`}
                                         >
                                             {user?.avatar ? (
                                                 <img
                                                     src={user.avatar}
                                                     alt={user.username}
-                                                    className="w-3.5 h-3.5 rounded-full object-cover"
+                                                    className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
                                                 />
                                             ) : (
-                                                <span className="text-[9px] font-bold text-accent">{user?.username?.charAt(0)}</span>
+                                                <User className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                                             )}
-                                            <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider">Account</span>
+                                            <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Account</span>
                                         </button>
                                         {isMobileAccountOpen && (
-                                            <div className="absolute bottom-full right-0 mb-3 w-36 rounded-2xl border border-white/10 bg-[#0a0d12] shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden p-1">
-                                                <div className="absolute -bottom-1.5 right-4 w-3 h-3 rotate-45 bg-[#0a0d12] border-r border-b border-white/10" />
+                                            <div
+                                                className="absolute bottom-full right-0 mb-2.5 w-36 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                                                style={{ background: mobilePopoverBackground }}
+                                            >
+                                                <div
+                                                    className="absolute -bottom-1.5 right-4 h-3 w-3 rotate-45 border-r border-b border-white/12"
+                                                    style={{ backgroundColor: mobilePopoverTipBackground }}
+                                                />
                                                 {!isPathActive('/profile') && (
                                                     <Link
                                                         to="/profile"
-                                                        className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                                     >
                                                         Profile
                                                     </Link>
@@ -920,7 +952,7 @@ export default function Navbar() {
                                                 {!isPathActive('/settings') && (
                                                     <Link
                                                         to="/settings"
-                                                        className="flex items-center gap-2 px-3 py-2 text-xs text-gray-200 hover:bg-white/10 rounded-xl"
+                                                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                                     >
                                                         Settings
                                                     </Link>
@@ -931,7 +963,7 @@ export default function Navbar() {
                                                         logout();
                                                         setIsMobileAccountOpen(false);
                                                     }}
-                                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-300 hover:bg-red-500/15 rounded-xl"
+                                                    className="w-full rounded-xl px-3 py-2 text-left text-xs font-medium text-red-300 hover:bg-red-500/15"
                                                 >
                                                     Sign Out
                                                 </button>
@@ -941,12 +973,10 @@ export default function Navbar() {
                                 ) : (
                                     <Link
                                         to={mobileProfilePath}
-                                        className={`flex flex-col items-center justify-center rounded-2xl py-1 transition-all ${isPathActive('/login')
-                                            ? 'bg-white/12 text-white'
-                                            : 'text-gray-300/85'
-                                            }`}
+                                        className={mobileTabClasses(location.pathname === '/login' || location.pathname === '/register')}
                                     >
-                                        <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wider">{mobileProfileLabel}</span>
+                                        <User className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                                        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">{mobileProfileLabel}</span>
                                     </Link>
                                 )}
                             </div>
