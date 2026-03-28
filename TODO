@@ -82,6 +82,6 @@ class UserFavorite(Model):
 - send emails as the custom email +
 
 - Pagination classni global settings ga chiqarib qoyish +
-- filter backendni shared ga otkazish classga ajratib yozish voris olib
+- filter backendni shared ga otkazish classga ajratib yozish voris olib +
 - anime degan app ichidagi modelni bolaklash kerak +
-- querysetlarni xammasini tepaga olib chiqish kerak
+- querysetlarni xammasini tepaga olib chiqish kerak +
