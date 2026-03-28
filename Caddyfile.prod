@@ -197,7 +197,7 @@
     # Serve user-specific profile link previews for major crawlers/bots.
     @profile_share_crawlers {
         path /u/*
-        header_regexp User-Agent (?i)(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegrambot|linkedinbot|skypeuripreview|googlebot|bingbot|duckduckbot|applebot)
+        header_regexp User-Agent (?i)(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegram(?:bot)?|linkedinbot|skypeuripreview|googlebot|bingbot|duckduckbot|applebot|pinterestbot|vkshare|line|kakaotalk-scrap)
     }
     handle @profile_share_crawlers {
         reverse_proxy {$WEB_UPSTREAMS:web:8000}

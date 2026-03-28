@@ -75,6 +75,15 @@
         reverse_proxy web:8000
     }
 
+    # Serve user-specific profile link previews for major crawlers/bots.
+    @profile_share_crawlers {
+        path /u/*
+        header_regexp User-Agent (?i)(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegram(?:bot)?|linkedinbot|skypeuripreview|googlebot|bingbot|duckduckbot|applebot|pinterestbot|vkshare|line|kakaotalk-scrap)
+    }
+    handle @profile_share_crawlers {
+        reverse_proxy web:8000
+    }
+
     # Vite HMR (WebSocket) - required for hot reload
     handle /vite-hmr {
         reverse_proxy frontend:5173

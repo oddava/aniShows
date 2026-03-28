@@ -1,4 +1,5 @@
 import json
+import re
 from html import escape, unescape
 from urllib.parse import quote
 
@@ -22,8 +23,16 @@ class ProfileSharePreviewView(View):
     """Return crawler-friendly HTML metadata for public profile links."""
 
     http_method_names = ["get", "head"]
+    CRAWLER_UA_RE = re.compile(
+        r"(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|"
+        r"whatsapp|telegram(?:bot)?|linkedinbot|skypeuripreview|"
+        r"googlebot|bingbot|duckduckbot|applebot|pinterestbot|vkshare|"
+        r"line|kakaotalk-scrap)",
+        re.IGNORECASE,
+    )
 
     def get(self, request, username: str, section: str | None = None) -> HttpResponse:
+        should_redirect = not self._is_share_crawler(request)
         user = (
             User.objects.select_related("userprofile", "stats")
             .filter(username__iexact=username)
@@ -37,7 +46,7 @@ class ProfileSharePreviewView(View):
                 description="This AniShows profile could not be found.",
                 canonical_url=canonical_url,
                 image_url=self._default_image_url(request),
-                redirect_url=canonical_url,
+                redirect_url=canonical_url if should_redirect else None,
             )
             return HttpResponse(html, status=404, content_type="text/html; charset=utf-8")
 
@@ -56,9 +65,13 @@ class ProfileSharePreviewView(View):
             description=description,
             canonical_url=canonical_url,
             image_url=image_url,
-            redirect_url=redirect_url,
+            redirect_url=redirect_url if should_redirect else None,
         )
         return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+    def _is_share_crawler(self, request) -> bool:
+        user_agent = request.headers.get("User-Agent", "")
+        return bool(self.CRAWLER_UA_RE.search(user_agent))
 
     def _build_title(self, username: str, section: str | None) -> str:
         if not section or section.strip().lower() == "overview":
@@ -163,14 +176,21 @@ class ProfileSharePreviewView(View):
         description: str,
         canonical_url: str,
         image_url: str,
-        redirect_url: str,
+        redirect_url: str | None = None,
     ) -> str:
         title_esc = escape(title, quote=True)
         desc_esc = escape(description, quote=True)
         canonical_esc = escape(canonical_url, quote=True)
         image_esc = escape(image_url, quote=True)
-        redirect_esc = escape(redirect_url, quote=True)
-        redirect_js = json.dumps(redirect_url)
+        redirect_block = ""
+
+        if redirect_url:
+            redirect_esc = escape(redirect_url, quote=True)
+            redirect_js = json.dumps(redirect_url)
+            redirect_block = f"""
+  <meta http-equiv=\"refresh\" content=\"0;url={redirect_esc}\" />
+  <script>window.location.replace({redirect_js});</script>
+"""
 
         return f"""<!doctype html>
 <html lang=\"en\">
@@ -192,12 +212,10 @@ class ProfileSharePreviewView(View):
   <meta name=\"twitter:title\" content=\"{title_esc}\" />
   <meta name=\"twitter:description\" content=\"{desc_esc}\" />
   <meta name=\"twitter:image\" content=\"{image_esc}\" />
-
-  <meta http-equiv=\"refresh\" content=\"0;url={redirect_esc}\" />
-  <script>window.location.replace({redirect_js});</script>
+{redirect_block}
 </head>
 <body>
-  <p><a href=\"{redirect_esc}\">Continue to profile</a></p>
+  <p>AniShows profile preview</p>
 </body>
 </html>
 """

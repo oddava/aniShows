@@ -50,3 +50,28 @@ class ProfileSharePreviewViewTests(TestCase):
         content = response.content.decode()
         self.assertIn("Profile Not Found | AniShows", content)
         self.assertIn("could not be found", content)
+
+    def test_telegram_crawler_preview_does_not_include_redirect(self):
+        user = User.objects.create_user(username="tguser", password="pw")
+        UserStats.objects.create(user=user, anime_count=12)
+
+        response = self.client.get("/u/tguser", HTTP_USER_AGENT="Telegram/10.9")
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("tguser on AniShows", content)
+        self.assertNotIn("http-equiv=\"refresh\"", content)
+        self.assertNotIn("window.location.replace", content)
+
+    def test_regular_browser_preview_keeps_redirect(self):
+        user = User.objects.create_user(username="browseruser", password="pw")
+
+        response = self.client.get(
+            "/u/browseruser",
+            HTTP_USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("http-equiv=\"refresh\"", content)
+        self.assertIn("window.location.replace", content)
