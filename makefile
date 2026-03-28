@@ -14,7 +14,8 @@ EXEC = docker compose exec web python manage.py
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
-        verify-backup restore restore-db-only restore-media-only load-browse
+        verify-backup restore restore-db-only restore-media-only load-browse \
+        load-api-smoke load-api-standard load-api-micro
 
 # ============================================================================
 # Service Management
@@ -224,6 +225,41 @@ load-browse:                    ## Run read-heavy k6 browse load profile (set BA
 		-e BASE_URL=$${BASE_URL:-http://localhost} \
 		-v $(PWD)/monitoring/load-tests:/load-tests \
 		grafana/k6 run /load-tests/k6-browse.js
+
+load-api-smoke:                 ## Run API benchmark smoke profile (set BASE_URL/BENCH_USERNAME/BENCH_PASSWORD)
+	docker run --rm -i \
+		-e BASE_URL=$${BASE_URL:-http://localhost} \
+		-e BENCH_MODE=smoke \
+		-e BENCH_USERNAME=$${BENCH_USERNAME:-} \
+		-e BENCH_PASSWORD=$${BENCH_PASSWORD:-} \
+		-e ENABLE_LIST_WRITES=$${ENABLE_LIST_WRITES:-false} \
+		-v $(PWD)/monitoring/load-tests:/load-tests \
+		grafana/k6 run \
+		--summary-export=$${SUMMARY_EXPORT_PATH:-/load-tests/results/k6-api-smoke-summary.json} \
+		/load-tests/k6-api-benchmark.js
+
+load-api-standard:              ## Run API benchmark standard profile (set BASE_URL/BENCH_USERNAME/BENCH_PASSWORD)
+	docker run --rm -i \
+		-e BASE_URL=$${BASE_URL:-http://localhost} \
+		-e BENCH_MODE=standard \
+		-e BENCH_USERNAME=$${BENCH_USERNAME:-} \
+		-e BENCH_PASSWORD=$${BENCH_PASSWORD:-} \
+		-e ENABLE_LIST_WRITES=$${ENABLE_LIST_WRITES:-false} \
+		-v $(PWD)/monitoring/load-tests:/load-tests \
+		grafana/k6 run \
+		--summary-export=$${SUMMARY_EXPORT_PATH:-/load-tests/results/k6-api-standard-summary.json} \
+		/load-tests/k6-api-benchmark.js
+
+load-api-micro:                 ## Run endpoint-isolated API micro benchmark profile
+	docker run --rm -i \
+		-e BASE_URL=$${BASE_URL:-http://localhost} \
+		-e BENCH_MODE=micro \
+		-e BENCH_USERNAME=$${BENCH_USERNAME:-} \
+		-e BENCH_PASSWORD=$${BENCH_PASSWORD:-} \
+		-v $(PWD)/monitoring/load-tests:/load-tests \
+		grafana/k6 run \
+		--summary-export=$${SUMMARY_EXPORT_PATH:-/load-tests/results/k6-api-micro-summary.json} \
+		/load-tests/k6-api-benchmark.js
 
 # ============================================================================
 # Backups
