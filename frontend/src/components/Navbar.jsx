@@ -580,8 +580,8 @@ export default function Navbar() {
                             )}
 
                             {/* Search - Always Extended with Fuzzy Search */}
-                            <div className="flex-1 flex justify-center mx-2 lg:mx-4" ref={searchRef}>
-                                <div className="relative w-full max-w-sm lg:max-w-xl">
+                            <div className="flex-1 flex justify-center mx-1 lg:mx-2" ref={searchRef}>
+                                <div className="relative w-full max-w-[16rem] lg:max-w-[21rem]">
                                     <form onSubmit={handleSearch} className="relative">
                                         <input
                                             ref={searchInputRef}
@@ -597,13 +597,8 @@ export default function Navbar() {
                                                 }
                                             }}
                                             placeholder="Search anime..."
-                                            className="w-full rounded-xl border border-gray-700 bg-dark-100 py-2.5 px-4 text-sm text-white placeholder:text-gray-400 focus:border-accent focus:outline-none"
+                                            className="w-full rounded-lg border border-gray-700 bg-dark-100 py-2 pl-3 pr-8 text-sm text-white placeholder:text-gray-400 focus:border-accent focus:outline-none"
                                         />
-                                        {isSearching && (
-                                            <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                                                <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                                            </div>
-                                        )}
 
                                         {/* Clear button */}
                                         {searchQuery && (
@@ -615,7 +610,7 @@ export default function Navbar() {
                                                     setSelectedIndex(-1);
                                                     searchInputRef.current?.focus();
                                                 }}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 transition-colors hover:bg-dark-50 hover:text-white focus:outline-none"
                                             >
                                                 <span className="text-[10px] font-bold">CLEAR</span>
                                             </button>
@@ -623,8 +618,8 @@ export default function Navbar() {
 
                                         {/* Keyboard shortcut hint */}
                                         {!searchQuery && (
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
-                                                <kbd className="px-1.5 py-0.5 bg-dark-50 rounded text-[10px] text-gray-500 border border-gray-700">/</kbd>
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
+                                                <kbd className="px-1 py-0.5 bg-dark-50 rounded text-[10px] text-gray-500 border border-gray-700">/</kbd>
                                             </div>
                                         )}
                                     </form>

@@ -17,7 +17,6 @@ vi.mock('../../context/AuthContext', () => ({
 vi.mock('../../api/client', () => ({
     animeApi: {
         getTrending: vi.fn(),
-        getTopRated: vi.fn(),
     },
     listApi: {
         add: vi.fn(),
@@ -82,7 +81,6 @@ describe('Home', () => {
         authState.loading = false;
 
         animeApi.getTrending.mockResolvedValue({ data: [mockAnime] });
-        animeApi.getTopRated.mockResolvedValue({ data: [mockAnime] });
     });
 
     it('renders guest intro hero for non-authenticated users', async () => {
@@ -125,15 +123,13 @@ describe('Home', () => {
         ).toBeInTheDocument();
     });
 
-    it('still renders guest trending/top rated sections when guest hero is static', async () => {
+    it('still renders guest trending section when guest hero is static', async () => {
         render(<Home />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(animeApi.getTrending).toHaveBeenCalledTimes(1);
         });
 
-        expect(animeApi.getTopRated).toHaveBeenCalledTimes(1);
         expect(screen.getByText('Trending Now')).toBeInTheDocument();
-        expect(screen.getByText('Top Rated')).toBeInTheDocument();
     });
 });

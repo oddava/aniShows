@@ -37,13 +37,6 @@ export default function Home() {
         enabled: !isAuthenticated,
     });
 
-    const { data: topRated, isLoading: topRatedLoading } = useQuery({
-        queryKey: ['anime', 'top_rated', 'home-section'],
-        queryFn: () => animeApi.getTopRated().then(res => res.data),
-        staleTime: 1000 * 60 * 15,
-        gcTime: 1000 * 60 * 30,
-    });
-
     const trending = isAuthenticated ? memberTrending : guestTrending;
     const trendingLoading = isAuthenticated ? !memberTrending : guestTrendingLoading;
     const heroCarousel = memberTrending?.slice(0, 5) || [];
@@ -182,38 +175,6 @@ export default function Home() {
                                         ))
                                     ) : (
                                         <div className="w-full text-center py-8 text-gray-500">No trending anime found</div>
-                                    )}
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Top Rated Section */}
-                        <section ref={setRevealRef} className="px-4 md:px-6 reveal pb-2">
-                            <div className="max-w-7xl mx-auto">
-                                <div className="flex items-center justify-between mb-6 md:mb-8">
-                                    <div>
-                                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Top Rated</h2>
-                                    </div>
-                                    <Link to="/browse?sort=rating" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-yellow-400/40 group">
-                                        View All <ChevronRight className="w-4 h-4" />
-                                    </Link>
-                                </div>
-
-                                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
-                                    {topRatedLoading ? (
-                                        Array(6).fill(0).map((_, i) => (
-                                            <div key={i} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                                                <AnimeCardSkeleton />
-                                            </div>
-                                        ))
-                                    ) : topRated?.length > 0 ? (
-                                        topRated.slice(0, 6).map((anime) => (
-                                            <div key={anime.id} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                                                <AnimeCard anime={anime} />
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="w-full text-center py-8 text-gray-500">No top rated anime found</div>
                                     )}
                                 </div>
                             </div>
