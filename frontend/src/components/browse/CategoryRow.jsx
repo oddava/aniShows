@@ -26,7 +26,7 @@ export default function CategoryRow({ title, animeList, isLoading, viewAllLink, 
                     )}
                 </div>
 
-                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
+                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-6 sm:gap-8 md:gap-10 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
                     {isLoading ? (
                         Array(skeletonCount).fill(0).map((_, i) => (
                             <div key={i} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
@@ -36,7 +36,7 @@ export default function CategoryRow({ title, animeList, isLoading, viewAllLink, 
                     ) : animeList?.length > 0 ? (
                         animeList.map((anime, index) => (
                             <div key={anime.id} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
-                                <AnimeCard anime={anime} priority={index < 6} />
+                                <AnimeCard anime={anime} priority={index < 6} useBannerAccentTitleHover />
                             </div>
                         ))
                     ) : (

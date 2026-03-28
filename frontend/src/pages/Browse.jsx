@@ -498,6 +498,13 @@ export default function Browse() {
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
+  const clearSeasonAndYear = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('season');
+    newParams.delete('year');
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
   const toggleArrayParam = useCallback((key, value) => {
     const newParams = new URLSearchParams(searchParams);
     const current = newParams.get(key)?.split(',').filter(Boolean) || [];
@@ -574,68 +581,68 @@ export default function Browse() {
                   genres={genres}
                   isGenresError={isGenresError}
                   typeOptions={TYPE_OPTIONS}
-                statusOptions={STATUS_OPTIONS}
-                seasonOptions={SEASON_OPTIONS}
-                yearOptions={YEAR_OPTIONS}
-                searchInputRef={searchInputRef}
-                onOpenMobileFilters={() => setShowFilters(true)}
-                hasActiveFilters={hasActiveFilters || hasUnappliedChanges}
-              />
+                  statusOptions={STATUS_OPTIONS}
+                  seasonOptions={SEASON_OPTIONS}
+                  yearOptions={YEAR_OPTIONS}
+                  searchInputRef={searchInputRef}
+                  onOpenMobileFilters={() => setShowFilters(true)}
+                  hasActiveFilters={hasActiveFilters || hasUnappliedChanges}
+                />
+
+                {/* Controls Bar - only show result count and view mode if in grid mode */}
+                {isGridMode && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <p className="flex items-baseline gap-1.5">
+                        <span className="text-accent font-bold text-lg">{totalCount.toLocaleString()}</span>
+                        <span className="text-gray-500 text-sm">results</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+
+                      {/* Title Language Toggle */}
+                      <button
+                        onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
+                        className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
+                        title="Toggle title language"
+                      >
+                        {titleLanguage === 'en' ? 'EN' : 'JP'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Active Filter Chips */}
+                <ActiveFilterChips
+                  currentTypes={currentTypes}
+                  currentStatuses={currentStatuses}
+                  currentSeason={currentSeason}
+                  currentYear={currentYearParam}
+                  currentMinRating={currentMinRating}
+                  currentMaxRating={currentMaxRating}
+                  currentStudio={currentStudio}
+                  currentGenres={currentGenres}
+                  typeOptions={TYPE_OPTIONS}
+                  statusOptions={STATUS_OPTIONS}
+                  seasonOptions={SEASON_OPTIONS}
+                  studios={studios}
+                  genres={genres}
+                  onClearType={() => updateParam('type', '')}
+                  onClearStatus={() => updateParam('status', '')}
+                  onClearSeason={clearSeasonAndYear}
+                  onClearMinRating={() => updateParam('min_rating', '')}
+                  onClearMaxRating={() => updateParam('max_rating', '')}
+                  onClearStudio={() => updateParam('studio', '')}
+                  onToggleGenre={(genre) => toggleArrayParam('genre', genre)}
+                  onClearAll={clearAllFilters}
+                  hasActiveFilters={hasActiveFilters}
+                />
+
+                {/* Anime Content */}
+                {isGridMode ? renderContent() : <BrowseRowMode titleLanguage={titleLanguage} />}
               </div>
-
-              {/* Controls Bar - only show result count and view mode if in grid mode */}
-              {isGridMode && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                  <div className="flex items-center gap-3">
-                    <p className="flex items-baseline gap-1.5">
-                      <span className="text-accent font-bold text-lg">{totalCount.toLocaleString()}</span>
-                      <span className="text-gray-500 text-sm">results</span>
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-                    <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-
-                    {/* Title Language Toggle */}
-                    <button
-                      onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                      className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
-                      title="Toggle title language"
-                    >
-                      {titleLanguage === 'en' ? 'EN' : 'JP'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Active Filter Chips */}
-              <ActiveFilterChips
-                currentTypes={currentTypes}
-                currentStatuses={currentStatuses}
-                currentSeason={currentSeason}
-                currentYear={currentYearParam}
-                currentMinRating={currentMinRating}
-                currentMaxRating={currentMaxRating}
-                currentStudio={currentStudio}
-                currentGenres={currentGenres}
-                typeOptions={TYPE_OPTIONS}
-                statusOptions={STATUS_OPTIONS}
-                seasonOptions={SEASON_OPTIONS}
-                studios={studios}
-                genres={genres}
-                onClearType={() => updateParam('type', '')}
-                onClearStatus={() => updateParam('status', '')}
-                onClearSeason={() => { updateParam('season', ''); updateParam('year', ''); }}
-                onClearMinRating={() => updateParam('min_rating', '')}
-                onClearMaxRating={() => updateParam('max_rating', '')}
-                onClearStudio={() => updateParam('studio', '')}
-                onToggleGenre={(genre) => toggleArrayParam('genre', genre)}
-                onClearAll={clearAllFilters}
-                hasActiveFilters={hasActiveFilters}
-              />
-
-              {/* Anime Content */}
-              {isGridMode ? renderContent() : <BrowseRowMode titleLanguage={titleLanguage} />}
             </main>
           </div>
         </div>
@@ -686,7 +693,7 @@ export default function Browse() {
             />
           ) : (
             <>
-              <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-4 lg:gap-5">
+              <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-8 lg:gap-10">
                 {allAnime.map((anime, index) => (
                   <AnimeCard
                     key={anime.id}

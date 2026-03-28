@@ -167,7 +167,7 @@ export default function Home() {
                                     </Link>
                                 </div>
 
-                                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
+                                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
                                     {trendingLoading ? (
                                         Array(6).fill(0).map((_, i) => (
                                             <div key={i} className="flex-shrink-0 w-[160px] md:w-auto h-full">
@@ -199,7 +199,7 @@ export default function Home() {
                                     </Link>
                                 </div>
 
-                                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
+                                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
                                     {topRatedLoading ? (
                                         Array(6).fill(0).map((_, i) => (
                                             <div key={i} className="flex-shrink-0 w-[160px] md:w-auto h-full">
@@ -411,7 +411,7 @@ function CurrentlyWatchingSection() {
                     </Link>
                 </div>
 
-                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
+                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
                     {watching.map((entry) => (
                         <div key={entry.id} className="flex-shrink-0 w-[160px] md:w-auto h-full">
                             <AnimeCard
@@ -473,7 +473,7 @@ function RecommendedForYouSection({ revealRef }) {
                     <p className="text-sm md:text-base text-gray-500 mt-0.5">{subtitle}</p>
                 </div>
 
-                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 md:gap-5 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
+                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
                     {isLoading ? (
                         Array(6).fill(0).map((_, i) => (
                             <div key={i} className="flex-shrink-0 w-[160px] md:w-auto h-full">

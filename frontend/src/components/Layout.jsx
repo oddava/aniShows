@@ -12,7 +12,8 @@ const PageLoader = () => (
 
 export default function Layout() {
     const location = useLocation();
-    const isBrowsePage = location.pathname === '/browse';
+    const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+    const isBrowsePage = normalizedPath === '/browse';
 
     return (
         <div className="min-h-screen bg-dark flex flex-col">

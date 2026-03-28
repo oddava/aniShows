@@ -155,7 +155,7 @@ function FavoritesContent({
     return (
         <div className="space-y-8 animate-tab-content">
             {favoritesLoading ? (
-                <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 md:gap-3">
+                <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 md:gap-4">
                     {Array(7).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
                 </div>
             ) : favorites?.length > 0 ? (
@@ -305,7 +305,7 @@ function AnimeListView({
 }) {
     if (listsLoading) {
         return (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4">
                 {Array(14).fill(0).map((_, i) => <ProfileAnimeCardSkeleton key={i} />)}
             </div>
         );
@@ -325,7 +325,7 @@ function AnimeListView({
     if (viewMode === 'grid') {
         return (
             <div className="relative">
-                <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 md:gap-3 transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
+                <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4 transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
                     {filteredListItems.map((item) => (
                         <ProfileAnimeCard
                             key={item.id}

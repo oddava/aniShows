@@ -58,7 +58,7 @@ export function ScheduleCardSkeleton({ delay = 0 }) {
  */
 export function ScheduleGridSkeleton({ count = 10 }) {
     return (
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 lg:gap-5">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 lg:gap-6">
             {Array.from({ length: count }).map((_, i) => (
                 <ScheduleCardSkeleton key={i} delay={i * 50} />
             ))}

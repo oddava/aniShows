@@ -16,10 +16,10 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
     const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
 
     return (
-        <div className="bg-dark-100 rounded-lg border border-gray-800/60 overflow-hidden">
-            <Link to={`/anime/${anime.slug}`} className="block">
+        <div className="flex flex-col h-full">
+            <Link to={`/anime/${anime.slug}`} className="flex flex-col h-full">
                 {/* Image Container */}
-                <div className="relative aspect-[2/3] bg-dark-50">
+                <div className="relative aspect-[2/3] bg-dark-50 rounded-lg overflow-hidden">
                     <img
                         src={imageUrl}
                         alt={anime.title}
@@ -41,20 +41,20 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
                 </div>
 
                 {/* Title and Info */}
-                <div className="p-2 h-[64px] flex flex-col justify-start">
-                    <h3 className="text-xs font-medium text-white line-clamp-2 leading-tight mb-auto">
+                <div className="mt-3 block">
+                    <h3 className="text-[12px] sm:text-[13px] font-medium text-gray-400 line-clamp-2 leading-[1.3] transition-colors hover:text-accent">
                         {anime.title}
                     </h3>
-                    <div className="flex items-center justify-between pt-1">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    <div className="flex items-center justify-between mt-0.5 opacity-60">
+                        <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
                             {anime.anime_type || 'TV'}
                         </span>
                         {showProgress ? (
-                            <span className="text-[10px] text-gray-500 font-bold">
+                            <span className="text-[9px] text-gray-400 font-bold">
                                 {episodesWatched}/{anime.episode_count || '?'}
                             </span>
                         ) : (
-                            <span className="text-[10px] text-gray-500 font-bold">
+                            <span className="text-[9px] text-gray-400 font-bold">
                                 {anime.episode_count || '?'} eps
                             </span>
                         )}
@@ -68,14 +68,11 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
 // Skeleton for loading state - minimal
 export function ProfileAnimeCardSkeleton() {
     return (
-        <div className="bg-dark-100 rounded-lg border border-gray-800/60 overflow-hidden">
-            <div className="aspect-[2/3] bg-dark-200" />
-            <div className="p-2 h-[64px] space-y-1.5 flex flex-col justify-start">
+        <div className="flex flex-col h-full">
+            <div className="aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden" />
+            <div className="mt-3 block space-y-2">
                 <div className="h-2.5 bg-dark-200 rounded w-full" />
-                <div className="mt-auto flex justify-between">
-                    <div className="h-2 bg-dark-200 rounded w-1/3" />
-                    <div className="h-2 bg-dark-200 rounded w-1/4" />
-                </div>
+                <div className="h-2.5 bg-dark-200 rounded w-[85%]" />
             </div>
         </div>
     );

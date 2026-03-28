@@ -4,6 +4,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { favoriteApi, listApi } from '../api/client';
+import useColorExtraction from '../hooks/useColorExtraction';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -20,7 +21,163 @@ const STATUS_OPTIONS = [
     { value: 'Dropped', label: 'Dropped', icon: X, color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40' },
 ];
 
-function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, priority = false, index = 0 }) {
+function isSameOriginImageUrl(url) {
+    if (!url) return false;
+    if (url.startsWith('/')) return true;
+
+    try {
+        return new URL(url, window.location.origin).origin === window.location.origin;
+    } catch {
+        return false;
+    }
+}
+
+function normalizeHexColor(value) {
+    if (!value || typeof value !== 'string') return null;
+    const hex = value.trim();
+    const shortMatch = /^#([a-f\d]{3})$/i.exec(hex);
+    if (shortMatch) {
+        const expanded = shortMatch[1].split('').map((ch) => ch + ch).join('');
+        return `#${expanded.toLowerCase()}`;
+    }
+    return /^#([a-f\d]{6})$/i.test(hex) ? hex.toLowerCase() : null;
+}
+
+function hexToRgb(hex) {
+    const normalized = normalizeHexColor(hex);
+    if (!normalized) return null;
+    const raw = normalized.slice(1);
+    return {
+        r: parseInt(raw.slice(0, 2), 16),
+        g: parseInt(raw.slice(2, 4), 16),
+        b: parseInt(raw.slice(4, 6), 16),
+    };
+}
+
+function rgbToHex(r, g, b) {
+    const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+    return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function srgbToLinear(channel) {
+    const c = channel / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function relativeLuminance({ r, g, b }) {
+    return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+}
+
+function contrastRatio(hexA, hexB) {
+    const rgbA = hexToRgb(hexA);
+    const rgbB = hexToRgb(hexB);
+    if (!rgbA || !rgbB) return 1;
+    const l1 = relativeLuminance(rgbA);
+    const l2 = relativeLuminance(rgbB);
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+function rgbToHsl({ r, g, b }) {
+    const rn = r / 255;
+    const gn = g / 255;
+    const bn = b / 255;
+    const max = Math.max(rn, gn, bn);
+    const min = Math.min(rn, gn, bn);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case rn:
+                h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+                break;
+            case gn:
+                h = ((bn - rn) / d + 2) / 6;
+                break;
+            case bn:
+                h = ((rn - gn) / d + 4) / 6;
+                break;
+            default:
+                break;
+        }
+    }
+
+    return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+function mixTowardWhite(hex, amount) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return null;
+    const t = Math.max(0, Math.min(1, amount));
+    const r = rgb.r + (255 - rgb.r) * t;
+    const g = rgb.g + (255 - rgb.g) * t;
+    const b = rgb.b + (255 - rgb.b) * t;
+    return rgbToHex(r, g, b);
+}
+
+function ensureReadableAccent(hex, backgroundHex = '#0b0f14', minContrast = 4.5) {
+    const normalized = normalizeHexColor(hex);
+    if (!normalized) return null;
+
+    if (contrastRatio(normalized, backgroundHex) >= minContrast) {
+        return normalized;
+    }
+
+    let best = normalized;
+    for (let i = 1; i <= 10; i += 1) {
+        const candidate = mixTowardWhite(normalized, i * 0.1);
+        if (!candidate) continue;
+        best = candidate;
+        if (contrastRatio(candidate, backgroundHex) >= minContrast) {
+            return candidate;
+        }
+    }
+    return best;
+}
+
+function selectReadableBannerAccent(colors, backgroundHex = '#0b0f14') {
+    const rawCandidates = [
+        colors?.primary,
+        colors?.accent,
+        colors?.secondary,
+        ...(colors?.palette || []),
+    ];
+
+    const candidates = [...new Set(rawCandidates.map(normalizeHexColor).filter(Boolean))];
+    if (!candidates.length) return null;
+
+    candidates.sort((a, b) => {
+        const aRgb = hexToRgb(a);
+        const bRgb = hexToRgb(b);
+        const aHsl = aRgb ? rgbToHsl(aRgb) : { s: 0 };
+        const bHsl = bRgb ? rgbToHsl(bRgb) : { s: 0 };
+        const aContrast = contrastRatio(a, backgroundHex);
+        const bContrast = contrastRatio(b, backgroundHex);
+        const aReadable = aContrast >= 3.2 ? 1 : 0;
+        const bReadable = bContrast >= 3.2 ? 1 : 0;
+
+        if (aReadable !== bReadable) return bReadable - aReadable;
+        if (Math.abs(aHsl.s - bHsl.s) > 1) return bHsl.s - aHsl.s;
+        return bContrast - aContrast;
+    });
+
+    return ensureReadableAccent(candidates[0], backgroundHex, 4.5);
+}
+
+function AnimeCard({
+    anime,
+    userListEntry,
+    titleLanguage = 'en',
+    lite = false,
+    priority = false,
+    index = 0,
+    useBannerAccentTitleHover = true
+}) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
@@ -41,14 +198,67 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
+    const bannerAccentImageUrl = useMemo(() => {
+        if (!useBannerAccentTitleHover) return null;
+
+        const candidates = [
+            anime.banner_image_medium,
+            anime.banner_image,
+            imageUrl,
+            anime.banner_image_external_url,
+        ].filter(Boolean);
+
+        const sameOriginCandidate = candidates.find(isSameOriginImageUrl);
+        return sameOriginCandidate || imageUrl || candidates[0] || null;
+    }, [
+        useBannerAccentTitleHover,
+        anime.banner_image_medium,
+        anime.banner_image,
+        anime.banner_image_external_url,
+        imageUrl
+    ]);
+    const { colors: bannerColors } = useColorExtraction(bannerAccentImageUrl);
+    const titleHoverColor = useMemo(
+        () => {
+            if (!useBannerAccentTitleHover) return 'var(--color-accent)';
+            return selectReadableBannerAccent(bannerColors) || 'var(--color-accent)';
+        },
+        [useBannerAccentTitleHover, bannerColors]
+    );
     const displayTitle = useMemo(() =>
         titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
         [titleLanguage, anime.title_jp, anime.title]
     );
 
+    const invalidateAnimeViews = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: ['anime'] });
+        queryClient.invalidateQueries({ queryKey: ['seasonal'] });
+    }, [queryClient]);
+
     useEffect(() => {
         setImageLoaded(false);
     }, [imageUrl]);
+
+    // Keep local quick-action state in sync when fresh server data arrives.
+    useEffect(() => {
+        setIsFavorite(anime.is_favorite || false);
+    }, [anime.id, anime.is_favorite]);
+
+    useEffect(() => {
+        setListStatus(userListEntry?.status || anime.user_list_status?.status || null);
+        setListId(userListEntry?.id || anime.user_list_status?.id || null);
+        setLocalEpisodesWatched(
+            userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0
+        );
+    }, [
+        anime.id,
+        userListEntry?.status,
+        userListEntry?.id,
+        userListEntry?.episodes_watched,
+        anime.user_list_status?.status,
+        anime.user_list_status?.id,
+        anime.user_list_status?.episodes_watched
+    ]);
 
     useEffect(() => {
         function handleClickOutside(event) {
@@ -90,6 +300,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
+            invalidateAnimeViews();
             queryClient.invalidateQueries({ queryKey: ['favorites'] });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
@@ -98,7 +309,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, isFavorite, queryClient]);
+    }, [anime.id, isAuthenticated, isLoading, isFavorite, queryClient, invalidateAnimeViews]);
 
     const handleStatusChange = useCallback(async (e, newStatus) => {
         e.preventDefault();
@@ -119,6 +330,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
             }
+            invalidateAnimeViews();
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
@@ -128,7 +340,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, queryClient]);
+    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, queryClient, invalidateAnimeViews]);
 
     const handleRemoveFromList = useCallback(async (e) => {
         e.preventDefault();
@@ -145,6 +357,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         setIsLoading(true);
         try {
             await listApi.remove(previousId);
+            invalidateAnimeViews();
             queryClient.invalidateQueries({ queryKey: ['lists'] });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
@@ -154,7 +367,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         } finally {
             setIsLoading(false);
         }
-    }, [listId, listStatus, isLoading, queryClient]);
+    }, [listId, listStatus, isLoading, queryClient, invalidateAnimeViews]);
 
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
@@ -169,8 +382,8 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         try {
             const entryId = userListEntry?.id || listId;
             await listApi.update(entryId, { episodes_watched: newEpisodes });
+            invalidateAnimeViews();
             queryClient.invalidateQueries({ queryKey: ['lists'] });
-            queryClient.invalidateQueries({ queryKey: ['anime'] });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
         } catch (error) {
             logger.error("Failed to update progress", error);
@@ -178,13 +391,19 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
         } finally {
             setIsLoading(false);
         }
-    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, queryClient]);
+    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, queryClient, invalidateAnimeViews]);
 
     const toggleStatusMenu = useCallback((e) => {
         e.preventDefault();
         e.stopPropagation();
         if (!isLoading) setShowStatusMenu(prev => !prev);
     }, [isLoading]);
+
+    const handleImageError = useCallback((event) => {
+        applyImageFallback(event, fallbackImageUrl);
+        // Prevent permanent skeleton state if primary + fallback both fail.
+        setImageLoaded(true);
+    }, [fallbackImageUrl]);
 
     if (lite) {
         return (
@@ -203,7 +422,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                     loading={loadingStrategy.loading}
                     decoding={loadingStrategy.decoding}
                     onLoad={() => setImageLoaded(true)}
-                    onError={(event) => applyImageFallback(event, fallbackImageUrl)}
+                    onError={handleImageError}
                     className={`w-full h-full object-cover ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -216,11 +435,13 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
     }
 
     return (
-        <div className="group relative block h-full overflow-visible hover:z-[150]"
+        <div
+            className="group relative block h-full overflow-visible hover:z-[150]"
+            style={{ '--anime-title-hover-color': titleHoverColor }}
         >
-            <div className="bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative transition-all duration-300 hover:border-accent/40">
+            <div className="flex flex-col h-full">
                 {/* Image Container */}
-                <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-dark-50 flex-shrink-0">
                     <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
                         {!imageLoaded && (
                             <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
@@ -233,7 +454,7 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                             loading={loadingStrategy.loading}
                             decoding={loadingStrategy.decoding}
                             onLoad={() => setImageLoaded(true)}
-                            onError={(event) => applyImageFallback(event, fallbackImageUrl)}
+                            onError={handleImageError}
                             className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                         />
                     </Link>
@@ -327,30 +548,12 @@ function AnimeCard({ anime, userListEntry, titleLanguage = 'en', lite = false, p
                 )}
 
                 {/* Title/Info Footer */}
-                <Link to={`/anime/${anime.slug}`} className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl"
+                <Link to={`/anime/${anime.slug}`} className="mt-3 block"
                 >
-                    <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent-light transition-colors"
+                    <h3 className="font-medium text-gray-300 text-[13px] sm:text-[13.5px] line-clamp-2 leading-[1.3] transition-colors group-hover:text-[var(--anime-title-hover-color)]"
                     >
                         {displayTitle}
                     </h3>
-                    <div className="flex items-center justify-between text-[11px] text-gray-400"
-                    >
-                        <span className="font-medium text-accent-light"
-                        >{anime.anime_type || 'TV'}</span>
-                        <div className="flex items-center gap-1 text-gray-400"
-                        >
-                            {listStatus === 'Watching' ? (
-                                <>
-                                    <span className="text-accent-light font-bold">{episodesWatched}</span>
-                                    <span className="text-gray-500">/</span>
-                                    <span>{anime.episode_count || '?'}</span>
-                                    <span className="text-[10px] text-gray-500 ml-0.5">eps</span>
-                                </>
-                            ) : (
-                                <span>{anime.episode_count || '?'} eps</span>
-                            )}
-                        </div>
-                    </div>
                 </Link>
             </div>
         </div>
@@ -364,6 +567,7 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.lite !== nextProps.lite) return false;
     if (prevProps.priority !== nextProps.priority) return false;
     if (prevProps.index !== nextProps.index) return false;
+    if (prevProps.useBannerAccentTitleHover !== nextProps.useBannerAccentTitleHover) return false;
     if (prevProps.anime.is_favorite !== nextProps.anime.is_favorite) return false;
 
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
@@ -379,34 +583,20 @@ export default React.memo(AnimeCard, arePropsEqual);
 // Skeleton loader with AniList-style shimmer effect
 export function AnimeCardSkeleton() {
     return (
-        <div className="relative overflow-hidden rounded-xl bg-dark-100 border border-gray-800 h-full flex flex-col">
-            {/* Shimmer overlay */}
-            <div className="absolute inset-0 z-10 pointer-events-none">
-                <div className="absolute inset-0 shimmer-overlay" />
-            </div>
-
+        <div className="relative h-full flex flex-col">
             {/* Card image placeholder */}
-            <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden rounded-t-xl">
+            <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden rounded-lg">
                 <div className="absolute inset-0 skeleton-shimmer" />
             </div>
 
             {/* Card content placeholder */}
-            <div className="p-2.5 space-y-2 flex-grow flex flex-col">
+            <div className="mt-3 space-y-2 block">
                 {/* Title line */}
-                <div className="h-3.5 bg-dark-200 rounded relative overflow-hidden">
+                <div className="h-3 bg-dark-200 rounded relative overflow-hidden">
                     <div className="absolute inset-0 skeleton-shimmer" />
                 </div>
-                <div className="h-3.5 bg-dark-200 rounded w-2/3 relative overflow-hidden">
+                <div className="h-3 w-2/3 bg-dark-200 rounded relative overflow-hidden">
                     <div className="absolute inset-0 skeleton-shimmer" />
-                </div>
-                {/* Subtitle line */}
-                <div className="flex items-center justify-between mt-auto pt-1">
-                    <div className="h-2.5 w-8 bg-dark-200 rounded relative overflow-hidden">
-                        <div className="absolute inset-0 skeleton-shimmer" />
-                    </div>
-                    <div className="h-2.5 w-12 bg-dark-200 rounded relative overflow-hidden">
-                        <div className="absolute inset-0 skeleton-shimmer" />
-                    </div>
                 </div>
             </div>
         </div>
