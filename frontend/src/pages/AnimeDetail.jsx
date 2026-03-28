@@ -429,7 +429,9 @@ export default function AnimeDetail() {
     }, [isAuthenticated, anime?.id, user, queryClient]);
 
     const handleListUpdate = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: ['anime'] });
         queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+        queryClient.invalidateQueries({ queryKey: ['user', 'list', 'watching'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
     }, [queryClient, slug]);
