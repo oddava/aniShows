@@ -24,7 +24,6 @@ export default function MusicSection({ anime, accentColor }) {
     return (
         <div className="mb-12 animate-tab-content">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
                 Themes
             </h2>
 

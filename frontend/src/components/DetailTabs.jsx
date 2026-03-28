@@ -24,7 +24,6 @@ export function OverviewTab({ anime, accentColor }) {
 
             <div className="mb-12">
                 <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
                     Synopsis
                 </h2>
                 <div>
@@ -52,7 +51,6 @@ export function OverviewTab({ anime, accentColor }) {
             {videoId && (
                 <div className="mb-12">
                     <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                        <div className="w-1 h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
                         Trailer
                     </h2>
                     <LazyYouTube videoId={videoId} title="Trailer" accentColor={accentColor} />

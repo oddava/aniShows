@@ -735,7 +735,6 @@ export default function AnimeDetail() {
                             <div className="mt-16 mb-16">
                                 <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                                     <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
-                                        <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: accentColor || '#8b5cf6' }} />
                                         Reviews
                                         <span className="text-xs sm:text-sm font-normal text-gray-400 bg-dark-50 px-2 sm:px-3 py-1 rounded-full border border-gray-800">
                                             {reviewCount}
@@ -865,7 +864,6 @@ export default function AnimeDetail() {
                             {related && related.length > 0 && (
                                 <div>
                                     <h2 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6 flex items-center gap-2">
-                                        <div className="w-1 h-5 sm:h-6 rounded-full" style={{ backgroundColor: accentColor || '#8b5cf6' }} />
                                         Recommendations
                                     </h2>
                                     <div className="hidden lg:grid grid-cols-1 gap-4">
