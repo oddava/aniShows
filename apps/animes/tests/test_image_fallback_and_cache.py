@@ -1,6 +1,6 @@
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -267,6 +267,14 @@ class ImageUrlMixinFallbackTests(SimpleTestCase):
 
         self.assertEqual(resolved, "/media/anime/covers/test.jpg")
 
+    def test_thumbnail_resolution_does_not_generate_during_request_by_default(self):
+        thumbnail_field = Mock(spec=[])
+        thumbnail_field.url = "/media/CACHE/images/anime/covers/test.webp"
+
+        resolved = self.serializer._ensure_thumbnail(thumbnail_field)
+
+        self.assertEqual(resolved, "/media/CACHE/images/anime/covers/test.webp")
+
 
 class AnimeListImageFieldFallbackTests(APITestCase):
     def setUp(self):
@@ -321,3 +329,22 @@ class AnimeListImageFieldFallbackTests(APITestCase):
             payload["banner_image_external_url"],
             "https://img.anilist.co/external-banner-2.jpg",
         )
+
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_list_response_includes_cache_status_header(self, _mock_delay):
+        Anime.objects.create(
+            title="Cache Header Anime",
+            slug="cache-header-anime",
+            synopsis="desc",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.anilist.co/external-cover-3.jpg",
+        )
+
+        first = self.client.get(reverse("anime-list"), {"sort": "title"})
+        second = self.client.get(reverse("anime-list"), {"sort": "title"})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first["X-Cache-Status"], "miss")
+        self.assertEqual(second["X-Cache-Status"], "hit")

@@ -171,3 +171,27 @@ def health_check_workers(self):
     except Exception as e:
         logger.error(f"Error in worker health check: {e}")
         raise self.retry(exc=e)
+
+
+@shared_task(
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    time_limit=180,
+)
+def flush_forum_view_counts(self, max_threads=None):
+    """Flush buffered anonymous forum thread views to the database."""
+    from apps.forums.cache_utils import flush_buffered_thread_views
+
+    try:
+        result = flush_buffered_thread_views(max_threads=max_threads)
+        if result["processed_threads"]:
+            logger.info(
+                "Flushed buffered forum views: %s threads, %s views",
+                result["processed_threads"],
+                result["flushed"],
+            )
+        return result
+    except Exception as e:
+        logger.error(f"Error flushing forum view counts: {e}")
+        raise self.retry(exc=e)

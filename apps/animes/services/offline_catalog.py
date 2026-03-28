@@ -18,6 +18,7 @@ from django.utils.text import slugify
 from apps.animes.models import Anime, OfflineCatalogImport, Studio
 from apps.animes.services.offline_sync import OfflineSyncService
 from apps.shared.logger import logger
+from apps.shared.public_cache import invalidate_public_cache_keys
 
 DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250
@@ -656,8 +657,8 @@ class OfflineCatalogImportService:
                 updated_ids.extend(anime.id for anime in to_update if anime.id)
 
         if touched_slugs:
-            cache.delete_many(
-                [
+            invalidate_public_cache_keys(
+                *[
                     key
                     for slug in touched_slugs
                     for key in (f"anime_detail_base:v2:{slug}", f"anime_detail_base:{slug}")

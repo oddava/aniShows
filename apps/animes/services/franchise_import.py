@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
 from asgiref.sync import async_to_sync
-from django.core.cache import cache
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
 from apps.shared.logger import logger
+from apps.shared.public_cache import invalidate_public_cache_keys
 
 
 class FranchiseImportError(Exception):
@@ -39,11 +39,9 @@ class FranchiseImportService:
                 self._refresh_existing_anime(existing, anilist_id)
                 existing.refresh_from_db(fields=["title", "slug"])
 
-            cache.delete_many(
-                [
-                    f"anime_detail_base:v2:{existing.slug}",
-                    f"anime_detail_base:{existing.slug}",
-                ]
+            invalidate_public_cache_keys(
+                f"anime_detail_base:v2:{existing.slug}",
+                f"anime_detail_base:{existing.slug}",
             )
             return FranchiseImportResult(
                 slug=existing.slug,
@@ -62,11 +60,9 @@ class FranchiseImportService:
             imported = self._will_create_new_anime(item)
             anime = service.save_anime_to_db(item)
             self._ensure_external_image_refs(anime, item)
-            cache.delete_many(
-                [
-                    f"anime_detail_base:v2:{anime.slug}",
-                    f"anime_detail_base:{anime.slug}",
-                ]
+            invalidate_public_cache_keys(
+                f"anime_detail_base:v2:{anime.slug}",
+                f"anime_detail_base:{anime.slug}",
             )
 
             if anime.mal_id:

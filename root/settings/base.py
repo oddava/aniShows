@@ -83,6 +83,14 @@ ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS = max(
     0.0,
 )
 NOTIFICATION_UNREAD_CACHE_TTL = _env_int("NOTIFICATION_UNREAD_CACHE_TTL", 86400)
+PUBLIC_API_CACHE_LOCK_TTL_SECONDS = _env_int("PUBLIC_API_CACHE_LOCK_TTL_SECONDS", 15)
+PUBLIC_API_CACHE_STALE_TTL_SECONDS = _env_int("PUBLIC_API_CACHE_STALE_TTL_SECONDS", 900)
+PUBLIC_API_CACHE_WAIT_TIMEOUT_MS = _env_int("PUBLIC_API_CACHE_WAIT_TIMEOUT_MS", 250)
+PUBLIC_API_CACHE_WAIT_POLL_INTERVAL_MS = _env_int("PUBLIC_API_CACHE_WAIT_POLL_INTERVAL_MS", 25)
+PUBLIC_API_CACHE_TTL_JITTER_SECONDS = _env_int("PUBLIC_API_CACHE_TTL_JITTER_SECONDS", 30)
+IMAGEKIT_GENERATE_DURING_REQUESTS = _env_bool("IMAGEKIT_GENERATE_DURING_REQUESTS", False)
+FORUM_VIEW_BUFFER_TTL_SECONDS = _env_int("FORUM_VIEW_BUFFER_TTL_SECONDS", 7200)
+FORUM_VIEW_FLUSH_BATCH_SIZE = _env_int("FORUM_VIEW_FLUSH_BATCH_SIZE", 500)
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -816,6 +824,11 @@ CELERY_BEAT_SCHEDULE = {
     "health-check-workers-hourly": {
         "task": "apps.core.tasks.cleanup_tasks.health_check_workers",
         "schedule": crontab(minute=15),  # Every hour at 15 min past
+        "options": {"queue": "low_priority"},
+    },
+    "flush-forum-view-counts-minute": {
+        "task": "apps.core.tasks.cleanup_tasks.flush_forum_view_counts",
+        "schedule": crontab(minute="*"),
         "options": {"queue": "low_priority"},
     },
 }

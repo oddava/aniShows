@@ -1,5 +1,6 @@
 """Serializer mixins for common functionality."""
 
+from django.conf import settings
 from imagekit.cachefiles import ImageCacheFile
 
 from apps.shared.media_urls import normalize_media_url
@@ -56,7 +57,8 @@ class ImageUrlMixin:
         if not isinstance(thumbnail_field, ImageCacheFile):
             return self._build_url(thumbnail_field)
 
-        thumbnail_field.generate()
+        if getattr(settings, "IMAGEKIT_GENERATE_DURING_REQUESTS", False):
+            thumbnail_field.generate()
         return self._build_url(thumbnail_field)
 
     def get_image_url(self, obj, field_name, fallback_field_name=None):

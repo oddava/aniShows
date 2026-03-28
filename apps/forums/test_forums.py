@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 
+from apps.forums.cache_utils import flush_buffered_thread_views
 from apps.forums.models import Category, Post, PostLike, Tag, Thread, ThreadLike
 
 User = get_user_model()
@@ -55,6 +56,11 @@ class TestForumsAPI:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["results"]) == 1
         assert response.data["results"][0]["title"] == "First Thread"
+        assert response["X-Cache-Status"] == "miss"
+
+        cached = api_client.get(url)
+        assert cached.status_code == status.HTTP_200_OK
+        assert cached["X-Cache-Status"] == "hit"
 
     def test_create_thread_unauthenticated(self, api_client, category):
         url = reverse("forums:thread-list")
@@ -128,6 +134,19 @@ class TestForumsAPI:
         response = api_client.get(url, {"ordering": "-updated_at"})
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["results"]) >= 1
+
+    def test_public_thread_detail_buffers_view_count(self, api_client, thread):
+        url = reverse("forums:thread-detail", args=[thread.id])
+
+        first = api_client.get(url)
+        thread.refresh_from_db()
+        assert first.status_code == status.HTTP_200_OK
+        assert first["X-Cache-Status"] == "miss"
+        assert thread.view_count == 0
+
+        flush_forum_view_counts()
+        thread.refresh_from_db()
+        assert thread.view_count == 1
 
     def test_toggle_pin_as_staff(self, api_client, thread, user):
         user.is_staff = True

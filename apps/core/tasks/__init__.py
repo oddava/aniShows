@@ -3,6 +3,7 @@
 from apps.core.tasks.cleanup_tasks import (
     cleanup_celery_backend,
     cleanup_old_task_results,
+    flush_forum_view_counts,
     health_check_workers,
 )
 

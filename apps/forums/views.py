@@ -17,21 +17,21 @@ from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 from apps.core.services.notification_service import NotificationService
 from apps.core.utils import get_client_ip
 from apps.shared.logger import logger
+from apps.shared.public_cache import get_or_build_public_payload
 from apps.users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 
 from .cache_utils import (
+    buffer_thread_view_increment,
     cache_category_detail,
     cache_category_list,
     cache_post_list,
     cache_tag_list,
-    cache_thread_detail,
-    cache_thread_list,
+    get_thread_detail_cache_key,
+    get_thread_list_cache_key,
     get_cached_category_detail,
     get_cached_category_list,
     get_cached_post_list,
     get_cached_tag_list,
-    get_cached_thread_detail,
-    get_cached_thread_list,
     invalidate_post_list_cache,
     invalidate_thread_caches,
     invalidate_thread_list_cache,
@@ -151,6 +151,11 @@ class ThreadViewSet(ModelViewSet):
     search_fields = ["title", "content"]
     ordering_fields = ["created_at", "updated_at", "view_count"]
 
+    @staticmethod
+    def _with_cache_status_header(response: Response, cache_status: str) -> Response:
+        response["X-Cache-Status"] = cache_status
+        return response
+
     def get_serializer_class(self):
         """Use lightweight serializer for list views, full serializer for detail"""
         if self.action == "list":
@@ -202,15 +207,13 @@ class ThreadViewSet(ModelViewSet):
         if request.query_params.get("search") or request.user.is_authenticated:
             return super().list(request, *args, **kwargs)
 
-        # Try to get from cache first
-        cached = get_cached_thread_list(category_slug, tag_slug, page, ordering)
-        if cached is not None:
-            return Response(cached)
-
-        # Get from database and cache
-        response = super().list(request, *args, **kwargs)
-        cache_thread_list(response.data, category_slug, tag_slug, page, ordering)
-        return response
+        cache_key = get_thread_list_cache_key(category_slug, tag_slug, page, ordering)
+        data, cache_status = get_or_build_public_payload(
+            cache_key,
+            lambda: super(ThreadViewSet, self).list(request, *args, **kwargs).data,
+            ttl=300,
+        )
+        return self._with_cache_status_header(Response(data), cache_status)
 
     def retrieve(self, request, *args, **kwargs):
         """Cache thread detail and handle unique view counts"""
@@ -226,19 +229,18 @@ class ThreadViewSet(ModelViewSet):
         view_cache_key = f"forum:view:{thread_id}:{viewer_id}"
         if not cache.get(view_cache_key):
             cache.set(view_cache_key, True, timeout=3600)
-            instance.increment_view_count()
+            buffer_thread_view_increment(int(thread_id))
 
         if request.user.is_authenticated:
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
 
-        cached = get_cached_thread_detail(thread_id)
-        if cached is not None:
-            return Response(cached)
-
-        serializer = self.get_serializer(instance)
-        cache_thread_detail(thread_id, serializer.data)
-        return Response(serializer.data)
+        data, cache_status = get_or_build_public_payload(
+            get_thread_detail_cache_key(thread_id),
+            lambda: self.get_serializer(instance).data,
+            ttl=300,
+        )
+        return self._with_cache_status_header(Response(data), cache_status)
 
     @action(
         detail=True,

@@ -307,6 +307,27 @@ class TestRuntimePolicyControls(APITestCase):
         self.assertIn("detail", payload)
         self.assertEqual(payload["retry_after"], 300)
 
+    @patch("apps.core.views.health.connection.cursor")
+    @patch("apps.core.views.health.cache.get", side_effect=RuntimeError("cache offline"))
+    @patch("apps.core.views.health.cache.set", side_effect=RuntimeError("cache offline"))
+    def test_liveness_endpoint_stays_up_when_dependencies_fail(
+        self,
+        _mock_cache_set,
+        _mock_cache_get,
+        _mock_cursor,
+    ):
+        response = self.client.get("/api/v1/health/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertEqual(payload["checks"], {"app": True})
+
+    def test_readiness_endpoint_reports_dependency_checks(self):
+        response = self.client.get("/api/v1/health/ready/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.json()
+        self.assertIn("database", payload["checks"])
+        self.assertIn("cache", payload["checks"])
+
     def test_registration_can_be_disabled(self):
         self._set_settings({"general": {"allowRegistration": False}})
 

@@ -7,64 +7,73 @@ from apps.core.services.admin_settings_service import is_maintenance_mode_enable
 from apps.shared.logger import logger
 
 
-def health_check(request):
-    """
-    Health check endpoint for Docker and load balancers.
-
-    Checks:
-    - Database connectivity
-    - Redis cache connectivity
-    - Returns 200 if all healthy, 503 if any check fails
-    """
-    checks = {
-        "database": False,
-        "cache": False,
-    }
-
-    # Check database
+def _safe_maintenance_mode() -> bool:
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
-        checks["database"] = True
-    except Exception as e:
-        logger.error(f"Health check - Database failed: {e}")
+        return is_maintenance_mode_enabled()
+    except Exception as exc:
+        logger.error("Health check - Maintenance lookup failed: %s", exc)
+        return False
 
-    # Check cache
-    try:
-        cache.set("health_check", "ok", timeout=5)
-        if cache.get("health_check") == "ok":
-            checks["cache"] = True
-    except Exception as e:
-        logger.error(f"Health check - Cache failed: {e}")
 
-    # Overall status
-    all_healthy = all(checks.values())
-
-    maintenance_mode = is_maintenance_mode_enabled()
-    service_available = all_healthy and not maintenance_mode
-
-    if not all_healthy:
+def _base_health_payload(*, maintenance_mode: bool, checks: dict | None = None) -> dict:
+    service_available = not maintenance_mode and all((checks or {"app": True}).values())
+    if checks and not all(checks.values()):
         status_label = "unhealthy"
     elif maintenance_mode:
         status_label = "maintenance"
     else:
         status_label = "healthy"
 
-    response_data = {
+    payload = {
         "status": status_label,
-        "checks": checks,
         "maintenance_mode": maintenance_mode,
         "service_available": service_available,
         "version": getattr(settings, "VERSION", "unknown"),
     }
-
+    if checks is not None:
+        payload["checks"] = checks
     if maintenance_mode:
-        response_data["detail"] = (
+        payload["detail"] = (
             "Service is temporarily unavailable due to maintenance. Please try again later."
         )
-        response_data["retry_after"] = 300
+        payload["retry_after"] = 300
+    return payload
 
-    status_code = 200 if all_healthy else 503
 
-    return JsonResponse(response_data, status=status_code)
+def health_check(request):
+    """Liveness endpoint for load balancers and fast benchmark probes."""
+    maintenance_mode = _safe_maintenance_mode()
+    return JsonResponse(
+        _base_health_payload(maintenance_mode=maintenance_mode, checks={"app": True}),
+        status=200,
+    )
+
+
+def readiness_check(request):
+    """Readiness endpoint with live dependency checks."""
+    checks = {
+        "database": False,
+        "cache": False,
+    }
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        checks["database"] = True
+    except Exception as exc:
+        logger.error("Readiness check - Database failed: %s", exc)
+
+    try:
+        cache.set("health_check", "ok", timeout=5)
+        if cache.get("health_check") == "ok":
+            checks["cache"] = True
+    except Exception as exc:
+        logger.error("Readiness check - Cache failed: %s", exc)
+
+    maintenance_mode = _safe_maintenance_mode()
+    status_code = 200 if all(checks.values()) else 503
+    return JsonResponse(
+        _base_health_payload(maintenance_mode=maintenance_mode, checks=checks),
+        status=status_code,
+    )

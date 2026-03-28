@@ -5,7 +5,19 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q
+from django.db.models import (
+    Avg,
+    Case,
+    Count,
+    Exists,
+    F,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    Q,
+    Value,
+    When,
+)
 from django.db.models.functions import Coalesce
 from rest_framework import status
 from rest_framework.decorators import action
@@ -34,6 +46,11 @@ from apps.animes.serializers import (
 )
 from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
 from apps.shared.logger import logger
+from apps.shared.public_cache import (
+    get_or_build_public_payload,
+    invalidate_public_cache_keys,
+    public_cache_stale_key,
+)
 from apps.users.models import UserAnimeList
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
@@ -95,6 +112,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @classmethod
     def _detail_cache_keys(cls, slug: str) -> tuple[str, str]:
         return (cls._detail_cache_key(slug), cls._legacy_detail_cache_key(slug))
+
+    @staticmethod
+    def _with_cache_status_header(response: Response, cache_status: str) -> Response:
+        response["X-Cache-Status"] = cache_status
+        return response
 
     def get_queryset(self):
         is_list = self.action == "list"
@@ -288,40 +310,53 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         slug = kwargs.get("slug")
         is_auth = request.user.is_authenticated
 
-        # Cache the BASE data (same for all users)
         cache_keys = self._detail_cache_keys(slug)
         primary_cache_key = cache_keys[0]
         cached_base = None
         cache_hit_key = None
+        cache_status = "hit"
         for key in cache_keys:
             cached_base = cache.get(key)
-            if cached_base:
+            if cached_base is not None:
                 cache_hit_key = key
                 break
-        needs_refresh = not cached_base
+        needs_refresh = cached_base is None
         if cached_base:
             data = cached_base.copy()
-            # Self-heal stale cache entries that were stored before image refs existed.
             if (
                 not self._has_cover_media(data)
                 or self._item_has_internal_media_urls(data)
                 or self._item_has_stale_imagekit_cache_urls(data)
             ):
                 needs_refresh = True
-                cache.delete_many(cache_keys)
+                invalidate_public_cache_keys(*cache_keys)
             elif cache_hit_key != primary_cache_key:
-                cache.set(primary_cache_key, data, 3600 if self._has_cover_media(data) else 60)
+                ttl = 3600 if self._has_cover_media(data) else 60
+                cache.set(primary_cache_key, data, ttl)
+                cache.set(public_cache_stale_key(primary_cache_key), data, ttl + 900)
 
         if needs_refresh:
             try:
-                # Use a lightweight queryset for base data
-                instance = self.get_queryset().get(slug=slug)
-                serializer = self.get_serializer(instance)
-                data = serializer.data
-                # Avoid long-lived cache for still-incomplete media payloads.
-                ttl = 3600 if self._has_cover_media(data) else 60
-                cache.set(primary_cache_key, data, ttl)
-                cache.set(self._legacy_detail_cache_key(slug), data, ttl)
+                legacy_cache_key = self._legacy_detail_cache_key(slug)
+
+                def build_base_payload():
+                    instance = self.get_queryset().get(slug=slug)
+                    serializer = self.get_serializer(instance)
+                    payload = serializer.data
+                    ttl = 3600 if self._has_cover_media(payload) else 60
+                    cache.set(legacy_cache_key, payload, ttl)
+                    cache.set(public_cache_stale_key(legacy_cache_key), payload, ttl + 900)
+                    return payload
+
+                data, cache_status = get_or_build_public_payload(
+                    primary_cache_key,
+                    build_base_payload,
+                    ttl=3600,
+                    validator=lambda payload: (
+                        not self._item_has_internal_media_urls(payload)
+                        and not self._item_has_stale_imagekit_cache_urls(payload)
+                    ),
+                )
             except Anime.DoesNotExist:
                 return Response({"error": "Anime not found"}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
@@ -361,7 +396,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             except Exception as e:
                 logger.warning(f"Error injecting user status for anime {slug}: {e}")
 
-        return Response(data)
+        return self._with_cache_status_header(Response(data), cache_status)
 
     @staticmethod
     def _has_cover_media(data: dict) -> bool:
@@ -452,6 +487,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         return False
 
+    def _is_valid_public_payload(self, payload) -> bool:
+        return not (
+            self._payload_has_internal_media_urls(payload)
+            or self._payload_has_stale_imagekit_cache_urls(payload)
+        )
+
     def list(self, request, *args, **kwargs):
         """Override to add caching for anime list endpoint"""
         if request.user.is_authenticated:
@@ -462,41 +503,27 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
         cache_key = f"anime_list:{self._PUBLIC_CACHE_VERSION}:{cache_key_hash}"
 
-        cached_data = cache.get(cache_key)
-        if (
-            cached_data
-            and not self._payload_has_internal_media_urls(cached_data)
-            and not self._payload_has_stale_imagekit_cache_urls(cached_data)
-        ):
-            return Response(cached_data)
-        if cached_data:
-            cache.delete(cache_key)
-
-        response = super().list(request, *args, **kwargs)
-
-        cache.set(cache_key, response.data, 300)
-
-        return response
+        data, cache_status = get_or_build_public_payload(
+            cache_key,
+            lambda: super(AnimeViewSet, self).list(request, *args, **kwargs).data,
+            ttl=300,
+            validator=self._is_valid_public_payload,
+        )
+        return self._with_cache_status_header(Response(data), cache_status)
 
     def _get_cached_shelf(self, request, cache_key, queryset_fn):
         """Shared helper for trending/top_rated shelves."""
         cache_key = f"{cache_key}:{self._PUBLIC_CACHE_VERSION}"
-        data = cache.get(cache_key)
-
-        if data and (
-            self._payload_has_internal_media_urls(data)
-            or self._payload_has_stale_imagekit_cache_urls(data)
-        ):
-            cache.delete(cache_key)
-            data = None
-
-        if not data:
-            queryset = queryset_fn(
-                Anime.public_queryset().select_related("studio").prefetch_related("genres")
-            )
-            serializer = AnimeListSerializer(queryset, many=True, context={"request": request})
-            data = serializer.data
-            cache.set(cache_key, data, 60 * 10)
+        data, cache_status = get_or_build_public_payload(
+            cache_key,
+            lambda: AnimeListSerializer(
+                queryset_fn(Anime.public_queryset().select_related("studio").prefetch_related("genres")),
+                many=True,
+                context={"request": request},
+            ).data,
+            ttl=60 * 10,
+            validator=self._is_valid_public_payload,
+        )
 
         if request.user.is_authenticated and data:
             anime_ids = [item["id"] for item in data]
@@ -534,7 +561,34 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 for item in data
             ]
 
-        return Response(data)
+        return self._with_cache_status_header(Response(data), cache_status)
+
+    def _related_queryset(self, anime):
+        relation_slugs = [
+            relation.get("slug")
+            for relation in anime.relations
+            if isinstance(relation, dict) and relation.get("slug") and relation.get("slug") != anime.slug
+        ]
+        relation_slugs = list(dict.fromkeys(relation_slugs))[:8]
+        base_queryset = Anime.public_queryset().select_related("studio").prefetch_related("genres")
+
+        if relation_slugs:
+            ordering = Case(
+                *[When(slug=slug, then=Value(index)) for index, slug in enumerate(relation_slugs)],
+                default=Value(len(relation_slugs)),
+                output_field=IntegerField(),
+            )
+            return base_queryset.filter(slug__in=relation_slugs).annotate(
+                relation_order=ordering
+            ).order_by("relation_order", "-id")
+
+        genre_ids = anime.genres.values_list("id", flat=True)
+        return (
+            base_queryset.filter(genres__in=genre_ids)
+            .exclude(id=anime.id)
+            .annotate(shared_genres=Count("genres"))
+            .order_by("-shared_genres", "-id")[:8]
+        )
 
     @action(detail=False, methods=["get"])
     def trending(self, request):
@@ -573,18 +627,24 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def related(self, request, slug=None):
         """Get related anime based on genres"""
         anime = self.get_object()
-        genre_ids = anime.genres.values_list("id", flat=True)
-        related = (
-            Anime.public_queryset()
-            .filter(genres__in=genre_ids)
-            .exclude(id=anime.id)
-            .select_related("studio")
-            .prefetch_related("genres")
-            .annotate(shared_genres=Count("genres"))
-            .order_by("-shared_genres")[:8]
+        cache_key = f"anime_related:{self._PUBLIC_CACHE_VERSION}:{anime.slug}"
+
+        def build_related_payload():
+            related_queryset = self._related_queryset(anime)
+            serializer = AnimeListSerializer(
+                related_queryset,
+                many=True,
+                context={"request": request},
+            )
+            return serializer.data
+
+        data, cache_status = get_or_build_public_payload(
+            cache_key,
+            build_related_payload,
+            ttl=300,
+            validator=self._is_valid_public_payload,
         )
-        serializer = AnimeListSerializer(related, many=True, context={"request": request})
-        return Response(serializer.data)
+        return self._with_cache_status_header(Response(data), cache_status)
 
     @action(detail=True, methods=["get"])
     def characters(self, request, slug=None):

@@ -10,6 +10,7 @@ from django.utils import timezone as tz
 from apps.animes.tasks import enrich_metadata, generate_recommendations
 from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
+from apps.shared.public_cache import invalidate_public_cache_keys
 from apps.users.models import UserActivity, UserAnimeList
 from apps.users.services.cache import invalidate_user_caches
 from apps.users.services.stats_service import create_or_update_user_stats
@@ -74,22 +75,22 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Anime)
 def invalidate_anime_detail_cache(sender, instance, **kwargs):
     """Invalidate cached anime detail payload when anime fields change."""
-    cache.delete_many(
-        [
-            f"anime_detail_base:v2:{instance.slug}",
-            f"anime_detail_base:{instance.slug}",
-        ]
+    invalidate_public_cache_keys(
+        f"anime_detail_base:v2:{instance.slug}",
+        f"anime_detail_base:{instance.slug}",
+        "anime_trending:v2",
+        f"anime_related:v2:{instance.slug}",
     )
 
 
 @receiver(post_delete, sender=Anime)
 def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
     """Invalidate cached anime detail payload on delete."""
-    cache.delete_many(
-        [
-            f"anime_detail_base:v2:{instance.slug}",
-            f"anime_detail_base:{instance.slug}",
-        ]
+    invalidate_public_cache_keys(
+        f"anime_detail_base:v2:{instance.slug}",
+        f"anime_detail_base:{instance.slug}",
+        "anime_trending:v2",
+        f"anime_related:v2:{instance.slug}",
     )
 
 
