@@ -111,13 +111,13 @@ export default function Profile({ forcedUsername }) {
     const handleTabChange = useCallback((nextTab, options = {}) => {
         const normalizedTab = normalizeProfileTab(nextTab);
         const { replace = false } = options;
-        const basePath = isPublicView ? `/u/${targetUsername}` : '/profile';
+        const basePath = targetUsername ? `/u/${targetUsername}` : '/profile';
         const nextPath = normalizedTab === 'overview' ? basePath : `${basePath}/${normalizedTab}`;
 
         if (nextPath !== location.pathname) {
             navigate(nextPath, { replace });
         }
-    }, [isPublicView, targetUsername, location.pathname, navigate]);
+    }, [targetUsername, location.pathname, navigate]);
 
     // Reset tab state and refetch when navigating between different profiles
     useEffect(() => {
@@ -152,6 +152,25 @@ export default function Profile({ forcedUsername }) {
             navigate(nextPath, { replace: true });
         }
     }, [forcedUsername, pathSegments, location.pathname, navigate]);
+
+    // Canonicalize own profile paths: /profile[/tab] -> /u/:currentUsername[/tab]
+    useEffect(() => {
+        if (forcedUsername) return;
+        if (pathSegments[0] !== 'profile') return;
+        if (loading || !currentUser?.username) return;
+
+        const maybeTab = pathSegments[1];
+        if (maybeTab && !isTabSegment(maybeTab)) return;
+
+        const ownTab = isTabSegment(maybeTab) ? normalizeProfileTab(maybeTab) : 'overview';
+        const nextPath = ownTab === 'overview'
+            ? `/u/${currentUser.username}`
+            : `/u/${currentUser.username}/${ownTab}`;
+
+        if (location.pathname !== nextPath) {
+            navigate(nextPath, { replace: true });
+        }
+    }, [forcedUsername, pathSegments, loading, currentUser?.username, location.pathname, navigate]);
 
     const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
         queryKey: ['profile', targetUsername],

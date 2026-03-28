@@ -554,11 +554,19 @@ export default function Navbar() {
         }
     };
 
-    const mobileProfilePath = isAuthenticated ? '/profile' : '/login';
+    const currentUserProfilePath = user?.username ? `/u/${user.username}` : '/profile';
+    const isProfileRoute = location.pathname === '/profile'
+        || location.pathname.startsWith('/profile/')
+        || location.pathname.startsWith('/u/');
+    const isOnCurrentUserProfile = Boolean(user?.username) && (
+        location.pathname === currentUserProfilePath
+        || location.pathname.startsWith(`${currentUserProfilePath}/`)
+    );
+    const mobileProfilePath = isAuthenticated ? currentUserProfilePath : '/login';
     const mobileProfileLabel = isAuthenticated ? 'Profile' : 'Sign In';
 
     const showMobileIsland = useMemo(() => {
-        const mainPaths = ['/', '/browse', '/seasonal', '/schedule', '/forums', '/profile', '/settings', '/notifications'];
+        const mainPaths = ['/', '/browse', '/seasonal', '/schedule', '/forums', '/profile', '/u', '/settings', '/notifications'];
         return mainPaths.some((path) => {
             if (path === '/') return location.pathname === '/';
             return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -603,8 +611,8 @@ export default function Navbar() {
         }
         if (!longPressTriggeredRef.current) {
             setIsMobileAccountOpen(false);
-            if (location.pathname !== '/profile') {
-                navigate('/profile');
+            if (!isOnCurrentUserProfile) {
+                navigate(currentUserProfilePath);
             }
         }
     };
@@ -648,7 +656,7 @@ export default function Navbar() {
                             <NavItem to="/schedule" label="Schedule" />
                             <NavItem to="/forums" label="Forums" />
                             {(isAuthenticated || authLoading) && (
-                                <NavItem to="/profile" label="My List" />
+                                <NavItem to={currentUserProfilePath} label="My List" />
                             )}
 
                             {/* Search - Collapsible */}
@@ -851,7 +859,7 @@ export default function Navbar() {
                                             {/* Menu Items */}
                                             <div className="py-1 px-2 space-y-0.5">
                                                 <Link
-                                                    to="/profile"
+                                                    to={currentUserProfilePath}
                                                     onClick={() => setIsProfileOpen(false)}
                                                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
                                                 >
@@ -1002,7 +1010,7 @@ export default function Navbar() {
                                             onPointerLeave={cancelAccountHold}
                                             onPointerCancel={cancelAccountHold}
                                             onContextMenu={(e) => e.preventDefault()}
-                                            className={`w-full ${mobileTabClasses(isPathActive('/profile') || isPathActive('/settings'))}`}
+                                            className={`w-full ${mobileTabClasses(isProfileRoute || isPathActive('/settings'))}`}
                                         >
                                             {user?.avatar ? (
                                                 <img
@@ -1024,9 +1032,9 @@ export default function Navbar() {
                                                     className="absolute -bottom-1.5 right-4 h-3 w-3 rotate-45 border-r border-b border-white/12"
                                                     style={{ backgroundColor: mobilePopoverTipBackground }}
                                                 />
-                                                {!isPathActive('/profile') && (
+                                                {!isOnCurrentUserProfile && (
                                                     <Link
-                                                        to="/profile"
+                                                        to={currentUserProfilePath}
                                                         className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                                     >
                                                         Profile
