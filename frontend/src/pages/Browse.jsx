@@ -574,7 +574,7 @@ export default function Browse() {
           {/* Main Layout */}
           <div className="w-full">
             {/* Main Content */}
-            <main className="flex-1 min-w-0 pb-24">
+            <main className="flex-1 min-w-0">
               
               <div className="max-w-7xl mx-auto w-full">
                 <TopFilterBar
