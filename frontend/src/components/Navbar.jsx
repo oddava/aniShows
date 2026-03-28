@@ -291,28 +291,90 @@ export default function Navbar() {
         };
     }, []);
 
-    // Hide/show navbar on scroll
+    // Auto-hide navbar logic
+    const isHoveredRef = useRef(false);
+    const isSearchExpandedRef = useRef(isSearchExpanded);
+    const isProfileOpenRef = useRef(isProfileOpen);
+    const showSuggestionsRef = useRef(showSuggestions);
+    const isSearchingRef = useRef(isSearching);
+    const timeoutRef = useRef(null);
+
+    // Keep refs fully in sync
+    useEffect(() => { isSearchExpandedRef.current = isSearchExpanded; }, [isSearchExpanded]);
+    useEffect(() => { isProfileOpenRef.current = isProfileOpen; }, [isProfileOpen]);
+    useEffect(() => { showSuggestionsRef.current = showSuggestions; }, [showSuggestions]);
+    useEffect(() => { isSearchingRef.current = isSearching; }, [isSearching]);
+
+    const startHideTimer = useCallback(() => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+            const isInteracting = 
+                isHoveredRef.current || 
+                isSearchExpandedRef.current || 
+                isProfileOpenRef.current || 
+                showSuggestionsRef.current || 
+                isSearchingRef.current;
+                
+            if (!isInteracting) {
+                setIsVisible(false);
+            }
+        }, 2500); // Hide after 2.5 seconds of idle time
+    }, []);
+
+    // Watch for interactions closing to resume hide timer
+    useEffect(() => {
+        if (!isSearchExpanded && !isProfileOpen && !showSuggestions) {
+            if (!isHoveredRef.current && isVisible) {
+                startHideTimer();
+            }
+        }
+    }, [isSearchExpanded, isProfileOpen, showSuggestions, isVisible, startHideTimer]);
+
     useEffect(() => {
         const handleScroll = () => {
             const currentScrollY = window.scrollY;
 
-            // Always show at top
+            // Show on scroll
             if (currentScrollY < 100) {
                 setIsVisible(true);
+                startHideTimer();
             } else if (currentScrollY > lastScrollY && currentScrollY > 200) {
-                // Scrolling down
-                setIsVisible(false);
+                if (!isHoveredRef.current && !isSearchExpandedRef.current && !isProfileOpenRef.current && !showSuggestionsRef.current) {
+                    setIsVisible(false);
+                    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                }
             } else if (currentScrollY < lastScrollY) {
-                // Scrolling up
                 setIsVisible(true);
+                startHideTimer();
             }
 
             setLastScrollY(currentScrollY);
         };
 
+        const handleMouseMove = (e) => {
+            const isTopArea = e.clientY <= 90;
+            
+            if (isTopArea && !isHoveredRef.current) {
+                isHoveredRef.current = true;
+                setIsVisible(true);
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            } else if (!isTopArea && isHoveredRef.current) {
+                isHoveredRef.current = false;
+                startHideTimer();
+            }
+        };
+
+        // Initialize state listener
+        startHideTimer();
+
         window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, [lastScrollY]);
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+            window.removeEventListener('mousemove', handleMouseMove);
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, [lastScrollY, startHideTimer]);
 
     // Define handleSuggestionClick BEFORE the useEffect that uses it
     const handleSuggestionClick = useCallback((slug) => {
