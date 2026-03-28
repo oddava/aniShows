@@ -10,6 +10,7 @@ import {
     getImageFallbackUrl,
     getImageSrcSet,
     getOptimizedImageUrl,
+    isSameOriginImageUrl,
 } from '../utils/imageUtils';
 import logger from '../utils/logger';
 
@@ -18,17 +19,6 @@ const STATUS_OPTIONS = [
     { value: 'Completed', label: 'Completed', icon: Check, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', dotColor: 'bg-blue-400' },
     { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-slate-300', bgColor: 'bg-slate-500/20 border-slate-400/40', dotColor: 'bg-slate-400' },
 ];
-
-function isSameOriginImageUrl(url) {
-    if (!url) return false;
-    if (url.startsWith('/')) return true;
-
-    try {
-        return new URL(url, window.location.origin).origin === window.location.origin;
-    } catch {
-        return false;
-    }
-}
 
 function normalizeHexColor(value) {
     if (!value || typeof value !== 'string') return null;
@@ -206,7 +196,7 @@ function AnimeCard({
         ].filter(Boolean);
 
         const sameOriginCandidate = candidates.find(isSameOriginImageUrl);
-        return sameOriginCandidate || imageUrl || candidates[0] || null;
+        return sameOriginCandidate || null;
     }, [
         useBannerAccentTitleHover,
         anime.banner_image_medium,

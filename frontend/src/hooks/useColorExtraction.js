@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { isSameOriginImageUrl } from '../utils/imageUtils';
 
 // Cache for color extractions to avoid re-processing same images
 const colorCache = new Map();
@@ -28,6 +29,12 @@ export default function useColorExtraction(imageUrl) {
             return;
         }
 
+        if (!isSameOriginImageUrl(imageUrl)) {
+            setIsLoading(false);
+            setError(null);
+            return;
+        }
+
         // Check cache first
         const cached = colorCache.get(imageUrl);
         if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -45,7 +52,6 @@ export default function useColorExtraction(imageUrl) {
 
             try {
                 const img = new Image();
-                img.crossOrigin = 'anonymous';
 
                 await new Promise((resolve, reject) => {
                     img.onload = resolve;

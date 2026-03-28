@@ -24,6 +24,7 @@ import {
     getImageFallbackUrl,
     getImageSrcSet,
     getOptimizedImageUrl,
+    isSameOriginImageUrl,
 } from '../utils/imageUtils';
 import logger from '../utils/logger';
 
@@ -73,12 +74,17 @@ const useAccentColor = (coverImage, bannerImage) => {
     const [accentColor, setAccentColor] = useState(null);
 
     useEffect(() => {
-        if (!coverImage) return;
+        const safeCoverImage = isSameOriginImageUrl(coverImage) ? coverImage : null;
+        const safeBannerImage = isSameOriginImageUrl(bannerImage) ? bannerImage : null;
+
+        if (!safeCoverImage && !safeBannerImage) {
+            setAccentColor(null);
+            return;
+        }
 
         const extractColor = (imageUrl) => {
             return new Promise((resolve, reject) => {
                 const img = new Image();
-                img.crossOrigin = 'anonymous';
 
                 img.onload = () => {
                     try {
@@ -118,11 +124,11 @@ const useAccentColor = (coverImage, bannerImage) => {
             setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
         };
 
-        extractColor(coverImage)
+        extractColor(safeCoverImage || safeBannerImage)
             .then(processColor)
             .catch(() => {
-                if (bannerImage) {
-                    extractColor(bannerImage)
+                if (safeBannerImage) {
+                    extractColor(safeBannerImage)
                         .then(processColor)
                         .catch(() => setAccentColor(null));
                 } else {

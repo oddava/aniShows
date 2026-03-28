@@ -17,6 +17,30 @@ const isBlankLike = (value) => {
 };
 const coerceUrl = (value) => (isBlankLike(value) ? null : value.trim());
 
+/**
+ * Whether an image URL can be safely sampled with canvas APIs in-browser.
+ * Canvas sampling should be limited to same-origin (plus blob/data) sources.
+ */
+export const isSameOriginImageUrl = (url) => {
+    const normalizedUrl = coerceUrl(url);
+    if (!normalizedUrl) return false;
+
+    if (normalizedUrl.startsWith('/')) return true;
+    if (normalizedUrl.startsWith('blob:')) return true;
+    if (normalizedUrl.startsWith('data:image/')) return true;
+
+    if (typeof window === 'undefined' || !window.location?.origin) {
+        return false;
+    }
+
+    try {
+        const parsed = new URL(normalizedUrl, window.location.origin);
+        return parsed.origin === window.location.origin;
+    } catch {
+        return false;
+    }
+};
+
 const appendCacheBuster = (url) => {
     if (!url) return url;
     const separator = url.includes('?') ? '&' : '?';
