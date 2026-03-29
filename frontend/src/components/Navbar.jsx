@@ -644,7 +644,6 @@ export default function Navbar() {
                 style={{
                     background: 'var(--color-navbar-bg)',
                     borderColor: 'var(--color-navbar-border)',
-                    boxShadow: '0 18px 48px var(--color-navbar-shadow)',
                 }}
             >
                 <div className="px-4 sm:px-6">
