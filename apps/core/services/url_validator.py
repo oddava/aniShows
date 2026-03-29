@@ -12,6 +12,7 @@ Provides comprehensive validation including:
 """
 
 import hashlib
+import ipaddress
 import re
 import socket
 from datetime import datetime
@@ -142,6 +143,7 @@ class URLValidator:
             # Normalize URL
             normalized_url = self._normalize_url(url)
             parsed = urlparse(normalized_url)
+            hostname = parsed.hostname or ""
 
             # Check 1: HTTPS only
             if parsed.scheme != "https":
@@ -150,13 +152,13 @@ class URLValidator:
                 return result
 
             # Check 2: IP address detection
-            if self._is_ip_address(parsed.netloc):
+            if self._is_ip_address(hostname):
                 result = (False, "IP addresses are not allowed", {})
                 cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
                 return result
 
             # Check 3: URL shortener blocking
-            if self._is_url_shortener(parsed.netloc):
+            if self._is_url_shortener(hostname):
                 result = (
                     False,
                     "URL shorteners are not allowed for security reasons",
@@ -166,7 +168,7 @@ class URLValidator:
                 return result
 
             # Check 4: Subdomain depth
-            subdomain_count = self._count_subdomains(parsed.netloc)
+            subdomain_count = self._count_subdomains(hostname)
             if subdomain_count > 3:
                 result = (
                     False,
@@ -177,7 +179,7 @@ class URLValidator:
                 return result
 
             # Check 5: Homograph attack detection
-            if self._is_homograph_attack(parsed.netloc):
+            if self._is_homograph_attack(hostname):
                 result = (
                     False,
                     "Potential homograph attack detected (punycode domain)",
@@ -187,8 +189,13 @@ class URLValidator:
                 return result
 
             # Check 6: DNS resolution
-            if not self._resolve_dns(parsed.netloc):
-                result = (False, "Domain does not resolve to a valid IP address", {})
+            resolved_ips = self._resolve_public_ips(hostname)
+            if not resolved_ips:
+                result = (
+                    False,
+                    "Domain does not resolve to a public IP address",
+                    {},
+                )
                 cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
                 return result
 
@@ -197,7 +204,7 @@ class URLValidator:
             platform = self._detect_platform(parsed.netloc)
             domain_age_days = None
             if not platform:  # Only check age for unknown platforms
-                domain_age_days = self._get_domain_age(parsed.netloc)
+                domain_age_days = self._get_domain_age(hostname)
                 if domain_age_days is not None and domain_age_days < 7:
                     result = (
                         False,
@@ -221,7 +228,7 @@ class URLValidator:
 
             metadata = {
                 "normalized_url": normalized_url,
-                "domain": parsed.netloc,
+                "domain": hostname,
                 "platform": platform or "website",
                 "subdomain_count": subdomain_count,
                 "domain_age_days": domain_age_days,
@@ -273,6 +280,25 @@ class URLValidator:
         )
 
         return normalized
+
+    def validate_public_target(
+        self, url: str, *, allowed_schemes: tuple[str, ...] = ("https",)
+    ) -> str:
+        """Validate a request target before fetching it over the network."""
+        normalized_url = self._normalize_url(url)
+        parsed = urlparse(normalized_url)
+        hostname = parsed.hostname or ""
+
+        if parsed.scheme not in allowed_schemes:
+            raise URLValidationError("Unsupported URL scheme")
+        if not hostname:
+            raise URLValidationError("URL is missing a hostname")
+        if self._is_ip_address(hostname):
+            raise URLValidationError("IP addresses are not allowed")
+        if not self._resolve_public_ips(hostname):
+            raise URLValidationError("Hostname resolves to a private or reserved IP address")
+
+        return normalized_url
 
     def _is_ip_address(self, netloc: str) -> bool:
         """Check if the netloc is an IP address"""
@@ -355,13 +381,30 @@ class URLValidator:
 
     def _resolve_dns(self, netloc: str) -> bool:
         """Check if domain resolves to a valid IP"""
-        host = netloc.split(":")[0]  # Remove port
+        return bool(self._resolve_public_ips(netloc))
+
+    def _resolve_public_ips(
+        self, netloc: str
+    ) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        """Resolve hostname and return only globally routable addresses."""
+        host = netloc.split(":")[0]
 
         try:
-            socket.getaddrinfo(host, None)
-            return True
+            addrinfo = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
         except socket.gaierror:
-            return False
+            return []
+
+        public_ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        for _family, _socktype, _proto, _canonname, sockaddr in addrinfo:
+            candidate = sockaddr[0]
+            try:
+                ip_obj = ipaddress.ip_address(candidate)
+            except ValueError:
+                continue
+            if ip_obj.is_global:
+                public_ips.append(ip_obj)
+
+        return public_ips
 
     def _get_domain_age(self, netloc: str) -> int | None:
         """Get domain age in days using WHOIS"""

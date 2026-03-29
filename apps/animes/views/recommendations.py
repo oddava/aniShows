@@ -2,6 +2,7 @@ from django.core.cache import cache
 from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.serializers import IntegerField, Serializer
 from rest_framework.viewsets import ViewSet
 
 from apps.shared.logger import logger
@@ -16,7 +17,12 @@ class RecommendationsViewSet(ViewSet):
     def list(self, request):
         from apps.animes.services.recommendations import RecommendationService
 
-        limit = int(request.query_params.get("limit", 12))
+        class RecommendationsQuerySerializer(Serializer):
+            limit = IntegerField(required=False, default=12, min_value=1, max_value=100)
+
+        query_serializer = RecommendationsQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        limit = query_serializer.validated_data["limit"]
 
         cache_key = f"user_recommendations:{request.user.id}"
         cached_data = cache.get(cache_key)

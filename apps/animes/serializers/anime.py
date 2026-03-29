@@ -251,7 +251,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         return None
 
     def get_status_distribution(self, obj):
-        """Calculate anime list status distribution from prefetched data."""
+        """Return the denormalized list-status summary stored on the anime record."""
         distribution = {
             "watching": 0,
             "completed": 0,
@@ -259,17 +259,10 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "dropped": 0,
             "plan_to_watch": 0,
         }
-
-        user_lists = getattr(obj, "_prefetched_objects_cache", {}).get("user_lists") or getattr(
-            obj, "user_lists", None
-        )
-
-        if user_lists:
-            for entry in user_lists.all():
-                status_key = entry.status.lower().replace(" ", "_")
-                if status_key in distribution:
-                    distribution[status_key] += 1
-
+        stored_distribution = getattr(obj, "status_distribution", None) or {}
+        if isinstance(stored_distribution, dict):
+            for key in distribution:
+                distribution[key] = int(stored_distribution.get(key, 0) or 0)
         return distribution
 
 

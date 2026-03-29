@@ -29,6 +29,12 @@ from apps.users.permissions import EmailVerificationMixin
 
 User = get_user_model()
 
+
+class ReviewCommentsQuerySerializer(serializers.Serializer):
+    page = serializers.IntegerField(required=False, default=1, min_value=1)
+    page_size = serializers.IntegerField(required=False, default=10, min_value=1, max_value=100)
+
+
 class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -65,8 +71,10 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     @action(detail=True, methods=["get"])
     def comments(self, request, pk=None):
         review = self.get_object()
-        page = int(request.query_params.get("page", 1))
-        page_size = int(request.query_params.get("page_size", 10))
+        query_serializer = ReviewCommentsQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        page = query_serializer.validated_data["page"]
+        page_size = query_serializer.validated_data["page_size"]
         paginated_comments, total = get_review_comments(review, page, page_size)
         serializer = ReviewCommentSerializer(
             paginated_comments, many=True, context={"request": request}

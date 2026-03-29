@@ -32,7 +32,12 @@ def ensure_comments_enabled():
 
 
 def get_review_queryset(request_user, query_params):
-    queryset = Review.objects.select_related("user", "user__userprofile", "anime")
+    queryset = Review.objects.select_related(
+        "user",
+        "user__userprofile",
+        "anime",
+        "anime__studio",
+    ).prefetch_related("anime__genres")
     queryset = queryset.annotate(
         _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
         _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),

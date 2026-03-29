@@ -1,6 +1,10 @@
+from urllib.parse import urlsplit, urlunsplit
+
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from django.conf import settings
+from rest_framework import status
+from rest_framework.response import Response
 
 from apps.shared.logger import logger
 from apps.users.views.social_auth import SocialLoginView
@@ -20,28 +24,60 @@ class GoogleLogin(SocialLoginView):
     client_class = CustomOAuth2Client
     authentication_classes = []  # Disable CSRF check by removing SessionAuthentication
 
-    def get_callback_url(self, request=None, adapter=None):
-        """
-        Dynamically get callback URL from request, fallback to settings.
-        This fixes issues where frontend origin (http vs https, www vs non-www)
-        doesn't match the strictly hardcoded settings.FRONTEND_URL.
-        """
-        # Try to get from request body
-        if request and request.data.get("callback_url"):
-            url = request.data.get("callback_url")
-            logger.debug(f"Using callback_url from request: {url}")
-            return url
+    @classmethod
+    def _allowed_callback_urls(cls):
+        configured_origins = {settings.FRONTEND_URL}
+        configured_origins.update(getattr(settings, "CORS_ALLOWED_ORIGINS", []))
 
-        # Fallback to standard logic (settings or adapter default)
-        url = super().get_callback_url(request, adapter)
+        allowed_urls = set()
+        for origin in configured_origins:
+            if not origin:
+                continue
+            parsed_origin = urlsplit(origin)
+            if not parsed_origin.scheme or not parsed_origin.netloc:
+                continue
+            allowed_urls.add(
+                urlunsplit(
+                    (
+                        parsed_origin.scheme,
+                        parsed_origin.netloc,
+                        "/auth/google/callback",
+                        "",
+                        "",
+                    )
+                )
+            )
+        return allowed_urls
+
+    def _resolve_callback_url(self, request):
+        requested_callback = request.data.get("callback_url")
+        default_callback = super().get_callback_url(request, None)
+
+        if not requested_callback:
+            return default_callback
+
+        normalized_callback = urlunsplit(urlsplit(requested_callback)._replace(query="", fragment=""))
+        if normalized_callback not in self._allowed_callback_urls():
+            logger.warning(
+                "Rejected non-whitelisted Google callback URL",
+                extra={"callback_url": requested_callback},
+            )
+            raise ValueError("Invalid callback URL.")
+        return normalized_callback
+
+    def get_callback_url(self, request=None, adapter=None):
+        url = self._resolve_callback_url(request) if request else super().get_callback_url(request, adapter)
         logger.debug(f"Using default callback_url: {url}")
         return url
 
     def post(self, request, *args, **kwargs):
-        # Force set callback_url from request if present
-        callback_url = request.data.get("callback_url")
-        if callback_url:
-            self.callback_url = callback_url
+        try:
+            self.callback_url = self._resolve_callback_url(request)
+        except ValueError:
+            return Response(
+                {"callback_url": ["Invalid callback URL."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             return super().post(request, *args, **kwargs)

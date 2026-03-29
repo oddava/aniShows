@@ -28,7 +28,12 @@ class FranchiseImportService:
     rate_window_seconds = 60
 
     def import_from_anilist(
-        self, *, anilist_id: int, client_ip: str, source_slug: str | None = None
+        self,
+        *,
+        anilist_id: int,
+        client_ip: str,
+        source_slug: str | None = None,
+        rate_limit_key: str | None = None,
     ) -> FranchiseImportResult:
         existing = Anime.objects.filter(anilist_id=anilist_id).first()
         if existing:
@@ -36,7 +41,7 @@ class FranchiseImportService:
                 self.update_relation_slug(source_slug, anilist_id, existing.slug)
 
             if self._is_missing_primary_images(existing):
-                self._enforce_rate_limit(client_ip)
+                self._enforce_rate_limit(rate_limit_key or client_ip)
                 self._refresh_existing_anime(existing, anilist_id)
                 existing.refresh_from_db(fields=["title", "slug"])
 
@@ -50,7 +55,7 @@ class FranchiseImportService:
                 imported=False,
             )
 
-        self._enforce_rate_limit(client_ip)
+        self._enforce_rate_limit(rate_limit_key or client_ip)
 
         service = AniListService(enable_caching=False, enable_rate_limiting=True)
         try:
@@ -135,8 +140,8 @@ class FranchiseImportService:
         if update_fields:
             anime.save(update_fields=update_fields)
 
-    def _enforce_rate_limit(self, client_ip: str) -> None:
-        rate_key = f"franchise_fetch:{client_ip}"
+    def _enforce_rate_limit(self, rate_limit_key: str) -> None:
+        rate_key = f"franchise_fetch:{rate_limit_key or 'unknown'}"
         current_count = cache.get(rate_key, 0)
         if current_count >= self.rate_limit:
             raise FranchiseImportError("Rate limit exceeded", 429)

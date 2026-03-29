@@ -19,12 +19,13 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Coalesce
-from rest_framework import status
+from rest_framework import permissions, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from apps.animes.models import (
     Anime,
@@ -45,6 +46,7 @@ from apps.animes.serializers import (
     StudioSerializer,
 )
 from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
+from apps.core.utils import get_client_ip
 from apps.shared.logger import logger
 from apps.shared.public_cache import (
     get_or_build_public_payload,
@@ -59,6 +61,11 @@ VALID_SEASONS = {"winter", "spring", "summer", "fall"}
 VALID_SORT_FIELDS = {"popular", "rating", "newest", "title", "upcoming", "trending"}
 MAX_RATING = 10.0
 MIN_RATING = 0.0
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return
 
 
 class AnimeViewSet(ReadOnlyModelViewSet):
@@ -118,7 +125,17 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         response["X-Cache-Status"] = cache_status
         return response
 
-    def get_queryset(self):
+    @staticmethod
+    def _sanitize_public_user_fields(payload):
+        if not isinstance(payload, dict):
+            return payload
+
+        sanitized = payload.copy()
+        sanitized["is_favorite"] = False
+        sanitized["user_list_status"] = None
+        return sanitized
+
+    def _build_queryset(self, *, include_user_context: bool = True):
         is_list = self.action == "list"
 
         # TODO: consider moving this queryset builder into the service layer.
@@ -137,7 +154,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
 
         user = self.request.user
-        if user.is_authenticated:
+        if include_user_context and user.is_authenticated:
             queryset = queryset.annotate(
                 _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
             )
@@ -301,6 +318,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         return queryset
 
+    def get_queryset(self):
+        return self._build_queryset(include_user_context=True)
+
     def get_serializer_class(self):
         if self.action == "retrieve":
             return AnimeDetailSerializer
@@ -323,7 +343,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 break
         needs_refresh = cached_base is None
         if cached_base:
-            data = cached_base.copy()
+            data = self._sanitize_public_user_fields(cached_base)
+            cache_payload_changed = data != cached_base
             if (
                 not self._has_cover_media(data)
                 or self._item_has_internal_media_urls(data)
@@ -331,7 +352,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             ):
                 needs_refresh = True
                 invalidate_public_cache_keys(*cache_keys)
-            elif cache_hit_key != primary_cache_key:
+            elif cache_hit_key != primary_cache_key or cache_payload_changed:
                 ttl = 3600 if self._has_cover_media(data) else 60
                 cache.set(primary_cache_key, data, ttl)
                 cache.set(public_cache_stale_key(primary_cache_key), data, ttl + 900)
@@ -341,9 +362,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 legacy_cache_key = self._legacy_detail_cache_key(slug)
 
                 def build_base_payload():
-                    instance = self.get_queryset().get(slug=slug)
+                    instance = self._build_queryset(include_user_context=False).get(slug=slug)
                     serializer = self.get_serializer(instance)
-                    payload = serializer.data
+                    payload = self._sanitize_public_user_fields(serializer.data)
                     ttl = 3600 if self._has_cover_media(payload) else 60
                     cache.set(legacy_cache_key, payload, ttl)
                     cache.set(public_cache_stale_key(legacy_cache_key), payload, ttl + 900)
@@ -612,11 +633,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def reviews(self, request, slug=None):
         """Get reviews for a specific anime with pagination"""
-        from apps.animes.models import Review
         from apps.animes.serializers import ReviewSerializer
+        from apps.animes.services.reviews import get_review_queryset
 
         anime = self.get_object()
-        reviews = Review.objects.filter(anime=anime).select_related("user")
+        reviews = get_review_queryset(request.user, request.query_params).filter(anime=anime)
 
         paginator = PageNumberPagination()
         paginator.page_size = 20
@@ -669,8 +690,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         detail=False,
         methods=["post"],
         url_path="franchise/fetch",
-        permission_classes=[AllowAny],
-        authentication_classes=[],
+        permission_classes=[permissions.IsAuthenticated],
+        authentication_classes=[JWTAuthentication, CsrfExemptSessionAuthentication],
     )
     def franchise_fetch(self, request):
         anilist_id = request.data.get("anilist_id")
@@ -689,10 +710,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
 
         try:
+            client_ip = get_client_ip(request)
             result = self.franchise_import_service.import_from_anilist(
                 anilist_id=anilist_id,
-                client_ip=self._get_client_ip(request),
+                client_ip=client_ip,
                 source_slug=request.data.get("source_slug"),
+                rate_limit_key=f"user:{request.user.pk}:{client_ip}",
             )
             return Response(
                 {
@@ -703,13 +726,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
         except FranchiseImportError as exc:
             return Response({"error": exc.message}, status=exc.status_code)
-
-    @staticmethod
-    def _get_client_ip(request):
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "unknown")
 
 class GenreViewSet(ReadOnlyModelViewSet):
     queryset = Genre.objects.all().order_by("name")

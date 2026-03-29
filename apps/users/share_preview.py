@@ -40,17 +40,12 @@ class ProfileSharePreviewView(View):
         )
 
         if not user:
-            canonical_url = request.build_absolute_uri(f"/u/{quote(username)}")
-            html = self._render_html(
-                title="Profile Not Found | AniShows",
-                description="This AniShows profile could not be found.",
-                canonical_url=canonical_url,
-                image_url=self._default_image_url(request),
-                redirect_url=canonical_url if should_redirect else None,
-            )
-            return HttpResponse(html, status=404, content_type="text/html; charset=utf-8")
+            return self._not_found_response(request, username, section, should_redirect)
 
         profile = self._get_profile(user)
+        if profile and profile.is_private and not self._is_authorized_for_private_profile(request, user):
+            return self._not_found_response(request, username, section, should_redirect)
+
         stats = self._get_stats(user)
         canonical_path = self._canonical_profile_path(user.username, section)
         canonical_url = request.build_absolute_uri(canonical_path)
@@ -68,6 +63,25 @@ class ProfileSharePreviewView(View):
             redirect_url=redirect_url if should_redirect else None,
         )
         return HttpResponse(html, content_type="text/html; charset=utf-8")
+
+    def _is_authorized_for_private_profile(self, request, user) -> bool:
+        viewer = getattr(request, "user", None)
+        if not viewer or not viewer.is_authenticated:
+            return False
+        return bool(viewer == user or viewer.is_staff or viewer.is_superuser)
+
+    def _not_found_response(
+        self, request, username: str, section: str | None, should_redirect: bool
+    ) -> HttpResponse:
+        canonical_url = request.build_absolute_uri(self._canonical_profile_path(username, section))
+        html = self._render_html(
+            title="Profile Not Found | AniShows",
+            description="This AniShows profile could not be found.",
+            canonical_url=canonical_url,
+            image_url=self._default_image_url(request),
+            redirect_url=canonical_url if should_redirect else None,
+        )
+        return HttpResponse(html, status=404, content_type="text/html; charset=utf-8")
 
     def _is_share_crawler(self, request) -> bool:
         user_agent = request.headers.get("User-Agent", "")

@@ -1,6 +1,6 @@
 from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import permissions, status
+from rest_framework import permissions, serializers, status
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
@@ -60,6 +60,14 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return obj.author == request.user
+
+
+class ThreadListQuerySerializer(serializers.Serializer):
+    page = serializers.IntegerField(required=False, default=1, min_value=1)
+
+
+class PostListQuerySerializer(serializers.Serializer):
+    page = serializers.IntegerField(required=False, default=1, min_value=1)
 
 class TagViewSet(ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
@@ -156,7 +164,9 @@ class ThreadViewSet(ModelViewSet):
         """Cache thread list with query parameters"""
         category_slug = request.query_params.get("category__slug")
         tag_slug = request.query_params.get("tags__slug")
-        page = int(request.query_params.get("page", 1))
+        query_serializer = ThreadListQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        page = query_serializer.validated_data["page"]
         ordering = request.query_params.get("ordering", "-updated_at")
 
         if request.query_params.get("search") or request.user.is_authenticated:
@@ -249,7 +259,9 @@ class PostViewSet(ModelViewSet):
     def list(self, request, *args, **kwargs):
         """Cache post list for thread and handle threaded pagination"""
         thread_id = request.query_params.get("thread__id")
-        page = int(request.query_params.get("page", 1))
+        query_serializer = PostListQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+        page = query_serializer.validated_data["page"]
 
         if thread_id and not request.user.is_authenticated:
             # Try to get from cache first

@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db.models import (
     CASCADE,
     SET_NULL,
@@ -315,6 +316,37 @@ class CeleryTaskSchedule(TimestampMixin, Model):
     def __str__(self):
         return f"{self.name} ({self.schedule_type})"
 
+    def clean(self):
+        from celery import current_app
+
+        errors = {}
+        available_queues = {queue.name for queue in (current_app.conf.task_queues or [])}
+
+        if self.task_name and (
+            not self.task_name.startswith("apps.") or self.task_name not in current_app.tasks
+        ):
+            errors["task_name"] = "Task name must reference a registered application task."
+
+        if self.queue and self.queue not in available_queues:
+            errors["queue"] = "Queue must be one of the configured Celery queues."
+
+        if not isinstance(self.task_args, list):
+            errors["task_args"] = "Task args must be a JSON list."
+
+        if not isinstance(self.task_kwargs, dict):
+            errors["task_kwargs"] = "Task kwargs must be a JSON object."
+
+        if self.schedule_type == self.ScheduleType.INTERVAL and (
+            self.interval_every is None or self.interval_every < 1
+        ):
+            errors["interval_every"] = "Interval schedules require a positive interval."
+
+        if self.schedule_type == self.ScheduleType.DATETIME and not self.one_time_datetime:
+            errors["one_time_datetime"] = "One-time schedules require a run datetime."
+
+        if errors:
+            raise ValidationError(errors)
+
     def get_celery_schedule(self):
         if self.schedule_type == self.ScheduleType.CRONTAB:
             from celery.schedules import crontab
@@ -338,8 +370,16 @@ class CeleryTaskSchedule(TimestampMixin, Model):
                 "seconds": timedelta(seconds=self.interval_every),
                 "microseconds": timedelta(microseconds=self.interval_every),
             }
-            return schedule(period_map.get(self.interval_period, timedelta(hours=1)))
-        return None
+            if self.interval_period not in period_map:
+                raise ValidationError({"interval_period": "Unsupported interval period."})
+            return schedule(period_map[self.interval_period])
+        if self.schedule_type == self.ScheduleType.DATETIME:
+            if not self.one_time_datetime:
+                raise ValidationError(
+                    {"one_time_datetime": "One-time schedules require a run datetime."}
+                )
+            return None
+        raise ValidationError({"schedule_type": "Unsupported schedule type."})
 
 class Notification(CreatedAtMixin, Model):
     class NotificationType(TextChoices):

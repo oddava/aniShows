@@ -36,16 +36,23 @@ class MetricsView(View):
             )
 
     def _is_metrics_enabled(self) -> bool:
-        return os.getenv("METRICS_ENABLED", "true").lower() == "true"
+        if os.getenv("METRICS_ENABLED", "true").lower() != "true":
+            return False
+
+        if self._get_metrics_credentials() is None:
+            logger.error(
+                "Metrics endpoint disabled: explicit non-default METRICS_USERNAME and "
+                "METRICS_PASSWORD must be configured"
+            )
+            return False
+
+        return True
 
     def _verify_auth(self, request) -> bool:
-        expected_username = os.getenv("METRICS_USERNAME", "admin")
-        expected_password = os.getenv("METRICS_PASSWORD", "admin")
-
-        if not expected_password or expected_password == "admin":
-            logger.warning(
-                "Metrics endpoint using default credentials - change METRICS_PASSWORD in production!"
-            )
+        credentials = self._get_metrics_credentials()
+        if credentials is None:
+            return False
+        expected_username, expected_password = credentials
 
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
 
@@ -61,6 +68,18 @@ class MetricsView(View):
         except Exception as e:
             logger.warning(f"Invalid auth header: {e}")
             return False
+
+    @staticmethod
+    def _get_metrics_credentials() -> tuple[str, str] | None:
+        username = (os.getenv("METRICS_USERNAME") or "").strip()
+        password = (os.getenv("METRICS_PASSWORD") or "").strip()
+
+        if not username or not password:
+            return None
+        if username == "admin" and password == "admin":
+            return None
+
+        return username, password
 
     def _generate_metrics(self) -> bytes:
         if "PROMETHEUS_MULTIPROC_DIR" in os.environ:

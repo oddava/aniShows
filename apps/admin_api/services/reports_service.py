@@ -91,47 +91,96 @@ def _overview_payload(days: int) -> dict:
     genre_queryset = Genre.objects.all()
     activity_log_queryset = AuditLog.objects.select_related("user")
 
-    total_users = user_queryset.count()
-    users_before_period = user_queryset.filter(date_joined__lt=start).count()
-    new_users = user_queryset.filter(date_joined__gte=start).count()
-    prev_new_users = user_queryset.filter(date_joined__gte=prev_start, date_joined__lt=start).count()
+    user_counts = user_queryset.aggregate(
+        total_users=Count("id"),
+        users_before_period=Count("id", filter=Q(date_joined__lt=start)),
+        new_users=Count("id", filter=Q(date_joined__gte=start)),
+        prev_new_users=Count(
+            "id",
+            filter=Q(date_joined__gte=prev_start, date_joined__lt=start),
+        ),
+    )
+    profile_counts = profile_queryset.aggregate(
+        active_users=Count("id", filter=Q(last_activity__gte=start)),
+        prev_active_users=Count(
+            "id",
+            filter=Q(last_activity__gte=prev_start, last_activity__lt=start),
+        ),
+        returning_users=Count(
+            "id",
+            filter=Q(last_activity__gte=start, user__date_joined__lt=start),
+        ),
+        prev_returning_users=Count(
+            "id",
+            filter=Q(
+                last_activity__gte=prev_start,
+                last_activity__lt=start,
+                user__date_joined__lt=prev_start,
+            ),
+        ),
+    )
 
-    active_users = profile_queryset.filter(last_activity__gte=start).count()
-    prev_active_users = profile_queryset.filter(
-        last_activity__gte=prev_start, last_activity__lt=start
-    ).count()
+    total_users = user_counts["total_users"]
+    users_before_period = user_counts["users_before_period"]
+    new_users = user_counts["new_users"]
+    prev_new_users = user_counts["prev_new_users"]
 
-    returning_users = profile_queryset.filter(last_activity__gte=start, user__date_joined__lt=start).count()
+    active_users = profile_counts["active_users"]
+    prev_active_users = profile_counts["prev_active_users"]
+    returning_users = profile_counts["returning_users"]
     retention = round((returning_users / active_users) * 100, 2) if active_users else 0.0
 
-    prev_returning_users = profile_queryset.filter(
-        last_activity__gte=prev_start, last_activity__lt=start, user__date_joined__lt=prev_start
-    ).count()
+    prev_returning_users = profile_counts["prev_returning_users"]
     prev_retention = (
         round((prev_returning_users / prev_active_users) * 100, 2) if prev_active_users else 0.0
     )
 
-    anime_total = anime_queryset.count()
-    episodes_total = anime_queryset.aggregate(total=Coalesce(Sum("episode_count"), Value(0)))["total"]
+    anime_totals = anime_queryset.aggregate(
+        anime_total=Count("id"),
+        episodes_total=Coalesce(Sum("episode_count"), Value(0)),
+    )
+    anime_total = anime_totals["anime_total"]
+    episodes_total = anime_totals["episodes_total"]
 
-    favorites = favorite_queryset.count()
-    prev_favorites = favorite_queryset.filter(added_at__lt=start).count()
-    favorites_in_period = favorite_queryset.filter(added_at__gte=start).count()
-    prev_favorites_in_period = favorite_queryset.filter(
-        added_at__gte=prev_start, added_at__lt=start
-    ).count()
+    favorite_counts = favorite_queryset.aggregate(
+        favorites=Count("id"),
+        prev_favorites=Count("id", filter=Q(added_at__lt=start)),
+        favorites_in_period=Count("id", filter=Q(added_at__gte=start)),
+        prev_favorites_in_period=Count(
+            "id",
+            filter=Q(added_at__gte=prev_start, added_at__lt=start),
+        ),
+    )
+    favorites = favorite_counts["favorites"]
+    prev_favorites = favorite_counts["prev_favorites"]
+    favorites_in_period = favorite_counts["favorites_in_period"]
+    prev_favorites_in_period = favorite_counts["prev_favorites_in_period"]
 
-    reviews = review_queryset.count()
-    reviews_in_period = review_queryset.filter(created_at__gte=start).count()
-    prev_reviews_in_period = review_queryset.filter(created_at__gte=prev_start, created_at__lt=start).count()
+    review_counts = review_queryset.aggregate(
+        reviews=Count("id"),
+        reviews_in_period=Count("id", filter=Q(created_at__gte=start)),
+        prev_reviews_in_period=Count(
+            "id",
+            filter=Q(created_at__gte=prev_start, created_at__lt=start),
+        ),
+        avg_rating=Avg("rating"),
+    )
+    reviews = review_counts["reviews"]
+    reviews_in_period = review_counts["reviews_in_period"]
+    prev_reviews_in_period = review_counts["prev_reviews_in_period"]
+    avg_rating = review_counts["avg_rating"] or 0.0
 
-    watchlists = watchlist_queryset.count()
-    watchlists_in_period = watchlist_queryset.filter(updated_at__gte=start).count()
-    prev_watchlists_in_period = watchlist_queryset.filter(
-        updated_at__gte=prev_start, updated_at__lt=start
-    ).count()
-
-    avg_rating = review_queryset.aggregate(avg=Avg("rating"))["avg"] or 0.0
+    watchlist_counts = watchlist_queryset.aggregate(
+        watchlists=Count("id"),
+        watchlists_in_period=Count("id", filter=Q(updated_at__gte=start)),
+        prev_watchlists_in_period=Count(
+            "id",
+            filter=Q(updated_at__gte=prev_start, updated_at__lt=start),
+        ),
+    )
+    watchlists = watchlist_counts["watchlists"]
+    watchlists_in_period = watchlist_counts["watchlists_in_period"]
+    prev_watchlists_in_period = watchlist_counts["prev_watchlists_in_period"]
 
     growth_by_day = list(
         user_queryset.filter(date_joined__gte=start)
@@ -203,17 +252,34 @@ def _users_payload(days: int) -> dict:
     user_queryset = User.objects.all()
     profile_queryset = UserProfile.objects.all()
 
-    total_users = user_queryset.count()
-    new_users = user_queryset.filter(date_joined__gte=start).count()
-    returning_users = profile_queryset.filter(last_activity__gte=start, user__date_joined__lt=start).count()
-    active_users_count = profile_queryset.filter(last_activity__gte=start).count()
+    user_counts = user_queryset.aggregate(
+        total_users=Count("id"),
+        new_users=Count("id", filter=Q(date_joined__gte=start)),
+        active=Count("id", filter=Q(is_active=True)),
+        inactive=Count("id", filter=Q(is_active=False)),
+        staff=Count("id", filter=Q(is_staff=True)),
+    )
+    profile_counts = profile_queryset.aggregate(
+        returning_users=Count(
+            "id",
+            filter=Q(last_activity__gte=start, user__date_joined__lt=start),
+        ),
+        active_users_count=Count("id", filter=Q(last_activity__gte=start)),
+        verified=Count("id", filter=Q(email_verified=True)),
+        unverified=Count("id", filter=Q(email_verified=False)),
+    )
+
+    total_users = user_counts["total_users"]
+    new_users = user_counts["new_users"]
+    returning_users = profile_counts["returning_users"]
+    active_users_count = profile_counts["active_users_count"]
 
     user_breakdown = {
-        "active": user_queryset.filter(is_active=True).count(),
-        "inactive": user_queryset.filter(is_active=False).count(),
-        "verified": profile_queryset.filter(email_verified=True).count(),
-        "unverified": profile_queryset.filter(email_verified=False).count(),
-        "staff": user_queryset.filter(is_staff=True).count(),
+        "active": user_counts["active"],
+        "inactive": user_counts["inactive"],
+        "verified": profile_counts["verified"],
+        "unverified": profile_counts["unverified"],
+        "staff": user_counts["staff"],
     }
 
     registration_trend = list(

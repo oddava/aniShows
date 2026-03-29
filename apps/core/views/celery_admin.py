@@ -15,7 +15,7 @@ from django.db.models import Avg, Count, Q
 from django.utils import timezone
 from django_filters import CharFilter, DateFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
@@ -229,6 +229,105 @@ class CeleryTaskScheduleFilter(FilterSet):
         model = CeleryTaskSchedule
         fields = ['status', 'schedule_type']
 
+
+class CeleryTaskScheduleWriteSerializer(serializers.ModelSerializer):
+    task_args = serializers.ListField(required=False, allow_empty=True)
+    task_kwargs = serializers.DictField(required=False)
+
+    class Meta:
+        model = CeleryTaskSchedule
+        fields = [
+            "name",
+            "task_name",
+            "description",
+            "schedule_type",
+            "crontab_minute",
+            "crontab_hour",
+            "crontab_day_of_week",
+            "crontab_day_of_month",
+            "crontab_month_of_year",
+            "interval_every",
+            "interval_period",
+            "one_time_datetime",
+            "task_args",
+            "task_kwargs",
+            "queue",
+            "status",
+        ]
+
+    def validate_task_name(self, value):
+        if not isinstance(value, str) or not value.startswith("apps.") or value not in current_app.tasks:
+            raise serializers.ValidationError(
+                "Task name must reference a registered application task."
+            )
+        return value
+
+    def validate_queue(self, value):
+        queue_name = (value or "default").strip()
+        available_queues = {queue.name for queue in (current_app.conf.task_queues or [])}
+        if queue_name not in available_queues:
+            raise serializers.ValidationError(
+                "Queue must be one of the configured Celery queues."
+            )
+        return queue_name
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        schedule_type = attrs.get(
+            "schedule_type",
+            instance.schedule_type if instance else CeleryTaskSchedule.ScheduleType.CRONTAB,
+        )
+        one_time_datetime = attrs.get(
+            "one_time_datetime",
+            instance.one_time_datetime if instance else None,
+        )
+        interval_every = attrs.get(
+            "interval_every",
+            instance.interval_every if instance else 1,
+        )
+        interval_period = attrs.get(
+            "interval_period",
+            instance.interval_period if instance else "hours",
+        )
+        valid_interval_periods = dict(
+            CeleryTaskSchedule._meta.get_field("interval_period").choices
+        )
+
+        if schedule_type == CeleryTaskSchedule.ScheduleType.DATETIME and not one_time_datetime:
+            raise serializers.ValidationError(
+                {"one_time_datetime": "One-time schedules require a run datetime."}
+            )
+        if schedule_type == CeleryTaskSchedule.ScheduleType.INTERVAL:
+            if interval_every is None or interval_every < 1:
+                raise serializers.ValidationError(
+                    {"interval_every": "Interval schedules require a positive interval."}
+                )
+            if interval_period not in valid_interval_periods:
+                raise serializers.ValidationError(
+                    {"interval_period": "Interval schedules require a valid period."}
+                )
+
+        attrs["queue"] = attrs.get("queue") or getattr(instance, "queue", "default") or "default"
+        attrs.setdefault("task_args", getattr(instance, "task_args", []) if instance else [])
+        attrs.setdefault("task_kwargs", getattr(instance, "task_kwargs", {}) if instance else {})
+
+        if schedule_type == CeleryTaskSchedule.ScheduleType.CRONTAB:
+            attrs["interval_every"] = None
+            attrs["one_time_datetime"] = None
+        elif schedule_type == CeleryTaskSchedule.ScheduleType.INTERVAL:
+            attrs["one_time_datetime"] = None
+            attrs.setdefault("interval_every", 1)
+            attrs.setdefault("interval_period", "hours")
+        else:
+            attrs["interval_every"] = None
+            attrs["crontab_minute"] = "*"
+            attrs["crontab_hour"] = "*"
+            attrs["crontab_day_of_week"] = "*"
+            attrs["crontab_day_of_month"] = "*"
+            attrs["crontab_month_of_year"] = "*"
+
+        return attrs
+
 class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
     """ViewSet for managing Celery task schedules."""
 
@@ -276,24 +375,9 @@ class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
         return self.get_paginated_response(schedules_data)
 
     def create(self, request, *args, **kwargs):
-        schedule = CeleryTaskSchedule.objects.create(
-            name=request.data.get("name"),
-            task_name=request.data.get("task_name"),
-            description=request.data.get("description", ""),
-            schedule_type=request.data.get("schedule_type", "CRONTAB"),
-            crontab_minute=request.data.get("crontab_minute", "*"),
-            crontab_hour=request.data.get("crontab_hour", "*"),
-            crontab_day_of_week=request.data.get("crontab_day_of_week", "*"),
-            crontab_day_of_month=request.data.get("crontab_day_of_month", "*"),
-            crontab_month_of_year=request.data.get("crontab_month_of_year", "*"),
-            interval_every=request.data.get("interval_every", 1),
-            interval_period=request.data.get("interval_period", "hours"),
-            one_time_datetime=request.data.get("one_time_datetime"),
-            task_args=request.data.get("task_args", []),
-            task_kwargs=request.data.get("task_kwargs", {}),
-            queue=request.data.get("queue", "default"),
-            status=request.data.get("status", "ENABLED"),
-        )
+        serializer = CeleryTaskScheduleWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        schedule = serializer.save()
         return Response(
             {
                 "id": schedule.id,
@@ -336,31 +420,13 @@ class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         schedule = self.get_object()
-        schedule.name = request.data.get("name", schedule.name)
-        schedule.task_name = request.data.get("task_name", schedule.task_name)
-        schedule.description = request.data.get("description", schedule.description)
-        schedule.schedule_type = request.data.get("schedule_type", schedule.schedule_type)
-        schedule.crontab_minute = request.data.get("crontab_minute", schedule.crontab_minute)
-        schedule.crontab_hour = request.data.get("crontab_hour", schedule.crontab_hour)
-        schedule.crontab_day_of_week = request.data.get(
-            "crontab_day_of_week", schedule.crontab_day_of_week
+        serializer = CeleryTaskScheduleWriteSerializer(
+            schedule,
+            data=request.data,
+            partial=kwargs.get("partial", False),
         )
-        schedule.crontab_day_of_month = request.data.get(
-            "crontab_day_of_month", schedule.crontab_day_of_month
-        )
-        schedule.crontab_month_of_year = request.data.get(
-            "crontab_month_of_year", schedule.crontab_month_of_year
-        )
-        schedule.interval_every = request.data.get("interval_every", schedule.interval_every)
-        schedule.interval_period = request.data.get("interval_period", schedule.interval_period)
-        schedule.one_time_datetime = request.data.get(
-            "one_time_datetime", schedule.one_time_datetime
-        )
-        schedule.task_args = request.data.get("task_args", schedule.task_args)
-        schedule.task_kwargs = request.data.get("task_kwargs", schedule.task_kwargs)
-        schedule.queue = request.data.get("queue", schedule.queue)
-        schedule.status = request.data.get("status", schedule.status)
-        schedule.save()
+        serializer.is_valid(raise_exception=True)
+        schedule = serializer.save()
 
         return Response(
             {

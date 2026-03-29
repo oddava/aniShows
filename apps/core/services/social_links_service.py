@@ -96,14 +96,15 @@ class SocialLinksService:
         if not is_valid:
             raise SocialLinkValidationError(error_message)
 
+        validated_url = validation_metadata.get("normalized_url", normalized_url)
         trust_level = self._determine_trust_level(
             validation_metadata.get("platform"), validation_metadata
         )
 
         return {
             "platform": platform,
-            "url": normalized_url,
-            "normalized_url": validation_metadata.get("normalized_url", normalized_url),
+            "url": validated_url,
+            "normalized_url": validated_url,
             "domain": validation_metadata.get("domain", ""),
             "detected_platform": validation_metadata.get("platform", "website"),
             "trust_level": trust_level,
@@ -254,10 +255,11 @@ class SocialLinksService:
             trust_level = self._determine_trust_level(
                 validation_metadata.get("platform"), validation_metadata
             )
+            validated_url = validation_metadata.get("normalized_url", normalized)
 
             return {
                 "valid": True,
-                "url": normalized,
+                "url": validated_url,
                 "platform": validation_metadata.get("platform", "website"),
                 "domain": validation_metadata.get("domain", ""),
                 "trust_level": trust_level,

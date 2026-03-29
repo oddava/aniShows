@@ -40,54 +40,6 @@ def delete_account(user, password):
             )
 
     with transaction.atomic():
-        from apps.animes.models import (
-            Review,
-            ReviewComment,
-            ReviewVote,
-            UserFavorite,
-            UserHistory,
-            UserRecommendation,
-        )
-        from apps.core.models import Notification, PushSubscription
-        from apps.forums.models import Post, PostLike, Thread, ThreadLike
-        from apps.users.models import (
-            SocialLinkChangeLog,
-            UserActivity,
-            UserAnimeList,
-            UserBadge,
-            UserFollow,
-            UserStats,
-        )
-
-        db = user._state.db or "default"
-
-        PostLike.objects.filter(post__author=user)._raw_delete(db)
-        PostLike.objects.filter(user=user)._raw_delete(db)
-        ThreadLike.objects.filter(thread__author=user)._raw_delete(db)
-        ThreadLike.objects.filter(user=user)._raw_delete(db)
-        Post.objects.filter(thread__author=user)._raw_delete(db)
-        Post.objects.filter(author=user)._raw_delete(db)
-        Thread.objects.filter(author=user)._raw_delete(db)
-
-        ReviewComment.objects.filter(review__user=user)._raw_delete(db)
-        ReviewComment.objects.filter(user=user)._raw_delete(db)
-        ReviewVote.objects.filter(review__user=user)._raw_delete(db)
-        ReviewVote.objects.filter(user=user)._raw_delete(db)
-        Review.objects.filter(user=user)._raw_delete(db)
-
-        UserActivity.objects.filter(user=user)._raw_delete(db)
-        UserAnimeList.objects.filter(user=user)._raw_delete(db)
-        UserFavorite.objects.filter(user=user)._raw_delete(db)
-        UserHistory.objects.filter(user=user)._raw_delete(db)
-        UserRecommendation.objects.filter(user=user)._raw_delete(db)
-        UserStats.objects.filter(user=user)._raw_delete(db)
-        UserFollow.objects.filter(follower=user)._raw_delete(db)
-        UserFollow.objects.filter(following=user)._raw_delete(db)
-        UserBadge.objects.filter(user=user)._raw_delete(db)
-        SocialLinkChangeLog.objects.filter(user=user)._raw_delete(db)
-        Notification.objects.filter(user=user)._raw_delete(db)
-        PushSubscription.objects.filter(user=user)._raw_delete(db)
-
         user.delete()
 
     return AccountManagementResult(

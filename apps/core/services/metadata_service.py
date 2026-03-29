@@ -9,6 +9,8 @@ from django.core.cache import cache
 
 from apps.shared.logger import logger
 
+from .url_validator import URLValidationError, URLValidator
+
 
 class MetadataService:
     """Service for fetching and caching link metadata."""
@@ -16,6 +18,7 @@ class MetadataService:
     CACHE_PREFIX = "link_metadata:"
     CACHE_TTL = timedelta(hours=24)
     REQUEST_TIMEOUT = 5  # seconds
+    MAX_REDIRECTS = 5
 
     # Favicon services as fallbacks
     FAVICON_SERVICES = [
@@ -25,9 +28,10 @@ class MetadataService:
     ]
 
     def __init__(self):
+        self.url_validator = URLValidator()
         self.client = httpx.Client(
             timeout=self.REQUEST_TIMEOUT,
-            follow_redirects=True,
+            follow_redirects=False,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
         )
 
@@ -53,17 +57,20 @@ class MetadataService:
     def _scrape_metadata(self, url: str) -> Dict:
         """Scrape Open Graph and other metadata from a URL."""
         try:
-            response = self.client.get(url)
+            response = self._get_safe_response(url)
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "html.parser")
             return {
-                "title": self._extract_title(soup, url),
+                "title": self._extract_title(soup, str(response.url)),
                 "description": self._extract_description(soup),
-                "favicon": self._extract_favicon(soup, url),
+                "favicon": self._extract_favicon(soup, str(response.url)),
                 "image": self._extract_og_image(soup),
-                "site_name": self._extract_site_name(soup, url),
+                "site_name": self._extract_site_name(soup, str(response.url)),
             }
+        except URLValidationError as e:
+            logger.warning(f"Blocked unsafe metadata fetch for {url}: {e}")
+            return self._fallback_metadata(url)
         except httpx.TimeoutException:
             logger.warning(f"Timeout fetching metadata for {url}")
             return self._fallback_metadata(url)
@@ -73,6 +80,27 @@ class MetadataService:
         except Exception as e:
             logger.error(f"Error scraping metadata for {url}: {e}")
             return self._fallback_metadata(url)
+
+    def _get_safe_response(self, url: str) -> httpx.Response:
+        """Fetch a URL while validating every redirect target."""
+        current_url = self.url_validator.validate_public_target(url)
+
+        for _ in range(self.MAX_REDIRECTS + 1):
+            response = self.client.get(current_url)
+            if not response.is_redirect:
+                return response
+
+            location = response.headers.get("location")
+            if not location:
+                return response
+
+            current_url = self.url_validator.validate_public_target(
+                str(response.url.join(location))
+            )
+
+        raise httpx.TooManyRedirects(
+            f"Exceeded {self.MAX_REDIRECTS} redirects while fetching metadata"
+        )
 
     def _extract_title(self, soup: BeautifulSoup, url: str) -> str:
         """Extract page title."""

@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Q
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone as tz
@@ -106,6 +107,51 @@ def invalidate_heatmap_cache(user_id):
     cache_key = get_user_heatmap_cache_key(user_id)
     cache.delete(cache_key)
     logger.debug(f"Invalidated heatmap cache for user {user_id}")
+
+
+def update_anime_status_distribution(anime_id):
+    """Refresh the denormalized status summary stored on Anime."""
+    if not anime_id:
+        return
+
+    distribution = (
+        UserAnimeList.objects.filter(anime_id=anime_id)
+        .aggregate(
+            watching=Count(
+                "id",
+                filter=Q(status=UserAnimeList.UserAnimeStatus.watching),
+            ),
+            completed=Count(
+                "id",
+                filter=Q(status=UserAnimeList.UserAnimeStatus.completed),
+            ),
+            on_hold=Count(
+                "id",
+                filter=Q(status=UserAnimeList.UserAnimeStatus.on_hold),
+            ),
+            dropped=Count(
+                "id",
+                filter=Q(status=UserAnimeList.UserAnimeStatus.dropped),
+            ),
+            plan_to_watch=Count(
+                "id",
+                filter=Q(status=UserAnimeList.UserAnimeStatus.plan_to_watch),
+            ),
+        )
+    )
+    normalized_distribution = {
+        key: int(distribution.get(key, 0) or 0)
+        for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
+    }
+
+    try:
+        anime = Anime.objects.get(pk=anime_id)
+    except Anime.DoesNotExist:
+        return
+
+    if anime.status_distribution != normalized_distribution:
+        anime.status_distribution = normalized_distribution
+        anime.save(update_fields=["status_distribution"])
 
 
 @receiver(pre_save, sender=UserAnimeList)
@@ -343,6 +389,8 @@ def handle_user_anime_list_change(sender, instance, **kwargs):
 
         # Schedule recommendations with dedup (5-minute window)
         _schedule_recommendations_debounced(instance.user.id, countdown=300)
+
+        transaction.on_commit(lambda anime_id=instance.anime_id: update_anime_status_distribution(anime_id))
 
 
 @receiver([post_save, post_delete], sender=UserFavorite)

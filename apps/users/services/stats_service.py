@@ -4,11 +4,59 @@ Provides functions for calculating user statistics on-the-fly
 when UserStats materialized view is not available.
 """
 
-from django.db.models import Avg, F, Sum, Value
+from django.db.models import Avg, Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.animes.models import Review, UserFavorite
-from apps.users.models import UserAnimeList, UserStats
+from apps.users.models import UserAnimeList, UserFollow, UserStats
+
+
+def serialize_user_stats(
+    stats_data: dict,
+    *,
+    include_follow_counts: bool = False,
+    include_last_updated=False,
+):
+    payload = {
+        "anime_count": int(stats_data.get("anime_count", 0) or 0),
+        "episodes_watched": int(stats_data.get("episodes_watched", 0) or 0),
+        "total_minutes": int(stats_data.get("total_minutes", 0) or 0),
+        "days_watched": round(float(stats_data.get("days_watched", 0) or 0), 1),
+        "mean_score": round(stats_data["mean_score"], 1) if stats_data.get("mean_score") else None,
+        "favorites_count": int(stats_data.get("favorites_count", 0) or 0),
+        "reviews_count": int(stats_data.get("reviews_count", 0) or 0),
+    }
+    if include_follow_counts:
+        payload["followers_count"] = int(stats_data.get("followers_count", 0) or 0)
+        payload["following_count"] = int(stats_data.get("following_count", 0) or 0)
+    if include_last_updated:
+        payload["last_updated"] = stats_data.get("last_updated")
+    return payload
+
+
+def get_materialized_user_stats_payload(
+    stats: UserStats,
+    *,
+    include_follow_counts: bool = False,
+    include_last_updated: bool = False,
+):
+    stats_data = {
+        "anime_count": stats.anime_count,
+        "episodes_watched": stats.episodes_watched,
+        "total_minutes": stats.total_minutes,
+        "days_watched": stats.days_watched,
+        "mean_score": stats.mean_score,
+        "favorites_count": stats.favorites_count,
+        "reviews_count": stats.reviews_count,
+        "followers_count": stats.followers_count,
+        "following_count": stats.following_count,
+        "last_updated": stats.last_updated,
+    }
+    return serialize_user_stats(
+        stats_data,
+        include_follow_counts=include_follow_counts,
+        include_last_updated=include_last_updated,
+    )
 
 
 def calculate_user_stats(user):
@@ -66,6 +114,16 @@ def calculate_user_stats(user):
     }
 
 
+def calculate_user_stats_with_follows(user):
+    stats_data = calculate_user_stats(user)
+    follow_counts = UserFollow.objects.aggregate(
+        followers_count=Count("id", filter=Q(following=user)),
+        following_count=Count("id", filter=Q(follower=user)),
+    )
+    stats_data.update(follow_counts)
+    return stats_data
+
+
 def create_or_update_user_stats(user):
     """
     Create or update the UserStats materialized view for a user.
@@ -106,17 +164,7 @@ def get_user_stats_with_fallback(user):
     """
     try:
         stats = user.stats
-        return {
-            "anime_count": stats.anime_count,
-            "episodes_watched": stats.episodes_watched,
-            "total_minutes": stats.total_minutes,
-            "days_watched": stats.days_watched,
-            "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
-            "favorites_count": stats.favorites_count,
-            "reviews_count": stats.reviews_count,
-            "followers_count": stats.followers_count,
-            "following_count": stats.following_count,
-        }
+        return get_materialized_user_stats_payload(stats, include_follow_counts=True)
     except UserStats.DoesNotExist:
         # Fall back to on-the-fly calculation
-        return calculate_user_stats(user)
+        return serialize_user_stats(calculate_user_stats_with_follows(user), include_follow_counts=True)
