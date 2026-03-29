@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from asgiref.sync import async_to_sync
+from django.core.cache import cache
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
@@ -99,9 +100,7 @@ class FranchiseImportService:
                     f"No AniList payload returned while refreshing existing anime {anilist_id}"
                 )
         except Exception as exc:
-            logger.warning(
-                f"Failed to refresh existing anime {anime.slug} ({anilist_id}): {exc}"
-            )
+            logger.warning(f"Failed to refresh existing anime {anime.slug} ({anilist_id}): {exc}")
         finally:
             async_to_sync(service.close)()
 

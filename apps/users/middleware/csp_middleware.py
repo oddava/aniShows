@@ -15,8 +15,6 @@ class CSPMiddleware(MiddlewareMixin):
         # Always add CSP headers for security
         from django.conf import settings
 
-        is_admin = request.path.startswith("/django-admin/")
-
         # Base CSP directives - stricter without unsafe-inline
         csp_directives = {
             "default-src": ["'self'"],

@@ -12,6 +12,7 @@ from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
+from rest_framework.throttling import BaseThrottle
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from apps.core.services.notification_service import NotificationService
@@ -46,6 +47,10 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+
+def _hash_viewer_identifier(value: str) -> str:
+    return hashlib.md5(value.encode(), usedforsecurity=False).hexdigest()
 
 
 def _broadcast_to_thread(thread_id, event):
@@ -162,9 +167,9 @@ class ThreadViewSet(ModelViewSet):
             return ThreadListSerializer
         return ThreadSerializer
 
-    def get_throttles(self) -> list:
+    def get_throttles(self) -> list[BaseThrottle]:
         if self.action in ("create", "update", "partial_update", "destroy"):
-            return [ForumWriteRateThrottle()]  # type: ignore
+            return [ForumWriteRateThrottle()]
         return list(super().get_throttles())
 
     def get_queryset(self):
@@ -224,7 +229,7 @@ class ThreadViewSet(ModelViewSet):
             viewer_id = f"user_{request.user.id}"
         else:
             ip = get_client_ip(request)
-            viewer_id = f"ip_{hashlib.md5(ip.encode()).hexdigest()}"
+            viewer_id = f"ip_{_hash_viewer_identifier(ip)}"
 
         view_cache_key = f"forum:view:{thread_id}:{viewer_id}"
         if not cache.get(view_cache_key):
@@ -361,9 +366,9 @@ class PostViewSet(ModelViewSet):
     filterset_fields = ["thread__id"]
     ordering_fields = ["created_at"]
 
-    def get_throttles(self) -> list:
+    def get_throttles(self) -> list[BaseThrottle]:
         if self.action in ("create", "update", "partial_update", "destroy"):
-            return [ForumWriteRateThrottle()]  # type: ignore
+            return [ForumWriteRateThrottle()]
         return list(super().get_throttles())
 
     def get_queryset(self):
@@ -406,7 +411,6 @@ class PostViewSet(ModelViewSet):
 
                 # Iteratively collect descendant IDs up to max depth (10)
                 # to avoid loading the entire thread's replies into memory.
-                ancestor_ids = set(top_level_ids)
                 all_descendant_ids = set()
                 current_parent_ids = top_level_ids
 

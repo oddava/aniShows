@@ -15,8 +15,7 @@ from django.db.models import Avg, Count
 from django.shortcuts import redirect
 from django.urls import path
 from django.utils import timezone
-from django.utils.html import format_html
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html, format_html_join
 
 from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
 
@@ -187,9 +186,7 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
         old_tasks = CeleryTaskResult.objects.filter(date_created__lt=cutoff_date)
         count = old_tasks.count()
         old_tasks.delete()
-        self.message_user(
-            request, f"Deleted {count} old task results.", messages.SUCCESS
-        )
+        self.message_user(request, f"Deleted {count} old task results.", messages.SUCCESS)
 
     @admin.action(description="Retry selected failed tasks")
     def retry_selected_tasks(self, request, queryset):
@@ -207,14 +204,10 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
                 )
                 retried += 1
             except Exception as e:
-                self.message_user(
-                    request, f"Failed to retry {task.task_name}: {e}", messages.ERROR
-                )
+                self.message_user(request, f"Failed to retry {task.task_name}: {e}", messages.ERROR)
 
         if retried > 0:
-            self.message_user(
-                request, f"Successfully retried {retried} tasks.", messages.SUCCESS
-            )
+            self.message_user(request, f"Successfully retried {retried} tasks.", messages.SUCCESS)
 
     def has_add_permission(self, request):
         return False
@@ -230,9 +223,7 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
         today = timezone.now().date()
         stats = {
             "total_tasks": CeleryTaskResult.objects.count(),
-            "today_tasks": CeleryTaskResult.objects.filter(
-                date_created__date=today
-            ).count(),
+            "today_tasks": CeleryTaskResult.objects.filter(date_created__date=today).count(),
             "pending_tasks": CeleryTaskResult.objects.filter(status="PENDING").count(),
             "running_tasks": CeleryTaskResult.objects.filter(status="STARTED").count(),
             "failed_today": CeleryTaskResult.objects.filter(
@@ -253,6 +244,7 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
             return 100.0
         success = tasks.filter(status="SUCCESS").count()
         return round((success / total) * 100, 1)
+
 
 @admin.register(CeleryWorkerStatus)
 class CeleryWorkerStatusAdmin(admin.ModelAdmin):
@@ -316,13 +308,11 @@ class CeleryWorkerStatusAdmin(admin.ModelAdmin):
     def queues_display(self, obj):
         """Display queues as badges."""
         if obj.queues:
-            badges = " ".join(
-                [
-                    format_html('<span class="badge badge-info">{}</span>', q)
-                    for q in obj.queues
-                ]
+            return format_html_join(
+                " ",
+                '<span class="badge badge-info">{}</span>',
+                ((queue_name,) for queue_name in obj.queues),
             )
-            return mark_safe(badges)
         return "-"
 
     queues_display.short_description = "Queues"
@@ -359,13 +349,10 @@ class CeleryWorkerStatusAdmin(admin.ModelAdmin):
                         },
                     )
 
-            self.message_user(
-                request, "Worker status refreshed successfully.", messages.SUCCESS
-            )
+            self.message_user(request, "Worker status refreshed successfully.", messages.SUCCESS)
         except Exception as e:
-            self.message_user(
-                request, f"Failed to refresh worker status: {e}", messages.ERROR
-            )
+            self.message_user(request, f"Failed to refresh worker status: {e}", messages.ERROR)
+
 
 @admin.register(CeleryTaskSchedule)
 class CeleryTaskScheduleAdmin(admin.ModelAdmin):
@@ -536,9 +523,7 @@ class CeleryTaskScheduleAdmin(admin.ModelAdmin):
                 )
                 executed += 1
             except Exception as e:
-                self.message_user(
-                    request, f"Failed to run {schedule.name}: {e}", messages.ERROR
-                )
+                self.message_user(request, f"Failed to run {schedule.name}: {e}", messages.ERROR)
 
         if executed > 0:
             self.message_user(

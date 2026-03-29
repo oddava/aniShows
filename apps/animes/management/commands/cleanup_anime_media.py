@@ -9,7 +9,7 @@ database still points at broken files. The command will:
 3) Optionally queue a fresh image download for each cleaned anime.
 
 Examples:
-    # Dry run – report only
+    # Dry run - report only
     uv run python manage.py cleanup_anime_media --dry-run
 
     # Remove broken references and requeue downloads
@@ -17,6 +17,8 @@ Examples:
 """
 
 from __future__ import annotations
+
+from contextlib import suppress
 
 from django.core.management.base import BaseCommand
 
@@ -99,9 +101,7 @@ class Command(BaseCommand):
 
             msg_prefix = f"[{anime.id}] {anime.title}"
             self.stdout.write(
-                self.style.WARNING(
-                    f"{msg_prefix}: clearing missing {', '.join(cleaned_fields)}"
-                )
+                self.style.WARNING(f"{msg_prefix}: clearing missing {', '.join(cleaned_fields)}")
             )
 
             if dry_run:
@@ -120,10 +120,8 @@ class Command(BaseCommand):
                         spec = getattr(anime, spec_name, None)
                         spec_name_value = getattr(spec, "name", None)
                         if spec and spec_name_value:
-                            try:
+                            with suppress(Exception):
                                 spec.storage.delete(spec_name_value)
-                            except Exception:
-                                pass
 
             if fields_for_update:
                 anime.save(update_fields=fields_for_update)
@@ -133,13 +131,17 @@ class Command(BaseCommand):
                 banner_url = anime.banner_image_external_url or ""
                 # Only queue if we have something to fetch.
                 if cover_url or banner_url or anime.mal_id:
-                    queued += 1 if _queue_image_fetch(
-                        anime_id=anime.id,
-                        cover_url=cover_url,
-                        banner_url=banner_url,
-                        mal_id=anime.mal_id,
-                        force=True,
-                    ) else 0
+                    queued += (
+                        1
+                        if _queue_image_fetch(
+                            anime_id=anime.id,
+                            cover_url=cover_url,
+                            banner_url=banner_url,
+                            mal_id=anime.mal_id,
+                            force=True,
+                        )
+                        else 0
+                    )
 
         self.stdout.write("\n---- SUMMARY ----")
         self.stdout.write(f"Inspected: {inspected}")
@@ -147,7 +149,5 @@ class Command(BaseCommand):
         self.stdout.write(f"Queued:    {queued if queue_fetch else 0}")
         if storage_errors:
             self.stdout.write(
-                self.style.WARNING(
-                    f"Storage errors during exists() checks: {storage_errors}"
-                )
+                self.style.WARNING(f"Storage errors during exists() checks: {storage_errors}")
             )

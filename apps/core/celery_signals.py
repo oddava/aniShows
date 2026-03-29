@@ -1,5 +1,6 @@
-import glob
 import os
+from contextlib import suppress
+from pathlib import Path
 
 from celery.signals import (
     celeryd_init,
@@ -25,14 +26,13 @@ def clean_multiproc_dir(sender, instance, **kwargs):
     """Clean up the Prometheus multiprocess directory before worker starts."""
     path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
     if path:
-        if not os.path.exists(path):
-            os.makedirs(path, exist_ok=True)
+        multiproc_dir = Path(path)
+        if not multiproc_dir.exists():
+            multiproc_dir.mkdir(parents=True, exist_ok=True)
         else:
-            for f in glob.glob(os.path.join(path, "*.db")):
-                try:
-                    os.remove(f)
-                except OSError:
-                    pass
+            for db_file in multiproc_dir.glob("*.db"):
+                with suppress(OSError):
+                    db_file.unlink()
 
 
 @task_prerun.connect

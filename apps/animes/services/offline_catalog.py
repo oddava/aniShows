@@ -210,7 +210,9 @@ class OfflineCatalogImportService:
         last_line_number = import_run.last_processed_line
 
         try:
-            with self._open_source_stream(source_url=import_run.source_url, source_path=source_path) as text_stream:
+            with self._open_source_stream(
+                source_url=import_run.source_url, source_path=source_path
+            ) as text_stream:
                 for line_number, raw_line in enumerate(text_stream, start=1):
                     last_line_number = line_number
                     if line_number <= skipped_lines:
@@ -292,7 +294,9 @@ class OfflineCatalogImportService:
                     import_run.records_created += flush_result["created"]
                     import_run.records_updated += flush_result["updated"]
                     import_run.records_failed += flush_result["failed"]
-                import_run.last_processed_line = max(import_run.last_processed_line, last_line_number)
+                import_run.last_processed_line = max(
+                    import_run.last_processed_line, last_line_number
+                )
 
             stale_count = Anime.objects.filter(
                 offline_db_last_seen_at__isnull=False,
@@ -458,10 +462,10 @@ class OfflineCatalogImportService:
             text_stream = io.TextIOWrapper(stream, encoding="utf-8")
 
         class _ManagedTextStream:
-            def __enter__(self_nonlocal):
+            def __enter__(self):
                 return text_stream
 
-            def __exit__(self_nonlocal, exc_type, exc, tb):
+            def __exit__(self, exc_type, exc, tb):
                 try:
                     text_stream.close()
                 finally:
@@ -530,9 +534,7 @@ class OfflineCatalogImportService:
             for candidate in self._title_candidates(entry)
             if candidate
         }
-        slug_candidates = {
-            slug for candidate in title_candidates if (slug := slugify(candidate))
-        }
+        slug_candidates = {slug for candidate in title_candidates if (slug := slugify(candidate))}
         studio_names = {entry.primary_studio for entry in entries if entry.primary_studio}
 
         anilist_map = (
@@ -695,7 +697,9 @@ class OfflineCatalogImportService:
                 "touched_slugs": [anime.slug for anime in anime_rows],
             }
         except (IntegrityError, DataError):
-            logger.warning("Bulk create hit uniqueness conflict, falling back to row-by-row recovery")
+            logger.warning(
+                "Bulk create hit uniqueness conflict, falling back to row-by-row recovery"
+            )
 
         summary = {
             "created": 0,
@@ -872,7 +876,9 @@ class OfflineCatalogImportService:
         missing = [Studio(name=name) for name in clean_names if name not in existing]
         if missing:
             Studio.objects.bulk_create(missing, ignore_conflicts=True)
-            existing = {studio.name: studio for studio in Studio.objects.filter(name__in=clean_names)}
+            existing = {
+                studio.name: studio for studio in Studio.objects.filter(name__in=clean_names)
+            }
         return existing
 
     def _match_existing(
@@ -905,7 +911,9 @@ class OfflineCatalogImportService:
 
         anime_year = anime.season_year or (anime.release_date.year if anime.release_date else None)
         if anime_year and entry.season_year:
-            return anime_year == entry.season_year and anime.title.casefold() == entry.title.casefold()
+            return (
+                anime_year == entry.season_year and anime.title.casefold() == entry.title.casefold()
+            )
         if anime_year or entry.season_year:
             return False
         return anime.title.casefold() == entry.title.casefold()
@@ -953,7 +961,9 @@ class OfflineCatalogImportService:
         if entry.season_year:
             candidates.append(self._compose_title_variant(base_title, f" ({entry.season_year})"))
         if entry.anilist_id:
-            candidates.append(self._compose_title_variant(base_title, f" [anilist-{entry.anilist_id}]"))
+            candidates.append(
+                self._compose_title_variant(base_title, f" [anilist-{entry.anilist_id}]")
+            )
         if entry.mal_id:
             candidates.append(self._compose_title_variant(base_title, f" [mal-{entry.mal_id}]"))
         return candidates
@@ -980,7 +990,9 @@ class OfflineCatalogImportService:
             "themes_task_ids": [],
         }
 
-    def _initialize_sync_states(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, int]:
+    def _initialize_sync_states(
+        self, created_ids: list[int], updated_ids: list[int]
+    ) -> dict[str, int]:
         changed_ids = list(dict.fromkeys([*created_ids, *updated_ids]))
         if not changed_ids:
             return {
@@ -1042,11 +1054,15 @@ class OfflineCatalogImportService:
             }:
                 extracted = self._extract_numeric_path_id(path_parts)
             elif provider == "anime_planet":
-                extracted = path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
+                extracted = (
+                    path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
+                )
             elif provider == "animenewsnetwork":
                 extracted = parse_qs(parsed.query).get("id", [None])[0]
             elif provider == "notify_moe":
-                extracted = path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
+                extracted = (
+                    path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
+                )
 
             if extracted is None:
                 continue

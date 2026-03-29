@@ -4,7 +4,8 @@ Provides functions for calculating user statistics on-the-fly
 when UserStats materialized view is not available.
 """
 
-from django.db.models import Avg, Sum
+from django.db.models import Avg, F, Sum, Value
+from django.db.models.functions import Coalesce
 
 from apps.animes.models import Review, UserFavorite
 from apps.users.models import UserAnimeList, UserStats
@@ -33,9 +34,6 @@ def calculate_user_stats(user):
     episodes_watched = lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
 
     # Calculate total minutes watched using DB aggregation (no Python loop)
-    from django.db.models import F, Value
-    from django.db.models.functions import Coalesce
-
     total_minutes = (
         lists.select_related("anime")
         .annotate(
@@ -67,6 +65,7 @@ def calculate_user_stats(user):
         "reviews_count": reviews_count,
     }
 
+
 def create_or_update_user_stats(user):
     """
     Create or update the UserStats materialized view for a user.
@@ -79,7 +78,7 @@ def create_or_update_user_stats(user):
     """
     stats_data = calculate_user_stats(user)
 
-    stats, created = UserStats.objects.update_or_create(
+    stats, _created = UserStats.objects.update_or_create(
         user=user,
         defaults={
             "anime_count": stats_data["anime_count"],
@@ -93,6 +92,7 @@ def create_or_update_user_stats(user):
     )
 
     return stats
+
 
 def get_user_stats_with_fallback(user):
     """

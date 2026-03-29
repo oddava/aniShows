@@ -1,6 +1,4 @@
-"""
-Core services for social links, metadata fetching, and URL validation.
-"""
+"""Core services for social links, metadata fetching, and URL validation."""
 
 from .metadata_service import MetadataService
 from .social_links_service import SocialLinksService, SocialLinkValidationError

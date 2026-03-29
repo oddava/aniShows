@@ -35,10 +35,7 @@ def normalize_media_url(url: str | None) -> str | None:
         host = (parsed.hostname or "").lower()
         if host in _INTERNAL_HOSTS:
             media_idx = parsed.path.find("/media/")
-            if media_idx != -1:
-                url = parsed.path[media_idx:]
-            else:
-                url = parsed.path
+            url = parsed.path[media_idx:] if media_idx != -1 else parsed.path
         else:
             return url
 

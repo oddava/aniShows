@@ -1,6 +1,4 @@
-"""
-Secure file upload utilities to prevent path traversal and malicious file uploads.
-"""
+"""Secure file upload utilities for user and anime media."""
 
 import os
 import uuid
@@ -26,7 +24,7 @@ def generate_secure_filename(filename, allowed_extensions=None):
         raise ValidationError("Filename cannot be empty")
 
     # Extract extension
-    name, ext = os.path.splitext(filename)
+    _name, ext = os.path.splitext(filename)
     if not ext:
         raise ValidationError("File must have an extension")
 
@@ -44,6 +42,7 @@ def generate_secure_filename(filename, allowed_extensions=None):
 
     return f"{secure_name}.{ext}"
 
+
 def user_avatar_path(instance, filename):
     """
     Generate secure upload path for user avatars.
@@ -51,16 +50,14 @@ def user_avatar_path(instance, filename):
     """
     from apps.users.models import UserProfile
 
-    if isinstance(instance, UserProfile):
-        user_id = instance.user.id
-    else:
-        user_id = instance.id
+    user_id = instance.user.id if isinstance(instance, UserProfile) else instance.id
 
     secure_filename = generate_secure_filename(
         filename, allowed_extensions=["jpg", "jpeg", "png", "webp", "gif"]
     )
 
     return f"avatars/{user_id}/{secure_filename}"
+
 
 def user_banner_path(instance, filename):
     """
@@ -69,10 +66,7 @@ def user_banner_path(instance, filename):
     """
     from apps.users.models import UserProfile
 
-    if isinstance(instance, UserProfile):
-        user_id = instance.user.id
-    else:
-        user_id = instance.id
+    user_id = instance.user.id if isinstance(instance, UserProfile) else instance.id
 
     secure_filename = generate_secure_filename(
         filename, allowed_extensions=["jpg", "jpeg", "png", "webp", "gif"]
@@ -80,23 +74,20 @@ def user_banner_path(instance, filename):
 
     return f"banners/{user_id}/{secure_filename}"
 
+
 def anime_image_path(instance, filename, image_type="cover"):
     """
     Generate secure upload path for anime images.
     Stores files in anime/<image_type>/<anime_id>/<secure_filename>
     """
-    from apps.animes.models import Anime
-
-    if isinstance(instance, Anime):
-        anime_id = instance.id
-    else:
-        anime_id = instance.id
+    anime_id = instance.id
 
     secure_filename = generate_secure_filename(
         filename, allowed_extensions=["jpg", "jpeg", "png", "webp"]
     )
 
     return f"anime/{image_type}/{anime_id}/{secure_filename}"
+
 
 def badge_image_path(instance, filename):
     """

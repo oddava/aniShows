@@ -5,4 +5,4 @@ def get_client_ip(request):
         ip = x_forwarded_for.split(",")[0].strip()
     else:
         ip = request.META.get("REMOTE_ADDR")
-    return ip or "0.0.0.0"
+    return ip or "0.0.0.0"  # noqa: S104

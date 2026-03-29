@@ -1,15 +1,10 @@
-from apps.shared.logger import logger
+"""Social link validation and orchestration services."""
 
-"""
-Social Links Service
-Main orchestrator for processing and validating social links.
-Optimized for fast saves - metadata fetched asynchronously.
-"""
-
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from django.conf import settings
 
+from apps.shared.logger import logger
 from apps.users.models import SocialLinkChangeLog
 
 from .metadata_service import MetadataService
@@ -17,18 +12,14 @@ from .url_validator import URLValidationError, URLValidator
 
 
 class SocialLinkValidationError(Exception):
-    """Raised when a social link fails validation"""
+    """Raised when a social link fails validation."""
 
-    pass
 
 class SocialLinksService:
-    """
-    Service for processing, validating, and managing social links.
-    """
+    """Service for processing, validating, and managing social links."""
 
     MAX_LINKS = 5
 
-    # Trust levels
     TRUST_VERIFIED = "verified"
     TRUST_COMMON = "common"
     TRUST_UNKNOWN = "unknown"
@@ -36,9 +27,7 @@ class SocialLinksService:
 
     def __init__(self):
         self.validator = URLValidator(
-            google_safe_browsing_api_key=getattr(
-                settings, "GOOGLE_SAFE_BROWSING_API_KEY", None
-            )
+            google_safe_browsing_api_key=getattr(settings, "GOOGLE_SAFE_BROWSING_API_KEY", None)
         )
         self.metadata_service = MetadataService()
 
@@ -61,21 +50,16 @@ class SocialLinksService:
             raise SocialLinkValidationError("Social links must be a list")
 
         if len(links) > self.MAX_LINKS:
-            raise SocialLinkValidationError(
-                f"Maximum {self.MAX_LINKS} social links allowed"
-            )
+            raise SocialLinkValidationError(f"Maximum {self.MAX_LINKS} social links allowed")
 
         processed_links = []
         urls_needing_metadata = []
 
         for idx, link in enumerate(links):
             if not isinstance(link, dict):
-                raise SocialLinkValidationError(
-                    f"Link at index {idx} must be a dictionary"
-                )
+                raise SocialLinkValidationError(f"Link at index {idx} must be a dictionary")
 
             platform = link.get("platform", "").strip()
-            # Handle both 'value' (frontend) and 'url' (backend storage) fields
             value = link.get("value", "").strip() or link.get("url", "").strip()
 
             if not platform or not value:
@@ -85,75 +69,54 @@ class SocialLinksService:
                 processed_link = self._process_single_link(
                     platform, value, skip_metadata=skip_metadata
                 )
-                # Also add 'value' field for frontend compatibility
                 processed_link["value"] = processed_link["url"]
                 processed_links.append(processed_link)
 
-                # Queue for async metadata fetch if needed
                 if skip_metadata:
                     urls_needing_metadata.append(processed_link["url"])
-
             except SocialLinkValidationError as e:
-                raise SocialLinkValidationError(
-                    f"Invalid link for {platform}: {str(e)}"
-                )
+                raise SocialLinkValidationError(f"Invalid link for {platform}: {str(e)}")
 
-        # Trigger async metadata fetch for all URLs
         if skip_metadata and urls_needing_metadata and user:
             self._trigger_async_metadata_fetch(urls_needing_metadata, user.id)
 
         return processed_links
 
-    def _process_single_link(
-        self, platform: str, value: str, skip_metadata: bool = True
-    ) -> Dict:
-        """Process and validate a single social link"""
-        # Check for dangerous schemes (XSS prevention)
+    def _process_single_link(self, platform: str, value: str, skip_metadata: bool = True) -> Dict:
+        """Process and validate a single social link."""
         dangerous_schemes = ["javascript:", "data:", "vbscript:", "file:"]
         value_lower = value.lower()
         for scheme in dangerous_schemes:
             if value_lower.startswith(scheme):
-                raise SocialLinkValidationError(
-                    f"Invalid URL scheme detected: '{scheme}'"
-                )
+                raise SocialLinkValidationError(f"Invalid URL scheme detected: '{scheme}'")
 
-        # Normalize to full URL
         normalized_url = self.validator.normalize_username(platform, value)
-
-        # Validate URL
-        is_valid, error_message, validation_metadata = self.validator.validate(
-            normalized_url
-        )
+        is_valid, error_message, validation_metadata = self.validator.validate(normalized_url)
 
         if not is_valid:
             raise SocialLinkValidationError(error_message)
 
-        # Determine trust level
         trust_level = self._determine_trust_level(
             validation_metadata.get("platform"), validation_metadata
         )
 
-        # Build processed link object
-        # Skip metadata fetching during save for speed
-        processed_link = {
+        return {
             "platform": platform,
             "url": normalized_url,
             "normalized_url": validation_metadata.get("normalized_url", normalized_url),
             "domain": validation_metadata.get("domain", ""),
             "detected_platform": validation_metadata.get("platform", "website"),
             "trust_level": trust_level,
-            "metadata": {},  # Empty initially, filled async
-            "metadata_pending": True,  # Flag for frontend
+            "metadata": {},
+            "metadata_pending": True,
             "validation": {
                 "subdomain_count": validation_metadata.get("subdomain_count", 0),
                 "domain_age_days": validation_metadata.get("domain_age_days"),
             },
         }
 
-        return processed_link
-
     def _trigger_async_metadata_fetch(self, urls: List[str], user_id: int):
-        """Trigger async metadata fetching for URLs"""
+        """Trigger async metadata fetching for URLs."""
         try:
             from apps.core.tasks import fetch_multiple_link_metadata
 
@@ -162,13 +125,8 @@ class SocialLinksService:
         except Exception as e:
             logger.warning(f"Failed to trigger async metadata fetch: {e}")
 
-    def _determine_trust_level(
-        self, platform: str | None, validation_metadata: Dict
-    ) -> str:
-        """
-        Determine trust level based on platform and validation data.
-        """
-        # Verified platforms (major social media)
+    def _determine_trust_level(self, platform: str | None, validation_metadata: Dict) -> str:
+        """Determine trust level based on platform and validation data."""
         verified_platforms = [
             "twitter",
             "youtube",
@@ -193,7 +151,6 @@ class SocialLinksService:
         if platform in verified_platforms:
             return self.TRUST_VERIFIED
 
-        # Common platforms (well-known but smaller)
         common_platforms = [
             "patreon",
             "ko-fi",
@@ -211,7 +168,6 @@ class SocialLinksService:
         if platform in common_platforms:
             return self.TRUST_COMMON
 
-        # Unknown domain - check age if available
         domain_age = validation_metadata.get("domain_age_days")
         if domain_age is not None and domain_age < 30:
             return self.TRUST_SUSPICIOUS
@@ -221,18 +177,14 @@ class SocialLinksService:
     def log_changes(
         self, user: Any, old_links: List[Dict], new_links: List[Dict], ip_address: str
     ) -> None:
-        """
-        Log changes to social links for audit purposes.
-        """
+        """Log changes to social links for audit purposes."""
         try:
-            # Find added links
             old_urls = {link.get("url") or link.get("value") for link in old_links}
             new_urls = {link.get("url") or link.get("value") for link in new_links}
 
             added = new_urls - old_urls
             removed = old_urls - new_urls
 
-            # Log additions
             for link in new_links:
                 url = link.get("url") or link.get("value")
                 if url in added:
@@ -240,7 +192,6 @@ class SocialLinksService:
                         user=user, action="add", new_value=link, ip_address=ip_address
                     )
 
-            # Log removals
             for link in old_links:
                 url = link.get("url") or link.get("value")
                 if url in removed:
@@ -252,16 +203,14 @@ class SocialLinksService:
                         ip_address=ip_address,
                     )
 
-            # Log modifications (same URL, different metadata)
             for new_link in new_links:
                 new_url = new_link.get("url") or new_link.get("value")
                 if new_url not in added and new_url not in removed:
-                    # Check if metadata changed
                     old_link = next(
                         (
-                            l
-                            for l in old_links
-                            if (l.get("url") or l.get("value")) == new_url
+                            old_link_item
+                            for old_link_item in old_links
+                            if (old_link_item.get("url") or old_link_item.get("value")) == new_url
                         ),
                         None,
                     )
@@ -273,7 +222,6 @@ class SocialLinksService:
                             new_value=new_link,
                             ip_address=ip_address,
                         )
-
         except Exception as e:
             logger.error(f"Error logging social link changes: {e}")
 
@@ -283,7 +231,6 @@ class SocialLinksService:
         Returns validation result with metadata.
         """
         try:
-            # Check for dangerous schemes first
             dangerous_schemes = ["javascript:", "data:", "vbscript:", "file:"]
             url_lower = url.lower()
             for scheme in dangerous_schemes:
@@ -294,13 +241,8 @@ class SocialLinksService:
                         "trust_level": self.TRUST_SUSPICIOUS,
                     }
 
-            # Normalize
             normalized = self.validator._normalize_url(url)
-
-            # Validate
-            is_valid, error_message, validation_metadata = self.validator.validate(
-                normalized
-            )
+            is_valid, error_message, validation_metadata = self.validator.validate(normalized)
 
             if not is_valid:
                 return {
@@ -309,7 +251,6 @@ class SocialLinksService:
                     "trust_level": self.TRUST_SUSPICIOUS,
                 }
 
-            # Determine trust level
             trust_level = self._determine_trust_level(
                 validation_metadata.get("platform"), validation_metadata
             )
@@ -323,7 +264,6 @@ class SocialLinksService:
                 "subdomain_count": validation_metadata.get("subdomain_count", 0),
                 "domain_age_days": validation_metadata.get("domain_age_days"),
             }
-
         except Exception as e:
             logger.error(f"Error validating URL {url}: {e}")
             return {

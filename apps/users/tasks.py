@@ -1,18 +1,8 @@
-from apps.shared.logger import logger
-
-"""
-Unified user workflow tasks.
-
-Consolidates user-related maintenance tasks:
-- cleanup_unverified_accounts
-- process_import_job
-- fetch_anime_by_external_id
-- cleanup_old_import_jobs
-"""
+"""Unified user workflow tasks."""
 
 import asyncio
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from celery import shared_task
 from django.contrib.auth import get_user_model
@@ -21,11 +11,13 @@ from django.db.utils import InterfaceError, OperationalError
 from django.utils import timezone
 
 from apps.animes.services.anilist import AniListService
+from apps.shared.logger import logger
 from apps.users.models import UserImportJob
 from apps.users.services.import_service import ImportService
 
 User = get_user_model()
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
+
 
 @shared_task(
     bind=True,
@@ -123,6 +115,7 @@ def cleanup_unverified_accounts(self, days: int = 7):
         logger.error(f"Error cleaning up unverified accounts: {e}")
         raise self.retry(exc=e)
 
+
 @shared_task(
     bind=True,
     max_retries=3,
@@ -212,14 +205,15 @@ def process_import_job(self, job_id: int, **kwargs):
             "reason": "import_failed",
         }
 
+
 @shared_task(
     max_retries=3,
     default_retry_delay=60,
 )
 def fetch_anime_by_external_id(
-    mal_id: int = None,
-    anilist_id: int = None,
-    title: str = None,
+    mal_id: int | None = None,
+    anilist_id: int | None = None,
+    title: str | None = None,
 ):
     """
     Fetch anime from AniList API by external ID and create it in the database.
@@ -274,6 +268,7 @@ def fetch_anime_by_external_id(
     finally:
         asyncio.run(service.close())
 
+
 @shared_task
 def cleanup_old_import_jobs(days: int = 30):
     """
@@ -305,6 +300,7 @@ def cleanup_old_import_jobs(days: int = 30):
     except Exception as e:
         logger.error(f"Error cleaning up import jobs: {e}")
         return 0
+
 
 @shared_task
 def run_user_maintenance_workflow(
@@ -348,13 +344,14 @@ def run_user_maintenance_workflow(
         "cleanup_imports": cleanup_imports,
     }
 
+
 @shared_task(
     bind=True,
     max_retries=3,
     default_retry_delay=30,
     time_limit=300,  # 5 minutes max
 )
-def update_user_stats(self, user_id: int = None):
+def update_user_stats(self, user_id: int | None = None):
     """
     Update user statistics in the materialized view.
 
@@ -513,15 +510,15 @@ def update_user_stats(self, user_id: int = None):
             logger.error(f"Error in update_user_stats task: {e}")
         raise self.retry(exc=e)
 
-@shared_task
-def update_all_user_stats():
-    """
-    Update stats for all users - scheduled task run every 5 minutes.
-    """
-    return update_user_stats.delay()
 
 @shared_task
-def warm_profile_cache(usernames: list = None):
+def update_all_user_stats():
+    """Update stats for all users on the scheduled five-minute interval."""
+    return update_user_stats.delay()
+
+
+@shared_task
+def warm_profile_cache(usernames: list | None = None):
     """
     Pre-warm Redis cache for popular user profiles.
 
@@ -562,7 +559,7 @@ def warm_profile_cache(usernames: list = None):
         serialized_users = PublicUserSerializer(ordered_users, many=True).data
 
         warmed_count = 0
-        for user, data in zip(ordered_users, serialized_users):
+        for user, data in zip(ordered_users, serialized_users, strict=False):
             # Cache key format used by PublicUserProfileViewSet.retrieve
             cache_key = get_public_profile_cache_key(user.username, viewer_id="anonymous")
             cache.set(cache_key, data, timeout=1800)  # 30 minutes

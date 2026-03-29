@@ -1,6 +1,6 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
-import defusedxml.ElementTree as ET
+from defusedxml import ElementTree
 from django.utils import timezone
 
 from apps.shared.logger import logger
@@ -21,7 +21,7 @@ class MyAnimeListXMLImporter(BaseImporter):
         entries = []
 
         try:
-            root = ET.fromstring(self.xml_content)
+            root = ElementTree.fromstring(self.xml_content)
 
             for anime_elem in root.findall("anime"):
                 entry = {
@@ -33,7 +33,7 @@ class MyAnimeListXMLImporter(BaseImporter):
                 }
                 entries.append(entry)
 
-        except ET.ParseError as e:
+        except ElementTree.ParseError as e:
             logger.error(f"Error parsing XML: {e}")
             raise ValueError("Invalid XML file format")
 

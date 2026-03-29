@@ -8,8 +8,6 @@ from rest_framework.serializers import (
 
 from apps.animes.models import Anime
 from apps.animes.serializers.base import (
-    AnimeCharacterSerializer,
-    AnimeStaffSerializer,
     GenreSerializer,
     StudioSerializer,
     ThemeSongSerializer,
@@ -142,9 +140,6 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
 
     genres = GenreSerializer(many=True, read_only=True)
     studio = StudioSerializer(read_only=True)
-    # Removing full lists to optimize payload - will be fetched on demand
-    # characters = AnimeCharacterSerializer(source="cast", many=True, read_only=True)
-    # staff = AnimeStaffSerializer(source="production_staff", many=True, read_only=True)
     character_count = IntegerField(read_only=True)
     staff_count = IntegerField(read_only=True)
     theme_songs = ThemeSongSerializer(many=True, read_only=True)

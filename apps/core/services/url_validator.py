@@ -1,8 +1,6 @@
-from apps.shared.logger import logger
+"""Security-focused URL validation for user-provided social links.
 
-"""
-URL Validator Service for Social Links
-Provides comprehensive security validation for URLs including:
+Provides comprehensive validation including:
 - HTTPS-only enforcement
 - IP address detection
 - URL shortener blocking
@@ -16,24 +14,23 @@ Provides comprehensive security validation for URLs including:
 import hashlib
 import re
 import socket
-from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from datetime import datetime
+from typing import Tuple
 from urllib.parse import urlparse, urlunparse
 
 import idna
 import whois
 from django.core.cache import cache
 
+from apps.shared.logger import logger
+
 
 class URLValidationError(Exception):
-    """Raised when URL validation fails"""
+    """Raised when URL validation fails."""
 
-    pass
 
 class URLValidator:
-    """
-    Validates URLs for security concerns before allowing them as social links.
-    """
+    """Validates URLs for security concerns before allowing them as social links."""
 
     # URL shorteners to block
     URL_SHORTENERS = {
@@ -124,7 +121,7 @@ class URLValidator:
 
     def _get_cache_key(self, url: str) -> str:
         """Generate cache key for URL validation"""
-        url_hash = hashlib.md5(url.lower().encode()).hexdigest()
+        url_hash = hashlib.md5(url.lower().encode(), usedforsecurity=False).hexdigest()
         return f"url_validation:{url_hash}"
 
     def validate(self, url: str) -> Tuple[bool, str, dict]:
@@ -339,12 +336,12 @@ class URLValidator:
                     # Contains unicode - potential homograph
                     # Check for suspicious lookalikes
                     lookalikes = {
-                        "а": "a",  # Cyrillic а vs Latin a
-                        "е": "e",  # Cyrillic е vs Latin e
-                        "о": "o",  # Cyrillic о vs Latin o
-                        "р": "p",  # Cyrillic р vs Latin p
-                        "с": "c",  # Cyrillic с vs Latin c
-                        "х": "x",  # Cyrillic х vs Latin x
+                        "\u0430": "a",  # Cyrillic small letter a
+                        "\u0435": "e",  # Cyrillic small letter ie
+                        "\u043e": "o",  # Cyrillic small letter o
+                        "\u0440": "p",  # Cyrillic small letter er
+                        "\u0441": "c",  # Cyrillic small letter es
+                        "\u0445": "x",  # Cyrillic small letter ha
                     }
                     if char in lookalikes:
                         return True

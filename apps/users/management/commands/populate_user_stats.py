@@ -11,6 +11,7 @@ from apps.users.services.stats_service import create_or_update_user_stats
 
 User = get_user_model()
 
+
 class Command(BaseCommand):
     help = "Populate UserStats for all users who do not have stats yet"
 
@@ -77,7 +78,7 @@ class Command(BaseCommand):
         updated = 0
         errors = 0
 
-        for user in users.iterator():
+        for user in users.iterator(chunk_size=batch_size):
             try:
                 stats = create_or_update_user_stats(user)
 

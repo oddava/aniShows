@@ -168,10 +168,7 @@ class ImportExportViewSet(ViewSet):
                 return Response({"data": export_data})
 
             # Determine content type and filename
-            if export_format == "json":
-                content_type = "application/json"
-            else:
-                content_type = "application/xml"
+            content_type = "application/json" if export_format == "json" else "application/xml"
 
             filename = ExportService.get_export_filename(request.user, export_format)
 
