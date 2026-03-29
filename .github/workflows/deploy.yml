@@ -202,10 +202,12 @@ jobs:
           echo "🧪 Running tests..."
           pytest \
             --cov=apps \
-            --cov-report=xml \
-            --cov-report=html \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=30 \
             -n auto \
             --dist=worksteal \
+            --nomigrations \
+            --maxfail=1 \
             -q \
             --durations=25
 
@@ -214,14 +216,7 @@ jobs:
         if: always()
         with:
           name: coverage-report
-          path: |
-            htmlcov/
-            coverage.xml
-
-      - name: Check coverage threshold
-        run: |
-          echo "📊 Checking coverage threshold..."
-          coverage report --fail-under=30 || echo "⚠️ Coverage below 30%"
+          path: coverage.xml
 
   # =============================================================================
   # BUILD & PUSH DOCKER IMAGES TO GHCR
