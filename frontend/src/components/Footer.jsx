@@ -4,7 +4,7 @@ import Logo from './Logo';
 
 export default function Footer({ className = '' }) {
     return (
-        <footer className={`bg-dark-100 border-t border-gray-800 pt-16 pb-8 ${className}`}>
+        <footer className={`bg-dark-50 pt-16 pb-8 ${className}`}>
             <div className="max-w-7xl mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                     {/* Brand */}
@@ -99,7 +99,7 @@ export default function Footer({ className = '' }) {
                     </div>
                 </div>
 
-                <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
                     <p className="text-gray-400 text-sm">
                         © {new Date().getFullYear()} aniShows. All rights reserved.
                     </p>

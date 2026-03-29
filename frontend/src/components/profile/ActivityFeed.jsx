@@ -217,7 +217,7 @@ function ActivityCard({ activity }) {
     const title = anime?.title || 'Unknown title';
 
     return (
-        <article className="group relative overflow-hidden rounded-lg bg-gradient-to-br from-dark-100/90 to-dark-200/88 p-2 transition-colors hover:bg-dark-100">
+        <article className="group relative overflow-hidden rounded-lg bg-dark-100 p-2 transition-colors">
             <div className="flex items-stretch gap-3">
                 <div className="flex min-w-0 flex-1 flex-col px-1 py-1">
                     <div className="mb-1">

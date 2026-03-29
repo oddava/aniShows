@@ -351,7 +351,7 @@ const AdminLogs = () => {
           onClick={() => setIsModalOpen(false)}
         >
           <div 
-            className="w-full max-w-2xl bg-gradient-to-br from-dark-100 to-dark border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+            className="w-full max-w-2xl bg-dark-100 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
