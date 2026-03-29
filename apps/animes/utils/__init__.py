@@ -7,6 +7,8 @@ from django.utils.http import urlsafe_base64_encode
 
 from apps.animes.utils.tokens import account_activation_token
 from apps.shared.logger import logger
+
+
 def send_email(subject: str, body: str | None, emails: list[str], html_content=None):
     email = EmailMultiAlternatives(
         subject=subject,

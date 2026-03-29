@@ -1,7 +1,7 @@
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
-from allauth.socialaccount.models import SocialAccount
 
 from apps.users.models import UserAnimeList, UserBadge, UserFollow
 

@@ -6,7 +6,6 @@ from collections.abc import Callable
 from django.conf import settings
 from django.core.cache import cache
 
-
 PayloadValidator = Callable[[object], bool]
 PayloadBuilder = Callable[[], object]
 

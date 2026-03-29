@@ -1,10 +1,10 @@
 import re
 from dataclasses import dataclass
 
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Prefetch
-from allauth.socialaccount.models import SocialAccount
 
 from apps.shared.logger import logger
 from apps.shared.media_urls import normalize_media_url

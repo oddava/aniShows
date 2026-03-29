@@ -188,7 +188,7 @@ class AniListImporter(BaseImporter):
             response.raise_for_status()
             data = response.json()
 
-            if "errors" in data and data["errors"]:
+            if data.get("errors"):
                 error_message = data["errors"][0].get("message", "Unknown AniList error")
                 lowered = error_message.lower()
                 if "rate limit" in lowered or "too many requests" in lowered:

@@ -3,8 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.users.serializers.users import UserBadgeSerializer
 from apps.users.models import UserBadge
+from apps.users.serializers.users import UserBadgeSerializer
 
 
 class UserBadgeViewSet(GenericViewSet):

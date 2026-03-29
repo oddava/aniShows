@@ -77,7 +77,7 @@ class Command(BaseCommand):
 
                 try:
                     exists = image_field.storage.exists(image_field.name)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     storage_unreadable = True
                     storage_errors += 1
                     logger.warning(
@@ -122,7 +122,7 @@ class Command(BaseCommand):
                         if spec and spec_name_value:
                             try:
                                 spec.storage.delete(spec_name_value)
-                            except Exception:  # noqa: BLE001
+                            except Exception:
                                 pass
 
             if fields_for_update:

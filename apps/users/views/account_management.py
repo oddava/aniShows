@@ -8,9 +8,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.users.serializers.users import ChangePasswordSerializer
 from apps.shared.logger import logger
 from apps.users import throttling
+from apps.users.serializers.users import ChangePasswordSerializer
 from apps.users.services.email_service import EmailService
 
 User = get_user_model()

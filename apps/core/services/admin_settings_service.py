@@ -1,6 +1,6 @@
-from copy import deepcopy
 import threading
 import time
+from copy import deepcopy
 
 from django.conf import settings
 from django.core.cache import cache

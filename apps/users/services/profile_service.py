@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Prefetch
@@ -9,7 +10,6 @@ from apps.shared.logger import logger
 from apps.shared.media_urls import normalize_media_url
 from apps.users.models import UserBadge, UserStats
 from apps.users.services.avatar_service import get_user_avatar_url
-from allauth.socialaccount.models import SocialAccount
 
 try:
     from apps.users.services.cache import get_user_online_cache_key, get_user_profile_cache_key

@@ -5,9 +5,9 @@ from rest_framework import permissions, serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.viewsets import ModelViewSet
 
-from apps.users.serializers.users import UserAnimeListSerializer
 from apps.users.models import UserAnimeList
 from apps.users.permissions import EmailVerificationMixin
+from apps.users.serializers.users import UserAnimeListSerializer
 from apps.users.services.cache import (
     invalidate_anime_detail_cache,
     invalidate_user_anime_caches,

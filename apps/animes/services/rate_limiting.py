@@ -16,7 +16,6 @@ from typing import Any
 from django.core.cache import cache
 
 
-
 class AniListRateLimiter:
     """Distributed rate limiter using Redis for multi-worker coordination.
     AniList allows 90 requests per minute per IP.
