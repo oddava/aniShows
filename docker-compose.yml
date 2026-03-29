@@ -216,7 +216,7 @@ services:
   # Celery Worker - default/batch/background queues
   celery:
     image: anishows_web:latest
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,low_priority", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=1000" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,low_priority", "--concurrency=${CELERY_DEFAULT_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -261,7 +261,7 @@ services:
   # Celery Worker - user-facing and notification queues
   celery_priority:
     image: anishows_web:latest
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=2", "--pool=prefork", "--max-tasks-per-child=500" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=${CELERY_PRIORITY_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -297,7 +297,7 @@ services:
   # Celery Worker - image processing queue
   celery_images:
     image: anishows_web:latest
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=250" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=${CELERY_IMAGES_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_IMAGES_MAX_TASKS_PER_CHILD:-100}", "--max-memory-per-child=${CELERY_IMAGES_MAX_MEMORY_PER_CHILD_KB:-512000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
@@ -333,7 +333,7 @@ services:
   # Celery Worker - analytics queue
   celery_analytics:
     image: anishows_web:latest
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=1", "--pool=prefork", "--max-tasks-per-child=500" ]
+    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=${CELERY_ANALYTICS_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
     env_file:
       - .env
     environment:
