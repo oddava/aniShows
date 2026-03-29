@@ -157,6 +157,25 @@ function selectReadableBannerAccent(colors, backgroundHex = '#0b0f14') {
     return ensureReadableAccent(candidates[0], backgroundHex, 4.5);
 }
 
+function getTimeRemainingLabel(dateString) {
+    if (!dateString) return null;
+    const target = new Date(dateString);
+    if (isNaN(target.getTime())) return null;
+
+    const now = new Date();
+    const diff = target - now;
+    if (diff < 0) return 'Aired';
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (hours < 1) return `${minutes}m`;
+    if (hours < 24) return `${hours}h ${minutes}m`;
+
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+}
+
 function AnimeCard({
     anime,
     userListEntry,
@@ -164,7 +183,8 @@ function AnimeCard({
     lite = false,
     priority = false,
     index = 0,
-    useBannerAccentTitleHover = true
+    useBannerAccentTitleHover = true,
+    showAiringCountdown = false
 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
@@ -216,6 +236,16 @@ function AnimeCard({
         titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
         [titleLanguage, anime.title_jp, anime.title]
     );
+    const airingCountdown = useMemo(() => {
+        if (!showAiringCountdown) return null;
+        const timeRemaining = getTimeRemainingLabel(anime.next_airing_date);
+        if (!timeRemaining) return null;
+
+        const episodeLabel = anime.next_airing_episode ? `EP ${anime.next_airing_episode}` : 'Episode';
+        return timeRemaining === 'Aired'
+            ? `${episodeLabel} Aired`
+            : `${episodeLabel} in ${timeRemaining}`;
+    }, [showAiringCountdown, anime.next_airing_date, anime.next_airing_episode]);
 
     const invalidateAnimeViews = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ['anime'] });
@@ -476,6 +506,15 @@ function AnimeCard({
                             />
                         </div>
                     )}
+                    {airingCountdown && (
+                        <div className="absolute bottom-2 left-2 right-2 z-30 pointer-events-none">
+                            <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65 text-gray-100">
+                                <span className="text-[11px] font-medium tracking-wide text-gray-100">
+                                    {airingCountdown}
+                                </span>
+                            </div>
+                        </div>
+                    )}
                     {/* Quick progress button */}
                     {isAuthenticated && listStatus === 'Watching' && (
                         <button
@@ -527,6 +566,7 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.priority !== nextProps.priority) return false;
     if (prevProps.index !== nextProps.index) return false;
     if (prevProps.useBannerAccentTitleHover !== nextProps.useBannerAccentTitleHover) return false;
+    if (prevProps.showAiringCountdown !== nextProps.showAiringCountdown) return false;
 
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
     const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;

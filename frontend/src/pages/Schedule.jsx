@@ -1,21 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ChevronLeft,
   ChevronRight,
-  Clock,
   Bell,
-  CheckCircle2
 } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import {
-  applyImageFallback,
-  getImageFallbackUrl,
-  getImageSrcSet,
-  getOptimizedImageUrl
-} from '../utils/imageUtils';
+import AnimeCard from '../components/AnimeCard';
 import { ScheduleGridSkeleton } from '../components/skeletons';
 import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
@@ -42,28 +35,6 @@ const formatDate = (date) => {
     month: 'short',
     day: 'numeric'
   }).format(date);
-};
-
-// Helper to format time remaining
-const getTimeRemaining = (dateString) => {
-  if (!dateString) return 'Unknown';
-  const target = new Date(dateString);
-  // Check if date is valid
-  if (isNaN(target.getTime())) return 'Unknown';
-
-  const now = new Date();
-  const diff = target - now;
-
-  if (diff < 0) return 'Aired';
-
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (hours < 1) return `${minutes}m`;
-  if (hours < 24) return `${hours}h ${minutes}m`;
-
-  const days = Math.floor(hours / 24);
-  return `${days}d ${hours % 24}h`;
 };
 
 // Day Selector Component
@@ -106,105 +77,6 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-};
-
-// Schedule Card Component
-const ScheduleCard = ({ anime }) => {
-  const { isAuthenticated } = useAuth();
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
-  const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
-  const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
-
-  useEffect(() => {
-    setImageLoaded(false);
-  }, [imageUrl]);
-
-  const timeRemaining = getTimeRemaining(anime.next_airing_date);
-  const watchingEntry = anime.user_list_status?.status === 'watching' ? anime.user_list_status : null;
-
-  // Safely check if anime has aired
-  const hasAired = (() => {
-    if (!anime.next_airing_date) return false;
-    const airDate = new Date(anime.next_airing_date);
-    return !isNaN(airDate.getTime()) && airDate < new Date();
-  })();
-
-  return (
-    <div className="group relative block h-full overflow-visible hover:z-[150]">
-      <div
-        className={`
-          bg-dark-100 rounded-xl border border-gray-800 h-full flex flex-col relative transition-all duration-300
-          hover:border-gray-700
-        `}
-      >
-        {/* Cover Image */}
-        <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
-          <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
-            {!imageLoaded && (
-              <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
-            )}
-            <img
-              src={imageUrl}
-              srcSet={imageSrcSet}
-              sizes="(max-width: 767px) 46vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 18vw"
-              alt={anime.title}
-              loading="lazy"
-              decoding="async"
-              onLoad={() => setImageLoaded(true)}
-              onError={(event) => applyImageFallback(event, fallbackImageUrl)}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-            />
-          </Link>
-
-          {/* Bottom Schedule Status Bar */}
-          <div className="absolute bottom-2 left-2 right-2 z-[100]">
-            <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center justify-start gap-1.5 bg-black/65 text-gray-100">
-              {!hasAired && (
-                <Clock className="w-3 h-3 text-gray-100/90" />
-              )}
-              {hasAired ? (
-                <>
-                  <CheckCircle2 className="w-3 h-3 text-gray-100/90" />
-                  <span className="text-[11px] font-medium tracking-wide text-gray-100">
-                    EP {anime.next_airing_episode} Aired
-                  </span>
-                </>
-              ) : (
-                <span className="text-[11px] font-medium tracking-wide text-gray-100">
-                  EP {anime.next_airing_episode} in {timeRemaining}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <Link to={`/anime/${anime.slug}`} className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl">
-          <h3 className="font-semibold text-white text-sm line-clamp-2 mb-1 leading-snug group-hover:text-accent-light transition-colors">
-            {anime.title}
-          </h3>
-
-          <div className="flex items-center justify-between text-[11px] text-gray-400 mt-auto">
-            <span className="font-medium text-accent-light">{anime.anime_type || 'TV'}</span>
-
-            <div className="flex items-center gap-1 text-gray-400">
-              {isAuthenticated && watchingEntry ? (
-                <>
-                  <span className="text-accent-light font-bold">{watchingEntry.episodes_watched}</span>
-                  <span className="text-gray-500">/</span>
-                  <span>{anime.episode_count || '?'}</span>
-                  <span className="text-[10px] text-gray-500 ml-0.5">eps</span>
-                </>
-              ) : (
-                <span>{anime.episode_count || '?'} eps</span>
-              )}
-            </div>
-          </div>
-        </Link>
       </div>
     </div>
   );
@@ -461,11 +333,14 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 lg:gap-6">
-              {selectedDayAnime.map((anime) => (
-                <ScheduleCard
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 anime-card-grid-gap">
+              {selectedDayAnime.map((anime, index) => (
+                <AnimeCard
                   key={anime.id}
                   anime={anime}
+                  priority={index < 6}
+                  index={index}
+                  showAiringCountdown
                 />
               ))}
             </div>
