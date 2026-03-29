@@ -114,8 +114,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: admin-core-forums
-            paths: "apps/admin_api/tests apps/core/tests apps/forums"
+          - shard: admin-core
+            paths: "apps/admin_api/tests apps/core/tests"
+          - shard: forums
+            paths: "apps/forums"
           - shard: users
             paths: "apps/users/tests"
           - shard: animes-a

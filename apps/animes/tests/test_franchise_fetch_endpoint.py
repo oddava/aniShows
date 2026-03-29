@@ -11,23 +11,15 @@ class FranchiseFetchEndpointTests(APITestCase):
     endpoint_name = "anime-franchise-fetch"
 
     @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
-    def test_anonymous_post_can_fetch_franchise_entry(self, mock_import):
-        mock_import.return_value = FranchiseImportResult(
-            slug="naruto-shippuuden",
-            title="Naruto: Shippuuden",
-            imported=True,
-        )
-
+    def test_anonymous_post_requires_authentication(self, mock_import):
         response = self.client.post(
             reverse(self.endpoint_name),
             {"anilist_id": 1735, "source_slug": "naruto"},
             format="json",
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["slug"], "naruto-shippuuden")
-        self.assertTrue(response.data["imported"])
-        mock_import.assert_called_once()
+        self.assertEqual(response.status_code, 401)
+        mock_import.assert_not_called()
 
     @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
     def test_session_user_without_csrf_token_is_not_blocked(self, mock_import):

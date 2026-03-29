@@ -29,7 +29,7 @@ class ProfileSharePreviewViewTests(TestCase):
         self.assertIn("meta property=\"og:title\"", content)
         self.assertIn("meta name=\"twitter:description\"", content)
 
-    def test_private_profile_preview_hides_bio(self):
+    def test_private_profile_preview_returns_not_found_for_unauthorized_viewer(self):
         user = User.objects.create_user(username="secret", password="pw")
         profile = UserProfile.objects.get(user=user)
         profile.bio = "This should not appear"
@@ -38,9 +38,10 @@ class ProfileSharePreviewViewTests(TestCase):
 
         response = self.client.get("/u/secret", HTTP_USER_AGENT="Discordbot/2.0")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 404)
         content = response.content.decode()
-        self.assertIn("profile is private on AniShows.", content)
+        self.assertIn("Profile Not Found | AniShows", content)
+        self.assertIn("could not be found", content)
         self.assertNotIn("This should not appear", content)
 
     def test_missing_profile_returns_not_found_metadata(self):
