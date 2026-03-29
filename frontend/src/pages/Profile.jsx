@@ -274,6 +274,8 @@ export default function Profile({ forcedUsername }) {
         root.style.setProperty('--color-accent', baseColor);
         root.style.setProperty('--color-accent-light', lightColor);
         root.style.setProperty('--color-accent-dark', darkColor);
+        root.style.setProperty('--color-accent-text', baseColor);
+        root.style.setProperty('--color-accent-text-hover', lightColor);
 
         root.style.setProperty('--profile-accent', baseColor);
         root.style.setProperty('--profile-accent-light', lightColor);
@@ -284,6 +286,8 @@ export default function Profile({ forcedUsername }) {
             root.style.removeProperty('--color-accent');
             root.style.removeProperty('--color-accent-light');
             root.style.removeProperty('--color-accent-dark');
+            root.style.removeProperty('--color-accent-text');
+            root.style.removeProperty('--color-accent-text-hover');
             root.style.removeProperty('--profile-accent');
             root.style.removeProperty('--profile-accent-light');
             root.style.removeProperty('--profile-secondary');
