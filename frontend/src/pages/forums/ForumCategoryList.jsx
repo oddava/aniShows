@@ -11,6 +11,7 @@ import Pagination from '../../components/common/Pagination';
 import { preloadForumChunks } from '../../App';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
+import { ForumCategoryPageSkeleton } from '../../components/forums/ForumSkeletons';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 
 const CATEGORY_DOT_COLORS = [
@@ -273,9 +274,20 @@ const ForumCategoryList = () => {
         ? false
         : (activeTab === 'new' ? (newFetching && newPlaceholder) : (activeFetching && activePlaceholder));
 
-    const showCategoriesLoading = useDelayedLoading(categoriesLoading && !isCategoriesPlaceholder, 500);
-    const showContentLoading = useDelayedLoading(isContentLoading && !isContentPlaceholder, 500);
-    const showRailLoading = useDelayedLoading(railLoading && !railPlaceholder, 500);
+    const delayedCategoriesLoading = useDelayedLoading(categoriesLoading && !isCategoriesPlaceholder, 500);
+    const delayedContentLoading = useDelayedLoading(isContentLoading && !isContentPlaceholder, 500);
+    const delayedRailLoading = useDelayedLoading(railLoading && !railPlaceholder, 500);
+
+    const isInitialCategoriesLoad = categoriesLoading && !categories;
+    const isInitialContentLoad = isContentLoading && !displayedData;
+    const isInitialRailLoad = railLoading && !railFeed;
+
+    const showCategoriesLoading = isInitialCategoriesLoad || delayedCategoriesLoading;
+    const showContentLoading = isInitialContentLoad || delayedContentLoading;
+    const showRailLoading = isInitialRailLoad || delayedRailLoading;
+
+    const shouldShowInitialPageSkeleton = !categories && !displayedData && !railFeed
+        && (categoriesLoading || isContentLoading || railLoading);
 
     const threadResults = displayedData?.results || [];
     const pinnedThreads = (!isSearching && page === 1) ? threadResults.filter((thread) => thread.is_pinned) : [];
@@ -291,6 +303,10 @@ const ForumCategoryList = () => {
     const latestActivityThreads = [...railThreads]
         .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
         .slice(0, 5);
+
+    if (shouldShowInitialPageSkeleton) {
+        return <ForumCategoryPageSkeleton />;
+    }
 
     const renderCategorySidebar = () => {
         if (showCategoriesLoading) {
@@ -521,7 +537,7 @@ const ForumCategoryList = () => {
                                         <ThreadRow key={thread.id} thread={thread} />
                                     ))}
                                 </div>
-                            ) : !showContentLoading && (
+                            ) : !showContentLoading && !isContentLoading && (
                                 <div className="forums-surface py-20 text-center">
                                     <h3 className="forums-section-title">
                                         {isSearching ? 'No results found' : 'No threads yet'}

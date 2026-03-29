@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import AdminRoute from '../components/AdminRoute';
 import Layout from '../components/Layout';
+import { ForumCategoryPageSkeleton } from '../components/forums/ForumSkeletons';
 
 const lazyWithRetry = (importer, retries = 1, retryDelayMs = 250) => lazy(async () => {
     let lastError = null;
@@ -123,7 +124,14 @@ export default function AppRoutes() {
                     <Route path="import" element={<ImportPage />} />
                     <Route path="export" element={<ExportPage />} />
                     <Route path="staff/:id" element={<VoiceActorDetail />} />
-                    <Route path="forums" element={<ForumCategoryList />} />
+                    <Route
+                        path="forums"
+                        element={(
+                            <Suspense fallback={<ForumCategoryPageSkeleton />}>
+                                <ForumCategoryList />
+                            </Suspense>
+                        )}
+                    />
                     <Route path="forums/create" element={<CreateThread />} />
                     <Route path="forums/category/:slug" element={<ForumThreadList />} />
                     <Route path="forums/category/:slug/create" element={<CreateThread />} />

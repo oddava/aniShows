@@ -1,7 +1,9 @@
 import React, { memo } from 'react';
 
-// Static placeholder style - NO animations
+// Legacy static placeholders used by existing forum views.
 const placeholderBase = 'bg-gray-800/40';
+const forumsBlockPlaceholder = 'animate-pulse rounded-lg border border-[var(--forums-border)] bg-[var(--forums-surface-soft)]';
+const forumsLinePlaceholder = 'animate-pulse rounded-md bg-[var(--forums-surface-soft)]';
 
 export const ThreadSkeleton = memo(() => (
     <div className="bg-dark-100/50 rounded-xl border border-gray-800/50 p-4">
@@ -122,3 +124,61 @@ export const CategorySkeleton = memo(() => (
     </div>
 ));
 CategorySkeleton.displayName = 'CategorySkeleton';
+
+export const ForumCategoryPageSkeleton = memo(() => (
+    <div className="forums-page">
+        <div className="mx-auto max-w-[1280px] px-4 py-8 md:px-6">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[170px_minmax(0,1fr)_280px]">
+                <aside className="h-fit xl:sticky xl:top-24">
+                    <div className={`mb-3 h-9 ${forumsBlockPlaceholder}`} />
+                    <div className="space-y-1.5">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div key={`forum-left-${i}`} className={`h-7 ${forumsBlockPlaceholder}`} />
+                        ))}
+                    </div>
+                </aside>
+
+                <section className="min-w-0">
+                    <div className="mb-4 border-b border-[var(--forums-border)] pb-3">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                            <div className={`h-9 min-w-0 flex-1 ${forumsBlockPlaceholder}`} />
+                            <div className="flex items-center gap-2">
+                                <div className={`h-8 w-24 ${forumsBlockPlaceholder}`} />
+                                <div className={`h-8 w-24 ${forumsBlockPlaceholder}`} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mb-4 flex items-center justify-between">
+                        <div className={`h-6 w-52 ${forumsLinePlaceholder}`} />
+                        <div className={`h-5 w-16 ${forumsLinePlaceholder}`} />
+                    </div>
+
+                    <div className="space-y-4">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                            <div key={`forum-main-${i}`} className={`rounded-2xl p-6 ${forumsBlockPlaceholder}`}>
+                                <div className="space-y-2">
+                                    <div className={`h-5 w-3/4 ${forumsLinePlaceholder}`} />
+                                    <div className={`h-4 w-1/2 ${forumsLinePlaceholder}`} />
+                                    <div className={`h-4 w-1/3 ${forumsLinePlaceholder}`} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                <aside className="space-y-4 xl:sticky xl:top-24">
+                    {[1, 2].map((i) => (
+                        <div key={`forum-right-${i}`} className="space-y-2">
+                            <div className={`h-4 w-28 ${forumsLinePlaceholder}`} />
+                            {[1, 2, 3, 4, 5].map((j) => (
+                                <div key={`forum-right-row-${i}-${j}`} className={`h-12 ${forumsBlockPlaceholder}`} />
+                            ))}
+                        </div>
+                    ))}
+                </aside>
+            </div>
+        </div>
+    </div>
+));
+ForumCategoryPageSkeleton.displayName = 'ForumCategoryPageSkeleton';

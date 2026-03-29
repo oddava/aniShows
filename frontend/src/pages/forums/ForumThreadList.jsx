@@ -201,6 +201,10 @@ const ForumThreadList = () => {
     // Only show loading UI after 500ms delay AND when we're actually loading NEW data
     const showCategoryLoading = useDelayedLoading(isCategoryLoading && !isCategoryPlaceholder, 500);
     const showThreadsLoading = useDelayedLoading(isThreadsLoading && !isThreadsPlaceholder, 500);
+    const showThreadsRefreshing = useDelayedLoading(
+        isFetching && !isThreadsLoading && !isThreadsPlaceholder,
+        300
+    );
 
     const totalPages = typeof threadsData?.count !== 'undefined' ? Math.max(1, Math.ceil(threadsData.count / 20)) : 0;
 
@@ -324,12 +328,9 @@ const ForumThreadList = () => {
                         </div>
                     ) : (
                         <>
-                            {isFetching && (
-                                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/30 backdrop-blur-sm">
-                                    <div className="forums-surface-soft flex items-center gap-2 px-4 py-3">
-                                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--forums-accent-weak)] border-t-[var(--forums-accent)]" />
-                                        <span className="forums-meta-text">Updating...</span>
-                                    </div>
+                            {showThreadsRefreshing && (
+                                <div className="mb-2 flex justify-end">
+                                    <span className="forums-meta-text text-xs">Refreshing…</span>
                                 </div>
                             )}
 
