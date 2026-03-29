@@ -10,11 +10,14 @@ from apps.core.models import CeleryTaskResult
 from apps.core.permissions import IsAdminUser
 from apps.core.services.admin_import_jobs_service import (
     IMPORT_TASKS,
+    OFFLINE_RECONCILE_TASK,
     cancel_import_job,
     format_task_result,
     trigger_anilist_import,
     trigger_offline_import,
 )
+
+__all__ = ["OFFLINE_RECONCILE_TASK", "AdminImportJobFilter", "AdminImportJobViewSet"]
 
 
 class AdminImportJobFilter(FilterSet):
@@ -46,6 +49,11 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     filterset_class = AdminImportJobFilter
     ordering_fields = ["date_created", "date_completed"]
     ordering = ["-date_created"]
+
+    @staticmethod
+    def _format_task_result(result):
+        """Backward-compatible wrapper kept for existing tests/callers."""
+        return format_task_result(result)
 
     def get_queryset(self):
         return CeleryTaskResult.objects.filter(task_name__in=IMPORT_TASKS)
