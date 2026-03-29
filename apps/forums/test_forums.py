@@ -144,7 +144,7 @@ class TestForumsAPI:
         assert first["X-Cache-Status"] == "miss"
         assert thread.view_count == 0
 
-        flush_forum_view_counts()
+        flush_buffered_thread_views()
         thread.refresh_from_db()
         assert thread.view_count == 1
 
