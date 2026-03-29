@@ -441,7 +441,7 @@ export default function Notifications() {
                                     {(thumbnail || followerNotification) && (
                                         <div
                                             className={`flex-shrink-0 ${followerNotification
-                                                ? 'w-14 h-14 sm:w-16 sm:h-16'
+                                                ? 'w-14 self-stretch sm:self-auto sm:w-16 sm:h-16'
                                                 : 'w-14 h-20 sm:w-16 sm:h-24 bg-dark-50 flex items-center justify-center'
                                                 }`}
                                         >

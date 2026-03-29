@@ -64,7 +64,7 @@ class TestSendPendingNotifications(TestCase):
             user=self.user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
             title="New Episode",
-            message="Episode 3 is now available",
+            message="Episode 3 aired.",
             is_email_sent=False,
             is_push_sent=False,
         )
@@ -154,7 +154,7 @@ class TestCheckNewEpisodes(TestCase):
             user=self.user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
             title="New Episode",
-            message="Episode 5 is now available",
+            message="Episode 5 aired.",
             data={"anime_id": anime.id, "episode_number": 5},
         )
 

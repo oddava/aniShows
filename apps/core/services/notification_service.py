@@ -270,7 +270,7 @@ class NotificationService:
             user=user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
             title="New Episode",
-            message=f"Episode {episode_number} of {anime.title} is now available!",
+            message=f"Episode {episode_number} of {anime.title} aired.",
             data=data,
             priority="medium",
         )
@@ -371,15 +371,19 @@ class NotificationService:
     @classmethod
     def create_forum_like_notification(cls, user, author, instance, is_thread=False):
         """Create notification for forum like."""
-        item_type = "thread" if is_thread else "post"
         title = instance.title if is_thread else instance.thread.title
         thread_id = instance.id if is_thread else instance.thread.id
+        message = (
+            f"{author.username} liked your thread: {title}"
+            if is_thread
+            else f"{author.username} liked your post in {title}"
+        )
 
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_LIKE,
             title="New Like",
-            message=f"{author.username} liked your {item_type} in {title}",
+            message=message,
             data={
                 "thread_id": thread_id,
                 "liker_username": author.username,
