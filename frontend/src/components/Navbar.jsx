@@ -649,7 +649,7 @@ export default function Navbar() {
                 <div className="px-4 sm:px-6">
                     <div className="flex items-center justify-between h-14">
                         {/* Logo */}
-                        <Link to="/" className="focus:outline-none hover:scale-105 transition-transform duration-300">
+                        <Link to="/" className="focus:outline-none">
                             <Logo />
                         </Link>
 
