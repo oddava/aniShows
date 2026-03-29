@@ -85,6 +85,24 @@
     background: var(--color-dark-100);
     color: #fff;
   }
+
+  /* Make all inputs borderless and flat per user request */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="search"],
+  input[type="url"],
+  input[type="number"],
+  textarea,
+  select,
+  .input {
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-color: transparent !important;
+    --tw-ring-offset-shadow: 0 0 transparent !important;
+    --tw-ring-shadow: 0 0 transparent !important;
+  }
 }
 
 @layer components {
@@ -260,16 +278,6 @@
   .group:hover .group-hover\:text-accent\/80,
   .group:focus-within .group-focus-within\:text-accent {
     color: var(--color-accent-text) !important;
-  }
-
-  .focus\:border-purple-500:focus,
-  .focus-within\:border-purple-500:focus-within {
-    border-color: var(--color-accent) !important;
-  }
-
-  .focus\:ring-purple-500\/50:focus,
-  .focus-within\:ring-purple-500\/50:focus-within {
-    --tw-ring-color: color-mix(in srgb, var(--color-accent) 28%, transparent) !important;
   }
 
   .divide-white\/\[0\.04\] > :not([hidden]) ~ :not([hidden]) {
