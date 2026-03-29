@@ -7,45 +7,38 @@ import React from 'react';
 export function ScheduleCardSkeleton({ delay = 0 }) {
     return (
         <div
-            className="relative overflow-hidden rounded-xl bg-dark-100 skeleton-fade-in border border-gray-800 h-full flex flex-col"
+            className="relative h-full flex flex-col skeleton-fade-in"
             style={{ animationDelay: `${delay}ms` }}
         >
-            {/* Cover image placeholder - aspect ratio 2:3 */}
-            <div className="relative aspect-[2/3] overflow-hidden rounded-t-xl bg-dark-50 flex-shrink-0">
-                <div className="absolute inset-0 bg-dark-200">
-                    <div className="absolute inset-0 skeleton-wave" />
-                </div>
+            {/* Cover image placeholder */}
+            <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden rounded-lg">
+                <div className="absolute inset-0 skeleton-shimmer" />
 
-                {/* Bottom status bar placeholder */}
-                <div className="absolute bottom-2 left-2 right-2 z-[100]">
-                    <div className="h-7 rounded-md border border-accent/30 bg-black/55 relative overflow-hidden flex items-center justify-start px-2.5">
-                        <div className="h-2.5 w-28 bg-white/10 rounded relative overflow-hidden">
-                            <div className="absolute inset-0 skeleton-wave" />
+                {/* Airing countdown placeholder */}
+                <div className="absolute bottom-2 left-2 right-2 z-30 pointer-events-none">
+                    <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65">
+                        <div className="h-2.5 w-24 bg-white/15 rounded relative overflow-hidden">
+                            <div className="absolute inset-0 skeleton-shimmer" />
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Content area */}
-            <div className="p-2.5 flex-grow flex flex-col bg-dark-100 rounded-b-xl space-y-2">
-                {/* Title placeholder */}
-                <div className="space-y-1.5 mb-1">
-                    <div className="h-3.5 bg-dark-200 rounded w-full relative overflow-hidden">
-                        <div className="absolute inset-0 skeleton-wave" />
+            {/* Title/info footer placeholder */}
+            <div className="mt-3 block space-y-2">
+                <div className="flex items-start gap-1.5">
+                    <div className="mt-[0.28rem] h-2 w-2 shrink-0 rounded-full bg-dark-300 relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-shimmer" />
                     </div>
-                    <div className="h-3.5 bg-dark-200 rounded w-2/3 relative overflow-hidden">
-                        <div className="absolute inset-0 skeleton-wave" />
+                    <div className="mt-[0.06rem] h-3 w-10 shrink-0 rounded bg-dark-300 relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-shimmer" />
+                    </div>
+                    <div className="h-3.5 flex-1 bg-dark-300 rounded relative overflow-hidden">
+                        <div className="absolute inset-0 skeleton-shimmer" />
                     </div>
                 </div>
-
-                {/* Meta info placeholder */}
-                <div className="flex items-center justify-between pt-1 mt-auto">
-                    <div className="h-2.5 w-8 bg-dark-200 rounded relative overflow-hidden">
-                        <div className="absolute inset-0 skeleton-wave" />
-                    </div>
-                    <div className="h-2.5 w-12 bg-dark-200 rounded relative overflow-hidden">
-                        <div className="absolute inset-0 skeleton-wave" />
-                    </div>
+                <div className="h-3.5 w-2/3 bg-dark-300 rounded relative overflow-hidden">
+                    <div className="absolute inset-0 skeleton-shimmer" />
                 </div>
             </div>
         </div>
@@ -58,7 +51,7 @@ export function ScheduleCardSkeleton({ delay = 0 }) {
  */
 export function ScheduleGridSkeleton({ count = 10 }) {
     return (
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5 lg:gap-6">
+        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 anime-card-grid-gap">
             {Array.from({ length: count }).map((_, i) => (
                 <ScheduleCardSkeleton key={i} delay={i * 50} />
             ))}
