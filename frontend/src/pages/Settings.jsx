@@ -577,7 +577,7 @@ export default function Settings() {
 
                     {/* Profile Tab */}
                     {activeTab === 'profile' && (
-                        <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800 animate-fade-in">
+                        <div className="bg-dark-100 p-6 rounded-2xl animate-fade-in">
                             <h2 className="text-xl font-semibold text-white mb-6">Profile Settings</h2>
 
                             <div className="space-y-6">
@@ -598,7 +598,7 @@ export default function Settings() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                        <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl bg-dark-50 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
+                                        <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl bg-dark-50 overflow-hidden flex items-center justify-center shrink-0">
                                             {avatarPreviewUrl ? (
                                                 <img src={avatarPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                             ) : user?.avatar ? (
@@ -634,7 +634,7 @@ export default function Settings() {
                                 {/* Banner */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                    <div className="relative w-full aspect-[2.2/1] sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1] rounded-xl bg-dark-50 border border-gray-700 overflow-hidden mb-3 group">
+                                    <div className="relative mb-3 w-full aspect-[2.2/1] overflow-hidden rounded-xl bg-dark-50 group sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1]">
                                         {bannerPreviewUrl ? (
                                             <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.banner && !removeBanner ? (
@@ -704,7 +704,7 @@ export default function Settings() {
                                         </span>
                                     </div>
 
-                                    <div className={`border rounded-2xl overflow-hidden ${bio.length > 5000 ? 'border-red-500/50' : 'border-gray-800'}`}>
+                                    <div className="rounded-2xl overflow-hidden">
                                         <RichTextEditor
                                             value={bio}
                                             onChange={(newBio) => {
@@ -735,7 +735,7 @@ export default function Settings() {
                                                 type="color"
                                                 value={normalizeProfilePrimaryColor(profilePrimaryColor)}
                                                 onChange={(e) => setProfilePrimaryColor(normalizeProfilePrimaryColor(e.target.value))}
-                                                className="h-11 w-14 rounded-lg border border-gray-700 bg-dark-50 p-1 cursor-pointer"
+                                                className="h-11 w-14 cursor-pointer rounded-lg border border-transparent bg-dark-50 p-1"
                                                 aria-label="Choose profile primary color"
                                             />
                                             <input
@@ -791,7 +791,7 @@ export default function Settings() {
 
                                     <div className="space-y-4 max-w-2xl">
                                         {socialLinks.length === 0 ? (
-                                            <div className="p-6 bg-dark-200/30 rounded-xl border border-white/5 text-center">
+                                            <div className="p-6 bg-dark-100 rounded-xl text-center">
                                                 <p className="text-gray-500 mb-2">No social links added yet.</p>
                                                 <p className="text-xs text-gray-600">Add up to 5 links to your profile</p>
                                             </div>
@@ -810,11 +810,11 @@ export default function Settings() {
                                                     return (
                                                         <div
                                                             key={index}
-                                                            className={`relative bg-dark-200/50 p-4 rounded-xl border transition-all ${isDuplicate
-                                                                ? 'border-red-500/30 bg-red-500/5'
+                                                            className={`relative rounded-xl p-4 transition-colors ${isDuplicate
+                                                                ? 'bg-red-500/5'
                                                                 : isEmptyPlatform
-                                                                    ? 'border-yellow-500/30'
-                                                                    : 'border-white/10'
+                                                                    ? 'bg-yellow-500/[0.05]'
+                                                                    : 'bg-dark-100'
                                                                 }`}
                                                         >
                                                             {/* Header with index and remove button */}
@@ -870,7 +870,7 @@ export default function Settings() {
                                                 })}
 
                                                 {/* Help text */}
-                                                <div className="p-4 bg-dark-200/30 rounded-xl border border-white/5">
+                                                <div className="p-4 bg-dark-100 rounded-xl">
                                                     <h4 className="text-xs font-medium text-gray-400 mb-2">Tips:</h4>
                                                     <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
                                                         <li>Enter @username for social platforms or paste a full URL</li>

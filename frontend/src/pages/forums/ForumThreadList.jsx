@@ -39,8 +39,7 @@ const PinnedThreadRow = memo(({ thread }) => {
             }}
             className="forums-thread-card group cursor-pointer p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
             style={{
-                borderColor: 'var(--forums-accent-weak)',
-                background: 'linear-gradient(180deg, var(--forums-surface-soft), var(--forums-surface))',
+                backgroundColor: 'var(--forums-surface)',
             }}
         >
             <div className="flex items-start justify-between gap-4">
@@ -48,7 +47,7 @@ const PinnedThreadRow = memo(({ thread }) => {
                     <div className="flex min-w-0 items-center gap-2">
                         <Pin size={14} className="forums-accent-text shrink-0" />
                         {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
-                        <h3 className="forums-thread-title truncate transition-colors group-hover:text-[var(--forums-accent)]">
+                        <h3 className="forums-thread-title truncate">
                             {thread.title}
                         </h3>
                     </div>
@@ -88,7 +87,7 @@ const ThreadCard = memo(({ thread }) => {
             <div className="flex flex-col gap-4">
                 <div className="flex min-w-0 items-center gap-2">
                     {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
-                    <h3 className="forums-thread-title line-clamp-2 transition-colors group-hover:text-[var(--forums-accent)]">
+                    <h3 className="forums-thread-title line-clamp-2">
                         {thread.title}
                     </h3>
                 </div>

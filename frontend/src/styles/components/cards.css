@@ -38,6 +38,23 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none !important;
-  box-shadow: 0 0 0 4px var(--color-focus-ring) !important;
+  box-shadow: none !important;
   border-color: var(--color-accent) !important;
+}
+
+.richtext-editor-textarea:focus,
+.richtext-editor-textarea:focus-visible {
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.input:focus,
+.input:focus-visible {
+  border-color: transparent !important;
+}
+
+.flat-control:focus,
+.flat-control:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }

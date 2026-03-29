@@ -20,13 +20,11 @@
 
   .forums-surface {
     background-color: transparent;
-    border: 1px solid var(--forums-border);
     border-radius: 16px;
   }
 
   .forums-surface-soft {
     background-color: transparent;
-    border: 1px solid var(--forums-border);
     border-radius: 16px;
   }
 
@@ -55,11 +53,6 @@
     border: 0;
     border-radius: 10px;
     padding: 18px;
-    transition: background-color 180ms ease;
-  }
-
-  .forums-thread-card:hover {
-    background-color: color-mix(in srgb, var(--forums-surface-soft) 78%, transparent);
   }
 
   .forums-thread-title {
@@ -71,15 +64,13 @@
   }
 
   .forums-pinned-row {
-    border: 1px solid var(--forums-border);
     border-radius: 10px;
     padding: 8px 10px;
     background-color: var(--forums-surface-soft);
-    transition: border-color 180ms ease, background-color 180ms ease;
+    transition: background-color 180ms ease;
   }
 
   .forums-pinned-row:hover {
-    border-color: var(--forums-border);
     background-color: var(--forums-surface-soft);
   }
 

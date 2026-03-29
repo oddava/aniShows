@@ -281,7 +281,7 @@ const RichTextEditor = ({
                         placeholder={placeholder}
                         minRows={editorMinRows}
                         maxRows={editorMaxRows}
-                        className="w-full bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none resize-none font-sans text-[15px] leading-relaxed"
+                        className="richtext-editor-textarea w-full bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none resize-none font-sans text-[15px] leading-relaxed"
                     />
                     {!value && (
                         <div className="absolute inset-0 pointer-events-none p-4 text-gray-500 italic lg:hidden group-focus-within:hidden"></div>

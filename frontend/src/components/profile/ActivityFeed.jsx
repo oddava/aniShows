@@ -29,14 +29,14 @@ const FILTER_OPTIONS = [
 ];
 
 const ACTIVITY_CONFIG = {
-    completed: { icon: CheckCircle2, marker: 'bg-emerald-400', chip: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' },
-    added: { icon: ListPlus, marker: 'bg-blue-400', chip: 'text-blue-300 border-blue-500/30 bg-blue-500/10' },
-    progress: { icon: PlayCircle, marker: 'bg-accent', chip: 'text-accent-light border-accent/30 bg-accent/10' },
-    status_change: { icon: Workflow, marker: 'bg-yellow-400', chip: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/10' },
-    score: { icon: Star, marker: 'bg-amber-400', chip: 'text-amber-300 border-amber-500/30 bg-amber-500/10' },
-    removed: { icon: Trash2, marker: 'bg-rose-400', chip: 'text-rose-300 border-rose-500/30 bg-rose-500/10' },
-    rewatching: { icon: Repeat2, marker: 'bg-cyan-400', chip: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10' },
-    notes_update: { icon: StickyNote, marker: 'bg-pink-400', chip: 'text-pink-300 border-pink-500/30 bg-pink-500/10' },
+    completed: { icon: CheckCircle2, marker: 'bg-emerald-400', chip: 'bg-emerald-500/10 text-emerald-300' },
+    added: { icon: ListPlus, marker: 'bg-blue-400', chip: 'bg-blue-500/10 text-blue-300' },
+    progress: { icon: PlayCircle, marker: 'bg-accent', chip: 'bg-accent/10 text-accent-light' },
+    status_change: { icon: Workflow, marker: 'bg-yellow-400', chip: 'bg-yellow-500/10 text-yellow-300' },
+    score: { icon: Star, marker: 'bg-amber-400', chip: 'bg-amber-500/10 text-amber-300' },
+    removed: { icon: Trash2, marker: 'bg-rose-400', chip: 'bg-rose-500/10 text-rose-300' },
+    rewatching: { icon: Repeat2, marker: 'bg-cyan-400', chip: 'bg-cyan-500/10 text-cyan-300' },
+    notes_update: { icon: StickyNote, marker: 'bg-pink-400', chip: 'bg-pink-500/10 text-pink-300' },
 };
 
 function renderActivityDescription(activity) {
@@ -217,7 +217,7 @@ function ActivityCard({ activity }) {
     const title = anime?.title || 'Unknown title';
 
     return (
-        <article className="group relative overflow-hidden rounded-lg border border-gray-800/70 bg-gradient-to-br from-dark-100/85 to-dark-200/85 p-2 transition-colors hover:border-gray-700">
+        <article className="group relative overflow-hidden rounded-lg bg-gradient-to-br from-dark-100/90 to-dark-200/88 p-2 transition-colors hover:bg-dark-100">
             <div className="flex items-stretch gap-3">
                 <div className="flex min-w-0 flex-1 flex-col px-1 py-1">
                     <div className="mb-1">
@@ -228,14 +228,14 @@ function ActivityCard({ activity }) {
 
                     <div className="flex flex-wrap items-center gap-2">
                         {metadata && (
-                            <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${config.chip}`}>
+                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${config.chip}`}>
                                 {metadata}
                             </span>
                         )}
                     </div>
 
                     {activity.notes && (
-                        <p className="mt-1.5 line-clamp-2 rounded-lg border border-gray-800/80 bg-dark-200/60 px-2 py-1.5 text-xs italic text-gray-400">
+                        <p className="mt-1.5 line-clamp-2 rounded-lg bg-dark-200/70 px-2 py-1.5 text-xs italic text-gray-400">
                             "{activity.notes}"
                         </p>
                     )}
@@ -249,7 +249,7 @@ function ActivityCard({ activity }) {
                 {anime?.slug && (
                     <Link
                         to={`/anime/${anime.slug}`}
-                        className="w-10 shrink-0 overflow-hidden rounded-md border border-gray-800/80 bg-dark-50 transition-colors group-hover:border-gray-700"
+                        className="w-10 shrink-0 overflow-hidden rounded-md bg-dark-50 transition-colors"
                     >
                         <AnimeMediaImage
                             anime={anime}
@@ -355,9 +355,9 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                             key={filter.value}
                             type="button"
                             onClick={() => setFilterType(filter.value)}
-                            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${isActive
-                                ? 'border-accent/60 bg-accent/15 text-accent-light'
-                                : 'border-gray-700/80 bg-dark-100/70 text-gray-400 hover:border-gray-600 hover:text-gray-200'
+                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${isActive
+                                ? 'bg-accent/15 text-accent-light'
+                                : 'bg-dark-100/70 text-gray-400 hover:bg-dark-100 hover:text-gray-200'
                                 }`}
                         >
                             {filter.color ? (
@@ -373,7 +373,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                     );
                 })}
                 {isFilterUpdating && (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700/80 bg-dark-100/70 px-3 py-1.5 text-xs font-semibold text-gray-300">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-dark-100/70 px-3 py-1.5 text-xs font-semibold text-gray-300">
                         <span className="h-3.5 w-3.5 rounded-full border border-gray-400/50 border-t-gray-100 animate-spin" />
                         Updating...
                     </span>
@@ -383,7 +383,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
             {isLoading && activities.length === 0 && (
                 <div className="space-y-2">
                     {Array.from({ length: compact ? 3 : 5 }).map((_, index) => (
-                        <div key={index} className="h-20 animate-pulse rounded-xl border border-gray-800/60 bg-dark-100/60" />
+                        <div key={index} className="h-20 animate-pulse rounded-xl bg-dark-100/60" />
                     ))}
                 </div>
             )}
@@ -394,7 +394,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                     <button
                         type="button"
                         onClick={() => refetch()}
-                        className="mt-3 rounded-lg border border-gray-700 bg-dark-100 px-4 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-accent/50 hover:text-white"
+                        className="mt-3 rounded-lg bg-dark-100 px-4 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-dark-50 hover:text-white"
                     >
                         Retry
                     </button>
@@ -433,7 +433,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                         type="button"
                         onClick={() => fetchNextPage()}
                         disabled={isFetchingNextPage}
-                        className="rounded-lg border border-gray-700 bg-dark-100 px-5 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:border-gray-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-lg bg-dark-100 px-5 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-dark-50 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         {isFetchingNextPage ? 'Loading...' : 'Load More Activity'}
                     </button>

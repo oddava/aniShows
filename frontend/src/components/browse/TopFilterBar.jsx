@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { Search, X, Filter } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import FlatSelect from './FlatSelect';
 
 export default function TopFilterBar({
     genres,
@@ -19,6 +20,26 @@ export default function TopFilterBar({
     const isSearchFocusedRef = useRef(false);
     const inputRef = searchInputRef || localSearchInputRef;
     const currentQuery = searchParams.get('q') || '';
+    const genreOptions = [
+        { value: '', label: 'Any' },
+        ...(!isGenresError && genres ? genres.map((genre) => ({ value: genre.slug, label: genre.name })) : [])
+    ];
+    const yearSelectOptions = [
+        { value: '', label: 'Any' },
+        ...yearOptions.map((year) => ({ value: year, label: String(year) }))
+    ];
+    const seasonSelectOptions = [
+        { value: '', label: 'Any' },
+        ...seasonOptions.map((season) => ({ value: season.value, label: season.label }))
+    ];
+    const formatSelectOptions = [
+        { value: '', label: 'Any' },
+        ...typeOptions.map((type) => ({ value: type.value, label: type.label }))
+    ];
+    const statusSelectOptions = [
+        { value: '', label: 'Any' },
+        ...statusOptions.map((status) => ({ value: status.value, label: status.label }))
+    ];
 
     const [searchInput, setSearchInput] = useState(currentQuery);
 
@@ -84,12 +105,12 @@ export default function TopFilterBar({
                                 isSearchFocusedRef.current = false;
                             }}
                             placeholder="Find anime..."
-                            className="w-full bg-dark-200 border border-gray-700/50 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white focus:outline-none focus:border-accent hover:border-gray-600 transition-colors placeholder:text-gray-600 shadow-inner"
+                            className="w-full rounded-xl bg-dark-200 pl-10 pr-10 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:outline-none focus-visible:outline-none"
                         />
                         {searchInput && (
                             <button
                                 onClick={clearSearch}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white bg-dark p-0.5 rounded-full z-10"
+                                className="flat-control absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-0.5 text-gray-400 hover:text-white"
                             >
                                 <X className="w-3 h-3" />
                             </button>
@@ -103,76 +124,66 @@ export default function TopFilterBar({
                     {/* Genres Dropdown */}
                     <div className="w-full relative">
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Genres</label>
-                        <select
+                        <FlatSelect
                             value={searchParams.get('genre') || ''}
-                            onChange={(e) => handleSelectChange('genre', e.target.value)}
-                            className="w-full bg-dark-200 border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors appearance-none shadow-inner truncate"
-                        >
-                            <option value="">Any</option>
-                            {!isGenresError && genres?.map((g) => (
-                                <option key={g.id} value={g.slug}>{g.name}</option>
-                            ))}
-                        </select>
+                            onChange={(value) => handleSelectChange('genre', value)}
+                            options={genreOptions}
+                            placeholder="Any"
+                            triggerClassName="bg-dark-200 text-gray-300"
+                            menuClassName="bg-dark-100"
+                        />
                     </div>
 
                     {/* Year Dropdown */}
                     <div className="w-full relative">
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Year</label>
-                        <select
+                        <FlatSelect
                             value={searchParams.get('year') || ''}
-                            onChange={(e) => handleSelectChange('year', e.target.value)}
-                            className="w-full bg-dark-200 border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors appearance-none shadow-inner"
-                        >
-                            <option value="">Any</option>
-                            {yearOptions.map(y => (
-                                <option key={y} value={y}>{y}</option>
-                            ))}
-                        </select>
+                            onChange={(value) => handleSelectChange('year', value)}
+                            options={yearSelectOptions}
+                            placeholder="Any"
+                            triggerClassName="bg-dark-200 text-gray-300"
+                            menuClassName="bg-dark-100"
+                        />
                     </div>
 
                     {/* Season Dropdown */}
                     <div className="w-full relative">
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Season</label>
-                        <select
+                        <FlatSelect
                             value={searchParams.get('season') || ''}
-                            onChange={(e) => handleSelectChange('season', e.target.value)}
-                            className="w-full bg-dark-200 border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors appearance-none shadow-inner capitalize"
-                        >
-                            <option value="">Any</option>
-                            {seasonOptions.map(s => (
-                                <option key={s.value} value={s.value}>{s.label}</option>
-                            ))}
-                        </select>
+                            onChange={(value) => handleSelectChange('season', value)}
+                            options={seasonSelectOptions}
+                            placeholder="Any"
+                            triggerClassName="bg-dark-200 text-gray-300"
+                            menuClassName="bg-dark-100"
+                        />
                     </div>
 
                     {/* Format Dropdown */}
                     <div className="w-full relative">
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Format</label>
-                        <select
+                        <FlatSelect
                             value={searchParams.get('type') || ''}
-                            onChange={(e) => handleSelectChange('type', e.target.value)}
-                            className="w-full bg-dark-200 border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors appearance-none shadow-inner"
-                        >
-                            <option value="">Any</option>
-                            {typeOptions.map(t => (
-                                <option key={t.value} value={t.value}>{t.label}</option>
-                            ))}
-                        </select>
+                            onChange={(value) => handleSelectChange('type', value)}
+                            options={formatSelectOptions}
+                            placeholder="Any"
+                            triggerClassName="bg-dark-200 text-gray-300"
+                            menuClassName="bg-dark-100"
+                        />
                     </div>
 
                     {/* Status Dropdown */}
                     <div className="w-full relative">
                         <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Airing Status</label>
-                        <select
+                        <FlatSelect
                             value={searchParams.get('status') || ''}
-                            onChange={(e) => handleSelectChange('status', e.target.value)}
-                            className="w-full bg-dark-200 border border-gray-700/50 rounded-xl px-3 py-2.5 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors appearance-none shadow-inner"
-                        >
-                            <option value="">Any</option>
-                            {statusOptions.map(s => (
-                                <option key={s.value} value={s.value}>{s.label}</option>
-                            ))}
-                        </select>
+                            onChange={(value) => handleSelectChange('status', value)}
+                            options={statusSelectOptions}
+                            placeholder="Any"
+                            triggerClassName="bg-dark-200 text-gray-300"
+                            menuClassName="bg-dark-100"
+                        />
                     </div>
                 </div>
 
@@ -180,7 +191,7 @@ export default function TopFilterBar({
                 <div className="flex items-end justify-center lg:hidden lg:w-auto">
                     <button
                         onClick={onOpenMobileFilters}
-                        className="h-[44px] w-full flex items-center justify-center gap-2 px-4 rounded-xl bg-dark-200 border border-gray-700/50 text-gray-300 hover:text-white hover:bg-white/5 hover:border-accent/40 transition-all font-bold text-sm"
+                        className="flat-control h-[44px] w-full rounded-xl bg-dark-200 px-4 text-sm font-bold text-gray-300 transition-colors hover:text-white focus:outline-none focus-visible:outline-none flex items-center justify-center gap-2"
                     >
                         <Filter className="w-4 h-4" />
                         <span>Advanced Filters</span>
@@ -195,7 +206,7 @@ export default function TopFilterBar({
             <div className="hidden lg:flex justify-end mt-4 pt-4 border-t border-gray-800/50">
                 <button
                     onClick={onOpenMobileFilters}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors border border-transparent hover:border-gray-700"
+                    className="flat-control flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 transition-colors hover:text-white focus:outline-none focus-visible:outline-none"
                 >
                     <Filter className="w-3 h-3" />
                     Advanced Filters

@@ -266,7 +266,7 @@ const SmartLinkInput = ({
                             onChange={handleValueChange}
                             spellCheck="false"
                             autoComplete="off"
-                            className={`input py-2 text-sm w-full pr-10 ${error ? 'border-red-500/50 focus:border-red-500' : ''
+                            className={`input py-2 text-sm w-full pr-10 ${error ? 'bg-red-500/[0.06]' : ''
                                 }`}
                             placeholder={placeholder}
                             disabled={disabled}
@@ -296,7 +296,7 @@ const SmartLinkInput = ({
 
             {/* Preview */}
             {showPreview && (
-                <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                <div className="p-3 bg-dark-100 rounded-lg">
                     <div className="flex items-center gap-3">
                         <div className="shrink-0 text-gray-400">
                             {getPlatformIcon(detectedPlatform)}

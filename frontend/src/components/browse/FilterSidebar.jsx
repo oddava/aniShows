@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronUp, Tv, ChevronRight, Calendar, Star, Building2, Filter } from 'lucide-react';
 import PropTypes from 'prop-types';
+import FlatSelect from './FlatSelect';
 
 const FilterSection = ({ icon: Icon, title, section, count, collapsed, onToggle, children, isMobile }) => (
   <div className="border-b border-gray-800/50 last:border-b-0 pb-4 mb-4">
     <button
       onClick={() => onToggle(section)}
-      className="w-full flex items-center justify-between text-sm font-semibold text-white mb-3 hover:text-accent transition-colors group"
+      className="flat-control mb-3 flex w-full items-center justify-between text-sm font-semibold text-white transition-colors group hover:text-accent"
       aria-expanded={!collapsed}
       aria-controls={`${section}-content`}
     >
@@ -77,6 +78,18 @@ export default function FilterSidebar({
     g.name.toLowerCase().includes(genreSearch.toLowerCase())
   );
   const displayedGenres = showAllGenres ? filteredGenres : filteredGenres.slice(0, 12);
+  const seasonSelectOptions = [
+    { value: '', label: 'Any Season' },
+    ...seasonOptions.map((season) => ({ value: season.value, label: season.label.split(' ')[0] }))
+  ];
+  const yearSelectOptions = [
+    { value: '', label: 'Any Year' },
+    ...yearOptions.map((year) => ({ value: year, label: String(year) }))
+  ];
+  const studioSelectOptions = [
+    { value: '', label: 'All Studios' },
+    ...(studios?.map((studio) => ({ value: studio.id, label: studio.name })) || [])
+  ];
 
   const RadioOption = useCallback(({
     label,
@@ -89,9 +102,9 @@ export default function FilterSidebar({
       role="radio"
       aria-checked={checked}
     >
-      <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${checked
-          ? 'border-accent bg-accent'
-          : 'border-gray-600 bg-dark-100 group-hover:border-gray-500'
+      <div className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full transition-colors ${checked
+          ? 'bg-accent'
+          : 'bg-dark-200/95 group-hover:bg-dark-200'
         }`}>
         {checked && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
       </div>
@@ -189,26 +202,22 @@ export default function FilterSidebar({
         isMobile={isMobile}
       >
         <div className="grid grid-cols-2 gap-2">
-          <select
+          <FlatSelect
             value={localFilters.season}
-            onChange={(e) => onUpdateFilter('season', e.target.value)}
-            className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors"
-          >
-            <option value="">Any Season</option>
-            {seasonOptions.map((s) => (
-              <option key={s.value} value={s.value}>{s.label.split(' ')[0]}</option>
-            ))}
-          </select>
-          <select
+            onChange={(value) => onUpdateFilter('season', value)}
+            options={seasonSelectOptions}
+            placeholder="Any Season"
+            triggerClassName="rounded-lg bg-dark-100 px-3 py-2 text-gray-300"
+            menuClassName="rounded-lg bg-dark-100"
+          />
+          <FlatSelect
             value={localFilters.year}
-            onChange={(e) => onUpdateFilter('year', e.target.value)}
-            className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors"
-          >
-            <option value="">Any Year</option>
-            {yearOptions.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+            onChange={(value) => onUpdateFilter('year', value)}
+            options={yearSelectOptions}
+            placeholder="Any Year"
+            triggerClassName="rounded-lg bg-dark-100 px-3 py-2 text-gray-300"
+            menuClassName="rounded-lg bg-dark-100"
+          />
         </div>
       </FilterSection>
 
@@ -242,7 +251,7 @@ export default function FilterSidebar({
                 const clampedValue = Math.max(0, Math.min(10, numValue));
                 onUpdateFilter('minRating', clampedValue.toString());
               }}
-              className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors"
+              className="w-full rounded-lg bg-dark-100 px-3 py-2 text-sm text-gray-300 outline-none transition-colors focus:outline-none focus-visible:outline-none"
             />
             <span className="text-gray-500">-</span>
             <input
@@ -263,7 +272,7 @@ export default function FilterSidebar({
                 const clampedValue = Math.max(0, Math.min(10, numValue));
                 onUpdateFilter('maxRating', clampedValue.toString());
               }}
-              className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors"
+              className="w-full rounded-lg bg-dark-100 px-3 py-2 text-sm text-gray-300 outline-none transition-colors focus:outline-none focus-visible:outline-none"
             />
           </div>
           {localFilters.minRating && localFilters.maxRating &&
@@ -288,16 +297,14 @@ export default function FilterSidebar({
             Failed to load studios
           </p>
         ) : (
-          <select
+          <FlatSelect
             value={localFilters.studio}
-            onChange={(e) => onUpdateFilter('studio', e.target.value)}
-            className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors"
-          >
-            <option value="">All Studios</option>
-            {studios?.map((studio) => (
-              <option key={studio.id} value={studio.id}>{studio.name}</option>
-            ))}
-          </select>
+            onChange={(value) => onUpdateFilter('studio', value)}
+            options={studioSelectOptions}
+            placeholder="All Studios"
+            triggerClassName="rounded-lg bg-dark-100 px-3 py-2 text-gray-300"
+            menuClassName="rounded-lg bg-dark-100"
+          />
         )}
       </FilterSection>
 
@@ -323,7 +330,7 @@ export default function FilterSidebar({
                 placeholder="Search genres..."
                 value={genreSearch}
                 onChange={(e) => setGenreSearch(e.target.value)}
-                className="w-full bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent hover:border-gray-600 transition-colors placeholder:text-gray-600"
+                className="w-full rounded-lg bg-dark-100 px-3 py-2 text-sm text-gray-300 outline-none transition-colors placeholder:text-gray-600 focus:outline-none focus-visible:outline-none"
               />
             )}
             <div className="flex flex-wrap gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
@@ -333,10 +340,10 @@ export default function FilterSidebar({
                   <button
                     key={genre.id}
                     onClick={() => onToggleGenre(genre.slug)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200
+                    className={`flat-control rounded-full px-2.5 py-1 text-xs font-medium transition-colors
                       ${isSelected
-                        ? 'bg-accent text-white  '
-                        : 'bg-dark-100 text-gray-400 border border-gray-700 hover:border-accent/50 hover:text-white'
+                        ? 'bg-accent text-white'
+                        : 'bg-dark-100 text-gray-400 hover:bg-dark-200 hover:text-white'
                       }`}
                   >
                     {genre.name}
@@ -348,7 +355,7 @@ export default function FilterSidebar({
             {filteredGenres.length > 12 && !genreSearch && (
               <button
                 onClick={() => setShowAllGenres(!showAllGenres)}
-                className="text-xs text-accent hover:text-accent-light transition-colors font-medium"
+                className="flat-control text-xs font-medium text-accent transition-colors hover:text-accent-light"
               >
                 {showAllGenres ? 'Show Less' : `Show All (${filteredGenres.length})`}
               </button>
@@ -363,14 +370,14 @@ export default function FilterSidebar({
           {!isMobile && (
             <button
               onClick={onApplyFilters}
-              className="w-full py-2.5 text-sm font-bold text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors  "
+              className="flat-control w-full rounded-xl bg-accent py-2.5 text-sm font-bold text-white transition-colors hover:bg-accent-dark focus:outline-none focus-visible:outline-none"
             >
               Apply Filters
             </button>
           )}
           <button
             onClick={onResetFilters}
-            className="w-full py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+            className="flat-control w-full py-2 text-sm font-medium text-gray-400 transition-colors hover:text-white"
           >
             Reset {isMobile ? 'Changes' : 'Changes'}
           </button>
