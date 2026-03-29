@@ -5,6 +5,11 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.animes.models import Review, ReviewComment, ReviewReport, ReviewVote
+from apps.animes.serializers import (
+    ReviewCommentSerializer,
+    ReviewReportCreateSerializer,
+    ReviewSerializer,
+)
 from apps.animes.services.reviews import (
     add_review_comment,
     create_review,
@@ -19,11 +24,6 @@ from apps.animes.services.reviews import (
     update_review,
     update_review_comment,
     vote_on_review,
-)
-from apps.animes.serializers import (
-    ReviewCommentSerializer,
-    ReviewReportCreateSerializer,
-    ReviewSerializer,
 )
 from apps.users.permissions import EmailVerificationMixin
 

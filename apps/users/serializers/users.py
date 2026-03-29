@@ -29,8 +29,8 @@ from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from apps.core.services.admin_settings_service import username_length_limits
 from apps.shared.logger import logger
 from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
-from apps.users.services.avatar_service import get_user_avatar_url
 from apps.users.services.auth_service import AuthService
+from apps.users.services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 

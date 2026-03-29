@@ -6,10 +6,10 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from apps.admin_api.services.logs_service import build_system_log_stats
 from apps.core.models import AuditLog, SystemLog
 from apps.core.permissions import IsAdminUser
 from apps.users.admin_serializers import AuditLogSerializer, SystemLogSerializer
-from apps.admin_api.services.logs_service import build_system_log_stats
 
 
 class SystemLogFilter(FilterSet):

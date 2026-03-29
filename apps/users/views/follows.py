@@ -19,6 +19,7 @@ from apps.users.services.follow_service import (
     toggle_follow,
 )
 
+
 class FollowViewSet(GenericViewSet):
     """Handle follow/unfollow operations and listing followers/following"""
 

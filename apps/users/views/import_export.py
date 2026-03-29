@@ -10,14 +10,14 @@ from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 from apps.animes.serializers.imports import UserImportJobSerializer
 from apps.shared.logger import logger
 from apps.users.models import UserImportJob
+from apps.users.services.export_service import ExportService
 from apps.users.services.import_job_service import (
+    cancel_import_job,
     create_anilist_import_job,
     create_mal_import_job,
     create_mal_xml_import_job,
-    cancel_import_job,
     is_valid_import_username,
 )
-from apps.users.services.export_service import ExportService
 
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024

@@ -6,15 +6,6 @@ from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveMod
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from apps.animes.admin_serializers import (
-    AdminAnimeSerializer,
-    AdminCharacterSerializer,
-    AdminGenreSerializer,
-    AdminOfflineAnimeSyncStateSerializer,
-    AdminStaffSerializer,
-    AdminStudioSerializer,
-)
-from apps.animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
 from apps.admin_api.services.anime_admin_service import (
     AdminAnimeActionResult,
     apply_default_genre_slug,
@@ -29,6 +20,15 @@ from apps.admin_api.services.anime_admin_service import (
     mark_merge_target,
     set_ids_and_retry,
 )
+from apps.animes.admin_serializers import (
+    AdminAnimeSerializer,
+    AdminCharacterSerializer,
+    AdminGenreSerializer,
+    AdminOfflineAnimeSyncStateSerializer,
+    AdminStaffSerializer,
+    AdminStudioSerializer,
+)
+from apps.animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
 from apps.animes.services.offline_sync import OfflineSyncService
 from apps.core.permissions import IsAdminUser
 
