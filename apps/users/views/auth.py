@@ -185,21 +185,49 @@ class AuthViewSet(ViewSet):
 class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
     """Token refresh serializer with logging for failed attempts."""
 
+    def _failure_log_context(self) -> dict[str, str | int | None]:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        is_authenticated = bool(getattr(user, "is_authenticated", False))
+
+        return {
+            "request_method": getattr(request, "method", None),
+            "request_path": getattr(request, "path", None),
+            "remote_addr": request.META.get("REMOTE_ADDR") if request else None,
+            "user_id": getattr(user, "pk", None) if is_authenticated else None,
+            "username": user.get_username() if is_authenticated else None,
+        }
+
     def validate(self, attrs):
         try:
             data = super().validate(attrs)
             return data
         except User.DoesNotExist:
-            logger.warning("Token refresh failed: User does not exist")
+            logger.warning(
+                "Token refresh failed",
+                extra={
+                    **self._failure_log_context(),
+                    "exception_class": User.DoesNotExist.__name__,
+                },
+            )
             raise InvalidToken()
         except Exception as e:
-            refresh_token = attrs.get("refresh", "unknown")
-            token_preview = f"{refresh_token[:20]}..." if len(refresh_token) > 20 else refresh_token
             if isinstance(e, (InvalidToken, TokenError)):
-                logger.warning(f"Token refresh failed: {str(e)}")
+                logger.warning(
+                    "Token refresh failed",
+                    extra={
+                        **self._failure_log_context(),
+                        "exception_class": e.__class__.__name__,
+                    },
+                )
             else:
                 logger.error(
-                    f"Token refresh failed: {str(e)}, token_preview={token_preview}", exc_info=True
+                    "Token refresh failed",
+                    exc_info=True,
+                    extra={
+                        **self._failure_log_context(),
+                        "exception_class": e.__class__.__name__,
+                    },
                 )
             raise
 

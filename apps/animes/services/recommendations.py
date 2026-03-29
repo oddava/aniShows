@@ -669,8 +669,3 @@ class RecommendationService:
             return True
         except UserRecommendation.DoesNotExist:
             return False
-
-    def record_impression(self, user, anime_id: int) -> None:
-        """Record that a user saw this recommendation (for analytics)."""
-        # This could update a counter or log to analytics
-        pass
