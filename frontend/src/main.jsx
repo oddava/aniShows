@@ -54,7 +54,7 @@ function renderFatalBootstrapError() {
     return
   }
   rootElement.innerHTML = `
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#120a1a;color:#e5e7eb;padding:24px;text-align:center;font-family:system-ui,sans-serif;">
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#110919;color:#e5e7eb;padding:24px;text-align:center;font-family:system-ui,sans-serif;">
       <div>
         <h1 style="margin:0 0 12px;font-size:20px;">App failed to load</h1>
         <p style="margin:0;opacity:0.85;">Please hard refresh the page. If the issue persists, clear browser site data for this domain.</p>
