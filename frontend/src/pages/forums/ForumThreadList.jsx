@@ -107,7 +107,7 @@ const ThreadCard = memo(({ thread }) => {
                                 </MiniProfileHoverCard>
                                 <Link
                                     to={`/u/${thread.author?.username}`}
-                                    className="truncate text-sm font-semibold text-[var(--forums-accent)] transition-colors hover:text-[var(--forums-accent-hover)]"
+                                    className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
                                 >
                                     {thread.author?.username}
                                 </Link>
@@ -256,7 +256,7 @@ const ForumThreadList = () => {
             <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
                 {/* Breadcrumb */}
                 <div className="forums-meta-text mb-8 flex items-center gap-2">
-                    <Link to="/forums" className="flex items-center gap-1 transition-colors hover:text-[var(--forums-accent)]">
+                    <Link to="/forums" className="flex items-center gap-1 transition-colors hover:text-[var(--forums-accent-text)]">
                         <ArrowLeft size={14} /> Forums
                     </Link>
                     <ChevronRight size={12} />
@@ -320,7 +320,7 @@ const ForumThreadList = () => {
                             <p className="forums-meta-text mb-4 mt-2">Please try again later.</p>
                             <button
                                 onClick={() => window.location.reload()}
-                                className="text-sm font-semibold text-[var(--forums-accent)] hover:underline"
+                                className="text-sm font-semibold text-[var(--forums-accent-text)] hover:underline"
                             >
                                 Retry
                             </button>

@@ -35,6 +35,8 @@
   --color-navbar-shadow: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
   --color-scrollbar-thumb: color-mix(in srgb, var(--color-accent-base) 22%, var(--color-surface-3-base));
   --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-accent-base) 30%, var(--color-surface-4-base));
+  --color-accent-text: #9b78ea;
+  --color-accent-text-hover: #b08df6;
   --color-focus-ring: color-mix(in srgb, var(--color-accent) 24%, transparent);
   --color-focus-ring-strong: color-mix(in srgb, var(--color-accent) 44%, transparent);
 }
@@ -236,6 +238,28 @@
   .text-purple-300,
   .text-purple-400 {
     color: var(--color-accent-light) !important;
+  }
+
+  .text-accent,
+  .text-accent-light {
+    color: var(--color-accent-text) !important;
+  }
+
+  .text-accent\/80 {
+    color: color-mix(in srgb, var(--color-accent-text) 84%, transparent) !important;
+  }
+
+  .hover\:text-accent:hover,
+  .hover\:text-accent-hover:hover,
+  .hover\:text-accent-light:hover,
+  .hover\:text-accent\/80:hover {
+    color: var(--color-accent-text-hover) !important;
+  }
+
+  .group:hover .group-hover\:text-accent,
+  .group:hover .group-hover\:text-accent\/80,
+  .group:focus-within .group-focus-within\:text-accent {
+    color: var(--color-accent-text) !important;
   }
 
   .focus\:border-purple-500:focus,
