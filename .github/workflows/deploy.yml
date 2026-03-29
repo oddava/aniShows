@@ -110,6 +110,18 @@ jobs:
   # =============================================================================
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: admin-core-forums
+            paths: "apps/admin_api/tests apps/core/tests apps/forums"
+          - shard: users
+            paths: "apps/users/tests"
+          - shard: animes-a
+            paths: "apps/animes/tests/test_airing_notification_state.py apps/animes/tests/test_anilist_integrity.py apps/animes/tests/test_anime_list.py apps/animes/tests/test_episode_tracking.py apps/animes/tests/test_franchise_fetch_endpoint.py apps/animes/tests/test_franchise_import.py apps/animes/tests/test_image_fallback_and_cache.py apps/animes/tests/test_image_self_heal_tasks.py"
+          - shard: animes-b
+            paths: "apps/animes/tests/test_jikan_service.py apps/animes/tests/test_offline_catalog_import.py apps/animes/tests/test_offline_catalog_task_command.py apps/animes/tests/test_offline_sync_state_pipeline.py apps/animes/tests/test_quarantined_public_visibility.py apps/animes/tests/test_recommendations_service.py apps/animes/tests/test_reviews.py apps/animes/tests/test_seasonal.py"
     services:
       postgres:
         image: postgres:18-alpine
@@ -198,18 +210,63 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: "6379"
           DJANGO_SECRET_KEY: test-secret-key-not-for-production
+          COVERAGE_FILE: .coverage.${{ matrix.shard }}
         run: |
-          echo "🧪 Running tests..."
+          echo "🧪 Running tests for shard: ${{ matrix.shard }}"
           pytest \
             --cov=apps \
-            --cov-report=xml:coverage.xml \
-            --cov-fail-under=30 \
+            --cov-report= \
             --no-cov-on-fail \
-            -n 2 \
-            --dist=loadscope \
             --nomigrations \
             --maxfail=1 \
-            -q
+            -q \
+            ${{ matrix.paths }}
+
+      - name: Upload coverage data
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: coverage-data-${{ matrix.shard }}
+          path: .coverage.${{ matrix.shard }}
+          include-hidden-files: true
+
+  test-coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install dependencies
+        run: |
+          echo "📦 Installing dependencies..."
+          uv pip install --system setuptools wheel
+          uv pip install --system ".[dev]"
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-data-*
+          path: coverage-data
+          merge-multiple: true
+
+      - name: Combine coverage and enforce threshold
+        run: |
+          coverage combine coverage-data
+          coverage xml -o coverage.xml
+          coverage report --fail-under=30
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -222,7 +279,7 @@ jobs:
   # BUILD & PUSH DOCKER IMAGES TO GHCR
   # =============================================================================
   build:
-    needs: [lint-and-security, frontend-checks, test]
+    needs: [lint-and-security, frontend-checks, test-coverage]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
