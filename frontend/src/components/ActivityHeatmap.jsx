@@ -1,22 +1,10 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '../context/ThemeContext';
-
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
-
-function normalizeProfilePrimaryColor(value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
-}
-
-function adjustHexBrightness(hex, percent) {
-    const num = parseInt(hex.replace('#', ''), 16);
-    const amt = Math.round(2.55 * percent);
-    const red = Math.min(255, Math.max(0, (num >> 16) + amt));
-    const green = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
-    const blue = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
-    return `#${(0x1000000 + red * 0x10000 + green * 0x100 + blue).toString(16).slice(1)}`;
-}
+import {
+    getProfileAccentTheme,
+    normalizeProfilePrimaryColor,
+} from '../utils/profileAccent';
 
 function hexToRgb(hex) {
     const normalized = normalizeProfilePrimaryColor(hex).replace('#', '');
@@ -50,8 +38,7 @@ function TooltipPortal({ children }) {
 export default function ActivityHeatmap({ activityData = [], accentColor }) {
     const { theme } = useTheme();
     const isPastel = theme === 'retro-anime';
-    const profileAccentColor = normalizeProfilePrimaryColor(accentColor);
-    const profileAccentLight = adjustHexBrightness(profileAccentColor, 20);
+    const { baseColor: profileAccentColor, lightColor: profileAccentLight } = getProfileAccentTheme(accentColor);
     
     const [hoveredDay, setHoveredDay] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });

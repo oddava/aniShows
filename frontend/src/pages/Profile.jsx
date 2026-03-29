@@ -14,11 +14,14 @@ import {
 } from '../components/profile';
 import useUserProfile from '../hooks/useUserProfile';
 import { setUserContext } from '../sentry';
+import {
+    DEFAULT_PROFILE_PRIMARY_COLOR,
+    getProfileAccentTheme,
+    normalizeProfilePrimaryColor,
+} from '../utils/profileAccent';
 
 import MarkdownRenderer from '../components/common/MarkdownRenderer';
 import OverviewTab from '../components/profile/OverviewTab';
-
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
 function normalizeProfileTab(tab) {
@@ -33,20 +36,6 @@ function isTabSegment(segment) {
     if (!segment) return false;
     const normalized = String(segment).trim().toLowerCase().replace(/-/g, '_');
     return normalized === 'animelist' || normalized === 'stats' || PROFILE_TABS.has(normalized);
-}
-
-function normalizeProfilePrimaryColor(value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
-}
-
-function adjustHexBrightness(hex, percent) {
-    const num = parseInt(hex.replace('#', ''), 16);
-    const amt = Math.round(2.55 * percent);
-    const red = Math.min(255, Math.max(0, (num >> 16) + amt));
-    const green = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amt));
-    const blue = Math.min(255, Math.max(0, (num & 0x0000FF) + amt));
-    return `#${(0x1000000 + red * 0x10000 + green * 0x100 + blue).toString(16).slice(1)}`;
 }
 
 export default function Profile({ forcedUsername }) {
@@ -267,9 +256,9 @@ export default function Profile({ forcedUsername }) {
 
     useEffect(() => {
         const root = document.documentElement;
-        const baseColor = selectedPrimaryColor || DEFAULT_PROFILE_PRIMARY_COLOR;
-        const lightColor = adjustHexBrightness(baseColor, 20);
-        const darkColor = adjustHexBrightness(baseColor, -18);
+        const { baseColor, lightColor, darkColor } = getProfileAccentTheme(
+            selectedPrimaryColor || DEFAULT_PROFILE_PRIMARY_COLOR
+        );
 
         root.style.setProperty('--color-accent', baseColor);
         root.style.setProperty('--color-accent-light', lightColor);

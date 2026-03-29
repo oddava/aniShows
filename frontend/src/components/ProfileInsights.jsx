@@ -4,22 +4,10 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { TrendingUp, Star, Tv, Clock, BarChart3, Activity } from 'lucide-react';
 import ActivityHeatmap from './ActivityHeatmap';
 import AnimeMediaImage from './common/AnimeMediaImage';
-
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
-
-function normalizeProfilePrimaryColor(value) {
-    const normalized = String(value || '').trim().toLowerCase();
-    return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
-}
-
-function adjustHexBrightness(hex, percent) {
-    const num = parseInt(hex.replace('#', ''), 16);
-    const amt = Math.round(2.55 * percent);
-    const red = Math.min(255, Math.max(0, (num >> 16) + amt));
-    const green = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
-    const blue = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
-    return `#${(0x1000000 + red * 0x10000 + green * 0x100 + blue).toString(16).slice(1)}`;
-}
+import {
+    getProfileAccentTheme,
+    normalizeProfilePrimaryColor,
+} from '../utils/profileAccent';
 
 function hexToRgb(hex) {
     const normalized = normalizeProfilePrimaryColor(hex).replace('#', '');
@@ -113,9 +101,8 @@ const ActivityHeatmapSection = ({ username, isPrivate, accentColor }) => {
 };
 
 export default function ProfileInsights({ username, isPrivate, accentColor }) {
-    const profileAccentColor = normalizeProfilePrimaryColor(accentColor);
-    const profileAccentLight = adjustHexBrightness(profileAccentColor, 18);
-    const profileAccentDark = adjustHexBrightness(profileAccentColor, -18);
+    const { baseColor: profileAccentColor, lightColor: profileAccentLight, darkColor: profileAccentDark } =
+        getProfileAccentTheme(accentColor);
 
     // Fetch all anime lists
     const {
