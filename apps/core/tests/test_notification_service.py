@@ -1,11 +1,13 @@
+from unittest.mock import Mock, patch
+
+from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
-from unittest.mock import Mock, patch
-from allauth.socialaccount.models import SocialAccount
 
 from apps.core.models import Notification
 from apps.core.services.notification_service import NotificationService
+from apps.forums.models import Category, Post, Thread
 from apps.users.models import UserProfile
 
 User = get_user_model()
@@ -117,4 +119,104 @@ class TestNotificationUnreadCountCache(TestCase):
         mock_sender.assert_called_with(
             f"notifications_user_{self.user.id}",
             {"type": "notification.count_update", "count": 0},
+        )
+
+
+class TestForumLikeNotificationAggregation(TestCase):
+    def setUp(self):
+        self.recipient = User.objects.create_user(
+            username="recipient_user",
+            email="recipient@example.com",
+            password="password123",
+        )
+        self.alice = User.objects.create_user(
+            username="alice_user",
+            email="alice@example.com",
+            password="password123",
+        )
+        self.bob = User.objects.create_user(
+            username="bob_user",
+            email="bob@example.com",
+            password="password123",
+        )
+        self.category = Category.objects.create(name="General", slug="general")
+        self.thread = Thread.objects.create(
+            category=self.category,
+            title="Welcome to AniShows!",
+            author=self.recipient,
+            content="Thread content",
+        )
+        self.post = Post.objects.create(
+            thread=self.thread,
+            author=self.recipient,
+            content="Post content",
+        )
+
+    @patch.object(NotificationService, "_broadcast_notification_update")
+    @patch.object(NotificationService, "_broadcast_notification")
+    def test_forum_like_notifications_aggregate_for_same_thread(
+        self, mock_broadcast_new, mock_broadcast_update
+    ):
+        first = NotificationService.create_forum_like_notification(
+            user=self.recipient,
+            author=self.alice,
+            instance=self.thread,
+            is_thread=True,
+        )
+        second = NotificationService.create_forum_like_notification(
+            user=self.recipient,
+            author=self.bob,
+            instance=self.thread,
+            is_thread=True,
+        )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.recipient,
+                notification_type=Notification.NotificationType.FORUM_LIKE,
+                is_read=False,
+            ).count(),
+            1,
+        )
+
+        merged = Notification.objects.get(pk=first.id)
+        self.assertEqual(merged.data["liker_count"], 2)
+        self.assertEqual(merged.data["liker_username"], "bob_user")
+        self.assertEqual(merged.data["liker_usernames"], ["bob_user", "alice_user"])
+        self.assertEqual(
+            merged.message,
+            "bob_user and 1 others liked your thread: Welcome to AniShows!",
+        )
+        mock_broadcast_new.assert_called_once()
+        mock_broadcast_update.assert_called_once()
+
+    def test_forum_like_notifications_do_not_aggregate_across_different_posts(self):
+        another_post = Post.objects.create(
+            thread=self.thread,
+            author=self.recipient,
+            content="Another post",
+        )
+        NotificationService.create_forum_like_notification(
+            user=self.recipient,
+            author=self.alice,
+            instance=self.post,
+            is_thread=False,
+        )
+        NotificationService.create_forum_like_notification(
+            user=self.recipient,
+            author=self.bob,
+            instance=another_post,
+            is_thread=False,
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(
+                user=self.recipient,
+                notification_type=Notification.NotificationType.FORUM_LIKE,
+                is_read=False,
+            ).count(),
+            2,
         )

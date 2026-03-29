@@ -9,10 +9,9 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { applyImageFallback, getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
 import { 
-    getNotificationDisplayText,
+    getActorUsernameData,
     getHighlightEntityData,
-    getNotificationTarget,
-    cleanNotificationMessage
+    getNotificationTarget
 } from '../utils/notificationUtils';
 
 const NOTIFICATION_FILTERS = [
@@ -120,6 +119,15 @@ export default function Notifications() {
     const [nextPage, setNextPage] = useState(null);
     const [fetchError, setFetchError] = useState('');
     const [actionError, setActionError] = useState('');
+
+    const markNotificationRead = useCallback(async (notification) => {
+        if (notification.is_read) return;
+
+        await notificationApi.markAsRead(notification.id);
+        setNotifications((prev) => prev.map((item) => (
+            item.id === notification.id ? { ...item, is_read: true } : item
+        )));
+    }, []);
     const [brokenThumbIds, setBrokenThumbIds] = useState(new Set());
     const [followerAvatarByUsername, setFollowerAvatarByUsername] = useState({});
 
@@ -260,6 +268,19 @@ export default function Notifications() {
             return;
         }
 
+        if (data.type === 'notification_updated' && data.notification) {
+            setNotifications((prev) => {
+                const hasExisting = prev.some((item) => item.id === data.notification.id);
+                const merged = hasExisting
+                    ? prev.map((item) => (item.id === data.notification.id ? data.notification : item))
+                    : [data.notification, ...prev];
+                return [...merged].sort(
+                    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                );
+            });
+            return;
+        }
+
         if (data.type === 'notification_read' && data.notification_id) {
             setNotifications((prev) => prev.map((item) => (
                 item.id === data.notification_id ? { ...item, is_read: true } : item
@@ -279,10 +300,7 @@ export default function Notifications() {
 
         if (!notification.is_read) {
             try {
-                await notificationApi.markAsRead(notification.id);
-                setNotifications((prev) => prev.map((item) => (
-                    item.id === notification.id ? { ...item, is_read: true } : item
-                )));
+                await markNotificationRead(notification);
             } catch (error) {
                 logger.error('Failed to mark notification as read:', error);
                 setActionError('Could not update read status for this notification.');
@@ -290,7 +308,7 @@ export default function Notifications() {
         }
 
         if (target) navigate(target);
-    }, [navigate]);
+    }, [markNotificationRead, navigate]);
 
     const handleMarkAllAsRead = useCallback(async () => {
         setMarkingAllRead(true);
@@ -417,6 +435,7 @@ export default function Notifications() {
                     {filteredNotifications.map((notification) => {
                         const thumbnail = getNotificationThumbnail(notification, coverBySlug, followerAvatarByUsername);
                         const { displayText, entity: highlightEntity, startIndex: highlightStart } = getHighlightEntityData(notification);
+                        const { username: actorUsername, startIndex: actorStart } = getActorUsernameData(notification);
                         const hasHighlightedChunk = highlightStart >= 0;
                         const target = getNotificationTarget(notification);
                         const followerNotification = isFollowerNotification(notification);
@@ -433,6 +452,18 @@ export default function Notifications() {
 
                         const handleEntityClick = async () => {
                             await handleNotificationOpen(notification);
+                        };
+
+                        const handleActorClick = async () => {
+                            if (!actorUsername) return;
+                            setActionError('');
+                            try {
+                                await markNotificationRead(notification);
+                            } catch (error) {
+                                logger.error('Failed to mark notification as read:', error);
+                                setActionError('Could not update read status for this notification.');
+                            }
+                            navigate(`/u/${actorUsername}`);
                         };
 
                         return (
@@ -483,39 +514,113 @@ export default function Notifications() {
 
                                     <div className="min-w-0 flex-1 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-2.5">
                                         <p className="min-w-0 text-sm sm:text-base leading-snug text-gray-300 line-clamp-2 pr-1 sm:pr-2">
-                                            {hasHighlightedChunk ? (
-                                                <>
-                                                    <span>{displayText.slice(0, highlightStart)}</span>
-                                                    {target ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleEntityClick}
-                                                            className="text-accent hover:text-accent/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 rounded-sm cursor-pointer"
-                                                        >
-                                                            {highlightEntity}
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-accent font-semibold">{highlightEntity}</span>
-                                                    )}
-                                                    <span>{displayText.slice(highlightStart + highlightEntity.length)}</span>
-                                                </>
-                                            ) : (
-                                                <span>
-                                                    {displayText}
-                                                    {target && (
-                                                        <>
-                                                            {' '}
+                                            {(() => {
+                                                const segments = [];
+                                                const actorEnd = actorStart + (actorUsername?.length || 0);
+                                                const highlightEnd = hasHighlightedChunk
+                                                    ? highlightStart + highlightEntity.length
+                                                    : -1;
+                                                const hasOverlap = actorStart >= 0 && hasHighlightedChunk && !(
+                                                    highlightEnd <= actorStart || actorEnd <= highlightStart
+                                                );
+
+                                                if (actorStart >= 0 && actorUsername) {
+                                                    segments.push({
+                                                        kind: 'actor',
+                                                        start: actorStart,
+                                                        end: actorEnd,
+                                                        text: actorUsername,
+                                                    });
+                                                }
+
+                                                if (hasHighlightedChunk && !hasOverlap) {
+                                                    segments.push({
+                                                        kind: 'entity',
+                                                        start: highlightStart,
+                                                        end: highlightEnd,
+                                                        text: highlightEntity,
+                                                    });
+                                                }
+
+                                                if (segments.length === 0) {
+                                                    return (
+                                                        <span>
+                                                            {displayText}
+                                                            {target && (
+                                                                <>
+                                                                    {' '}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={handleEntityClick}
+                                                                        className="text-accent hover:text-accent/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 rounded-sm cursor-pointer"
+                                                                    >
+                                                                        Open
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    );
+                                                }
+
+                                                const sortedSegments = [...segments].sort((a, b) => a.start - b.start);
+                                                let cursor = 0;
+                                                const parts = [];
+
+                                                sortedSegments.forEach((segment, index) => {
+                                                    if (segment.start > cursor) {
+                                                        parts.push(
+                                                            <span key={`text-${notification.id}-${index}`}>
+                                                                {displayText.slice(cursor, segment.start)}
+                                                            </span>
+                                                        );
+                                                    }
+
+                                                    if (segment.kind === 'actor') {
+                                                        parts.push(
                                                             <button
+                                                                key={`actor-${notification.id}-${index}`}
+                                                                type="button"
+                                                                onClick={handleActorClick}
+                                                                className="text-accent hover:text-accent/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 rounded-sm cursor-pointer"
+                                                            >
+                                                                {segment.text}
+                                                            </button>
+                                                        );
+                                                    } else if (target) {
+                                                        parts.push(
+                                                            <button
+                                                                key={`entity-${notification.id}-${index}`}
                                                                 type="button"
                                                                 onClick={handleEntityClick}
                                                                 className="text-accent hover:text-accent/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 rounded-sm cursor-pointer"
                                                             >
-                                                                Open
+                                                                {segment.text}
                                                             </button>
-                                                        </>
-                                                    )}
-                                                </span>
-                                            )}
+                                                        );
+                                                    } else {
+                                                        parts.push(
+                                                            <span
+                                                                key={`entity-${notification.id}-${index}`}
+                                                                className="text-accent font-semibold"
+                                                            >
+                                                                {segment.text}
+                                                            </span>
+                                                        );
+                                                    }
+
+                                                    cursor = segment.end;
+                                                });
+
+                                                if (cursor < displayText.length) {
+                                                    parts.push(
+                                                        <span key={`tail-${notification.id}`}>
+                                                            {displayText.slice(cursor)}
+                                                        </span>
+                                                    );
+                                                }
+
+                                                return <>{parts}</>;
+                                            })()}
                                         </p>
                                         <span
                                             className="text-[11px] sm:text-[13px] text-gray-500 whitespace-nowrap self-end sm:self-auto sm:mt-0.5"

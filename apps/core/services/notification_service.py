@@ -18,6 +18,20 @@ UNREAD_COUNT_CACHE_TTL_SECONDS = 24 * 60 * 60
 class NotificationService:
     """Service for creating and managing user notifications."""
 
+    @staticmethod
+    def _serialize_notification(notification: Notification) -> Dict[str, Any]:
+        """Serialize a notification for websocket delivery."""
+        return {
+            "id": notification.id,
+            "notification_type": notification.notification_type,
+            "title": notification.title,
+            "message": notification.message,
+            "data": notification.data,
+            "priority": notification.priority,
+            "created_at": notification.created_at.isoformat(),
+            "is_read": notification.is_read,
+        }
+
     @classmethod
     def create_notification(
         cls,
@@ -101,22 +115,32 @@ class NotificationService:
                 group_name,
                 {
                     "type": "notification.new",
-                    "notification": {
-                        "id": notification.id,
-                        "notification_type": notification.notification_type,
-                        "title": notification.title,
-                        "message": notification.message,
-                        "data": notification.data,
-                        "priority": notification.priority,
-                        "created_at": notification.created_at.isoformat(),
-                        "is_read": False,
-                    },
+                    "notification": cls._serialize_notification(notification),
                     "unread_count": unread_count,
                 },
             )
         except Exception:
             # Never let a broadcast failure break notification creation
             logger.exception("Failed to broadcast notification via WebSocket")
+
+    @classmethod
+    def _broadcast_notification_update(cls, notification):
+        """Push an updated notification payload to active websocket clients."""
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer is None:
+                return
+
+            group_name = f"notifications_user_{notification.user_id}"
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "notification.updated",
+                    "notification": cls._serialize_notification(notification),
+                },
+            )
+        except Exception:
+            logger.exception("Failed to broadcast notification update via WebSocket")
 
     @classmethod
     def _broadcast_unread_count(cls, user_id: int, count: int):
@@ -373,23 +397,113 @@ class NotificationService:
         """Create notification for forum like."""
         title = instance.title if is_thread else instance.thread.title
         thread_id = instance.id if is_thread else instance.thread.id
-        message = (
-            f"{author.username} liked your thread: {title}"
-            if is_thread
-            else f"{author.username} liked your post in {title}"
-        )
+        post_id = None if is_thread else instance.id
 
+        def _build_message(primary_username: str, liker_count: int) -> str:
+            target_label = "thread" if is_thread else "post"
+            suffix = f": {title}" if is_thread else f" in {title}"
+            if liker_count <= 1:
+                return f"{primary_username} liked your {target_label}{suffix}"
+            return (
+                f"{primary_username} and {liker_count - 1} others "
+                f"liked your {target_label}{suffix}"
+            )
+
+        base_data = {
+            "thread_id": thread_id,
+            "liker_username": author.username,
+            "liker_usernames": [author.username],
+            "liker_user_ids": [author.id],
+            "liker_count": 1,
+            "thread_title": title,
+            "is_thread": is_thread,
+        }
+        if post_id is not None:
+            base_data["post_id"] = post_id
+
+        message = _build_message(author.username, 1)
+
+        # Merge likes for the same target into a single unread notification.
+        filters = {
+            "user": user,
+            "notification_type": Notification.NotificationType.FORUM_LIKE,
+            "is_read": False,
+            "data__thread_id": thread_id,
+            "data__is_thread": is_thread,
+        }
+        if post_id is not None:
+            filters["data__post_id"] = post_id
+
+        try:
+            with transaction.atomic():
+                existing = (
+                    Notification.objects.select_for_update()
+                    .filter(**filters)
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if existing:
+                    existing_data = existing.data or {}
+                    existing_usernames = [
+                        username
+                        for username in existing_data.get("liker_usernames", [])
+                        if isinstance(username, str) and username
+                    ]
+                    if (
+                        not existing_usernames
+                        and isinstance(existing_data.get("liker_username"), str)
+                        and existing_data.get("liker_username")
+                    ):
+                        existing_usernames = [existing_data["liker_username"]]
+
+                    existing_user_ids = [
+                        user_id
+                        for user_id in existing_data.get("liker_user_ids", [])
+                        if isinstance(user_id, int)
+                    ]
+
+                    merged_usernames = [author.username] + [
+                        username for username in existing_usernames if username != author.username
+                    ]
+                    merged_user_ids = [author.id] + [
+                        user_id for user_id in existing_user_ids if user_id != author.id
+                    ]
+
+                    merged_data = {
+                        **existing_data,
+                        **base_data,
+                        "liker_username": merged_usernames[0],
+                        "liker_usernames": merged_usernames,
+                        "liker_user_ids": merged_user_ids,
+                        "liker_count": len(merged_user_ids),
+                        "thread_title": title,
+                    }
+                    if post_id is None:
+                        merged_data.pop("post_id", None)
+
+                    existing.message = _build_message(merged_usernames[0], len(merged_user_ids))
+                    existing.data = merged_data
+                    existing.created_at = timezone.now()
+                    existing.save(update_fields=["message", "data", "created_at"])
+
+                    cls._broadcast_notification_update(existing)
+                    logger.info(
+                        "Updated aggregated forum_like notification %s for user %s",
+                        existing.id,
+                        user.id,
+                    )
+                    return existing
+        except Exception as e:
+            logger.exception(f"Failed to update aggregated forum_like notification: {e}")
+
+        # Fallback to creating a fresh notification if no unread aggregate exists.
         return cls.create_notification(
             user=user,
             notification_type=Notification.NotificationType.FORUM_LIKE,
             title="New Like",
             message=message,
-            data={
-                "thread_id": thread_id,
-                "liker_username": author.username,
-                "thread_title": title,
-                "is_thread": is_thread,
-            },
+            data=base_data,
             priority="low",
         )
 

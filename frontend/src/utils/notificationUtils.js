@@ -96,10 +96,6 @@ export const getHighlightEntityData = (notification) => {
     const candidateFields = [
         data.anime_title,
         data.badge_name,
-        data.follower_username,
-        data.replier_username,
-        data.mentioner_username,
-        data.liker_username,
         data.thread_title,
         ...quotedPhrases,
         inferEntityFromTitle(notification?.title || ''),
@@ -126,6 +122,38 @@ export const getHighlightEntityData = (notification) => {
     }
 
     return { displayText, entity: uniqueCandidates[0] || null, startIndex: -1 };
+};
+
+/**
+ * Returns username chunk metadata for notifications where an actor user exists.
+ * @param {Object} notification
+ * @returns {Object} { username, startIndex, displayText }
+ */
+export const getActorUsernameData = (notification) => {
+    const data = notification?.data || {};
+    const displayText = getNotificationDisplayText(notification);
+    const usernameCandidate = [
+        data.follower_username,
+        data.replier_username,
+        data.mentioner_username,
+        data.liker_username,
+    ].find((value) => typeof value === 'string' && value.trim());
+
+    if (!usernameCandidate) {
+        return { username: null, startIndex: -1, displayText };
+    }
+
+    const normalized = usernameCandidate.trim();
+    const startIndex = findTextIndex(displayText, normalized);
+    if (startIndex < 0) {
+        return { username: normalized, startIndex: -1, displayText };
+    }
+
+    return {
+        username: displayText.slice(startIndex, startIndex + normalized.length),
+        startIndex,
+        displayText,
+    };
 };
 
 /**

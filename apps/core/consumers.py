@@ -134,6 +134,15 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             }
         )
 
+    async def notification_updated(self, event):
+        """Push an updated notification payload to the client."""
+        await self.send_json(
+            {
+                "type": "notification_updated",
+                "notification": event["notification"],
+            }
+        )
+
     async def notification_count_update(self, event):
         """Push an updated unread count to the client."""
         await self.send_json(
