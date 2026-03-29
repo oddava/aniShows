@@ -12,12 +12,12 @@ Into a chained workflow with smart deduplication and batching.
 """
 
 from asgiref.sync import sync_to_async
-from celery import shared_task
 from django.utils import timezone
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.rate_limiting import APICallCache
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask, run_async_in_task
 
@@ -341,14 +341,9 @@ class AiringWorkflowTask(BaseTask):
 
         return summary
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=AiringWorkflowTask,
-    max_retries=3,
-    default_retry_delay=120,
-    retry_backoff=True,
-    retry_backoff_max=600,
-    retry_jitter=True,
+    retry_policy="standard",
     time_limit=3600,
     soft_time_limit=3300,
 )

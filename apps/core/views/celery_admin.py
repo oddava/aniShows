@@ -40,6 +40,7 @@ class CeleryTaskResultFilter(FilterSet):
 class CeleryTaskResultViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, viewsets.GenericViewSet):
     """ViewSet for Celery task results management. Read-only plus delete/stats."""
 
+    # TODO: consider moving this admin orchestration into the service layer.
     permission_classes = [IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = CeleryTaskResultFilter

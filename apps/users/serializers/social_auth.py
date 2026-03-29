@@ -1,8 +1,5 @@
-from allauth.account import app_settings as allauth_account_settings
 from allauth.socialaccount.helpers import complete_social_login
 from allauth.socialaccount.providers.oauth2.client import OAuth2Error
-from django.contrib.auth import get_user_model
-from django.db import IntegrityError
 from django.http import HttpRequest, HttpResponseBadRequest
 from django.urls.exceptions import NoReverseMatch
 from django.utils.translation import gettext_lazy as _
@@ -125,20 +122,5 @@ class SocialLoginSerializer(serializers.Serializer):
         if isinstance(ret, HttpResponseBadRequest):
             raise serializers.ValidationError(ret.content)
 
-        if not login.is_existing:
-            if allauth_account_settings.UNIQUE_EMAIL:
-                if self.auth_service.email_exists(login.user.email):
-                    raise serializers.ValidationError(
-                        _("User is already registered with this e-mail address.")
-                    )
-
-            login.lookup()
-            try:
-                login.save(request, connect=True)
-            except IntegrityError as exc:
-                raise serializers.ValidationError(
-                    _("User is already registered with this e-mail address.")
-                ) from exc
-
-        attrs["user"] = login.account.user
+        attrs["user"] = self.auth_service.finalize_social_login(request, login)
         return attrs

@@ -1,10 +1,9 @@
-from celery import shared_task
-
 from apps.animes.services.offline_catalog import (
     DEFAULT_ASSET_NAME,
     OfflineCatalogImportService,
 )
 from apps.animes.services.offline_sync import OfflineSyncService
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask
 
@@ -169,14 +168,9 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
         }
 
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=OfflineCatalogImportTask,
-    max_retries=2,
-    default_retry_delay=300,
-    retry_backoff=True,
-    retry_backoff_max=1800,
-    retry_jitter=True,
+    retry_policy="long",
     time_limit=7200,
     soft_time_limit=6900,
 )
@@ -207,14 +201,9 @@ def import_offline_catalog(
     )
 
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=OfflineCatalogReconcileSyncTask,
-    max_retries=3,
-    default_retry_delay=180,
-    retry_backoff=True,
-    retry_backoff_max=1800,
-    retry_jitter=True,
+    retry_policy="long",
     time_limit=3600,
     soft_time_limit=3300,
 )

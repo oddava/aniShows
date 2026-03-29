@@ -13,11 +13,10 @@ With support for:
 - Configurable limits and algorithms
 """
 
-
-from celery import shared_task
 from django.contrib.auth import get_user_model
 
 from apps.animes.services.recommendations import RecommendationService
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask
 
@@ -117,42 +116,9 @@ class RecommendationTask(BaseTask):
         """Generate recommendations for all active users."""
         try:
             service = RecommendationService()
-
-            # Get active users (with anime in their list or favorites)
-            active_user_ids = self._get_active_user_ids()
-            total = len(active_user_ids)
-
-            if total == 0:
-                logger.info("No active users found for recommendations")
-                return {
-                    "mode": "batch",
-                    "total_users": 0,
-                    "processed": 0,
-                    "recommendations_created": 0,
-                }
-
-            logger.info(f"Generating recommendations for {total} active users")
-
-            processed = 0
-            errors = 0
-            total_recs = 0
-
-            for user_id in active_user_ids:
-                try:
-                    user = User.objects.get(id=user_id)
-                    recs = service.generate_for_user(user, limit=limit)
-                    total_recs += len(recs)
-                    processed += 1
-
-                    if processed % 10 == 0 or processed == total:
-                        logger.info(f"Progress: {processed}/{total} users processed")
-
-                except Exception as e:
-                    logger.error(f"Error for user {user_id}: {e}")
-                    errors += 1
-                    continue
-
-            self.metrics.stop()
+            result = service.generate_for_all_users()
+            total = result.get("total_users", 0)
+            total_recs = result.get("total_recommendations", 0)
 
             # Record Prometheus metric
             try:
@@ -163,16 +129,16 @@ class RecommendationTask(BaseTask):
                 pass
 
             logger.info(
-                f"Batch complete: {processed}/{total} users, "
-                f"{total_recs} recommendations, {errors} errors"
+                f"Batch complete: {result.get('processed', 0)}/{total} users, "
+                f"{total_recs} recommendations, {result.get('failed', 0)} errors"
             )
 
             return {
                 "mode": "batch",
                 "total_users": total,
-                "processed": processed,
+                "processed": result.get("processed", 0),
                 "recommendations_created": total_recs,
-                "errors": errors,
+                "errors": result.get("failed", 0),
                 "algorithm": algorithm,
             }
 
@@ -180,23 +146,9 @@ class RecommendationTask(BaseTask):
             logger.exception("Error in batch recommendation generation")
             raise self.retry(exc=e)
 
-    def _get_active_user_ids(self) -> list[int]:
-        """Get IDs of users with anime activity."""
-        from apps.users.models import UserAnimeList
-
-        # Users with anime in their list
-        active_ids = UserAnimeList.objects.values_list("user_id", flat=True).distinct()
-
-        return list(active_ids)
-
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=RecommendationTask,
-    max_retries=2,
-    default_retry_delay=300,
-    retry_backoff=True,
-    retry_backoff_max=900,
-    retry_jitter=True,
+    retry_policy="long",
     time_limit=7200,  # 2 hours for all users
     soft_time_limit=6900,
 )

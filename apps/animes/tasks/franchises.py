@@ -7,11 +7,11 @@ Franchise/Relations synchronization task.
 import asyncio
 
 from asgiref.sync import sync_to_async
-from celery import shared_task
 from django.db.models import Q
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask, run_async_in_task
 
@@ -318,14 +318,9 @@ class FranchiseSyncTask(BaseTask):
 
         return imported_ids
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=FranchiseSyncTask,
-    max_retries=3,
-    default_retry_delay=120,
-    retry_backoff=True,
-    retry_backoff_max=600,
-    retry_jitter=True,
+    retry_policy="standard",
     time_limit=3600,
     soft_time_limit=3300,
 )
@@ -349,14 +344,9 @@ def sync_franchises(
         update_window=update_window, anime_ids=anime_ids,
     )
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=FranchiseSyncTask,
-    max_retries=3,
-    default_retry_delay=60,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
+    retry_policy="standard",
     time_limit=1800,
     soft_time_limit=1500,
 )

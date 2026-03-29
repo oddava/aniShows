@@ -20,7 +20,9 @@ Queue Strategy:
 - dead_letter: Failed tasks for manual review
 """
 
+import logging
 import os
+
 from celery import Celery
 from kombu import Queue
 
@@ -28,6 +30,7 @@ from kombu import Queue
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "root.settings")
 
 app = Celery("root")
+logger = logging.getLogger(__name__)
 
 # Configure from Django settings
 app.config_from_object("django.conf:settings", namespace="CELERY")
@@ -39,9 +42,7 @@ app.autodiscover_tasks()
 try:
     import apps.core.celery_signals
 except ImportError as e:
-    import logging
-
-    logging.getLogger(__name__).warning(f"Failed to import celery_signals: {e}")
+    logger.warning("Failed to import celery_signals: %s", e)
 
 # ============================================================================
 # TASK ROUTING CONFIGURATION
@@ -191,4 +192,4 @@ if os.getenv("DEBUG", "False") == "True":
 
     @app.task(bind=True, ignore_result=True)
     def debug_task(self):
-        print(f"Request: {self.request!r}")
+        logger.info("Debug task invoked", extra={"request": repr(self.request)})

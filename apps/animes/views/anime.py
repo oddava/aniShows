@@ -121,6 +121,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         is_list = self.action == "list"
 
+        # TODO: consider moving this queryset builder into the service layer.
         queryset = Anime.public_queryset().select_related("studio")
 
         if is_list:

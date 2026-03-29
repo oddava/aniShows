@@ -54,8 +54,12 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
         """List all import jobs."""
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
-        jobs_data = [format_task_result(job) for job in page]
-        return self.get_paginated_response(jobs_data)
+        if page is not None:
+            jobs_data = [format_task_result(job) for job in page]
+            return self.get_paginated_response(jobs_data)
+
+        jobs_data = [format_task_result(job) for job in queryset]
+        return Response(jobs_data)
 
     def retrieve(self, request, *args, **kwargs):
         """Get detailed import job information."""

@@ -12,11 +12,11 @@ from urllib.parse import quote_plus
 
 import httpx
 from asgiref.sync import sync_to_async
-from celery import shared_task
 from django.utils import timezone
 
 from apps.animes.models import Anime, ThemeSong
 from apps.animes.services.jikan import JikanRateLimiter, fetch_themes_from_jikan
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask, run_async_in_task
 
@@ -506,14 +506,9 @@ class ThemeSongSyncTask(BaseTask):
 
         return count
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=ThemeSongSyncTask,
-    max_retries=3,
-    default_retry_delay=300,
-    retry_backoff=True,
-    retry_backoff_max=1800,
-    retry_jitter=True,
+    retry_policy="long",
     time_limit=7200,  # 2 hours for large batches
     soft_time_limit=6900,
 )
@@ -540,7 +535,7 @@ def sync_theme_songs(
     """
     return self.execute(anime_id, limit, force_resync, retry_failed, base_delay, anime_ids)
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+@observed_shared_task(retry_policy="long")
 def backfill_theme_youtube_urls(self, limit: int = 100):
     """Periodic task to backfill missing YouTube URLs for theme songs.
 

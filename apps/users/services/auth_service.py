@@ -1,10 +1,15 @@
 from typing import Dict
 
+from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.db import IntegrityError
+from django.http import HttpRequest
+from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
 from apps.core.services.admin_settings_service import is_email_verification_required
+from apps.users.services.user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
 
@@ -61,13 +66,26 @@ class AuthService:
             profile.save()
         return user
 
+    def finalize_social_login(self, request: HttpRequest, login) -> User:
+        if not login.is_existing:
+            if allauth_account_settings.UNIQUE_EMAIL and self.email_exists(login.user.email):
+                raise ValidationError(_("User is already registered with this e-mail address."))
+
+            login.lookup()
+            try:
+                login.save(request, connect=True)
+            except IntegrityError as exc:
+                raise ValidationError(
+                    _("User is already registered with this e-mail address.")
+                ) from exc
+
+        return login.account.user
+
     def verify_email(self, uidb64: str, token: str) -> tuple[bool, User | None]:
         """Verify email with token. Returns (success, user)."""
         try:
             from django.utils.encoding import force_str
             from django.utils.http import urlsafe_base64_decode
-
-            from apps.users.views.users import get_annotated_user_queryset
 
             uid = force_str(urlsafe_base64_decode(uidb64))
             # Get user with annotations for proper serializer output

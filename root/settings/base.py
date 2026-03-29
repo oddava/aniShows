@@ -6,7 +6,9 @@ Common settings shared across all environments.
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     """Parse a boolean-like environment variable."""
@@ -14,6 +16,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
 
 def _env_int(name: str, default: int) -> int:
     """Parse an integer env value with a safe default."""
@@ -651,19 +654,21 @@ CHANNEL_LAYERS = {
 # =============================================================================
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_BROKER_URL)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_BROKER_URL)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
 if REDIS_SENTINEL_ENABLED:
     CELERY_BROKER_TRANSPORT_OPTIONS = {
         "master_name": REDIS_SENTINEL_SERVICE_NAME,
         "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
     }
-    CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
-        "master_name": REDIS_SENTINEL_SERVICE_NAME,
-        "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
-    }
+    if CELERY_RESULT_BACKEND != "django-db":
+        CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
+            "master_name": REDIS_SENTINEL_SERVICE_NAME,
+            "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
+        }
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
 
@@ -821,9 +826,20 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"days": 7, "batch_size": 1000},
         "options": {"queue": "low_priority"},
     },
+    "celery-backend-cleanup-daily": {
+        "task": "celery.backend_cleanup",
+        "schedule": crontab(hour=1, minute=30),  # Daily at 1:30 AM
+        "options": {"queue": "low_priority"},
+    },
     "health-check-workers-hourly": {
         "task": "apps.core.tasks.cleanup_tasks.health_check_workers",
         "schedule": crontab(minute=15),  # Every hour at 15 min past
+        "options": {"queue": "low_priority"},
+    },
+    "update-relation-slugs-daily": {
+        "task": "apps.animes.tasks.franchises.update_relation_slugs",
+        "schedule": crontab(hour=4, minute=30),  # Daily at 4:30 AM
+        "kwargs": {"batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "flush-forum-view-counts-minute": {

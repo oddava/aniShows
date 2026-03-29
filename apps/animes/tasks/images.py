@@ -10,13 +10,13 @@ import hashlib
 
 import httpx
 from asgiref.sync import sync_to_async
-from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter
+from apps.shared.celery import observed_shared_task
 
 try:
     from botocore.exceptions import ConnectionClosedError, EndpointConnectionError
@@ -168,12 +168,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
 
     return None
 
-@shared_task(
-    bind=True,
-    max_retries=3,
-    default_retry_delay=60,
-    time_limit=300,
-)
+@observed_shared_task(retry_policy="standard", time_limit_preset="quick")
 def fetch_anime_images(
     self,
     anime_id: int,
@@ -294,11 +289,7 @@ def fetch_anime_images(
         raise self.retry(exc=e, countdown=60)
 
 
-@shared_task(
-    bind=True,
-    max_retries=0,
-    time_limit=300,
-)
+@observed_shared_task(retry_policy="none", time_limit_preset="quick")
 def heal_missing_anime_media(self, batch_size: int = 100):
     """Periodic self-heal task for anime missing local media files."""
     from apps.animes.models import Anime
@@ -344,15 +335,7 @@ def heal_missing_anime_media(self, batch_size: int = 100):
     return {"status": "success", "inspected": inspected, "queued": queued}
 
 
-@shared_task(
-    bind=True,
-    max_retries=3,
-    default_retry_delay=60,
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-    time_limit=300,  # 5 minutes max per anime
-)
+@observed_shared_task(retry_policy="standard", time_limit_preset="quick")
 def generate_image_thumbnails(self, anime_id: int):
     """Generate optimized thumbnails for anime images.
     Runs asynchronously to avoid blocking import process.

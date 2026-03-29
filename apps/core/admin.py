@@ -1,14 +1,71 @@
+from contextlib import suppress
+
 from django.contrib import admin
+from django.contrib.admin.sites import AlreadyRegistered, NotRegistered
 from django.utils.html import format_html
 
 # Import celery admin to register models (registers automatically via @admin.register)
 from apps.core import celery_admin
 from apps.core.models import AuditLog, Notification, PushSubscription, SystemLog
 
+try:
+    from django_celery_results.models import TaskResult as DjangoTaskResult
+except ImportError:  # pragma: no cover - installed in runtime containers
+    DjangoTaskResult = None
+
 # Admin site branding
 admin.site.site_header = "aniShows Administration"
 admin.site.site_title = "aniShows Admin Portal"
 admin.site.index_title = "Welcome to aniShows Admin"
+
+if DjangoTaskResult is not None:
+
+    class DjangoTaskResultAdmin(admin.ModelAdmin):
+        """Standard django-celery-results admin for persisted backend results."""
+
+        list_display = ["task_name_display", "status", "date_done", "result_preview"]
+        list_filter = ["status", ("date_done", admin.DateFieldListFilter)]
+        search_fields = ["task_id", "task_name", "worker"]
+        readonly_fields = [
+            "task_id",
+            "task_name",
+            "status",
+            "date_created",
+            "date_done",
+            "result",
+            "meta",
+            "traceback",
+            "worker",
+            "task_args",
+            "task_kwargs",
+            "periodic_task_name",
+        ]
+        ordering = ["-date_done"]
+
+        def task_name_display(self, obj):
+            return getattr(obj, "task_name", "") or obj.task_id
+
+        task_name_display.short_description = "Task"
+
+        def result_preview(self, obj):
+            result = getattr(obj, "result", "")
+            if not result:
+                return "-"
+            return str(result)[:120]
+
+        result_preview.short_description = "Result"
+
+        def has_add_permission(self, request):
+            return False
+
+        def has_change_permission(self, request, obj=None):
+            return False
+
+    with suppress(NotRegistered):
+        admin.site.unregister(DjangoTaskResult)
+
+    with suppress(AlreadyRegistered):
+        admin.site.register(DjangoTaskResult, DjangoTaskResultAdmin)
 
 @admin.register(SystemLog)
 class SystemLogAdmin(admin.ModelAdmin):

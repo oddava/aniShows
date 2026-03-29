@@ -28,6 +28,7 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
         "task_name_short",
         "status_badge",
         "date_created",
+        "result_preview",
         "duration_display",
         "worker_short",
         "queue",
@@ -178,6 +179,19 @@ class CeleryTaskResultAdmin(admin.ModelAdmin):
         return "-"
 
     traceback_formatted.short_description = "Traceback"
+
+    def result_preview(self, obj):
+        """Display a compact result preview in the changelist."""
+        if obj.result_summary:
+            return obj.result_summary[:80]
+        if obj.result_data:
+            import json
+
+            preview = json.dumps(obj.result_data, default=str)
+            return preview[:80]
+        return "-"
+
+    result_preview.short_description = "Result"
 
     @admin.action(description="Delete tasks older than 30 days")
     def delete_old_tasks(self, request, queryset):

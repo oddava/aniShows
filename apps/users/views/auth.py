@@ -76,6 +76,19 @@ class RegisterView(generics.CreateAPIView):
         self.auth_service = AuthService()
         self.email_service = EmailService()
 
+    def _validate_registration_availability(self, validated_data):
+        generic_message = "Unable to create account. The email or username may already be in use."
+        username = validated_data["username"]
+        email = validated_data["email"]
+
+        if self.auth_service.username_exists(username) or self.auth_service.email_exists(email):
+            raise serializers.ValidationError(
+                {
+                    "username": [generic_message],
+                    "email": [generic_message],
+                }
+            )
+
     def create(self, request, *args, **kwargs):
         if not is_registration_enabled():
             return Response(
@@ -85,6 +98,7 @@ class RegisterView(generics.CreateAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        self._validate_registration_availability(serializer.validated_data)
 
         result = register_user_flow(serializer.validated_data, self.auth_service, self.email_service)
         headers = self.get_success_headers(serializer.data)

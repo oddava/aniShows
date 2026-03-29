@@ -1,5 +1,3 @@
-from apps.shared.logger import logger
-
 """
 Base task infrastructure for unified Celery tasks.
 
@@ -15,49 +13,15 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from celery import Task
 from django.core.cache import cache
 
+from apps.shared.celery import RETRY_POLICIES, TIME_LIMIT_PRESETS, ObservedTask
+from apps.shared.logger import logger
+
 # Retry configuration presets
-RETRY_PRESETS = {
-    "quick": {
-        "max_retries": 3,
-        "default_retry_delay": 60,
-        "retry_backoff": True,
-        "retry_backoff_max": 300,
-        "retry_jitter": True,
-    },
-    "standard": {
-        "max_retries": 3,
-        "default_retry_delay": 120,
-        "retry_backoff": True,
-        "retry_backoff_max": 600,
-        "retry_jitter": True,
-    },
-    "long": {
-        "max_retries": 3,
-        "default_retry_delay": 180,
-        "retry_backoff": True,
-        "retry_backoff_max": 900,
-        "retry_jitter": True,
-    },
-    "external_api": {
-        "max_retries": 5,
-        "default_retry_delay": 60,
-        "retry_backoff": True,
-        "retry_backoff_max": 600,
-        "retry_jitter": True,
-    },
-}
+RETRY_PRESETS = RETRY_POLICIES
 
 # Time limit presets (in seconds)
-TIME_LIMIT_PRESETS = {
-    "quick": (300, 240),  # (time_limit, soft_time_limit)
-    "standard": (1800, 1500),  # 30 min / 25 min
-    "long": (3600, 3300),  # 1 hour / 55 min
-    "extended": (7200, 6900),  # 2 hours / 1h 55min
-}
-
 class TaskMetrics:
     """Collect metrics for task execution."""
 
@@ -104,7 +68,7 @@ class TaskMetrics:
             "errors": self.errors,
         }
 
-class BaseTask(Task):
+class BaseTask(ObservedTask):
     """Base task class with common functionality.
 
     Features:
@@ -248,15 +212,6 @@ class BaseTask(Task):
     def on_success(self, retval, task_id, args, kwargs):
         """Called when task succeeds."""
         self.metrics.stop()
-        logger.info(
-            f"Task {self.name} completed successfully",
-            extra={
-                "task_id": task_id,
-                "metrics": self.metrics.to_dict(),
-            },
-        )
-
-        # Update CeleryTaskResult in database
         try:
             from django.utils import timezone
 
@@ -303,18 +258,11 @@ class BaseTask(Task):
 
         except Exception as e:
             logger.warning(f"Failed to emit Prometheus metrics: {e}")
+        super().on_success(retval, task_id, args, kwargs)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Called when task fails."""
         self.metrics.stop()
-        logger.error(
-            f"Task {self.name} failed: {exc}",
-            extra={
-                "task_id": task_id,
-                "metrics": self.metrics.to_dict(),
-                "exception": str(exc),
-            },
-        )
         # Update CeleryTaskResult in database
         try:
             from django.utils import timezone
@@ -360,14 +308,10 @@ class BaseTask(Task):
 
         except Exception as e:
             logger.warning(f"Failed to emit Prometheus metrics: {e}")
+        super().on_failure(exc, task_id, args, kwargs, einfo)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Called when task retries."""
-        logger.warning(
-            f"Task {self.name} retrying (attempt {self.request.retries + 1}/{self.max_retries}): {exc}",
-            extra={"task_id": task_id, "retry_count": self.request.retries},
-        )
-
         # Update CeleryTaskResult
         try:
             from apps.core.models import CeleryTaskResult
@@ -387,6 +331,7 @@ class BaseTask(Task):
             TASK_RETRY_COUNT.labels(task_name=self.name).inc()
         except Exception:
             pass
+        super().on_retry(exc, task_id, args, kwargs, einfo)
 
 # Helper to run async code in sync celery task
 def run_async_in_task(coro):

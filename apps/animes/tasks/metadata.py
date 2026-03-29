@@ -15,12 +15,12 @@ With support for:
 """
 
 from asgiref.sync import sync_to_async
-from celery import shared_task
 from django.db.models import Q
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.offline_catalog import PLACEHOLDER_SYNOPSIS
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask, run_async_in_task
 
@@ -285,14 +285,9 @@ class MetadataEnrichmentTask(BaseTask):
                 "errors": error_count,
             }
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=MetadataEnrichmentTask,
-    max_retries=3,
-    default_retry_delay=60,
-    retry_backoff=True,
-    retry_backoff_max=600,
-    retry_jitter=True,
+    retry_policy="standard",
     time_limit=7200,  # 2 hours for large batches
     soft_time_limit=6900,
 )

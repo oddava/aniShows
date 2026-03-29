@@ -21,6 +21,7 @@ class LikedByUserMixin:
 
         user = self.context["request"].user
         if user and user.is_authenticated:
+            # TODO: consider moving this fallback out of the serializer and into the service layer.
             return obj.likes.filter(user=user).exists()
         return False
 
@@ -67,6 +68,7 @@ class CategorySerializer(ModelSerializer):
         if hasattr(obj, "prefetched_latest_thread"):
             latest = obj.prefetched_latest_thread[0] if obj.prefetched_latest_thread else None
         else:
+            # TODO: consider moving this fallback out of the serializer and into the service layer.
             latest = obj.threads.order_by("-updated_at").select_related("author").first()
 
         if latest:
@@ -202,4 +204,5 @@ class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer
         """Get the number of direct replies to this post"""
         if hasattr(obj, "reply_count"):
             return obj.reply_count
+        # TODO: consider moving this fallback out of the serializer and into the service layer.
         return obj.replies.count()

@@ -308,6 +308,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
 
         request = self.context.get("request")
         if request and request.user.is_authenticated:
+            # TODO: consider moving this fallback out of the serializer and into the service layer.
             return obj.followers.filter(follower=request.user).exists()
         return False
 
@@ -463,43 +464,13 @@ class RegisterSerializer(ModelSerializer):
         if len(normalized) > max_length:
             raise ValidationError(f"Username must be at most {max_length} characters long.")
 
-        self.auth_service.validate_registration_credentials(
-            normalized,
-            self.initial_data.get("email", "").lower().strip(),
-        )
-
         return normalized
 
     def validate_email(self, value):
-        normalized_email = value.lower().strip()
-        username = self.initial_data.get("username", "").strip()
-        if username:
-            self.auth_service.validate_registration_credentials(username, normalized_email)
-        elif self.auth_service.email_exists(normalized_email):
-            raise ValidationError(
-                "Unable to create account. The email or username may already be in use."
-            )
-
-        return normalized_email
+        return value.lower().strip()
 
     def create(self, validated_data):
-        from django.db import IntegrityError
-
-        try:
-            user = User.objects.create_user(
-                username=validated_data["username"],
-                email=validated_data["email"],
-                password=validated_data["password"],
-            )
-            return user
-        except IntegrityError:
-            raise ValidationError(
-                {
-                    "non_field_errors": [
-                        "Unable to create account. The email or username may already be in use."
-                    ]
-                }
-            )
+        return self.auth_service.register_user(validated_data)
 
 
 class FavoriteSerializer(ModelSerializer):

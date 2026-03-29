@@ -16,11 +16,12 @@ import asyncio
 from datetime import datetime
 
 from asgiref.sync import sync_to_async
-from celery import shared_task
 from django.db import transaction
+from django.db.models import Case, IntegerField, Value, When
 
 from apps.animes.models import Anime
 from apps.animes.services.anilist import AniListService, MediaSort
+from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask, run_async_in_task
 
@@ -294,14 +295,16 @@ class SyncAnimeCatalogTask(BaseTask):
         @sync_to_async
         def batch_update():
             with transaction.atomic():
-                # Clear all trending ranks
-                clear_queryset = Anime.objects.filter(trending_rank__isnull=False)
-                clear_queryset.update(trending_rank=None)
-
-                # Update new ranks
-                for aid, rank in rank_updates.items():
-                    update_queryset = Anime.objects.filter(anilist_id=aid)
-                    update_queryset.update(trending_rank=rank)
+                Anime.objects.filter(trending_rank__isnull=False).update(trending_rank=None)
+                if not rank_updates:
+                    return
+                Anime.objects.filter(anilist_id__in=rank_updates).update(
+                    trending_rank=Case(
+                        *[When(anilist_id=aid, then=Value(rank)) for aid, rank in rank_updates.items()],
+                        default=Value(None),
+                        output_field=IntegerField(),
+                    )
+                )
 
         await batch_update()
         logger.info(f"Updated {len(rank_updates)} trending ranks")
@@ -335,14 +338,9 @@ class SyncAnimeCatalogTask(BaseTask):
 
         logger.info(f"Theme sync queued for all {len(anime_ids)} new anime")
 
-@shared_task(
-    bind=True,
+@observed_shared_task(
     base=SyncAnimeCatalogTask,
-    max_retries=3,
-    default_retry_delay=120,
-    retry_backoff=True,
-    retry_backoff_max=600,
-    retry_jitter=True,
+    retry_policy="standard",
     time_limit=3600,
     soft_time_limit=3300,
 )

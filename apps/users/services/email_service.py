@@ -1,11 +1,11 @@
 import httpx
-from celery import shared_task
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
+from apps.shared.celery import observed_shared_task
 from apps.shared.logger import logger
 
 
@@ -67,7 +67,7 @@ Please verify your email: {link}
 Note: Unverified accounts are automatically deleted after 7 days.
 """
 
-@shared_task(bind=True, max_retries=3)
+@observed_shared_task(retry_policy="standard")
 def send_email_task(self, subject, message, recipient_list, html_message=None):
     """Celery task for sending emails through Resend HTTP API."""
     try:
