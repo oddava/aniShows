@@ -1,7 +1,3 @@
-from datetime import timedelta
-
-from django.db.models import Count, Q
-from django.utils import timezone
 from django_filters import CharFilter, DateFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
@@ -13,6 +9,7 @@ from rest_framework.viewsets import GenericViewSet
 from apps.core.models import AuditLog, SystemLog
 from apps.core.permissions import IsAdminUser
 from apps.users.admin_serializers import AuditLogSerializer, SystemLogSerializer
+from apps.admin_api.services.logs_service import build_system_log_stats
 
 
 class SystemLogFilter(FilterSet):
@@ -54,25 +51,7 @@ class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     @action(detail=False, methods=["get"])
     def stats(self, request):
         queryset = self.filter_queryset(self.get_queryset())
-        by_level = dict(queryset.values_list("level").annotate(count=Count("id")))
-        by_type = dict(queryset.values_list("log_type").annotate(count=Count("id")))
-
-        last_24h = timezone.now() - timedelta(hours=24)
-        recent = queryset.filter(timestamp__gte=last_24h)
-        recent_total = recent.count()
-        recent_errors = recent.filter(level__in=["ERROR", "CRITICAL"]).count()
-
-        return Response(
-            {
-                "by_level": by_level,
-                "by_type": by_type,
-                "total": queryset.count(),
-                "recent_errors": recent_errors,
-                "error_rate": round((recent_errors / recent_total) * 100, 2)
-                if recent_total
-                else 0.0,
-            }
-        )
+        return Response(build_system_log_stats(queryset))
 
 
 class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):

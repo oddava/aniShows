@@ -30,6 +30,7 @@ from apps.core.services.admin_settings_service import username_length_limits
 from apps.shared.logger import logger
 from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
 from apps.users.services.avatar_service import get_user_avatar_url
+from apps.users.services.auth_service import AuthService
 
 User = get_user_model()
 
@@ -447,6 +448,7 @@ class UserProfileUpdateSerializer(Serializer):
 
 class RegisterSerializer(ModelSerializer):
     password = CharField(write_only=True, min_length=8)
+    auth_service = AuthService()
 
     class Meta:
         model = User
@@ -461,17 +463,19 @@ class RegisterSerializer(ModelSerializer):
         if len(normalized) > max_length:
             raise ValidationError(f"Username must be at most {max_length} characters long.")
 
-        if User.objects.filter(username__iexact=normalized).exists():
-            raise ValidationError(
-                "Unable to create account. The email or username may already be in use."
-            )
+        self.auth_service.validate_registration_credentials(
+            normalized,
+            self.initial_data.get("email", "").lower().strip(),
+        )
 
         return normalized
 
     def validate_email(self, value):
         normalized_email = value.lower().strip()
-
-        if User.objects.filter(email=normalized_email).exists():
+        username = self.initial_data.get("username", "").strip()
+        if username:
+            self.auth_service.validate_registration_credentials(username, normalized_email)
+        elif self.auth_service.email_exists(normalized_email):
             raise ValidationError(
                 "Unable to create account. The email or username may already be in use."
             )

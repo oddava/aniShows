@@ -10,6 +10,8 @@ from requests.exceptions import HTTPError
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 
+from apps.users.services.auth_service import AuthService
+
 
 class SocialLoginSerializer(serializers.Serializer):
     """Serializer for social auth flows (OAuth code or access token)."""
@@ -17,6 +19,7 @@ class SocialLoginSerializer(serializers.Serializer):
     access_token = serializers.CharField(required=False, allow_blank=True)
     code = serializers.CharField(required=False, allow_blank=True)
     id_token = serializers.CharField(required=False, allow_blank=True)
+    auth_service = AuthService()
 
     def _get_request(self):
         request = self.context.get("request")
@@ -124,8 +127,7 @@ class SocialLoginSerializer(serializers.Serializer):
 
         if not login.is_existing:
             if allauth_account_settings.UNIQUE_EMAIL:
-                account_exists = get_user_model().objects.filter(email=login.user.email).exists()
-                if account_exists:
+                if self.auth_service.email_exists(login.user.email):
                     raise serializers.ValidationError(
                         _("User is already registered with this e-mail address.")
                     )

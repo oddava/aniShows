@@ -1,6 +1,5 @@
 import re
 
-from django.contrib.auth import get_user_model
 from django.http import HttpResponse
 from rest_framework import permissions, status
 from rest_framework.decorators import action
@@ -11,13 +10,14 @@ from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 from apps.animes.serializers.imports import UserImportJobSerializer
 from apps.shared.logger import logger
 from apps.users.models import UserImportJob
+from apps.users.services.import_job_service import (
+    create_anilist_import_job,
+    create_mal_import_job,
+    create_mal_xml_import_job,
+    cancel_import_job,
+    is_valid_import_username,
+)
 from apps.users.services.export_service import ExportService
-from apps.users.tasks import process_import_job
-
-User = get_user_model()
-
-# Validation for usernames - alphanumeric, underscores, hyphens only
-USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
 
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024
@@ -39,29 +39,15 @@ class ImportExportViewSet(ViewSet):
         if not username:
             return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate username format to prevent injection
-        if not USERNAME_PATTERN.match(username):
+        if not is_valid_import_username(username):
             return Response(
                 {
                     "error": "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Create import job
-        job = UserImportJob.objects.create(
-            user=request.user,
-            source=UserImportJob.ImportSource.myanimelist_api,
-            source_identifier=username,
-        )
-
-        # Start async import with validated username
-        process_import_job.delay(job_id=job.id, username=username)
-
-        return Response(
-            {"message": "Import started", "job_id": job.id, "status": "pending"},
-            status=status.HTTP_202_ACCEPTED,
-        )
+        result = create_mal_import_job(request.user, username)
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_mal_xml(self, request):
@@ -93,20 +79,8 @@ class ImportExportViewSet(ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Create import job
-        job = UserImportJob.objects.create(
-            user=request.user,
-            source=UserImportJob.ImportSource.myanimelist_xml,
-            source_identifier=file.name,
-        )
-
-        # Start async import
-        process_import_job.delay(job_id=job.id, xml_content=xml_content)
-
-        return Response(
-            {"message": "Import started", "job_id": job.id, "status": "pending"},
-            status=status.HTTP_202_ACCEPTED,
-        )
+        result = create_mal_xml_import_job(request.user, file.name, xml_content)
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["post"])
     def import_anilist(self, request):
@@ -117,8 +91,7 @@ class ImportExportViewSet(ViewSet):
         if not username:
             return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate username format to prevent injection
-        if not USERNAME_PATTERN.match(username):
+        if not is_valid_import_username(username):
             return Response(
                 {
                     "error": "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
@@ -133,20 +106,8 @@ class ImportExportViewSet(ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Create import job
-        job = UserImportJob.objects.create(
-            user=request.user,
-            source=UserImportJob.ImportSource.anilist,
-            source_identifier=username,
-        )
-
-        # Start async import with validated username
-        process_import_job.delay(job_id=job.id, username=username, access_token=access_token)
-
-        return Response(
-            {"message": "Import started", "job_id": job.id, "status": "pending"},
-            status=status.HTTP_202_ACCEPTED,
-        )
+        result = create_anilist_import_job(request.user, username, access_token)
+        return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["get"])
     def export_user_data(self, request):
@@ -209,22 +170,5 @@ class UserImportJobViewSet(ReadOnlyModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Only allow cancelling pending or processing jobs
-        if job.status not in [
-            UserImportJob.ImportStatus.pending,
-            UserImportJob.ImportStatus.processing,
-        ]:
-            return Response(
-                {"error": "Cannot cancel a job that is already completed or failed"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Mark as failed (cancelled)
-        job.status = UserImportJob.ImportStatus.failed
-        job.errors.append("Cancelled by user")
-        job.save(update_fields=["status", "errors"])
-
-        return Response(
-            {"message": "Import job cancelled", "job_id": job.id},
-            status=status.HTTP_200_OK,
-        )
+        result = cancel_import_job(job)
+        return Response(result.payload, status=result.status_code)

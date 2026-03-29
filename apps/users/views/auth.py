@@ -47,33 +47,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         email = attrs.get("email")
         username = attrs.get("username")
         if username:
-            username = username.strip()
-
-            # If username looks like an email, try to find user by email
-            if "@" in username:
-                try:
-                    user = User.objects.get(email__iexact=username)
-                    attrs["username"] = user.username
-                except User.DoesNotExist:
-                    # Let parent handle the failure
-                    attrs["username"] = username
-            else:
-                # Try case-insensitive username lookup
-                try:
-                    user = User.objects.get(username__iexact=username)
-                    attrs["username"] = user.username
-                except User.DoesNotExist:
-                    # Use original username and let parent handle failure
-                    attrs["username"] = username
-
+            attrs["username"] = AuthService().normalize_login_identifier(username=username)
         elif email:
-            # Try to find user by email
-            try:
-                user = User.objects.get(email__iexact=email)
-                attrs["username"] = user.username
-            except User.DoesNotExist:
-                # Let parent handle the failure
-                pass
+            normalized_username = AuthService().normalize_login_identifier(email=email)
+            if normalized_username:
+                attrs["username"] = normalized_username
 
         return super().validate(attrs)
 

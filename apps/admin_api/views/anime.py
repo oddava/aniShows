@@ -1,5 +1,3 @@
-from django.db import transaction
-from django.db.models import Avg, Count
 from django_filters import CharFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
@@ -17,6 +15,20 @@ from apps.animes.admin_serializers import (
     AdminStudioSerializer,
 )
 from apps.animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
+from apps.admin_api.services.anime_admin_service import (
+    AdminAnimeActionResult,
+    apply_default_genre_slug,
+    delete_genre,
+    delete_studio,
+    get_admin_anime_queryset,
+    get_admin_character_queryset,
+    get_admin_genre_queryset,
+    get_admin_offline_sync_state_queryset,
+    get_admin_staff_queryset,
+    get_admin_studio_queryset,
+    mark_merge_target,
+    set_ids_and_retry,
+)
 from apps.animes.services.offline_sync import OfflineSyncService
 from apps.core.permissions import IsAdminUser
 
@@ -41,12 +53,7 @@ class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, G
     ordering = ['-created_at']
 
     def get_queryset(self):
-        queryset = Anime.objects.prefetch_related("genres").select_related("studio").annotate(
-            favorites_count=Count("favorites"),
-            reviews_count=Count("reviews"),
-            avg_review_rating=Avg("reviews__rating"),
-        )
-        return queryset
+        return get_admin_anime_queryset()
 
     def destroy(self, request, *args, **kwargs):
         """Delete an anime."""
@@ -71,33 +78,18 @@ class AdminGenreViewSet(ModelViewSet):
     search_fields = ['name']
 
     def get_queryset(self):
-        queryset = Genre.objects.annotate(anime_count=Count("anime")).order_by("name")
-        return queryset
+        return get_admin_genre_queryset()
 
     def perform_create(self, serializer):
-        name = serializer.validated_data.get('name')
-        slug = serializer.validated_data.get('slug')
-        if not slug:
-            serializer.validated_data['slug'] = name.lower().replace(" ", "-")
+        apply_default_genre_slug(serializer)
         serializer.save()
 
     def destroy(self, request, *args, **kwargs):
         """Delete a genre. Checks for existing anime references."""
         genre = self.get_object()
 
-        if genre.anime_count > 0 and not request.query_params.get("force"):
-            return Response(
-                {
-                    "detail": f"Cannot delete genre with {genre.anime_count} associated anime. Use ?force=true to delete anyway.",
-                    "anime_count": genre.anime_count,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        name = genre.name
-        self.perform_destroy(genre)
-
-        return Response({"message": f"Genre '{name}' deleted successfully."})
+        result = delete_genre(genre, bool(request.query_params.get("force")))
+        return Response(result.payload, status=result.status_code)
 
 
 class AdminStudioViewSet(ModelViewSet):
@@ -109,26 +101,14 @@ class AdminStudioViewSet(ModelViewSet):
     search_fields = ['name']
 
     def get_queryset(self):
-        queryset = Studio.objects.annotate(anime_count=Count("anime")).order_by("name")
-        return queryset
+        return get_admin_studio_queryset()
 
     def destroy(self, request, *args, **kwargs):
         """Delete a studio. Prevents deletion if > 0 anime assigned."""
         studio = self.get_object()
 
-        if studio.anime_count > 0 and not request.query_params.get("force"):
-            return Response(
-                {
-                    "detail": f"Cannot delete studio with {studio.anime_count} associated anime. Use ?force=true to delete anyway.",
-                    "anime_count": studio.anime_count,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        name = studio.name
-        self.perform_destroy(studio)
-
-        return Response({"message": f"Studio '{name}' deleted successfully."})
+        result = delete_studio(studio, bool(request.query_params.get("force")))
+        return Response(result.payload, status=result.status_code)
 
 
 class AdminCharacterViewSet(ModelViewSet):
@@ -142,8 +122,7 @@ class AdminCharacterViewSet(ModelViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        queryset = Character.objects.annotate(anime_count=Count("animes", distinct=True))
-        return queryset
+        return get_admin_character_queryset()
 
 
 class AdminStaffViewSet(ModelViewSet):
@@ -157,8 +136,7 @@ class AdminStaffViewSet(ModelViewSet):
     ordering = ["name"]
 
     def get_queryset(self):
-        queryset = Staff.objects.annotate(anime_count=Count("animes", distinct=True))
-        return queryset
+        return get_admin_staff_queryset()
 
 
 class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
@@ -184,23 +162,7 @@ class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, Gene
             return None
 
     def get_queryset(self):
-        queryset = OfflineAnimeSyncState.objects.select_related("anime")
-        quarantined = self.request.query_params.get("quarantined", "true").strip().lower()
-        if quarantined in {"1", "true", "yes", "on"}:
-            queryset = queryset.filter(quarantined=True)
-        elif quarantined in {"0", "false", "no", "off"}:
-            queryset = queryset.filter(quarantined=False)
-
-        reason = self.request.query_params.get("reason")
-        if reason:
-            queryset = queryset.filter(quarantine_reason=reason)
-
-        stage = self.request.query_params.get("stage")
-        stage_status = self.request.query_params.get("status")
-        if stage in {"metadata", "franchise", "themes"} and stage_status:
-            queryset = queryset.filter(**{f"{stage}_status": stage_status})
-
-        return queryset.order_by(*self.ordering)
+        return get_admin_offline_sync_state_queryset(self.request.query_params, self.ordering)
 
     @action(detail=True, methods=["post"])
     def retry(self, request, pk=None):
@@ -220,82 +182,18 @@ class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, Gene
     @action(detail=True, methods=["post"])
     def set_ids_and_retry(self, request, pk=None):
         state = self.get_object()
-        anime = state.anime
-
         anilist_id = self._parse_int_or_none(request.data.get("anilist_id"))
         mal_id = self._parse_int_or_none(request.data.get("mal_id"))
-        if anilist_id is None and mal_id is None:
-            return Response(
-                {"detail": "Provide at least one of anilist_id or mal_id."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        with transaction.atomic():
-            anime_queryset = Anime.objects.select_for_update()
-            anime = anime_queryset.get(id=anime.id)
-
-            if anilist_id is not None:
-                conflict_queryset = Anime.objects.filter(anilist_id=anilist_id).exclude(id=anime.id)
-                conflict = conflict_queryset.first()
-                if conflict:
-                    return Response(
-                        {
-                            "detail": (
-                                f"AniList ID {anilist_id} already belongs to anime #{conflict.id}."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                anime.anilist_id = anilist_id
-
-            if mal_id is not None:
-                conflict_queryset = Anime.objects.filter(mal_id=mal_id).exclude(id=anime.id)
-                conflict = conflict_queryset.first()
-                if conflict:
-                    return Response(
-                        {"detail": f"MAL ID {mal_id} already belongs to anime #{conflict.id}."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                anime.mal_id = mal_id
-
-            anime.save(update_fields=["anilist_id", "mal_id", "updated_at"])
-
-        OfflineSyncService().reset_for_retry(state)
-        state.refresh_from_db()
-        return Response(self.get_serializer(state).data)
+        result = set_ids_and_retry(state, anilist_id, mal_id)
+        if result.status_code != 200:
+            return Response(result.payload, status=result.status_code)
+        return Response(self.get_serializer(result.payload["state"]).data)
 
     @action(detail=True, methods=["post"])
     def merge_target(self, request, pk=None):
         state = self.get_object()
         target_anime_id = self._parse_int_or_none(request.data.get("target_anime_id"))
-        if target_anime_id is None:
-            return Response(
-                {"detail": "target_anime_id is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if target_anime_id == state.anime_id:
-            return Response(
-                {"detail": "target_anime_id must be different from current anime."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        target_queryset = Anime.objects.filter(id=target_anime_id)
-        if not target_queryset.exists():
-            return Response(
-                {"detail": f"Target anime #{target_anime_id} was not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        reason = f"merged_into:{target_anime_id}"
-        OfflineSyncService().mark_skipped(state, reason=reason)
-        state_queryset = OfflineAnimeSyncState.objects.filter(id=state.id)
-        state_queryset.update(
-            quarantine_context={
-                "manual": True,
-                "action": "merge_target",
-                "target_anime_id": target_anime_id,
-            }
-        )
-        state.refresh_from_db()
-        return Response(self.get_serializer(state).data)
+        result = mark_merge_target(state, target_anime_id)
+        if result.status_code != 200:
+            return Response(result.payload, status=result.status_code)
+        return Response(self.get_serializer(result.payload["state"]).data)

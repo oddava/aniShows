@@ -1,17 +1,15 @@
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
-from django.shortcuts import get_object_or_404
-from rest_framework import permissions, serializers
-from rest_framework.exceptions import PermissionDenied
+from rest_framework import permissions
 from rest_framework.viewsets import ModelViewSet
 
 from apps.users.models import UserAnimeList
 from apps.users.permissions import EmailVerificationMixin
 from apps.users.serializers.users import UserAnimeListSerializer
-from apps.users.services.cache import (
-    invalidate_anime_detail_cache,
-    invalidate_user_anime_caches,
-    invalidate_user_caches,
+from apps.users.services.list_service import (
+    create_user_anime_list_entry,
+    delete_user_anime_list_entry,
+    get_user_anime_list_queryset,
+    update_user_anime_list_entry,
 )
 
 User = get_user_model()
@@ -22,61 +20,17 @@ class UserAnimeListViewSet(EmailVerificationMixin, ModelViewSet):
     verification_error_message = "Please verify your email to add anime to your list."
 
     def get_queryset(self):
-        username = self.request.query_params.get("username")
-        queryset = UserAnimeList.objects.all()
-
-        if username:
-            target_user = get_object_or_404(User, username=username)
-            if target_user != self.request.user:
-                profile = getattr(target_user, "userprofile", None)
-                if profile and profile.is_private:
-                    return UserAnimeList.objects.none()
-            queryset = queryset.filter(user=target_user)
-        elif self.request.user.is_authenticated:
-            queryset = queryset.filter(user=self.request.user)
-        else:
-            return UserAnimeList.objects.none()
-
-        queryset = queryset.select_related("anime__studio").prefetch_related("anime__genres")
-
-        # Filter by status
-        list_status = self.request.query_params.get("status")
-        if list_status:
-            queryset = queryset.filter(status=list_status)
-
-        return queryset.order_by("-updated_at")
+        return get_user_anime_list_queryset(
+            self.request.user,
+            username=self.request.query_params.get("username"),
+            list_status=self.request.query_params.get("status"),
+        )
 
     def perform_create(self, serializer):
-        try:
-            serializer.save(user=self.request.user)
-            # Invalidate user caches - list changes affect stats
-            invalidate_user_caches(self.request.user.id, self.request.user.username)
-            invalidate_user_anime_caches(self.request.user.id)
-            # Invalidate anime detail cache for this specific anime
-            invalidate_anime_detail_cache(serializer.instance.anime.slug, self.request.user.id)
-        except IntegrityError:
-            raise serializers.ValidationError({"detail": "This anime is already in your list."})
+        create_user_anime_list_entry(serializer, self.request.user)
 
     def perform_update(self, serializer):
-        """Ensure users can only update their own list entries."""
-        if serializer.instance.user != self.request.user:
-            raise PermissionDenied("You can only modify your own anime list.")
-        serializer.save()
-        # Invalidate user caches - list changes affect stats
-        invalidate_user_caches(self.request.user.id, self.request.user.username)
-        invalidate_user_anime_caches(self.request.user.id)
-        # Invalidate anime detail cache for this specific anime
-        invalidate_anime_detail_cache(serializer.instance.anime.slug, self.request.user.id)
+        update_user_anime_list_entry(serializer, self.request.user)
 
     def perform_destroy(self, instance):
-        """Ensure users can only delete their own list entries."""
-        if instance.user != self.request.user:
-            raise PermissionDenied("You can only remove items from your own anime list.")
-        # Get anime slug before deletion
-        anime_slug = instance.anime.slug
-        instance.delete()
-        # Invalidate user caches - list changes affect stats
-        invalidate_user_caches(self.request.user.id, self.request.user.username)
-        invalidate_user_anime_caches(self.request.user.id)
-        # Invalidate anime detail cache for this specific anime
-        invalidate_anime_detail_cache(anime_slug, self.request.user.id)
+        delete_user_anime_list_entry(instance, self.request.user)
