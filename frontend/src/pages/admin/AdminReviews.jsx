@@ -113,7 +113,7 @@ const AdminReviews = () => {
                                 value={filters.has_spoilers}
                                 onChange={(e) => setFilters(f => ({ ...f, has_spoilers: e.target.value }))}
                                 className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'rgba(30,30,30,0.8)' }}
+                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'var(--color-dark-100)' }}
                             >
                                 <option value="">All Reviews</option>
                                 <option value="true">With Spoilers</option>
@@ -124,7 +124,7 @@ const AdminReviews = () => {
                                 value={filters.min_rating}
                                 onChange={(e) => setFilters(f => ({ ...f, min_rating: e.target.value }))}
                                 className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'rgba(30,30,30,0.8)' }}
+                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'var(--color-dark-100)' }}
                             >
                                 <option value="">Min Rating</option>
                                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
@@ -136,7 +136,7 @@ const AdminReviews = () => {
                                 value={filters.ordering}
                                 onChange={(e) => setFilters(f => ({ ...f, ordering: e.target.value }))}
                                 className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'rgba(30,30,30,0.8)' }}
+                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'var(--color-dark-100)' }}
                             >
                                 <option value="-created_at">Newest First</option>
                                 <option value="created_at">Oldest First</option>
@@ -170,7 +170,7 @@ const AdminReviews = () => {
                                 {reviews.map((review) => (
                                     <tr key={review.id}>
                                         <td>
-                                            <Link to={`/u/${review.user.username}`} style={{ color: '#a78bfa', textDecoration: 'none', fontWeight: '500' }}>
+                                            <Link to={`/u/${review.user.username}`} style={{ color: 'var(--color-accent-light)', textDecoration: 'none', fontWeight: '500' }}>
                                                 {review.user.username}
                                             </Link>
                                         </td>
@@ -279,7 +279,7 @@ const AdminReviews = () => {
                             </div>
                             <div style={{ marginBottom: '1rem' }}>
                                 <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>Anime</div>
-                                <Link to={`/anime/${selectedReview.anime.slug}`} style={{ color: '#a78bfa', textDecoration: 'none' }}>
+                                <Link to={`/anime/${selectedReview.anime.slug}`} style={{ color: 'var(--color-accent-light)', textDecoration: 'none' }}>
                                     {selectedReview.anime.title}
                                 </Link>
                             </div>

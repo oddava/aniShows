@@ -50,9 +50,9 @@ export default function EpisodesTab({ anime, accentColor }) {
                 <div className="flex items-center gap-4">
                     <div
                         className="w-12 h-12 rounded-xl flex items-center justify-center"
-                        style={{ backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.2)' }}
+                        style={{ backgroundColor: accentColor ? `${accentColor}20` : 'rgba(117,105,141,0.2)' }}
                     >
-                        <Tv className="w-6 h-6" style={{ color: accentColor || '#8b5cf6' }} />
+                        <Tv className="w-6 h-6" style={{ color: accentColor || '#75698d' }} />
                     </div>
                     <div>
                         <p className="text-white font-bold">{episodeCount} Episodes</p>
@@ -89,7 +89,7 @@ export default function EpisodesTab({ anime, accentColor }) {
                         className="h-full rounded-full transition-all duration-500"
                         style={{
                             width: `${(watchedEpisodes.size / episodeCount) * 100}%`,
-                            backgroundColor: accentColor || '#8b5cf6'
+                            backgroundColor: accentColor || '#75698d'
                         }}
                     />
                 </div>

@@ -16,7 +16,7 @@ import logger from '../../utils/logger';
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-[#1a1a1a]/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl shadow-2xl">
+            <div className="bg-dark-100/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl shadow-2xl">
                 <p className="text-gray-400 text-xs mb-1 mb-2 font-medium">{label}</p>
                 <p className="text-white text-sm font-bold flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500"></span>
@@ -153,7 +153,7 @@ const AdminDashboard = () => {
                 {statCards.map((stat, idx) => (
                     <div
                         key={idx}
-                        className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20"
+                        className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20"
                     >
                         <div className="flex justify-between items-start mb-4">
                             <div className="text-gray-400">
@@ -181,7 +181,7 @@ const AdminDashboard = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Growth Chart */}
-                <div className="lg:col-span-2 bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col">
+                <div className="lg:col-span-2 bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col">
 
                     <div className="flex items-center justify-between mb-8 z-10">
                         <div>
@@ -208,7 +208,7 @@ const AdminDashboard = () => {
                                             <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                                     <XAxis
                                         dataKey="name"
                                         stroke="rgba(255,255,255,0.2)"
@@ -244,7 +244,7 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Popular Anime / Top Engagement */}
-                <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col">
+                <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             <Heart className="text-pink-500" size={20} />
@@ -283,7 +283,7 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* Recent Signups */}
-                <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
+                <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
                     <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             <UsersRound className="text-gray-400" size={20} />
@@ -339,7 +339,7 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Recent Reviews */}
-                <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
+                <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
                     <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             <Star className="text-gray-400" size={20} />

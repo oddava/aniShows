@@ -81,7 +81,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
         return (
             <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
+                    <Users className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
                     <h3 className="text-lg font-bold text-white">Friends Watching</h3>
                 </div>
                 <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
         return (
             <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
+                    <Users className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
                     <h3 className="text-lg font-bold text-white">Friends Watching</h3>
                 </div>
                 <p className="text-gray-500 text-sm">
@@ -114,7 +114,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
     return (
         <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
             <div className="flex items-center gap-2 mb-4">
-                <Users className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
+                <Users className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
                 <h3 className="text-lg font-bold text-white">Friends Watching</h3>
             </div>
 

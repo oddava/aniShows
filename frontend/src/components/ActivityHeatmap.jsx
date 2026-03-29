@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '../context/ThemeContext';
 
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
 
 function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();

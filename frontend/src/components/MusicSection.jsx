@@ -32,7 +32,7 @@ export default function MusicSection({ anime, accentColor }) {
                 {themes.openings.length > 0 && (
                     <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-6 border border-gray-800 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 mb-4">
-                            <Disc className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
+                            <Disc className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
                             <h3 className="font-bold text-white">Opening Themes</h3>
                             <span className="text-xs text-gray-500">({themes.openings.length})</span>
                         </div>
@@ -66,7 +66,7 @@ export default function MusicSection({ anime, accentColor }) {
                 {themes.endings.length > 0 && (
                     <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-6 border border-gray-800 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 mb-4">
-                            <Disc className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
+                            <Disc className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
                             <h3 className="font-bold text-white">Ending Themes</h3>
                             <span className="text-xs text-gray-500">({themes.endings.length})</span>
                         </div>

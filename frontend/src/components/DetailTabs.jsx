@@ -39,7 +39,7 @@ export function OverviewTab({ anime, accentColor }) {
                         <button
                             onClick={() => setSynopsisExpanded(!synopsisExpanded)}
                             className={`mt-3 flex items-center gap-2 text-sm font-bold transition-all active:scale-95 ${synopsisExpanded ? 'opacity-100' : 'opacity-30'}`}
-                            style={{ color: accentColor || '#8b5cf6' }}
+                            style={{ color: accentColor || '#75698d' }}
                         >
                             {synopsisExpanded ? 'Show Less' : 'Read More'}
                             <ChevronDown className={`w-4 h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
@@ -116,7 +116,7 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
                             className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] font-bold uppercase rounded"
                             style={{
                                 backgroundColor: role.role === 'MAIN'
-                                    ? (accentColor || '#8b5cf6')
+                                    ? (accentColor || '#75698d')
                                     : 'rgba(255,255,255,0.2)',
                                 color: 'white'
                             }}

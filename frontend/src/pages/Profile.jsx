@@ -18,7 +18,7 @@ import { setUserContext } from '../sentry';
 import MarkdownRenderer from '../components/common/MarkdownRenderer';
 import OverviewTab from '../components/profile/OverviewTab';
 
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
 function normalizeProfileTab(tab) {

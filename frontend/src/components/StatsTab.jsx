@@ -100,7 +100,7 @@ export default function StatsTab({ anime, accentColor }) {
                 {/* Rankings */}
                 <div className="bg-dark-100/50 rounded-2xl p-6 border border-gray-800">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <BarChart3 className="w-5 h-5" style={{ color: accentColor || '#8b5cf6' }} />
+                        <BarChart3 className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
                         Rankings
                     </h3>
                     <div className="space-y-3">
@@ -136,7 +136,7 @@ function StatCard({ icon: Icon, label, value, subtext, accentColor }) {  // esli
         <div className="bg-dark-100/50 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-colors">
             <Icon 
                 className="w-5 h-5 mb-2" 
-                style={{ color: accentColor || '#8b5cf6' }} 
+                style={{ color: accentColor || '#75698d' }} 
             />
             <p className="text-2xl font-black text-white">{value}{subtext}</p>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{label}</p>

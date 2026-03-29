@@ -19,7 +19,7 @@ const RatingBar = ({ stars, count, total, onFilter, isActive, accentColor }) => 
                     className="h-full rounded-full transition-all duration-500"
                     style={{
                         width: `${percentage}%`,
-                        backgroundColor: isActive ? (accentColor || '#8b5cf6') : 'rgba(234, 179, 8, 0.7)'
+                        backgroundColor: isActive ? (accentColor || '#75698d') : 'rgba(234, 179, 8, 0.7)'
                     }}
                 />
             </div>
@@ -112,7 +112,7 @@ export default function ReviewSummary({
                         <button
                             onClick={() => onFilterByRating(null)}
                             className="mt-3 text-xs hover:underline"
-                            style={{ color: accentColor || '#8b5cf6' }}
+                            style={{ color: accentColor || '#75698d' }}
                         >
                             Clear filter
                         </button>

@@ -15,10 +15,10 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 export default function useColorExtraction(imageUrl) {
     // Start with default colors immediately - no waiting
     const [colors, setColors] = useState({
-        primary: '#8b5cf6',
-        secondary: '#a855f7',
-        accent: '#a78bfa',
-        palette: ['#8b5cf6', '#a855f7', '#ec4899']
+        primary: '#75698d',
+        secondary: '#6a617d',
+        accent: '#9489ac',
+        palette: ['#75698d', '#6a617d', '#9489ac']
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);

@@ -589,9 +589,9 @@ export default function Navbar() {
         }
     `;
 
-    const mobileIslandBackground = 'linear-gradient(160deg, rgba(12,12,15,0.84), rgba(8,8,10,0.78) 68%, color-mix(in srgb, var(--color-accent) 14%, transparent) 100%)';
-    const mobilePopoverBackground = 'rgba(11, 11, 14, 0.94)';
-    const mobilePopoverTipBackground = 'rgba(11, 11, 14, 0.94)';
+    const mobileIslandBackground = 'linear-gradient(160deg, color-mix(in srgb, var(--color-dark-50) 86%, transparent), color-mix(in srgb, var(--color-dark) 78%, transparent) 68%, color-mix(in srgb, var(--color-accent) 24%, transparent) 100%)';
+    const mobilePopoverBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
+    const mobilePopoverTipBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
 
     const startAccountHold = () => {
         longPressTriggeredRef.current = false;
@@ -641,6 +641,11 @@ export default function Navbar() {
         <>
             <nav
                 className={`hidden md:block fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-6xl rounded-2xl border border-white/10 bg-dark/70 backdrop-blur-xl transition-all duration-300 ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}
+                style={{
+                    background: 'var(--color-navbar-bg)',
+                    borderColor: 'var(--color-navbar-border)',
+                    boxShadow: '0 18px 48px var(--color-navbar-shadow)',
+                }}
             >
                 <div className="px-4 sm:px-6">
                     <div className="flex items-center justify-between h-14">
@@ -693,7 +698,7 @@ export default function Navbar() {
                                                 }
                                             }}
                                             placeholder="Search anime..."
-                                            className={`w-full rounded-full border border-white/5 bg-black/20 py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-black/40 focus:outline-none focus:ring-4 focus:ring-accent/10 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
+                                            className={`w-full rounded-full border border-white/5 bg-black/20 py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-black/40 focus:outline-none focus:ring-4 focus:ring-accent/20 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
                                         />
 
                                         {/* Clear button */}
@@ -813,7 +818,7 @@ export default function Navbar() {
                                     {/* Profile Button */}
                                     <button
                                         onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40 hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] focus:outline-none focus:ring-2 focus:ring-accent/40"
+                                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40 hover:shadow-[0_0_20px_rgba(117,105,141,0.12)] focus:outline-none focus:ring-2 focus:ring-accent/30"
                                     >
                                         {/* Avatar or Placeholder */}
                                         <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
@@ -826,7 +831,7 @@ export default function Navbar() {
                                             )}
                                         </div>
                                         {isAuthenticated && mobileUnreadCount > 0 && (
-                                            <span className="absolute top-1 left-7 w-2h-2 bg-red-500 rounded-full ring-2 ring-[#0c0c0f] shadow-sm z-10" />
+                                            <span className="absolute top-1 left-7 w-2h-2 bg-red-500 rounded-full ring-2 ring-dark shadow-sm z-10" />
                                         )}
                                         <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
                                             {user?.username}

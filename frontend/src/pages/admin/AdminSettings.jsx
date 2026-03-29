@@ -128,11 +128,11 @@ const AdminSettings = () => {
                   onChange={(e) => handleChange('general', 'timezone', e.target.value)}
                   className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
                 >
-                  <option value="UTC" className="bg-[#1a1a1a]">UTC</option>
-                  <option value="America/New_York" className="bg-[#1a1a1a]">Eastern Time</option>
-                  <option value="America/Los_Angeles" className="bg-[#1a1a1a]">Pacific Time</option>
-                  <option value="Europe/London" className="bg-[#1a1a1a]">London</option>
-                  <option value="Asia/Tokyo" className="bg-[#1a1a1a]">Tokyo</option>
+                  <option value="UTC" className="bg-dark-100">UTC</option>
+                  <option value="America/New_York" className="bg-dark-100">Eastern Time</option>
+                  <option value="America/Los_Angeles" className="bg-dark-100">Pacific Time</option>
+                  <option value="Europe/London" className="bg-dark-100">London</option>
+                  <option value="Asia/Tokyo" className="bg-dark-100">Tokyo</option>
                 </select>
               </div>
               <div className="md:col-span-2">

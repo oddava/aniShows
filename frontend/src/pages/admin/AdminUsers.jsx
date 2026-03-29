@@ -104,7 +104,7 @@ const AdminUsers = () => {
             </div>
 
             {/* Table Controls (Search & Filters) */}
-            <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
+            <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
                 <form onSubmit={handleSearch} className="relative w-full md:w-96 group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-400 transition-colors" size={18} />
                     <input
@@ -124,9 +124,9 @@ const AdminUsers = () => {
                             onChange={(e) => setFilters(f => ({ ...f, is_active: e.target.value }))}
                             className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
                         >
-                            <option value="" className="bg-[#1a1a1a]">All Status</option>
-                            <option value="true" className="bg-[#1a1a1a]">Active Only</option>
-                            <option value="false" className="bg-[#1a1a1a]">Banned/Inactive</option>
+                            <option value="" className="bg-dark-100">All Status</option>
+                            <option value="true" className="bg-dark-100">Active Only</option>
+                            <option value="false" className="bg-dark-100">Banned/Inactive</option>
                         </select>
                     </div>
 
@@ -137,18 +137,18 @@ const AdminUsers = () => {
                             onChange={(e) => setFilters(f => ({ ...f, is_staff: e.target.value }))}
                             className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
                         >
-                            <option value="" className="bg-[#1a1a1a]">All Roles</option>
-                            <option value="true" className="bg-[#1a1a1a]">Staff & Admins</option>
-                            <option value="false" className="bg-[#1a1a1a]">Regular Users</option>
+                            <option value="" className="bg-dark-100">All Roles</option>
+                            <option value="true" className="bg-dark-100">Staff & Admins</option>
+                            <option value="false" className="bg-dark-100">Regular Users</option>
                         </select>
                     </div>
                 </div>
             </div>
 
             {/* Main Table */}
-            <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative min-h-[400px]">
+            <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative min-h-[400px]">
                 {loading && (
-                    <div className="absolute inset-0 z-10 bg-[#111111]/50 backdrop-blur-sm flex items-center justify-center">
+                    <div className="absolute inset-0 z-10 bg-dark/50 backdrop-blur-sm flex items-center justify-center">
                         <div className="flex flex-col items-center">
                             <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-3" />
                             <p className="text-sm font-medium text-purple-400">Loading Users...</p>

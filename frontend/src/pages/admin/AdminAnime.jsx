@@ -97,7 +97,7 @@ const AdminAnime = () => {
             </div>
 
             {/* Table Controls (Search & Filters) */}
-            <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
+            <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
                 <form onSubmit={handleSearch} className="relative w-full md:w-96 group">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-400 transition-colors" size={18} />
                     <input
@@ -117,10 +117,10 @@ const AdminAnime = () => {
                             onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))}
                             className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
                         >
-                            <option value="" className="bg-[#1a1a1a]">All Statuses</option>
-                            <option value="Airing" className="bg-[#1a1a1a]">Airing</option>
-                            <option value="Finished" className="bg-[#1a1a1a]">Finished</option>
-                            <option value="Upcoming" className="bg-[#1a1a1a]">Upcoming</option>
+                            <option value="" className="bg-dark-100">All Statuses</option>
+                            <option value="Airing" className="bg-dark-100">Airing</option>
+                            <option value="Finished" className="bg-dark-100">Finished</option>
+                            <option value="Upcoming" className="bg-dark-100">Upcoming</option>
                         </select>
                     </div>
 
@@ -131,11 +131,11 @@ const AdminAnime = () => {
                             onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
                             className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
                         >
-                            <option value="" className="bg-[#1a1a1a]">All Types</option>
-                            <option value="TV" className="bg-[#1a1a1a]">TV Show</option>
-                            <option value="Movie" className="bg-[#1a1a1a]">Movie</option>
-                            <option value="OVA" className="bg-[#1a1a1a]">OVA</option>
-                            <option value="Special" className="bg-[#1a1a1a]">Special</option>
+                            <option value="" className="bg-dark-100">All Types</option>
+                            <option value="TV" className="bg-dark-100">TV Show</option>
+                            <option value="Movie" className="bg-dark-100">Movie</option>
+                            <option value="OVA" className="bg-dark-100">OVA</option>
+                            <option value="Special" className="bg-dark-100">Special</option>
                         </select>
                     </div>
 
@@ -146,19 +146,19 @@ const AdminAnime = () => {
                             onChange={(e) => setFilters(f => ({ ...f, ordering: e.target.value }))}
                             className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
                         >
-                            <option value="-created_at" className="bg-[#1a1a1a]">Newest First</option>
-                            <option value="created_at" className="bg-[#1a1a1a]">Oldest First</option>
-                            <option value="-rating" className="bg-[#1a1a1a]">Highest Rated</option>
-                            <option value="title" className="bg-[#1a1a1a]">A-Z Title</option>
+                            <option value="-created_at" className="bg-dark-100">Newest First</option>
+                            <option value="created_at" className="bg-dark-100">Oldest First</option>
+                            <option value="-rating" className="bg-dark-100">Highest Rated</option>
+                            <option value="title" className="bg-dark-100">A-Z Title</option>
                         </select>
                     </div>
                 </div>
             </div>
 
             {/* Main Table */}
-            <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative min-h-[400px]">
+            <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative min-h-[400px]">
                 {loading && (
-                    <div className="absolute inset-0 z-10 bg-[#111111]/50 backdrop-blur-sm flex items-center justify-center">
+                    <div className="absolute inset-0 z-10 bg-dark/50 backdrop-blur-sm flex items-center justify-center">
                         <div className="flex flex-col items-center">
                             <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-3" />
                             <p className="text-sm font-medium text-purple-400">Loading Library...</p>

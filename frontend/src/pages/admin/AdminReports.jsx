@@ -29,7 +29,7 @@ const TABS = [
 ];
 
 const CHART_COLORS = [
-  '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',
+  '#75698d', '#4f88a8', '#4f8d74', '#b88a52', '#b5626f',
   '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#84cc16',
   '#a855f7', '#22d3ee', '#34d399', '#fbbf24', '#fb7185',
 ];
@@ -43,7 +43,7 @@ const STATUS_COLORS = {
 };
 
 const LIST_STATUS_COLORS = {
-  'Watching': '#8b5cf6',
+  'Watching': '#75698d',
   'Completed': '#10b981',
   'On Hold': '#f59e0b',
   'Dropped': '#ef4444',
@@ -55,7 +55,7 @@ const LIST_STATUS_COLORS = {
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#111111]/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl shadow-2xl">
+      <div className="bg-dark/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl shadow-2xl">
         <p className="text-gray-400 text-xs font-medium mb-2">{label}</p>
         {payload.map((entry, index) => (
           <p key={index} className="text-sm font-bold flex items-center gap-2 mb-0.5" style={{ color: '#fff' }}>
@@ -69,7 +69,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const StatCard = ({ title, value, change, changeType, icon: Icon, link, linkText, colorClass, bgClass }) => (
-  <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
+  <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
     <div className="flex justify-between items-start mb-4">
       <div className="text-gray-400">
         <Icon size={24} strokeWidth={1.5} />
@@ -100,7 +100,7 @@ const StatCard = ({ title, value, change, changeType, icon: Icon, link, linkText
 );
 
 const ChartCard = ({ title, subtitle, icon: Icon, iconColor, iconBg, children, className = "" }) => (
-  <div className={`bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col ${className}`}>
+  <div className={`bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col ${className}`}>
     <div className="flex items-center justify-between mb-8 z-10">
       <div>
         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -154,7 +154,7 @@ const LoadingSpinner = ({ text = "Loading..." }) => (
 );
 
 const EmptyState = ({ onRetry }) => (
-  <div className="flex flex-col items-center justify-center min-h-[300px] bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl border-dashed">
+  <div className="flex flex-col items-center justify-center min-h-[300px] bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl border-dashed">
     <Activity size={48} className="text-gray-600 mb-4" />
     <h3 className="text-lg font-bold text-white mb-2">No Data Available</h3>
     <p className="text-gray-400 mb-6 text-sm text-center max-w-md">Could not load analytics data for this period.</p>
@@ -261,7 +261,7 @@ const OverviewTab = ({ stats }) => {
                         <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                     <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickMargin={10} axisLine={false} />
                     <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
                     <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }} />
@@ -279,10 +279,10 @@ const OverviewTab = ({ stats }) => {
               {dailySignupsData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailySignupsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                     <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickMargin={10} axisLine={false} />
                     <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                    <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-overlay-soft)' }} />
                     <Bar dataKey="signups" name="Signups" radius={[4, 4, 0, 0]}>
                       {dailySignupsData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill="#ffffff" fillOpacity={0.2} />
@@ -300,7 +300,7 @@ const OverviewTab = ({ stats }) => {
 
       {/* Activity Log & Export */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6">
+        <div className="lg:col-span-2 bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Bell size={20} className="text-amber-400" /> Activity Log
@@ -333,7 +333,7 @@ const OverviewTab = ({ stats }) => {
           </div>
         </div>
 
-        <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+        <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
           <Download size={48} className="text-purple-400 mb-4 opacity-50" />
           <h3 className="text-xl font-bold text-white mb-2">Export Data</h3>
           <p className="text-sm text-gray-400 mb-6">Download a full JSON export of all platform statistics.</p>
@@ -369,7 +369,7 @@ const UsersTab = ({ data, loading }) => {
   const verificationData = useMemo(() => {
     if (!data.user_breakdown) return [];
     return [
-      { name: 'Verified', value: data.user_breakdown.verified || 0, color: '#8b5cf6' },
+      { name: 'Verified', value: data.user_breakdown.verified || 0, color: '#75698d' },
       { name: 'Unverified', value: data.user_breakdown.unverified || 0, color: '#6b7280' },
     ].filter(d => d.value > 0);
   }, [data]);
@@ -397,7 +397,7 @@ const UsersTab = ({ data, loading }) => {
                       <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                   <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickMargin={10} axisLine={false} />
                   <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
                   <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }} />
@@ -597,10 +597,10 @@ const ContentTab = ({ data, loading }) => {
             {genreData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={genreData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" horizontal={false} />
                   <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.8)', fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
-                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-overlay-soft)' }} />
                   <Bar dataKey="anime" name="Anime Count" radius={[0, 4, 4, 0]}>
                     {genreData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill="#ffffff" fillOpacity={0.2} />
@@ -619,10 +619,10 @@ const ContentTab = ({ data, loading }) => {
             {studioData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={studioData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" horizontal={false} />
                   <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickLine={false} axisLine={false} />
                   <YAxis type="category" dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.8)', fontSize: 11 }} tickLine={false} axisLine={false} width={120} />
-                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-overlay-soft)' }} />
                   <Bar dataKey="anime" name="Anime Count" radius={[0, 4, 4, 0]} fill="#ffffff" fillOpacity={0.2} />
                 </BarChart>
               </ResponsiveContainer>
@@ -645,7 +645,7 @@ const ContentTab = ({ data, loading }) => {
                     <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickMargin={10} axisLine={false} />
                 <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }} />
@@ -752,7 +752,7 @@ const EngagementTab = ({ data, loading }) => {
 
   const getRatingColor = (rating) => {
     if (rating >= 8) return '#10b981';
-    if (rating >= 6) return '#8b5cf6';
+    if (rating >= 6) return '#75698d';
     if (rating >= 4) return '#f59e0b';
     return '#ef4444';
   };
@@ -786,10 +786,10 @@ const EngagementTab = ({ data, loading }) => {
             {ratingData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={ratingData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                   <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickMargin={10} axisLine={false} />
                   <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                  <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-overlay-soft)' }} />
                   <Bar dataKey="reviews" name="Reviews" radius={[4, 4, 0, 0]}>
                     {ratingData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill="#ffffff" fillOpacity={0.2} />
@@ -830,7 +830,7 @@ const EngagementTab = ({ data, loading }) => {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={reviewsTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-soft)" vertical={false} />
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} tickMargin={10} axisLine={false} />
                 <YAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '3 3' }} />
@@ -846,7 +846,7 @@ const EngagementTab = ({ data, loading }) => {
       {/* Review Votes */}
       {data.review_votes && (data.review_votes.helpful > 0 || data.review_votes.unhelpful > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
+          <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
             <div className="flex items-center gap-3 mb-4">
               <div className="text-gray-400">
                 <ThumbsUp size={24} strokeWidth={1.5} />
@@ -860,7 +860,7 @@ const EngagementTab = ({ data, loading }) => {
               <div className="h-1.5 rounded-full bg-white/40" style={{ width: `${data.review_votes.helpful + data.review_votes.unhelpful > 0 ? (data.review_votes.helpful / (data.review_votes.helpful + data.review_votes.unhelpful)) * 100 : 0}%` }} />
             </div>
           </div>
-          <div className="bg-[#111111]/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
+          <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
             <div className="flex items-center gap-3 mb-4">
               <div className="text-gray-400">
                 <ThumbsDown size={24} strokeWidth={1.5} />
@@ -1011,10 +1011,10 @@ const AdminReports = () => {
               backgroundSize: '1.25em 1.25em',
             }}
           >
-            <option value="7" className="bg-[#1a1a1a]">Last 7 days</option>
-            <option value="30" className="bg-[#1a1a1a]">Last 30 days</option>
-            <option value="90" className="bg-[#1a1a1a]">Last 90 days</option>
-            <option value="365" className="bg-[#1a1a1a]">Last year</option>
+            <option value="7" className="bg-dark-100">Last 7 days</option>
+            <option value="30" className="bg-dark-100">Last 30 days</option>
+            <option value="90" className="bg-dark-100">Last 90 days</option>
+            <option value="365" className="bg-dark-100">Last year</option>
           </select>
           <button
             onClick={handleExport}
@@ -1036,7 +1036,7 @@ const AdminReports = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#111111]/60 backdrop-blur-xl border border-white/5 rounded-2xl p-1.5 overflow-x-auto">
+      <div className="flex gap-1 bg-dark/60 backdrop-blur-xl border border-white/5 rounded-2xl p-1.5 overflow-x-auto">
         {TABS.map(({ key, label, icon: TabIcon }) => (
           <button
             key={key}

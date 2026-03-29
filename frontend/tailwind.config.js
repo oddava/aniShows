@@ -9,17 +9,17 @@ export default {
         extend: {
             colors: {
                 dark: {
-                    DEFAULT: '#0f0f0f',
-                    50: '#262626',
-                    100: '#1a1a1a',
-                    200: '#171717',
-                    300: '#141414',
-                    400: '#0f0f0f',
+                    DEFAULT: 'var(--color-dark)',
+                    50: 'var(--color-dark-50)',
+                    100: 'var(--color-dark-100)',
+                    200: 'var(--color-dark-200)',
+                    300: 'var(--color-dark-300)',
+                    400: 'var(--color-dark-400)',
                 },
                 accent: {
-                    DEFAULT: '#8b5cf6',
-                    light: '#a78bfa',
-                    dark: '#7c3aed',
+                    DEFAULT: 'var(--color-accent)',
+                    light: 'var(--color-accent-light)',
+                    dark: 'var(--color-accent-dark)',
                 },
             },
             fontFamily: {

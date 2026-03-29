@@ -72,7 +72,7 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
                 {/* Header */}
                 <div className="relative h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 border-b border-white/5 flex-shrink-0"
                     style={{
-                        backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.15)'
+                        backgroundColor: accentColor ? `${accentColor}20` : 'rgba(117,105,141,0.15)'
                     }}
                 >
                     <button
@@ -109,8 +109,8 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
                         <span
                             className="inline-block px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-bold rounded-full"
                             style={{
-                                backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.2)',
-                                color: accentColor || '#8b5cf6'
+                                backgroundColor: accentColor ? `${accentColor}20` : 'rgba(117,105,141,0.2)',
+                                color: accentColor || '#75698d'
                             }}
                         >
                             <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 inline mr-1" />

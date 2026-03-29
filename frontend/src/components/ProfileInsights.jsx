@@ -5,7 +5,7 @@ import { TrendingUp, Star, Tv, Clock, BarChart3, Activity } from 'lucide-react';
 import ActivityHeatmap from './ActivityHeatmap';
 import AnimeMediaImage from './common/AnimeMediaImage';
 
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
 
 function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -37,7 +37,7 @@ function toRgba(hex, alpha) {
 
 // Color palette for charts
 const GENRE_COLORS = [
-    '#8b5cf6', '#ec4899', '#06b6d4', '#22c55e', '#f59e0b',
+    '#75698d', '#c47292', '#4f88a8', '#4f8d74', '#b88a52',
     '#ef4444', '#3b82f6', '#a855f7', '#14b8a6', '#f97316'
 ];
 
@@ -294,7 +294,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                             <div className="h-64 relative">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RadarChart data={genreData} margin={{ top: 0, right: 30, bottom: 0, left: 30 }}>
-                                        <PolarGrid stroke="rgba(255,255,255,0.05)" radialLines={true} />
+                                        <PolarGrid stroke="var(--color-border-soft)" radialLines={true} />
                                         <PolarAngleAxis
                                             dataKey="name"
                                             tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}
@@ -366,7 +366,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                         allowDecimals={false}
                                         dx={-10}
                                     />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-overlay-soft)' }} />
                                     <Bar
                                         dataKey="count"
                                         radius={[6, 6, 0, 0]}

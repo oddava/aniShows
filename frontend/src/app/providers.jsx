@@ -36,9 +36,9 @@ export default function AppProviders({ children }) {
                                     position="bottom-right"
                                     toastOptions={{
                                         style: {
-                                            background: '#1a1a1a',
+                                            background: 'var(--color-dark-100)',
                                             color: '#fff',
-                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            border: '1px solid var(--color-border)',
                                         },
                                         success: {
                                             iconTheme: {

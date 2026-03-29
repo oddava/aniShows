@@ -67,7 +67,7 @@ const getUniqueStaffCount = (staff) => {
 };
 
 const getCoverPlaceholder = (title = 'Anime') =>
-    `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(title)}`;
+    `https://placehold.co/10131b/75698d?text=${encodeURIComponent(title)}`;
 
 // Extract and memoize color from image
 const useAccentColor = (coverImage, bannerImage) => {
@@ -260,7 +260,7 @@ const TabButton = memo(({ tab, isActive, onClick, accentColor, count }) => {
                     ? 'text-white '
                     : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
             style={isActive ? {
-                backgroundColor: accentColor || '#8b5cf6'
+                backgroundColor: accentColor || '#75698d'
             } : {}}
         >
             <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -476,10 +476,10 @@ export default function AnimeDetail() {
     const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
         getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
-        `https://placehold.co/1920x600/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+        `https://placehold.co/10131b/75698d?text=${encodeURIComponent(anime.title)}`;
     const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
-        `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(anime.title)}`;
+        `https://placehold.co/10131b/75698d?text=${encodeURIComponent(anime.title)}`;
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');
     const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');
@@ -758,7 +758,7 @@ export default function AnimeDetail() {
                                                     onClick={() => setIsWritingReview(true)}
                                                     className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent"
                                                     style={{
-                                                        backgroundColor: accentColor || '#8b5cf6'
+                                                        backgroundColor: accentColor || '#75698d'
                                                     }}
                                                 >
                                                     Write a Review
@@ -887,9 +887,9 @@ export default function AnimeDetail() {
                                             to={`/browse?genre=${anime.genres?.[0]?.slug || ''}`}
                                             className="block text-center mt-4 sm:mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"
                                             style={{
-                                                color: accentColor || '#8b5cf6',
-                                                backgroundColor: accentColor ? `${accentColor}10` : 'rgba(139,92,246,0.05)',
-                                                borderColor: accentColor ? `${accentColor}1a` : 'rgba(139,92,246,0.1)'
+                                                color: accentColor || '#75698d',
+                                                backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
+                                                borderColor: accentColor ? `${accentColor}1a` : 'rgba(117,105,141,0.1)'
                                             }}
                                         >
                                             FIND MORE TITLES LIKE THIS

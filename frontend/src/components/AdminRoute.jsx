@@ -22,8 +22,8 @@ const AdminRoute = ({ children }) => {
                     <div style={{
                         width: '48px',
                         height: '48px',
-                        border: '3px solid rgba(139, 92, 246, 0.2)',
-                        borderTopColor: '#8b5cf6',
+                        border: '3px solid rgba(117, 105, 141, 0.18)',
+                        borderTopColor: 'var(--color-accent)',
                         borderRadius: '50%',
                         animation: 'spin 0.8s linear infinite',
                         margin: '0 auto 1rem'
@@ -54,4 +54,3 @@ const AdminRoute = ({ children }) => {
 };
 
 export default AdminRoute;
-

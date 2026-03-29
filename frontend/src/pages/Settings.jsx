@@ -61,9 +61,9 @@ function getSocialLinkDuplicateKey(link = {}) {
     return `platform:${platform}|value:${value.toLowerCase()}`;
 }
 
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
 const PROFILE_COLOR_PRESETS = [
-    '#8b5cf6',
+    '#75698d',
     '#ef4444',
     '#f97316',
     '#eab308',

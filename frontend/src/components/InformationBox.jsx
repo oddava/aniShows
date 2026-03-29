@@ -26,7 +26,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                 <div className="flex flex-col items-end leading-tight">
                     <span>{startStr}</span>
                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest my-1">to</span>
-                    <span style={{ color: accentColor || '#8b5cf6' }}>Present</span>
+                    <span style={{ color: accentColor || '#75698d' }}>Present</span>
                 </div>
             );
         }
@@ -50,7 +50,7 @@ export default function InformationBox({ anime, className, accentColor }) {
         <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 min-w-0 overflow-hidden ${className}`}>
             <h3
                 className="text-white font-bold uppercase text-[10px] tracking-[0.2em]"
-                style={{ color: accentColor ? `${accentColor}cc` : '#8b5cf6cc' }}
+                style={{ color: accentColor ? `${accentColor}cc` : '#75698dcc' }}
             >
                 Information
             </h3>
@@ -93,10 +93,10 @@ export default function InformationBox({ anime, className, accentColor }) {
                             style={{
                                 backgroundColor: isWithin24Hours(anime.next_airing_date)
                                     ? 'rgba(34, 197, 94, 0.1)'
-                                    : (accentColor ? `${accentColor}15` : 'rgba(139, 92, 246, 0.1)'),
+                                    : (accentColor ? `${accentColor}15` : 'rgba(117, 105, 141, 0.1)'),
                                 borderColor: isWithin24Hours(anime.next_airing_date)
                                     ? 'rgba(34, 197, 94, 0.3)'
-                                    : (accentColor ? `${accentColor}30` : 'rgba(139, 92, 246, 0.2)')
+                                    : (accentColor ? `${accentColor}30` : 'rgba(117, 105, 141, 0.2)')
                             }}
                         >
                             <div className="flex items-center gap-2 mb-3">
@@ -105,7 +105,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     style={{
                                         color: isWithin24Hours(anime.next_airing_date)
                                             ? '#22c55e'
-                                            : (accentColor || '#8b5cf6')
+                                            : (accentColor || '#75698d')
                                     }}
                                 />
                                 <span
@@ -113,7 +113,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     style={{
                                         color: isWithin24Hours(anime.next_airing_date)
                                             ? '#22c55e'
-                                            : (accentColor || '#8b5cf6')
+                                            : (accentColor || '#75698d')
                                     }}
                                 >
                                     Next Episode
@@ -128,7 +128,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     style={{
                                         color: isWithin24Hours(anime.next_airing_date)
                                             ? '#22c55e'
-                                            : (accentColor || '#8b5cf6')
+                                            : (accentColor || '#75698d')
                                     }}
                                 >
                                     {formatRelativeTime(anime.next_airing_date)}
@@ -159,19 +159,19 @@ export default function InformationBox({ anime, className, accentColor }) {
                                                 : 'bg-dark-200 hover:bg-white text-gray-300 hover:text-black border-gray-700/50 hover:border-white'
                                         }`}
                                         style={isAccentLink ? {
-                                            color: accentColor || '#8b5cf6',
-                                            borderColor: accentColor ? `${accentColor}80` : 'rgba(139,92,246,0.5)'
+                                            color: accentColor || '#75698d',
+                                            borderColor: accentColor ? `${accentColor}80` : 'rgba(117,105,141,0.5)'
                                         } : {}}
                                         onMouseEnter={(e) => {
                                             if (isAccentLink) {
-                                                e.currentTarget.style.backgroundColor = accentColor || '#8b5cf6';
+                                                e.currentTarget.style.backgroundColor = accentColor || '#75698d';
                                                 e.currentTarget.style.color = 'white';
                                             }
                                         }}
                                         onMouseLeave={(e) => {
                                             if (isAccentLink) {
                                                 e.currentTarget.style.backgroundColor = 'transparent';
-                                                e.currentTarget.style.color = accentColor || '#8b5cf6';
+                                                e.currentTarget.style.color = accentColor || '#75698d';
                                             }
                                         }}
                                     >

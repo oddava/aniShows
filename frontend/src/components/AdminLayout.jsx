@@ -141,17 +141,17 @@ const AdminNotifications = () => {
             >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-purple-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 animate-pulse border-2 border-[#111111]">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-purple-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 animate-pulse border-2 border-dark">
                         {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                 )}
                 {unreadCount === 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-gray-600 rounded-full border border-[#111111]" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-gray-600 rounded-full border border-dark" />
                 )}
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-96 bg-[#111111]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/40 z-50 overflow-hidden">
+                <div className="absolute right-0 top-full mt-2 w-96 bg-dark/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/40 z-50 overflow-hidden">
                     {/* Header */}
                     <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                         <div>
@@ -324,7 +324,7 @@ const AdminLayout = () => {
 
             {/* Sidebar */}
             <aside className={`
-                fixed inset-y-0 left-0 z-50 w-72 bg-[#111111]/95 backdrop-blur-xl border-r border-white/5 
+                fixed inset-y-0 left-0 z-50 w-72 bg-dark/95 backdrop-blur-xl border-r border-white/5 
                 transform transition-all duration-300 ease-in-out flex flex-col
                 lg:translate-x-0 lg:static lg:flex-shrink-0
                 ${sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
@@ -452,7 +452,7 @@ const AdminLayout = () => {
                 {/* Top App Bar */}
                 <header className={`
                     h-20 flex-shrink-0 flex items-center justify-between px-6 lg:px-10 z-30 transition-all duration-300
-                    ${scrolled ? 'bg-[#111111]/80 backdrop-blur-xl border-b border-white/5 shadow-lg' : 'bg-transparent'}
+                    ${scrolled ? 'bg-dark/80 backdrop-blur-xl border-b border-white/5 shadow-lg' : 'bg-transparent'}
                 `}>
                     <div className="flex items-center gap-4 flex-1">
                         <button
@@ -491,7 +491,7 @@ const AdminLayout = () => {
                 </header>
 
                 {/* Subpage Router View */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar bg-[#0a0a0a]">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar bg-dark">
                     <div className="p-6 lg:p-10 max-w-7xl mx-auto w-full min-h-full pb-24">
                         <div className="mb-6 lg:hidden">
                             <h1 className="text-2xl font-bold">{currentRouteName}</h1>

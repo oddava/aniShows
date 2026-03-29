@@ -1,15 +1,15 @@
 @layer components {
   .forums-page {
-    --forums-bg: #121212;
-    --forums-surface: #1b1b1b;
-    --forums-surface-soft: #202020;
+    --forums-bg: var(--color-dark);
+    --forums-surface: var(--color-dark-100);
+    --forums-surface-soft: var(--color-dark-200);
     --forums-thread-bg: var(--forums-surface);
-    --forums-border: #2d2d2d;
+    --forums-border: var(--color-border);
     --forums-text: #f3f4f6;
     --forums-text-muted: #a3a3a3;
     --forums-meta: #8c8c8c;
     --forums-accent: var(--color-accent);
-    --forums-accent-weak: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    --forums-accent-weak: color-mix(in srgb, var(--color-accent) 26%, transparent);
     --forums-accent-hover: var(--color-accent-dark);
 
     min-height: 100vh;

@@ -87,7 +87,7 @@ const OptimizedImage = memo(function OptimizedImage({
     aspectRatio: aspectRatio,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: 'rgba(26, 26, 26, 1)', // bg-dark color
+    backgroundColor: 'var(--color-dark-100)',
   };
 
   const imageStyle = {
@@ -103,7 +103,7 @@ const OptimizedImage = memo(function OptimizedImage({
   const skeletonStyle = {
     position: 'absolute',
     inset: 0,
-    backgroundColor: 'rgba(45, 45, 45, 1)', // bg-dark-50 color
+    backgroundColor: 'var(--color-dark-300)',
     animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
     opacity: isLoaded ? 0 : 1,
     transition: 'opacity 0.3s ease-in-out',
@@ -135,7 +135,7 @@ const OptimizedImage = memo(function OptimizedImage({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(45, 45, 45, 1)',
+            backgroundColor: 'var(--color-dark-300)',
             color: '#666',
             fontSize: '0.875rem',
           }}

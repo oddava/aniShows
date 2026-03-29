@@ -50,7 +50,7 @@ const appendCacheBuster = (url) => {
 export const getImageUrl = (url, title = 'Anime') => {
     const normalizedUrl = coerceUrl(url);
     if (!normalizedUrl) {
-        return `https://placehold.co/300x450/1a1a1a/8b5cf6?text=${encodeURIComponent(title)}`;
+        return `https://placehold.co/10131b/75698d?text=${encodeURIComponent(title)}`;
     }
 
     let cleanUrl = normalizedUrl;

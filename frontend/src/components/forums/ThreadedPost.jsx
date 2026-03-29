@@ -87,7 +87,7 @@ const ThreadedPost = ({
                 <div
                     id={`post-${post.id}`}
                     className={`relative rounded-[20px] p-4 border transition-all duration-500 ${isFocused
-                        ? 'bg-accent/[0.03] border-accent/40 ring-1 ring-accent/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]'
+                        ? 'bg-accent/[0.03] border-accent/40 ring-1 ring-accent/20 shadow-[0_0_20px_rgba(117,105,141,0.08)]'
                         : isOP
                             ? 'bg-accent/[0.05] border-accent/20 hover:border-accent/30'
                             : 'bg-white/[0.02] border-white/[0.05] hover:border-white/[0.08]'

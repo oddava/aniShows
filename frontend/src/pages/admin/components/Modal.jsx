@@ -42,7 +42,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
       onClick={handleBackdropClick}
     >
       <div
-        className={`${sizeClasses[size]} w-full bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/10 rounded-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-hidden flex flex-col`}
+        className={`${sizeClasses[size]} w-full bg-gradient-to-br from-dark-100 to-dark border border-white/10 rounded-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-hidden flex flex-col`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (

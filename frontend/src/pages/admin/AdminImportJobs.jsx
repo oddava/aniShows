@@ -275,7 +275,7 @@ const AdminImportJobs = () => {
               className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
             >
               {statusOptions.map(option => (
-                <option key={option.value} value={option.value} className="bg-[#1a1a1a]">
+                <option key={option.value} value={option.value} className="bg-dark-100">
                   {option.label}
                 </option>
               ))}
@@ -494,7 +494,7 @@ const AdminImportJobs = () => {
               value={triggerSource}
               onChange={(e) => setTriggerSource(e.target.value)}
               disabled={isTriggering}
-              className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+              className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
             >
               <option value="anilist_sync">AniList Sync</option>
               <option value="offline_catalog">Anime Offline Database</option>
@@ -510,7 +510,7 @@ const AdminImportJobs = () => {
                   value={triggerSyncType}
                   onChange={(e) => setTriggerSyncType(e.target.value)}
                   disabled={isTriggering}
-                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
                 >
                   <option value="trending">Trending Anime</option>
                   <option value="seasonal">Current Season</option>
@@ -530,7 +530,7 @@ const AdminImportJobs = () => {
                   value={triggerLimit}
                   onChange={(e) => setTriggerLimit(e.target.value)}
                   disabled={isTriggering}
-                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
                 />
               </div>
             </>
@@ -546,7 +546,7 @@ const AdminImportJobs = () => {
                   onChange={(e) => setTriggerReleaseTag(e.target.value)}
                   disabled={isTriggering}
                   placeholder="latest"
-                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
                 />
               </div>
               <div>
@@ -560,7 +560,7 @@ const AdminImportJobs = () => {
                   onChange={(e) => setTriggerImportLimit(e.target.value)}
                   disabled={isTriggering}
                   placeholder="Leave blank to import full dataset"
-                  className="w-full px-4 py-2 bg-[#1a1a1a] border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
                 />
               </div>
               <label className="flex items-center gap-2 text-white/80 text-sm">
@@ -569,7 +569,7 @@ const AdminImportJobs = () => {
                   checked={triggerEnrichment}
                   onChange={(e) => setTriggerEnrichment(e.target.checked)}
                   disabled={isTriggering}
-                  className="rounded border-white/20 bg-[#1a1a1a]"
+                  className="rounded border-white/20 bg-dark-100"
                 />
                 Queue metadata enrichment after import (synopsis, characters, staff, stats)
               </label>

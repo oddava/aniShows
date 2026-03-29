@@ -162,7 +162,7 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                 {/* Header */}
                 <div className="relative h-16 sm:h-20 flex items-center justify-end px-4 sm:px-6 border-b border-white/5 flex-shrink-0"
                     style={{
-                        backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.15)'
+                        backgroundColor: accentColor ? `${accentColor}20` : 'rgba(117,105,141,0.15)'
                     }}
                 >
                     <button
@@ -192,8 +192,8 @@ export default function CharacterModal({ role, onClose, accentColor }) {
                             <span
                                 className="inline-block mt-2 sm:mt-3 px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full text-center w-full"
                                 style={{
-                                    backgroundColor: accentColor ? `${accentColor}20` : 'rgba(139,92,246,0.2)',
-                                    color: accentColor || '#8b5cf6'
+                                    backgroundColor: accentColor ? `${accentColor}20` : 'rgba(117,105,141,0.2)',
+                                    color: accentColor || '#75698d'
                                 }}
                             >
                                 {characterRole}

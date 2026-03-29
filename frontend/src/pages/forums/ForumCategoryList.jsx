@@ -20,7 +20,7 @@ const CATEGORY_DOT_COLORS = [
     '#4ade80',
     '#f59e0b',
     '#f472b6',
-    '#a78bfa',
+    '#9489ac',
 ];
 
 const getThreadPreview = (content) => {
