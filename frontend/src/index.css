@@ -6,37 +6,37 @@
 
 :root {
   color-scheme: dark;
-  --color-accent-base: #6c558f;
-  --color-surface-base: color-mix(in srgb, #0a0710 89%, var(--color-accent-base) 11%);
-  --color-surface-deep: color-mix(in srgb, #0e0915 86%, var(--color-accent-base) 14%);
-  --color-surface-1-base: color-mix(in srgb, #15101d 82%, var(--color-accent-base) 18%);
-  --color-surface-2-base: color-mix(in srgb, #1a1423 78%, var(--color-accent-base) 22%);
-  --color-surface-3-base: color-mix(in srgb, #221a2d 74%, var(--color-accent-base) 26%);
-  --color-surface-4-base: color-mix(in srgb, #2a2036 70%, var(--color-accent-base) 30%);
-  --color-border-subtle: color-mix(in srgb, var(--color-accent-base) 7%, transparent);
-  --color-border-soft: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
-  --color-border-base: color-mix(in srgb, var(--color-accent-base) 14%, transparent);
-  --color-border-strong-base: color-mix(in srgb, var(--color-accent-base) 22%, transparent);
-  --color-border-emphasis: color-mix(in srgb, var(--color-accent-base) 30%, transparent);
-  --color-overlay-soft: color-mix(in srgb, var(--color-accent-base) 4%, transparent);
-  --color-overlay-muted: color-mix(in srgb, var(--color-accent-base) 6%, transparent);
-  --color-overlay-base: color-mix(in srgb, var(--color-accent-base) 8%, transparent);
-  --color-overlay-strong: color-mix(in srgb, var(--color-accent-base) 12%, transparent);
+  --color-accent-base: #8b5cf6;
+  --color-surface-base: color-mix(in srgb, #0b0c0f 96%, var(--color-accent-base) 4%);
+  --color-surface-deep: color-mix(in srgb, #0d0e12 95%, var(--color-accent-base) 5%);
+  --color-surface-1-base: color-mix(in srgb, #121317 94%, var(--color-accent-base) 6%);
+  --color-surface-2-base: color-mix(in srgb, #17181d 91%, var(--color-accent-base) 9%);
+  --color-surface-3-base: color-mix(in srgb, #1d1e24 88%, var(--color-accent-base) 12%);
+  --color-surface-4-base: color-mix(in srgb, #23252b 85%, var(--color-accent-base) 15%);
+  --color-border-subtle: color-mix(in srgb, var(--color-accent-base) 3%, transparent);
+  --color-border-soft: color-mix(in srgb, var(--color-accent-base) 5%, transparent);
+  --color-border-base: color-mix(in srgb, var(--color-accent-base) 8%, transparent);
+  --color-border-strong-base: color-mix(in srgb, var(--color-accent-base) 12%, transparent);
+  --color-border-emphasis: color-mix(in srgb, var(--color-accent-base) 20%, transparent);
+  --color-overlay-soft: color-mix(in srgb, var(--color-accent-base) 2%, transparent);
+  --color-overlay-muted: color-mix(in srgb, var(--color-accent-base) 4%, transparent);
+  --color-overlay-base: color-mix(in srgb, var(--color-accent-base) 6%, transparent);
+  --color-overlay-strong: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
   --color-surface-glass: color-mix(in srgb, var(--color-surface-2-base) 86%, transparent);
   --color-surface-overlay: color-mix(in srgb, var(--color-surface-1-base) 95%, transparent);
   --color-navbar-bg:
     linear-gradient(
       135deg,
-      color-mix(in srgb, #191225 64%, var(--color-accent-base) 36%) 0%,
-      color-mix(in srgb, #171021 68%, var(--color-accent-base) 32%) 48%,
-      color-mix(in srgb, #130d1c 72%, var(--color-accent-base) 28%) 100%
+      color-mix(in srgb, #15161a 90%, var(--color-accent-base) 10%) 0%,
+      color-mix(in srgb, #111215 92%, var(--color-accent-base) 8%) 48%,
+      color-mix(in srgb, #0c0d10 94%, var(--color-accent-base) 6%) 100%
     );
-  --color-navbar-border: color-mix(in srgb, var(--color-accent-base) 18%, transparent);
-  --color-navbar-shadow: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
-  --color-scrollbar-thumb: color-mix(in srgb, var(--color-accent-base) 22%, var(--color-surface-3-base));
-  --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-accent-base) 30%, var(--color-surface-4-base));
-  --color-accent-text: #9b78ea;
-  --color-accent-text-hover: #b08df6;
+  --color-navbar-border: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
+  --color-navbar-shadow: color-mix(in srgb, var(--color-accent-base) 5%, transparent);
+  --color-scrollbar-thumb: color-mix(in srgb, var(--color-accent-base) 15%, var(--color-surface-3-base));
+  --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-accent-base) 25%, var(--color-surface-4-base));
+  --color-accent-text: #a78bfa;
+  --color-accent-text-hover: #c4b5fd;
   --color-focus-ring: color-mix(in srgb, var(--color-accent) 24%, transparent);
   --color-focus-ring-strong: color-mix(in srgb, var(--color-accent) 44%, transparent);
 }
@@ -54,13 +54,13 @@
   --color-border: var(--color-border-base);
   --color-border-strong: var(--color-border-strong-base);
   --color-text-muted: #9ca3af;
-  --color-gray-700: color-mix(in srgb, #72677f 82%, var(--color-accent-base) 18%);
-  --color-gray-800: color-mix(in srgb, #453751 74%, var(--color-accent-base) 26%);
-  --color-gray-900: color-mix(in srgb, #2f243b 66%, var(--color-accent-base) 34%);
+  --color-gray-700: color-mix(in srgb, #3f3f46 90%, var(--color-accent-base) 10%);
+  --color-gray-800: color-mix(in srgb, #27272a 92%, var(--color-accent-base) 8%);
+  --color-gray-900: color-mix(in srgb, #18181b 94%, var(--color-accent-base) 6%);
 
-  --color-accent: #75698d;
-  --color-accent-light: #9489ac;
-  --color-accent-dark: #615674;
+  --color-accent: #8b5cf6;
+  --color-accent-light: #a78bfa;
+  --color-accent-dark: #7c3aed;
 
   --font-sans: "Inter", system-ui, sans-serif;
 }
