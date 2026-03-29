@@ -204,16 +204,16 @@ jobs:
             --cov=apps \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=30 \
-            -n auto \
-            --dist=worksteal \
+            --no-cov-on-fail \
+            -n 2 \
+            --dist=loadscope \
             --nomigrations \
             --maxfail=1 \
-            -q \
-            --durations=25
+            -q
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
           name: coverage-report
           path: coverage.xml
