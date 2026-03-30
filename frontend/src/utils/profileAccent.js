@@ -1,4 +1,4 @@
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
 
 export function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
@@ -92,8 +92,8 @@ export function toneProfileAccentColor(value) {
 
     const toned = {
         hue: hsl.hue,
-        saturation: Math.min(hsl.saturation, 0.58),
-        lightness: Math.min(hsl.lightness, 0.54),
+        saturation: Math.min(hsl.saturation, 0.82),
+        lightness: Math.min(hsl.lightness, 0.64),
     };
 
     return hslToHex(toned);
