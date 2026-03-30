@@ -199,6 +199,7 @@ function AnimeCard({
     );
 
     const [imageLoaded, setImageLoaded] = useState(false);
+    const imageRef = useRef(null);
     const statusMenuRef = useRef(null);
 
     // Memoized computed values - use optimized images with srcset
@@ -254,6 +255,17 @@ function AnimeCard({
 
     useEffect(() => {
         setImageLoaded(false);
+    }, [imageUrl]);
+
+    useEffect(() => {
+        const frame = requestAnimationFrame(() => {
+            const img = imageRef.current;
+            if (img?.complete) {
+                setImageLoaded(true);
+            }
+        });
+
+        return () => cancelAnimationFrame(frame);
     }, [imageUrl]);
 
     useEffect(() => {
@@ -404,10 +416,12 @@ function AnimeCard({
                     <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
                 )}
                 <img
+                    ref={imageRef}
                     src={imageUrl}
                     srcSet={imageSrcSet}
                     sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                     alt={anime.title}
+                    draggable={false}
                     loading={loadingStrategy.loading}
                     decoding={loadingStrategy.decoding}
                     onLoad={() => setImageLoaded(true)}
@@ -436,10 +450,12 @@ function AnimeCard({
                             <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
                         )}
                         <img
+                            ref={imageRef}
                             src={imageUrl}
                             srcSet={imageSrcSet}
                             sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                             alt={anime.title}
+                            draggable={false}
                             loading={loadingStrategy.loading}
                             decoding={loadingStrategy.decoding}
                             onLoad={() => setImageLoaded(true)}

@@ -1,8 +1,7 @@
-import React, { useMemo, lazy, Suspense } from 'react';
-import { Heart, List, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star } from 'lucide-react';
+import React, { lazy, Suspense } from 'react';
+import { Heart, MessageSquare, Lock, Search, LayoutGrid, LayoutList, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
-import ProfileAnimeCard, { ProfileAnimeCardSkeleton } from '../ProfileAnimeCard';
 import ReviewCard from '../ReviewCard';
 import DraggableFavoritesGrid from '../DraggableFavoritesGrid';
 import ProfileStats from './ProfileStats';
@@ -32,7 +31,6 @@ export default function ProfileContent({
     isOwnProfile,
     targetUsername,
     displayUser,
-    profileLoading,
     favoritesData,
     favoritesLoading,
     isFetchingNextFavorites,
@@ -306,7 +304,7 @@ function AnimeListView({
     if (listsLoading) {
         return (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4">
-                {Array(14).fill(0).map((_, i) => <ProfileAnimeCardSkeleton key={i} />)}
+                {Array(14).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
             </div>
         );
     }
@@ -327,11 +325,10 @@ function AnimeListView({
             <div className="relative">
                 <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4 transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
                     {filteredListItems.map((item) => (
-                        <ProfileAnimeCard
+                        <AnimeCard
                             key={item.id}
                             anime={item.anime}
-                            episodesWatched={item.episodes_watched}
-                            showProgress={listStatusFilter === 'Watching'}
+                            userListEntry={item}
                         />
                     ))}
                 </div>
