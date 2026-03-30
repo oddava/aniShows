@@ -55,8 +55,8 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
         const today = new Date();
         const result = [];
 
-        // Create 26 weeks of data in chronological order (oldest -> newest)
-        for (let week = 25; week >= 0; week--) {
+        // Create 52 weeks of data in chronological order (oldest -> newest)
+        for (let week = 51; week >= 0; week--) {
             const weekData = [];
             for (let day = 0; day < 7; day++) {
                 const date = new Date(today);

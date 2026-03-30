@@ -77,40 +77,42 @@ function CurrentlyWatchingGrid({ watchingItems }) {
         <div className="mb-10">
             <div className="ui-surface-subtle p-5">
                 <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
-                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4">
                     {watchingItems.map((item) => {
                         const eps = item.episodes_watched || 0;
                         const total = item.anime?.episode_count || 0;
                         const progress = total > 0 ? (eps / total) * 100 : 0;
 
                         return (
-                            <Link
-                                key={item.id}
-                                to={`/anime/${item.anime?.slug}`}
-                                className="relative aspect-[2/3] rounded-xl overflow-hidden border border-gray-800 bg-dark-200"
-                            >
-                                <AnimeMediaImage
-                                    anime={item.anime}
-                                    kind="cover"
-                                    size="small"
-                                    alt={item.anime?.title}
-                                    className="w-full h-full object-cover"
-                                />
-                                <div className="absolute bottom-0 left-0 right-0 h-1 bg-dark-400/80 z-20">
-                                    <div
-                                        className="h-full bg-accent transition-[width] duration-300"
-                                        style={{ width: `${progress}%` }}
+                            <div key={item.id} className="group relative">
+                                <Link
+                                    to={`/anime/${item.anime?.slug}`}
+                                    className="block relative aspect-[2/3] bg-dark-200"
+                                >
+                                    <AnimeMediaImage
+                                        anime={item.anime}
+                                        kind="cover"
+                                        size="small"
+                                        alt={item.anime?.title}
+                                        className="w-full h-full object-cover"
                                     />
-                                </div>
-                                <div className="absolute inset-x-0 bottom-0 z-10 bg-dark/85 p-2.5">
-                                    <p className="mb-1 line-clamp-2 text-[10px] font-black leading-tight text-white">
-                                        {item.anime?.title}
+                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-dark-400/80 z-20">
+                                        <div
+                                            className="h-full bg-accent transition-[width] duration-300"
+                                            style={{ width: `${progress}%` }}
+                                        />
+                                    </div>
+                                </Link>
+
+                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
+                                    <p className="text-[11px] font-bold text-white max-w-[180px] truncate">{item.anime?.title}</p>
+                                    <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-accent">
+                                        {item.anime?.anime_type} • {eps} / {total || '?'} eps
                                     </p>
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-                                        {eps} / {total || '?'} eps
-                                    </p>
+                                    {/* Arrow */}
+                                    <div className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 border-b border-r border-gray-700 bg-dark-100"></div>
                                 </div>
-                            </Link>
+                            </div>
                         );
                     })}
                 </div>
@@ -142,29 +144,32 @@ function FavoritesGrid({ favoritesData }) {
         <div className="mb-10">
             <div className="ui-surface-subtle p-5">
                 <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
-                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4">
                     {favorites.map((fav) => (
-                        <Link
-                            key={fav.id}
-                            to={`/anime/${fav.anime?.slug}`}
-                            className="relative aspect-[2/3] rounded-xl overflow-hidden border border-gray-800 bg-dark-200"
-                        >
-                            <AnimeMediaImage
-                                anime={fav.anime}
-                                kind="cover"
-                                size="small"
-                                alt={fav.anime?.title}
-                                className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-x-0 bottom-0 z-10 bg-dark/85 p-2.5">
-                                <p className="mb-1 line-clamp-2 text-[10px] font-black leading-tight text-white">
-                                    {fav.anime?.title}
+                        <div key={fav.id} className="group relative">
+                            <Link
+                                to={`/anime/${fav.anime?.slug}`}
+                                className="block relative aspect-[2/3] bg-dark-200"
+                            >
+                                <AnimeMediaImage
+                                    anime={fav.anime}
+                                    kind="cover"
+                                    size="small"
+                                    alt={fav.anime?.title}
+                                    className="w-full h-full object-cover"
+                                />
+                            </Link>
+
+                            {/* Floating Tooltip */}
+                            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
+                                <p className="text-[11px] font-bold text-white max-w-[180px] truncate">{fav.anime?.title}</p>
+                                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                    {fav.anime?.anime_type}
                                 </p>
-                                <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
-                                    {fav.anime?.type || 'Anime'}
-                                </p>
+                                {/* Arrow */}
+                                <div className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 border-b border-r border-gray-700 bg-dark-100"></div>
                             </div>
-                        </Link>
+                        </div>
                     ))}
                 </div>
             </div>
@@ -372,7 +377,7 @@ export default function OverviewTab({
             <TopStatsRow user={displayUser} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-                <div className="lg:col-span-5 space-y-8">
+                <div className="lg:col-span-6 space-y-8">
                     {displayUser?.bio ? (
                         <div className="ui-surface-subtle p-6">
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">About</h3>
@@ -412,7 +417,7 @@ export default function OverviewTab({
                     <GenreOverviewSidebar username={targetUsername} isPrivate={isPrivate} />
                 </div>
 
-                <div className="lg:col-span-7 min-h-[400px]">
+                <div className="lg:col-span-6 min-h-[400px]">
                     <FavoritesGrid favoritesData={favoritesData} />
 
                     <CurrentlyWatchingGrid watchingItems={watchingItems} />
