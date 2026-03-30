@@ -137,19 +137,19 @@ export default function ProfileHeader({
 
                             <div className="flex items-center gap-4 text-sm font-medium mt-1">
                                 <button
-                                    onClick={() => onOpenFollowersModal('followers')}
-                                    className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
-                                >
-                                    <span className="text-white font-bold">{(displayUser?.followers_count ?? 0).toLocaleString()}</span>
-                                    <span>Followers</span>
-                                </button>
-                                <span className="text-gray-600">•</span>
-                                <button
                                     onClick={() => onOpenFollowersModal('following')}
                                     className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
                                 >
                                     <span className="text-white font-bold">{(displayUser?.following_count ?? 0).toLocaleString()}</span>
                                     <span>Following</span>
+                                </button>
+                                <span className="text-gray-600">•</span>
+                                <button
+                                    onClick={() => onOpenFollowersModal('followers')}
+                                    className="text-gray-400 hover:text-white transition-colors flex items-center gap-1.5"
+                                >
+                                    <span className="text-white font-bold">{(displayUser?.followers_count ?? 0).toLocaleString()}</span>
+                                    <span>Followers</span>
                                 </button>
                             </div>
                         </div>

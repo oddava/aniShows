@@ -174,7 +174,7 @@ export default function FollowersModal({
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
-            aria-label={`${username}'s followers and following`}
+            aria-label={`${username}'s following and followers`}
         >
             <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-gray-800 bg-dark-100 shadow-xl">
                 {/* Header */}
@@ -192,18 +192,18 @@ export default function FollowersModal({
                 {/* Tabs */}
                 <div className="flex border-b border-gray-800">
                     <TabButton
-                        active={activeTab === 'followers'}
-                        onClick={() => handleTabChange('followers')}
-                        icon={<Users className="w-4 h-4" />}
-                        label="Followers"
-                        count={displayFollowersCount}
-                    />
-                    <TabButton
                         active={activeTab === 'following'}
                         onClick={() => handleTabChange('following')}
                         icon={<UserCheck className="w-4 h-4" />}
                         label="Following"
                         count={displayFollowingCount}
+                    />
+                    <TabButton
+                        active={activeTab === 'followers'}
+                        onClick={() => handleTabChange('followers')}
+                        icon={<Users className="w-4 h-4" />}
+                        label="Followers"
+                        count={displayFollowersCount}
                     />
                 </div>
 
