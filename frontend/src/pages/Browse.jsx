@@ -165,6 +165,15 @@ export default function Browse() {
     [searchParams]
   );
 
+  // Backward compatibility: seasonal filter requires year in API.
+  // Auto-fill current year for legacy URLs like ?season=winter.
+  useEffect(() => {
+    if (!currentSeason || currentYearParam) return;
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('year', new Date().getFullYear().toString());
+    setSearchParams(newParams);
+  }, [currentSeason, currentYearParam, searchParams, setSearchParams]);
+
   const isGridMode = Boolean(
     currentSearch || 
     currentGenres.length > 0 || 
@@ -487,7 +496,6 @@ export default function Browse() {
     data?.pages?.flatMap(page => page.results) || [],
     [data]
   );
-  const totalCount = data?.pages?.[0]?.count || 0;
 
   // Infinite scroll
   const observer = useRef(null);
@@ -777,16 +785,9 @@ export default function Browse() {
                   {...filterSidebarProps}
                 />
 
-                {/* Controls Bar - only show result count and view mode if in grid mode */}
+                {/* Controls Bar - only show view controls in grid mode */}
                 {isGridMode && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center gap-3">
-                      <p className="flex items-baseline gap-1.5">
-                        <span className="text-accent font-bold text-lg">{totalCount.toLocaleString()}</span>
-                        <span className="text-gray-500 text-sm">results</span>
-                      </p>
-                    </div>
-
                     <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                       <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
 

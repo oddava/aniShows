@@ -73,6 +73,9 @@ export default function TopFilterBar({
             newParams.delete(key);
         } else {
             newParams.set(key, value);
+            if (key === 'season' && !newParams.get('year')) {
+                newParams.set('year', new Date().getFullYear().toString());
+            }
         }
         setSearchParams(newParams);
     };
