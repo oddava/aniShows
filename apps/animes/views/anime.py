@@ -227,11 +227,14 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 types_list = [t.strip().lower() for t in anime_type.split(",")]
                 valid_types = [t for t in types_list if t in VALID_TYPES]
                 if valid_types:
-                    queryset = queryset.filter(anime_type__in=valid_types)
+                    type_q = Q()
+                    for t in valid_types:
+                        type_q |= Q(anime_type__iexact=t)
+                    queryset = queryset.filter(type_q)
             else:
                 type_clean = anime_type.strip().lower()
                 if type_clean in VALID_TYPES:
-                    queryset = queryset.filter(anime_type=type_clean)
+                    queryset = queryset.filter(anime_type__iexact=type_clean)
 
         studio = self.request.query_params.get("studio")
         if studio:
