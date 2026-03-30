@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
-import { Loader2, RefreshCw } from 'lucide-react';
 
 const Pill = ({ active, label, onClick }) => (
     <button
@@ -38,14 +37,9 @@ export default function AdvancedFiltersPanel({
     localFilters,
     onUpdateFilter,
     onToggleGenre,
-    hasUnappliedChanges,
-    onApplyFilters,
-    onResetFilters,
-    isApplying,
     typeOptions,
     statusOptions,
-    seasonOptions,
-    yearOptions
+    seasonOptions
 }) {
     const [genreSearch, setGenreSearch] = useState('');
     const [showAllGenres, setShowAllGenres] = useState(false);
@@ -54,13 +48,6 @@ export default function AdvancedFiltersPanel({
         g.name.toLowerCase().includes(genreSearch.toLowerCase())
     );
     const displayedGenres = showAllGenres ? filteredGenres : filteredGenres.slice(0, 24);
-
-    const handleRatingChange = (e) => {
-        // e.target.value is the max value, min is 0. 
-        // A simple range slider gives one value, but we need dual thumb ideally.
-        // The prompt says "Rating should be a proper range slider".
-        // Let's implement a simple native dual thumb using two inputs over each other, or just a custom one.
-    };
 
     if (!isOpen) return null;
 
@@ -230,32 +217,6 @@ export default function AdvancedFiltersPanel({
                 </div>
             </div>
 
-            {/* Footer Action Bar */}
-            <div className="bg-dark-200/50 border-t border-gray-800/50 p-6 flex flex-col items-center">
-                <button
-                    onClick={onApplyFilters}
-                    disabled={isApplying || !hasUnappliedChanges}
-                    className="w-full py-4 text-sm font-bold flex items-center justify-center gap-2 text-white bg-accent hover:bg-accent-dark rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest"
-                >
-                    {isApplying ? (
-                        <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Applying...
-                        </>
-                    ) : (
-                        'Apply Filters'
-                    )}
-                </button>
-                {hasUnappliedChanges && (
-                    <button
-                        onClick={onResetFilters}
-                        className="mt-4 text-xs font-bold text-gray-400 hover:text-white transition-colors uppercase tracking-widest"
-                    >
-                        Discard Changes
-                    </button>
-                )}
-            </div>
-            
             {/* Custom CSS for hiding the default thumb of the range input to make dual slider work visually */}
             <style>{`
                 input[type=range]::-webkit-slider-thumb {
@@ -292,12 +253,7 @@ AdvancedFiltersPanel.propTypes = {
     localFilters: PropTypes.object.isRequired,
     onUpdateFilter: PropTypes.func.isRequired,
     onToggleGenre: PropTypes.func.isRequired,
-    hasUnappliedChanges: PropTypes.bool.isRequired,
-    onApplyFilters: PropTypes.func.isRequired,
-    onResetFilters: PropTypes.func.isRequired,
-    isApplying: PropTypes.bool,
     typeOptions: PropTypes.array.isRequired,
     statusOptions: PropTypes.array.isRequired,
-    seasonOptions: PropTypes.array.isRequired,
-    yearOptions: PropTypes.array.isRequired
+    seasonOptions: PropTypes.array.isRequired
 };

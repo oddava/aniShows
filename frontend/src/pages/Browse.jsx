@@ -67,7 +67,6 @@ export default function Browse() {
   const [titleLanguage, setTitleLanguage] = useState(() => localStorage.getItem('title_language') || 'en');
   const [activeTab, setActiveTab] = useState('popular');
   const [isTabSwitching, setIsTabSwitching] = useState(false);
-  const [isApplyingFilters, setIsApplyingFilters] = useState(false);
   const [minLoadingTime, setMinLoadingTime] = useState(false);
 
   const [collapsedSections, setCollapsedSections] = useState(() => {
@@ -118,8 +117,6 @@ export default function Browse() {
     maxRating: currentMaxRating,
     studio: currentStudio,
   });
-
-  const [hasUnappliedChanges, setHasUnappliedChanges] = useState(false);
 
   // Clear all filters function - defined early for useKeyboardShortcuts
   const clearAllFilters = useCallback(() => {
@@ -173,66 +170,7 @@ export default function Browse() {
       maxRating: currentMaxRating,
       studio: currentStudio,
     });
-    setHasUnappliedChanges(false);
   }, [searchParams]);
-
-  // Check for unapplied changes
-  useEffect(() => {
-    const hasChanges =
-      JSON.stringify(localFilters.genres.sort()) !== JSON.stringify(currentGenres.sort()) ||
-      localFilters.type !== currentTypes ||
-      localFilters.status !== currentStatuses ||
-      localFilters.season !== currentSeason ||
-      localFilters.year !== currentYearParam ||
-      localFilters.minRating !== currentMinRating ||
-      localFilters.maxRating !== currentMaxRating ||
-      localFilters.studio !== currentStudio;
-    setHasUnappliedChanges(hasChanges);
-  }, [localFilters, currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio]);
-
-  // Apply filters to URL
-  const applyFilters = useCallback(() => {
-    const newParams = new URLSearchParams(searchParams);
-
-    if (localFilters.genres.length > 0) {
-      newParams.set('genre', localFilters.genres.join(','));
-    } else {
-      newParams.delete('genre');
-    }
-
-    ['type', 'status', 'season', 'year', 'min_rating', 'max_rating', 'studio'].forEach(key => {
-      const value = localFilters[key === 'min_rating' ? 'minRating' : key === 'max_rating' ? 'maxRating' : key];
-      if (value) {
-        newParams.set(key, value);
-      } else {
-        newParams.delete(key);
-      }
-    });
-
-    setSearchParams(newParams);
-  }, [localFilters, searchParams, setSearchParams]);
-
-  const resetFilters = useCallback(() => {
-    setLocalFilters({
-      genres: currentGenres,
-      type: currentTypes,
-      status: currentStatuses,
-      season: currentSeason,
-      year: currentYearParam,
-      minRating: currentMinRating,
-      maxRating: currentMaxRating,
-      studio: currentStudio,
-    });
-  }, [currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio]);
-
-  const handleApplyFilters = useCallback(() => {
-    setIsApplyingFilters(true);
-    applyFilters();
-    setTimeout(() => {
-      setIsApplyingFilters(false);
-      setShowFilters(false);
-    }, 500);
-  }, [applyFilters]);
 
   // Update active tab based on params
   useEffect(() => {
@@ -526,17 +464,44 @@ export default function Browse() {
 
   const updateLocalFilter = useCallback((key, value) => {
     setLocalFilters(prev => ({ ...prev, [key]: value }));
-  }, []);
+
+    const keyMap = {
+      type: 'type',
+      status: 'status',
+      season: 'season',
+      year: 'year',
+      minRating: 'min_rating',
+      maxRating: 'max_rating',
+      studio: 'studio',
+    };
+    const paramKey = keyMap[key];
+    if (!paramKey) return;
+
+    const newParams = new URLSearchParams(searchParams);
+    if (value) {
+      newParams.set(paramKey, value);
+    } else {
+      newParams.delete(paramKey);
+    }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
 
   const toggleLocalGenre = useCallback((genreSlug) => {
-    setLocalFilters(prev => {
-      const current = prev.genres;
-      const updated = current.includes(genreSlug)
-        ? current.filter(g => g !== genreSlug)
-        : [...current, genreSlug];
-      return { ...prev, genres: updated };
-    });
-  }, []);
+    const current = searchParams.get('genre')?.split(',').filter(Boolean) || [];
+    const updated = current.includes(genreSlug)
+      ? current.filter(g => g !== genreSlug)
+      : [...current, genreSlug];
+
+    setLocalFilters(prev => ({ ...prev, genres: updated }));
+
+    const newParams = new URLSearchParams(searchParams);
+    if (updated.length > 0) {
+      newParams.set('genre', updated.join(','));
+    } else {
+      newParams.delete('genre');
+    }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
 
   const hasActiveFilters = currentGenres.length > 0 || currentTypes || currentStatuses || currentStudio || currentSeason || currentYearParam || currentMinRating || currentMaxRating;
 
@@ -551,9 +516,6 @@ export default function Browse() {
     onToggleSection: toggleSection,
     onUpdateFilter: updateLocalFilter,
     onToggleGenre: toggleLocalGenre,
-    hasUnappliedChanges,
-    onApplyFilters: applyFilters,
-    onResetFilters: resetFilters,
     typeOptions: TYPE_OPTIONS,
     statusOptions: STATUS_OPTIONS,
     seasonOptions: SEASON_OPTIONS,
@@ -585,15 +547,12 @@ export default function Browse() {
                   yearOptions={YEAR_OPTIONS}
                   searchInputRef={searchInputRef}
                   onOpenMobileFilters={() => setShowFilters(!showFilters)}
-                  hasActiveFilters={hasActiveFilters || hasUnappliedChanges}
+                  hasActiveFilters={hasActiveFilters}
                 />
 
                 <AdvancedFiltersPanel
                   isOpen={showFilters}
                   {...filterSidebarProps}
-                  isApplying={isApplyingFilters}
-                  onApplyFilters={handleApplyFilters}
-                  onResetFilters={resetFilters}
                 />
 
                 {/* Controls Bar - only show result count and view mode if in grid mode */}
