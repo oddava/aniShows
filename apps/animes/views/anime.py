@@ -71,7 +71,7 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 class AnimeViewSet(ReadOnlyModelViewSet):
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
-    _PUBLIC_CACHE_VERSION = "v2"
+    _PUBLIC_CACHE_VERSION = "v3"
 
     _LIST_FIELDS = (
         "id",
@@ -262,6 +262,51 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             except (ValueError, TypeError):
                 pass
 
+        source_material = self.request.query_params.get("source")
+        if source_material:
+            queryset = queryset.filter(source_material__iexact=source_material.strip())
+
+        tags = []
+        tags_param = self.request.query_params.get("tags")
+        if tags_param:
+            tags = [tag.strip().lower() for tag in tags_param.split(",") if tag.strip()]
+            for tag in tags:
+                queryset = queryset.filter(tags__contains=[tag])
+
+        min_episodes = self.request.query_params.get("min_episodes")
+        max_episodes = self.request.query_params.get("max_episodes")
+        if min_episodes:
+            try:
+                min_episodes_val = int(min_episodes)
+                if 0 <= min_episodes_val <= 10_000:
+                    queryset = queryset.filter(episode_count__gte=min_episodes_val)
+            except (ValueError, TypeError):
+                pass
+        if max_episodes:
+            try:
+                max_episodes_val = int(max_episodes)
+                if 0 <= max_episodes_val <= 10_000:
+                    queryset = queryset.filter(episode_count__lte=max_episodes_val)
+            except (ValueError, TypeError):
+                pass
+
+        min_duration = self.request.query_params.get("min_duration")
+        max_duration = self.request.query_params.get("max_duration")
+        if min_duration:
+            try:
+                min_duration_val = int(min_duration)
+                if 0 <= min_duration_val <= 1_000:
+                    queryset = queryset.filter(duration_minutes__gte=min_duration_val)
+            except (ValueError, TypeError):
+                pass
+        if max_duration:
+            try:
+                max_duration_val = int(max_duration)
+                if 0 <= max_duration_val <= 1_000:
+                    queryset = queryset.filter(duration_minutes__lte=max_duration_val)
+            except (ValueError, TypeError):
+                pass
+
         season = self.request.query_params.get("season")
         year = self.request.query_params.get("year")
         if year:
@@ -284,6 +329,23 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                         queryset = queryset.filter(release_date__year=year_int)
             except (ValueError, TypeError):
                 pass
+        else:
+            min_year = self.request.query_params.get("min_year")
+            max_year = self.request.query_params.get("max_year")
+            if min_year:
+                try:
+                    min_year_int = int(min_year)
+                    if 1980 <= min_year_int <= 2050:
+                        queryset = queryset.filter(release_date__year__gte=min_year_int)
+                except (ValueError, TypeError):
+                    pass
+            if max_year:
+                try:
+                    max_year_int = int(max_year)
+                    if 1980 <= max_year_int <= 2050:
+                        queryset = queryset.filter(release_date__year__lte=max_year_int)
+                except (ValueError, TypeError):
+                    pass
 
         sort = self.request.query_params.get("sort", "popular")
         sort_clean = sort.strip().lower()
@@ -305,7 +367,13 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         elif sort == "upcoming":
             queryset = queryset.filter(status="Upcoming")
         elif sort == "popular":
-            if not season and not year and not search:
+            has_temporal_filter = bool(
+                season
+                or year
+                or self.request.query_params.get("min_year")
+                or self.request.query_params.get("max_year")
+            )
+            if not has_temporal_filter and not search:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             else:
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))

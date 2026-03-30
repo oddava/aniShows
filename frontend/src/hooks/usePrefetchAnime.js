@@ -20,6 +20,7 @@ export function usePrefetchAnime() {
             'anime',
             'list',
             currentParams.genres?.join(',') || '',
+            currentParams.tags?.join(',') || '',
             currentParams.sort || 'popular',
             currentParams.search || '',
             currentParams.type || '',
@@ -29,6 +30,13 @@ export function usePrefetchAnime() {
             currentParams.year || '',
             currentParams.minRating || '',
             currentParams.maxRating || '',
+            currentParams.source || '',
+            currentParams.minEpisodes || '',
+            currentParams.maxEpisodes || '',
+            currentParams.minDuration || '',
+            currentParams.maxDuration || '',
+            currentParams.minYear || '',
+            currentParams.maxYear || '',
         ];
 
         // Prefetch with shorter stale time since it's the next page
@@ -39,6 +47,7 @@ export function usePrefetchAnime() {
                     page: pageParam,
                     page_size: currentParams.pageSize || 12,
                     genre: currentParams.genres?.length > 0 ? currentParams.genres.join(',') : undefined,
+                    tags: currentParams.tags?.length > 0 ? currentParams.tags.join(',') : undefined,
                     sort: currentParams.sort,
                     q: currentParams.search || undefined,
                     type: currentParams.type || undefined,
@@ -48,6 +57,13 @@ export function usePrefetchAnime() {
                     year: currentParams.year || undefined,
                     min_rating: currentParams.minRating || undefined,
                     max_rating: currentParams.maxRating || undefined,
+                    source: currentParams.source || undefined,
+                    min_episodes: currentParams.minEpisodes || undefined,
+                    max_episodes: currentParams.maxEpisodes || undefined,
+                    min_duration: currentParams.minDuration || undefined,
+                    max_duration: currentParams.maxDuration || undefined,
+                    min_year: currentParams.minYear || undefined,
+                    max_year: currentParams.maxYear || undefined,
                 }).then(res => res.data),
             staleTime: 1000 * 60 * 2, // 2 minutes for prefetched data
         });

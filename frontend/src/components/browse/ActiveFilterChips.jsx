@@ -1,4 +1,4 @@
-import { X, SlidersHorizontal } from 'lucide-react';
+import { X } from 'lucide-react';
 import PropTypes from 'prop-types';
 
 export default function ActiveFilterChips({
@@ -10,9 +10,18 @@ export default function ActiveFilterChips({
   currentMaxRating,
   currentStudio,
   currentGenres,
+  currentTags,
+  currentSource,
+  currentMinEpisodes,
+  currentMaxEpisodes,
+  currentMinDuration,
+  currentMaxDuration,
+  currentMinYear,
+  currentMaxYear,
   typeOptions,
   statusOptions,
   seasonOptions,
+  sourceOptions,
   studios,
   genres,
   onClearType,
@@ -22,6 +31,13 @@ export default function ActiveFilterChips({
   onClearMaxRating,
   onClearStudio,
   onToggleGenre,
+  onToggleTag,
+  onClearSource,
+  onClearMinEpisodes,
+  onClearMaxEpisodes,
+  onClearMinDuration,
+  onClearMaxDuration,
+  onClearYearRange,
   onClearAll,
   hasActiveFilters
 }) {
@@ -77,6 +93,54 @@ export default function ActiveFilterChips({
     });
   }
 
+  if (currentSource) {
+    filters.push({
+      key: 'source',
+      label: sourceOptions.find(s => s.value === currentSource)?.label || currentSource,
+      onClear: onClearSource,
+    });
+  }
+
+  if (currentMinEpisodes) {
+    filters.push({
+      key: 'minEpisodes',
+      label: `Episodes ≥ ${currentMinEpisodes}`,
+      onClear: onClearMinEpisodes,
+    });
+  }
+
+  if (currentMaxEpisodes) {
+    filters.push({
+      key: 'maxEpisodes',
+      label: `Episodes ≤ ${currentMaxEpisodes}`,
+      onClear: onClearMaxEpisodes,
+    });
+  }
+
+  if (currentMinDuration) {
+    filters.push({
+      key: 'minDuration',
+      label: `Duration ≥ ${currentMinDuration}m`,
+      onClear: onClearMinDuration,
+    });
+  }
+
+  if (currentMaxDuration) {
+    filters.push({
+      key: 'maxDuration',
+      label: `Duration ≤ ${currentMaxDuration}m`,
+      onClear: onClearMaxDuration,
+    });
+  }
+
+  if (currentMinYear || currentMaxYear) {
+    filters.push({
+      key: 'yearRange',
+      label: `Years ${currentMinYear || '...'} - ${currentMaxYear || '...'}`,
+      onClear: onClearYearRange,
+    });
+  }
+
   currentGenres.forEach((genre) => {
     const genreData = genres?.find(g => g.slug === genre);
     if (genreData) {
@@ -87,6 +151,15 @@ export default function ActiveFilterChips({
         isGenre: true
       });
     }
+  });
+
+  currentTags.forEach((tag) => {
+    filters.push({
+      key: `tag-${tag}`,
+      label: tag.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      onClear: () => onToggleTag(tag),
+      isGenre: true,
+    });
   });
 
   return (
@@ -129,6 +202,14 @@ ActiveFilterChips.propTypes = {
   currentMaxRating: PropTypes.string,
   currentStudio: PropTypes.string,
   currentGenres: PropTypes.arrayOf(PropTypes.string).isRequired,
+  currentTags: PropTypes.arrayOf(PropTypes.string).isRequired,
+  currentSource: PropTypes.string,
+  currentMinEpisodes: PropTypes.string,
+  currentMaxEpisodes: PropTypes.string,
+  currentMinDuration: PropTypes.string,
+  currentMaxDuration: PropTypes.string,
+  currentMinYear: PropTypes.string,
+  currentMaxYear: PropTypes.string,
   typeOptions: PropTypes.arrayOf(PropTypes.shape({
     value: PropTypes.string.isRequired,
     label: PropTypes.string.isRequired
@@ -138,6 +219,10 @@ ActiveFilterChips.propTypes = {
     label: PropTypes.string.isRequired
   })).isRequired,
   seasonOptions: PropTypes.arrayOf(PropTypes.shape({
+    value: PropTypes.string.isRequired,
+    label: PropTypes.string.isRequired
+  })).isRequired,
+  sourceOptions: PropTypes.arrayOf(PropTypes.shape({
     value: PropTypes.string.isRequired,
     label: PropTypes.string.isRequired
   })).isRequired,
@@ -156,6 +241,13 @@ ActiveFilterChips.propTypes = {
   onClearMaxRating: PropTypes.func.isRequired,
   onClearStudio: PropTypes.func.isRequired,
   onToggleGenre: PropTypes.func.isRequired,
+  onToggleTag: PropTypes.func.isRequired,
+  onClearSource: PropTypes.func.isRequired,
+  onClearMinEpisodes: PropTypes.func.isRequired,
+  onClearMaxEpisodes: PropTypes.func.isRequired,
+  onClearMinDuration: PropTypes.func.isRequired,
+  onClearMaxDuration: PropTypes.func.isRequired,
+  onClearYearRange: PropTypes.func.isRequired,
   onClearAll: PropTypes.func.isRequired,
   hasActiveFilters: PropTypes.bool.isRequired
 };
@@ -168,6 +260,15 @@ ActiveFilterChips.defaultProps = {
   currentMinRating: '',
   currentMaxRating: '',
   currentStudio: '',
+  currentTags: [],
+  currentSource: '',
+  currentMinEpisodes: '',
+  currentMaxEpisodes: '',
+  currentMinDuration: '',
+  currentMaxDuration: '',
+  currentMinYear: '',
+  currentMaxYear: '',
   studios: [],
-  genres: []
+  genres: [],
+  sourceOptions: [],
 };

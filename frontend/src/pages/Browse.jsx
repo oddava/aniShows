@@ -54,6 +54,67 @@ const SEASON_OPTIONS = [
 ];
 
 const YEAR_OPTIONS = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
+const MIN_YEAR_BOUND = 1980;
+const MAX_YEAR_BOUND = new Date().getFullYear() + 1;
+
+const SOURCE_OPTIONS = [
+  { value: 'Original', label: 'Original' },
+  { value: 'Manga', label: 'Manga' },
+  { value: 'Light Novel', label: 'Light Novel' },
+  { value: 'Visual Novel', label: 'Visual Novel' },
+  { value: 'Game', label: 'Game' },
+  { value: 'Web Manga', label: 'Web Manga' },
+  { value: 'Novel', label: 'Novel' },
+  { value: 'Music', label: 'Music' },
+  { value: 'Mixed Media', label: 'Mixed Media' },
+  { value: 'Picture Book', label: 'Picture Book' },
+  { value: 'Card Game', label: 'Card Game' },
+  { value: 'Other', label: 'Other' },
+];
+
+const ADVANCED_TAG_GROUPS = [
+  {
+    title: 'Cast / Main Cast',
+    tags: [
+      'anti-hero',
+      'ensemble cast',
+      'female protagonist',
+      'male protagonist',
+      'primarily adult cast',
+      'primarily teen cast',
+    ],
+  },
+  {
+    title: 'Theme / Fantasy',
+    tags: [
+      'isekai',
+      'magic',
+      'mythology',
+      'super power',
+      'youkai',
+      'witch',
+    ],
+  },
+  {
+    title: 'Theme / Sci Fi',
+    tags: [
+      'cyberpunk',
+      'space opera',
+      'time loop',
+      'time manipulation',
+      'post-apocalyptic',
+      'virtual world',
+    ],
+  },
+  {
+    title: 'Theme / Action',
+    tags: ['martial arts', 'swordplay', 'guns', 'battle royale', 'espionage', 'samurai'],
+  },
+  {
+    title: 'Theme / Drama',
+    tags: ['revenge', 'coming of age', 'conspiracy', 'tragedy', 'war', 'class struggle'],
+  },
+];
 
 
 
@@ -92,16 +153,35 @@ export default function Browse() {
   const currentYearParam = searchParams.get('year') || '';
   const currentMinRating = searchParams.get('min_rating') || '';
   const currentMaxRating = searchParams.get('max_rating') || '';
+  const currentSource = searchParams.get('source') || '';
+  const currentMinEpisodes = searchParams.get('min_episodes') || '';
+  const currentMaxEpisodes = searchParams.get('max_episodes') || '';
+  const currentMinDuration = searchParams.get('min_duration') || '';
+  const currentMaxDuration = searchParams.get('max_duration') || '';
+  const currentMinYear = searchParams.get('min_year') || '';
+  const currentMaxYear = searchParams.get('max_year') || '';
+  const currentTags = useMemo(() =>
+    searchParams.get('tags')?.split(',').filter(Boolean) || [],
+    [searchParams]
+  );
 
   const isGridMode = Boolean(
     currentSearch || 
     currentGenres.length > 0 || 
+    currentTags.length > 0 ||
     currentTypes || 
     currentStatuses || 
     currentSeason || 
     currentYearParam || 
     currentMinRating || 
     currentMaxRating || 
+    currentSource ||
+    currentMinEpisodes ||
+    currentMaxEpisodes ||
+    currentMinDuration ||
+    currentMaxDuration ||
+    currentMinYear ||
+    currentMaxYear ||
     currentStudio || 
     searchParams.has('sort')
   );
@@ -116,6 +196,14 @@ export default function Browse() {
     minRating: currentMinRating,
     maxRating: currentMaxRating,
     studio: currentStudio,
+    source: currentSource,
+    minEpisodes: currentMinEpisodes,
+    maxEpisodes: currentMaxEpisodes,
+    minDuration: currentMinDuration,
+    maxDuration: currentMaxDuration,
+    minYear: currentMinYear,
+    maxYear: currentMaxYear,
+    tags: currentTags,
   });
 
   // Clear all filters function - defined early for useKeyboardShortcuts
@@ -169,6 +257,14 @@ export default function Browse() {
       minRating: currentMinRating,
       maxRating: currentMaxRating,
       studio: currentStudio,
+      source: currentSource,
+      minEpisodes: currentMinEpisodes,
+      maxEpisodes: currentMaxEpisodes,
+      minDuration: currentMinDuration,
+      maxDuration: currentMaxDuration,
+      minYear: currentMinYear,
+      maxYear: currentMaxYear,
+      tags: currentTags,
     });
   }, [searchParams]);
 
@@ -281,12 +377,34 @@ export default function Browse() {
     isError,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['anime', 'list', currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYearParam, currentMinRating, currentMaxRating],
+    queryKey: [
+      'anime',
+      'list',
+      currentGenres.join(','),
+      currentTags.join(','),
+      currentSort,
+      currentSearch,
+      currentTypes,
+      currentStatuses,
+      currentStudio,
+      currentSeason,
+      currentYearParam,
+      currentMinRating,
+      currentMaxRating,
+      currentSource,
+      currentMinEpisodes,
+      currentMaxEpisodes,
+      currentMinDuration,
+      currentMaxDuration,
+      currentMinYear,
+      currentMaxYear,
+    ],
     queryFn: ({ pageParam }) =>
       animeApi.getAll({
         page: pageParam,
         page_size: 12,
         genre: currentGenres.length > 0 ? currentGenres.join(',') : undefined,
+        tags: currentTags.length > 0 ? currentTags.join(',') : undefined,
         sort: currentSort,
         q: currentSearch || undefined,
         type: currentTypes || undefined,
@@ -296,6 +414,13 @@ export default function Browse() {
         year: currentYearParam || undefined,
         min_rating: currentMinRating || undefined,
         max_rating: currentMaxRating || undefined,
+        source: currentSource || undefined,
+        min_episodes: currentMinEpisodes || undefined,
+        max_episodes: currentMaxEpisodes || undefined,
+        min_duration: currentMinDuration || undefined,
+        max_duration: currentMaxDuration || undefined,
+        min_year: currentMinYear || undefined,
+        max_year: currentMaxYear || undefined,
       }).then(res => res.data),
     initialPageParam: 1,
     placeholderData: (previousData) => previousData,
@@ -395,6 +520,7 @@ export default function Browse() {
             const nextPage = (data?.pages?.length || 0) + 2;
             prefetchNextPage({
               genres: currentGenres,
+              tags: currentTags,
               sort: currentSort,
               search: currentSearch,
               type: currentTypes,
@@ -404,6 +530,13 @@ export default function Browse() {
               year: currentYearParam,
               minRating: currentMinRating,
               maxRating: currentMaxRating,
+              source: currentSource,
+              minEpisodes: currentMinEpisodes,
+              maxEpisodes: currentMaxEpisodes,
+              minDuration: currentMinDuration,
+              maxDuration: currentMaxDuration,
+              minYear: currentMinYear,
+              maxYear: currentMaxYear,
               pageSize: 12,
             }, nextPage);
 
@@ -417,12 +550,37 @@ export default function Browse() {
     );
 
     observer.current.observe(node);
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isTabSwitching, data?.pages?.length, prefetchNextPage, currentGenres, currentSort, currentSearch, currentTypes, currentStatuses, currentStudio, currentSeason, currentYearParam, currentMinRating, currentMaxRating]);
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isTabSwitching,
+    data?.pages?.length,
+    prefetchNextPage,
+    currentGenres,
+    currentTags,
+    currentSort,
+    currentSearch,
+    currentTypes,
+    currentStatuses,
+    currentStudio,
+    currentSeason,
+    currentYearParam,
+    currentMinRating,
+    currentMaxRating,
+    currentSource,
+    currentMinEpisodes,
+    currentMaxEpisodes,
+    currentMinDuration,
+    currentMaxDuration,
+    currentMinYear,
+    currentMaxYear,
+  ]);
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
     document.title = 'Browse Anime - AniShows';
-  }, [currentGenres.join(','), currentSort, currentSearch, currentTypes, currentStatuses]);
+  }, [currentGenres.join(','), currentTags.join(','), currentSort, currentSearch, currentTypes, currentStatuses]);
 
   // Filter helpers
   const updateParam = useCallback((key, value) => {
@@ -439,6 +597,15 @@ export default function Browse() {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('season');
     newParams.delete('year');
+    newParams.delete('min_year');
+    newParams.delete('max_year');
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
+  const clearYearRange = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('min_year');
+    newParams.delete('max_year');
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
@@ -473,6 +640,13 @@ export default function Browse() {
       minRating: 'min_rating',
       maxRating: 'max_rating',
       studio: 'studio',
+      source: 'source',
+      minEpisodes: 'min_episodes',
+      maxEpisodes: 'max_episodes',
+      minDuration: 'min_duration',
+      maxDuration: 'max_duration',
+      minYear: 'min_year',
+      maxYear: 'max_year',
     };
     const paramKey = keyMap[key];
     if (!paramKey) return;
@@ -482,6 +656,15 @@ export default function Browse() {
       newParams.set(paramKey, value);
     } else {
       newParams.delete(paramKey);
+    }
+
+    if (key === 'year') {
+      newParams.delete('min_year');
+      newParams.delete('max_year');
+    }
+    if (key === 'minYear' || key === 'maxYear') {
+      newParams.delete('year');
+      newParams.delete('season');
     }
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
@@ -503,7 +686,42 @@ export default function Browse() {
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
-  const hasActiveFilters = currentGenres.length > 0 || currentTypes || currentStatuses || currentStudio || currentSeason || currentYearParam || currentMinRating || currentMaxRating;
+  const toggleLocalTag = useCallback((tag) => {
+    const current = searchParams.get('tags')?.split(',').filter(Boolean) || [];
+    const normalized = tag.trim().toLowerCase();
+    const updated = current.includes(normalized)
+      ? current.filter(t => t !== normalized)
+      : [...current, normalized];
+
+    setLocalFilters(prev => ({ ...prev, tags: updated }));
+
+    const newParams = new URLSearchParams(searchParams);
+    if (updated.length > 0) {
+      newParams.set('tags', updated.join(','));
+    } else {
+      newParams.delete('tags');
+    }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
+  const hasActiveFilters = Boolean(
+    currentGenres.length > 0 ||
+    currentTags.length > 0 ||
+    currentTypes ||
+    currentStatuses ||
+    currentStudio ||
+    currentSeason ||
+    currentYearParam ||
+    currentMinRating ||
+    currentMaxRating ||
+    currentSource ||
+    currentMinEpisodes ||
+    currentMaxEpisodes ||
+    currentMinDuration ||
+    currentMaxDuration ||
+    currentMinYear ||
+    currentMaxYear
+  );
 
   // Filter sidebar props
   const filterSidebarProps = {
@@ -516,10 +734,15 @@ export default function Browse() {
     onToggleSection: toggleSection,
     onUpdateFilter: updateLocalFilter,
     onToggleGenre: toggleLocalGenre,
+    onToggleTag: toggleLocalTag,
     typeOptions: TYPE_OPTIONS,
     statusOptions: STATUS_OPTIONS,
     seasonOptions: SEASON_OPTIONS,
     yearOptions: YEAR_OPTIONS,
+    sourceOptions: SOURCE_OPTIONS,
+    tagGroups: ADVANCED_TAG_GROUPS,
+    minYearBound: MIN_YEAR_BOUND,
+    maxYearBound: MAX_YEAR_BOUND,
   };
 
   return (
@@ -590,9 +813,18 @@ export default function Browse() {
                   currentMaxRating={currentMaxRating}
                   currentStudio={currentStudio}
                   currentGenres={currentGenres}
+                  currentTags={currentTags}
+                  currentSource={currentSource}
+                  currentMinEpisodes={currentMinEpisodes}
+                  currentMaxEpisodes={currentMaxEpisodes}
+                  currentMinDuration={currentMinDuration}
+                  currentMaxDuration={currentMaxDuration}
+                  currentMinYear={currentMinYear}
+                  currentMaxYear={currentMaxYear}
                   typeOptions={TYPE_OPTIONS}
                   statusOptions={STATUS_OPTIONS}
                   seasonOptions={SEASON_OPTIONS}
+                  sourceOptions={SOURCE_OPTIONS}
                   studios={studios}
                   genres={genres}
                   onClearType={() => updateParam('type', '')}
@@ -602,6 +834,13 @@ export default function Browse() {
                   onClearMaxRating={() => updateParam('max_rating', '')}
                   onClearStudio={() => updateParam('studio', '')}
                   onToggleGenre={(genre) => toggleArrayParam('genre', genre)}
+                  onToggleTag={(tag) => toggleArrayParam('tags', tag)}
+                  onClearSource={() => updateParam('source', '')}
+                  onClearMinEpisodes={() => updateParam('min_episodes', '')}
+                  onClearMaxEpisodes={() => updateParam('max_episodes', '')}
+                  onClearMinDuration={() => updateParam('min_duration', '')}
+                  onClearMaxDuration={() => updateParam('max_duration', '')}
+                  onClearYearRange={clearYearRange}
                   onClearAll={clearAllFilters}
                   hasActiveFilters={hasActiveFilters}
                 />

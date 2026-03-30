@@ -85,3 +85,4 @@ class UserFavorite(Model):
 - filter backendni shared ga otkazish classga ajratib yozish voris olib +
 - anime degan app ichidagi modelni bolaklash kerak +
 - querysetlarni xammasini tepaga olib chiqish kerak +
+
