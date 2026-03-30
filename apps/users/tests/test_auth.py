@@ -344,6 +344,33 @@ class SocialLoginSerializerTests(SimpleTestCase):
             "Social login is temporarily unavailable.",
         )
 
+    @patch.object(SocialLoginSerializer.auth_service, "finalize_social_login")
+    @patch("apps.users.serializers.social_auth.complete_social_login")
+    @patch("apps.users.serializers.social_auth.SocialLoginSerializer.get_social_login")
+    def test_finalize_social_login_error_is_mapped_to_validation_error(
+        self,
+        mock_get_social_login,
+        mock_complete_social_login,
+        mock_finalize_social_login,
+    ):
+        """Unexpected signup/finalization failures should not produce a server error."""
+        mock_get_social_login.return_value = SimpleNamespace()
+        mock_complete_social_login.return_value = None
+        mock_finalize_social_login.side_effect = RuntimeError("post-save signal failure")
+        request = self.request_factory.post("/api/v1/auth/google/", {"code": "fake-code"})
+
+        serializer = SocialLoginSerializer(
+            data={"code": "fake-code"},
+            context={"request": request, "view": self.view},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("non_field_errors", serializer.errors)
+        self.assertEqual(
+            serializer.errors["non_field_errors"][0],
+            "Failed to finalize social login.",
+        )
+
 
 class TokenRefreshTests(APITestCase):
     """Tests for token refresh endpoint."""

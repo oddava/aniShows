@@ -137,5 +137,14 @@ class SocialLoginSerializer(serializers.Serializer):
         if isinstance(ret, HttpResponseBadRequest):
             raise serializers.ValidationError(ret.content)
 
-        attrs["user"] = self.auth_service.finalize_social_login(request, login)
+        try:
+            attrs["user"] = self.auth_service.finalize_social_login(request, login)
+        except serializers.ValidationError:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Unhandled social auth finalization error",
+                extra={"provider": getattr(adapter, "provider_id", "unknown")},
+            )
+            raise serializers.ValidationError(_("Failed to finalize social login.")) from exc
         return attrs
