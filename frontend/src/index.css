@@ -155,7 +155,7 @@
   }
 
   .ui-avatar-fallback {
-    @apply flex items-center justify-center rounded-full border-2 border-gray-800 bg-dark-50 font-semibold text-gray-200;
+    @apply flex items-center justify-center rounded-xl border border-gray-800 bg-dark-200 font-semibold text-gray-500;
   }
 
   .anime-card-grid-gap {

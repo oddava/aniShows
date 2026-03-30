@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { followApi } from '../api/client';
-import { X, Users, UserCheck, UserPlus, UserMinus, Loader2, Search } from 'lucide-react';
+import { X, Users, User, UserCheck, UserPlus, UserMinus, Loader2, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -413,7 +413,7 @@ function Avatar({ user }) {
             <img
                 src={user.avatar}
                 alt={user.username}
-                className="w-11 h-11 rounded-full object-cover border-2 border-gray-700 group-hover:border-accent/50 transition-colors shrink-0"
+                className="w-11 h-11 rounded-xl object-cover border-2 border-gray-700 group-hover:border-accent/50 transition-colors shrink-0"
                 loading="lazy"
             />
         );
@@ -421,9 +421,7 @@ function Avatar({ user }) {
 
     return (
         <div className="ui-avatar-fallback h-11 w-11 shrink-0">
-            <span className="text-lg font-bold text-white">
-                {user.username[0].toUpperCase()}
-            </span>
+            <User className="w-6 h-6 text-gray-500/80" />
         </div>
     );
 }
