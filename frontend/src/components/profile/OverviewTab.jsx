@@ -87,7 +87,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
                             <div key={item.id} className="group relative">
                                 <Link
                                     to={`/anime/${item.anime?.slug}`}
-                                    className="block relative aspect-[2/3] bg-dark-200"
+                                    className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
                                 >
                                     <AnimeMediaImage
                                         anime={item.anime}
@@ -149,7 +149,7 @@ function FavoritesGrid({ favoritesData }) {
                         <div key={fav.id} className="group relative">
                             <Link
                                 to={`/anime/${fav.anime?.slug}`}
-                                className="block relative aspect-[2/3] bg-dark-200"
+                                className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
                             >
                                 <AnimeMediaImage
                                     anime={fav.anime}
