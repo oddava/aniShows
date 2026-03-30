@@ -589,7 +589,7 @@ export default function Navbar() {
         }
     `;
 
-    const mobileIslandBackground = 'linear-gradient(160deg, color-mix(in srgb, var(--color-dark-50) 86%, transparent), color-mix(in srgb, var(--color-dark) 78%, transparent) 68%, color-mix(in srgb, var(--color-accent) 24%, transparent) 100%)';
+    const mobileIslandBackground = 'var(--color-surface-glass)';
     const mobilePopoverBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
     const mobilePopoverTipBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
 
@@ -926,7 +926,7 @@ export default function Navbar() {
             {/* Mobile Bottom Navigation Island */}
             {showMobileIsland && (
                 <div
-                    className="md:hidden fixed bottom-[max(0.4rem,env(safe-area-inset-bottom))] left-1/2 z-[1001] -translate-x-1/2 w-[calc(100%-0.9rem)] max-w-[350px] select-none"
+                    className="md:hidden fixed bottom-[max(0.4rem,env(safe-area-inset-bottom))] inset-x-[0.45rem] z-[1001] mx-auto w-auto max-w-[350px] select-none"
                     style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
                 >
                     <div

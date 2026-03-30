@@ -318,7 +318,7 @@ export default function Profile({ forcedUsername }) {
 
     return (
         <ProfileErrorBoundary username={targetUsername}>
-            <div className="min-h-screen pb-20">
+            <div className="min-h-screen overflow-x-hidden pb-20">
                 <ProfileHeader
                     displayUser={displayUser}
                     isPublicView={isPublicView}
@@ -387,7 +387,7 @@ export default function Profile({ forcedUsername }) {
 
 function ProfileSkeleton() {
     return (
-        <div className="min-h-screen pb-20">
+        <div className="min-h-screen overflow-x-hidden pb-20">
             <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1] overflow-hidden">
                 <div className="w-full h-full bg-dark-50 animate-pulse" />
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-transparent" />
