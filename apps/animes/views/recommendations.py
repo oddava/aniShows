@@ -1,4 +1,8 @@
+from datetime import timedelta
+
 from django.core.cache import cache
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,6 +11,33 @@ from rest_framework.viewsets import ViewSet
 
 from apps.shared.logger import logger
 from apps.users.serializers.users import UserRecommendationSerializer
+
+
+def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) -> bool:
+    """Check whether cached serialized recommendations are still fresh."""
+    if not isinstance(cached_data, list) or not cached_data:
+        return False
+
+    stale_before = timezone.now() - timedelta(hours=stale_after_hours)
+    newest_created_at = None
+
+    for item in cached_data:
+        if not isinstance(item, dict):
+            continue
+        created_at = item.get("created_at")
+        if not created_at:
+            continue
+        parsed = parse_datetime(created_at)
+        if parsed is None:
+            continue
+        if timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, timezone.utc)
+        if newest_created_at is None or parsed > newest_created_at:
+            newest_created_at = parsed
+
+    if newest_created_at is None:
+        return False
+    return newest_created_at >= stale_before
 
 
 class RecommendationsViewSet(ViewSet):
@@ -27,8 +58,10 @@ class RecommendationsViewSet(ViewSet):
         cache_key = f"user_recommendations:{request.user.id}"
         cached_data = cache.get(cache_key)
 
-        if cached_data:
+        if cached_data and _is_recommendations_cache_fresh(cached_data):
             return Response(cached_data[:limit])
+        if cached_data:
+            cache.delete(cache_key)
 
         try:
             max_cache_limit = max(limit, 30)

@@ -396,6 +396,8 @@ function RecommendedForYouSection({ revealRef }) {
         queryFn: () => recommendationsApi.getAll(12).then(res => res.data.results || res.data),
         enabled: isAuthenticated,
         staleTime: 1000 * 60 * 60,
+        refetchInterval: 1000 * 60 * 60,
+        refetchIntervalInBackground: true,
         retry: 1,
     });
 
