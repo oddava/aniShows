@@ -408,11 +408,15 @@ function UserListItem({ user, onClose, isFollowing, isFollower, onFollowToggle }
 }
 
 function Avatar({ user }) {
-    if (user.avatar) {
+    const [hasImageError, setHasImageError] = useState(false);
+    const showAvatarImage = Boolean(user.avatar) && !hasImageError;
+
+    if (showAvatarImage) {
         return (
             <img
                 src={user.avatar}
                 alt={user.username}
+                onError={() => setHasImageError(true)}
                 className="w-11 h-11 rounded-xl object-cover border-2 border-gray-700 group-hover:border-accent/50 transition-colors shrink-0"
                 loading="lazy"
             />
