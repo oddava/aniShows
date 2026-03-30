@@ -13,10 +13,15 @@ import ImageCropModal from '../components/ImageCropModal';
 import BadgesSettings from '../components/profile/BadgesSettings';
 
 function getResponsiveBannerAspect(width) {
-    if (width >= 1536) return 5.5;
-    if (width >= 1280) return 4.5;
-    if (width >= 640) return 3.5;
-    return 2.2;
+    const safeWidth = Math.max(320, Number(width) || 320);
+
+    // Keep this in sync with ProfileHeader + Settings banner preview classes.
+    if (safeWidth >= 1536) return 5.8;
+    if (safeWidth >= 1280) return 5.2;
+    if (safeWidth >= 1024) return 4.9;
+    if (safeWidth >= 768) return 4.6;
+    if (safeWidth >= 640) return 3.8;
+    return 3.2;
 }
 
 function decodeHtmlEntities(text = '') {
@@ -103,7 +108,7 @@ export default function Settings() {
         type: 'avatar' // 'avatar' or 'banner'
     });
     const [bannerCropAspect, setBannerCropAspect] = useState(() => {
-        if (typeof window === 'undefined') return 4;
+        if (typeof window === 'undefined') return getResponsiveBannerAspect(1280);
         return getResponsiveBannerAspect(window.innerWidth);
     });
     // Temporary ObjectURLs for previewing without storing in memory permanently
@@ -634,7 +639,7 @@ export default function Settings() {
                                 {/* Banner */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                    <div className="relative mb-3 w-full aspect-[2.2/1] overflow-hidden rounded-xl bg-dark-50 group sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1]">
+                                    <div className="relative mb-3 w-full aspect-[3.2/1] overflow-hidden rounded-xl bg-dark-50 group sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1]">
                                         {bannerPreviewUrl ? (
                                             <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.banner && !removeBanner ? (

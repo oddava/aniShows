@@ -332,7 +332,7 @@ export default function Profile({ forcedUsername }) {
                     counts={tabCounts}
                 />
 
-                <div className="max-w-7xl mx-auto px-4 mt-8">
+                <div className="max-w-7xl mx-auto px-4 mt-6">
                     {activeTab === 'overview' ? (
                         <OverviewTab
                             displayUser={displayUser}
@@ -388,14 +388,14 @@ export default function Profile({ forcedUsername }) {
 function ProfileSkeleton() {
     return (
         <div className="min-h-screen pb-20">
-            <div className="relative w-full aspect-[2.2/1] sm:aspect-[3.5/1] xl:aspect-[4.5/1] 2xl:aspect-[5.5/1] overflow-hidden">
+            <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1] overflow-hidden">
                 <div className="w-full h-full bg-dark-50 animate-pulse" />
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-transparent" />
             </div>
 
             <div className="max-w-7xl mx-auto px-4 relative z-10">
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 px-2 sm:px-4 pt-4">
-                    <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-24">
+                    <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-28">
                         <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-2xl bg-dark-100 p-1.5 ">
                             <div className="w-full h-full rounded-[14px] bg-dark-200 animate-pulse" />
                         </div>
@@ -409,7 +409,7 @@ function ProfileSkeleton() {
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-4 mt-8">
+            <div className="max-w-7xl mx-auto px-4 mt-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[1, 2, 3, 4].map(i => (
                         <div key={i} className="bg-dark-100/50 rounded-xl p-4 border border-gray-800">

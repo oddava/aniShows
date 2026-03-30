@@ -12,9 +12,9 @@ export default function ProfileHeader({
     if (!displayUser) return null;
 
     return (
-        <div className="relative mb-8 profile-header">
+        <div className="relative mb-5 md:mb-6 profile-header">
             {/* Banner */}
-            <div className="relative w-full aspect-[2.8/1] sm:aspect-[3.2/1] md:aspect-[4/1] xl:aspect-[4.6/1] 2xl:aspect-[5/1] overflow-hidden bg-dark-200">
+            <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1] overflow-hidden bg-dark-200">
                 {displayUser?.banner ? (
                     <>
                         <img
@@ -32,8 +32,8 @@ export default function ProfileHeader({
             {/* Profile Info Container */}
             <div className="max-w-7xl mx-auto px-4 relative z-10">
                 {/* Mobile layout (Twitter-like) */}
-                <div className="md:hidden px-2 pt-3">
-                    <div className="relative shrink-0 -mt-14">
+                <div className="md:hidden px-2 pt-2">
+                    <div className="relative shrink-0 -mt-16">
                         <div className="w-28 h-28 rounded-full bg-dark border-4 border-dark overflow-hidden">
                             {displayUser?.avatar ? (
                                 <img
@@ -52,7 +52,7 @@ export default function ProfileHeader({
                         </div>
                     </div>
 
-                    <div className="relative z-20 -mt-12 flex justify-end">
+                    <div className="relative z-20 -mt-14 flex justify-end">
                         <div className="shrink-0">
                             {!isPublicView ? (
                                 <Link
@@ -78,7 +78,7 @@ export default function ProfileHeader({
                         </div>
                     </div>
 
-                    <div className="mt-5 flex flex-col gap-2">
+                    <div className="mt-4 flex flex-col gap-2">
                         <div className="flex items-center gap-2 mt-2">
                             <h1 className="text-2xl font-bold text-white tracking-tight">
                                 {displayUser?.username}
@@ -106,8 +106,8 @@ export default function ProfileHeader({
                 </div>
 
                 {/* Desktop layout (original style) */}
-                <div className="hidden md:flex items-start gap-8 px-2 sm:px-4 pt-4">
-                    <div className="relative shrink-0 -mt-24">
+                <div className="hidden md:flex items-start gap-8 px-2 sm:px-4 pt-2 lg:pt-3">
+                    <div className="relative shrink-0 -mt-28">
                         <div className="w-40 h-40 rounded-2xl bg-dark overflow-hidden">
                             {displayUser?.avatar ? (
                                 <img
@@ -131,7 +131,7 @@ export default function ProfileHeader({
                         )}
                     </div>
 
-                    <div className="flex-1 flex items-start justify-between w-full gap-4 mt-2">
+                    <div className="flex-1 flex items-start justify-between w-full gap-4 mt-1">
                         <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-4">
                                 <h1 className="text-4xl font-bold text-white tracking-tight drop-shadow-md">
