@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 
 const Pill = ({ active, label, onClick }) => (
   <button
@@ -260,6 +260,7 @@ export default function AdvancedFiltersPanel({
   tagGroups,
   minYearBound,
   maxYearBound,
+  onClose = () => {},
 }) {
   const [showTagFilters, setShowTagFilters] = useState(true);
   const [tagSearch, setTagSearch] = useState('');
@@ -286,12 +287,46 @@ export default function AdvancedFiltersPanel({
 
   const displayedGenres = showAllGenres ? filteredGenres : filteredGenres.slice(0, 24);
 
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return undefined;
+
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      const previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = previousOverflow;
+      };
+    }
+
+    return undefined;
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="w-full bg-dark-100 rounded-2xl border border-gray-800/60 mb-8 overflow-hidden animate-fade-in max-h-[82vh] sm:max-h-[80vh] flex flex-col">
-      <div className="h-full min-h-0 p-4 sm:p-5 space-y-4 flex flex-col">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="fixed inset-0 z-[1100] md:static md:inset-auto md:z-auto">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-[1px] md:hidden"
+        onClick={onClose}
+        aria-label="Close filters"
+      />
+
+      <div className="absolute inset-x-0 top-0 bottom-0 md:relative md:inset-auto w-full bg-dark-100 rounded-none md:rounded-2xl border-0 md:border border-gray-800/60 mb-0 md:mb-8 overflow-y-auto md:overflow-hidden animate-fade-in max-h-[100dvh] md:max-h-[80vh] flex flex-col">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-dark-100/95 backdrop-blur">
+          <h2 className="text-sm font-semibold text-gray-200">Filters</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-300 hover:bg-dark-200 hover:text-white transition-colors"
+            aria-label="Close filters panel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-3 sm:p-5 space-y-4 flex flex-col pb-[calc(env(safe-area-inset-bottom)+1rem)] md:h-full md:min-h-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <SelectField
             label="Airing Status"
             value={localFilters.status}
@@ -322,7 +357,7 @@ export default function AdvancedFiltersPanel({
           />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <DualRangeFilter
             label="Rating"
             min={0}
@@ -369,7 +404,7 @@ export default function AdvancedFiltersPanel({
           />
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
           <Pill
             active={localFilters.genres.includes('hentai')}
             label="Adult (Hentai)"
@@ -392,20 +427,20 @@ export default function AdvancedFiltersPanel({
           />
         </div>
 
-        <div className="rounded-2xl border border-gray-800/60 bg-dark-200/30 overflow-hidden flex flex-col min-h-0 flex-1">
-          <button
-            onClick={() => setShowTagFilters((prev) => !prev)}
-            className="w-full px-4 py-3 flex items-center justify-between text-left"
-          >
-            <span className="text-sm font-semibold text-gray-200">Advanced Genres & Tag Filters</span>
-            <ChevronDown
-              className={`w-4 h-4 text-gray-500 transition-transform ${showTagFilters ? '' : '-rotate-90'}`}
-            />
-          </button>
+          <div className="rounded-2xl border border-gray-800/60 bg-dark-200/30 overflow-hidden flex flex-col md:min-h-0 md:flex-1">
+            <button
+              onClick={() => setShowTagFilters((prev) => !prev)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left"
+            >
+              <span className="text-sm font-semibold text-gray-200">Advanced Genres & Tag Filters</span>
+              <ChevronDown
+                className={`w-4 h-4 text-gray-500 transition-transform ${showTagFilters ? '' : '-rotate-90'}`}
+              />
+            </button>
 
-          {showTagFilters && (
-            <div className="border-t border-gray-800/60 flex flex-col min-h-0 h-full">
-              <div className="sticky top-0 z-10 px-4 pt-3 pb-2 bg-dark-100/95 backdrop-blur">
+            {showTagFilters && (
+              <div className="border-t border-gray-800/60 flex flex-col md:min-h-0 md:h-full">
+                <div className="sticky top-0 z-10 px-4 pt-3 pb-2 bg-dark-100/95 backdrop-blur">
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -418,7 +453,7 @@ export default function AdvancedFiltersPanel({
                 </div>
               </div>
 
-              <div className="tags-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4 pr-2">
+                <div className="tags-scroll max-h-[44dvh] overflow-y-auto px-4 pb-4 space-y-4 pr-1 sm:pr-2 md:flex-1 md:min-h-0 md:max-h-none">
                 <div>
                   <SectionHeader>Genres</SectionHeader>
                   <div className="flex flex-wrap gap-1.5">
@@ -456,9 +491,10 @@ export default function AdvancedFiltersPanel({
                     </div>
                   </div>
                 ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -552,4 +588,5 @@ AdvancedFiltersPanel.propTypes = {
   ).isRequired,
   minYearBound: PropTypes.number.isRequired,
   maxYearBound: PropTypes.number.isRequired,
+  onClose: PropTypes.func,
 };

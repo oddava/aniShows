@@ -782,6 +782,7 @@ export default function Browse() {
 
                 <AdvancedFiltersPanel
                   isOpen={showFilters}
+                  onClose={() => setShowFilters(false)}
                   {...filterSidebarProps}
                 />
 
