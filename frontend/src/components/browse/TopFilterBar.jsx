@@ -169,10 +169,10 @@ export default function TopFilterBar({
                 {/* Advanced Filters Button */}
                 <button
                     onClick={onOpenMobileFilters}
-                    className="flex-shrink-0 relative w-[48px] h-[48px] flex items-center justify-center rounded-xl bg-dark-200 text-gray-400 hover:text-white hover:bg-dark-100 transition-all group"
+                    className="flex-shrink-0 relative w-[48px] h-[48px] flex items-center justify-center rounded-xl bg-dark-200 text-gray-400"
                     aria-label="Advanced Filters"
                 >
-                    <Filter className="w-[18px] h-[18px] group-hover:scale-110 transition-transform" />
+                    <Filter className="w-[18px] h-[18px]" />
                     {hasActiveFilters && (
                         <span className="absolute top-3 right-3 w-2 h-2 bg-accent rounded-full border-2 border-dark-200" />
                     )}

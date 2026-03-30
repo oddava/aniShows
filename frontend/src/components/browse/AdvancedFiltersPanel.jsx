@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { ChevronDown, Search } from 'lucide-react';
 
@@ -22,33 +22,138 @@ Pill.propTypes = {
 };
 
 const SectionHeader = ({ children }) => (
-  <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.18em] mb-2">{children}</h3>
+  <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.16em] mb-2">{children}</h3>
 );
 
 SectionHeader.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-const SelectField = ({ label, value, onChange, options, placeholder = 'Any' }) => (
-  <div>
-    <SectionHeader>{label}</SectionHeader>
-    <div className="relative">
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl bg-dark-200/80 px-3.5 py-2 text-xs text-gray-200 outline-none transition-colors border border-transparent focus:border-accent/50 appearance-none"
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+const SelectField = ({ label, value, onChange, options, placeholder = 'Any' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm('');
+      return undefined;
+    }
+
+    const handleOutsideClick = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      const target = event.target;
+      const isTypingIntoField =
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable);
+
+      if (isTypingIntoField) return;
+
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        return;
+      }
+
+      if (event.key === 'Backspace') {
+        setSearchTerm((prev) => prev.slice(0, -1));
+        return;
+      }
+
+      if (
+        event.key.length === 1 &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        setSearchTerm((prev) => `${prev}${event.key}`.slice(-32));
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const selectedLabel = options.find((option) => option.value === (value || ''))?.label || placeholder;
+  const filteredOptions = options.filter((option) =>
+    option.label.toLowerCase().includes(searchTerm.trim().toLowerCase())
+  );
+
+  return (
+    <div>
+      <SectionHeader>{label}</SectionHeader>
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className={`w-full rounded-xl bg-dark-200/80 px-3.5 py-2 text-xs text-left text-gray-200 outline-none transition-colors border ${
+            isOpen ? 'border-accent/50' : 'border-transparent'
+          } hover:border-accent/40`}
+        >
+          <span className="block pr-6 truncate">{selectedLabel}</span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform ${
+              isOpen ? 'rotate-180 text-accent' : ''
+            }`}
+          />
+        </button>
+
+        {isOpen && (
+          <div className="absolute z-30 mt-1 w-full rounded-xl border border-gray-700/70 bg-dark-300 shadow-[0_12px_28px_rgba(0,0,0,0.45)] overflow-hidden">
+            <div className="max-h-64 overflow-y-auto py-1 custom-select-scroll">
+              {!searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange('');
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                    !value ? 'bg-white/10 text-white' : 'text-gray-200 hover:bg-white/5'
+                  }`}
+                >
+                  {placeholder}
+                </button>
+              )}
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                      option.value === value
+                        ? 'bg-accent/20 text-accent'
+                        : 'text-gray-200 hover:bg-white/5'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-xs text-gray-500">No matches</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 SelectField.propTypes = {
   label: PropTypes.string.isRequired,
@@ -149,9 +254,7 @@ export default function AdvancedFiltersPanel({
   onUpdateFilter,
   onToggleGenre,
   onToggleTag,
-  typeOptions,
   statusOptions,
-  seasonOptions,
   yearOptions,
   sourceOptions,
   tagGroups,
@@ -188,7 +291,7 @@ export default function AdvancedFiltersPanel({
   return (
     <div className="w-full bg-dark-100 rounded-2xl border border-gray-800/60 mb-8 overflow-hidden animate-fade-in max-h-[82vh] sm:max-h-[80vh] flex flex-col">
       <div className="h-full min-h-0 p-4 sm:p-5 space-y-4 flex flex-col">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           <SelectField
             label="Airing Status"
             value={localFilters.status}
@@ -217,35 +320,6 @@ export default function AdvancedFiltersPanel({
             onChange={(value) => onUpdateFilter('year', value)}
             options={(yearOptions || []).map((year) => ({ value: String(year), label: String(year) }))}
           />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div>
-            <SectionHeader>Format</SectionHeader>
-            <div className="flex flex-wrap gap-2">
-              {typeOptions.map((type) => (
-                <Pill
-                  key={type.value}
-                  active={localFilters.type === type.value}
-                  label={type.label}
-                  onClick={() => onUpdateFilter('type', localFilters.type === type.value ? '' : type.value)}
-                />
-              ))}
-            </div>
-          </div>
-          <div>
-            <SectionHeader>Season</SectionHeader>
-            <div className="flex flex-wrap gap-2">
-              {seasonOptions.map((season) => (
-                <Pill
-                  key={season.value}
-                  active={localFilters.season === season.value}
-                  label={season.label}
-                  onClick={() => onUpdateFilter('season', localFilters.season === season.value ? '' : season.value)}
-                />
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -412,16 +486,30 @@ export default function AdvancedFiltersPanel({
         .tags-scroll::-webkit-scrollbar {
           width: 8px;
         }
+        .custom-select-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
         .tags-scroll::-webkit-scrollbar-track {
           background: rgba(255, 255, 255, 0.04);
+          border-radius: 999px;
+        }
+        .custom-select-scroll::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.03);
           border-radius: 999px;
         }
         .tags-scroll::-webkit-scrollbar-thumb {
           background: rgba(117, 80, 232, 0.6);
           border-radius: 999px;
         }
+        .custom-select-scroll::-webkit-scrollbar-thumb {
+          background: rgba(117, 80, 232, 0.45);
+          border-radius: 999px;
+        }
         .tags-scroll::-webkit-scrollbar-thumb:hover {
           background: rgba(117, 80, 232, 0.85);
+        }
+        .custom-select-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(117, 80, 232, 0.7);
         }
       `}</style>
     </div>
@@ -453,9 +541,7 @@ AdvancedFiltersPanel.propTypes = {
   onUpdateFilter: PropTypes.func.isRequired,
   onToggleGenre: PropTypes.func.isRequired,
   onToggleTag: PropTypes.func.isRequired,
-  typeOptions: PropTypes.array.isRequired,
   statusOptions: PropTypes.array.isRequired,
-  seasonOptions: PropTypes.array.isRequired,
   yearOptions: PropTypes.array.isRequired,
   sourceOptions: PropTypes.array.isRequired,
   tagGroups: PropTypes.arrayOf(
