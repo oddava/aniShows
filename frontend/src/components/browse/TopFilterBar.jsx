@@ -1,14 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { Search, X, Filter } from 'lucide-react';
+import { Search, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import FlatSelect from './FlatSelect';
+
+const Pill = ({ active, label, onClick }) => (
+    <button
+        onClick={onClick}
+        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+            active 
+            ? 'bg-accent text-white' 
+            : 'bg-dark-200/50 text-gray-400 hover:bg-dark-200 hover:text-gray-300'
+        }`}
+    >
+        {label}
+    </button>
+);
+
+Pill.propTypes = {
+    active: PropTypes.bool,
+    label: PropTypes.string.isRequired,
+    onClick: PropTypes.func.isRequired
+};
 
 export default function TopFilterBar({
     genres,
     isGenresError,
     typeOptions,
-    statusOptions,
     seasonOptions,
     yearOptions,
     searchInputRef,
@@ -20,44 +37,27 @@ export default function TopFilterBar({
     const isSearchFocusedRef = useRef(false);
     const inputRef = searchInputRef || localSearchInputRef;
     const currentQuery = searchParams.get('q') || '';
-    const genreOptions = [
-        { value: '', label: 'Any' },
-        ...(!isGenresError && genres ? genres.map((genre) => ({ value: genre.slug, label: genre.name })) : [])
-    ];
-    const yearSelectOptions = [
-        { value: '', label: 'Any' },
-        ...yearOptions.map((year) => ({ value: year, label: String(year) }))
-    ];
-    const seasonSelectOptions = [
-        { value: '', label: 'Any' },
-        ...seasonOptions.map((season) => ({ value: season.value, label: season.label }))
-    ];
-    const formatSelectOptions = [
-        { value: '', label: 'Any' },
-        ...typeOptions.map((type) => ({ value: type.value, label: type.label }))
-    ];
-    const statusSelectOptions = [
-        { value: '', label: 'Any' },
-        ...statusOptions.map((status) => ({ value: status.value, label: status.label }))
-    ];
+    
+    // Parse current states
+    const currentGenres = searchParams.get('genre')?.split(',').filter(Boolean) || [];
+    const currentType = searchParams.get('type') || '';
+    const currentSeason = searchParams.get('season') || '';
+    const currentYear = searchParams.get('year') || '';
 
     const [searchInput, setSearchInput] = useState(currentQuery);
 
-    // Only pull from the URL when the user is not actively editing the field.
     useEffect(() => {
         if (!isSearchFocusedRef.current) {
             setSearchInput(currentQuery);
         }
     }, [currentQuery]);
 
-    // Debounce search
     useEffect(() => {
         const timeout = setTimeout(() => {
             if (searchInput !== currentQuery) {
                 const newParams = new URLSearchParams(searchParams);
                 if (searchInput) {
                     newParams.set('q', searchInput);
-                    // Clear other filters when searching if preferred? No, let's keep them
                 } else {
                     newParams.delete('q');
                 }
@@ -67,13 +67,43 @@ export default function TopFilterBar({
         return () => clearTimeout(timeout);
     }, [searchInput, currentQuery, searchParams, setSearchParams]);
 
-    const handleSelectChange = (key, value) => {
+    const handleSingleToggle = (key, value) => {
         const newParams = new URLSearchParams(searchParams);
-        if (value) {
-            newParams.set(key, value);
-        } else {
+        if (newParams.get(key) === value) {
             newParams.delete(key);
+        } else {
+            newParams.set(key, value);
         }
+        setSearchParams(newParams);
+    };
+
+    const handleGenreToggle = (genreSlug) => {
+        const newParams = new URLSearchParams(searchParams);
+        const updated = currentGenres.includes(genreSlug)
+            ? currentGenres.filter(g => g !== genreSlug)
+            : [...currentGenres, genreSlug];
+            
+        if (updated.length > 0) {
+            newParams.set('genre', updated.join(','));
+        } else {
+            newParams.delete('genre');
+        }
+        setSearchParams(newParams);
+    };
+
+    const handleYearStep = (direction) => {
+        const currentYearNum = currentYear ? parseInt(currentYear, 10) : new Date().getFullYear();
+        let newYear = currentYearNum + direction;
+        
+        // Boundaries based on options
+        const maxYear = yearOptions[0];
+        const minYear = yearOptions[yearOptions.length - 1];
+        
+        if (newYear > maxYear) newYear = maxYear;
+        if (newYear < minYear) newYear = minYear;
+
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('year', newYear.toString());
         setSearchParams(newParams);
     };
 
@@ -84,136 +114,110 @@ export default function TopFilterBar({
         setSearchParams(newParams);
     };
 
+    // Use a subset of genres for the quick bar to avoid overwhelming it
+    const quickGenres = !isGenresError && genres ? genres.slice(0, 8) : [];
+
     return (
-        <div className="w-full mb-8 md:mb-12">
-            <div className="flex flex-col lg:flex-row gap-4">
+        <div className="w-full mb-8">
+            {/* Top Anchor Row */}
+            <div className="flex items-center gap-3 w-full mb-4">
                 
-                {/* Search Input - Taking more space */}
-                <div className="flex-1 lg:max-w-xs relative group">
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Search</label>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-accent transition-colors" />
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            onFocus={() => {
-                                isSearchFocusedRef.current = true;
-                            }}
-                            onBlur={() => {
-                                isSearchFocusedRef.current = false;
-                            }}
-                            placeholder="Find anime..."
-                            className="w-full rounded-xl bg-dark-200 pl-10 pr-10 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-gray-600 focus:outline-none focus-visible:outline-none"
-                        />
-                        {searchInput && (
-                            <button
-                                onClick={clearSearch}
-                                className="flat-control absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-0.5 text-gray-400 hover:text-white"
-                            >
-                                <X className="w-3 h-3" />
-                            </button>
-                        )}
-                    </div>
+                {/* Search Input - Main Anchor */}
+                <div className="flex-1 relative group">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 group-focus-within:text-accent transition-colors" />
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        onFocus={() => { isSearchFocusedRef.current = true; }}
+                        onBlur={() => { isSearchFocusedRef.current = false; }}
+                        placeholder="Search anime..."
+                        className="w-full rounded-xl bg-dark-200 pl-11 pr-10 py-3 text-base text-white outline-none transition-all placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-accent/50 focus:bg-dark-100"
+                    />
+                    {searchInput && (
+                        <button
+                            onClick={clearSearch}
+                            className="flat-control absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-1 text-gray-400 hover:text-white"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
 
-                {/* Filters Grid */}
-                <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-3">
-                    
-                    {/* Genres Dropdown */}
-                    <div className="w-full relative">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Genres</label>
-                        <FlatSelect
-                            value={searchParams.get('genre') || ''}
-                            onChange={(value) => handleSelectChange('genre', value)}
-                            options={genreOptions}
-                            placeholder="Any"
-                            triggerClassName="bg-dark-200 text-gray-300"
-                            menuClassName="bg-dark-100"
-                        />
-                    </div>
-
-                    {/* Year Dropdown */}
-                    <div className="w-full relative">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Year</label>
-                        <FlatSelect
-                            value={searchParams.get('year') || ''}
-                            onChange={(value) => handleSelectChange('year', value)}
-                            options={yearSelectOptions}
-                            placeholder="Any"
-                            triggerClassName="bg-dark-200 text-gray-300"
-                            menuClassName="bg-dark-100"
-                        />
-                    </div>
-
-                    {/* Season Dropdown */}
-                    <div className="w-full relative">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Season</label>
-                        <FlatSelect
-                            value={searchParams.get('season') || ''}
-                            onChange={(value) => handleSelectChange('season', value)}
-                            options={seasonSelectOptions}
-                            placeholder="Any"
-                            triggerClassName="bg-dark-200 text-gray-300"
-                            menuClassName="bg-dark-100"
-                        />
-                    </div>
-
-                    {/* Format Dropdown */}
-                    <div className="w-full relative">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Format</label>
-                        <FlatSelect
-                            value={searchParams.get('type') || ''}
-                            onChange={(value) => handleSelectChange('type', value)}
-                            options={formatSelectOptions}
-                            placeholder="Any"
-                            triggerClassName="bg-dark-200 text-gray-300"
-                            menuClassName="bg-dark-100"
-                        />
-                    </div>
-
-                    {/* Status Dropdown */}
-                    <div className="w-full relative">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 ml-1">Airing Status</label>
-                        <FlatSelect
-                            value={searchParams.get('status') || ''}
-                            onChange={(value) => handleSelectChange('status', value)}
-                            options={statusSelectOptions}
-                            placeholder="Any"
-                            triggerClassName="bg-dark-200 text-gray-300"
-                            menuClassName="bg-dark-100"
-                        />
-                    </div>
-                </div>
-
-                {/* Mobile Extra Options toggle button */}
-                <div className="flex items-end justify-center lg:hidden lg:w-auto">
-                    <button
-                        onClick={onOpenMobileFilters}
-                        className="flat-control h-[44px] w-full rounded-xl bg-dark-200 px-4 text-sm font-bold text-gray-300 transition-colors hover:text-white focus:outline-none focus-visible:outline-none flex items-center justify-center gap-2"
+                {/* Compact Year Stepper */}
+                <div className="hidden sm:flex items-center bg-dark-200 rounded-xl p-1 h-[48px]">
+                    <button 
+                        onClick={() => handleYearStep(-1)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
+                        aria-label="Previous year"
                     >
-                        <Filter className="w-4 h-4" />
-                        <span>Advanced Filters</span>
-                        {hasActiveFilters && (
-                            <span className="w-2 h-2 bg-accent rounded-full mb-2 ml-1" />
-                        )}
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="w-12 text-center text-sm font-bold text-gray-300">
+                        {currentYear || 'Year'}
+                    </span>
+                    <button 
+                        onClick={() => handleYearStep(1)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
+                        aria-label="Next year"
+                    >
+                        <ChevronRight className="w-4 h-4" />
                     </button>
                 </div>
-            </div>
-            
-            {/* Desktop Action bar (sorting if needed, or advanced options) */}
-            <div className="hidden lg:flex justify-end mt-4 pt-4 border-t border-gray-800/50">
+
+                {/* Advanced Filters Button */}
                 <button
                     onClick={onOpenMobileFilters}
-                    className="flat-control flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 transition-colors hover:text-white focus:outline-none focus-visible:outline-none"
+                    className="flex-shrink-0 relative w-[48px] h-[48px] flex items-center justify-center rounded-xl bg-dark-200 text-gray-400 hover:text-white hover:bg-dark-100 transition-all group"
+                    aria-label="Advanced Filters"
                 >
-                    <Filter className="w-3 h-3" />
-                    Advanced Filters
+                    <Filter className="w-[18px] h-[18px] group-hover:scale-110 transition-transform" />
                     {hasActiveFilters && (
-                        <span className="w-1.5 h-1.5 bg-accent rounded-full ml-1" />
+                        <span className="absolute top-3 right-3 w-2 h-2 bg-accent rounded-full border-2 border-dark-200" />
                     )}
                 </button>
+            </div>
+
+            {/* Quick Filters Pill Row */}
+            <div className="w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="flex items-center gap-4 min-w-max">
+                    {/* Format Group */}
+                    <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">
+                        {typeOptions.map(type => (
+                            <Pill 
+                                key={type.value}
+                                active={currentType === type.value}
+                                label={type.label}
+                                onClick={() => handleSingleToggle('type', type.value)}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Season Group */}
+                    <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">
+                        {seasonOptions.map(season => (
+                            <Pill 
+                                key={season.value}
+                                active={currentSeason === season.value}
+                                label={season.label}
+                                onClick={() => handleSingleToggle('season', season.value)}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Genres Group */}
+                    <div className="flex items-center gap-1.5">
+                        {quickGenres.map(genre => (
+                            <Pill 
+                                key={genre.slug}
+                                active={currentGenres.includes(genre.slug)}
+                                label={genre.name}
+                                onClick={() => handleGenreToggle(genre.slug)}
+                            />
+                        ))}
+                    </div>
+                </div>
             </div>
         </div>
     );

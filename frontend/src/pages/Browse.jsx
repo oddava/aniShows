@@ -10,10 +10,9 @@ import VirtualizedAnimeList from '../components/VirtualizedAnimeList';
 import { LoadingBar } from '../components/LoadingBar';
 import EmptyState from '../components/browse/EmptyState';
 import ActiveFilterChips from '../components/browse/ActiveFilterChips';
-import FilterSidebar from '../components/browse/FilterSidebar';
+import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
 import ViewModeToggle from '../components/browse/ViewModeToggle';
 import TrendingCarousel from '../components/browse/TrendingCarousel';
-import MobileFilterDrawer from '../components/browse/MobileFilterDrawer';
 import { animeApi, genreApi, studioApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
@@ -226,7 +225,7 @@ export default function Browse() {
     });
   }, [currentGenres, currentTypes, currentStatuses, currentSeason, currentYearParam, currentMinRating, currentMaxRating, currentStudio]);
 
-  const handleApplyMobile = useCallback(() => {
+  const handleApplyFilters = useCallback(() => {
     setIsApplyingFilters(true);
     applyFilters();
     setTimeout(() => {
@@ -585,8 +584,16 @@ export default function Browse() {
                   seasonOptions={SEASON_OPTIONS}
                   yearOptions={YEAR_OPTIONS}
                   searchInputRef={searchInputRef}
-                  onOpenMobileFilters={() => setShowFilters(true)}
+                  onOpenMobileFilters={() => setShowFilters(!showFilters)}
                   hasActiveFilters={hasActiveFilters || hasUnappliedChanges}
+                />
+
+                <AdvancedFiltersPanel
+                  isOpen={showFilters}
+                  {...filterSidebarProps}
+                  isApplying={isApplyingFilters}
+                  onApplyFilters={handleApplyFilters}
+                  onResetFilters={resetFilters}
                 />
 
                 {/* Controls Bar - only show result count and view mode if in grid mode */}
@@ -648,14 +655,7 @@ export default function Browse() {
         </div>
       </div>
 
-      {/* Mobile Filter Drawer */}
-      <MobileFilterDrawer
-        isOpen={showFilters}
-        onClose={() => setShowFilters(false)}
-        onApply={handleApplyMobile}
-        isApplying={isApplyingFilters}
-        filterSidebarProps={filterSidebarProps}
-      />
+
     </>
   );
 
