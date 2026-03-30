@@ -5,7 +5,7 @@ import { ChevronDown, Search } from 'lucide-react';
 const Pill = ({ active, label, onClick }) => (
   <button
     onClick={onClick}
-    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+    className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
       active
         ? 'bg-accent text-white'
         : 'bg-dark-200/60 text-gray-400 hover:bg-dark-200 hover:text-gray-200'
@@ -22,7 +22,7 @@ Pill.propTypes = {
 };
 
 const SectionHeader = ({ children }) => (
-  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-[0.18em] mb-3">{children}</h3>
+  <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.18em] mb-2">{children}</h3>
 );
 
 SectionHeader.propTypes = {
@@ -36,7 +36,7 @@ const SelectField = ({ label, value, onChange, options, placeholder = 'Any' }) =
       <select
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl bg-dark-200/80 px-4 py-2.5 text-sm text-gray-200 outline-none transition-colors border border-transparent focus:border-accent/50 appearance-none"
+        className="w-full rounded-xl bg-dark-200/80 px-3.5 py-2 text-xs text-gray-200 outline-none transition-colors border border-transparent focus:border-accent/50 appearance-none"
       >
         <option value="">{placeholder}</option>
         {options.map((option) => (
@@ -45,7 +45,7 @@ const SelectField = ({ label, value, onChange, options, placeholder = 'Any' }) =
           </option>
         ))}
       </select>
-      <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <ChevronDown className="w-3.5 h-3.5 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
     </div>
   </div>
 );
@@ -86,10 +86,10 @@ const DualRangeFilter = ({
   const maxPercent = ((parsedMax - min) / (max - min)) * 100;
 
   return (
-    <div className="rounded-xl bg-dark-200/40 p-4 border border-gray-800/60">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-xl bg-dark-200/40 p-3 border border-gray-800/60">
+      <div className="flex items-center justify-between mb-2.5">
         <SectionHeader>{label}</SectionHeader>
-        <div className="text-xs text-gray-400 font-semibold">
+        <div className="text-[11px] text-gray-400 font-semibold">
           {format(parsedMin)} - {format(parsedMax)}
         </div>
       </div>
@@ -186,9 +186,9 @@ export default function AdvancedFiltersPanel({
   if (!isOpen) return null;
 
   return (
-    <div className="w-full bg-dark-100 rounded-2xl border border-gray-800/60 mb-8 overflow-hidden animate-fade-in">
-      <div className="p-6 sm:p-8 space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+    <div className="w-full bg-dark-100 rounded-2xl border border-gray-800/60 mb-8 overflow-hidden animate-fade-in max-h-[82vh] sm:max-h-[80vh] flex flex-col">
+      <div className="h-full min-h-0 p-4 sm:p-5 space-y-4 flex flex-col">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           <SelectField
             label="Airing Status"
             value={localFilters.status}
@@ -219,7 +219,7 @@ export default function AdvancedFiltersPanel({
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
             <SectionHeader>Format</SectionHeader>
             <div className="flex flex-wrap gap-2">
@@ -248,7 +248,7 @@ export default function AdvancedFiltersPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           <DualRangeFilter
             label="Rating"
             min={0}
@@ -295,7 +295,7 @@ export default function AdvancedFiltersPanel({
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <Pill
             active={localFilters.genres.includes('hentai')}
             label="Adult (Hentai)"
@@ -318,10 +318,10 @@ export default function AdvancedFiltersPanel({
           />
         </div>
 
-        <div className="rounded-2xl border border-gray-800/60 bg-dark-200/30">
+        <div className="rounded-2xl border border-gray-800/60 bg-dark-200/30 overflow-hidden flex flex-col min-h-0 flex-1">
           <button
             onClick={() => setShowTagFilters((prev) => !prev)}
-            className="w-full px-5 py-4 flex items-center justify-between text-left"
+            className="w-full px-4 py-3 flex items-center justify-between text-left"
           >
             <span className="text-sm font-semibold text-gray-200">Advanced Genres & Tag Filters</span>
             <ChevronDown
@@ -330,55 +330,59 @@ export default function AdvancedFiltersPanel({
           </button>
 
           {showTagFilters && (
-            <div className="px-5 pb-5 border-t border-gray-800/60 space-y-5">
-              <div className="relative pt-4">
-                <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 mt-2" />
-                <input
-                  type="search"
-                  value={tagSearch}
-                  onChange={(e) => setTagSearch(e.target.value)}
-                  placeholder="Filter tags and genres..."
-                  className="w-full rounded-xl bg-dark-300/70 border border-gray-800 px-10 py-2.5 text-sm text-white outline-none focus:border-accent/50"
-                />
-              </div>
-
-              <div>
-                <SectionHeader>Genres</SectionHeader>
-                <div className="flex flex-wrap gap-2">
-                  {displayedGenres.map((genre) => (
-                    <Pill
-                      key={genre.slug}
-                      active={localFilters.genres.includes(genre.slug)}
-                      label={genre.name}
-                      onClick={() => onToggleGenre(genre.slug)}
-                    />
-                  ))}
+            <div className="border-t border-gray-800/60 flex flex-col min-h-0 h-full">
+              <div className="sticky top-0 z-10 px-4 pt-3 pb-2 bg-dark-100/95 backdrop-blur">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="search"
+                    value={tagSearch}
+                    onChange={(e) => setTagSearch(e.target.value)}
+                    placeholder="Filter tags and genres..."
+                    className="w-full rounded-xl bg-dark-300/70 border border-gray-800 px-10 py-2 text-xs text-white outline-none focus:border-accent/50"
+                  />
                 </div>
-                {!normalizedTagSearch && genres.length > 24 && (
-                  <button
-                    onClick={() => setShowAllGenres((prev) => !prev)}
-                    className="mt-3 text-xs font-semibold text-gray-500 hover:text-white uppercase tracking-wider"
-                  >
-                    {showAllGenres ? 'Show Less' : `Show All (${genres.length})`}
-                  </button>
-                )}
               </div>
 
-              {filteredTagGroups.map((group) => (
-                <div key={group.title}>
-                  <SectionHeader>{group.title}</SectionHeader>
-                  <div className="flex flex-wrap gap-2">
-                    {group.tags.map((tag) => (
+              <div className="tags-scroll flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4 pr-2">
+                <div>
+                  <SectionHeader>Genres</SectionHeader>
+                  <div className="flex flex-wrap gap-1.5">
+                    {displayedGenres.map((genre) => (
                       <Pill
-                        key={tag}
-                        active={selectedTags.includes(tag)}
-                        label={formatTag(tag)}
-                        onClick={() => onToggleTag(tag)}
+                        key={genre.slug}
+                        active={localFilters.genres.includes(genre.slug)}
+                        label={genre.name}
+                        onClick={() => onToggleGenre(genre.slug)}
                       />
                     ))}
                   </div>
+                  {!normalizedTagSearch && genres.length > 24 && (
+                    <button
+                      onClick={() => setShowAllGenres((prev) => !prev)}
+                      className="mt-3 text-xs font-semibold text-gray-500 hover:text-white uppercase tracking-wider"
+                    >
+                      {showAllGenres ? 'Show Less' : `Show All (${genres.length})`}
+                    </button>
+                  )}
                 </div>
-              ))}
+
+                {filteredTagGroups.map((group) => (
+                  <div key={group.title}>
+                    <SectionHeader>{group.title}</SectionHeader>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.tags.map((tag) => (
+                        <Pill
+                          key={tag}
+                          active={selectedTags.includes(tag)}
+                          label={formatTag(tag)}
+                          onClick={() => onToggleTag(tag)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -404,6 +408,20 @@ export default function AdvancedFiltersPanel({
           background: #fff;
           border: 2px solid #7550e8;
           cursor: ew-resize;
+        }
+        .tags-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .tags-scroll::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.04);
+          border-radius: 999px;
+        }
+        .tags-scroll::-webkit-scrollbar-thumb {
+          background: rgba(117, 80, 232, 0.6);
+          border-radius: 999px;
+        }
+        .tags-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(117, 80, 232, 0.85);
         }
       `}</style>
     </div>

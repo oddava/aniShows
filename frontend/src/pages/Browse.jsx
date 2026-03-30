@@ -578,9 +578,8 @@ export default function Browse() {
   ]);
 
   useEffect(() => {
-    window.scrollTo({ top: 0 });
     document.title = 'Browse Anime - AniShows';
-  }, [currentGenres.join(','), currentTags.join(','), currentSort, currentSearch, currentTypes, currentStatuses]);
+  }, []);
 
   // Filter helpers
   const updateParam = useCallback((key, value) => {
