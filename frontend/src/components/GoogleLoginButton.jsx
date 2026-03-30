@@ -1,14 +1,19 @@
 import { Chrome } from 'lucide-react';
 
+const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
+
 export default function GoogleLoginButton() {
     const handleLogin = () => {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         const redirectUri = `${window.location.origin}/auth/google/callback`;
-        const scope = 'profile email';
+        const scope = 'openid profile email';
         const responseType = 'code';
         const accessType = 'online';
+        const state = window.crypto.randomUUID();
 
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&access_type=${accessType}&include_granted_scopes=true`;
+        sessionStorage.setItem(GOOGLE_OAUTH_STATE_KEY, state);
+
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&access_type=${accessType}&include_granted_scopes=true&state=${encodeURIComponent(state)}`;
 
         window.location.href = authUrl;
     };

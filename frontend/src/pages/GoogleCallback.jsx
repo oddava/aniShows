@@ -4,6 +4,8 @@ import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
 
+const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
+
 export default function GoogleCallback() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -18,10 +20,17 @@ export default function GoogleCallback() {
 
         const code = searchParams.get('code');
         const errorParam = searchParams.get('error');
+        const state = searchParams.get('state');
+        const expectedState = sessionStorage.getItem(GOOGLE_OAUTH_STATE_KEY);
+        sessionStorage.removeItem(GOOGLE_OAUTH_STATE_KEY);
 
         if (errorParam) {
             setIsLoading(false);
             setError(`Google login cancelled: ${errorParam}`);
+            setTimeout(() => navigate('/login'), 3000);
+        } else if (!state || !expectedState || state !== expectedState) {
+            setIsLoading(false);
+            setError('Google login session expired. Please try again.');
             setTimeout(() => navigate('/login'), 3000);
         } else if (code) {
             handleGoogleCallback(code);
@@ -71,4 +80,3 @@ export default function GoogleCallback() {
         </div>
     );
 }
-

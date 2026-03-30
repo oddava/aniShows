@@ -10,18 +10,10 @@ from apps.shared.logger import logger
 from apps.users.views.social_auth import SocialLoginView
 
 
-class CustomOAuth2Client(OAuth2Client):
-    def __init__(self, *args, **kwargs):
-        # Fix for "got multiple values for argument 'scope_delimiter'"
-        kwargs.pop("scope_delimiter", None)
-        # Fix for potential other argument conflicts by just passing through
-        super().__init__(*args, **kwargs)
-
-
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
     callback_url = f"{settings.FRONTEND_URL}/auth/google/callback"
-    client_class = CustomOAuth2Client
+    client_class = OAuth2Client
     authentication_classes = []  # Disable CSRF check by removing SessionAuthentication
 
     @classmethod

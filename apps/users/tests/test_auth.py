@@ -19,6 +19,7 @@ from django.core.exceptions import MultipleObjectsReturned
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
+from requests.exceptions import RequestException
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
@@ -266,11 +267,26 @@ class SocialLoginSerializerTests(SimpleTestCase):
         def get_access_token(self, code):
             return {"access_token": "test-access-token"}
 
+    class RecordingClient:
+        last_args = None
+        last_kwargs = None
+
+        def __init__(self, *args, **kwargs):
+            self.__class__.last_args = args
+            self.__class__.last_kwargs = kwargs
+
+        def get_access_token(self, code):
+            return {"access_token": "test-access-token"}
+
+    class RequestFailingClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_access_token(self, code):
+            raise RequestException("google unreachable")
+
     class DummyProvider:
         app = SimpleNamespace(client_id="client-id", secret="client-secret")
-
-        def get_scope_from_request(self, request):
-            return ["profile", "email"]
 
     class DummyAdapter:
         provider_id = "google"
@@ -369,6 +385,56 @@ class SocialLoginSerializerTests(SimpleTestCase):
         self.assertEqual(
             serializer.errors["non_field_errors"][0],
             "Failed to finalize social login.",
+        )
+
+    @patch.object(SocialLoginSerializer.auth_service, "finalize_social_login")
+    @patch("apps.users.serializers.social_auth.complete_social_login")
+    @patch("apps.users.serializers.social_auth.SocialLoginSerializer.get_social_login")
+    def test_google_client_is_initialized_without_legacy_scope_positional_arg(
+        self,
+        mock_get_social_login,
+        mock_complete_social_login,
+        mock_finalize_social_login,
+    ):
+        """OAuth client init should match the current allauth signature."""
+        mock_get_social_login.return_value = SimpleNamespace(account=SimpleNamespace(user=SimpleNamespace()))
+        mock_complete_social_login.return_value = None
+        mock_finalize_social_login.return_value = SimpleNamespace()
+        request = self.request_factory.post("/api/v1/auth/google/", {"code": "fake-code"})
+        view = SimpleNamespace(
+            adapter_class=self.DummyAdapter,
+            client_class=self.RecordingClient,
+            callback_url=self.callback_url,
+        )
+
+        serializer = SocialLoginSerializer(
+            data={"code": "fake-code"},
+            context={"request": request, "view": view},
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(len(self.RecordingClient.last_args), 6)
+        self.assertEqual(self.RecordingClient.last_kwargs["scope_delimiter"], " ")
+
+    def test_request_exception_during_token_exchange_is_mapped_to_validation_error(self):
+        """Transient token exchange failures should not bubble up as 500s."""
+        request = self.request_factory.post("/api/v1/auth/google/", {"code": "fake-code"})
+        failing_view = SimpleNamespace(
+            adapter_class=self.DummyAdapter,
+            client_class=self.RequestFailingClient,
+            callback_url=self.callback_url,
+        )
+
+        serializer = SocialLoginSerializer(
+            data={"code": "fake-code"},
+            context={"request": request, "view": failing_view},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("non_field_errors", serializer.errors)
+        self.assertEqual(
+            serializer.errors["non_field_errors"][0],
+            "Failed to exchange code for access token",
         )
 
 

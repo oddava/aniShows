@@ -5,6 +5,7 @@ from django.http import HttpRequest, HttpResponseBadRequest
 from django.urls.exceptions import NoReverseMatch
 from django.utils.translation import gettext_lazy as _
 from requests.exceptions import HTTPError
+from requests.exceptions import RequestException
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 
@@ -82,8 +83,6 @@ class SocialLoginSerializer(serializers.Serializer):
             if not self.client_class:
                 raise serializers.ValidationError(_("Define client_class in view"))
 
-            provider = adapter.get_provider()
-            scope = provider.get_scope_from_request(request)
             client = self.client_class(
                 request,
                 app.client_id,
@@ -91,14 +90,21 @@ class SocialLoginSerializer(serializers.Serializer):
                 adapter.access_token_method,
                 adapter.access_token_url,
                 self.callback_url,
-                scope,
                 scope_delimiter=adapter.scope_delimiter,
                 headers=adapter.headers,
                 basic_auth=adapter.basic_auth,
             )
             try:
                 token = client.get_access_token(code)
-            except OAuth2Error as exc:
+            except (OAuth2Error, RequestException, ValueError) as exc:
+                logger.warning(
+                    "Google token exchange failed",
+                    extra={
+                        "provider": getattr(adapter, "provider_id", "unknown"),
+                        "callback_url": self.callback_url,
+                    },
+                    exc_info=True,
+                )
                 raise serializers.ValidationError(
                     _("Failed to exchange code for access token")
                 ) from exc
