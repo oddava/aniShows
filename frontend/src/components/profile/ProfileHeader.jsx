@@ -39,7 +39,7 @@ export default function ProfileHeader({
     if (!displayUser) return null;
 
     return (
-        <div className="relative mb-5 md:mb-6 profile-header">
+        <div className="relative mb-3 md:mb-6 profile-header">
             {/* Banner */}
             <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1] overflow-hidden bg-dark-200">
                 {displayUser?.banner ? (
@@ -60,19 +60,19 @@ export default function ProfileHeader({
             <div className="max-w-7xl mx-auto px-4 relative z-10">
                 {/* Mobile layout (Twitter-like) */}
                 <div className="md:hidden px-2 pt-2">
-                    <div className="relative shrink-0 -mt-16">
+                    <div className="relative shrink-0 -mt-12">
                         <ProfileAvatar
                             avatar={displayUser?.avatar}
                             username={displayUser?.username}
-                            sizeClass="w-28 h-28"
-                            iconClass="w-16 h-16"
+                            sizeClass="w-24 h-24"
+                            iconClass="w-12 h-12"
                         />
                     </div>
 
-                    <div className="mt-2 flex flex-col gap-2">
+                    <div className="mt-2 flex flex-col gap-1.5">
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                <h1 className="text-2xl font-bold text-white tracking-tight">
+                                <h1 className="text-2xl font-semibold text-white tracking-tight">
                                     {displayUser?.username}
                                 </h1>
                                 <UserBadges user={displayUser} />
@@ -103,7 +103,7 @@ export default function ProfileHeader({
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4 text-sm font-medium mt-1">
+                        <div className="flex items-center gap-4 text-sm font-medium">
                             <button
                                 onClick={() => onOpenFollowersModal('following')}
                                 className="text-gray-400 hover:text-white transition-colors"
@@ -123,20 +123,20 @@ export default function ProfileHeader({
                 </div>
 
                 {/* Desktop layout (original style) */}
-                <div className="hidden md:flex items-start gap-8 px-2 sm:px-4 pt-2 lg:pt-3">
-                    <div className="relative shrink-0 -mt-24">
+                <div className="hidden md:flex items-start gap-6 px-2 sm:px-4 pt-2 lg:pt-3">
+                    <div className="relative shrink-0 -mt-16 lg:-mt-20">
                         <ProfileAvatar
                             avatar={displayUser?.avatar}
                             username={displayUser?.username}
-                            sizeClass="w-44 h-44"
-                            iconClass="w-24 h-24"
+                            sizeClass="w-32 h-32 lg:w-36 lg:h-36"
+                            iconClass="w-16 h-16 lg:w-20 lg:h-20"
                         />
                     </div>
 
                     <div className="flex-1 flex items-center justify-between w-full gap-4 mt-1">
                         <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-4">
-                                <h1 className="text-4xl font-bold text-white tracking-tight drop-shadow-md">
+                                <h1 className="text-2xl lg:text-3xl font-semibold text-white tracking-tight">
                                     {displayUser?.username}
                                 </h1>
                                 <UserBadges user={displayUser} />
