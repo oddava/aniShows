@@ -9,28 +9,7 @@ import HorizontalCarousel from '../common/HorizontalCarousel';
 import AnimeMediaImage from '../common/AnimeMediaImage';
 import { activityApi, listApi, favoriteApi, followApi } from '../../api/client';
 
-function FriendAvatar({ user }) {
-    const [avatarFailed, setAvatarFailed] = useState(false);
-    const showAvatarImage = !!user.avatar && !avatarFailed;
 
-    if (showAvatarImage) {
-        return (
-            <img
-                src={user.avatar}
-                alt=""
-                className="h-11 w-11 rounded-full border-2 border-gray-700 object-cover"
-                loading="lazy"
-                onError={() => setAvatarFailed(true)}
-            />
-        );
-    }
-
-    return (
-        <div className="ui-avatar-fallback h-11 w-11">
-            <UserRound className="h-5 w-5 text-slate-500" aria-hidden="true" />
-        </div>
-    );
-}
 
 function TopStatsRow({ user }) {
     if (!user) return null;
@@ -177,73 +156,7 @@ function FavoritesGrid({ favoritesData }) {
     );
 }
 
-function FriendsGrid({ username, isPrivate, onTabChange }) {
-    const { data: friendsData, isLoading } = useQuery({
-        queryKey: ['friends', username],
-        queryFn: () => followApi.getMutuals(username, { page_size: 12 }).then(res => res.data),
-        enabled: !isPrivate && !!username,
-        staleTime: 2 * 60 * 1000,
-        refetchOnMount: true,
-    });
 
-    const friends = friendsData?.results || [];
-
-    if (isPrivate || isLoading) return null;
-
-    const MAX_DISPLAYED = 10;
-    const displayedFriends = friends.slice(0, MAX_DISPLAYED);
-    const totalCount = friendsData?.count || friends.length;
-    const remainingCount = totalCount - MAX_DISPLAYED;
-
-    return (
-        <div className="ui-surface-subtle p-5">
-            <div className="flex items-center justify-between mb-4">
-                <button
-                    onClick={() => onTabChange && onTabChange('friends')}
-                    className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-[0.16em]"
-                >
-                    Friends
-                </button>
-                {totalCount > 0 && (
-                    <span className="text-[10px] text-gray-500">{totalCount}</span>
-                )}
-            </div>
-
-            {friends.length === 0 ? (
-                <div className="text-center py-6 text-gray-500">
-                    <p className="text-xs">No friends yet</p>
-                </div>
-            ) : (
-                <div className="flex flex-wrap gap-3">
-                    {displayedFriends.map((item) => (
-                        <Link
-                            key={item.user.id}
-                            to={`/u/${item.user.username}`}
-                            className="flex w-14 flex-col items-center gap-1.5"
-                            title={item.user.username}
-                        >
-                            <FriendAvatar user={item.user} />
-                            <span className="w-full truncate text-center text-[10px] text-gray-400">
-                                {item.user.username}
-                            </span>
-                        </Link>
-                    ))}
-                    {remainingCount > 0 && (
-                        <button
-                            onClick={() => onTabChange && onTabChange('friends')}
-                            className="flex w-14 flex-col items-center gap-1.5"
-                        >
-                            <div className="w-11 h-11 rounded-full bg-dark-200 border-2 border-gray-700/50 flex items-center justify-center">
-                                <span className="text-xs font-medium text-gray-400">+{remainingCount}</span>
-                            </div>
-                            <span className="text-[10px] text-gray-500 truncate w-full text-center mt-auto">View All</span>
-                        </button>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-}
 
 function GenreOverviewSidebar({ username, isPrivate }) {
     const { data: listsData, isLoading } = useQuery({
@@ -406,7 +319,7 @@ export default function OverviewTab({
                         </div>
                     ) : null}
 
-                    <FriendsGrid username={targetUsername} isPrivate={isPrivate} onTabChange={onTabChange} />
+
 
                     <ActivityHistorySidebar
                         username={targetUsername}
@@ -415,16 +328,10 @@ export default function OverviewTab({
                     />
 
                     <GenreOverviewSidebar username={targetUsername} isPrivate={isPrivate} />
-                </div>
 
-                <div className="lg:col-span-6 min-h-[400px]">
-                    <FavoritesGrid favoritesData={favoritesData} />
-
-                    <CurrentlyWatchingGrid watchingItems={watchingItems} />
-
-                    <div className="mt-8 ui-surface-subtle p-5">
+                    <div className="ui-surface-subtle p-5">
                         <div className="mb-5 flex items-center justify-between gap-4">
-                            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Watching Activity</h3>
+                            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Activity</h3>
                             <button
                                 type="button"
                                 onClick={() => onTabChange && onTabChange('activity')}
@@ -435,6 +342,14 @@ export default function OverviewTab({
                         </div>
                         <ActivityFeed username={targetUsername} isPrivate={isPrivate} compact />
                     </div>
+                </div>
+
+                <div className="lg:col-span-6 min-h-[400px]">
+                    <FavoritesGrid favoritesData={favoritesData} />
+
+                    <CurrentlyWatchingGrid watchingItems={watchingItems} />
+
+
                 </div>
             </div>
         </div>
