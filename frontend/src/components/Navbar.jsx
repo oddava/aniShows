@@ -9,7 +9,6 @@ import {
     Clapperboard,
     MessageSquare,
     Compass,
-    Flame,
     CalendarDays,
     Search,
 } from 'lucide-react';
@@ -566,7 +565,7 @@ export default function Navbar() {
     const mobileProfileLabel = isAuthenticated ? 'Profile' : 'Sign In';
 
     const showMobileIsland = useMemo(() => {
-        const mainPaths = ['/', '/browse', '/seasonal', '/schedule', '/forums', '/profile', '/u', '/settings', '/notifications'];
+        const mainPaths = ['/', '/browse', '/schedule', '/forums', '/profile', '/u', '/settings', '/notifications'];
         return mainPaths.some((path) => {
             if (path === '/') return location.pathname === '/';
             return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -574,7 +573,7 @@ export default function Navbar() {
     }, [location.pathname]);
 
     const isPathActive = (path) => {
-        if (path === '/browse' || path === '/seasonal' || path === '/schedule') {
+        if (path === '/browse' || path === '/schedule') {
             return location.pathname === path;
         }
         return location.pathname.startsWith(path);
@@ -656,7 +655,6 @@ export default function Navbar() {
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-1.5 flex-1 ml-6 lg:ml-8">
                             <NavItem to="/browse" label="Browse" />
-                            <NavItem to="/seasonal" label="Seasonal" />
                             <NavItem to="/schedule" label="Schedule" />
                             <NavItem to="/forums" label="Forums" />
                             {(isAuthenticated || authLoading) && (
@@ -945,7 +943,7 @@ export default function Navbar() {
                                 <button
                                     type="button"
                                     onClick={() => setIsMobileAnimeOpen((prev) => !prev)}
-                                    className={`w-full ${mobileTabClasses(isPathActive('/browse') || isPathActive('/seasonal') || isPathActive('/schedule'))}`}
+                                    className={`w-full ${mobileTabClasses(isPathActive('/browse') || isPathActive('/schedule'))}`}
                                 >
                                     <Clapperboard className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                                     <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Anime</span>
@@ -965,13 +963,6 @@ export default function Navbar() {
                                         >
                                             <Compass className="h-3.5 w-3.5 text-gray-300" />
                                             Browse
-                                        </Link>
-                                        <Link
-                                            to="/seasonal"
-                                            className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
-                                        >
-                                            <Flame className="h-3.5 w-3.5 text-gray-300" />
-                                            Seasonal
                                         </Link>
                                         <Link
                                             to="/schedule"

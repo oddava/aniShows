@@ -17,10 +17,6 @@ const pageSEO = {
     title: 'Browse Anime | AniShows - Discover New Series',
     description: 'Browse through thousands of anime series. Filter by genre, season, year, and rating to find your next favorite show.',
   },
-  seasonal: {
-    title: 'Seasonal Anime | AniShows - This Season\'s Best',
-    description: 'Explore anime airing this season. Stay up to date with the latest releases and discover new favorites.',
-  },
   schedule: {
     title: 'Anime Schedule | AniShows - Release Calendar',
     description: 'Check when the next episode of your favorite anime airs. Weekly anime release schedule and countdown timers.',

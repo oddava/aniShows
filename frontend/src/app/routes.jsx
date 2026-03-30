@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 
 import AdminLayout from '../components/AdminLayout';
 import AdminRoute from '../components/AdminRoute';
@@ -46,7 +46,6 @@ const GoogleCallback = lazyWithRetry(() => import('../pages/GoogleCallback'));
 const Terms = lazyWithRetry(() => import('../pages/Terms'));
 const Privacy = lazyWithRetry(() => import('../pages/Privacy'));
 const NotFound = lazyWithRetry(() => import('../pages/NotFound'));
-const Seasonal = lazyWithRetry(() => import('../pages/Seasonal'));
 const Schedule = lazyWithRetry(() => import('../pages/Schedule'));
 const ImportPage = lazyWithRetry(() => import('../pages/ImportPage'));
 const ExportPage = lazyWithRetry(() => import('../pages/ExportPage'));
@@ -100,7 +99,7 @@ export default function AppRoutes() {
                 <Route element={<Layout />}>
                     <Route index element={<Home />} />
                     <Route path="browse" element={<Browse />} />
-                    <Route path="seasonal" element={<Seasonal />} />
+                    <Route path="seasonal" element={<Navigate to="/browse" replace />} />
                     <Route path="schedule" element={<Schedule />} />
                     <Route path="anime/:slug" element={<AnimeDetail />} />
                     <Route path="profile/*" element={<Profile />} />
