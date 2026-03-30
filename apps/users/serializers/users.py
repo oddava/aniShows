@@ -270,7 +270,6 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     followers_count = SerializerMethodField()
     following_count = SerializerMethodField()
     is_following = SerializerMethodField()
-    is_online = SerializerMethodField()
 
     badges = SerializerMethodField()
 
@@ -296,7 +295,6 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "followers_count",
             "following_count",
             "is_following",
-            "is_online",
             "badges",
         ]
         read_only_fields = fields
@@ -327,28 +325,6 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             return int(count)
 
         return obj.following.count()
-
-    def get_is_online(self, obj):
-        """Check if user is currently online based on recent activity"""
-        from datetime import timedelta
-
-        from django.core.cache import cache
-        from django.utils import timezone
-
-        from apps.users.services.cache import get_user_online_cache_key
-
-        cache_key = get_user_online_cache_key(obj.id)
-        if cache.get(cache_key) is not None:
-            return True
-
-        profile = getattr(obj, "userprofile", None)
-        if profile and profile.last_activity:
-            time_since_activity = timezone.now() - profile.last_activity
-            if time_since_activity < timedelta(minutes=5):
-                return True
-
-        return False
-
 
 class UserProfileUpdateSerializer(Serializer):
     username = CharField(max_length=150, required=False)

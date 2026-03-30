@@ -11,7 +11,7 @@ from apps.shared.media_urls import normalize_media_url
 from apps.users.serializers.users import PublicUserSerializer
 from apps.users.services.avatar_service import get_user_avatar_url
 from apps.users.services.cache import get_public_profile_cache_key
-from apps.users.services.profile_service import get_featured_badges, is_user_online
+from apps.users.services.profile_service import get_featured_badges
 from apps.users.services.user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
@@ -117,7 +117,6 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
                 "favorites_count": stats.favorites_count,
                 "reviews_count": stats.reviews_count,
-                "is_online": is_user_online(user),
             }
 
             if is_authenticated:

@@ -3,20 +3,16 @@ from apps.shared.logger import logger
 """
 WebSocket consumers for the core app.
 
-Provides real-time notification delivery and online presence tracking.
+Provides real-time notification delivery.
 """
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from django.core.cache import cache
-from django.utils import timezone
 
 from apps.core.services.notification_service import NotificationService
 
-ONLINE_TIMEOUT = 300
-
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
-    """WebSocket consumer for real-time user notifications and presence.
+    """WebSocket consumer for real-time user notifications.
 
     Each authenticated user joins a personal notification group:
     ``notifications_user_{user_id}``
@@ -29,9 +25,6 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         - ``unread_count``: Updated unread notification count
         - ``notification_read``: A notification was marked as read
 
-    Presence:
-        On connect, the user is marked online in Redis.
-        On disconnect, the online key is removed.
     """
 
     async def connect(self):
@@ -50,9 +43,6 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
 
         await self.accept()
 
-        # Mark user as online
-        await self._set_online()
-
         # Send current unread count on connect
         unread_count = await self._get_unread_count()
         await self.send_json(
@@ -65,12 +55,11 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         logger.info("WebSocket connected: user=%s", self.user_id)
 
     async def disconnect(self, code):
-        """Leave notification group and mark user offline."""
+        """Leave notification group."""
         if hasattr(self, "group_name"):
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
         if hasattr(self, "user") and self.user and not self.user.is_anonymous:
-            await self._set_offline()
             logger.info("WebSocket disconnected: user=%s code=%s", self.user_id, code)
 
     async def receive_json(self, content, **kwargs):
@@ -107,8 +96,6 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             )
 
         elif msg_type == "ping":
-            # Heartbeat — refresh online status
-            await self._set_online()
             await self.send_json({"type": "pong"})
 
     # ------------------------------------------------------------------
@@ -167,21 +154,3 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _mark_all_read(self):
         NotificationService.mark_all_as_read(self.user)
-
-    # ------------------------------------------------------------------
-    # Presence helpers
-    # ------------------------------------------------------------------
-
-    @database_sync_to_async
-    def _set_online(self):
-        from apps.users.services.cache import get_user_online_cache_key
-
-        cache_key = get_user_online_cache_key(self.user_id)
-        cache.set(cache_key, timezone.now().isoformat(), timeout=ONLINE_TIMEOUT)
-
-    @database_sync_to_async
-    def _set_offline(self):
-        from apps.users.services.cache import get_user_online_cache_key
-
-        cache_key = get_user_online_cache_key(self.user_id)
-        cache.delete(cache_key)

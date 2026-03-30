@@ -34,7 +34,7 @@ export default function ProfileHeader({
                 {/* Mobile layout (Twitter-like) */}
                 <div className="md:hidden px-2 pt-2">
                     <div className="relative shrink-0 -mt-16">
-                        <div className="w-28 h-28 rounded-full bg-dark border-4 border-dark overflow-hidden">
+                        <div className="w-28 h-28 rounded-full border-4 border-dark overflow-hidden">
                             {displayUser?.avatar ? (
                                 <img
                                     src={displayUser.avatar}
@@ -108,7 +108,7 @@ export default function ProfileHeader({
                 {/* Desktop layout (original style) */}
                 <div className="hidden md:flex items-start gap-8 px-2 sm:px-4 pt-2 lg:pt-3">
                     <div className="relative shrink-0 -mt-28">
-                        <div className="w-40 h-40 rounded-2xl bg-dark overflow-hidden">
+                        <div className="w-40 h-40 rounded-2xl overflow-hidden">
                             {displayUser?.avatar ? (
                                 <img
                                     src={displayUser.avatar}
@@ -124,11 +124,6 @@ export default function ProfileHeader({
                                 <User className="w-20 h-20 text-gray-600" />
                             </div>
                         </div>
-                        {displayUser?.is_online ? (
-                            <div className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-dark" title="Online" />
-                        ) : (
-                            <div className="absolute bottom-2 right-2 w-4 h-4 bg-gray-500 rounded-full border-2 border-dark" title="Offline" />
-                        )}
                     </div>
 
                     <div className="flex-1 flex items-start justify-between w-full gap-4 mt-1">

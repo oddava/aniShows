@@ -33,7 +33,8 @@ export default async function getCroppedImg(
     pixelCrop,
     rotation = 0,
     flip = { horizontal: false, vertical: false },
-    maxWidth = 1500
+    maxWidth = 1500,
+    outputType = 'image/png'
 ) {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
@@ -100,12 +101,13 @@ export default async function getCroppedImg(
 
     // As a blob
     return new Promise((resolve, reject) => {
+        const normalizedOutputType = outputType || 'image/png';
         croppedCanvas.toBlob((file) => {
             if (file) {
                 resolve(file);
             } else {
                 reject(new Error('Canvas is empty'));
             }
-        }, 'image/webp', 0.92);
+        }, normalizedOutputType, normalizedOutputType === 'image/png' ? undefined : 0.92);
     });
 }

@@ -104,7 +104,3 @@ def get_profile_cache_version(username):
         cache.set(version_key, 0, timeout=3600)
         return 0
     return version
-
-def get_user_online_cache_key(user_id):
-    """Get the cache key for user online status."""
-    return f"user_online:{user_id}"

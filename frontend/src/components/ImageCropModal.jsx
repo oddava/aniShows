@@ -9,6 +9,7 @@ export default function ImageCropModal({
     imageSrc,
     aspect,
     mediaType = 'image',
+    sourceMimeType = '',
     cropShape = 'rect',
     onClose,
     onApply,
@@ -50,18 +51,24 @@ export default function ImageCropModal({
         try {
             setIsProcessing(true);
             const isBannerCrop = mediaType === 'banner';
+            const supportsTransparency = ['image/png', 'image/webp', 'image/gif'].includes(
+                String(sourceMimeType || '').toLowerCase()
+            );
+            const outputType = supportsTransparency ? 'image/png' : 'image/webp';
             const croppedBlob = await getCroppedImg(
                 imageSrc,
                 croppedAreaPixels,
                 0,
                 { horizontal: false, vertical: false },
-                isBannerCrop ? 1500 : 400 // Max width: 1500 for banner, 400 for avatar
+                isBannerCrop ? 1500 : 400, // Max width: 1500 for banner, 400 for avatar
+                outputType
             );
 
             if (croppedBlob) {
                 // Convert to File
-                const fileName = isBannerCrop ? 'banner.webp' : 'avatar.webp';
-                const file = new File([croppedBlob], fileName, { type: 'image/webp' });
+                const fileExtension = outputType === 'image/png' ? 'png' : 'webp';
+                const fileName = isBannerCrop ? `banner.${fileExtension}` : `avatar.${fileExtension}`;
+                const file = new File([croppedBlob], fileName, { type: outputType });
                 const previewUrl = URL.createObjectURL(croppedBlob);
                 onApply(file, previewUrl);
             }

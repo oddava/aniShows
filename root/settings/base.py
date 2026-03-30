@@ -208,7 +208,6 @@ MIDDLEWARE = [
     "apps.core.middleware.LoggingMiddleware",
     "apps.core.middleware.AdminAuditMiddleware",
     "apps.core.middleware.ExceptionLoggingMiddleware",
-    "apps.users.middleware.activity_middleware.UserActivityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
@@ -546,12 +545,10 @@ SIMPLE_JWT = {
 # Cache key prefixes and templates
 PROFILE_CACHE_KEY_TEMPLATE = "public_profile:{username}:v{version}"
 PROFILE_CACHE_VERSION_KEY_TEMPLATE = "profile_cache_version:{username}"
-USER_ONLINE_CACHE_KEY_TEMPLATE = "user_online:{user_id}"
 
 # Cache TTLs (in seconds)
 PROFILE_CACHE_TTL = 1800  # 30 minutes for public profiles
 PROFILE_CACHE_VERSION_TTL = 3600  # 1 hour for version keys
-USER_ONLINE_CACHE_TTL = 300  # 5 minutes for online status
 
 # =============================================================================
 # REDIS CACHE (with authentication support)

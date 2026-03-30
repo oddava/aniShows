@@ -105,6 +105,7 @@ export default function Settings() {
     const [cropModal, setCropModal] = useState({
         isOpen: false,
         imageSrc: null,
+        sourceMimeType: '',
         type: 'avatar' // 'avatar' or 'banner'
     });
     const [bannerCropAspect, setBannerCropAspect] = useState(() => {
@@ -603,7 +604,7 @@ export default function Settings() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                        <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl bg-dark-50 overflow-hidden flex items-center justify-center shrink-0">
+                                        <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl overflow-hidden flex items-center justify-center shrink-0">
                                             {avatarPreviewUrl ? (
                                                 <img src={avatarPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                             ) : user?.avatar ? (
@@ -624,6 +625,7 @@ export default function Settings() {
                                                     setCropModal({
                                                         isOpen: true,
                                                         imageSrc: url,
+                                                        sourceMimeType: file.type || '',
                                                         type: 'avatar'
                                                     });
                                                 }
@@ -639,7 +641,7 @@ export default function Settings() {
                                 {/* Banner */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Banner Image</label>
-                                    <div className="relative mb-3 w-full aspect-[3.2/1] overflow-hidden rounded-xl bg-dark-50 group sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1]">
+                                    <div className="relative mb-3 w-full aspect-[3.2/1] overflow-hidden rounded-xl group sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1]">
                                         {bannerPreviewUrl ? (
                                             <img src={bannerPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
                                         ) : user?.banner && !removeBanner ? (
@@ -673,6 +675,7 @@ export default function Settings() {
                                                     setCropModal({
                                                         isOpen: true,
                                                         imageSrc: url,
+                                                        sourceMimeType: file.type || '',
                                                         type: 'banner'
                                                     });
                                                     setRemoveBanner(false);
@@ -1292,6 +1295,7 @@ export default function Settings() {
                 imageSrc={cropModal.imageSrc}
                 aspect={cropModal.type === 'banner' ? bannerCropAspect : 1}
                 mediaType={cropModal.type}
+                sourceMimeType={cropModal.sourceMimeType}
                 cropShape={cropModal.type === 'banner' ? 'rect' : 'rect'}
                 title={cropModal.type === 'banner' ? 'Edit banner' : 'Edit profile picture'}
                 onClose={() => {

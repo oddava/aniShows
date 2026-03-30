@@ -12,14 +12,11 @@ from apps.users.models import UserBadge, UserStats
 from apps.users.services.avatar_service import get_user_avatar_url
 
 try:
-    from apps.users.services.cache import get_user_online_cache_key, get_user_profile_cache_key
+    from apps.users.services.cache import get_user_profile_cache_key
 except ImportError:
     # Backward-compatible fallback for environments with older cache service exports.
     def get_user_profile_cache_key(user_id, full=False):
         return f"user_profile:{user_id}:{'full' if full else 'light'}"
-
-    def get_user_online_cache_key(user_id):
-        return f"user_online:{user_id}"
 
 
 User = get_user_model()
@@ -96,23 +93,6 @@ def get_featured_badges(user):
     ]
     total_count = UserBadge.objects.filter(user=user, badge__is_active=True).count()
     return badges, total_count
-
-
-def is_user_online(user) -> bool:
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    cache_key = get_user_online_cache_key(user.id)
-    if cache.get(cache_key) is not None:
-        return True
-
-    if user.userprofile and user.userprofile.last_activity:
-        time_since = timezone.now() - user.userprofile.last_activity
-        if time_since < timedelta(minutes=5):
-            return True
-
-    return False
 
 
 def _get_stats_snapshot(user):
