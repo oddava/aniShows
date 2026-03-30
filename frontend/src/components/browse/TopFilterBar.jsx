@@ -71,6 +71,9 @@ export default function TopFilterBar({
         const newParams = new URLSearchParams(searchParams);
         if (newParams.get(key) === value) {
             newParams.delete(key);
+            if (key === 'season') {
+                newParams.delete('year');
+            }
         } else {
             newParams.set(key, value);
             if (key === 'season' && !newParams.get('year')) {

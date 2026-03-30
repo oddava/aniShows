@@ -830,6 +830,7 @@ export default function Browse() {
                   onClearType={() => updateParam('type', '')}
                   onClearStatus={() => updateParam('status', '')}
                   onClearSeason={clearSeasonAndYear}
+                  onClearYear={() => updateParam('year', '')}
                   onClearMinRating={() => updateParam('min_rating', '')}
                   onClearMaxRating={() => updateParam('max_rating', '')}
                   onClearStudio={() => updateParam('studio', '')}

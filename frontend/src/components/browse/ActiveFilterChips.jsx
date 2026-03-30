@@ -27,6 +27,7 @@ export default function ActiveFilterChips({
   onClearType,
   onClearStatus,
   onClearSeason,
+  onClearYear,
   onClearMinRating,
   onClearMaxRating,
   onClearStudio,
@@ -66,6 +67,14 @@ export default function ActiveFilterChips({
       key: 'season',
       label: `${seasonOptions.find(s => s.value === currentSeason)?.label.split(' ')[0]} ${currentYear || ''}`.trim(),
       onClear: onClearSeason
+    });
+  }
+
+  if (currentYear && !currentSeason && !currentMinYear && !currentMaxYear) {
+    filters.push({
+      key: 'year',
+      label: `Year ${currentYear}`,
+      onClear: onClearYear,
     });
   }
 
@@ -237,6 +246,7 @@ ActiveFilterChips.propTypes = {
   onClearType: PropTypes.func.isRequired,
   onClearStatus: PropTypes.func.isRequired,
   onClearSeason: PropTypes.func.isRequired,
+  onClearYear: PropTypes.func.isRequired,
   onClearMinRating: PropTypes.func.isRequired,
   onClearMaxRating: PropTypes.func.isRequired,
   onClearStudio: PropTypes.func.isRequired,
