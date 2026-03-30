@@ -30,15 +30,15 @@ export default function UserBadges({ user }) {
                 return (
                     <div
                         key={badge.id || index}
-                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${colorClasses}`}
+                        className={`inline-flex items-center shrink-0 gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${colorClasses}`}
                         title={badge.description}
                     >
                         {badge.image ? (
-                            <img src={badge.image} alt={badge.name} className="w-3 h-3 rounded-sm object-cover" />
+                            <img src={badge.image} alt={badge.name} className="w-3 h-3 rounded-sm object-cover shrink-0" />
                         ) : (
-                            <Icon className="w-3 h-3" />
+                            <Icon className="w-3 h-3 shrink-0" />
                         )}
-                        <span>{badge.name}</span>
+                        <span className="whitespace-nowrap">{badge.name}</span>
                     </div>
                 );
             })}
