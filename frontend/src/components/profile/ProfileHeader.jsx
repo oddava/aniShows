@@ -1,7 +1,34 @@
+import { useEffect, useState } from 'react';
 import { User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FollowButton from '../FollowButton';
 import UserBadges from './UserBadges';
+
+function ProfileAvatar({ avatar, username, sizeClass, iconClass }) {
+    const [avatarFailed, setAvatarFailed] = useState(false);
+    const showAvatar = Boolean(avatar) && !avatarFailed;
+
+    useEffect(() => {
+        setAvatarFailed(false);
+    }, [avatar]);
+
+    return (
+        <div className={`${sizeClass} rounded-2xl overflow-hidden`}>
+            {showAvatar ? (
+                <img
+                    src={avatar}
+                    alt={username}
+                    className="w-full h-full object-cover"
+                    onError={() => setAvatarFailed(true)}
+                />
+            ) : (
+                <div className="w-full h-full bg-dark-200 flex items-center justify-center">
+                    <User className={`${iconClass} text-gray-600`} />
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function ProfileHeader({
     displayUser,
@@ -34,22 +61,12 @@ export default function ProfileHeader({
                 {/* Mobile layout (Twitter-like) */}
                 <div className="md:hidden px-2 pt-2">
                     <div className="relative shrink-0 -mt-16">
-                        <div className="w-28 h-28 rounded-2xl overflow-hidden">
-                            {displayUser?.avatar ? (
-                                <img
-                                    src={displayUser.avatar}
-                                    alt={displayUser.username}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextElementSibling?.style && (e.target.nextElementSibling.style.display = 'flex');
-                                    }}
-                                />
-                            ) : null}
-                            <div className={`w-full h-full bg-dark-200 items-center justify-center ${displayUser?.avatar ? 'hidden' : 'flex'}`}>
-                                <User className="w-16 h-16 text-gray-600" />
-                            </div>
-                        </div>
+                        <ProfileAvatar
+                            avatar={displayUser?.avatar}
+                            username={displayUser?.username}
+                            sizeClass="w-28 h-28"
+                            iconClass="w-16 h-16"
+                        />
                     </div>
 
                     <div className="mt-2 flex flex-col gap-2">
@@ -108,22 +125,12 @@ export default function ProfileHeader({
                 {/* Desktop layout (original style) */}
                 <div className="hidden md:flex items-start gap-8 px-2 sm:px-4 pt-2 lg:pt-3">
                     <div className="relative shrink-0 -mt-24">
-                        <div className="w-44 h-44 rounded-2xl overflow-hidden">
-                            {displayUser?.avatar ? (
-                                <img
-                                    src={displayUser.avatar}
-                                    alt={displayUser.username}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextElementSibling?.style && (e.target.nextElementSibling.style.display = 'flex');
-                                    }}
-                                />
-                            ) : null}
-                            <div className={`w-full h-full bg-dark-200 items-center justify-center ${displayUser?.avatar ? 'hidden' : 'flex'}`}>
-                                <User className="w-24 h-24 text-gray-600" />
-                            </div>
-                        </div>
+                        <ProfileAvatar
+                            avatar={displayUser?.avatar}
+                            username={displayUser?.username}
+                            sizeClass="w-44 h-44"
+                            iconClass="w-24 h-24"
+                        />
                     </div>
 
                     <div className="flex-1 flex items-center justify-between w-full gap-4 mt-1">
