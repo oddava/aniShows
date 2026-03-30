@@ -116,7 +116,7 @@ class SocialLoginSerializer(serializers.Serializer):
             else:
                 login = self.get_social_login(adapter, app, social_token, token)
             ret = complete_social_login(request, login)
-        except HTTPError as exc:
+        except (OAuth2Error, HTTPError) as exc:
             raise serializers.ValidationError(_("Incorrect value")) from exc
 
         if isinstance(ret, HttpResponseBadRequest):

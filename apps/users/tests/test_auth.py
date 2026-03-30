@@ -9,16 +9,20 @@ Tests for:
 - Profile retrieval
 """
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from allauth.socialaccount.providers.oauth2.client import OAuth2Error
 from botocore.exceptions import EndpointConnectionError
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from apps.users.models import UserProfile
+from apps.users.serializers.social_auth import SocialLoginSerializer
 
 User = get_user_model()
 
@@ -249,6 +253,66 @@ class LoginTests(APITestCase):
         data = {"username": "nouser", "password": "anypass123"}
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class SocialLoginSerializerTests(SimpleTestCase):
+    """Unit tests for social login serializer edge cases."""
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_access_token(self, code):
+            return {"access_token": "test-access-token"}
+
+    class DummyProvider:
+        app = SimpleNamespace(client_id="client-id", secret="client-secret")
+
+        def get_scope_from_request(self, request):
+            return ["profile", "email"]
+
+    class DummyAdapter:
+        provider_id = "google"
+        access_token_method = "POST"
+        access_token_url = "https://oauth2.example/token"
+        scope_delimiter = " "
+        headers = {}
+        basic_auth = False
+        expires_in_key = "expires_in"
+
+        def __init__(self, request):
+            self.request = request
+
+        def get_provider(self):
+            return SocialLoginSerializerTests.DummyProvider()
+
+        def parse_token(self, tokens):
+            return SimpleNamespace(app=None, token=tokens["access_token"])
+
+    def setUp(self):
+        self.request_factory = RequestFactory()
+        self.callback_url = f"{settings.FRONTEND_URL}/auth/google/callback"
+        self.view = SimpleNamespace(
+            adapter_class=self.DummyAdapter,
+            client_class=self.DummyClient,
+            callback_url=self.callback_url,
+        )
+
+    @patch("apps.users.serializers.social_auth.SocialLoginSerializer.get_social_login")
+    def test_oauth2_error_is_mapped_to_validation_error(self, mock_get_social_login):
+        """OAuth2Error from Google login completion should be surfaced as serializer validation error."""
+        mock_get_social_login.side_effect = OAuth2Error("Invalid id_token")
+        request = self.request_factory.post("/api/v1/auth/google/", {"code": "fake-code"})
+
+        serializer = SocialLoginSerializer(
+            data={"code": "fake-code"},
+            context={"request": request, "view": self.view},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("non_field_errors", serializer.errors)
+        self.assertEqual(serializer.errors["non_field_errors"][0], "Incorrect value")
+
 
 class TokenRefreshTests(APITestCase):
     """Tests for token refresh endpoint."""
