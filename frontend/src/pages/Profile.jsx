@@ -8,7 +8,6 @@ import FollowersModal from '../components/FollowersModal';
 import {
     ProfileErrorBoundary,
     ProfileHeader,
-    ProfileStats,
     ProfileTabs,
     ProfileContent,
 } from '../components/profile';
@@ -20,7 +19,6 @@ import {
     normalizeProfilePrimaryColor,
 } from '../utils/profileAccent';
 
-import MarkdownRenderer from '../components/common/MarkdownRenderer';
 import OverviewTab from '../components/profile/OverviewTab';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
@@ -285,11 +283,11 @@ export default function Profile({ forcedUsername }) {
 
     // Handle loading states first
     if (isPublicView && profileLoading) {
-        return <ProfileSkeleton />;
+        return <ProfileSkeleton activeTab={activeTab} />;
     }
 
     if (!isPublicView && loading) {
-        return <ProfileSkeleton />;
+        return <ProfileSkeleton activeTab={activeTab} />;
     }
 
     if (!isPublicView && !isAuthenticated) {
@@ -307,7 +305,7 @@ export default function Profile({ forcedUsername }) {
     }
 
     if (!displayUser) {
-        return <ProfileSkeleton />;
+        return <ProfileSkeleton activeTab={activeTab} />;
     }
 
     const tabCounts = {
@@ -385,39 +383,164 @@ export default function Profile({ forcedUsername }) {
     );
 }
 
-function ProfileSkeleton() {
+function ProfileSkeleton({ activeTab = 'overview' }) {
+    const showOverviewSkeleton = activeTab === 'overview';
+    const tabSkeletonWidths = ['w-16', 'w-14', 'w-16', 'w-14', 'w-16', 'w-16', 'w-12'];
+
     return (
         <div className="min-h-screen overflow-x-hidden pb-20">
-            <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1] overflow-hidden">
-                <div className="w-full h-full bg-dark-50 animate-pulse" />
-                <div className="absolute inset-x-0 bottom-0 h-32 bg-transparent" />
-            </div>
+            <div className="relative mb-3 md:mb-6">
+                <div className="relative w-full aspect-[3.2/1] sm:aspect-[3.8/1] md:aspect-[4.6/1] lg:aspect-[4.9/1] xl:aspect-[5.2/1] 2xl:aspect-[5.8/1] overflow-hidden">
+                    <div className="w-full h-full bg-dark-50 animate-pulse" />
+                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-dark/25 to-transparent" />
+                </div>
 
-            <div className="max-w-7xl mx-auto px-4 relative z-10">
-                <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 px-2 sm:px-4 pt-4">
-                    <div className="relative shrink-0 -mt-16 sm:-mt-20 md:-mt-28">
-                        <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 rounded-2xl bg-dark-100 p-1.5 ">
-                            <div className="w-full h-full rounded-[14px] bg-dark-200 animate-pulse" />
+                <div className="max-w-7xl mx-auto px-4 relative z-10">
+                    <div className="md:hidden px-2 pt-2">
+                        <div className="relative shrink-0 -mt-12">
+                            <div className="w-24 h-24 rounded-2xl bg-dark-100 p-1.5">
+                                <div className="w-full h-full rounded-[14px] bg-dark-200 animate-pulse" />
+                            </div>
+                        </div>
+
+                        <div className="mt-2 flex flex-col gap-1.5">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex min-w-0 flex-col gap-2">
+                                    <div className="h-7 w-40 bg-dark-200 rounded animate-pulse" />
+                                    <div className="h-4 w-24 bg-dark-200 rounded animate-pulse" />
+                                </div>
+                                <div className="h-9 w-28 rounded-lg bg-dark-200 animate-pulse shrink-0" />
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <div className="h-4 w-24 bg-dark-200 rounded animate-pulse" />
+                                <div className="h-4 w-24 bg-dark-200 rounded animate-pulse" />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 text-center md:text-left w-full mt-2">
-                        <div className="h-8 sm:h-10 md:h-12 lg:h-14 w-48 bg-dark-200 rounded animate-pulse mb-3 mx-auto md:mx-0" />
-                        <div className="h-4 w-32 bg-dark-200 rounded animate-pulse mb-4 mx-auto md:mx-0" />
-                        <div className="h-4 w-64 bg-dark-200 rounded animate-pulse mx-auto md:mx-0" />
+                    <div className="hidden md:flex items-start gap-6 px-2 sm:px-4 pt-2 lg:pt-3">
+                        <div className="relative shrink-0 -mt-16 lg:-mt-20">
+                            <div className="w-32 h-32 lg:w-36 lg:h-36 rounded-2xl bg-dark-100 p-1.5">
+                                <div className="w-full h-full rounded-[14px] bg-dark-200 animate-pulse" />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 flex items-center justify-between w-full gap-4 mt-1">
+                            <div className="flex flex-col gap-2">
+                                <div className="h-9 w-56 bg-dark-200 rounded animate-pulse" />
+                                <div className="flex items-center gap-3">
+                                    <div className="h-4 w-28 bg-dark-200 rounded animate-pulse" />
+                                    <div className="h-4 w-4 bg-dark-200 rounded-full animate-pulse" />
+                                    <div className="h-4 w-28 bg-dark-200 rounded animate-pulse" />
+                                </div>
+                            </div>
+
+                            <div className="h-9 w-32 rounded-lg bg-dark-200 animate-pulse shrink-0" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mb-5 profile-tabs">
+                <div className="max-w-7xl mx-auto px-4">
+                    <div className="overflow-x-auto scrollbar-hide px-2 sm:px-4">
+                        <div className="mx-auto flex w-max gap-6 sm:gap-8 md:gap-12 py-1">
+                            {tabSkeletonWidths.map((width, index) => (
+                                <div key={`${width}-${index}`} className="relative py-3 px-1">
+                                    <div className={`h-4 ${width} bg-dark-200 rounded animate-pulse`} />
+                                    {index === 0 ? (
+                                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-dark-200 animate-pulse" />
+                                    ) : null}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div className="max-w-7xl mx-auto px-4 mt-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="bg-dark-100/50 rounded-xl p-4 border border-gray-800">
-                            <div className="h-6 w-16 bg-dark-200 rounded animate-pulse mb-2" />
-                            <div className="h-4 w-24 bg-dark-200 rounded animate-pulse" />
+                {showOverviewSkeleton ? (
+                    <div className="animate-tab-content pb-8">
+                        <div className="flex items-center justify-center gap-8 sm:gap-12 flex-wrap py-4 border-b border-accent/30 mb-8">
+                            {Array.from({ length: 5 }).map((_, index) => (
+                                <div key={`top-stat-${index}`} className="text-center">
+                                    <div className="h-7 w-12 mx-auto bg-dark-200 rounded animate-pulse mb-2" />
+                                    <div className="h-3 w-20 bg-dark-200 rounded animate-pulse" />
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+                            <div className="lg:col-span-6 space-y-8">
+                                <div className="ui-surface-subtle p-6 animate-pulse">
+                                    <div className="h-4 w-16 bg-dark-200 rounded mb-4" />
+                                    <div className="space-y-3">
+                                        <div className="h-3 w-full bg-dark-200 rounded" />
+                                        <div className="h-3 w-full bg-dark-200 rounded" />
+                                        <div className="h-3 w-5/6 bg-dark-200 rounded" />
+                                        <div className="h-3 w-2/3 bg-dark-200 rounded" />
+                                    </div>
+                                </div>
+
+                                <div className="ui-surface-subtle p-5 animate-pulse">
+                                    <div className="h-4 w-14 bg-dark-200 rounded mb-4" />
+                                    <div className="flex flex-wrap gap-2">
+                                        {Array.from({ length: 4 }).map((_, index) => (
+                                            <div key={`link-pill-${index}`} className="h-8 w-20 rounded-lg bg-dark-200" />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="ui-surface-subtle p-5 animate-pulse">
+                                    <div className="mb-5 flex items-center justify-between gap-4">
+                                        <div className="h-4 w-16 bg-dark-200 rounded" />
+                                        <div className="h-7 w-28 rounded-lg bg-dark-200" />
+                                    </div>
+                                    <div className="space-y-3">
+                                        {Array.from({ length: 3 }).map((_, index) => (
+                                            <div key={`activity-row-${index}`} className="h-12 rounded-lg bg-dark-200" />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="lg:col-span-6 min-h-[400px] space-y-8">
+                                <div className="ui-surface-subtle p-5 animate-pulse">
+                                    <div className="h-4 w-20 bg-dark-200 rounded mb-4" />
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                                        {Array.from({ length: 10 }).map((_, index) => (
+                                            <div key={`fav-cover-${index}`} className="aspect-[2/3] rounded-lg bg-dark-200" />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="ui-surface-subtle p-5 animate-pulse">
+                                    <div className="h-4 w-32 bg-dark-200 rounded mb-4" />
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                                        {Array.from({ length: 10 }).map((_, index) => (
+                                            <div key={`watching-cover-${index}`} className="aspect-[2/3] rounded-lg bg-dark-200" />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-6 animate-tab-content">
+                        <div className="h-10 w-72 bg-dark-200 rounded-xl animate-pulse" />
+                        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                            <div className="h-10 w-full sm:max-w-md rounded-xl bg-dark-200 animate-pulse" />
+                            <div className="h-10 w-24 rounded-xl bg-dark-200 animate-pulse" />
+                        </div>
+
+                        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 md:gap-4">
+                            {Array.from({ length: 14 }).map((_, index) => (
+                                <div key={`content-card-${index}`} className="aspect-[2/3] rounded-xl bg-dark-200 animate-pulse" />
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
