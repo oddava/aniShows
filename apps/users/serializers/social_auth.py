@@ -1,5 +1,6 @@
 from allauth.socialaccount.helpers import complete_social_login
 from allauth.socialaccount.providers.oauth2.client import OAuth2Error
+from django.core.exceptions import ImproperlyConfigured, MultipleObjectsReturned, ObjectDoesNotExist
 from django.http import HttpRequest, HttpResponseBadRequest
 from django.urls.exceptions import NoReverseMatch
 from django.utils.translation import gettext_lazy as _
@@ -7,6 +8,7 @@ from requests.exceptions import HTTPError
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 
+from apps.shared.logger import logger
 from apps.users.services.auth_service import AuthService
 
 
@@ -54,8 +56,15 @@ class SocialLoginSerializer(serializers.Serializer):
         if not adapter_class:
             raise serializers.ValidationError(_("Define adapter_class in view"))
 
-        adapter = adapter_class(request)
-        app = adapter.get_provider().app
+        try:
+            adapter = adapter_class(request)
+            app = adapter.get_provider().app
+        except (ImproperlyConfigured, MultipleObjectsReturned, ObjectDoesNotExist, ValueError) as exc:
+            logger.exception(
+                "Social auth provider configuration error",
+                extra={"provider": getattr(adapter_class, "provider_id", "unknown")},
+            )
+            raise serializers.ValidationError(_("Social login is temporarily unavailable.")) from exc
 
         access_token = attrs.get("access_token")
         code = attrs.get("code")
@@ -118,6 +127,12 @@ class SocialLoginSerializer(serializers.Serializer):
             ret = complete_social_login(request, login)
         except (OAuth2Error, HTTPError) as exc:
             raise serializers.ValidationError(_("Incorrect value")) from exc
+        except Exception as exc:
+            logger.exception(
+                "Unhandled social auth completion error",
+                extra={"provider": getattr(adapter, "provider_id", "unknown")},
+            )
+            raise serializers.ValidationError(_("Failed to authenticate with social provider.")) from exc
 
         if isinstance(ret, HttpResponseBadRequest):
             raise serializers.ValidationError(ret.content)

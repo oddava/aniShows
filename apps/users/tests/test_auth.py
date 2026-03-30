@@ -15,6 +15,7 @@ from unittest.mock import patch
 from allauth.socialaccount.providers.oauth2.client import OAuth2Error
 from botocore.exceptions import EndpointConnectionError
 from django.conf import settings
+from django.core.exceptions import MultipleObjectsReturned
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
@@ -289,6 +290,15 @@ class SocialLoginSerializerTests(SimpleTestCase):
         def parse_token(self, tokens):
             return SimpleNamespace(app=None, token=tokens["access_token"])
 
+    class BrokenConfigAdapter:
+        provider_id = "google"
+
+        def __init__(self, request):
+            self.request = request
+
+        def get_provider(self):
+            raise MultipleObjectsReturned("Multiple Google social apps configured")
+
     def setUp(self):
         self.request_factory = RequestFactory()
         self.callback_url = f"{settings.FRONTEND_URL}/auth/google/callback"
@@ -312,6 +322,27 @@ class SocialLoginSerializerTests(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("non_field_errors", serializer.errors)
         self.assertEqual(serializer.errors["non_field_errors"][0], "Incorrect value")
+
+    def test_provider_config_error_is_mapped_to_validation_error(self):
+        """Misconfigured provider setup should not produce a server error."""
+        request = self.request_factory.post("/api/v1/auth/google/", {"code": "fake-code"})
+        broken_view = SimpleNamespace(
+            adapter_class=self.BrokenConfigAdapter,
+            client_class=self.DummyClient,
+            callback_url=self.callback_url,
+        )
+
+        serializer = SocialLoginSerializer(
+            data={"code": "fake-code"},
+            context={"request": request, "view": broken_view},
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("non_field_errors", serializer.errors)
+        self.assertEqual(
+            serializer.errors["non_field_errors"][0],
+            "Social login is temporarily unavailable.",
+        )
 
 
 class TokenRefreshTests(APITestCase):
