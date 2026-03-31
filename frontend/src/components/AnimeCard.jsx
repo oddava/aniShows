@@ -511,19 +511,9 @@ function AnimeCard({
                         </div>
                     )}
 
-                    {/* Progress Bar */}
-                    {listStatus === 'Watching' && anime.episode_count && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60 z-20 overflow-hidden">
-                            <div
-                                style={{ width: `${Math.min((episodesWatched / anime.episode_count) * 100, 100)}%` }}
-                                className={`h-full transition-all duration-700 ease-out ${episodesWatched >= anime.episode_count
-                                    ? 'bg-green-500 '
-                                    : 'bg-accent '}`}
-                            />
-                        </div>
-                    )}
+
                     {airingCountdown && (
-                        <div className="absolute bottom-2 left-2 right-2 z-30 pointer-events-none">
+                        <div className={`absolute bottom-2 left-2 right-2 z-30 pointer-events-none transition-opacity duration-200 ${listStatus === 'Watching' ? 'group-hover:opacity-0' : ''}`}>
                             <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65 text-gray-100">
                                 <span className="text-[11px] font-medium tracking-wide text-gray-100">
                                     {airingCountdown}
@@ -531,19 +521,31 @@ function AnimeCard({
                             </div>
                         </div>
                     )}
-                    {/* Quick progress button */}
+                    {/* Watching Progress Overlay */}
                     {isAuthenticated && listStatus === 'Watching' && (
-                        <button
-                            onClick={handleQuickProgress}
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-md text-white shadow-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer z-40 border border-white/20 hover:bg-black/80 hover:border-white/30 touch-manipulation"
-                            title={`Mark episode ${episodesWatched + 1} as watched`}
-                        >
-                            {isLoading ? (
-                                <Loader2 className="w-6 h-6 animate-spin" />
-                            ) : (
-                                <Plus className="w-7 h-7 stroke-[3]" />
-                            )}
-                        </button>
+                        <div className="absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex">
+                            <div className="h-6 sm:h-7 px-2.5 rounded-md flex items-center justify-between gap-2.5 bg-black/50 text-white border border-white/20 shadow-none pointer-events-auto">
+                                <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide">
+                                    {anime.episode_count 
+                                        ? `${Math.min(episodesWatched, anime.episode_count)} / ${anime.episode_count}`
+                                        : `${episodesWatched} / ?`}
+                                </span>
+                                {(!anime.episode_count || episodesWatched < anime.episode_count) && (
+                                    <button
+                                        onClick={handleQuickProgress}
+                                        disabled={isLoading}
+                                        className="w-4 h-4 flex items-center justify-center rounded-sm hover:bg-white/20 transition-colors cursor-pointer touch-manipulation"
+                                        title={`Mark episode ${episodesWatched + 1} as watched`}
+                                    >
+                                        {isLoading ? (
+                                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                        ) : (
+                                            <Plus className="w-3 h-3 stroke-[3]" />
+                                        )}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     )}
 
                 </div>
@@ -557,11 +559,6 @@ function AnimeCard({
                                 aria-hidden="true"
                                 className={`mt-[0.28rem] h-2 w-2 shrink-0 rounded-full ${currentStatusOption.dotColor}`}
                             />
-                        )}
-                        {listStatus === 'Watching' && anime.episode_count && (
-                            <span className="mt-[0.06rem] shrink-0 text-[11px] font-medium text-gray-400">
-                                {Math.min(episodesWatched, anime.episode_count)}/{anime.episode_count}
-                            </span>
                         )}
                         <h3 className="font-medium text-gray-300 text-[13px] sm:text-[13.5px] line-clamp-2 leading-[1.3] transition-colors group-hover:text-[var(--anime-title-hover-color)]"
                         >
