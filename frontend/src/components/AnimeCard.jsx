@@ -468,7 +468,7 @@ function AnimeCard({
 
                     {/* Status Button */}
                     {isAuthenticated && (
-                        <div className="absolute bottom-2 right-2 z-[200] opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                        <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                             <div className="relative" ref={statusMenuRef}>
                                 <button
                                     onClick={toggleStatusMenu}
