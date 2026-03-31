@@ -15,9 +15,9 @@ import {
 import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
-    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20 border-emerald-500/40', dotColor: 'bg-emerald-400' },
-    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', dotColor: 'bg-blue-400' },
-    { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-slate-300', bgColor: 'bg-slate-500/20 border-slate-400/40', dotColor: 'bg-slate-400' },
+    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', dotColor: 'bg-emerald-400' },
+    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-blue-400', dotColor: 'bg-blue-400' },
+    { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-slate-300', dotColor: 'bg-slate-400' },
 ];
 
 function normalizeHexColor(value) {
@@ -473,10 +473,9 @@ function AnimeCard({
                                 <button
                                     onClick={toggleStatusMenu}
                                     disabled={isLoading}
-                                    className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg shadow-none border transition-colors duration-200 touch-manipulation
-                                        ${listStatus && currentStatusOption
-                                            ? `${currentStatusOption.bgColor} ${currentStatusOption.color}`
-                                            : 'bg-black/60 backdrop-blur-md text-white border-white/20 hover:bg-black/80 hover:border-white/30'}`}
+                                    className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg shadow-none border transition-all duration-200 touch-manipulation
+                                        bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/30
+                                        ${listStatus && currentStatusOption ? currentStatusOption.color : 'text-white'}`}
                                     title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
                                 >
                                     {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
