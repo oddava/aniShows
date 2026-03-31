@@ -23,7 +23,7 @@ export default function Layout() {
             </Suspense>
             {!isFlushPage && <div className="hidden md:block h-16 shrink-0" />}
             <VerificationBanner />
-            <main className={`${isBrowsePage ? '' : 'flex-grow'} pb-24 md:pb-0`}>
+            <main className={`${isBrowsePage ? '' : 'flex-grow'} md:pb-0`}>
                 <Outlet />
             </main>
             <Footer className={isBrowsePage ? '' : 'mt-auto'} />

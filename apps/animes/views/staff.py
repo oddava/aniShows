@@ -10,7 +10,6 @@ class StaffViewSet(ReadOnlyModelViewSet):
     the list action is intentionally disabled.
     """
 
-    queryset = Staff.objects.all()
     serializer_class = StaffDetailSerializer
     pagination_class = None
 

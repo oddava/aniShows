@@ -53,7 +53,7 @@ export default function BrowseRowMode({ titleLanguage }) {
     });
 
     return (
-        <div className="space-y-2 md:space-y-6 pb-8 pt-2">
+        <div className="space-y-2 md:space-y-6 pb-0 sm:pb-8 pt-2">
             <CategoryRow 
                 title="Trending Now" 
                 animeList={trending} 

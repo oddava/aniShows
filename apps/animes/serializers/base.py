@@ -29,13 +29,11 @@ def validate_image_content(file, max_size, field_name):
     import magic
     from PIL import Image
 
-    # Check file size
     if file.size > max_size:
         raise serializers.ValidationError(
             f"{field_name} file too large. Maximum size is {max_size // (1024 * 1024)}MB."
         )
 
-    # Check magic bytes for actual content type
     file.seek(0)
     magic_bytes = file.read(2048)
     file.seek(0)
@@ -47,14 +45,12 @@ def validate_image_content(file, max_size, field_name):
                 f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
             )
     except Exception as e:
-        # Fallback if magic fails (e.g. library missing, though it's likely installed)
         from apps.shared.logger import logger
         logger.warning(f"Image magic validation failed for {field_name}: {e}")
 
-    # Verify image can be opened and is not corrupted
     try:
         img = Image.open(file)
-        img.verify()  # Verify it's a valid image
+        img.verify()
         file.seek(0)
     except Exception:
         raise serializers.ValidationError(f"Invalid or corrupted image file for {field_name}.")

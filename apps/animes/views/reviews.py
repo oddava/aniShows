@@ -1,22 +1,22 @@
+from http import HTTPStatus
+
 from django.contrib.auth import get_user_model
-from rest_framework import permissions, serializers
+from rest_framework import permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.animes.models import Review, ReviewComment, ReviewReport, ReviewVote
 from apps.animes.serializers import (
     ReviewCommentSerializer,
     ReviewReportCreateSerializer,
     ReviewSerializer,
 )
+from apps.animes.serializers.reviews import ReviewCommentsQuerySerializer
 from apps.animes.services.reviews import (
     add_review_comment,
     create_review,
     delete_review,
     delete_review_comment,
-    ensure_comments_enabled,
-    ensure_reviews_enabled,
     get_review_comments,
     get_review_queryset,
     get_review_stats,
@@ -28,12 +28,6 @@ from apps.animes.services.reviews import (
 from apps.users.permissions import EmailVerificationMixin
 
 User = get_user_model()
-
-
-class ReviewCommentsQuerySerializer(serializers.Serializer):
-    page = serializers.IntegerField(required=False, default=1, min_value=1)
-    page_size = serializers.IntegerField(required=False, default=10, min_value=1, max_value=100)
-
 
 class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     serializer_class = ReviewSerializer
@@ -49,7 +43,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         if not anime_slug:
             return Response(
                 {"error": "anime parameter required"},
-                status=400,
+                status=HTTPStatus.BAD_REQUEST,
             )
         return Response(get_review_stats(anime_slug))
 
@@ -97,7 +91,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
             return Response(result.payload, status=result.status_code)
         comment = result.payload["comment"]
         serializer = ReviewCommentSerializer(comment, context={"request": request})
-        return Response(serializer.data, status=201)
+        return Response(serializer.data, status=HTTPStatus.CREATED)
 
     @action(
         detail=True,

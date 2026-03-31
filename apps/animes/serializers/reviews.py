@@ -151,3 +151,9 @@ class ReviewCommentSerializer(ModelSerializer):
 class ReviewReportCreateSerializer(Serializer):
     reason = ChoiceField(choices=ReviewReport.Reason.choices)
     description = CharField(required=False, allow_blank=True, max_length=500)
+
+
+class ReviewCommentsQuerySerializer(Serializer):
+    page = IntegerField(required=False, default=1, min_value=1)
+    page_size = IntegerField(required=False, default=10, min_value=1, max_value=100)
+
