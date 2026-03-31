@@ -25,6 +25,7 @@ from rest_framework.test import APIClient, APITestCase
 
 from apps.users.models import UserProfile
 from apps.users.serializers.social_auth import SocialLoginSerializer
+from apps.users.views.google import GoogleLogin
 
 User = get_user_model()
 
@@ -465,6 +466,20 @@ class TokenRefreshTests(APITestCase):
         """Test refresh fails with invalid token."""
         response = self.client.post(self.refresh_url, {"refresh": "invalidtoken"})
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class GoogleLoginViewTests(SimpleTestCase):
+    """Regression tests for Google callback URL resolution."""
+
+    def test_resolve_callback_url_uses_configured_default_without_super_lookup(self):
+        request = RequestFactory().post("/api/v1/auth/google/", {})
+
+        view = GoogleLogin()
+
+        self.assertEqual(
+            view._resolve_callback_url(request),
+            f"{settings.FRONTEND_URL}/auth/google/callback",
+        )
 
 class ProfileTests(APITestCase):
     """Tests for user profile endpoints."""

@@ -17,6 +17,10 @@ class GoogleLogin(SocialLoginView):
     authentication_classes = []  # Disable CSRF check by removing SessionAuthentication
 
     @classmethod
+    def _default_callback_url(cls):
+        return urlunsplit(urlsplit(cls.callback_url)._replace(query="", fragment=""))
+
+    @classmethod
     def _allowed_callback_urls(cls):
         configured_origins = {settings.FRONTEND_URL}
         configured_origins.update(getattr(settings, "CORS_ALLOWED_ORIGINS", []))
@@ -43,7 +47,7 @@ class GoogleLogin(SocialLoginView):
 
     def _resolve_callback_url(self, request):
         requested_callback = request.data.get("callback_url")
-        default_callback = super().get_callback_url(request, None)
+        default_callback = self._default_callback_url()
 
         if not requested_callback:
             return default_callback
@@ -58,7 +62,7 @@ class GoogleLogin(SocialLoginView):
         return normalized_callback
 
     def get_callback_url(self, request=None, adapter=None):
-        url = self._resolve_callback_url(request) if request else super().get_callback_url(request, adapter)
+        url = self._resolve_callback_url(request) if request else self._default_callback_url()
         logger.debug(f"Using default callback_url: {url}")
         return url
 
