@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
+from allauth.socialaccount.models import SocialAccount
 from django.db import IntegrityError
-from django.db.models import Avg, Count, Exists, OuterRef, Q
+from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q, Subquery
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
@@ -37,7 +38,16 @@ def get_review_queryset(request_user, query_params):
         "user__userprofile",
         "anime",
         "anime__studio",
-    ).prefetch_related("anime__genres")
+    ).prefetch_related(
+        "anime__genres",
+        Prefetch(
+            "user__socialaccount_set",
+            queryset=SocialAccount.objects.filter(provider="google").only(
+                "user_id", "provider", "extra_data"
+            ),
+            to_attr="_prefetched_social_accounts",
+        ),
+    )
     queryset = queryset.annotate(
         _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
         _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
@@ -54,8 +64,10 @@ def get_review_queryset(request_user, query_params):
 
     if request_user.is_authenticated:
         queryset = queryset.annotate(
-            _user_vote=Exists(
-                ReviewVote.objects.filter(user=request_user, review=OuterRef("pk"), is_helpful=True)
+            _user_vote=Subquery(
+                ReviewVote.objects.filter(
+                    user=request_user, review=OuterRef("pk")
+                ).values("is_helpful")[:1]
             )
         )
 

@@ -85,7 +85,7 @@ superuser:                      ## Create superuser
 	$(EXEC) createsuperuser
 
 test:                           ## Run tests
-	$(EXEC) test
+	docker compose run --rm --no-deps -e DJANGO_SETTINGS_MODULE=root.settings.test web python -m pytest
 
 lint:                           ## Run linter (ruff)
 	docker compose exec web uv run ruff check .

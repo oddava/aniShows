@@ -1,6 +1,15 @@
-from django.db.models import Count, Exists, OuterRef, Subquery
+from allauth.socialaccount.models import SocialAccount
+from django.db.models import Count, Exists, OuterRef, Prefetch, Subquery
 
 from apps.forums.models import Category, Post, PostLike, Thread, ThreadLike
+
+_GOOGLE_ACCOUNTS_PREFETCH_AUTHOR = Prefetch(
+    "author__socialaccount_set",
+    queryset=SocialAccount.objects.filter(provider="google").only(
+        "user_id", "provider", "extra_data"
+    ),
+    to_attr="_prefetched_social_accounts",
+)
 
 
 def build_category_queryset():
@@ -16,7 +25,7 @@ def build_category_queryset():
 def build_thread_queryset(user):
     queryset = Thread.objects.select_related(
         "author", "author__userprofile", "category"
-    ).prefetch_related("tags")
+    ).prefetch_related("tags", _GOOGLE_ACCOUNTS_PREFETCH_AUTHOR)
 
     if user.is_authenticated:
         queryset = queryset.annotate(
@@ -27,7 +36,9 @@ def build_thread_queryset(user):
 
 
 def build_post_queryset(user):
-    queryset = Post.objects.select_related("author", "author__userprofile", "thread").annotate(
+    queryset = Post.objects.select_related(
+        "author", "author__userprofile", "thread"
+    ).prefetch_related(_GOOGLE_ACCOUNTS_PREFETCH_AUTHOR).annotate(
         reply_count=Count("replies")
     )
 

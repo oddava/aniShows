@@ -19,7 +19,7 @@ def get_user_anime_list_queryset(request_user, username=None, list_status=None):
 
     if username:
         try:
-            target_user = User.objects.get(username=username)
+            target_user = User.objects.select_related("userprofile").get(username=username)
         except User.DoesNotExist as exc:
             raise Http404 from exc
 

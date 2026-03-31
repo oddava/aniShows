@@ -80,9 +80,14 @@ class ReviewSerializer(ModelSerializer):
         return value
 
     def get_user_vote(self, obj):
-        """Use the annotated _user_vote field to avoid N+1 queries."""
+        """Use the annotated _user_vote field to avoid N+1 queries.
+
+        Returns True (helpful), False (not helpful), or None (no vote).
+        _user_vote is a Subquery returning the is_helpful value directly,
+        so None means the user hasn't voted on this review.
+        """
         if hasattr(obj, "_user_vote"):
-            return obj._user_vote if obj._user_vote else None
+            return obj._user_vote
 
         request = self.context.get("request")
         if request and request.user.is_authenticated:
