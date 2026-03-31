@@ -196,3 +196,5 @@ static/
 docker-compose.override.yml
 
 AGENTS.md
+CLAUDE.md
+.claude
