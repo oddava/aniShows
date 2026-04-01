@@ -787,7 +787,7 @@ export default function AnimeDetail() {
                             {/* Reviews Section */}
                             <div className="mt-16 mb-16">
                                 <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                                    <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-6 flex items-center gap-2 sm:gap-3" style={{ color: mappedAccent }}>
+                                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6 flex items-center gap-2 sm:gap-3">
                                         Reviews
                                         <span 
                                             className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
@@ -923,7 +923,7 @@ export default function AnimeDetail() {
                         <div className="space-y-6 lg:space-y-8 lg:pt-40">
                             {recommendations && recommendations.length > 0 && (
                                 <div>
-                                    <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-4 sm:mb-6" style={{ color: mappedAccent }}>
+                                    <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                                         Recommendations
                                     </h2>
                                     <div className="hidden lg:grid grid-cols-1 gap-4">

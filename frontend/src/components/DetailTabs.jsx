@@ -27,7 +27,7 @@ export function OverviewTab({ anime, accentColor }) {
                 <div className={`grid grid-cols-1 ${hasThemes && hasTrailer ? 'xl:grid-cols-[2fr_1fr]' : ''} gap-8 mb-12 items-start`}>
                     {hasTrailer && (
                         <div className="min-w-0 flex flex-col order-1 xl:order-1">
-                            <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-4 sm:mb-6" style={{ color: accentColor }}>
+                            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                                 Trailer
                             </h2>
                             <div className="w-full flex flex-col justify-start">
@@ -43,7 +43,7 @@ export function OverviewTab({ anime, accentColor }) {
                     )}
                     
                     <div className="min-w-0 order-3 xl:order-3">
-                        <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-4 sm:mb-6" style={{ color: accentColor }}>
+                        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                             Status Distribution
                         </h2>
                         <StatusDistribution anime={anime} />
