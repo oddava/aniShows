@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Tv, Hash, Clock, Calendar, BookOpen, Building2, Users, Bell, ExternalLink } from 'lucide-react';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
 
@@ -141,8 +142,38 @@ export default function InformationBox({ anime, className, accentColor }) {
                     </div>
                 )}
 
-                {anime.external_links && anime.external_links.length > 0 && (
+                {anime.genres && anime.genres.length > 0 && (
                     <div className="pt-6 mt-8 border-t border-white/5">
+                        <p className="text-gray-300 text-xs font-bold uppercase tracking-wider mb-3">Genres</p>
+                        <div className="flex flex-wrap gap-2">
+                            {anime.genres.map((genre) => (
+                                <Link
+                                    key={genre.id}
+                                    to={`/browse?genre=${genre.slug}`}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
+                                    style={{
+                                        color: accentColor || '#75698d',
+                                        borderColor: accentColor ? `${accentColor}80` : 'rgba(117,105,141,0.5)',
+                                        backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = accentColor || '#75698d';
+                                        e.currentTarget.style.color = 'white';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)';
+                                        e.currentTarget.style.color = accentColor || '#75698d';
+                                    }}
+                                >
+                                    {genre.name}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {anime.external_links && anime.external_links.length > 0 && (
+                    <div className="pt-5 mt-5 border-t border-white/5">
                         <p className="text-gray-300 text-xs font-bold uppercase tracking-wider mb-3">External Links</p>
                         <div className="flex flex-wrap gap-2">
                             {anime.external_links.map((link, i) => {

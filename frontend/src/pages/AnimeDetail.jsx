@@ -577,9 +577,9 @@ export default function AnimeDetail() {
                 <div className="max-w-7xl mx-auto">
                     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
-                        <div className="flex flex-col gap-5">
-                            <div className="flex-shrink-0 mx-auto">
-                                <div className="relative w-44 sm:w-48 lg:w-full max-w-[236px] aspect-[2/3] overflow-hidden rounded-xl border border-gray-800 bg-dark-200 shadow-xl">
+                        <div className="hidden lg:flex lg:flex-col gap-5">
+                            <div className="flex-shrink-0">
+                                <div className="relative w-44 sm:w-48 lg:w-full aspect-[2/3] overflow-hidden rounded-xl border border-gray-800 bg-dark-200 shadow-xl">
                                     {!isCoverLoaded && (
                                         <div
                                             aria-hidden="true"
@@ -602,7 +602,7 @@ export default function AnimeDetail() {
                             </div>
 
                             {/* Main Actions - Unified Sidebar Grid */}
-                            <div className="space-y-2 w-full max-w-[236px] mx-auto" data-title="Tracking Actions">
+                            <div className="space-y-2 w-full" data-title="Tracking Actions">
                                 {isAuthenticated ? (
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
@@ -643,37 +643,72 @@ export default function AnimeDetail() {
                         {/* Column 2: Main Content */}
                         <div className="flex-1 min-w-0">
                             <div className="text-center lg:text-left mb-8">
+                                <div className="lg:hidden mb-8">
+                                    <div className="mx-auto flex max-w-[330px] items-end gap-4">
+                                        <div className="w-[118px] flex-shrink-0">
+                                            <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-gray-800 bg-dark-200 shadow-xl">
+                                                {!isCoverLoaded && (
+                                                    <div
+                                                        aria-hidden="true"
+                                                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
+                                                    />
+                                                )}
+                                                <img
+                                                    src={coverUrl}
+                                                    srcSet={coverSrcSet}
+                                                    sizes="118px"
+                                                    alt={anime.title}
+                                                    onLoad={() => setIsCoverLoaded(true)}
+                                                    onError={(event) => {
+                                                        setIsCoverLoaded(false);
+                                                        applyImageFallback(event, coverFallbackUrl);
+                                                    }}
+                                                    className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="min-w-0 flex-1">
+                                            <div className="space-y-3" data-title="Mobile Tracking Actions">
+                                                {isAuthenticated ? (
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1 min-w-0">
+                                                            <StatusSelector
+                                                                animeId={anime.id}
+                                                                initialStatus={anime.user_list_status}
+                                                                onUpdate={handleListUpdate}
+                                                                totalEpisodes={anime.episode_count}
+                                                                compactSidebar={true}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            onClick={handleFavorite}
+                                                            title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+                                                            className={`w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300
+                                                                ${isFavorite
+                                                                    ? 'bg-red-500/10 text-red-500 shadow-md'
+                                                                    : 'bg-dark-100 text-gray-400 hover:bg-dark-100/50 hover:text-red-500'}`}
+                                                        >
+                                                            <Heart className={`w-4.5 h-4.5 ${isFavorite ? 'fill-current' : ''}`} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full">
+                                                        <Link to="/login" className="btn-primary py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold w-full shadow-lg">
+                                                            <Plus className="w-4 h-4" /> Sign In to Track
+                                                        </Link>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2 min-w-0">
                                     <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
                                         {anime.title}
                                     </h1>
                                 </div>
-                                {anime.title_jp && (
-                                    <p className="text-gray-400 text-lg mb-6 font-medium tracking-wide">{anime.title_jp}</p>
-                                )}
-
-                                {/* Genres */}
-                                <div className="flex flex-wrap justify-center lg:justify-start gap-1.5 sm:gap-2 mb-6 sm:mb-8">
-                                    {anime.genres?.map((genre) => (
-                                        <Link
-                                            key={genre.id}
-                                            to={`/browse?genre=${genre.slug}`}
-                                            className="px-4 py-1.5 bg-dark-100 text-gray-300 rounded-full text-xs font-bold border border-gray-700 hover:text-white transition-all "
-                                            style={{ '--hover-bg': mappedAccent }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = mappedAccent;
-                                                e.currentTarget.style.borderColor = mappedAccent;
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = '';
-                                                e.currentTarget.style.borderColor = '';
-                                            }}
-                                        >
-                                            {genre.name}
-                                        </Link>
-                                    ))}
-                                </div>
-
                                 {/* Synopsis */}
                                 {anime.synopsis && (
                                     <div className="text-left mb-8">

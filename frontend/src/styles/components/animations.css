@@ -78,3 +78,40 @@
 .keyboard-hint {
   display: none;
 }
+
+/* Mobile Sheet Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slide-out-to-bottom {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-out.fade-out {
+  animation: fade-out 0.3s ease-out forwards;
+}
+
+.animate-in.slide-in-from-bottom {
+  animation: slide-in-from-bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-out.slide-out-to-bottom {
+  animation: slide-out-to-bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

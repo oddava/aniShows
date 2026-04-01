@@ -17,7 +17,10 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
+    const [isClosing, setIsClosing] = useState(false);
+    const [dragOffset, setDragOffset] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
+    const dragStartY = useRef(null);
 
     // Status state
     const [currentStatus, setCurrentStatus] = useState(initialStatus?.status || null);
@@ -28,15 +31,51 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     const dropdownRef = useRef(null);
 
     const closeDropdown = () => {
-        setIsOpen(false);
+        if (window.innerWidth < 640) {
+            setIsClosing(true);
+            setTimeout(() => {
+                setIsOpen(false);
+                setIsClosing(false);
+                setDragOffset(0);
+            }, 300);
+        } else {
+            setIsOpen(false);
+            setDragOffset(0);
+        }
     };
 
     const toggleDropdown = () => {
         if (isOpen) {
             closeDropdown();
         } else {
+            setIsClosing(false);
+            setDragOffset(0);
             setIsOpen(true);
         }
+    };
+
+    // Swipe to dismiss logic (Mobile only)
+    const handleTouchStart = (e) => {
+        if (window.innerWidth >= 640) return;
+        dragStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e) => {
+        if (window.innerWidth >= 640 || dragStartY.current === null) return;
+        const delta = e.touches[0].clientY - dragStartY.current;
+        if (delta > 0) {
+            setDragOffset(delta);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (window.innerWidth >= 640) return;
+        if (dragOffset > 100) {
+            closeDropdown();
+        } else {
+            setDragOffset(0);
+        }
+        dragStartY.current = null;
     };
 
     // Close dropdown on outside click
@@ -199,8 +238,8 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                     onClick={toggleDropdown}
                     disabled={isLoading}
                     className={`w-full flex items-center justify-center gap-2 px-3 transition-all duration-300 font-bold text-sm
-                        ${compactSidebar 
-                            ? 'py-2.5 rounded-lg bg-dark-100 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600' 
+                        ${compactSidebar
+                            ? 'h-9 rounded-lg bg-dark-100 text-gray-400 hover:text-white whitespace-nowrap'
                             : 'px-6 py-3 rounded-xl bg-dark-200 text-gray-300 border border-dark-50'}`}
                 >
                     {isLoading ? (
@@ -213,24 +252,49 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 </button>
 
                 {isOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100  border border-dark-50 rounded-2xl shadow-none z-[100]">
-                        {STATUS_OPTIONS.map((option, index) => (
-                            <button
-                                key={option.value}
-                                onClick={() => handleStatusChange(option.value)}
-                                className="w-full px-4 py-3 text-left flex items-center gap-3 transition-all duration-200 group hover:bg-white/5 rounded-xl"
-                            >
-                                <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
-                                    {option.icon && (
-                                        <option.icon className={`w-4 h-4 transition-all duration-300 ${option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100  ' : 'opacity-100'}`} />
-                                    )}
-                                </div>
-                                <span className="font-bold text-sm text-gray-300 group-hover:text-white">
-                                    {option.label}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
+                    <>
+                        {/* Backdrop for mobile */}
+                        <div 
+                            className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] sm:hidden ${isClosing ? 'animate-out fade-out' : 'animate-fade-in'}`} 
+                            onClick={closeDropdown}
+                        />
+
+                        <div 
+                            className={window.innerWidth < 640 
+                                ? `fixed bottom-0 left-0 right-0 z-[100] p-4 pb-10 bg-dark-100 rounded-t-[32px] border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] ${isClosing ? 'animate-out slide-out-to-bottom' : 'animate-in slide-in-from-bottom'}`
+                                : "absolute top-full left-0 right-0 mt-3 p-2 bg-dark-100 border border-dark-50 rounded-2xl shadow-none z-[100]"
+                            }
+                            style={window.innerWidth < 640 ? { transform: `translateY(${dragOffset}px)`, transition: dragStartY.current ? 'none' : 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' } : {}}
+                        >
+                            
+                            {/* Mobile Handle */}
+                            {window.innerWidth < 640 && (
+                                <div 
+                                    className="w-12 h-1.5 bg-gray-800/80 rounded-full mx-auto mb-6 cursor-grab active:cursor-grabbing" 
+                                    onTouchStart={handleTouchStart}
+                                    onTouchMove={handleTouchMove}
+                                    onTouchEnd={handleTouchEnd}
+                                />
+                            )}
+
+                            {STATUS_OPTIONS.map((option, index) => (
+                                <button
+                                    key={option.value}
+                                    onClick={() => handleStatusChange(option.value)}
+                                    className="w-full px-4 py-3.5 sm:py-2.5 text-left flex items-center gap-4 sm:gap-3 transition-all duration-200 group hover:bg-white/5 rounded-xl sm:rounded-lg"
+                                >
+                                <div className={`${window.innerWidth < 640 ? 'w-10 h-10' : 'w-8 h-8'} shrink-0 flex items-center justify-center rounded-xl sm:rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
+                                        {option.icon && (
+                                            <option.icon className={`w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100  ' : 'opacity-100'}`} />
+                                        )}
+                                    </div>
+                                    <span className="font-bold text-base sm:text-sm text-gray-300 group-hover:text-white whitespace-nowrap">
+                                        {option.label}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </>
                 )}
             </div>
         );
@@ -253,11 +317,11 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                     <button
                         onClick={toggleDropdown}
                         disabled={isLoading}
-                        className={`flex items-center justify-center gap-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 border w-full
-                            ${compactSidebar ? 'h-9' : 'py-2.5'}
+                    className={`flex items-center justify-center gap-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 w-full
+                            ${compactSidebar ? 'h-9' : 'py-2.5 border'}
                             ${currentOption
                                 ? `${compactSidebar
-                                    ? 'text-white hover:brightness-110 border-transparent shadow-md'
+                                    ? 'text-white hover:brightness-110 shadow-md'
                                     : `${currentOption.color} text-white hover:brightness-110 border-transparent shadow-md shadow-${currentOption.color.replace('bg-', '')}/20`}`
                                 : 'bg-dark-100 text-gray-400 border-gray-700 hover:border-gray-600'}`}
                         style={compactSidebar && currentOption ? {
@@ -278,35 +342,60 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
                     {/* Status Menu */}
                     {isOpen && (
-                        <div className="absolute top-full left-0 mt-3 w-56 p-2 bg-dark-100  border border-dark-50 rounded-2xl shadow-none z-[100]">
-                            {STATUS_OPTIONS.map((option, index) => (
-                                <button
-                                    key={option.value}
-                                    onClick={() => handleStatusChange(option.value)}
-                                    className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 group rounded-xl
-                                        ${currentStatus === option.value ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                        <>
+                            {/* Backdrop for mobile */}
+                             <div 
+                                className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] sm:hidden ${isClosing ? 'animate-out fade-out' : 'animate-fade-in'}`} 
+                                onClick={closeDropdown}
+                            />
+
+                                <div 
+                                    className={window.innerWidth < 640
+                                        ? `fixed bottom-0 left-0 right-0 z-[100] p-4 pb-10 bg-dark-100 rounded-t-[32px] border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] ${isClosing ? 'animate-out slide-out-to-bottom' : 'animate-in slide-in-from-bottom'}`
+                                        : `absolute top-full left-0 mt-3 p-2 bg-dark-100 rounded-2xl shadow-none z-[100] ${compactSidebar ? 'w-full min-w-[220px]' : 'w-56 border border-dark-50'}`
+                                    }
+                                    style={window.innerWidth < 640 ? { transform: `translateY(${dragOffset}px)`, transition: dragStartY.current ? 'none' : 'transform 0.2s ease-out' } : {}}
                                 >
-                                    <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
-                                        {option.icon && (
-                                            <option.icon className={`w-4 h-4 transition-all duration-300 ${currentStatus === option.value ? option.color.replace('bg-', 'text-') : option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100  ' : 'opacity-100'}`} />
-                                        )}
+                                
+                                {/* Mobile Handle */}
+                                {window.innerWidth < 640 && (
+                                    <div 
+                                        className="w-12 h-1.5 bg-gray-800/80 rounded-full mx-auto mb-6 cursor-grab active:cursor-grabbing" 
+                                        onTouchStart={handleTouchStart}
+                                        onTouchMove={handleTouchMove}
+                                        onTouchEnd={handleTouchEnd}
+                                    />
+                                )}
+
+                                {STATUS_OPTIONS.map((option, index) => (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => handleStatusChange(option.value)}
+                                        className={`w-full px-4 py-3.5 sm:px-3 sm:py-2.5 text-left flex items-center gap-4 sm:gap-3 transition-all duration-200 group rounded-xl sm:rounded-lg
+                                            ${currentStatus === option.value ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                                    >
+                                        <div className={`${window.innerWidth < 640 ? 'w-10 h-10' : 'w-8 h-8'} shrink-0 flex items-center justify-center rounded-xl sm:rounded-lg ${option.color} bg-opacity-20 group-hover:bg-opacity-100 transition-all duration-300 group-hover:text-white`}>
+                                            {option.icon && (
+                                                <option.icon className={`w-5 h-5 sm:w-4 sm:h-4 transition-all duration-300 ${currentStatus === option.value ? option.color.replace('bg-', 'text-') : option.color.replace('bg-', 'text-')} group-hover:text-white ${option.hoverOnly ? 'opacity-0 group-hover:opacity-100  ' : 'opacity-100'}`} />
+                                            )}
+                                        </div>
+                                        <span className={`font-bold text-base sm:text-sm leading-tight whitespace-nowrap transition-colors ${currentStatus === option.value ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
+                                            {option.label}
+                                        </span>
+                                    </button>
+                                ))}
+                                <div className="h-px bg-white/10 my-2 sm:my-1" />
+                                <button
+                                    onClick={handleRemove}
+                                    className="w-full px-4 py-3.5 sm:px-3 sm:py-2.5 text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-4 sm:gap-3 text-base sm:text-sm font-bold rounded-xl sm:rounded-lg transition-colors duration-200 group"
+                                >
+                                    <div className={`${window.innerWidth < 640 ? 'w-10 h-10' : 'w-8 h-8'} flex items-center justify-center rounded-xl sm:rounded-lg bg-red-500/10 group-hover:bg-red-500/20 transition-colors`}>
+                                        <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                     </div>
-                                    <span className={`font-bold text-sm transition-colors ${currentStatus === option.value ? 'text-white' : 'text-gray-300 group-hover:text-white'}`}>
-                                        {option.label}
-                                    </span>
+                                    Remove from List
                                 </button>
-                            ))}
-                            <div className="h-px bg-white/10 my-1" />
-                            <button
-                                onClick={handleRemove}
-                                className="w-full px-3 py-2.5 text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 flex items-center gap-3 text-sm font-bold rounded-xl transition-colors duration-200 group"
-                            >
-                                <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/10 group-hover:bg-red-500/20 transition-colors">
-                                    <Trash2 className="w-4 h-4" />
-                                </div>
-                                Remove from List
-                            </button>
-                        </div>
+                            </div>
+                        </>
                     )}
                 </div>
 
