@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic } from 'lucide-react';
+import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -313,6 +313,7 @@ export default function AnimeDetail() {
     const [selectedStaff, setSelectedStaff] = useState(null);
     const [isBannerLoaded, setIsBannerLoaded] = useState(false);
     const [isCoverLoaded, setIsCoverLoaded] = useState(false);
+    const [synopsisExpanded, setSynopsisExpanded] = useState(false);
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
@@ -366,9 +367,9 @@ export default function AnimeDetail() {
         enabled: !!slug
     });
 
-    const { data: related } = useQuery({
-        queryKey: ['anime', slug, 'related'],
-        queryFn: () => animeApi.getRelated(slug).then(res => res.data),
+    const { data: recommendations } = useQuery({
+        queryKey: ['anime', slug, 'recommendations'],
+        queryFn: () => animeApi.getRecommendations(slug).then(res => res.data),
         enabled: !!anime,
     });
 
@@ -576,9 +577,9 @@ export default function AnimeDetail() {
                 <div className="max-w-7xl mx-auto">
                     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
-                        <div className="flex flex-col gap-6">
-                            <div className="flex-shrink-0 mx-auto lg:mx-0">
-                                <div className="relative w-48 md:w-64 lg:w-full aspect-[2/3] overflow-hidden rounded-2xl border border-gray-800 bg-dark-200">
+                        <div className="flex flex-col gap-5">
+                            <div className="flex-shrink-0 mx-auto">
+                                <div className="relative w-44 sm:w-48 lg:w-full max-w-[236px] aspect-[2/3] overflow-hidden rounded-xl border border-gray-800 bg-dark-200 shadow-xl">
                                     {!isCoverLoaded && (
                                         <div
                                             aria-hidden="true"
@@ -598,6 +599,39 @@ export default function AnimeDetail() {
                                         className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
                                     />
                                 </div>
+                            </div>
+
+                            {/* Main Actions - Unified Sidebar Grid */}
+                            <div className="space-y-2 w-full max-w-[236px] mx-auto" data-title="Tracking Actions">
+                                {isAuthenticated ? (
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <StatusSelector
+                                                animeId={anime.id}
+                                                initialStatus={anime.user_list_status}
+                                                onUpdate={handleListUpdate}
+                                                totalEpisodes={anime.episode_count}
+                                                compactSidebar={true}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleFavorite}
+                                            title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+                                            className={`w-9 h-9 self-start flex justify-center items-center rounded-lg transition-all duration-300 border
+                                                ${isFavorite 
+                                                    ? 'bg-red-500/10 text-red-500 border-red-500/20 shadow-md' 
+                                                    : 'bg-dark-100 border-gray-700 text-gray-400 hover:bg-dark-100/50 hover:text-red-500 hover:border-red-500/50'}`}
+                                        >
+                                            <Heart className={`w-4.5 h-4.5 ${isFavorite ? 'fill-current' : ''}`} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full">
+                                        <Link to="/login" className="btn-primary py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold w-full shadow-lg">
+                                            <Plus className="w-4 h-4" /> Sign In to Track
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
 
                             <InformationBox anime={anime} accentColor={accentColor} className="hidden lg:flex" />
@@ -640,62 +674,29 @@ export default function AnimeDetail() {
                                     ))}
                                 </div>
 
-                                {/* Main Actions */}
-                                <div className={`flex flex-col gap-3 sm:gap-4 md:gap-5 p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl border relative z-20 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none border-t-0 pb-6' : 'bg-dark-100 border-dark-50'}`}
-                                    data-title="Tracking Actions"
-                                >
-                                    {isAuthenticated ? (
-                                        <>
-                                            {/* Top Row: Watch Time & Actions */}
-                                            <div className={`flex items-center justify-between gap-3 sm:gap-4 ${isRetro ? 'mt-4' : ''}`}>
-                                                <div className="flex flex-col">
-                                                    <span className="text-[9px] sm:text-[10px] font-black text-gray-500 uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-0.5 sm:mb-1">Watch Time</span>
-                                                    <span className="text-xs sm:text-sm md:text-base font-black text-white whitespace-nowrap">
-                                                        {watchTimeLabel}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 sm:gap-2">
-                                                    <button
-                                                        onClick={handleFavorite}
-                                                        title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                                                        className={`p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border transition-all duration-300 group flex-shrink-0
-                                                            ${isFavorite
-                                                                ? 'bg-red-500 border-red-500 text-white  '
-                                                                : 'bg-dark-200 border-gray-700 text-gray-400 hover:border-red-500/50 hover:text-red-500'}`}
-                                                    >
-                                                        <Heart className={`w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 ${isFavorite ? 'fill-current' : ''}`} />
-                                                    </button>
-
-                                                    <button
-                                                        onClick={handleShare}
-                                                        title="Share Anime"
-                                                        className="p-2.5 sm:p-3 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl border border-gray-700 bg-dark-200 text-gray-400 hover:border-accent/50 hover:text-accent transition-all duration-300  flex-shrink-0"
-                                                    >
-                                                        <svg className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Bottom Row: Progress Tracker */}
-                                            <div className="w-full border-t border-gray-800/50 pt-3 sm:pt-4">
-                                                <StatusSelector
-                                                    animeId={anime.id}
-                                                    initialStatus={anime.user_list_status}
-                                                    onUpdate={handleListUpdate}
-                                                    totalEpisodes={anime.episode_count}
-                                                />
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="flex-1 w-full">
-                                            <Link to="/login" className="btn-primary w-full py-2.5 sm:py-3 md:py-4 text-center rounded-xl sm:rounded-2xl flex items-center justify-center gap-2 sm:gap-3 text-sm sm:text-base">
-                                                <Plus className="w-4 h-4 sm:w-5 sm:h-5" /> Sign In to Track Progress
-                                            </Link>
+                                {/* Synopsis */}
+                                {anime.synopsis && (
+                                    <div className="text-left mb-8">
+                                        <div className="relative">
+                                            <p className={`text-gray-300 leading-relaxed text-sm lg:text-base font-normal max-w-4xl transition-all duration-300 ${!synopsisExpanded ? 'line-clamp-4' : ''}`}>
+                                                {anime.synopsis}
+                                            </p>
+                                            {anime.synopsis.length > 300 && !synopsisExpanded && (
+                                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-dark to-transparent pointer-events-none" />
+                                            )}
                                         </div>
-                                    )}
-                                </div>
+                                        {anime.synopsis.length > 300 && (
+                                            <button
+                                                onClick={() => setSynopsisExpanded(!synopsisExpanded)}
+                                                className={`mt-2 flex items-center gap-1.5 text-xs lg:text-sm font-bold transition-all active:scale-95 ${synopsisExpanded ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                                                style={{ color: mappedAccent }}
+                                            >
+                                                {synopsisExpanded ? 'Show Less' : 'Read More'}
+                                                <ChevronDown className={`w-3.5 h-3.5 lg:w-4 lg:h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="lg:hidden mt-6 sm:mt-8 mb-8 sm:mb-12 space-y-4 sm:space-y-6">
                                     <InformationBox anime={anime} accentColor={accentColor} />
@@ -877,13 +878,13 @@ export default function AnimeDetail() {
 
                         {/* Column 3: Sidebar - Recommendations */}
                         <div className="space-y-6 lg:space-y-8 lg:pt-40">
-                            {related && related.length > 0 && (
+                            {recommendations && recommendations.length > 0 && (
                                 <div>
                                     <h2 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6 flex items-center gap-2">
                                         Recommendations
                                     </h2>
                                     <div className="hidden lg:grid grid-cols-1 gap-4">
-                                        {related.slice(0, 5).map((rel) => (
+                                        {recommendations.slice(0, 5).map((rel) => (
                                             <RelatedAnimeCard
                                                 key={rel.id}
                                                 anime={rel}
@@ -891,14 +892,14 @@ export default function AnimeDetail() {
                                         ))}
                                     </div>
                                     <div className="lg:hidden flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory pl-0 sm:pl-0">
-                                        {related.slice(0, 6).map((rel) => (
+                                        {recommendations.slice(0, 6).map((rel) => (
                                             <MobileRelatedCard
                                                 key={rel.id}
                                                 anime={rel}
                                             />
                                         ))}
                                     </div>
-                                    {related.length > 5 && (
+                                    {recommendations.length > 5 && (
                                         <Link
                                             to={`/browse?genre=${anime.genres?.[0]?.slug || ''}`}
                                             className="block text-center mt-4 sm:mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"

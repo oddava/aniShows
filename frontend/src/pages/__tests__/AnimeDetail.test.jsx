@@ -10,7 +10,7 @@ vi.mock('../../api/client', () => ({
         getBySlug: vi.fn(),
         getCharacters: vi.fn(),
         getStaff: vi.fn(),
-        getRelated: vi.fn(),
+        getRecommendations: vi.fn(),
     },
     favoriteApi: {
         toggle: vi.fn(),
@@ -154,7 +154,7 @@ describe('AnimeDetail list update invalidation', () => {
         animeApi.getBySlug.mockResolvedValue({ data: mockAnime });
         animeApi.getCharacters.mockResolvedValue({ data: [] });
         animeApi.getStaff.mockResolvedValue({ data: [] });
-        animeApi.getRelated.mockResolvedValue({ data: [] });
+        animeApi.getRecommendations.mockResolvedValue({ data: [] });
         reviewApi.getAll.mockResolvedValue({ data: { results: [], count: 0, next: null } });
         reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
     });
@@ -193,6 +193,7 @@ describe('AnimeDetail list update invalidation', () => {
             expect(screen.getByTestId('stats-tab')).toBeInTheDocument();
         });
 
+        expect(animeApi.getRecommendations).toHaveBeenCalledWith('frieren');
         expect(animeApi.getCharacters).not.toHaveBeenCalled();
         expect(animeApi.getStaff).not.toHaveBeenCalled();
     });

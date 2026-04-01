@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Check, Play, Pause, Bookmark, Trash2, Minus, Plus, Star, RotateCcw, StickyNote, Calendar, Edit3, X, Eye } from 'lucide-react';
+import { ChevronDown, Check, Pause, Bookmark, Trash2, Minus, Plus, Eye } from 'lucide-react';
 import logger from '../utils/logger';
 
 const STATUS_OPTIONS = [
@@ -13,7 +13,7 @@ const STATUS_OPTIONS = [
     { value: 'Plan to Watch', label: 'Plan to Watch', color: 'bg-gray-500', icon: Bookmark },
 ];
 
-export default function StatusSelector({ animeId, initialStatus, onUpdate, totalEpisodes, isOwnProfile = true }) {
+export default function StatusSelector({ animeId, initialStatus, onUpdate, totalEpisodes, isOwnProfile = true, compactSidebar = false }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
@@ -21,20 +21,11 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
 
     // Status state
     const [currentStatus, setCurrentStatus] = useState(initialStatus?.status || null);
-    const [score, setScore] = useState(initialStatus?.score || 0);
     const [episodesWatched, setEpisodesWatched] = useState(initialStatus?.episodes_watched || 0);
     const [localEpisodes, setLocalEpisodes] = useState(initialStatus?.episodes_watched || 0);
     const [listId, setListId] = useState(initialStatus?.id || null);
 
-    // Detail fields
-    const [showDetails, setShowDetails] = useState(false);
-    const [notes, setNotes] = useState(initialStatus?.notes || '');
-    const [startedAt, setStartedAt] = useState(initialStatus?.started_at || '');
-    const [finishedAt, setFinishedAt] = useState(initialStatus?.finished_at || '');
-    const [isRewatching, setIsRewatching] = useState(initialStatus?.is_rewatching || false);
-
     const dropdownRef = useRef(null);
-    const detailsRef = useRef(null);
 
     const closeDropdown = () => {
         setIsOpen(false);
@@ -48,28 +39,11 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
         }
     };
 
-    const closeDetails = () => {
-        setShowDetails(false);
-    };
-
-    const toggleDetails = () => {
-        if (showDetails) {
-            closeDetails();
-        } else {
-            setShowDetails(true);
-        }
-    };
-
-    // Close dropdowns on outside click
+    // Close dropdown on outside click
     useEffect(() => {
         function handleClickOutside(event) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 closeDropdown();
-            }
-            if (detailsRef.current && !detailsRef.current.contains(event.target)) {
-                // If it's a click outside, we might NOT want to close details automatically
-                // because they might be interacting with something else, but it's often good UX.
-                // Let's keep details open until they click save or the close button.
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
@@ -79,14 +53,9 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     useEffect(() => {
         if (initialStatus) {
             setCurrentStatus(initialStatus.status);
-            setScore(initialStatus.score);
             setEpisodesWatched(initialStatus.episodes_watched);
             setLocalEpisodes(initialStatus.episodes_watched);
             setListId(initialStatus.id);
-            setNotes(initialStatus.notes || '');
-            setStartedAt(initialStatus.started_at || '');
-            setFinishedAt(initialStatus.finished_at || '');
-            setIsRewatching(initialStatus.is_rewatching || false);
         }
     }, [initialStatus]);
 
@@ -112,23 +81,13 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             if (listId) {
                 response = await listApi.update(listId, {
                     status: newStatus,
-                    score,
                     episodes_watched: nextEpisodes,
-                    notes,
-                    started_at: startedAt || null,
-                    finished_at: finishedAt || null,
-                    is_rewatching: isRewatching
                 });
             } else {
                 response = await listApi.add({
                     anime_id: animeId,
                     status: newStatus,
-                    score,
                     episodes_watched: nextEpisodes,
-                    notes,
-                    started_at: startedAt || null,
-                    finished_at: finishedAt || null,
-                    is_rewatching: isRewatching
                 });
             }
 
@@ -164,7 +123,6 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
             // Immediately switch back to the "Add to List" button
             setCurrentStatus(null);
             setListId(null);
-            setScore(0);
             setEpisodesWatched(0);
             setLocalEpisodes(0);
             queryClient.invalidateQueries({ queryKey: ['lists'] });
@@ -240,12 +198,15 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 <button
                     onClick={toggleDropdown}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-dark-200  text-gray-300 font-bold text-sm sm:text-base border border-dark-50 transition-colors"
+                    className={`w-full flex items-center justify-center gap-2 px-3 transition-all duration-300 font-bold text-sm
+                        ${compactSidebar 
+                            ? 'py-2.5 rounded-lg bg-dark-100 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600' 
+                            : 'px-6 py-3 rounded-xl bg-dark-200 text-gray-300 border border-dark-50'}`}
                 >
                     {isLoading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
-                        <Plus className="w-5 h-5" />
+                        <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                     )}
                     Add to List
                     <ChevronDown className={`w-4 h-4 ml-1 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
@@ -278,26 +239,40 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
     return (
         <div className="w-full relative status-selector-container">
             {/* Sleek Main Controls Bar */}
-            <div className="relative flex items-center justify-between p-1.5 sm:p-2 bg-dark-200  rounded-2xl border border-dark-50   z-10">
+            <div className={`relative flex items-center justify-between z-10 
+                ${compactSidebar 
+                    ? 'p-0 bg-transparent border-none' 
+                    : 'p-1.5 sm:p-2 bg-dark-200 rounded-2xl border border-dark-50'}`}
+            >
 
                 {/* Status Dropdown - Left */}
-                <div className="relative flex-shrink-0" ref={dropdownRef}>
+                <div
+                    className={compactSidebar ? 'relative flex-1 min-w-0' : 'relative flex-shrink-0'}
+                    ref={dropdownRef}
+                >
                     <button
                         onClick={toggleDropdown}
                         disabled={isLoading}
-                        className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300
+                        className={`flex items-center justify-center gap-2 px-3 rounded-lg font-bold text-xs sm:text-sm transition-all duration-300 border w-full
+                            ${compactSidebar ? 'h-9' : 'py-2.5'}
                             ${currentOption
-                                ? `${currentOption.color} text-white hover:brightness-110`
-                                : 'bg-dark-100 text-gray-300 border border-gray-700'}`}
+                                ? `${compactSidebar
+                                    ? 'text-white hover:brightness-110 border-transparent shadow-md'
+                                    : `${currentOption.color} text-white hover:brightness-110 border-transparent shadow-md shadow-${currentOption.color.replace('bg-', '')}/20`}`
+                                : 'bg-dark-100 text-gray-400 border-gray-700 hover:border-gray-600'}`}
+                        style={compactSidebar && currentOption ? {
+                            backgroundColor: 'var(--anime-accent, var(--color-accent))',
+                            boxShadow: '0 10px 24px color-mix(in srgb, var(--anime-accent, var(--color-accent)) 24%, transparent)',
+                        } : undefined}
                     >
                         {isLoading ? (
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : currentOption && currentOption.icon ? (
+                        ) : !compactSidebar && currentOption && currentOption.icon ? (
                             <currentOption.icon className="w-4 h-4" />
                         ) : (
-                            <div className="w-4 h-4" />
+                            <div className={`${compactSidebar ? 'hidden' : 'w-4 h-4'}`} />
                         )}
-                        <span className="hidden sm:inline">{currentOption.label}</span>
+                        <span className={compactSidebar ? 'inline' : 'hidden sm:inline'}>{currentOption.label}</span>
                         <ChevronDown className={`w-3.5 h-3.5 ml-0.5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
 
@@ -336,241 +311,88 @@ export default function StatusSelector({ animeId, initialStatus, onUpdate, total
                 </div>
 
                 {/* Episode Counter - Center */}
-                <div className="flex items-center justify-center flex-1 px-2 sm:px-4 min-w-[120px]">
-                    <div className="flex items-center gap-2 sm:gap-3 bg-dark-100/50 rounded-xl p-1 border border-white/5">
-                        <button
-                            onClick={() => handleEpisodeChange(episodesWatched - 1)}
-                            disabled={isLoading || episodesWatched <= 0}
-                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-dark-200 hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-dark-200 flex-shrink-0"
-                        >
-                            <Minus className="w-4 h-4" />
-                        </button>
-
-                        <div className="flex items-baseline gap-0.5 px-1 min-w-[50px] sm:min-w-[70px] justify-center">
-                            <input
-                                type="text"
-                                value={localEpisodes}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    if (val === '' || /^\d+$/.test(val)) {
-                                        setLocalEpisodes(val);
-                                    }
-                                }}
-                                onBlur={() => {
-                                    const val = localEpisodes === '' ? 0 : parseInt(localEpisodes);
-                                    handleEpisodeChange(val);
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.target.blur();
-                                    }
-                                }}
-                                className="w-9 sm:w-11 bg-transparent text-white font-black text-base sm:text-lg tabular-nums tracking-tight text-center focus:outline-none focus:bg-white/5 rounded-lg transition-all"
-                            />
-                            <span className="text-gray-500 text-xs sm:text-sm font-bold">/</span>
-                            <span className="text-gray-400 text-xs sm:text-sm font-bold tabular-nums">
-                                {totalEpisodes || '?'}
-                            </span>
-                        </div>
-
-                        <button
-                            onClick={() => handleEpisodeChange(episodesWatched + 1)}
-                            disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
-                            className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
-                        >
-                            <Plus className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Edit Details Button - Right */}
-                <div className="flex-shrink-0">
-                    <button
-                        onClick={toggleDetails}
-                        className={`w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl transition-all duration-300 border
-                            ${showDetails || score > 0 || notes || startedAt || isRewatching
-                                ? 'bg-accent/20 border-accent/30 text-accent hover:bg-accent hover:text-white hover:border-accent'
-                                : 'bg-dark-100 border-gray-700 text-gray-400 hover:border-white/20 hover:text-white hover:bg-white/5'}`}
-                        title="Edit Details"
-                    >
-                        <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        {score > 0 && !showDetails && (
-                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-accent rounded-full border-2 border-dark-200" />
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {/* Progress Bar (Attached below the bar) */}
-            <div className="absolute -bottom-1 left-4 right-4 h-1 sm:h-1.5 bg-dark-100 rounded-b-xl overflow-hidden opacity-80 z-0">
-                <div
-                    style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                    className={`h-full rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
-                        ? 'bg-green-500'
-                        : 'bg-accent'
-                        }`}
-                />
-            </div>
-
-            {/* Premium Absolute Detail Popover */}
-            {showDetails && (
-                <>
-                    {/* Invisible backdrop to catch clicks outside the popover */}
-                    <div
-                        className="fixed inset-0 z-[60]"
-                        onClick={closeDetails}
-                    />
-
-                    <div
-                        ref={detailsRef}
-                        className="absolute top-[calc(100%+12px)] right-0 w-[calc(100vw-2rem)] sm:w-[380px] max-w-full bg-dark-100  rounded-3xl border border-dark-50 shadow-none z-[70] overflow-hidden"
-                    >
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/[0.02]">
-                            <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                                <Edit3 className="w-4 h-4 text-accent" />
-                                Entry Details
-                            </h3>
+                {!compactSidebar && (
+                    <div className="flex items-center justify-center flex-1 px-2 sm:px-4 min-w-[120px]">
+                        <div className="flex items-center gap-2 sm:gap-3 bg-dark-100/50 rounded-xl p-1 border border-white/5">
                             <button
-                                onClick={closeDetails}
-                                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                onClick={() => handleEpisodeChange(episodesWatched - 1)}
+                                disabled={isLoading || episodesWatched <= 0}
+                                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-dark-200 hover:bg-white/10 text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-dark-200 flex-shrink-0"
                             >
-                                <X className="w-4 h-4" />
+                                <Minus className="w-4 h-4" />
                             </button>
-                        </div>
 
-                        {/* Content */}
-                        <div className="p-5 space-y-6">
-                            {/* Score Slider / Buttons */}
-                            <div>
-                                <div className="flex items-center justify-between mb-3">
-                                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                                        <Star className="w-3.5 h-3.5 text-yellow-500" /> Score
-                                    </label>
-                                    <span className="text-lg font-black text-white">
-                                        {score > 0 ? score : '-'} <span className="text-xs text-gray-500 font-bold">/ 10</span>
-                                    </span>
-                                </div>
-                                <div className="flex bg-dark-200 p-1 rounded-2xl border border-white/5 h-11">
-                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((val) => (
-                                        <button
-                                            key={val}
-                                            onClick={() => setScore(score === val ? 0 : val)}
-                                            className={`flex-1 flex items-center justify-center transition-all duration-300 rounded-xl
-                                                ${val <= score ? 'bg-yellow-500 text-dark-900' : 'hover:bg-white/5 text-gray-500'}`}
-                                        >
-                                            <span className="font-black text-sm">{val}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Dates Row */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                                        <Calendar className="w-3.5 h-3.5 text-accent" /> Started
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={startedAt}
-                                        onChange={(e) => setStartedAt(e.target.value)}
-                                        className="w-full bg-dark-200 border border-dark-50 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all  [color-scheme:dark]"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                                        <Check className="w-3.5 h-3.5 text-green-500" /> Finished
-                                    </label>
-                                    <input
-                                        type="date"
-                                        value={finishedAt}
-                                        onChange={(e) => setFinishedAt(e.target.value)}
-                                        className="w-full bg-dark-200 border border-dark-50 rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all  [color-scheme:dark]"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Rewatching Toggle */}
-                            <div className="flex items-center justify-between p-3.5 bg-dark-200/30 border border-white/5 rounded-2xl">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${isRewatching ? 'bg-cyan-500/20' : 'bg-white/5'}`}>
-                                        <RotateCcw className={`w-4 h-4 ${isRewatching ? 'text-cyan-400' : 'text-gray-500'}`} />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-200">Rewatching</p>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Mark as rewatching</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setIsRewatching(!isRewatching)}
-                                    className={`relative w-12 h-6 rounded-full transition-all duration-300  ${isRewatching ? 'bg-cyan-500' : 'bg-dark-100 border border-gray-700'
-                                        }`}
-                                >
-                                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white  transition-transform duration-300 ease-spring ${isRewatching ? 'translate-x-6' : 'translate-x-0.5'
-                                        }`} />
-                                </button>
-                            </div>
-
-                            {/* Notes */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                                    <StickyNote className="w-3.5 h-3.5 text-blue-400" /> Notes
-                                </label>
-                                <textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Write your private thoughts..."
-                                    className="w-full bg-dark-200 border border-dark-50 rounded-2xl px-4 py-3 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all "
-                                    rows={3}
-                                />
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    onClick={closeDetails}
-                                    className="flex-1 py-3.5 rounded-xl font-bold text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={async () => {
-                                        if (!listId) return;
-                                        setIsLoading(true);
-                                        try {
-                                            const response = await listApi.update(listId, {
-                                                status: currentStatus,
-                                                score,
-                                                notes,
-                                                started_at: startedAt || null,
-                                                finished_at: finishedAt || null,
-                                                is_rewatching: isRewatching,
-                                            });
-                                            queryClient.invalidateQueries({ queryKey: ['lists'] });
-                                            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-                                            if (onUpdate) onUpdate(response.data);
-                                            closeDetails();
-                                        } catch (error) {
-                                            logger.error('Failed to save details:', error);
-                                        } finally {
-                                            setIsLoading(false);
+                            <div className="flex items-baseline gap-0.5 px-1 min-w-[50px] sm:min-w-[70px] justify-center">
+                                <input
+                                    type="text"
+                                    value={localEpisodes}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '' || /^\d+$/.test(val)) {
+                                            setLocalEpisodes(val);
                                         }
                                     }}
-                                    disabled={isLoading}
-                                    className="flex-[2] py-3.5 rounded-xl bg-accent text-white font-bold text-sm hover:brightness-110 transition-all disabled:opacity-50 flex justify-center items-center"
-                                >
-                                    {isLoading ? (
-                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    ) : (
-                                        'Save Changes'
-                                    )}
-                                </button>
+                                    onBlur={() => {
+                                        const val = localEpisodes === '' ? 0 : parseInt(localEpisodes);
+                                        handleEpisodeChange(val);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.target.blur();
+                                        }
+                                    }}
+                                    className="w-9 sm:w-11 bg-transparent text-white font-black text-base sm:text-lg tabular-nums tracking-tight text-center focus:outline-none focus:bg-white/5 rounded-lg transition-all"
+                                />
+                                <span className="text-gray-500 text-xs sm:text-sm font-bold">/</span>
+                                <span className="text-gray-400 text-xs sm:text-sm font-bold tabular-nums">
+                                    {totalEpisodes || '?'}
+                                </span>
                             </div>
+
+                            <button
+                                onClick={() => handleEpisodeChange(episodesWatched + 1)}
+                                disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
+                                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
-                </>
+                )}
+
+            </div>
+
+            {/* Progress Row (Attached below for sidebar, absolute for normal) */}
+            <div className={`mt-1.5 w-full flex items-center gap-2 ${compactSidebar ? '' : 'hidden'}`}>
+                <div className="flex-1 h-1 bg-dark-100/50 rounded-full overflow-hidden border border-white/5">
+                    <div
+                        style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+                        className={`h-full rounded-full transition-all duration-700 ease-out ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
+                            ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]'
+                            : 'bg-accent shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.4)]'
+                            }`}
+                    />
+                </div>
+                <div className="flex items-center gap-1.5 bg-dark-100/50 px-2 py-0.5 rounded-md border border-white/5">
+                    <span className="text-[10px] font-black text-white/90 tabular-nums leading-none">{episodesWatched}</span>
+                    <span className="text-[10px] font-bold text-gray-600 leading-none">/</span>
+                    <span className="text-[10px] font-bold text-gray-500 tabular-nums leading-none">{totalEpisodes || '?'}</span>
+                </div>
+            </div>
+
+            {/* Old Progress Bar (Keep for non-sidebar mode) */}
+            {!compactSidebar && (
+                <div className="absolute -bottom-1 left-4 right-4 h-1 sm:h-1.5 bg-dark-100 rounded-b-xl overflow-hidden opacity-80 z-0">
+                    <div
+                        style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+                        className={`h-full rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
+                            ? 'bg-green-500'
+                            : 'bg-accent'
+                            }`}
+                    />
+                </div>
             )}
+
         </div>
     );
 }

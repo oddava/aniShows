@@ -3,6 +3,7 @@ import json
 from datetime import date
 from urllib.parse import urlparse
 
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import (
@@ -45,6 +46,7 @@ from apps.animes.serializers import (
     GenreSerializer,
     StudioSerializer,
 )
+from apps.animes.services.anilist import AniListService
 from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
 from apps.core.utils import get_client_ip
 from apps.shared.logger import logger
@@ -657,12 +659,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         return self._with_cache_status_header(Response(data), cache_status)
 
     def _related_queryset(self, anime):
-        relation_slugs = [
-            relation.get("slug")
-            for relation in anime.relations
-            if isinstance(relation, dict) and relation.get("slug") and relation.get("slug") != anime.slug
-        ]
-        relation_slugs = list(dict.fromkeys(relation_slugs))[:8]
+        relation_slugs = self._relation_slugs(anime)[:8]
         base_queryset = Anime.public_queryset().select_related("studio").prefetch_related("genres")
 
         if relation_slugs:
@@ -682,6 +679,101 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             .annotate(shared_genres=Count("genres"))
             .order_by("-shared_genres", "-id")[:8]
         )
+
+    @staticmethod
+    def _relation_anilist_ids(anime) -> list:
+        relation_ids: list[int] = []
+        for relation in anime.relations or []:
+            if not isinstance(relation, dict):
+                continue
+            relation_id = relation.get("id")
+            if relation_id and relation_id != anime.anilist_id:
+                relation_ids.append(relation_id)
+        return list(dict.fromkeys(relation_ids))
+
+    @staticmethod
+    def _relation_slugs(anime) -> list:
+        relation_slugs: list[str] = []
+        for relation in anime.relations or []:
+            if not isinstance(relation, dict):
+                continue
+            relation_slug = relation.get("slug")
+            if relation_slug and relation_slug != anime.slug:
+                relation_slugs.append(relation_slug)
+        return list(dict.fromkeys(relation_slugs))
+
+    def _fallback_recommendations_queryset(self, anime):
+        base_queryset = Anime.public_queryset().select_related("studio").prefetch_related("genres")
+        relation_anilist_ids = self._relation_anilist_ids(anime)
+        relation_slugs = self._relation_slugs(anime)
+        genre_ids = anime.genres.values_list("id", flat=True)
+
+        queryset = base_queryset.exclude(id=anime.id)
+        if relation_anilist_ids:
+            queryset = queryset.exclude(anilist_id__in=relation_anilist_ids)
+        if relation_slugs:
+            queryset = queryset.exclude(slug__in=relation_slugs)
+
+        return (
+            queryset.filter(genres__in=genre_ids)
+            .annotate(shared_genres=Count("genres"))
+            .order_by("-shared_genres", "-rating", "-id")[:8]
+        )
+
+    def _recommendations_queryset(self, anime):
+        relation_anilist_ids = set(self._relation_anilist_ids(anime))
+        if anime.anilist_id:
+            service = AniListService()
+            try:
+                recommendations = async_to_sync(service.get_recommendations_for_anime)(
+                    anime.anilist_id,
+                    limit=12,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to fetch AniList recommendations for %s (%s): %s",
+                    anime.slug,
+                    anime.anilist_id,
+                    exc,
+                )
+                recommendations = []
+            finally:
+                async_to_sync(service.close)()
+
+            ordered_anilist_ids: list[int] = []
+            for recommendation in recommendations:
+                recommendation_id = recommendation.get("id")
+                if (
+                    not recommendation_id
+                    or recommendation_id == anime.anilist_id
+                    or recommendation_id in relation_anilist_ids
+                ):
+                    continue
+                ordered_anilist_ids.append(recommendation_id)
+
+            ordered_anilist_ids = list(dict.fromkeys(ordered_anilist_ids))
+            if ordered_anilist_ids:
+                ordering = Case(
+                    *[
+                        When(anilist_id=anilist_id, then=Value(index))
+                        for index, anilist_id in enumerate(ordered_anilist_ids)
+                    ],
+                    default=Value(len(ordered_anilist_ids)),
+                    output_field=IntegerField(),
+                )
+                queryset = (
+                    Anime.public_queryset()
+                    .select_related("studio")
+                    .prefetch_related("genres")
+                    .filter(anilist_id__in=ordered_anilist_ids)
+                    .exclude(id=anime.id)
+                    .annotate(recommendation_order=ordering)
+                    .order_by("recommendation_order", "-id")
+                )
+                if queryset.exists():
+                    return queryset
+
+        return self._fallback_recommendations_queryset(anime)
 
     @action(detail=False, methods=["get"])
     def trending(self, request):
@@ -734,6 +826,29 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         data, cache_status = get_or_build_public_payload(
             cache_key,
             build_related_payload,
+            ttl=300,
+            validator=self._is_valid_public_payload,
+        )
+        return self._with_cache_status_header(Response(data), cache_status)
+
+    @action(detail=True, methods=["get"])
+    def recommendations(self, request, slug=None):
+        """Get sidebar recommendations for a specific anime."""
+        anime = self.get_object()
+        cache_key = f"anime_recommendations:{self._PUBLIC_CACHE_VERSION}:{anime.slug}"
+
+        def build_recommendations_payload():
+            queryset = self._recommendations_queryset(anime)
+            serializer = AnimeListSerializer(
+                queryset,
+                many=True,
+                context={"request": request},
+            )
+            return serializer.data
+
+        data, cache_status = get_or_build_public_payload(
+            cache_key,
+            build_recommendations_payload,
             ttl=300,
             validator=self._is_valid_public_payload,
         )

@@ -1371,6 +1371,86 @@ class AniListService:
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
+    async def get_recommendations_for_anime(
+        self, anilist_id: int, *, limit: int = 8
+    ) -> list[dict]:
+        """Fetch AniList recommendations for a specific anime."""
+        if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > 2_147_483_647:
+            self._set_last_error("invalid_variable", "invalid_anilist_id")
+            return []
+
+        query = """
+            query GetAnimeRecommendations($id: Int!, $perPage: Int!) {
+                Media(id: $id, type: ANIME) {
+                    recommendations(sort: [RATING_DESC], perPage: $perPage) {
+                        nodes {
+                            rating
+                            mediaRecommendation {
+                                id
+                                idMal
+                                title { romaji english native }
+                                format
+                                status
+                                episodes
+                                averageScore
+                                popularity
+                                coverImage { large extraLarge }
+                            }
+                        }
+                    }
+                }
+            }
+        """
+
+        variables = {"id": anilist_id, "perPage": min(limit, self.MAX_PER_PAGE)}
+        data = await self._query(query, variables)
+
+        recommendation_nodes = (
+            ((data.get("Media") or {}).get("recommendations") or {}).get("nodes") or []
+        )
+        if not isinstance(recommendation_nodes, list):
+            return []
+
+        recommendations: list[dict] = []
+        seen_ids: set[int] = set()
+
+        for recommendation in recommendation_nodes:
+            if not isinstance(recommendation, dict):
+                continue
+
+            media = recommendation.get("mediaRecommendation") or {}
+            if not isinstance(media, dict):
+                continue
+
+            recommendation_id = media.get("id")
+            if not recommendation_id or recommendation_id in seen_ids:
+                continue
+
+            seen_ids.add(recommendation_id)
+            title = media.get("title") or {}
+            cover_image = media.get("coverImage") or {}
+            average_score = media.get("averageScore")
+
+            recommendations.append(
+                {
+                    "id": recommendation_id,
+                    "mal_id": media.get("idMal"),
+                    "title": title.get("english") or title.get("romaji") or title.get("native"),
+                    "title_jp": title.get("native") or "",
+                    "format": media.get("format"),
+                    "status": media.get("status"),
+                    "episode_count": media.get("episodes") or 0,
+                    "member_count": media.get("popularity") or 0,
+                    "rating": round(average_score / 10, 1) if average_score else None,
+                    "cover_image_external_url": self.normalize_external_image_url(
+                        cover_image.get("extraLarge") or cover_image.get("large")
+                    ),
+                    "recommendation_rating": recommendation.get("rating"),
+                }
+            )
+
+        return recommendations
+
     async def search_by_mal_id(self, mal_id: int) -> dict | None:
         """Search for anime by MyAnimeList ID"""
         if not isinstance(mal_id, int) or mal_id <= 0 or mal_id > 2_147_483_647:

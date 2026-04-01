@@ -192,7 +192,7 @@ export default function Home() {
                                     Start Tracking Your Journey
                                 </h2>
                                 <p className="text-gray-400 mb-6 sm:mb-10 text-base sm:text-lg max-w-2xl mx-auto px-2">
-                                    Join over <span className="text-white font-semibold">10,000+</span> anime fans listing, rating, and reviewing their favorite series.
+                                    Join over <span className="text-white font-semibold">???</span> anime fans listing, rating, and reviewing their favorite series.
                                 </p>
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
                                     <Link to="/register" className="btn-primary flex items-center gap-2 text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto justify-center">

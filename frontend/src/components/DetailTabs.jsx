@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react';
-import { ChevronDown, Users, Mic, Loader } from 'lucide-react';
+import { useMemo } from 'react';
+import { Users, Mic, Loader } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FranchiseSection from './FranchiseSection';
 import MusicSection from './MusicSection';
 import LazyYouTube from './LazyYouTube';
 
 export function OverviewTab({ anime, accentColor }) {
-    const [synopsisExpanded, setSynopsisExpanded] = useState(false);
-
     // Extract YouTube video ID
     const getYouTubeId = (url) => {
         if (!url) return null;
@@ -21,32 +19,6 @@ export function OverviewTab({ anime, accentColor }) {
             <FranchiseSection relations={anime.relations} accentColor={accentColor} sourceSlug={anime.slug} />
 
             <MusicSection anime={anime} accentColor={accentColor} />
-
-            <div className="mb-12">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                    Synopsis
-                </h2>
-                <div>
-                    <div className="relative">
-                        <p className={`text-gray-300 leading-loose text-lg font-normal max-w-4xl transition-all duration-300 ${!synopsisExpanded ? 'line-clamp-4' : ''}`}>
-                            {anime.synopsis}
-                        </p>
-                        {anime.synopsis && anime.synopsis.length > 400 && !synopsisExpanded && (
-                            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-dark to-transparent pointer-events-none" />
-                        )}
-                    </div>
-                    {anime.synopsis && anime.synopsis.length > 400 && (
-                        <button
-                            onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                            className={`mt-3 flex items-center gap-2 text-sm font-bold transition-all active:scale-95 ${synopsisExpanded ? 'opacity-100' : 'opacity-30'}`}
-                            style={{ color: accentColor || '#75698d' }}
-                        >
-                            {synopsisExpanded ? 'Show Less' : 'Read More'}
-                            <ChevronDown className={`w-4 h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                    )}
-                </div>
-            </div>
 
             {videoId && (
                 <div className="mb-12">

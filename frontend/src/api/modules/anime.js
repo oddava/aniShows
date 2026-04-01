@@ -6,6 +6,7 @@ export const animeApi = {
     getTrending: (signal) => api.get('/anime/trending/', { signal }),
     getTopRated: (signal) => api.get('/anime/top_rated/', { signal }),
     getRelated: (slug, signal) => api.get(`/anime/${slug}/related/`, { signal }),
+    getRecommendations: (slug, signal) => api.get(`/anime/${slug}/recommendations/`, { signal }),
     getReviews: (slug, signal) => api.get(`/anime/${slug}/reviews/`, { signal }),
     getCharacters: (slug, signal) => api.get(`/anime/${slug}/characters/`, { signal }),
     getStaff: (slug, signal) => api.get(`/anime/${slug}/staff/`, { signal }),
