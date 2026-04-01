@@ -13,6 +13,7 @@ ANILIST_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
 OFFLINE_IMPORT_TASK = "apps.animes.tasks.offline_catalog.import_offline_catalog"
 OFFLINE_RECONCILE_TASK = "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync"
 IMPORT_TASKS = [ANILIST_SYNC_TASK, OFFLINE_IMPORT_TASK, OFFLINE_RECONCILE_TASK]
+FULL_CATALOG_LIMIT = 5000
 
 
 @dataclass(slots=True)
@@ -325,7 +326,8 @@ def create_pending_job(*, user, task_path: str, task_module: str, kwargs, queue:
 
 def trigger_anilist_import(payload, user) -> AdminImportJobActionResult:
     sync_type = payload.get("sync_type", "trending")
-    limit = payload.get("limit", 50)
+    default_limit = FULL_CATALOG_LIMIT if sync_type == "full_catalog" else 50
+    limit = payload.get("limit", default_limit)
     allowed_sync_types = ["trending", "seasonal", "next_season", "airing", "full_catalog"]
     if sync_type not in allowed_sync_types:
         return AdminImportJobActionResult(

@@ -49,6 +49,7 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 
 `apps.animes.tasks.sync.sync_anime_catalog`
 - Sync AniList catalog slices such as trending, seasonal, next season, and airing.
+- The `full_catalog` mode fetches a broader top 5000 slice for admin-triggered backfills.
 
 `apps.animes.tasks.airing.sync_airing_workflow`
 - Runs airing-date sync, cleanup, and backfill phases.

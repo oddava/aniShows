@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
 
 const AdminImportJobs = () => {
+  const FULL_CATALOG_LIMIT = 5000;
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -508,7 +509,13 @@ const AdminImportJobs = () => {
                 </label>
                 <select
                   value={triggerSyncType}
-                  onChange={(e) => setTriggerSyncType(e.target.value)}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setTriggerSyncType(nextType);
+                    if (nextType === 'full_catalog') {
+                      setTriggerLimit(FULL_CATALOG_LIMIT);
+                    }
+                  }}
                   disabled={isTriggering}
                   className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
                 >
@@ -516,7 +523,7 @@ const AdminImportJobs = () => {
                   <option value="seasonal">Current Season</option>
                   <option value="next_season">Next Season</option>
                   <option value="airing">Currently Airing</option>
-                  <option value="full_catalog">Full Catalog (top 1000)</option>
+                  <option value="full_catalog">Full Catalog (top 5000)</option>
                 </select>
               </div>
               <div>
@@ -526,7 +533,7 @@ const AdminImportJobs = () => {
                 <input
                   type="number"
                   min="1"
-                  max="1000"
+                  max={FULL_CATALOG_LIMIT}
                   value={triggerLimit}
                   onChange={(e) => setTriggerLimit(e.target.value)}
                   disabled={isTriggering}
