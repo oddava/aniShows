@@ -191,8 +191,13 @@ jobs:
             cd \"\$APP_DIR\"
             
             echo '🔄 Pulling latest compose files from GitHub...'
-            git stash || true
-            git pull origin main
+            git stash push --include-untracked -m \"pre-deploy-${SHORT_SHA}\" || true
+            git fetch origin main
+            if [ -e .codex ] && ! git ls-files --error-unmatch .codex >/dev/null 2>&1; then
+              echo '🧹 Removing local untracked .codex placeholder before updating...'
+              rm -rf .codex
+            fi
+            git pull --ff-only origin main
             
             echo '🔑 Logging into GitHub Container Registry...'
             echo '${GHCR_PAT}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
