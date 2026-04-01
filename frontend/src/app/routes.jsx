@@ -33,6 +33,7 @@ const lazyWithRetry = (importer, retries = 1, retryDelayMs = 250) => lazy(async 
 const Home = lazyWithRetry(() => import('../pages/Home'));
 const Browse = lazyWithRetry(() => import('../pages/Browse'));
 const AnimeDetail = lazyWithRetry(() => import('../pages/AnimeDetail'));
+const CharacterDetail = lazyWithRetry(() => import('../pages/CharacterDetail'));
 const Profile = lazyWithRetry(() => import('../pages/Profile'));
 const Settings = lazyWithRetry(() => import('../pages/Settings'));
 const Login = lazyWithRetry(() => import('../pages/Auth').then((module) => ({ default: module.Login })));
@@ -101,7 +102,8 @@ export default function AppRoutes() {
                     <Route path="browse" element={<Browse />} />
                     <Route path="seasonal" element={<Navigate to="/browse" replace />} />
                     <Route path="schedule" element={<Schedule />} />
-                    <Route path="anime/:slug" element={<AnimeDetail />} />
+                    <Route path="anime/:slug/*" element={<AnimeDetail />} />
+                    <Route path="character/:id" element={<CharacterDetail />} />
                     <Route path="profile/*" element={<Profile />} />
                     <Route path="u/:username/*" element={<Profile />} />
                     <Route path="kiyo" element={<Profile forcedUsername="kiyo" />} />

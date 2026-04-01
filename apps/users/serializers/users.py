@@ -18,13 +18,22 @@ from rest_framework.serializers import (
     SerializerMethodField,
 )
 
-from apps.animes.models import Anime, UserFavorite
+from apps.animes.models import (
+    Anime,
+    UserFavorite,
+    UserFavoriteCharacter,
+    UserFavoriteStaff,
+)
 from apps.animes.serializers.anime import (
     AnimeCompactSerializer,
     AnimeListSerializer,
     AnimeMinimalSerializer,
 )
-from apps.animes.serializers.base import validate_image_content
+from apps.animes.serializers.base import (
+    CharacterCompactSerializer,
+    StaffCompactSerializer,
+    validate_image_content,
+)
 from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from apps.core.services.admin_settings_service import username_length_limits
 from apps.shared.logger import logger
@@ -456,6 +465,24 @@ class FavoriteSerializer(ModelSerializer):
     class Meta:
         model = UserFavorite
         fields = ["id", "anime", "anime_id", "added_at"]
+        read_only_fields = ["id", "added_at"]
+
+
+class CharacterFavoriteSerializer(ModelSerializer):
+    character = CharacterCompactSerializer(read_only=True)
+
+    class Meta:
+        model = UserFavoriteCharacter
+        fields = ["id", "character", "added_at"]
+        read_only_fields = ["id", "added_at"]
+
+
+class StaffFavoriteSerializer(ModelSerializer):
+    staff = StaffCompactSerializer(read_only=True)
+
+    class Meta:
+        model = UserFavoriteStaff
+        fields = ["id", "staff", "added_at"]
         read_only_fields = ["id", "added_at"]
 
 

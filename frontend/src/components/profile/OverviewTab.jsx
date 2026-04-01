@@ -1,15 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { UserRound, Users } from 'lucide-react';
-import { useState } from 'react';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
-import HorizontalCarousel from '../common/HorizontalCarousel';
 import AnimeMediaImage from '../common/AnimeMediaImage';
-import { activityApi, listApi, favoriteApi, followApi } from '../../api/client';
-
-
+import {
+    activityApi,
+    characterFavoriteApi,
+    favoriteApi,
+    listApi,
+    staffFavoriteApi,
+} from '../../api/client';
 
 function TopStatsRow({ user }) {
     if (!user) return null;
@@ -100,11 +101,15 @@ function CurrentlyWatchingGrid({ watchingItems }) {
     );
 }
 
-function FavoritesGrid({ favoritesData }) {
-    const favorites = favoritesData?.pages?.flatMap(page => {
+function getFavoritesItems(favoritesData) {
+    return favoritesData?.pages?.flatMap(page => {
         if (Array.isArray(page)) return page;
         return page.results || [];
     }) || favoritesData?.results || favoritesData || [];
+}
+
+function AnimeFavoritesGrid({ favoritesData }) {
+    const favorites = getFavoritesItems(favoritesData);
 
     if (!favorites || favorites.length === 0) {
         return (
@@ -150,6 +155,59 @@ function FavoritesGrid({ favoritesData }) {
                             </div>
                         </div>
                     ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, nameKey }) {
+    if (!items || items.length === 0) {
+        return (
+            <div className="mb-10">
+                <div className="ui-surface-subtle p-5">
+                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
+                    <div className="py-6 text-center text-gray-500">
+                        <p className="text-sm">{emptyText}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mb-10">
+            <div className="ui-surface-subtle p-5">
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4">
+                    {items.map((entry) => {
+                        const item = entry[itemKey];
+                        return (
+                            <div key={entry.id} className="group relative">
+                                <Link
+                                    to={hrefBuilder(item)}
+                                    className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
+                                >
+                                    <img
+                                        src={item?.image || '/placeholder-avatar.png'}
+                                        alt={item?.[nameKey]}
+                                        loading="lazy"
+                                        className="w-full h-full object-cover"
+                                    />
+                                </Link>
+
+                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
+                                    <p className="max-w-[180px] truncate text-[11px] font-bold text-white">{item?.[nameKey]}</p>
+                                    {item?.name_native && (
+                                        <p className="mt-0.5 max-w-[180px] truncate text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                            {item.name_native}
+                                        </p>
+                                    )}
+                                    <div className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 border-b border-r border-gray-700 bg-dark-100"></div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -282,8 +340,26 @@ export default function OverviewTab({
         refetchOnMount: true,
     });
 
+    const { data: characterFavsData } = useQuery({
+        queryKey: ['character-favorites', targetUsername, 'overview'],
+        queryFn: () => characterFavoriteApi.getAll({ username: targetUsername, page: 1, page_size: 10 }).then((res) => res.data),
+        enabled: !!displayUser && !isPrivate,
+        staleTime: 60 * 1000,
+        refetchOnMount: true,
+    });
+
+    const { data: staffFavsData } = useQuery({
+        queryKey: ['staff-favorites', targetUsername, 'overview'],
+        queryFn: () => staffFavoriteApi.getAll({ username: targetUsername, page: 1, page_size: 10 }).then((res) => res.data),
+        enabled: !!displayUser && !isPrivate,
+        staleTime: 60 * 1000,
+        refetchOnMount: true,
+    });
+
     const watchingItems = watchingItemsData || [];
     const favoritesData = favsData || [];
+    const characterFavorites = getFavoritesItems(characterFavsData);
+    const staffFavorites = getFavoritesItems(staffFavsData);
 
     return (
         <div className="animate-tab-content pb-8 overview-tab">
@@ -345,11 +421,27 @@ export default function OverviewTab({
                 </div>
 
                 <div className="lg:col-span-6 min-h-[400px]">
-                    <FavoritesGrid favoritesData={favoritesData} />
+                    <AnimeFavoritesGrid favoritesData={favoritesData} />
+
+                    <PersonFavoritesGrid
+                        title="Characters"
+                        items={characterFavorites}
+                        emptyText="No characters yet"
+                        itemKey="character"
+                        hrefBuilder={(character) => `/character/${character?.id}`}
+                        nameKey="name"
+                    />
+
+                    <PersonFavoritesGrid
+                        title="Voice Actors"
+                        items={staffFavorites}
+                        emptyText="No voice actors yet"
+                        itemKey="staff"
+                        hrefBuilder={(staff) => `/staff/${staff?.id}`}
+                        nameKey="name"
+                    />
 
                     <CurrentlyWatchingGrid watchingItems={watchingItems} />
-
-
                 </div>
             </div>
         </div>

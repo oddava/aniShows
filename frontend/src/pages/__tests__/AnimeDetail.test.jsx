@@ -123,7 +123,7 @@ const mockAnime = {
     staff_count: 0,
 };
 
-function createHarness() {
+function createHarness(initialEntry = '/anime/frieren') {
     const queryClient = new QueryClient({
         defaultOptions: {
             queries: {
@@ -136,9 +136,9 @@ function createHarness() {
 
     const wrapper = ({ children }) => (
         <QueryClientProvider client={queryClient}>
-            <MemoryRouter initialEntries={['/anime/frieren']}>
+            <MemoryRouter initialEntries={[initialEntry]}>
                 <Routes>
-                    <Route path="/anime/:slug" element={children} />
+                    <Route path="/anime/:slug/*" element={children} />
                 </Routes>
             </MemoryRouter>
         </QueryClientProvider>
@@ -182,5 +182,36 @@ describe('AnimeDetail list update invalidation', () => {
             expect(keys).toContain(JSON.stringify(['lists']));
             expect(keys).toContain(JSON.stringify(['ownProfile']));
         });
+    });
+
+    it('renders the tab content for a direct tab route', async () => {
+        const { wrapper } = createHarness('/anime/frieren/stats');
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('stats-tab')).toBeInTheDocument();
+        });
+
+        expect(animeApi.getCharacters).not.toHaveBeenCalled();
+        expect(animeApi.getStaff).not.toHaveBeenCalled();
+    });
+
+    it('navigates to the tab route and fetches tab data when a tab link is clicked', async () => {
+        const { wrapper } = createHarness();
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('overview-tab')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole('link', { name: /characters/i }));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('characters-tab')).toBeInTheDocument();
+        });
+
+        expect(animeApi.getCharacters).toHaveBeenCalledWith('frieren');
     });
 });

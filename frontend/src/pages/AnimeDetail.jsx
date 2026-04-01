@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
-import { useParams, Link, useLocation } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
@@ -10,7 +10,6 @@ import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 import ReviewSummary from '../components/ReviewSummary';
-import CharacterModal from '../components/CharacterModal';
 import StaffModal from '../components/StaffModal';
 import StatsTab from '../components/StatsTab';
 import InformationBox from '../components/InformationBox';
@@ -30,11 +29,31 @@ import logger from '../utils/logger';
 
 // Memoized tab configuration to prevent re-renders
 const TABS = [
-    { id: 'overview', label: 'Overview', icon: Film },
-    { id: 'stats', label: 'Stats', icon: BarChart3 },
-    { id: 'characters', label: 'Characters', icon: Users },
-    { id: 'staff', label: 'Staff', icon: Mic },
+    { id: 'overview', label: 'Overview', icon: Film, path: 'overview' },
+    { id: 'stats', label: 'Stats', icon: BarChart3, path: 'stats' },
+    { id: 'characters', label: 'Characters', icon: Users, path: 'characters' },
+    { id: 'staff', label: 'Staff', icon: Mic, path: 'staff' },
 ];
+
+const DEFAULT_TAB_ID = 'overview';
+
+const getTabByPath = (tabPath) => {
+    const normalizedPath = tabPath?.replace(/^\/+|\/+$/g, '') || '';
+    if (!normalizedPath) {
+        return TABS.find((tab) => tab.id === DEFAULT_TAB_ID) || null;
+    }
+
+    return TABS.find((tab) => tab.path === normalizedPath) || null;
+};
+
+const getTabHref = (slug, tabId) => {
+    const tab = TABS.find((entry) => entry.id === tabId);
+    if (!tab?.path) {
+        return `/anime/${slug}`;
+    }
+
+    return `/anime/${slug}/${tab.path}`;
+};
 
 const getUniqueCharacterCount = (characters) => {
     if (!Array.isArray(characters)) return 0;
@@ -250,11 +269,12 @@ const MobileRelatedCard = memo(({ anime }) => {
 MobileRelatedCard.displayName = 'MobileRelatedCard';
 
 // Memoized tab button component
-const TabButton = memo(({ tab, isActive, onClick, accentColor, count }) => {
+const TabButton = memo(({ tab, isActive, to, accentColor, count }) => {
     const Icon = tab.icon;
     return (
-        <button
-            onClick={onClick}
+        <Link
+            to={to}
+            aria-current={isActive ? 'page' : undefined}
             className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
                 ${isActive
                     ? 'text-white '
@@ -270,14 +290,15 @@ const TabButton = memo(({ tab, isActive, onClick, accentColor, count }) => {
                     {count}
                 </span>
             )}
-        </button>
+        </Link>
     );
 });
 
 TabButton.displayName = 'TabButton';
 
 export default function AnimeDetail() {
-    const { slug } = useParams();
+    const { slug, '*': tabPath } = useParams();
+    const navigate = useNavigate();
     const location = useLocation();
     const { isAuthenticated, user } = useAuth();
     const { theme } = useTheme();
@@ -286,15 +307,15 @@ export default function AnimeDetail() {
     const [isFavorite, setIsFavorite] = useState(false);
     const [isWritingReview, setIsWritingReview] = useState(false);
     const [editingReview, setEditingReview] = useState(null);
-    const [activeTab, setActiveTab] = useState('overview');
     const [reviewSort, setReviewSort] = useState('helpful');
     const [ratingFilter, setRatingFilter] = useState(null);
     const [hideSpoilersGlobal, setHideSpoilersGlobal] = useState(false);
-    const [selectedCharacter, setSelectedCharacter] = useState(null);
     const [selectedStaff, setSelectedStaff] = useState(null);
     const [isBannerLoaded, setIsBannerLoaded] = useState(false);
     const [isCoverLoaded, setIsCoverLoaded] = useState(false);
     const containerRef = useRef(null);
+    const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
+    const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
 
     // Queries
     const { data: anime, isLoading, isError } = useQuery({
@@ -450,14 +471,16 @@ export default function AnimeDetail() {
         }
     }, [editingReview, updateReviewMutation, createReviewMutation]);
 
-    const handleTabClick = useCallback((tabId) => {
-        setActiveTab(tabId);
-    }, []);
-
     useEffect(() => {
         setIsBannerLoaded(false);
         setIsCoverLoaded(false);
     }, [slug]);
+
+    useEffect(() => {
+        if (tabPath && !activeTabConfig) {
+            navigate(getTabHref(slug, DEFAULT_TAB_ID), { replace: true });
+        }
+    }, [activeTabConfig, navigate, slug, tabPath]);
 
     // Loading & Error states
     if (isLoading) return <AnimeDetailSkeleton />;
@@ -516,13 +539,6 @@ export default function AnimeDetail() {
             <SEOHelmet anime={anime} />
 
             {/* Modals */}
-            {selectedCharacter && (
-                <CharacterModal
-                    role={selectedCharacter}
-                    onClose={() => setSelectedCharacter(null)}
-                    accentColor={accentColor}
-                />
-            )}
             {selectedStaff && (
                 <StaffModal
                     staffRole={selectedStaff}
@@ -695,7 +711,7 @@ export default function AnimeDetail() {
                                         key={tab.id}
                                         tab={tab}
                                         isActive={activeTab === tab.id}
-                                        onClick={() => handleTabClick(tab.id)}
+                                        to={getTabHref(slug, tab.id)}
                                         accentColor={mappedAccent}
                                         count={tab.count}
                                     />
@@ -718,7 +734,7 @@ export default function AnimeDetail() {
                                         anime={{ ...anime, characters }}
                                         isLoading={charactersLoading}
                                         accentColor={accentColor}
-                                        onCharacterClick={setSelectedCharacter}
+                                        onCharacterClick={(role) => navigate(`/character/${role.character?.id}`)}
                                     />
                                 )}
                                 {activeTab === 'staff' && (

@@ -97,6 +97,17 @@ class CharacterSerializer(ImageUrlMixin, ModelSerializer):
         return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
 
 
+class CharacterCompactSerializer(ImageUrlMixin, ModelSerializer):
+    image = SerializerMethodField()
+
+    class Meta:
+        model = Character
+        fields = ["id", "name", "name_native", "image"]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
+
+
 class StaffSerializer(ImageUrlMixin, ModelSerializer):
     image = SerializerMethodField()
     image_small = SerializerMethodField()
@@ -122,6 +133,17 @@ class StaffSerializer(ImageUrlMixin, ModelSerializer):
 
     def get_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
+
+
+class StaffCompactSerializer(ImageUrlMixin, ModelSerializer):
+    image = SerializerMethodField()
+
+    class Meta:
+        model = Staff
+        fields = ["id", "name", "name_native", "image"]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
 
 
 class AnimeCharacterSerializer(ModelSerializer):
@@ -169,6 +191,57 @@ class StaffVoiceRoleCharacterSerializer(ImageUrlMixin, ModelSerializer):
         return self.get_image_url(obj, "image", "image_url")
 
 
+class CharacterAnimeRoleSerializer(ModelSerializer):
+    """Serializer for an anime appearance on the character detail page."""
+
+    anime = StaffVoiceRoleAnimeSerializer(read_only=True)
+    voice_actor = StaffCompactSerializer(read_only=True)
+
+    class Meta:
+        model = AnimeCharacter
+        fields = ["id", "anime", "role", "voice_actor"]
+
+
+class CharacterDetailSerializer(ImageUrlMixin, ModelSerializer):
+    """Full serializer for the character detail page."""
+
+    image = SerializerMethodField()
+    image_medium = SerializerMethodField()
+    favorite_count = SerializerMethodField()
+    is_favorite = SerializerMethodField()
+    anime_roles = CharacterAnimeRoleSerializer(source="roles", many=True, read_only=True)
+
+    class Meta:
+        model = Character
+        fields = [
+            "id",
+            "anilist_id",
+            "name",
+            "name_native",
+            "image",
+            "image_medium",
+            "description",
+            "favorite_count",
+            "is_favorite",
+            "anime_roles",
+        ]
+
+    def get_image(self, obj):
+        return self.get_image_url(obj, "image", "image_url")
+
+    def get_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
+
+    def get_favorite_count(self, obj):
+        favorite_count = getattr(obj, "_favorite_count", None)
+        if favorite_count is not None:
+            return favorite_count
+        return obj.favorites.count()
+
+    def get_is_favorite(self, obj):
+        return bool(getattr(obj, "_is_favorite", False))
+
+
 class StaffVoiceRoleSerializer(ModelSerializer):
     """Serializer for a voice role entry on the staff detail page."""
 
@@ -195,6 +268,8 @@ class StaffDetailSerializer(ImageUrlMixin, ModelSerializer):
 
     image = SerializerMethodField()
     image_medium = SerializerMethodField()
+    favorite_count = SerializerMethodField()
+    is_favorite = SerializerMethodField()
     voice_roles = StaffVoiceRoleSerializer(many=True, read_only=True)
     production_credits = StaffProductionCreditSerializer(many=True, read_only=True)
 
@@ -208,6 +283,8 @@ class StaffDetailSerializer(ImageUrlMixin, ModelSerializer):
             "image",
             "image_medium",
             "description",
+            "favorite_count",
+            "is_favorite",
             "voice_roles",
             "production_credits",
         ]
@@ -217,6 +294,15 @@ class StaffDetailSerializer(ImageUrlMixin, ModelSerializer):
 
     def get_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
+
+    def get_favorite_count(self, obj):
+        favorite_count = getattr(obj, "_favorite_count", None)
+        if favorite_count is not None:
+            return favorite_count
+        return obj.favorites.count()
+
+    def get_is_favorite(self, obj):
+        return bool(getattr(obj, "_is_favorite", False))
 
 
 class ThemeSongSerializer(ModelSerializer):

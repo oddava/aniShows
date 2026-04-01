@@ -397,7 +397,7 @@ def _should_send_push(notification, profile):
 
 
 def _send_notification_email(notification):
-    from apps.users.services.email_service import send_email_task
+    from apps.users.tasks import send_email_task
 
     if notification.notification_type != Notification.NotificationType.NEW_EPISODE:
         logger.warning(

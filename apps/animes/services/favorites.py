@@ -4,7 +4,14 @@ from django.contrib.auth import get_user_model
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied
 
-from apps.animes.models import Anime, UserFavorite
+from apps.animes.models import (
+    Anime,
+    Character,
+    Staff,
+    UserFavorite,
+    UserFavoriteCharacter,
+    UserFavoriteStaff,
+)
 from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()
@@ -16,9 +23,7 @@ class FavoriteActionResult:
     status_code: int
 
 
-def get_favorite_queryset(request_user, username=None):
-    queryset = UserFavorite.objects.all()
-
+def _get_target_user(request_user, username=None):
     if username:
         try:
             target_user = User.objects.select_related("userprofile").get(username=username)
@@ -28,14 +33,41 @@ def get_favorite_queryset(request_user, username=None):
         if target_user != request_user:
             profile = getattr(target_user, "userprofile", None)
             if profile and profile.is_private:
-                return UserFavorite.objects.none()
-        queryset = queryset.filter(user=target_user)
-    elif request_user.is_authenticated:
-        queryset = queryset.filter(user=request_user)
-    else:
+                return None
+        return target_user
+
+    if request_user.is_authenticated:
+        return request_user
+
+    return None
+
+
+def get_favorite_queryset(request_user, username=None):
+    target_user = _get_target_user(request_user, username=username)
+    if target_user is None:
         return UserFavorite.objects.none()
 
-    return queryset.select_related("anime__studio").prefetch_related("anime__genres")
+    return (
+        UserFavorite.objects.filter(user=target_user)
+        .select_related("anime__studio")
+        .prefetch_related("anime__genres")
+    )
+
+
+def get_character_favorite_queryset(request_user, username=None):
+    target_user = _get_target_user(request_user, username=username)
+    if target_user is None:
+        return UserFavoriteCharacter.objects.none()
+
+    return UserFavoriteCharacter.objects.filter(user=target_user).select_related("character")
+
+
+def get_staff_favorite_queryset(request_user, username=None):
+    target_user = _get_target_user(request_user, username=username)
+    if target_user is None:
+        return UserFavoriteStaff.objects.none()
+
+    return UserFavoriteStaff.objects.filter(user=target_user).select_related("staff")
 
 
 def delete_favorite(instance, user):
@@ -44,28 +76,83 @@ def delete_favorite(instance, user):
     instance.delete()
 
 
-def toggle_favorite(user, anime_id):
-    if not anime_id:
-        return FavoriteActionResult(payload={"error": "anime_id required"}, status_code=400)
+def _toggle_model_favorite(
+    *,
+    user,
+    object_id,
+    model,
+    favorite_model,
+    field_name,
+    not_found_message,
+    trigger_stats_update=False,
+):
+    if not object_id:
+        return FavoriteActionResult(payload={"error": f"{field_name}_id required"}, status_code=400)
 
     try:
-        anime = Anime.objects.get(id=anime_id)
-    except Anime.DoesNotExist:
-        return FavoriteActionResult(payload={"error": "Anime not found"}, status_code=404)
+        instance = model.objects.get(id=object_id)
+    except model.DoesNotExist:
+        return FavoriteActionResult(payload={"error": not_found_message}, status_code=404)
 
-    favorite, created = UserFavorite.objects.get_or_create(user=user, anime=anime)
+    favorite, created = favorite_model.objects.get_or_create(user=user, **{field_name: instance})
     if not created:
         favorite.delete()
-        invalidate_user_caches(user.id, user.username)
+        favorite_count = favorite_model.objects.filter(**{field_name: instance}).count()
+        invalidate_user_caches(
+            user.id, user.username, trigger_stats_update=trigger_stats_update
+        )
         return FavoriteActionResult(
-            payload={"is_favorite": False, "message": "Removed from favorites"},
+            payload={
+                "is_favorite": False,
+                "favorite_count": favorite_count,
+                "message": "Removed from favorites",
+            },
             status_code=200,
         )
 
-    invalidate_user_caches(user.id, user.username)
+    favorite_count = favorite_model.objects.filter(**{field_name: instance}).count()
+    invalidate_user_caches(user.id, user.username, trigger_stats_update=trigger_stats_update)
     return FavoriteActionResult(
-        payload={"is_favorite": True, "message": "Added to favorites"},
+        payload={
+            "is_favorite": True,
+            "favorite_count": favorite_count,
+            "message": "Added to favorites",
+        },
         status_code=200,
+    )
+
+
+def toggle_favorite(user, anime_id):
+    return _toggle_model_favorite(
+        user=user,
+        object_id=anime_id,
+        model=Anime,
+        favorite_model=UserFavorite,
+        field_name="anime",
+        not_found_message="Anime not found",
+        trigger_stats_update=True,
+    )
+
+
+def toggle_character_favorite(user, character_id):
+    return _toggle_model_favorite(
+        user=user,
+        object_id=character_id,
+        model=Character,
+        favorite_model=UserFavoriteCharacter,
+        field_name="character",
+        not_found_message="Character not found",
+    )
+
+
+def toggle_staff_favorite(user, staff_id):
+    return _toggle_model_favorite(
+        user=user,
+        object_id=staff_id,
+        model=Staff,
+        favorite_model=UserFavoriteStaff,
+        field_name="staff",
+        not_found_message="Staff member not found",
     )
 
 

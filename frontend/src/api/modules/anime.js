@@ -26,3 +26,7 @@ export const studioApi = {
 export const staffApi = {
     getById: (id, signal) => api.get(`/staff/${id}/`, { signal }),
 };
+
+export const characterApi = {
+    getById: (id, signal) => api.get(`/characters/${id}/`, { signal }),
+};

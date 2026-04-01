@@ -6,6 +6,16 @@ export const favoriteApi = {
     reorder: (orderedItems) => api.post('/favorites/reorder/', { items: orderedItems }),
 };
 
+export const characterFavoriteApi = {
+    getAll: (params) => api.get('/character-favorites/', { params }),
+    toggle: (characterId) => api.post('/character-favorites/toggle/', { character_id: characterId }),
+};
+
+export const staffFavoriteApi = {
+    getAll: (params) => api.get('/staff-favorites/', { params }),
+    toggle: (staffId) => api.post('/staff-favorites/toggle/', { staff_id: staffId }),
+};
+
 export const listApi = {
     getAll: (params) => api.get('/lists/', { params }),
     add: (data) => api.post('/lists/', data),

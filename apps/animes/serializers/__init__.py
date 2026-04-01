@@ -9,8 +9,12 @@ from apps.animes.serializers.anime import (
 from apps.animes.serializers.base import (
     AnimeCharacterSerializer,
     AnimeStaffSerializer,
+    CharacterAnimeRoleSerializer,
+    CharacterCompactSerializer,
+    CharacterDetailSerializer,
     CharacterSerializer,
     GenreSerializer,
+    StaffCompactSerializer,
     StaffDetailSerializer,
     StaffProductionCreditSerializer,
     StaffSerializer,
@@ -32,6 +36,7 @@ from apps.animes.serializers.reviews import (
 
 _USER_SERIALIZER_EXPORTS = {
     "BadgeSerializer",
+    "CharacterFavoriteSerializer",
     "ChangePasswordSerializer",
     "FavoriteCompactSerializer",
     "FavoriteSerializer",
@@ -39,6 +44,7 @@ _USER_SERIALIZER_EXPORTS = {
     "FriendWatchingSerializer",
     "PublicUserSerializer",
     "RegisterSerializer",
+    "StaffFavoriteSerializer",
     "UserActivitySerializer",
     "UserAnimeListSerializer",
     "UserBadgeSerializer",

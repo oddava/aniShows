@@ -14,7 +14,10 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
-from apps.animes.tasks.offline_catalog import OfflineCatalogImportTask
+from apps.animes.tasks.offline_catalog import (
+    OfflineCatalogImportTask,
+    OfflineCatalogReconcileSyncTask,
+)
 
 
 class OfflineCatalogTaskAndCommandTests(TestCase):
@@ -46,13 +49,13 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
     def _write_jsonl_fixture(self, entries: list[dict], last_update: str = "2026-03-23") -> str:
         metadata = {"$schema": "https://example.com/schema.json", "lastUpdate": last_update}
-        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
-        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
-        with handle:
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as handle:
+            fixture_path = handle.name
+            self.addCleanup(lambda: Path(fixture_path).unlink(missing_ok=True))
             handle.write(json.dumps(metadata) + "\n")
             for entry in entries:
                 handle.write(json.dumps(entry) + "\n")
-        return handle.name
+        return fixture_path
 
     def _write_zst_fixture(self, entries: list[dict], last_update: str = "2026-03-23") -> str:
         if zstandard is None:
@@ -61,12 +64,12 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         payload_lines = [json.dumps(metadata), *[json.dumps(entry) for entry in entries]]
         payload = ("\n".join(payload_lines) + "\n").encode("utf-8")
 
-        handle = tempfile.NamedTemporaryFile("wb", suffix=".jsonl.zst", delete=False)
-        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
         compressor = zstandard.ZstdCompressor()
-        with handle:
+        with tempfile.NamedTemporaryFile("wb", suffix=".jsonl.zst", delete=False) as handle:
+            fixture_path = handle.name
+            self.addCleanup(lambda: Path(fixture_path).unlink(missing_ok=True))
             handle.write(compressor.compress(payload))
-        return handle.name
+        return fixture_path
 
     def test_task_execute_imports_from_jsonl_source(self):
         source_path = self._write_jsonl_fixture(
@@ -149,7 +152,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
     @patch("apps.animes.tasks.import_offline_catalog.s")
     def test_management_command_async_queues_task_with_expected_kwargs(self, mock_signature):
-        source_path = "/tmp/offline.jsonl"
+        source_path = str(Path(tempfile.gettempdir()) / "offline.jsonl")
         mock_task = Mock()
         mock_task.apply_async.return_value = SimpleNamespace(id="task-123")
         mock_signature.return_value = mock_task
@@ -186,3 +189,35 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             enrichment_chunk_size=25,
         )
         mock_task.apply_async.assert_called_once_with(queue="batch")
+
+    @patch("apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync.apply_async")
+    @patch("apps.animes.tasks.offline_catalog.OfflineSyncService")
+    def test_reconcile_task_reschedules_when_default_path_has_backlog(
+        self,
+        mock_sync_service_cls,
+        mock_apply_async,
+    ):
+        mock_sync_service_cls.return_value.reconcile_due.return_value = {
+            "stage_counts": {},
+            "reason_counts": {},
+            "pending": 5,
+            "complete": 0,
+            "processed": 2,
+            "claimed": 2,
+            "transient_backlog": 0,
+            "quarantined_count": 0,
+            "top_quarantine_reasons": [],
+        }
+        mock_apply_async.return_value = SimpleNamespace(id="next-round-1")
+
+        result = OfflineCatalogReconcileSyncTask().execute(
+            strict=False,
+            max_rounds=3,
+            round_number=1,
+            round_interval_minutes=1,
+        )
+
+        self.assertTrue(result["next_round_scheduled"])
+        self.assertEqual(result["next_round_task_id"], "next-round-1")
+        self.assertFalse(result["rounds_exhausted"])
+        mock_apply_async.assert_called_once()

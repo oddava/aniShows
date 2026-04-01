@@ -5,6 +5,7 @@ import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from asgiref.sync import async_to_sync, sync_to_async
@@ -58,6 +59,15 @@ class MediaFormat(StrEnum):
 class AniListService:
     BASE_URL = "https://graphql.anilist.co"
     MAX_PER_PAGE = 50
+    TRUSTED_IMAGE_DOMAINS = (
+        "s4.anilist.co",
+        "anilist.co",
+        "img.anilist.co",
+        "cdn.myanimelist.net",
+        "api-cdn.myanimelist.net",
+    )
+    MAL_IMAGE_PROXY_DOMAINS = ("myanimelist.net", "www.myanimelist.net")
+    IMAGE_FILE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")
 
     # Common GraphQL fields for anime media queries.
     # Used across anime_query(), search_anime(), get_anime_by_id(), search_by_mal_id().
@@ -362,33 +372,13 @@ class AniListService:
         if not url:
             return None
 
-        # SSRF Protection: Validate URL
-        from urllib.parse import urlparse
-
-        parsed = urlparse(url)
-
-        # Only allow HTTPS URLs
-        if parsed.scheme != "https":
-            logger.warning(f"Blocked non-HTTPS image URL: {url}")
-            return None
-
-        # Only allow URLs from trusted domains (AniList/CDN domains)
-        trusted_domains = [
-            "s4.anilist.co",
-            "anilist.co",
-            "img.anilist.co",
-            "cdn.myanimelist.net",
-            "api-cdn.myanimelist.net",
-        ]
-
-        domain = parsed.netloc.lower()
-        if not any(domain.endswith(trusted) or domain == trusted for trusted in trusted_domains):
-            logger.warning(f"Blocked untrusted image domain: {domain}")
+        resolved_url = self.resolve_fetchable_image_url(url)
+        if not resolved_url:
             return None
 
         try:
             await asyncio.sleep(0.2)  # Polite delay for images too
-            response = await self.client.get(url, timeout=10)
+            response = await self.client.get(resolved_url, timeout=10)
             response.raise_for_status()
 
             # Validate content type is an image
@@ -399,8 +389,78 @@ class AniListService:
 
             return response.content
         except httpx.HTTPError as e:
-            logger.error(f"Error downloading image {url}: {e}")
+            logger.error(f"Error downloading image {resolved_url}: {e}")
             return None
+
+    @classmethod
+    def _is_trusted_image_domain(cls, domain: str) -> bool:
+        return any(domain.endswith(trusted) or domain == trusted for trusted in cls.TRUSTED_IMAGE_DOMAINS)
+
+    @classmethod
+    def normalize_external_image_url(cls, url: str | None) -> str:
+        """Normalize external image URLs while preserving display-safe fallbacks."""
+        candidate = (url or "").strip()
+        if not candidate:
+            return ""
+
+        parsed = urlparse(candidate)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            logger.warning(f"Blocked malformed image URL: {candidate}")
+            return ""
+
+        domain = parsed.netloc.lower()
+        path = parsed.path or ""
+        if domain in cls.MAL_IMAGE_PROXY_DOMAINS:
+            lower_path = path.lower()
+            if "/images/" in lower_path or lower_path.endswith(cls.IMAGE_FILE_EXTENSIONS):
+                parsed = parsed._replace(scheme="https", netloc="cdn.myanimelist.net")
+                return urlunparse(parsed)
+
+        if parsed.scheme != "https":
+            parsed = parsed._replace(scheme="https")
+            return urlunparse(parsed)
+
+        return candidate
+
+    @classmethod
+    def resolve_fetchable_image_url(cls, url: str | None) -> str:
+        """Return a trusted direct image URL suitable for Celery fetch workers."""
+        normalized = cls.normalize_external_image_url(url)
+        if not normalized:
+            return ""
+
+        parsed = urlparse(normalized)
+        domain = parsed.netloc.lower()
+        if cls._is_trusted_image_domain(domain):
+            return normalized
+
+        logger.warning(f"Blocked untrusted image domain before fetch queue: {domain}")
+        return ""
+
+    @staticmethod
+    def _iter_rankings(item: dict) -> list[dict]:
+        rankings = item.get("rankings") or []
+        if not isinstance(rankings, list):
+            return []
+        return [ranking for ranking in rankings if isinstance(ranking, dict)]
+
+    @staticmethod
+    def _status_distribution(item: dict) -> dict:
+        stats = item.get("stats") or {}
+        if not isinstance(stats, dict):
+            return {}
+
+        distribution = stats.get("statusDistribution") or []
+        if not isinstance(distribution, list):
+            return {}
+
+        return {
+            status: amount
+            for entry in distribution
+            if isinstance(entry, dict)
+            and (status := entry.get("status"))
+            and (amount := entry.get("amount")) is not None
+        }
 
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
@@ -848,6 +908,12 @@ class AniListService:
         anime_data["last_aired_at"] = previous_airing_date
 
     def _prepare_anime_data(self, item, title, title_native, slug):
+        rankings = self._iter_rankings(item)
+        status_distribution = self._status_distribution(item)
+        cover_image = item.get("coverImage") or {}
+        if not isinstance(cover_image, dict):
+            cover_image = {}
+
         format_map = {
             "TV": Anime.AnimeType.tv,
             "TV_SHORT": Anime.AnimeType.tv,
@@ -898,24 +964,21 @@ class AniListService:
             else (description or ""),
             "site_rank": next(
                 (
-                    r["rank"]
-                    for r in item.get("rankings", [])
-                    if r["allTime"] and r["type"] == "RATED"
+                    ranking.get("rank")
+                    for ranking in rankings
+                    if ranking.get("allTime") and ranking.get("type") == "RATED"
                 ),
                 None,
             ),
             "popularity_rank": next(
                 (
-                    r["rank"]
-                    for r in item.get("rankings", [])
-                    if r["allTime"] and r["type"] == "POPULAR"
+                    ranking.get("rank")
+                    for ranking in rankings
+                    if ranking.get("allTime") and ranking.get("type") == "POPULAR"
                 ),
                 None,
             ),
-            "status_distribution": {
-                s["status"]: s["amount"]
-                for s in item.get("stats", {}).get("statusDistribution", [])
-            },
+            "status_distribution": status_distribution,
             "external_links": item.get("externalLinks", []),
             "relations": [
                 {
@@ -946,10 +1009,10 @@ class AniListService:
             "season_year": item.get("seasonYear"),
             # External image URLs are available immediately while background jobs
             # fetch and persist local image files.
-            "cover_image_external_url": item.get("coverImage", {}).get("extraLarge")
-            or item.get("coverImage", {}).get("large")
-            or "",
-            "banner_image_external_url": item.get("bannerImage") or "",
+            "cover_image_external_url": self.normalize_external_image_url(
+                cover_image.get("extraLarge") or cover_image.get("large")
+            ),
+            "banner_image_external_url": self.normalize_external_image_url(item.get("bannerImage")),
             # External IDs
             "anilist_id": item.get("id"),
             "mal_id": item.get("idMal"),
@@ -1205,10 +1268,14 @@ class AniListService:
 
     async def _download_and_save_images(self, anime, item):
         try:
-            cover_url = item.get("coverImage", {}).get("extraLarge") or item.get(
-                "coverImage", {}
-            ).get("large")
-            banner_url = item.get("bannerImage")
+            cover_image = item.get("coverImage") or {}
+            if not isinstance(cover_image, dict):
+                cover_image = {}
+
+            cover_url = self.normalize_external_image_url(
+                cover_image.get("extraLarge") or cover_image.get("large")
+            )
+            banner_url = self.normalize_external_image_url(item.get("bannerImage"))
             existing_cover_url = anime.cover_image_external_url or ""
             existing_banner_url = anime.banner_image_external_url or ""
             cover_url_changed = bool(cover_url and cover_url != existing_cover_url)
@@ -1228,10 +1295,10 @@ class AniListService:
                 or (not has_banner and mal_id)
                 or force_replace
             ):
-                from apps.animes.tasks.images import fetch_anime_images
+                from apps.animes.tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
-                await sync_to_async(fetch_anime_images.delay)(
+                await sync_to_async(_queue_image_fetch)(
                     anime_id=anime.id,
                     cover_url=cover_url,
                     banner_url=banner_url,
@@ -1278,7 +1345,7 @@ class AniListService:
     @sync_to_async
     def _save_external_url(self, anime, field_name, url):
         """Save external image URL for fallback purposes"""
-        setattr(anime, field_name, url)
+        setattr(anime, field_name, self.normalize_external_image_url(url))
         anime.save(update_fields=[field_name])
 
     async def get_anime_by_id(self, anilist_id: int) -> dict | None:

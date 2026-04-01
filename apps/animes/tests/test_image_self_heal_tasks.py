@@ -7,6 +7,7 @@ from django.test import TestCase
 from apps.animes.models import Anime
 from apps.animes.tasks.images import (
     _is_storage_endpoint_error,
+    _queue_image_fetch,
     fetch_anime_images,
     heal_missing_anime_media,
 )
@@ -56,6 +57,7 @@ class ImageTaskSelfHealTests(TestCase):
         )
 
         service = mock_service_cls.return_value
+        mock_service_cls.resolve_fetchable_image_url.side_effect = lambda url: url
         service.download_image = AsyncMock(return_value=b"cover-bytes")
         service._save_external_url = AsyncMock()
         service._save_image = AsyncMock(
@@ -102,6 +104,7 @@ class ImageTaskSelfHealTests(TestCase):
         mock_anime_get.return_value = anime
 
         service = mock_service_cls.return_value
+        mock_service_cls.resolve_fetchable_image_url.side_effect = lambda url: url
         service.download_image = AsyncMock(return_value=b"image-bytes")
         service._save_external_url = AsyncMock()
         service._save_image = AsyncMock()
@@ -195,4 +198,46 @@ class ImageTaskSelfHealTests(TestCase):
 
         self.assertEqual(result["status"], "skipped")
         self.assertEqual(result["reason"], "storage_unavailable")
+        mock_fetch_delay.assert_not_called()
+
+
+class ImageTaskQueueNormalizationTests(TestCase):
+    @patch("apps.animes.tasks.images.cache.add", return_value=True)
+    @patch("apps.animes.tasks.images.fetch_anime_images.delay")
+    def test_queue_image_fetch_rewrites_myanimelist_image_hosts(
+        self,
+        mock_fetch_delay,
+        _mock_cache_add,
+    ):
+        queued = _queue_image_fetch(
+            anime_id=77,
+            cover_url="https://myanimelist.net/images/anime/1/77777.jpg",
+            banner_url="https://www.myanimelist.net/images/anime/2/88888.webp",
+            mal_id=None,
+        )
+
+        self.assertTrue(queued)
+        mock_fetch_delay.assert_called_once_with(
+            anime_id=77,
+            cover_url="https://cdn.myanimelist.net/images/anime/1/77777.jpg",
+            banner_url="https://cdn.myanimelist.net/images/anime/2/88888.webp",
+            mal_id=None,
+            storage_retry=0,
+        )
+
+    @patch("apps.animes.tasks.images.cache.add", return_value=True)
+    @patch("apps.animes.tasks.images.fetch_anime_images.delay")
+    def test_queue_image_fetch_drops_untrusted_urls_without_fallback(
+        self,
+        mock_fetch_delay,
+        _mock_cache_add,
+    ):
+        queued = _queue_image_fetch(
+            anime_id=88,
+            cover_url="https://cdn.example.com/cover.jpg",
+            banner_url="https://cdn.example.com/banner.jpg",
+            mal_id=None,
+        )
+
+        self.assertFalse(queued)
         mock_fetch_delay.assert_not_called()

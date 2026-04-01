@@ -2,7 +2,13 @@ from .anime import Anime, AnimeCharacter, AnimeStaff, ThemeSong
 from .catalog import Character, Genre, Staff, Studio
 from .reviews import Review, ReviewComment, ReviewReport, ReviewVote
 from .sync import OfflineAnimeSyncState, OfflineCatalogImport
-from .user_data import UserFavorite, UserHistory, UserRecommendation
+from .user_data import (
+    UserFavorite,
+    UserFavoriteCharacter,
+    UserFavoriteStaff,
+    UserHistory,
+    UserRecommendation,
+)
 
 __all__ = [
     "Anime",
@@ -20,6 +26,8 @@ __all__ = [
     "Studio",
     "ThemeSong",
     "UserFavorite",
+    "UserFavoriteCharacter",
+    "UserFavoriteStaff",
     "UserHistory",
     "UserRecommendation",
 ]

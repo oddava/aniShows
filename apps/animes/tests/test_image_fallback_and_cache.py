@@ -33,6 +33,62 @@ class AniListPrepareAnimeDataTests(SimpleTestCase):
         self.assertEqual(data["cover_image_external_url"], "https://img.anilist.co/cover-xl.jpg")
         self.assertEqual(data["banner_image_external_url"], "https://img.anilist.co/banner.jpg")
 
+    def test_prepare_anime_data_skips_null_rankings_and_status_distribution_entries(self):
+        service = object.__new__(AniListService)
+        item = {
+            "id": 123,
+            "idMal": 456,
+            "title": {"english": "Null Safe Anime", "romaji": "Null Safe Anime"},
+            "rankings": [
+                None,
+                {"rank": 10, "type": "RATED", "allTime": True},
+                {"rank": 20, "type": "POPULAR", "allTime": True},
+            ],
+            "stats": {
+                "statusDistribution": [
+                    None,
+                    {"status": "CURRENT", "amount": 12},
+                    {"status": "COMPLETED", "amount": 34},
+                ]
+            },
+            "coverImage": None,
+            "bannerImage": None,
+            "startDate": {"year": 2024, "month": 1, "day": 1},
+            "endDate": {"year": 2024, "month": 3, "day": 1},
+        }
+
+        data = service._prepare_anime_data(item, "Null Safe Anime", "", "null-safe-anime")
+
+        self.assertEqual(data["site_rank"], 10)
+        self.assertEqual(data["popularity_rank"], 20)
+        self.assertEqual(
+            data["status_distribution"],
+            {"CURRENT": 12, "COMPLETED": 34},
+        )
+
+    def test_prepare_anime_data_normalizes_myanimelist_image_hosts(self):
+        service = object.__new__(AniListService)
+        item = {
+            "id": 321,
+            "idMal": 654,
+            "title": {"english": "MAL Hosted Anime", "romaji": "MAL Hosted Anime"},
+            "coverImage": {
+                "large": "https://myanimelist.net/images/anime/5/12345.jpg",
+            },
+            "bannerImage": "https://www.myanimelist.net/images/anime/9/99999.webp",
+        }
+
+        data = service._prepare_anime_data(item, "MAL Hosted Anime", "", "mal-hosted-anime")
+
+        self.assertEqual(
+            data["cover_image_external_url"],
+            "https://cdn.myanimelist.net/images/anime/5/12345.jpg",
+        )
+        self.assertEqual(
+            data["banner_image_external_url"],
+            "https://cdn.myanimelist.net/images/anime/9/99999.webp",
+        )
+
 
 class AnimeDetailCacheInvalidationSignalTests(TestCase):
     @patch("apps.animes.signals.enrich_metadata.delay")

@@ -121,10 +121,14 @@ class FranchiseImportService:
 
         This keeps detail pages renderable immediately while background image downloads run.
         """
-        cover_url = item.get("coverImage", {}).get("extraLarge") or item.get("coverImage", {}).get(
-            "large"
+        cover_image = item.get("coverImage") or {}
+        if not isinstance(cover_image, dict):
+            cover_image = {}
+
+        cover_url = AniListService.normalize_external_image_url(
+            cover_image.get("extraLarge") or cover_image.get("large")
         )
-        banner_url = item.get("bannerImage")
+        banner_url = AniListService.normalize_external_image_url(item.get("bannerImage"))
 
         update_fields: list[str] = []
         if not anime.cover_image and not anime.cover_image_external_url and cover_url:

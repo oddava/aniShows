@@ -94,6 +94,22 @@ def _queue_image_fetch(
     force_replace: bool = False,
 ) -> bool:
     """Queue image fetch task with per-anime dedupe to prevent retry storms."""
+    resolved_cover_url = AniListService.resolve_fetchable_image_url(cover_url)
+    resolved_banner_url = AniListService.resolve_fetchable_image_url(banner_url)
+
+    if not resolved_cover_url and cover_url:
+        logger.info(
+            "Skipping non-fetchable cover image URL before enqueue",
+            extra={"anime_id": anime_id, "cover_url": cover_url},
+        )
+    if not resolved_banner_url and banner_url:
+        logger.info(
+            "Skipping non-fetchable banner image URL before enqueue",
+            extra={"anime_id": anime_id, "banner_url": banner_url},
+        )
+    if not resolved_cover_url and not resolved_banner_url and not mal_id:
+        return False
+
     dedupe_ttl = max(_FETCH_DEDUP_TTL_SECONDS, countdown + 60)
     cache_key = _FETCH_DEDUP_KEY.format(anime_id=anime_id)
 
@@ -102,8 +118,8 @@ def _queue_image_fetch(
 
     kwargs = {
         "anime_id": anime_id,
-        "cover_url": cover_url or "",
-        "banner_url": banner_url or "",
+        "cover_url": resolved_cover_url,
+        "banner_url": resolved_banner_url,
         "mal_id": mal_id,
         "storage_retry": storage_retry,
     }
@@ -158,7 +174,9 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
 
                 # Find the largest picture
                 for pic in data:
-                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get("jpg", {}).get("large_image_url")
+                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get("jpg", {}).get(
+                        "large_image_url"
+                    )
                     if large_img:
                         return large_img
 
@@ -167,6 +185,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
             break
 
     return None
+
 
 @observed_shared_task(retry_policy="standard", time_limit_preset="quick")
 def fetch_anime_images(
@@ -193,10 +212,15 @@ def fetch_anime_images(
             try:
                 nonlocal banner_url
 
+                cover_url_resolved = AniListService.resolve_fetchable_image_url(cover_url)
+                banner_url = AniListService.resolve_fetchable_image_url(banner_url)
+
                 # Persist external URLs so the API can always fall back even while
                 # local storage is degraded.
-                if cover_url and cover_url != anime.cover_image_external_url:
-                    await service._save_external_url(anime, "cover_image_external_url", cover_url)
+                if cover_url_resolved and cover_url_resolved != anime.cover_image_external_url:
+                    await service._save_external_url(
+                        anime, "cover_image_external_url", cover_url_resolved
+                    )
                 if banner_url and banner_url != anime.banner_image_external_url:
                     await service._save_external_url(anime, "banner_image_external_url", banner_url)
 
@@ -223,12 +247,12 @@ def fetch_anime_images(
                     await sync_to_async(anime.save)(update_fields=[field_name])
 
                 # Step 2: Download the Images natively
-                if cover_url and (force_replace or not anime.cover_image):
+                if cover_url_resolved and (force_replace or not anime.cover_image):
                     if force_replace and anime.cover_image:
                         await _clear_local_image("cover_image")
-                    cover_data = await service.download_image(cover_url)
+                    cover_data = await service.download_image(cover_url_resolved)
                     if cover_data:
-                        filename = _image_filename(anime.slug, "cover", cover_url)
+                        filename = _image_filename(anime.slug, "cover", cover_url_resolved)
                         await service._save_image(anime, "cover_image", filename, cover_data)
 
                 if banner_url and (force_replace or not anime.banner_image):

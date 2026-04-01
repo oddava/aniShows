@@ -99,11 +99,8 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             for code in ("missing_ids", "invalid_ids", "invalid_variable", "not_found")
         )
         dispatched_jobs = reconcile_result.get("processed", 0)
-        should_schedule_next = (
-            strict
-            and round_number < max_rounds
-            and (pending > 0 or dispatched_jobs > 0)
-        )
+        backlog_remaining = pending > 0 or dispatched_jobs > 0
+        should_schedule_next = round_number < max_rounds and backlog_remaining
 
         next_round_task_id = None
         if should_schedule_next:
@@ -164,7 +161,7 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             "top_quarantine_reasons": reconcile_result.get("top_quarantine_reasons", []),
             "next_round_scheduled": bool(next_round_task_id),
             "next_round_task_id": next_round_task_id,
-            "rounds_exhausted": strict and round_number >= max_rounds,
+            "rounds_exhausted": round_number >= max_rounds and backlog_remaining,
         }
 
 
