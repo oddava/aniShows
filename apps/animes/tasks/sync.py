@@ -76,10 +76,10 @@ SYNC_CONFIGS = {
     },
     "full_catalog": {
         "method": "get_top_rated",
-        "kwargs": {"limit": 1000},
+        "kwargs": {"limit": 5000},
         "schedule": "weekly",
         "priority": "low",
-        "description": "Fetch top 1000 rated anime to build comprehensive catalog",
+        "description": "Fetch top 5000 rated anime to build a broader catalog",
     },
 }
 
@@ -91,7 +91,7 @@ class SyncAnimeCatalogTask(BaseTask):
     - 'seasonal': Current season anime
     - 'next_season': Upcoming season anime
     - 'airing': All currently airing anime
-    - 'full_catalog': Top 1000 rated anime (for building comprehensive catalog)
+    - 'full_catalog': Top 5000 rated anime (for building a broader catalog)
 
     Usage:
         # Sync trending anime
@@ -101,7 +101,7 @@ class SyncAnimeCatalogTask(BaseTask):
         sync_anime_catalog.delay(sync_type='seasonal')
 
         # Full catalog sync (manual only, not scheduled due to API limits)
-        sync_anime_catalog.delay(sync_type='full_catalog', limit=1000)
+        sync_anime_catalog.delay(sync_type='full_catalog', limit=5000)
 
         # Chain with other tasks
         chain(
