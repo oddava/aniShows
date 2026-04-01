@@ -14,7 +14,7 @@ export default function Layout() {
     const location = useLocation();
     const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
     const isBrowsePage = normalizedPath === '/browse';
-    const isFlushPage = normalizedPath === '/' || normalizedPath.startsWith('/profile') || normalizedPath.startsWith('/u/');
+    const isFlushPage = normalizedPath === '/' || normalizedPath.startsWith('/profile') || normalizedPath.startsWith('/u/') || normalizedPath.startsWith('/anime/');
 
     return (
         <div className="min-h-screen bg-dark flex flex-col">
