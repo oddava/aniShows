@@ -5,8 +5,8 @@ import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/
 const InfoRow = ({ icon: Icon, label, value }) => (
     <div className="flex items-start justify-between gap-4 py-1 min-w-0">
         <div className="flex items-center gap-2 pt-1 shrink-0">
-            <Icon className="w-3.5 h-3.5 text-gray-500" />
-            <p className="text-gray-400 text-[10px] font-black uppercase tracking-wider">
+            <Icon className="w-3.5 h-3.5 text-gray-400" />
+            <p className="text-gray-300 text-[10px] font-black uppercase tracking-wider">
                 {label}
             </p>
         </div>
@@ -49,10 +49,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
     return (
         <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 min-w-0 overflow-hidden ${className}`}>
-            <h3
-                className="text-white font-bold uppercase text-[10px] tracking-[0.2em]"
-                style={{ color: accentColor ? `${accentColor}cc` : '#75698dcc' }}
-            >
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em]">
                 Information
             </h3>
             <div className="space-y-4">
@@ -144,7 +141,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
                 {anime.genres && anime.genres.length > 0 && (
                     <div className="pt-6 mt-8 border-t border-white/5">
-                        <p className="text-gray-300 text-xs font-bold uppercase tracking-wider mb-3">Genres</p>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Genres</p>
                         <div className="flex flex-wrap gap-2">
                             {anime.genres.map((genre) => (
                                 <Link
@@ -174,8 +171,8 @@ export default function InformationBox({ anime, className, accentColor }) {
 
                 {anime.external_links && anime.external_links.length > 0 && (
                     <div className="pt-5 mt-5 border-t border-white/5">
-                        <p className="text-gray-300 text-xs font-bold uppercase tracking-wider mb-3">External Links</p>
-                        <div className="flex flex-wrap gap-2">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">External Links</p>
+                        <div className="grid grid-cols-2 gap-2">
                             {anime.external_links.map((link, i) => {
                                 const isAccentLink = ['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site);
                                 return (
@@ -184,10 +181,10 @@ export default function InformationBox({ anime, className, accentColor }) {
                                         href={link.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-2 border ${
+                                        className={`px-3 py-2 text-[11px] font-bold rounded-lg transition-all flex items-center justify-between gap-2 border ${
                                             isAccentLink
                                                 ? 'bg-transparent hover:text-white'
-                                                : 'bg-dark-200 hover:bg-white text-gray-300 hover:text-black border-gray-700/50 hover:border-white'
+                                                : 'bg-dark-200 hover:bg-white text-gray-400 hover:text-black border-gray-700/50 hover:border-white'
                                         }`}
                                         style={isAccentLink ? {
                                             color: accentColor || '#75698d',
@@ -206,7 +203,8 @@ export default function InformationBox({ anime, className, accentColor }) {
                                             }
                                         }}
                                     >
-                                        {link.site} <ExternalLink className="w-3 h-3" />
+                                        <span className="truncate">{link.site}</span>
+                                        <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
                                     </a>
                                 );
                             })}

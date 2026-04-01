@@ -5,6 +5,8 @@ import FranchiseSection from './FranchiseSection';
 import MusicSection from './MusicSection';
 import LazyYouTube from './LazyYouTube';
 
+import StatusDistribution from './StatusDistribution';
+
 export function OverviewTab({ anime, accentColor }) {
     // Extract YouTube video ID
     const getYouTubeId = (url) => {
@@ -14,18 +16,38 @@ export function OverviewTab({ anime, accentColor }) {
     };
     const videoId = getYouTubeId(anime.trailer_url);
 
+    const hasThemes = anime?.theme_songs && anime.theme_songs.some(t => t.song_type === 'opening' || t.song_type === 'ending');
+    const hasTrailer = !!videoId;
+
     return (
         <div className="animate-tab-content space-y-12">
             <FranchiseSection relations={anime.relations} accentColor={accentColor} sourceSlug={anime.slug} />
 
-            <MusicSection anime={anime} accentColor={accentColor} />
+            {(hasThemes || hasTrailer) && (
+                <div className={`grid grid-cols-1 ${hasThemes && hasTrailer ? 'xl:grid-cols-[2fr_1fr]' : ''} gap-8 mb-12 items-start`}>
+                    {hasTrailer && (
+                        <div className="min-w-0 flex flex-col order-1 xl:order-1">
+                            <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-4 sm:mb-6" style={{ color: accentColor }}>
+                                Trailer
+                            </h2>
+                            <div className="w-full flex flex-col justify-start">
+                                <LazyYouTube videoId={videoId} title="Trailer" accentColor={accentColor} />
+                            </div>
+                        </div>
+                    )}
 
-            {videoId && (
-                <div className="mb-12">
-                    <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                        Trailer
-                    </h2>
-                    <LazyYouTube videoId={videoId} title="Trailer" accentColor={accentColor} />
+                    {hasThemes && (
+                        <div className="min-w-0 order-2 xl:order-2 xl:row-span-2">
+                            <MusicSection anime={anime} accentColor={accentColor} isCompact={hasTrailer} />
+                        </div>
+                    )}
+                    
+                    <div className="min-w-0 order-3 xl:order-3">
+                        <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-4 sm:mb-6" style={{ color: accentColor }}>
+                            Status Distribution
+                        </h2>
+                        <StatusDistribution anime={anime} />
+                    </div>
                 </div>
             )}
         </div>
@@ -68,7 +90,7 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
     }
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 animate-tab-content">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3 animate-tab-content">
             {uniqueCharacters.map((role) => (
                 <div
                     key={role.id}
@@ -150,12 +172,12 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
     }
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 animate-tab-content">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-tab-content">
             {uniqueStaff.map((staffRole) => (
                 <div
                     key={staffRole.id}
                     onClick={() => onStaffClick(staffRole)}
-                    className="flex flex-col items-center text-center p-6 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors cursor-pointer group"
+                    className="flex flex-col items-center text-center p-4 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors cursor-pointer group"
                 >
                     <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4  group-hover:border-gray-600 transition-colors">
                         <img

@@ -1,10 +1,6 @@
-import { Play, Disc, ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+import { Play, Disc } from 'lucide-react';
 
-export default function MusicSection({ anime, accentColor }) {
-    const [showAllOpenings, setShowAllOpenings] = useState(false);
-    const [showAllEndings, setShowAllEndings] = useState(false);
-
+export default function MusicSection({ anime, accentColor, isCompact = false }) {
     // Get themes from API data
     const themeSongs = anime?.theme_songs || [];
 
@@ -15,84 +11,56 @@ export default function MusicSection({ anime, accentColor }) {
 
     const hasThemes = themes.openings.length > 0 || themes.endings.length > 0;
 
-    const MAX_VISIBLE = 6;
-
     if (!hasThemes) {
         return null;
     }
 
     return (
-        <div className="mb-12 animate-tab-content">
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+        <div className="animate-tab-content w-full">
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6">
                 Themes
             </h2>
 
-            <div className="grid md:grid-cols-2 gap-6 min-w-0">
+            <div className={`grid gap-6 min-w-0 w-full ${isCompact ? 'grid-cols-1' : 'md:grid-cols-2'}`}>
                 {/* Openings */}
                 {themes.openings.length > 0 && (
-                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-6 border border-gray-800 min-w-0 overflow-hidden">
+                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col">
                         <div className="flex items-center gap-2 mb-4">
-                            <Disc className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
-                            <h3 className="font-bold text-white">Opening Themes</h3>
-                            <span className="text-xs text-gray-500">({themes.openings.length})</span>
+                            <Disc className="w-4 h-4 text-gray-500" />
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.16em]">Opening Themes</h3>
+                            <span 
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-dark-50 border border-gray-800/50"
+                                style={{ color: accentColor || '#75698d' }}
+                            >
+                                ({themes.openings.length})
+                            </span>
                         </div>
-                        <div className="space-y-3">
-                            {(showAllOpenings ? themes.openings : themes.openings.slice(0, MAX_VISIBLE)).map((theme, idx) => (
-                                <ThemeItem key={idx} theme={theme} accentColor={accentColor} number={idx + 1} />
+                        <div className="space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent pr-2 max-h-[140px]">
+                            {themes.openings.map((theme, idx) => (
+                                <ThemeItem key={idx} theme={theme} number={idx + 1} />
                             ))}
                         </div>
-                        {themes.openings.length > MAX_VISIBLE && (
-                            <button
-                                onClick={() => setShowAllOpenings(!showAllOpenings)}
-                                className="w-full mt-4 py-2 px-4 flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-white bg-dark-200/50 hover:bg-dark-200 rounded-xl transition-all"
-                            >
-                                {showAllOpenings ? (
-                                    <>
-                                        <ChevronUp className="w-4 h-4" />
-                                        Show Less
-                                    </>
-                                ) : (
-                                    <>
-                                        <ChevronDown className="w-4 h-4" />
-                                        Show {themes.openings.length - MAX_VISIBLE} More
-                                    </>
-                                )}
-                            </button>
-                        )}
                     </div>
                 )}
 
                 {/* Endings */}
                 {themes.endings.length > 0 && (
-                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-6 border border-gray-800 min-w-0 overflow-hidden">
+                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col">
                         <div className="flex items-center gap-2 mb-4">
-                            <Disc className="w-5 h-5" style={{ color: accentColor || '#75698d' }} />
-                            <h3 className="font-bold text-white">Ending Themes</h3>
-                            <span className="text-xs text-gray-500">({themes.endings.length})</span>
+                            <Disc className="w-4 h-4 text-gray-500" />
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.16em]">Ending Themes</h3>
+                            <span 
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-dark-50 border border-gray-800/50"
+                                style={{ color: accentColor || '#75698d' }}
+                            >
+                                ({themes.endings.length})
+                            </span>
                         </div>
-                        <div className="space-y-3">
-                            {(showAllEndings ? themes.endings : themes.endings.slice(0, MAX_VISIBLE)).map((theme, idx) => (
-                                <ThemeItem key={idx} theme={theme} accentColor={accentColor} number={idx + 1} />
+                        <div className="space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent pr-2 max-h-[140px]">
+                            {themes.endings.map((theme, idx) => (
+                                <ThemeItem key={idx} theme={theme} number={idx + 1} />
                             ))}
                         </div>
-                        {themes.endings.length > MAX_VISIBLE && (
-                            <button
-                                onClick={() => setShowAllEndings(!showAllEndings)}
-                                className="w-full mt-4 py-2 px-4 flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-white bg-dark-200/50 hover:bg-dark-200 rounded-xl transition-all"
-                            >
-                                {showAllEndings ? (
-                                    <>
-                                        <ChevronUp className="w-4 h-4" />
-                                        Show Less
-                                    </>
-                                ) : (
-                                    <>
-                                        <ChevronDown className="w-4 h-4" />
-                                        Show {themes.endings.length - MAX_VISIBLE} More
-                                    </>
-                                )}
-                            </button>
-                        )}
                     </div>
                 )}
             </div>

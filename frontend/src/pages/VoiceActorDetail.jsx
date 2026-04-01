@@ -82,7 +82,11 @@ export default function VoiceActorDetail() {
 
     const parsedDescription = useMemo(() => {
         if (!staff?.description) return null;
-        return parseMarkdownLinks(staff.description);
+        return staff.description.split('\n').filter(p => !!p.trim()).map((para, i) => (
+            <p key={i} className="mb-4 last:mb-0">
+                {parseMarkdownLinks(para)}
+            </p>
+        ));
     }, [staff?.description]);
 
     useEffect(() => {
@@ -212,7 +216,7 @@ export default function VoiceActorDetail() {
                             </div>
 
                             {staff.description && (
-                                <div className="max-w-3xl text-sm leading-relaxed text-gray-300">
+                                <div className="max-w-3xl text-sm leading-relaxed text-gray-200 font-medium">
                                     {parsedDescription}
                                 </div>
                             )}

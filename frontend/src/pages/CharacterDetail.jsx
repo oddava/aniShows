@@ -235,7 +235,7 @@ export default function CharacterDetail() {
                             </div>
 
                             {character.description && (
-                                <div className="max-w-3xl text-sm leading-relaxed text-gray-300">
+                                <div className="max-w-3xl text-sm leading-relaxed text-gray-200 font-medium">
                                     {parsedDescription}
                                 </div>
                             )}

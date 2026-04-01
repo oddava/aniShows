@@ -245,7 +245,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Main Rating */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-3">Overall Rating</label>
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">Overall Rating</label>
                     <StarInput
                         value={rating}
                         onChange={setRating}
@@ -292,7 +292,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
 
                 {/* Text Input */}
                 <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-300">
+                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">
                         Your Review
                     </label>
                     <div className="relative">

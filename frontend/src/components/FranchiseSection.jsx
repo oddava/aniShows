@@ -80,9 +80,18 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
 
             {!isRetro ? (
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] flex items-center gap-2">
                         Franchise
-                        <span className="text-xs font-normal text-gray-500">({relations.length} total)</span>
+                        <span 
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
+                            style={{ 
+                                color: accentColor || '#75698d',
+                                borderColor: accentColor ? `${accentColor}30` : 'rgba(117,105,141,0.2)',
+                                backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)'
+                            }}
+                        >
+                            {relations.length}
+                        </span>
                     </h2>
                     {hasMore && (
                         <button

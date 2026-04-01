@@ -574,7 +574,7 @@ export default function AnimeDetail() {
 
             {/* Content Container */}
             <div className="relative -mt-32 px-4 sm:px-6 lg:px-8 pb-16">
-                <div className="max-w-7xl mx-auto">
+                <div className="max-w-[1440px] mx-auto">
                     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <div className="hidden lg:flex lg:flex-col gap-5">
@@ -617,10 +617,10 @@ export default function AnimeDetail() {
                                         <button
                                             onClick={handleFavorite}
                                             title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                                            className={`w-9 h-9 self-start flex justify-center items-center rounded-lg transition-all duration-300 border
+                                            className={`w-9 h-9 self-start flex justify-center items-center rounded-lg transition-all duration-300
                                                 ${isFavorite 
-                                                    ? 'bg-red-500/10 text-red-500 border-red-500/20 shadow-md' 
-                                                    : 'bg-dark-100 border-gray-700 text-gray-400 hover:bg-dark-100/50 hover:text-red-500 hover:border-red-500/50'}`}
+                                                    ? 'bg-red-500/10 text-red-500' 
+                                                    : 'bg-dark-100 text-gray-400 hover:text-white'}`}
                                         >
                                             <Heart className={`w-4.5 h-4.5 ${isFavorite ? 'fill-current' : ''}`} />
                                         </button>
@@ -686,8 +686,8 @@ export default function AnimeDetail() {
                                                             title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
                                                             className={`w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300
                                                                 ${isFavorite
-                                                                    ? 'bg-red-500/10 text-red-500 shadow-md'
-                                                                    : 'bg-dark-100 text-gray-400 hover:bg-dark-100/50 hover:text-red-500'}`}
+                                                                    ? 'bg-red-500/10 text-red-500'
+                                                                    : 'bg-dark-100 text-gray-400 hover:text-white'}`}
                                                         >
                                                             <Heart className={`w-4.5 h-4.5 ${isFavorite ? 'fill-current' : ''}`} />
                                                         </button>
@@ -709,15 +709,16 @@ export default function AnimeDetail() {
                                         {anime.title}
                                     </h1>
                                 </div>
-                                {/* Synopsis */}
                                 {anime.synopsis && (
                                     <div className="text-left mb-8">
-                                        <div className="relative">
-                                            <p className={`text-gray-300 leading-relaxed text-sm lg:text-base font-normal max-w-4xl transition-all duration-300 ${!synopsisExpanded ? 'line-clamp-4' : ''}`}>
-                                                {anime.synopsis}
-                                            </p>
+                                        <div className={`relative transition-all duration-500 ease-in-out ${!synopsisExpanded ? 'max-h-[140px] overflow-hidden' : 'max-h-[none]'}`}>
+                                            {anime.synopsis.split('\n').filter(p => p.trim()).map((para, i) => (
+                                                <p key={i} className="text-gray-200 font-medium leading-relaxed text-sm lg:text-base max-w-4xl mb-4 last:mb-0">
+                                                    {para}
+                                                </p>
+                                            ))}
                                             {anime.synopsis.length > 300 && !synopsisExpanded && (
-                                                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-dark to-transparent pointer-events-none" />
+                                                <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-dark via-dark/60 to-transparent pointer-events-none" />
                                             )}
                                         </div>
                                         {anime.synopsis.length > 300 && (
@@ -786,9 +787,16 @@ export default function AnimeDetail() {
                             {/* Reviews Section */}
                             <div className="mt-16 mb-16">
                                 <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                                    <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 sm:gap-3">
+                                    <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-6 flex items-center gap-2 sm:gap-3" style={{ color: mappedAccent }}>
                                         Reviews
-                                        <span className="text-xs sm:text-sm font-normal text-gray-400 bg-dark-50 px-2 sm:px-3 py-1 rounded-full border border-gray-800">
+                                        <span 
+                                            className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
+                                            style={{ 
+                                                color: mappedAccent,
+                                                borderColor: mappedAccent ? `${mappedAccent}30` : 'rgba(117,105,141,0.2)',
+                                                backgroundColor: mappedAccent ? `${mappedAccent}10` : 'rgba(117,105,141,0.05)'
+                                            }}
+                                        >
                                             {reviewCount}
                                         </span>
                                     </h2>
@@ -869,7 +877,7 @@ export default function AnimeDetail() {
 
                                             {ratingOnlyReviews.length > 0 && (
                                                 <div className="mt-8">
-                                                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">
+                                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">
                                                         Rating-only reviews ({ratingOnlyReviews.length})
                                                     </p>
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -915,7 +923,7 @@ export default function AnimeDetail() {
                         <div className="space-y-6 lg:space-y-8 lg:pt-40">
                             {recommendations && recommendations.length > 0 && (
                                 <div>
-                                    <h2 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6 flex items-center gap-2">
+                                    <h2 className="text-xs font-bold uppercase tracking-[0.16em] mb-4 sm:mb-6" style={{ color: mappedAccent }}>
                                         Recommendations
                                     </h2>
                                     <div className="hidden lg:grid grid-cols-1 gap-4">

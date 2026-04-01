@@ -37,7 +37,7 @@ const AvgSubScore = ({ icon: Icon, label, value }) => {  // eslint-disable-line 
         <div className="flex flex-col items-center gap-1 p-3 bg-dark-200/50 rounded-xl border border-gray-800/50">
             <Icon className="w-4 h-4 text-gray-500" />
             <span className="text-lg font-bold text-white">{displayValue}</span>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</span>
+            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.12em]">{label}</span>
         </div>
     );
 };
@@ -60,8 +60,8 @@ export default function ReviewSummary({
     return (
         <div className="bg-dark-100/50 rounded-2xl border border-gray-800 p-6 mb-8">
             <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-gray-500" />
                     Review Summary
                 </h3>
 
@@ -121,7 +121,7 @@ export default function ReviewSummary({
 
                 {/* Average Sub-Scores */}
                 <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Category Averages</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Category Averages</p>
                     <div className="grid grid-cols-4 gap-2">
                         <AvgSubScore icon={Book} label="Story" value={averages?.story} />
                         <AvgSubScore icon={Film} label="Animation" value={averages?.animation} />
