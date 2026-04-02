@@ -24,7 +24,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false }) 
             <div className={`grid gap-6 min-w-0 w-full ${isCompact ? 'grid-cols-1' : 'md:grid-cols-2'}`}>
                 {/* Openings */}
                 {themes.openings.length > 0 && (
-                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col">
+                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col h-full">
                         <div className="flex items-center gap-2 mb-4">
                             <Disc className="w-4 h-4 text-gray-500" />
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.16em]">Opening Themes</h3>
@@ -35,7 +35,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false }) 
                                 ({themes.openings.length})
                             </span>
                         </div>
-                        <div className="space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent pr-2 max-h-[140px]">
+                        <div className="space-y-3 pr-2">
                             {themes.openings.map((theme, idx) => (
                                 <ThemeItem key={idx} theme={theme} number={idx + 1} />
                             ))}
@@ -45,7 +45,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false }) 
 
                 {/* Endings */}
                 {themes.endings.length > 0 && (
-                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col">
+                    <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col h-full">
                         <div className="flex items-center gap-2 mb-4">
                             <Disc className="w-4 h-4 text-gray-500" />
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.16em]">Ending Themes</h3>
@@ -56,7 +56,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false }) 
                                 ({themes.endings.length})
                             </span>
                         </div>
-                        <div className="space-y-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent pr-2 max-h-[140px]">
+                        <div className="space-y-3 pr-2">
                             {themes.endings.map((theme, idx) => (
                                 <ThemeItem key={idx} theme={theme} number={idx + 1} />
                             ))}
