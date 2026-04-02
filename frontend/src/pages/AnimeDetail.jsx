@@ -205,7 +205,7 @@ const RelatedAnimeCard = memo(({ anime }) => {
                 />
             </div>
             <div className="flex-1 py-1 min-w-0">
-                <h3 className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
+                <h3 className="text-gray-300 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
                     {anime.title}
                 </h3>
                 <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -253,7 +253,7 @@ const MobileRelatedCard = memo(({ anime }) => {
                     onLoad={() => setIsLoaded(true)}
                 />
             </div>
-            <h3 className="text-gray-200 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
+            <h3 className="text-gray-300 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
                 {anime.title}
             </h3>
             <div className="flex items-center gap-1 text-[10px] text-gray-500">
@@ -746,7 +746,7 @@ export default function AnimeDetail() {
                                 </div>
 
                                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2 min-w-0">
-                                    <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
+                                    <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-300 tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
                                         {anime.title}
                                     </h1>
                                 </div>

@@ -51,7 +51,7 @@ export default function EpisodesTab({
         <div className="animate-tab-content min-w-0 space-y-4" data-testid="watch-tab">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-4 py-3 text-xs text-gray-400">
                 <div>
-                    Loaded <span className="font-bold text-white">{episodes.length}</span> of <span className="font-bold text-white">{resolvedCount}</span> episodes
+                    Loaded <span className="font-bold text-gray-300">{episodes.length}</span> of <span className="font-bold text-gray-300">{resolvedCount}</span> episodes
                 </div>
                 <div>{duration}m average runtime</div>
             </div>

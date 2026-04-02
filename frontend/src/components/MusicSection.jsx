@@ -76,7 +76,7 @@ function ThemeItem({ theme, number }) {
             </div>
 
             <div className="flex-1 min-w-0 overflow-hidden">
-                <p className="font-medium text-white text-sm sm:text-base truncate">{theme.title}</p>
+                <p className="font-medium text-gray-300 text-sm sm:text-base truncate">{theme.title}</p>
                 <p className="text-xs text-gray-500 truncate">
                     {theme.artist}
                     {theme.episodes && <span className="ml-2 text-gray-600">({theme.episodes})</span>}

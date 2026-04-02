@@ -10,7 +10,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
                 {label}
             </p>
         </div>
-        <div className="text-white font-bold text-sm text-right leading-relaxed break-words min-w-0 max-w-[60%]">
+        <div className="text-gray-200 font-bold text-sm text-right leading-relaxed break-words min-w-0 max-w-[60%]">
             {value}
         </div>
     </div>
@@ -118,7 +118,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                 </span>
                             </div>
                             <div className="space-y-1">
-                                <p className="text-white font-bold text-lg">
+                                <p className="text-gray-200 font-bold text-lg">
                                     Episode {anime.next_airing_episode ?? 'TBA'}
                                 </p>
                                 <p

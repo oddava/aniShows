@@ -77,7 +77,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
 
                                 <div className="flex-1 flex justify-between p-3 min-w-0">
                                     <div className="flex flex-col justify-between min-w-0 pr-2">
-                                        <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
+                                        <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
                                             {role.character.name}
                                         </Link>
                                         <span className="text-[11px] text-gray-500 truncate">
@@ -87,7 +87,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
 
                                     <div className="flex flex-col justify-between min-w-0 text-right pl-2">
                                         {role.voice_actor ? (
-                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
+                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
                                                 {role.voice_actor.name}
                                             </Link>
                                         ) : (
@@ -134,7 +134,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                     />
                                 </div>
                                 <div className="flex flex-col min-w-0 pr-4">
-                                    <span className="font-medium text-white text-[13px] truncate">
+                                    <span className="font-medium text-gray-300 text-[13px] truncate">
                                         {staffRole.staff.name}
                                     </span>
                                     <p className="text-[11px] text-gray-500 mt-0.5 truncate">
@@ -152,58 +152,72 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                     <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                         Episodes
                     </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                        {topEpisodes.map((episode) => (
-                            <article
-                                key={episode.number}
-                                className="min-w-0"
-                            >
-                                {episode.crunchyroll_url ? (
+                    <div className={topEpisodes.some(e => e.thumbnail) 
+                        ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" 
+                        : "grid grid-cols-1 sm:grid-cols-2 gap-3"}>
+                        {topEpisodes.map((episode) => {
+                            const hasThumbnail = episode.thumbnail;
+                            
+                            if (!hasThumbnail) {
+                                return (
                                     <a
+                                        key={episode.number}
                                         href={episode.crunchyroll_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200"
+                                        className="flex items-center gap-4 bg-dark-200/40 rounded-xl p-3 border border-white/5 hover:border-gray-700 transition-colors group"
                                     >
-                                        {episode.thumbnail ? (
-                                            <img
-                                                src={episode.thumbnail}
-                                                alt={`Episode ${episode.number}`}
-                                                loading="lazy"
-                                                className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
-                                            />
-                                        ) : (
-                                            <div className="absolute inset-0 bg-dark-100" />
-                                        )}
-
-                                        <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
-                                            <h3 className="text-[12px] font-medium text-white line-clamp-1">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-[13px] font-medium text-gray-300 truncate">
                                                 Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
                                             </h3>
                                         </div>
                                     </a>
-                                ) : (
-                                    <div className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200">
-                                        {episode.thumbnail ? (
+                                );
+                            }
+
+                            return (
+                                <article
+                                    key={episode.number}
+                                    className="min-w-0"
+                                >
+                                    {episode.crunchyroll_url ? (
+                                        <a
+                                            href={episode.crunchyroll_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200"
+                                        >
                                             <img
                                                 src={episode.thumbnail}
                                                 alt={`Episode ${episode.number}`}
                                                 loading="lazy"
                                                 className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
                                             />
-                                        ) : (
-                                            <div className="absolute inset-0 bg-dark-100" />
-                                        )}
-
-                                        <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
-                                            <h3 className="text-[12px] font-medium text-white line-clamp-1">
-                                                Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
-                                            </h3>
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
+                                                <h3 className="text-[12px] font-medium text-gray-300 line-clamp-1">
+                                                    Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                                </h3>
+                                            </div>
+                                        </a>
+                                    ) : (
+                                        <div className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200">
+                                            <img
+                                                src={episode.thumbnail}
+                                                alt={`Episode ${episode.number}`}
+                                                loading="lazy"
+                                                className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
+                                            />
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
+                                                <h3 className="text-[12px] font-medium text-gray-300 line-clamp-1">
+                                                    Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                                </h3>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </article>
-                        ))}
+                                    )}
+                                </article>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -234,7 +248,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                             Average Score
                         </h2>
                         <div className="bg-dark-100/50 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-colors">
-                            <p className="text-2xl font-black text-white">
+                            <p className="text-2xl font-black text-gray-300">
                                 {anime?.rating || 'N/A'}
                                 {anime?.rating ? <span className="text-sm font-normal text-gray-400 ml-1">/ 10</span> : ''}
                             </p>
@@ -305,7 +319,7 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
 
                     <div className="flex-1 flex justify-between p-3 min-w-0">
                         <div className="flex flex-col justify-between min-w-0 pr-2">
-                            <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
+                            <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
                                 {role.character.name}
                             </Link>
                             <span className="text-[11px] text-gray-500">
@@ -315,7 +329,7 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
 
                         <div className="flex flex-col justify-between min-w-0 text-right pl-2">
                             {role.voice_actor ? (
-                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
+                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
                                     {role.voice_actor.name}
                                 </Link>
                             ) : (
@@ -390,7 +404,7 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
                         />
                     </div>
                     <div className="flex flex-col min-w-0 pr-4">
-                        <h4 className="font-medium text-white text-[13px] truncate">
+                        <h4 className="font-medium text-gray-300 text-[13px] truncate">
                             <Link
                                 to={`/staff/${staffRole.staff.id}`}
                                 onClick={(e) => e.stopPropagation()}
