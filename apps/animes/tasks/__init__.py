@@ -39,6 +39,7 @@ from .offline_catalog import import_offline_catalog, reconcile_offline_catalog_s
 from .recommendations import generate_recommendations
 from .sync import sync_anime_catalog
 from .themes import backfill_theme_youtube_urls, sync_theme_songs
+from .watch_episodes import sync_watch_episodes_batch, sync_watch_episodes_for_anime
 
 # Import legacy tasks to ensure they're registered
 # These are in tasks_legacy.py but imported via celery autodiscover
@@ -55,5 +56,7 @@ __all__ = [
     "sync_anime_catalog",
     "sync_franchises",
     "sync_theme_songs",
+    "sync_watch_episodes_batch",
+    "sync_watch_episodes_for_anime",
     "update_relation_slugs",
 ]

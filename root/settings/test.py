@@ -48,6 +48,7 @@ CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = False
 # Disable results to avoid backend configuration issues
 CELERY_RESULT_BACKEND = None
+ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = False
 
 # Use console cache for tests
 CACHES = {

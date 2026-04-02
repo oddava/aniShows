@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from apps.animes.services.offline_catalog import (
     DEFAULT_ASSET_NAME,
     OfflineCatalogImportService,
@@ -6,6 +8,7 @@ from apps.animes.services.offline_sync import OfflineSyncService
 from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask
+from .watch_episodes import sync_watch_episodes_batch
 
 
 class OfflineCatalogImportTask(BaseTask):
@@ -39,6 +42,14 @@ class OfflineCatalogImportTask(BaseTask):
             resume=resume,
             enqueue_enrichment=enqueue_enrichment,
         )
+        watch_episode_task_id = None
+        changed_ids = result.get("changed_anime_ids") or []
+        if changed_ids and getattr(settings, "ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED", True):
+            watch_result = sync_watch_episodes_batch.apply_async(
+                kwargs={"anime_ids": changed_ids, "force": True}
+            )
+            watch_episode_task_id = getattr(watch_result, "id", None)
+
         if enforce_full_sync and enqueue_enrichment:
             reconcile_offline_catalog_sync.delay(
                 anime_ids=[],
@@ -50,6 +61,8 @@ class OfflineCatalogImportTask(BaseTask):
                 chunk_size=enrichment_chunk_size,
                 require_themes=True,
             )
+        result["watch_episode_sync_queued"] = bool(watch_episode_task_id)
+        result["watch_episode_sync_task_id"] = watch_episode_task_id
         self.metrics.record_records(result.get("records_seen", 0))
         return result
 

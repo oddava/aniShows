@@ -17,6 +17,7 @@ class Command(BaseCommand):
                 "sync-catalog",
                 "sync-airing",
                 "enrich-metadata",
+                "sync-watch-episodes",
                 "sync-themes",
                 "import-offline-catalog",
                 "reconcile-offline-sync",
@@ -65,6 +66,17 @@ class Command(BaseCommand):
             type=int,
             default=50,
             help="Batch size for backfill mode",
+        )
+        parser.add_argument(
+            "--status-filter",
+            action="append",
+            choices=["Airing", "Upcoming", "Finished", "Unknown"],
+            help="Optional anime status filter for batch watch-episode sync",
+        )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Invalidate cached watch-episode payloads before syncing",
         )
 
         # Theme options
@@ -198,6 +210,8 @@ class Command(BaseCommand):
             self._handle_sync_airing(options, run_async, queue)
         elif workflow == "enrich-metadata":
             self._handle_enrich_metadata(options, run_async, queue)
+        elif workflow == "sync-watch-episodes":
+            self._handle_sync_watch_episodes(options, run_async, queue)
         elif workflow == "sync-themes":
             self._handle_sync_themes(options, run_async, queue)
         elif workflow == "import-offline-catalog":
@@ -255,6 +269,34 @@ class Command(BaseCommand):
             task = enrich_metadata.s(anime_id=anime_id, mode="single")
         else:
             task = enrich_metadata.s(mode="backfill", batch_size=batch_size)
+
+        self._dispatch_task(task, run_async, queue)
+
+    def _handle_sync_watch_episodes(self, options, run_async, queue):
+        """Handle watch-episode cache sync."""
+        from apps.animes.tasks import (
+            sync_watch_episodes_batch,
+            sync_watch_episodes_for_anime,
+        )
+
+        anime_id = options.get("anime_id")
+        batch_size = options["batch_size"]
+        statuses = options.get("status_filter") or None
+        force = options["force"]
+
+        if anime_id:
+            self.stdout.write(f"Syncing watch episodes for anime ID: {anime_id}")
+            task = sync_watch_episodes_for_anime.s(anime_id=anime_id, force=force)
+        else:
+            self.stdout.write(
+                "Syncing watch episodes "
+                f"(batch_size={batch_size}, statuses={statuses or 'all'}, force={force})"
+            )
+            task = sync_watch_episodes_batch.s(
+                statuses=statuses,
+                batch_size=batch_size,
+                force=force,
+            )
 
         self._dispatch_task(task, run_async, queue)
 
@@ -359,6 +401,7 @@ class Command(BaseCommand):
             sync_airing_workflow,
             sync_anime_catalog,
             sync_theme_songs,
+            sync_watch_episodes_batch,
         )
 
         self.stdout.write("Starting full synchronization workflow...")
@@ -369,6 +412,11 @@ class Command(BaseCommand):
             sync_anime_catalog.s(sync_type="trending", limit=50),
             sync_airing_workflow.si(phases=["sync", "cleanup", "backfill"]),
             enrich_metadata.si(mode="backfill", batch_size=50),
+            sync_watch_episodes_batch.si(
+                statuses=["Airing", "Upcoming"],
+                batch_size=100,
+                force=True,
+            ),
             sync_theme_songs.si(limit=50),
             generate_recommendations.si(),
         )

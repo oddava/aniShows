@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
@@ -8,7 +9,12 @@ from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone as tz
 
-from apps.animes.tasks import enrich_metadata, generate_recommendations
+from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
+from apps.animes.tasks import (
+    enrich_metadata,
+    generate_recommendations,
+    sync_watch_episodes_for_anime,
+)
 from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
 from apps.shared.public_cache import invalidate_public_cache_keys
@@ -60,6 +66,41 @@ def update_user_stats_and_cache(user):
         logger.exception(f"Failed to update stats for user {user.username}: {e}")
 
 
+def _watch_episode_auto_sync_enabled() -> bool:
+    return getattr(settings, "ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED", True)
+
+
+def _queue_watch_episode_sync(anime_id: int, *, force: bool = False) -> None:
+    sync_watch_episodes_for_anime.apply_async(
+        kwargs={"anime_id": anime_id, "force": force}
+    )
+
+
+@receiver(pre_save, sender=Anime)
+def capture_old_anime_watch_identity(sender, instance, **kwargs):
+    """Capture identity fields so watch-episode caches can be invalidated safely."""
+    if not instance.pk:
+        instance._old_watch_sync_identity = None
+        return
+
+    old = (
+        Anime.objects.filter(pk=instance.pk)
+        .only("title", "slug", "mal_id", "anilist_id", "updated_at")
+        .first()
+    )
+    if old is None:
+        instance._old_watch_sync_identity = None
+        return
+
+    instance._old_watch_sync_identity = {
+        "title": old.title,
+        "slug": old.slug,
+        "mal_id": old.mal_id,
+        "anilist_id": old.anilist_id,
+        "updated_at": old.updated_at,
+    }
+
+
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
     """Event-driven trigger: When a new Anime is created,
@@ -70,7 +111,35 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
             f"New Anime created: {instance.title} (ID: {instance.id}). Triggering metadata fetch."
         )
         # This task routes to 'low_priority' queue via celery config
-        enrich_metadata.delay(anime_id=instance.id, mode="single")
+        transaction.on_commit(
+            lambda: enrich_metadata.delay(anime_id=instance.id, mode="single")
+        )
+
+
+@receiver(post_save, sender=Anime)
+def trigger_watch_episode_sync(sender, instance, created, **kwargs):
+    """Warm watch-episode cache for newly created or re-identified anime."""
+    old_identity = getattr(instance, "_old_watch_sync_identity", None) or {}
+    identity_changed = created or any(
+        old_identity.get(field) != getattr(instance, field)
+        for field in ("title", "slug", "mal_id", "anilist_id")
+    )
+
+    if old_identity.get("updated_at") and identity_changed:
+        AnimeWatchEpisodeService.invalidate_for_anime_version(
+            instance.id,
+            old_identity["updated_at"],
+        )
+
+    if not _watch_episode_auto_sync_enabled():
+        return
+
+    if not identity_changed or not (instance.mal_id or instance.anilist_id):
+        return
+
+    transaction.on_commit(
+        lambda: _queue_watch_episode_sync(instance.id, force=not created)
+    )
 
 
 @receiver(post_save, sender=Anime)
@@ -99,6 +168,7 @@ def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
         "anime_trending:v2",
         f"anime_related:v2:{instance.slug}",
     )
+    AnimeWatchEpisodeService().invalidate_for_anime(instance)
 
 
 # =============================================================================

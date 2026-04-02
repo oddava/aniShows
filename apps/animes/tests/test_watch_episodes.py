@@ -1,13 +1,17 @@
-from unittest.mock import AsyncMock, patch
+import io
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
+from django.core.management import call_command
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from apps.animes.models import Anime
 from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
+from apps.animes.tasks.watch_episodes import WatchEpisodeBatchSyncTask, WatchEpisodeSyncTask
 
 
 class AnimeWatchEpisodeServiceTests(TestCase):
@@ -157,3 +161,127 @@ class AnimeWatchEpisodesEndpointTests(APITestCase):
         self.assertEqual(len(response.data['results']), 20)
         self.assertEqual(response.data['results'][0]['number'], 21)
         self.assertEqual(response.data['results'][0]['title'], 'Episode 21')
+
+
+class AnimeWatchEpisodeTaskTests(TestCase):
+    def setUp(self):
+        self.anime = Anime.objects.create(
+            title='Orb: On the Movements of the Earth',
+            slug='orb-on-the-movements-of-the-earth',
+            synopsis='Astronomy and danger.',
+            anime_type='TV',
+            status='Airing',
+            mal_id=60001,
+            anilist_id=160001,
+        )
+
+    @patch('apps.animes.tasks.watch_episodes.AnimeWatchEpisodeService.get_for_anime')
+    @patch('apps.animes.tasks.watch_episodes.AnimeWatchEpisodeService.invalidate_for_anime')
+    def test_single_task_warms_one_anime(self, mock_invalidate, mock_get_for_anime):
+        mock_get_for_anime.return_value = [{'number': 1, 'title': 'Episode 1'}]
+
+        result = WatchEpisodeSyncTask().execute(anime_id=self.anime.id, force=True)
+
+        self.assertEqual(result['status'], 'success')
+        self.assertEqual(result['episodes'], 1)
+        mock_invalidate.assert_called_once()
+        mock_get_for_anime.assert_called_once()
+
+    @patch('apps.animes.tasks.watch_episodes.AnimeWatchEpisodeService.get_for_anime')
+    def test_batch_task_filters_by_status(self, mock_get_for_anime):
+        finished = Anime.objects.create(
+            title='Erased',
+            slug='erased',
+            synopsis='Mystery.',
+            anime_type='TV',
+            status='Finished',
+            mal_id=60002,
+            anilist_id=160002,
+        )
+        mock_get_for_anime.return_value = [{'number': 1, 'title': 'Episode 1'}]
+
+        result = WatchEpisodeBatchSyncTask().execute(statuses=['Airing'])
+
+        self.assertEqual(result['processed'], 1)
+        self.assertEqual(result['warmed'], 1)
+        self.assertEqual(
+            [call.args[0].id for call in mock_get_for_anime.call_args_list],
+            [self.anime.id],
+        )
+        self.assertNotIn(finished.id, result['anime_ids'])
+
+
+@override_settings(ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED=True)
+class AnimeWatchEpisodeSignalTests(TestCase):
+    @patch('apps.animes.signals.enrich_metadata.delay')
+    @patch('apps.animes.signals.sync_watch_episodes_for_anime.apply_async')
+    def test_create_enqueues_watch_episode_sync_after_commit(self, mock_apply_async, mock_enrich_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            anime = Anime.objects.create(
+                title='Dandadan',
+                slug='dandadan',
+                synopsis='Aliens and ghosts.',
+                anime_type='TV',
+                status='Airing',
+                mal_id=61001,
+                anilist_id=161001,
+            )
+
+        mock_enrich_delay.assert_called_once_with(anime_id=anime.id, mode='single')
+        mock_apply_async.assert_called_once_with(
+            kwargs={'anime_id': anime.id, 'force': False}
+        )
+
+    @patch('apps.animes.signals.enrich_metadata.delay')
+    @patch('apps.animes.signals.AnimeWatchEpisodeService.invalidate_for_anime_version')
+    @patch('apps.animes.signals.sync_watch_episodes_for_anime.apply_async')
+    def test_identity_change_invalidates_old_cache_and_requeues(
+        self,
+        mock_apply_async,
+        mock_invalidate,
+        _mock_enrich_delay,
+    ):
+        anime = Anime.objects.create(
+            title='Lazarus',
+            slug='lazarus',
+            synopsis='Future thriller.',
+            anime_type='TV',
+            status='Airing',
+            mal_id=62001,
+            anilist_id=162001,
+        )
+        mock_apply_async.reset_mock()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            anime.mal_id = 62002
+            anime.save(update_fields=['mal_id'])
+
+        mock_invalidate.assert_called_once()
+        self.assertEqual(mock_invalidate.call_args.args[0], anime.id)
+        mock_apply_async.assert_called_once_with(
+            kwargs={'anime_id': anime.id, 'force': True}
+        )
+
+
+class WarmWatchEpisodesCommandTests(TestCase):
+    @patch('apps.animes.management.commands.warm_watch_episodes.sync_watch_episodes_batch.s')
+    def test_async_command_queues_batch_task(self, mock_signature):
+        anime = Anime.objects.create(
+            title='Blue Box',
+            slug='blue-box',
+            synopsis='Sports and romance.',
+            anime_type='TV',
+            status='Airing',
+            mal_id=63001,
+            anilist_id=163001,
+        )
+        mock_task = Mock()
+        mock_task.apply_async.return_value = SimpleNamespace(id='watch-task-1')
+        mock_signature.return_value = mock_task
+        stdout = io.StringIO()
+
+        call_command('warm_watch_episodes', '--async', stdout=stdout)
+
+        mock_signature.assert_called_once_with(anime_ids=[anime.id], force=False)
+        mock_task.apply_async.assert_called_once_with()
+        self.assertIn('Queued watch-episode warm for 1 anime', stdout.getvalue())

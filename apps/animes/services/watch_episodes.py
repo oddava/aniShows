@@ -40,9 +40,17 @@ class AnimeWatchEpisodeService:
         cache.delete(self._cache_key(anime))
 
     @classmethod
+    def invalidate_for_anime_version(cls, anime_id: int, updated_at) -> None:
+        cache.delete(cls._cache_key_for_identity(anime_id, updated_at))
+
+    @classmethod
     def _cache_key(cls, anime: Anime) -> str:
-        updated_at_token = int(anime.updated_at.timestamp()) if getattr(anime, "updated_at", None) else 0
-        return f"anime_watch_episodes:{cls.CACHE_VERSION}:{anime.id}:{updated_at_token}"
+        return cls._cache_key_for_identity(anime.id, getattr(anime, "updated_at", None))
+
+    @classmethod
+    def _cache_key_for_identity(cls, anime_id: int, updated_at) -> str:
+        updated_at_token = int(updated_at.timestamp()) if getattr(updated_at, "timestamp", None) else 0
+        return f"anime_watch_episodes:{cls.CACHE_VERSION}:{anime_id}:{updated_at_token}"
 
     async def _build_for_anime(self, anime: Anime) -> list[dict]:
         anilist_media: dict = {}

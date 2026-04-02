@@ -201,6 +201,7 @@ class OfflineCatalogImportService:
             "sync_states_created": 0,
             "sync_states_updated": 0,
             "sync_states_total": 0,
+            "changed_anime_ids": [],
         }
 
         metadata_line: dict[str, Any] | None = None
@@ -355,6 +356,7 @@ class OfflineCatalogImportService:
                 "records_updated": import_run.records_updated,
                 "records_failed": import_run.records_failed,
                 "records_marked_stale": import_run.records_marked_stale,
+                "changed_anime_ids": list(dict.fromkeys([*created_ids, *updated_ids])),
             }
         )
         return summary

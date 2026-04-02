@@ -669,6 +669,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
+ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = True
 
 from celery.schedules import crontab
 
@@ -703,6 +704,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.animes.tasks.metadata.enrich_metadata",
         "schedule": crontab(hour=3, minute=0),  # 3:00 AM
         "kwargs": {"mode": "backfill", "batch_size": 100},
+        "options": {"queue": "low_priority"},
+    },
+    "sync-watch-episodes-airing-every-6-hours": {
+        "task": "apps.animes.tasks.watch_episodes.sync_watch_episodes_batch",
+        "schedule": crontab(hour="*/6", minute=15),
+        "kwargs": {"statuses": ["Airing", "Upcoming"], "force": True},
         "options": {"queue": "low_priority"},
     },
     "airing-workflow-cleanup-daily": {

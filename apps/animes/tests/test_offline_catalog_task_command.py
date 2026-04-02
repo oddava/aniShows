@@ -11,7 +11,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - depends on runtime image
     zstandard = None
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
 from apps.animes.tasks.offline_catalog import (
@@ -128,6 +128,26 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         self.assertEqual(result["sync_states_total"], 2)
         self.assertEqual(OfflineAnimeSyncState.objects.count(), 2)
         mock_reconcile_delay.assert_called_once()
+
+    @override_settings(ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED=True)
+    @patch("apps.animes.tasks.offline_catalog.sync_watch_episodes_batch.apply_async")
+    def test_task_execute_enqueues_watch_episode_sync_for_changed_anime(self, mock_watch_apply_async):
+        source_path = self._write_jsonl_fixture(
+            [self._entry(title="Watch Sync Import", anilist_id=1050, mal_id=2050)]
+        )
+        mock_watch_apply_async.return_value = SimpleNamespace(id="watch-sync-1")
+
+        result = OfflineCatalogImportTask().execute(
+            source_path=source_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        self.assertTrue(result["watch_episode_sync_queued"])
+        self.assertEqual(result["watch_episode_sync_task_id"], "watch-sync-1")
+        self.assertEqual(len(result["changed_anime_ids"]), 1)
+        mock_watch_apply_async.assert_called_once_with(
+            kwargs={"anime_ids": result["changed_anime_ids"], "force": True}
+        )
 
     def test_management_command_runs_import_synchronously(self):
         source_path = self._write_jsonl_fixture(

@@ -3,6 +3,7 @@ from django.db.models import Q
 
 from apps.animes.models import Anime
 from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
+from apps.animes.tasks import sync_watch_episodes_batch
 
 
 class Command(BaseCommand):
@@ -25,11 +26,34 @@ class Command(BaseCommand):
             action="store_true",
             help="Invalidate any existing watch-episode cache before warming",
         )
+        parser.add_argument(
+            "--async",
+            action="store_true",
+            dest="run_async",
+            help="Queue the warm operation as a Celery task",
+        )
+        parser.add_argument(
+            "--queue",
+            default=None,
+            choices=[
+                "critical",
+                "high_priority",
+                "default",
+                "batch",
+                "images",
+                "notifications",
+                "analytics",
+                "low_priority",
+            ],
+            help="Optional queue override for async execution",
+        )
 
     def handle(self, *args, **options):
         anime_id = options.get("anime_id")
         limit = options.get("limit")
         force = options.get("force", False)
+        run_async = options.get("run_async", False)
+        queue = options.get("queue")
 
         queryset = Anime.public_queryset().filter(
             Q(mal_id__isnull=False) | Q(anilist_id__isnull=False)
@@ -45,6 +69,20 @@ class Command(BaseCommand):
         total = len(anime_list)
         if total == 0:
             self.stdout.write(self.style.WARNING("No anime found for watch-episode warming."))
+            return
+
+        if run_async:
+            task = sync_watch_episodes_batch.s(
+                anime_ids=[anime.id for anime in anime_list],
+                force=force,
+            )
+            kwargs = {"queue": queue} if queue else {}
+            result = task.apply_async(**kwargs)
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Queued watch-episode warm for {total} anime. Task ID: {result.id}"
+                )
+            )
             return
 
         service = AnimeWatchEpisodeService()

@@ -82,6 +82,7 @@ app.conf.task_routes = {
     "apps.animes.tasks.metadata.enrich_metadata": {"queue": "batch"},
     "apps.animes.tasks.offline_catalog.import_offline_catalog": {"queue": "batch"},
     "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync": {"queue": "batch"},
+    "apps.animes.tasks.watch_episodes.sync_watch_episodes_for_anime": {"queue": "batch"},
     # =========================================================================
     # IMAGES QUEUE - Image processing
     # =========================================================================
@@ -107,6 +108,7 @@ app.conf.task_routes = {
     "apps.core.tasks.cleanup_tasks.flush_forum_view_counts": {"queue": "low_priority"},
     "apps.animes.tasks.themes.backfill_theme_youtube_urls": {"queue": "low_priority"},
     "apps.animes.tasks.images.heal_missing_anime_media": {"queue": "low_priority"},
+    "apps.animes.tasks.watch_episodes.sync_watch_episodes_batch": {"queue": "low_priority"},
     # User maintenance
     "apps.users.tasks.warm_profile_cache": {"queue": "low_priority"},
     "apps.users.tasks.update_all_user_stats": {"queue": "low_priority"},
