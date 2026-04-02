@@ -77,23 +77,23 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
 
                                 <div className="flex-1 flex justify-between p-3 min-w-0">
                                     <div className="flex flex-col justify-between min-w-0 pr-2">
-                                        <Link to={`/character/${role.character.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
+                                        <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
                                             {role.character.name}
                                         </Link>
-                                        <span className="text-[10px] text-gray-500 font-medium">
+                                        <span className="text-[11px] text-gray-500 truncate">
                                             {role.role}
                                         </span>
                                     </div>
 
                                     <div className="flex flex-col justify-between min-w-0 text-right pl-2">
                                         {role.voice_actor ? (
-                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
+                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
                                                 {role.voice_actor.name}
                                             </Link>
                                         ) : (
-                                            <span className="text-[12px] font-bold text-gray-600">N/A</span>
+                                            <span className="text-[13px] font-medium text-gray-600">N/A</span>
                                         )}
-                                        <span className="text-[10px] text-gray-500 font-medium">
+                                        <span className="text-[11px] text-gray-500">
                                             Japanese
                                         </span>
                                     </div>
@@ -134,7 +134,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                     />
                                 </div>
                                 <div className="flex flex-col min-w-0 pr-4">
-                                    <span className="font-bold text-white text-sm truncate">
+                                    <span className="font-medium text-white text-[13px] truncate">
                                         {staffRole.staff.name}
                                     </span>
                                     <p className="text-[11px] text-gray-500 mt-0.5 truncate">
@@ -177,7 +177,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                         )}
 
                                         <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
-                                            <h3 className="text-[11px] font-bold text-white line-clamp-1">
+                                            <h3 className="text-[12px] font-medium text-white line-clamp-1">
                                                 Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
                                             </h3>
                                         </div>
@@ -196,7 +196,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                         )}
 
                                         <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
-                                            <h3 className="text-[11px] font-bold text-white line-clamp-1">
+                                            <h3 className="text-[12px] font-medium text-white line-clamp-1">
                                                 Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
                                             </h3>
                                         </div>
@@ -305,23 +305,23 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
 
                     <div className="flex-1 flex justify-between p-3 min-w-0">
                         <div className="flex flex-col justify-between min-w-0 pr-2">
-                            <Link to={`/character/${role.character.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
+                            <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
                                 {role.character.name}
                             </Link>
-                            <span className="text-[10px] text-gray-500 font-medium">
+                            <span className="text-[11px] text-gray-500">
                                 {role.role}
                             </span>
                         </div>
 
                         <div className="flex flex-col justify-between min-w-0 text-right pl-2">
                             {role.voice_actor ? (
-                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
+                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-white truncate hover:text-accent transition-colors">
                                     {role.voice_actor.name}
                                 </Link>
                             ) : (
-                                <span className="text-[12px] font-bold text-gray-600">N/A</span>
+                                <span className="text-[13px] font-medium text-gray-600">N/A</span>
                             )}
-                            <span className="text-[10px] text-gray-500 font-medium">
+                            <span className="text-[11px] text-gray-500">
                                 Japanese
                             </span>
                         </div>
@@ -390,7 +390,7 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
                         />
                     </div>
                     <div className="flex flex-col min-w-0 pr-4">
-                        <h4 className="font-bold text-white text-sm truncate">
+                        <h4 className="font-medium text-white text-[13px] truncate">
                             <Link
                                 to={`/staff/${staffRole.staff.id}`}
                                 onClick={(e) => e.stopPropagation()}
