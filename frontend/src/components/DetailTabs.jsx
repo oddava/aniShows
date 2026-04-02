@@ -44,12 +44,12 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                 seen.add(name);
                 return true;
             })
-            .slice(0, 6);
+            .slice(0, 4);
     }, [characters]);
 
     const topEpisodes = useMemo(() => {
         if (!Array.isArray(episodes)) return [];
-        return episodes.slice(0, 3);
+        return episodes.slice(0, 4);
     }, [episodes]);
 
     return (
@@ -61,46 +61,54 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                     <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                         Characters
                     </h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                         {topCharacters.map((role) => (
-                            <Link
+                            <div 
                                 key={role.id}
-                                to={`/character/${role.character.id}`}
-                                className="group relative overflow-hidden rounded-xl border border-white/5 bg-dark-200/40 cursor-pointer block"
+                                className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5"
                             >
-                                <div className="aspect-[3/4] relative">
+                                <Link to={`/character/${role.character.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0">
                                     <img
                                         src={role.character.image || '/placeholder-avatar.png'}
                                         alt={role.character.name}
-                                        loading="lazy"
-                                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500"
+                                        className="w-full h-full object-cover saturate-[0.85]"
                                     />
-                                    <div className="absolute inset-0 bg-black/60 transition-opacity duration-300" />
+                                </Link>
 
-                                    <span
-                                        className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] font-bold uppercase rounded"
-                                        style={{
-                                            backgroundColor: role.role === 'MAIN'
-                                                ? (accentColor || '#75698d')
-                                                : 'rgba(255,255,255,0.2)',
-                                            color: 'white'
-                                        }}
-                                    >
-                                        {role.role}
-                                    </span>
-
-                                    <div className="absolute bottom-0 left-0 right-0 p-3 flex flex-col justify-end">
-                                        <h3 className="text-sm font-bold text-white truncate ">
+                                <div className="flex-1 flex justify-between p-3 min-w-0">
+                                    <div className="flex flex-col justify-between min-w-0 pr-2">
+                                        <Link to={`/character/${role.character.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
                                             {role.character.name}
-                                        </h3>
-                                        {role.voice_actor && (
-                                            <span className="text-xs text-white/70 mt-0.5 truncate block">
+                                        </Link>
+                                        <span className="text-[10px] text-gray-500 font-medium">
+                                            {role.role}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col justify-between min-w-0 text-right pl-2">
+                                        {role.voice_actor ? (
+                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
                                                 {role.voice_actor.name}
-                                            </span>
+                                            </Link>
+                                        ) : (
+                                            <span className="text-[12px] font-bold text-gray-600">N/A</span>
                                         )}
+                                        <span className="text-[10px] text-gray-500 font-medium">
+                                            Japanese
+                                        </span>
                                     </div>
                                 </div>
-                            </Link>
+
+                                {role.voice_actor && (
+                                    <Link to={`/staff/${role.voice_actor.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0 border-l border-white/5">
+                                        <img
+                                            src={role.voice_actor.image || '/placeholder-avatar.png'}
+                                            alt={role.voice_actor.name}
+                                            className="w-full h-full object-cover saturate-[0.85]"
+                                        />
+                                    </Link>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </div>
@@ -111,24 +119,28 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                     <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                         Staff
                     </h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {topStaff.map((staffRole) => (
                             <div
                                 key={staffRole.id}
                                 onClick={() => onStaffClick(staffRole)}
-                                className="flex flex-col items-center text-center p-4 bg-dark-100/30 rounded-xl border border-gray-800/50 cursor-pointer group"
+                                className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 cursor-pointer"
                             >
-                                <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4 transition-colors">
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
                                     <img
                                         src={staffRole.staff.image || '/placeholder-avatar.png'}
                                         alt={staffRole.staff.name}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover saturate-[0.85]"
                                     />
                                 </div>
-                                <span className="font-bold text-white text-sm line-clamp-2 mb-1">
-                                    {staffRole.staff.name}
-                                </span>
-                                <p className="text-xs text-gray-500 line-clamp-1">{staffRole.role}</p>
+                                <div className="flex flex-col min-w-0 pr-4">
+                                    <span className="font-bold text-white text-sm truncate">
+                                        {staffRole.staff.name}
+                                    </span>
+                                    <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                        {staffRole.role}
+                                    </p>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -140,55 +152,56 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                     <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                         Episodes
                     </h2>
-                    <div className="grid gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                         {topEpisodes.map((episode) => (
                             <article
                                 key={episode.number}
-                                className="group flex flex-row items-center justify-between gap-4 rounded-xl border border-white/5 bg-dark-200/40 p-3 transition-colors hover:border-gray-600 min-w-0 overflow-hidden"
+                                className="min-w-0"
                             >
-                                <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                                    {episode.thumbnail && (
-                                        <div className="relative aspect-video w-24 sm:w-32 flex-shrink-0 overflow-hidden rounded-lg bg-dark-200 border border-transparent group-hover:border-white/10 transition-colors">
-                                            <img
-                                                src={episode.thumbnail}
-                                                alt={`Episode ${episode.number}`}
-                                                loading="lazy"
-                                                className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                            />
-                                        </div>
-                                    )}
-
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors truncate">
-                                            <span className="text-gray-500 mr-1.5 sm:mr-2 flex-shrink-0">EP {episode.number}</span>
-                                            {episode.title || `Episode ${episode.number}`}
-                                        </h3>
-                                        <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 font-medium truncate">
-                                            {episode.aired && (
-                                                <span className="flex-shrink-0">{episode.aired}</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex-shrink-0 sm:flex sm:items-center">
+                                {episode.crunchyroll_url ? (
                                     <a
                                         href={episode.crunchyroll_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white transition-all bg-white/5 hover:!bg-[var(--hover-accent)] active:scale-95 w-full sm:w-auto"
-                                        style={{ '--hover-accent': accentColor || '#75698d' }}
+                                        className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200"
                                     >
-                                        {episode.has_real_crunchyroll_url ? (
-                                            <Play className="h-3.5 w-3.5 fill-current flex-shrink-0" />
+                                        {episode.thumbnail ? (
+                                            <img
+                                                src={episode.thumbnail}
+                                                alt={`Episode ${episode.number}`}
+                                                loading="lazy"
+                                                className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
+                                            />
                                         ) : (
-                                            <Search className="h-3.5 w-3.5 flex-shrink-0" />
+                                            <div className="absolute inset-0 bg-dark-100" />
                                         )}
-                                        <span className="truncate hidden sm:inline">
-                                            {episode.has_real_crunchyroll_url ? 'Watch' : 'Search'}
-                                        </span>
+
+                                        <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
+                                            <h3 className="text-[11px] font-bold text-white line-clamp-1">
+                                                Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                            </h3>
+                                        </div>
                                     </a>
-                                </div>
+                                ) : (
+                                    <div className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200">
+                                        {episode.thumbnail ? (
+                                            <img
+                                                src={episode.thumbnail}
+                                                alt={`Episode ${episode.number}`}
+                                                loading="lazy"
+                                                className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
+                                            />
+                                        ) : (
+                                            <div className="absolute inset-0 bg-dark-100" />
+                                        )}
+
+                                        <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
+                                            <h3 className="text-[11px] font-bold text-white line-clamp-1">
+                                                Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                )}
                             </article>
                         ))}
                     </div>
@@ -276,49 +289,53 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
     }
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3 animate-tab-content">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 animate-tab-content">
             {uniqueCharacters.map((role) => (
-                <div
+                <div 
                     key={role.id}
-                    onClick={() => onCharacterClick(role)}
-                    className="group relative overflow-hidden rounded-xl border border-white/5 bg-dark-200/40 cursor-pointer hover:border-gray-600"
+                    className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5"
                 >
-                    <div className="aspect-[3/4] relative">
+                    <Link to={`/character/${role.character.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0">
                         <img
                             src={role.character.image || '/placeholder-avatar.png'}
                             alt={role.character.name}
-                            loading="lazy"
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="w-full h-full object-cover saturate-[0.85]"
                         />
-                        <div className="absolute inset-0 bg-black/60" />
+                    </Link>
 
-                        <span
-                            className="absolute top-2 right-2 px-1.5 py-0.5 text-[8px] font-bold uppercase rounded"
-                            style={{
-                                backgroundColor: role.role === 'MAIN'
-                                    ? (accentColor || '#75698d')
-                                    : 'rgba(255,255,255,0.2)',
-                                color: 'white'
-                            }}
-                        >
-                            {role.role}
-                        </span>
-
-                        <div className="absolute bottom-0 left-0 right-0 p-3">
-                            <h3 className="text-sm font-bold text-white truncate ">
+                    <div className="flex-1 flex justify-between p-3 min-w-0">
+                        <div className="flex flex-col justify-between min-w-0 pr-2">
+                            <Link to={`/character/${role.character.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
                                 {role.character.name}
-                            </h3>
-                            {role.voice_actor && (
-                                <Link
-                                    to={`/staff/${role.voice_actor.id}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-xs text-white/70 mt-0.5 truncate  hover:text-accent transition-colors block"
-                                >
+                            </Link>
+                            <span className="text-[10px] text-gray-500 font-medium">
+                                {role.role}
+                            </span>
+                        </div>
+
+                        <div className="flex flex-col justify-between min-w-0 text-right pl-2">
+                            {role.voice_actor ? (
+                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[12px] font-bold text-white truncate hover:text-accent transition-colors">
                                     {role.voice_actor.name}
                                 </Link>
+                            ) : (
+                                <span className="text-[12px] font-bold text-gray-600">N/A</span>
                             )}
+                            <span className="text-[10px] text-gray-500 font-medium">
+                                Japanese
+                            </span>
                         </div>
                     </div>
+
+                    {role.voice_actor && (
+                        <Link to={`/staff/${role.voice_actor.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0 border-l border-white/5">
+                            <img
+                                src={role.voice_actor.image || '/placeholder-avatar.png'}
+                                alt={role.voice_actor.name}
+                                className="w-full h-full object-cover saturate-[0.85]"
+                            />
+                        </Link>
+                    )}
                 </div>
             ))}
         </div>
@@ -358,30 +375,32 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
     }
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 animate-tab-content">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-tab-content">
             {uniqueStaff.map((staffRole) => (
                 <div
                     key={staffRole.id}
                     onClick={() => onStaffClick(staffRole)}
-                    className="flex flex-col items-center text-center p-4 bg-dark-100/30 rounded-xl border border-gray-800/50 hover:bg-dark-100/50 transition-colors cursor-pointer group"
+                    className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 cursor-pointer"
                 >
-                    <div className="w-20 h-20 rounded-full overflow-hidden border border-gray-700 mb-4  group-hover:border-gray-600 transition-colors">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
                         <img
                             src={staffRole.staff.image || '/placeholder-avatar.png'}
                             alt={staffRole.staff.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover saturate-[0.85]"
                         />
                     </div>
-                    <h4 className="font-bold text-white text-sm line-clamp-2 mb-1">
-                        <Link
-                            to={`/staff/${staffRole.staff.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="hover:text-accent transition-colors"
-                        >
-                            {staffRole.staff.name}
-                        </Link>
-                    </h4>
-                    <p className="text-xs text-gray-500 line-clamp-1">{staffRole.role}</p>
+                    <div className="flex flex-col min-w-0 pr-4">
+                        <h4 className="font-bold text-white text-sm truncate">
+                            <Link
+                                to={`/staff/${staffRole.staff.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:text-accent transition-colors"
+                            >
+                                {staffRole.staff.name}
+                            </Link>
+                        </h4>
+                        <p className="text-[11px] text-gray-500 mt-1 truncate">{staffRole.role}</p>
+                    </div>
                 </div>
             ))}
         </div>
