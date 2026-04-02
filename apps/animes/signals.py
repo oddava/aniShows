@@ -77,6 +77,9 @@ def trigger_metadata_fetch(sender, instance, created, **kwargs):
 def invalidate_anime_detail_cache(sender, instance, **kwargs):
     """Invalidate cached anime detail payload when anime fields change."""
     invalidate_public_cache_keys(
+        f"anime_detail_base:v5:{instance.slug}",
+        f"anime_detail_base:v4:{instance.slug}",
+        f"anime_detail_base:v3:{instance.slug}",
         f"anime_detail_base:v2:{instance.slug}",
         f"anime_detail_base:{instance.slug}",
         "anime_trending:v2",
@@ -88,6 +91,9 @@ def invalidate_anime_detail_cache(sender, instance, **kwargs):
 def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
     """Invalidate cached anime detail payload on delete."""
     invalidate_public_cache_keys(
+        f"anime_detail_base:v5:{instance.slug}",
+        f"anime_detail_base:v4:{instance.slug}",
+        f"anime_detail_base:v3:{instance.slug}",
         f"anime_detail_base:v2:{instance.slug}",
         f"anime_detail_base:{instance.slug}",
         "anime_trending:v2",

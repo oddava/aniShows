@@ -10,6 +10,7 @@ vi.mock('../../api/client', () => ({
         getBySlug: vi.fn(),
         getCharacters: vi.fn(),
         getStaff: vi.fn(),
+        getWatchEpisodes: vi.fn(),
         getRecommendations: vi.fn(),
     },
     favoriteApi: {
@@ -91,6 +92,10 @@ vi.mock('../../components/DetailTabs', () => ({
     StaffTab: () => <div data-testid="staff-tab" />,
 }));
 
+vi.mock('../../components/EpisodesTab', () => ({
+    default: () => <div data-testid="watch-tab" />,
+}));
+
 vi.mock('../../components/skeletons', () => ({
     AnimeDetailSkeleton: () => <div data-testid="anime-detail-skeleton" />,
 }));
@@ -154,6 +159,23 @@ describe('AnimeDetail list update invalidation', () => {
         animeApi.getBySlug.mockResolvedValue({ data: mockAnime });
         animeApi.getCharacters.mockResolvedValue({ data: [] });
         animeApi.getStaff.mockResolvedValue({ data: [] });
+        animeApi.getWatchEpisodes.mockResolvedValue({
+            data: {
+                count: 1,
+                next: null,
+                previous: null,
+                results: [
+                    {
+                        number: 1,
+                        title: 'The Journey Begins',
+                        aired: '2024-01-12',
+                        thumbnail: 'https://img.anilist.co/episode-1.jpg',
+                        crunchyroll_url: 'https://www.crunchyroll.com/watch/GEXAMPLE',
+                        has_real_crunchyroll_url: true,
+                    },
+                ],
+            },
+        });
         animeApi.getRecommendations.mockResolvedValue({ data: [] });
         reviewApi.getAll.mockResolvedValue({ data: { results: [], count: 0, next: null } });
         reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
@@ -166,10 +188,10 @@ describe('AnimeDetail list update invalidation', () => {
         render(<AnimeDetail />, { wrapper });
 
         await waitFor(() => {
-            expect(screen.getByTestId('status-update-trigger')).toBeInTheDocument();
+            expect(screen.getAllByTestId('status-update-trigger').length).toBeGreaterThan(0);
         });
 
-        fireEvent.click(screen.getByTestId('status-update-trigger'));
+        fireEvent.click(screen.getAllByTestId('status-update-trigger')[0]);
 
         await waitFor(() => {
             const keys = invalidateSpy.mock.calls
@@ -214,5 +236,22 @@ describe('AnimeDetail list update invalidation', () => {
         });
 
         expect(animeApi.getCharacters).toHaveBeenCalledWith('frieren');
+    });
+
+    it('renders the watch tab for a direct watch route without extra tab fetches', async () => {
+        const { wrapper } = createHarness('/anime/frieren/watch');
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('watch-tab')).toBeInTheDocument();
+        });
+
+        expect(animeApi.getWatchEpisodes).toHaveBeenCalledWith('frieren', {
+            page: 1,
+            page_size: 50,
+        });
+        expect(animeApi.getCharacters).not.toHaveBeenCalled();
+        expect(animeApi.getStaff).not.toHaveBeenCalled();
     });
 });

@@ -1371,6 +1371,58 @@ class AniListService:
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
+    async def get_streaming_episodes_for_anime(
+        self,
+        *,
+        anilist_id: int | None = None,
+        mal_id: int | None = None,
+    ) -> dict | None:
+        """Fetch AniList streaming episode metadata for an anime."""
+        resolved_anilist_id = (
+            anilist_id
+            if isinstance(anilist_id, int) and 0 < anilist_id <= 2_147_483_647
+            else None
+        )
+        resolved_mal_id = (
+            mal_id if isinstance(mal_id, int) and 0 < mal_id <= 2_147_483_647 else None
+        )
+        if resolved_anilist_id is None and resolved_mal_id is None:
+            self._set_last_error("invalid_variable", "missing_anilist_or_mal_id")
+            return None
+
+        if resolved_anilist_id is not None:
+            variable_definitions = "$id: Int!"
+            lookup_args = "id: $id, type: ANIME"
+            variables = {"id": resolved_anilist_id}
+        else:
+            variable_definitions = "$malId: Int!"
+            lookup_args = "idMal: $malId, type: ANIME"
+            variables = {"malId": resolved_mal_id}
+
+        query = f"""
+            query GetAnimeStreamingEpisodes({variable_definitions}) {{
+                Media({lookup_args}) {{
+                    id
+                    idMal
+                    streamingEpisodes {{
+                        title
+                        thumbnail
+                        url
+                        site
+                    }}
+                }}
+            }}
+        """
+
+        data = await self._query(query, variables)
+        media = data.get("Media") if isinstance(data, dict) else None
+        if isinstance(media, dict):
+            return media
+        if not self.last_error_code:
+            lookup_value = resolved_anilist_id or resolved_mal_id
+            self._set_last_error("not_found", f"streaming_episodes:{lookup_value}")
+        return None
+
     async def get_recommendations_for_anime(
         self, anilist_id: int, *, limit: int = 8
     ) -> list[dict]:

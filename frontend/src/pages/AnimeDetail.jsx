@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown } from 'lucide-react';
+import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown, Tv } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,7 @@ import InformationBox from '../components/InformationBox';
 import FriendsWatching from '../components/FriendsWatching';
 import SEOHelmet from '../components/SEOHelmet';
 import { OverviewTab, CharactersTab, StaffTab } from '../components/DetailTabs';
+import EpisodesTab from '../components/EpisodesTab';
 import { AnimeDetailSkeleton } from '../components/skeletons';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import {
@@ -30,6 +31,7 @@ import logger from '../utils/logger';
 // Memoized tab configuration to prevent re-renders
 const TABS = [
     { id: 'overview', label: 'Overview', icon: Film, path: 'overview' },
+    { id: 'watch', label: 'Watch', icon: Tv, path: 'watch' },
     { id: 'stats', label: 'Stats', icon: BarChart3, path: 'stats' },
     { id: 'characters', label: 'Characters', icon: Users, path: 'characters' },
     { id: 'staff', label: 'Staff', icon: Mic, path: 'staff' },
@@ -270,7 +272,6 @@ MobileRelatedCard.displayName = 'MobileRelatedCard';
 
 // Memoized tab button component
 const TabButton = memo(({ tab, isActive, to, accentColor, count }) => {
-    const Icon = tab.icon;
     return (
         <Link
             to={to}
@@ -283,7 +284,6 @@ const TabButton = memo(({ tab, isActive, to, accentColor, count }) => {
                 backgroundColor: accentColor || '#75698d'
             } : {}}
         >
-            <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             {tab.label}
             {count > 0 && (
                 <span className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20' : 'bg-white/5'}`}>
@@ -340,6 +340,36 @@ export default function AnimeDetail() {
         staleTime: Infinity, // Staff lists rarely change
     });
 
+    const {
+        data: watchEpisodesData,
+        fetchNextPage: fetchNextWatchEpisodesPage,
+        hasNextPage: hasNextWatchEpisodesPage,
+        isFetchingNextPage: isFetchingNextWatchEpisodesPage,
+        isLoading: watchEpisodesLoading,
+        isError: watchEpisodesIsError,
+        refetch: refetchWatchEpisodes,
+    } = useInfiniteQuery({
+        queryKey: ['anime', slug, 'watch-episodes'],
+        queryFn: ({ pageParam }) => animeApi.getWatchEpisodes(slug, {
+            page: pageParam,
+            page_size: 50,
+        }).then(res => res.data),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            if (lastPage?.next) {
+                try {
+                    const url = new URL(lastPage.next);
+                    return url.searchParams.get('page');
+                } catch {
+                    return undefined;
+                }
+            }
+            return undefined;
+        },
+        enabled: !!anime && activeTab === 'watch',
+        staleTime: 300000,
+    });
+
     const { data: reviewsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading: reviewsLoading } = useInfiniteQuery({
         queryKey: ['reviews', slug, reviewSort, ratingFilter],
         queryFn: ({ pageParam }) => reviewApi.getAll({
@@ -381,6 +411,12 @@ export default function AnimeDetail() {
         reviewsData?.pages.flatMap(page => Array.isArray(page) ? page : (page.results || [])) || [],
         [reviewsData]
     );
+
+    const watchEpisodes = useMemo(() =>
+        watchEpisodesData?.pages.flatMap((page) => page?.results || []) || [],
+        [watchEpisodesData]
+    );
+    const watchEpisodesTotal = watchEpisodesData?.pages?.[0]?.count || anime?.episode_count || 0;
 
     const { textReviews, ratingOnlyReviews, reviewCount } = useMemo(() => ({
         textReviews: allReviews.filter(r => r.text?.trim().length > 0),
@@ -511,7 +547,8 @@ export default function AnimeDetail() {
 
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
-        count: tab.id === 'characters' ? (anime.character_count || 0) :
+        count: tab.id === 'watch' ? (anime.episode_count || 0) :
+            tab.id === 'characters' ? (anime.character_count || 0) :
             tab.id === 'staff' ? (anime.staff_count || 0) : 0
     }));
 
@@ -761,6 +798,20 @@ export default function AnimeDetail() {
                                     <OverviewTab
                                         anime={anime}
                                         accentColor={accentColor}
+                                    />
+                                )}
+                                {activeTab === 'watch' && (
+                                    <EpisodesTab
+                                        anime={anime}
+                                        accentColor={accentColor}
+                                        episodes={watchEpisodes}
+                                        totalCount={watchEpisodesTotal}
+                                        isLoading={watchEpisodesLoading}
+                                        hasError={watchEpisodesIsError}
+                                        hasNextPage={hasNextWatchEpisodesPage}
+                                        isFetchingNextPage={isFetchingNextWatchEpisodesPage}
+                                        onLoadMore={fetchNextWatchEpisodesPage}
+                                        onRetry={refetchWatchEpisodes}
                                     />
                                 )}
                                 {activeTab === 'stats' && (

@@ -1,8 +1,10 @@
 from rest_framework.serializers import (
+    BooleanField,
     CharField,
     DecimalField,
     IntegerField,
     ModelSerializer,
+    Serializer,
     SerializerMethodField,
 )
 
@@ -13,6 +15,15 @@ from apps.animes.serializers.base import (
     ThemeSongSerializer,
 )
 from apps.animes.serializers_mixins import ImageUrlMixin, UserStatusMixin
+
+
+class AnimeWatchEpisodeSerializer(Serializer):
+    number = IntegerField()
+    title = CharField()
+    aired = CharField(allow_blank=True, allow_null=True)
+    thumbnail = CharField(allow_blank=True)
+    crunchyroll_url = CharField()
+    has_real_crunchyroll_url = BooleanField()
 
 
 class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
@@ -264,7 +275,6 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             for key in distribution:
                 distribution[key] = int(stored_distribution.get(key, 0) or 0)
         return distribution
-
 
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
     """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""

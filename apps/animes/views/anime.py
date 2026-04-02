@@ -48,6 +48,7 @@ from apps.animes.serializers import (
 )
 from apps.animes.services.anilist import AniListService
 from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
+from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
 from apps.core.utils import get_client_ip
 from apps.shared.logger import logger
 from apps.shared.public_cache import (
@@ -70,10 +71,16 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
         return
 
 
+class WatchEpisodesPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class AnimeViewSet(ReadOnlyModelViewSet):
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
-    _PUBLIC_CACHE_VERSION = "v3"
+    _PUBLIC_CACHE_VERSION = "v5"
 
     _LIST_FIELDS = (
         "id",
@@ -871,6 +878,19 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         staff = AnimeStaff.objects.filter(anime=instance).select_related("staff")
         serializer = AnimeStaffSerializer(staff, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="watch-episodes")
+    def watch_episodes(self, request, slug=None):
+        """Get paginated watch-episode data for this anime."""
+        from apps.animes.serializers.anime import AnimeWatchEpisodeSerializer
+
+        anime = self.get_object()
+        episodes = AnimeWatchEpisodeService().get_for_anime(anime)
+
+        paginator = WatchEpisodesPagination()
+        page = paginator.paginate_queryset(episodes, request, view=self)
+        serializer = AnimeWatchEpisodeSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     @action(
         detail=False,
