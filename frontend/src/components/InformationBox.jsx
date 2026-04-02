@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Tv, Hash, Clock, Calendar, BookOpen, Building2, Users, Bell, ExternalLink } from 'lucide-react';
 import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
+import {
+    formatCompactCount,
+    getStatusDistributionTotal,
+    normalizeStatusDistribution,
+} from '../utils/statusDistribution';
 
 const InfoRow = ({ icon: Icon, label, value }) => (
     <div className="flex items-start justify-between gap-4 py-1 min-w-0">
@@ -17,6 +22,10 @@ const InfoRow = ({ icon: Icon, label, value }) => (
 );
 
 export default function InformationBox({ anime, className, accentColor }) {
+    const totalMembers = getStatusDistributionTotal(
+        normalizeStatusDistribution(anime?.status_distribution)
+    );
+
     const formatDateRange = () => {
         if (!anime.release_date) return 'Unknown';
         const options = { month: 'short', day: 'numeric', year: 'numeric' };
@@ -80,9 +89,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                     <InfoRow icon={Building2} label="Studio" value={anime.studio.name} />
                 )}
 
-                {anime.member_count > 0 && (
-                    <InfoRow icon={Users} label="Members" value={anime.member_count.toLocaleString()} />
-                )}
+                <InfoRow icon={Users} label="Members" value={formatCompactCount(totalMembers)} />
 
                 {anime.status === 'Airing' && anime.next_airing_date && (
                     <div className="pt-4 mt-4 border-t border-white/10">

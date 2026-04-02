@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown, Tv } from 'lucide-react';
+import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown, Tv, Disc } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +15,7 @@ import StatsTab from '../components/StatsTab';
 import InformationBox from '../components/InformationBox';
 import FriendsWatching from '../components/FriendsWatching';
 import SEOHelmet from '../components/SEOHelmet';
-import { OverviewTab, CharactersTab, StaffTab } from '../components/DetailTabs';
+import { OverviewTab, CharactersTab, StaffTab, ThemesTab } from '../components/DetailTabs';
 import EpisodesTab from '../components/EpisodesTab';
 import { AnimeDetailSkeleton } from '../components/skeletons';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
@@ -32,6 +32,7 @@ import logger from '../utils/logger';
 const TABS = [
     { id: 'overview', label: 'Overview', icon: Film, path: 'overview' },
     { id: 'watch', label: 'Watch', icon: Tv, path: 'watch' },
+    { id: 'themes', label: 'Themes', icon: Disc, path: 'themes' },
     { id: 'stats', label: 'Stats', icon: BarChart3, path: 'stats' },
     { id: 'characters', label: 'Characters', icon: Users, path: 'characters' },
     { id: 'staff', label: 'Staff', icon: Mic, path: 'staff' },
@@ -552,6 +553,7 @@ export default function AnimeDetail() {
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
         count: tab.id === 'watch' ? watchEpisodesTotal :
+            tab.id === 'themes' ? (anime.theme_songs?.length || 0) :
             tab.id === 'characters' ? (anime.character_count || 0) :
             tab.id === 'staff' ? (anime.staff_count || 0) : 0
     }));
@@ -821,6 +823,9 @@ export default function AnimeDetail() {
                                         onLoadMore={fetchNextWatchEpisodesPage}
                                         onRetry={refetchWatchEpisodes}
                                     />
+                                )}
+                                {activeTab === 'themes' && (
+                                    <ThemesTab anime={anime} accentColor={accentColor} />
                                 )}
                                 {activeTab === 'stats' && (
                                     <StatsTab anime={anime} accentColor={accentColor} />

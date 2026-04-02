@@ -80,7 +80,7 @@ class WatchEpisodesPagination(PageNumberPagination):
 class AnimeViewSet(ReadOnlyModelViewSet):
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
-    _PUBLIC_CACHE_VERSION = "v5"
+    _PUBLIC_CACHE_VERSION = "v6"
 
     _LIST_FIELDS = (
         "id",
@@ -127,7 +127,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @classmethod
     def _detail_cache_keys(cls, slug: str) -> tuple[str, str]:
-        return (cls._detail_cache_key(slug), cls._legacy_detail_cache_key(slug))
+        return (cls._detail_cache_key(slug),)
 
     @staticmethod
     def _with_cache_status_header(response: Response, cache_status: str) -> Response:
@@ -439,16 +439,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         if needs_refresh:
             try:
-                legacy_cache_key = self._legacy_detail_cache_key(slug)
-
                 def build_base_payload():
                     instance = self._build_queryset(include_user_context=False).get(slug=slug)
                     serializer = self.get_serializer(instance)
-                    payload = self._sanitize_public_user_fields(serializer.data)
-                    ttl = 3600 if self._has_cover_media(payload) else 60
-                    cache.set(legacy_cache_key, payload, ttl)
-                    cache.set(public_cache_stale_key(legacy_cache_key), payload, ttl + 900)
-                    return payload
+                    return self._sanitize_public_user_fields(serializer.data)
 
                 data, cache_status = get_or_build_public_payload(
                     primary_cache_key,

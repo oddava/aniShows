@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Users, Mic, Loader, Play, Calendar, Search, Star } from 'lucide-react';
+import { Users, Mic, Loader, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FranchiseSection from './FranchiseSection';
 import MusicSection from './MusicSection';
@@ -18,6 +18,9 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
 
     const hasThemes = anime?.theme_songs && anime.theme_songs.some(t => t.song_type === 'opening' || t.song_type === 'ending');
     const hasTrailer = !!videoId;
+    const scoreLabel = anime?.rating != null
+        ? (anime?.anilist_id ? 'on AniList' : '/ 10')
+        : '';
 
     // Deduplicate and filter staff
     const topStaff = useMemo(() => {
@@ -224,13 +227,17 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
 
             {hasThemes && (
                 <div className="min-w-0">
-                    <MusicSection anime={anime} accentColor={accentColor} isCompact={false} />
+                    <MusicSection anime={anime} accentColor={accentColor} isCompact={false} itemLimit={2} />
                 </div>
             )}
 
-            <div className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-8 items-start">
-                <div className="min-w-0">
-                    {hasTrailer && (
+            <div
+                className={`grid grid-cols-1 gap-8 items-start ${
+                    hasTrailer ? 'xl:grid-cols-[2fr_1fr]' : ''
+                }`}
+            >
+                {hasTrailer && (
+                    <div className="min-w-0">
                         <div className="flex flex-col">
                             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6">
                                 Trailer
@@ -239,30 +246,50 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                 <LazyYouTube videoId={videoId} title="Trailer" accentColor={accentColor} />
                             </div>
                         </div>
-                    )}
-                </div>
-                
-                <div className="min-w-0 flex flex-col gap-8">
+                    </div>
+                )}
+
+                <div
+                    className={`min-w-0 ${
+                        hasTrailer
+                            ? 'flex flex-col gap-8'
+                            : 'grid grid-cols-1 md:grid-cols-2 gap-8'
+                    }`}
+                >
                     <div>
                         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                             Average Score
                         </h2>
                         <div className="bg-dark-100/50 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-colors">
                             <p className="text-2xl font-black text-gray-300">
-                                {anime?.rating || 'N/A'}
-                                {anime?.rating ? <span className="text-sm font-normal text-gray-400 ml-1">/ 10</span> : ''}
+                                {anime?.rating != null ? anime.rating : 'N/A'}
+                                {anime?.rating != null ? <span className="text-sm font-normal text-gray-400 ml-1">{scoreLabel}</span> : ''}
                             </p>
                         </div>
                     </div>
 
-                    <div>
-                        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
-                            Status Distribution
-                        </h2>
-                        <StatusDistribution anime={anime} />
-                    </div>
+                    <StatusDistribution anime={anime} />
                 </div>
             </div>
+        </div>
+    );
+}
+
+export function ThemesTab({ anime, accentColor }) {
+    const hasThemes = anime?.theme_songs?.length > 0;
+
+    if (!hasThemes) {
+        return (
+            <div className="text-center py-12 animate-tab-content">
+                <Search className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">No theme songs available.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="animate-tab-content">
+            <MusicSection anime={anime} accentColor={accentColor} isCompact={false} />
         </div>
     );
 }

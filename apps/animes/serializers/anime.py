@@ -1,3 +1,4 @@
+from django.db.models import Count, Q
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -15,6 +16,7 @@ from apps.animes.serializers.base import (
     ThemeSongSerializer,
 )
 from apps.animes.serializers_mixins import ImageUrlMixin, UserStatusMixin
+from apps.users.models import UserAnimeList
 
 
 class AnimeWatchEpisodeSerializer(Serializer):
@@ -262,19 +264,28 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         return None
 
     def get_status_distribution(self, obj):
-        """Return the denormalized list-status summary stored on the anime record."""
-        distribution = {
-            "watching": 0,
-            "completed": 0,
-            "on_hold": 0,
-            "dropped": 0,
-            "plan_to_watch": 0,
+        """Return live site list counts for the anime detail page."""
+        if not obj.pk:
+            return {
+                "watching": 0,
+                "completed": 0,
+                "on_hold": 0,
+                "dropped": 0,
+                "plan_to_watch": 0,
+            }
+
+        distribution = UserAnimeList.objects.filter(anime_id=obj.pk).aggregate(
+            watching=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.watching)),
+            completed=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.completed)),
+            on_hold=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.on_hold)),
+            dropped=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.dropped)),
+            plan_to_watch=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.plan_to_watch)),
+        )
+
+        return {
+            key: int(distribution.get(key, 0) or 0)
+            for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
         }
-        stored_distribution = getattr(obj, "status_distribution", None) or {}
-        if isinstance(stored_distribution, dict):
-            for key in distribution:
-                distribution[key] = int(stored_distribution.get(key, 0) or 0)
-        return distribution
 
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
     """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""

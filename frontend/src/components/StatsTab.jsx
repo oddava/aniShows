@@ -1,11 +1,19 @@
 import { BarChart3, Users, Star, TrendingUp, Activity } from 'lucide-react';
 import StatusDistribution from './StatusDistribution';
+import {
+    formatCompactCount,
+    getStatusDistributionTotal,
+    normalizeStatusDistribution,
+} from '../utils/statusDistribution';
 
 export default function StatsTab({ anime, accentColor }) {
-    // Calculate total platform members from status_distribution
-    const distribution = anime?.status_distribution || {};
-    const totalPlatformMembers = Object.values(distribution).reduce((a, b) => a + b, 0);
-    
+    const totalPlatformMembers = getStatusDistributionTotal(
+        normalizeStatusDistribution(anime?.status_distribution)
+    );
+    const scoreLabel = anime?.rating != null
+        ? (anime?.anilist_id ? 'on AniList' : '/ 10')
+        : '';
+
     return (
         <div className="animate-tab-content space-y-8">
             {/* Overview Stats Grid */}
@@ -13,15 +21,15 @@ export default function StatsTab({ anime, accentColor }) {
                 <StatCard
                     icon={Users}
                     label="Total Members"
-                    value={totalPlatformMembers > 0 ? totalPlatformMembers.toLocaleString() : '0'}
+                    value={formatCompactCount(totalPlatformMembers)}
                     accentColor={accentColor}
                 />
                 <StatCard
                     icon={Star}
                     label="Average Score"
-                    value={anime?.rating || 'N/A'}
+                    value={anime?.rating != null ? anime.rating : 'N/A'}
                     accentColor={accentColor}
-                    subtext={anime?.rating ? '/ 10' : ''}
+                    subtext={scoreLabel}
                 />
                 <StatCard
                     icon={TrendingUp}
@@ -85,7 +93,10 @@ function StatCard({ icon: Icon, label, value, subtext, accentColor }) {  // esli
                 className="w-5 h-5 mb-2" 
                 style={{ color: accentColor || '#75698d' }} 
             />
-            <p className="text-2xl font-black text-white">{value}{subtext}</p>
+            <p className="text-2xl font-black text-white">
+                {value}
+                {subtext ? <span className="text-sm font-normal text-gray-400 ml-1">{subtext}</span> : ''}
+            </p>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.12em]">{label}</p>
         </div>
     );
