@@ -329,14 +329,14 @@ export default function AnimeDetail() {
     const { data: characters, isLoading: charactersLoading } = useQuery({
         queryKey: ['anime', slug, 'characters'],
         queryFn: () => animeApi.getCharacters(slug).then(res => res.data),
-        enabled: !!anime && activeTab === 'characters',
+        enabled: !!anime && (activeTab === 'characters' || activeTab === 'overview'),
         staleTime: Infinity, // Character lists rarely change
     });
 
     const { data: staff, isLoading: staffLoading } = useQuery({
         queryKey: ['anime', slug, 'staff'],
         queryFn: () => animeApi.getStaff(slug).then(res => res.data),
-        enabled: !!anime && activeTab === 'staff',
+        enabled: !!anime && (activeTab === 'staff' || activeTab === 'overview'),
         staleTime: Infinity, // Staff lists rarely change
     });
 
@@ -366,7 +366,7 @@ export default function AnimeDetail() {
             }
             return undefined;
         },
-        enabled: !!anime && activeTab === 'watch',
+        enabled: !!anime && (activeTab === 'watch' || activeTab === 'overview'),
         staleTime: 300000,
     });
 
@@ -416,7 +416,11 @@ export default function AnimeDetail() {
         watchEpisodesData?.pages.flatMap((page) => page?.results || []) || [],
         [watchEpisodesData]
     );
-    const watchEpisodesTotal = watchEpisodesData?.pages?.[0]?.count || anime?.episode_count || 0;
+    const rawWatchEpisodesCount = watchEpisodesData?.pages?.[0]?.count;
+    const parsedWatchEpisodesCount = Number(rawWatchEpisodesCount);
+    const watchEpisodesTotal = Number.isFinite(parsedWatchEpisodesCount) && parsedWatchEpisodesCount >= 0
+        ? parsedWatchEpisodesCount
+        : (anime?.episode_count || 0);
 
     const { textReviews, ratingOnlyReviews, reviewCount } = useMemo(() => ({
         textReviews: allReviews.filter(r => r.text?.trim().length > 0),
@@ -547,7 +551,7 @@ export default function AnimeDetail() {
 
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
-        count: tab.id === 'watch' ? (anime.episode_count || 0) :
+        count: tab.id === 'watch' ? watchEpisodesTotal :
             tab.id === 'characters' ? (anime.character_count || 0) :
             tab.id === 'staff' ? (anime.staff_count || 0) : 0
     }));
@@ -798,6 +802,10 @@ export default function AnimeDetail() {
                                     <OverviewTab
                                         anime={anime}
                                         accentColor={accentColor}
+                                        characters={characters}
+                                        staff={staff}
+                                        episodes={watchEpisodes}
+                                        onStaffClick={setSelectedStaff}
                                     />
                                 )}
                                 {activeTab === 'watch' && (

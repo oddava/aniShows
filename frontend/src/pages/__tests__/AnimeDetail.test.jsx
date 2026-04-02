@@ -251,7 +251,32 @@ describe('AnimeDetail list update invalidation', () => {
             page: 1,
             page_size: 50,
         });
+        const watchLink = screen.getByRole('link', { name: /watch/i });
+        expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch1');
         expect(animeApi.getCharacters).not.toHaveBeenCalled();
         expect(animeApi.getStaff).not.toHaveBeenCalled();
+    });
+
+    it('does not fallback to anime episode_count when watch episodes API count is zero', async () => {
+        animeApi.getWatchEpisodes.mockResolvedValueOnce({
+            data: {
+                count: 0,
+                next: null,
+                previous: null,
+                results: [],
+            },
+        });
+        const { wrapper } = createHarness('/anime/frieren/watch');
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('watch-tab')).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
+            const watchLink = screen.getByRole('link', { name: /watch/i });
+            expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch');
+        });
     });
 });
