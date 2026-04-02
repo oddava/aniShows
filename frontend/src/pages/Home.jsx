@@ -153,7 +153,7 @@ export default function Home() {
                             <div className="max-w-7xl mx-auto">
                                 <div className="flex items-center justify-between mb-6 md:mb-8">
                                     <div>
-                                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Trending Now</h2>
+                                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">Trending Now</h2>
                                     </div>
                                     <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-accent/40 group">
                                         View All
@@ -188,7 +188,7 @@ export default function Home() {
                     {!isAuthenticated && (
                         <section ref={setRevealRef} className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800 reveal">
                             <div className="max-w-4xl mx-auto text-center relative z-10 ui-surface py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl">
-                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white/90 mb-4 tracking-tight">
+                                <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em] mb-4">
                                     Start Tracking Your Journey
                                 </h2>
                                 <p className="text-gray-400 mb-6 sm:mb-10 text-base sm:text-lg max-w-2xl mx-auto px-2">
@@ -221,7 +221,7 @@ function GuestIntroHero() {
 
             <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
                 <div className="max-w-2xl">
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold mb-4 leading-tight text-white/90 tracking-tight">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none mb-4 break-words">
                         Discover, Track, and Share Your Anime Journey
                     </h1>
                     <p className="text-base sm:text-lg text-gray-300 mb-8 max-w-xl leading-relaxed">
@@ -283,7 +283,7 @@ function MemberCarouselHero({
             <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
                 {heroAnime && (
                     <div className="max-w-2xl">
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 leading-tight text-white/90 tracking-tight">
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none mb-3 break-words">
                             {heroAnime.title}
                         </h1>
 
@@ -365,7 +365,7 @@ function CurrentlyWatchingSection() {
             <div className="max-w-7xl mx-auto">
                 <div className="flex items-center justify-between mb-4 md:mb-6">
                     <div>
-                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Currently Watching</h2>
+                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">Currently Watching</h2>
                     </div>
                     <Link to="/profile/anime_list" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
                         View All <ChevronRight className="w-4 h-4" />
@@ -431,7 +431,7 @@ function RecommendedForYouSection({ revealRef }) {
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col gap-1 mb-4 md:mb-6">
                     <div>
-                        <h2 className="text-xl md:text-2xl font-bold text-white/90 tracking-tight">Recommended for You</h2>
+                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">Recommended for You</h2>
                     </div>
                     <p className="text-sm md:text-base text-gray-500 mt-0.5">{subtitle}</p>
                 </div>

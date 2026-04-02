@@ -42,7 +42,6 @@ export default function EpisodesTab({
     if (episodes.length === 0) {
         return (
             <div className="text-center py-12 animate-tab-content" data-testid="watch-tab">
-                <Tv className="w-12 h-12 text-gray-700 mx-auto mb-3" />
                 <p className="text-gray-400 text-sm">No episodes available.</p>
             </div>
         );

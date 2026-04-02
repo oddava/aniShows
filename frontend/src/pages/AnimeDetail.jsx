@@ -961,7 +961,6 @@ export default function AnimeDetail() {
                                     ) : (
                                         !isWritingReview && (
                                             <div className="text-center py-16 bg-dark-100/50 rounded-2xl border border-gray-800 border-dashed">
-                                                <MessageSquare className="w-12 h-12 text-gray-700 mx-auto mb-4" />
                                                 <p className="text-gray-400 mb-4">No reviews for this anime yet.</p>
                                             </div>
                                         )
