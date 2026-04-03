@@ -204,3 +204,35 @@ class OfflineSyncStatePipelineTests(TestCase):
         _, kwargs = mock_bulk_create.call_args
         self.assertEqual(kwargs["batch_size"], STATE_BULK_CREATE_BATCH_SIZE)
         self.assertTrue(kwargs["ignore_conflicts"])
+
+    @patch("apps.animes.services.offline_sync.logger.warning")
+    @patch("apps.animes.services.offline_sync.logger.info")
+    def test_blocked_stage_failure_logs_at_info(self, mock_info, mock_warning):
+        anime = self._anime("Blocked Log", anilist_id=404)
+
+        OfflineSyncService()._log_stage_failure(
+            anime=anime,
+            stage="metadata",
+            reason_code="not_found",
+            message="AniList media not found.",
+            quarantined=False,
+        )
+
+        mock_info.assert_called_once()
+        mock_warning.assert_not_called()
+
+    @patch("apps.animes.services.offline_sync.logger.warning")
+    @patch("apps.animes.services.offline_sync.logger.info")
+    def test_transient_stage_failure_logs_at_warning(self, mock_info, mock_warning):
+        anime = self._anime("Transient Log", anilist_id=505)
+
+        OfflineSyncService()._log_stage_failure(
+            anime=anime,
+            stage="metadata",
+            reason_code="transport_error",
+            message="timeout",
+            quarantined=False,
+        )
+
+        mock_warning.assert_called_once()
+        mock_info.assert_not_called()

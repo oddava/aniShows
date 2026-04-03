@@ -613,15 +613,32 @@ class OfflineSyncService:
         request_fingerprint = (
             f"a:{anime.anilist_id or '-'}|m:{anime.mal_id or '-'}|t:{(anime.title or '')[:40].casefold()}"
         )
-        logger.warning(
-            "Offline sync stage failure",
+        truncated_message = (message or "")[:500]
+        if quarantined:
+            log_method = logger.warning
+            event = "Offline sync stage quarantined"
+        elif reason_code in TRANSIENT_REASON_CODES:
+            log_method = logger.warning
+            event = "Offline sync stage retry scheduled"
+        else:
+            log_method = logger.info
+            event = "Offline sync stage blocked"
+
+        log_method(
+            "%s anime_id=%s stage=%s reason=%s quarantined=%s message=%s",
+            event,
+            anime.id,
+            stage,
+            reason_code,
+            quarantined,
+            truncated_message,
             extra={
                 "anime_id": anime.id,
                 "stage": stage,
                 "reason_code": reason_code,
                 "quarantined": quarantined,
                 "request_fingerprint": request_fingerprint,
-                "error_message": (message or "")[:500],
+                "error_message": truncated_message,
             },
         )
 
