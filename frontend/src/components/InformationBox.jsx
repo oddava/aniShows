@@ -21,6 +21,17 @@ const InfoRow = ({ icon: Icon, label, value }) => (
     </div>
 );
 
+const getBrowseFilterHref = (key, value) => {
+    const params = new URLSearchParams({ [key]: value });
+    return `/browse?${params.toString()}`;
+};
+
+const getFilterPillStyles = (accentColor) => ({
+    color: accentColor || '#75698d',
+    borderColor: accentColor ? `${accentColor}80` : 'rgba(117,105,141,0.5)',
+    backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
+});
+
 export default function InformationBox({ anime, className, accentColor }) {
     const totalMembers = getStatusDistributionTotal(
         normalizeStatusDistribution(anime?.status_distribution)
@@ -153,13 +164,9 @@ export default function InformationBox({ anime, className, accentColor }) {
                             {anime.genres.map((genre) => (
                                 <Link
                                     key={genre.id}
-                                    to={`/browse?genre=${genre.slug}`}
+                                    to={getBrowseFilterHref('genre', genre.slug)}
                                     className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
-                                    style={{
-                                        color: accentColor || '#75698d',
-                                        borderColor: accentColor ? `${accentColor}80` : 'rgba(117,105,141,0.5)',
-                                        backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
-                                    }}
+                                    style={getFilterPillStyles(accentColor)}
                                     onMouseEnter={(e) => {
                                         e.currentTarget.style.backgroundColor = accentColor || '#75698d';
                                         e.currentTarget.style.color = 'white';
@@ -170,6 +177,32 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     }}
                                 >
                                     {genre.name}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {anime.tags && anime.tags.length > 0 && (
+                    <div className="pt-5 mt-5 border-t border-white/5">
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Tags</p>
+                        <div className="flex flex-wrap gap-2">
+                            {anime.tags.map((tag) => (
+                                <Link
+                                    key={tag}
+                                    to={getBrowseFilterHref('tags', tag)}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
+                                    style={getFilterPillStyles(accentColor)}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = accentColor || '#75698d';
+                                        e.currentTarget.style.color = 'white';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)';
+                                        e.currentTarget.style.color = accentColor || '#75698d';
+                                    }}
+                                >
+                                    {tag}
                                 </Link>
                             ))}
                         </div>

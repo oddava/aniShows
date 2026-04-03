@@ -204,6 +204,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "staff_count",
             "external_links",
             "relations",
+            "tags",
             "site_rank",
             "popularity_rank",
             "is_favorite",

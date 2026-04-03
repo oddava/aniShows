@@ -80,7 +80,7 @@ class WatchEpisodesPagination(PageNumberPagination):
 class AnimeViewSet(ReadOnlyModelViewSet):
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
-    _PUBLIC_CACHE_VERSION = "v6"
+    _PUBLIC_CACHE_VERSION = "v7"
 
     _LIST_FIELDS = (
         "id",

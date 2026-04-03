@@ -103,6 +103,12 @@ class AnimeTypeFilterTests(APITestCase):
 
         self.assertSetEqual(titles, {"Type TV Anime"})
 
+    def test_detail_includes_tags(self):
+        response = self.client.get(reverse("anime-detail", args=["type-tv-anime"]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("tags"), ["isekai", "male protagonist"])
+
     def test_episode_range_filter(self):
         response = self.client.get(
             self.list_url,
