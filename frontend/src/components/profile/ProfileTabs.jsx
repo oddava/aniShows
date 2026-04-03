@@ -13,7 +13,7 @@ export default function ProfileTabs({ activeTab, onTabChange, counts = {} }) {
         <div className="mb-5 profile-tabs">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="overflow-x-auto scrollbar-hide">
-                    <div className="flex w-max gap-4 sm:gap-8 md:gap-12 border-b border-gray-800/30">
+                    <div className="flex w-max md:w-full md:justify-center gap-4 sm:gap-8 md:gap-12 border-b border-gray-800/30">
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
