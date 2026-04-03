@@ -52,6 +52,7 @@ NON_RETRYABLE_QUARANTINE_THRESHOLD = 3
 BLOCKED_QUARANTINE_THRESHOLD = 2
 TRANSIENT_QUARANTINE_THRESHOLD = 12
 IN_PROGRESS_LEASE_SECONDS = 10 * 60
+STATE_BULK_CREATE_BATCH_SIZE = 500
 
 
 @dataclass(slots=True)
@@ -94,7 +95,12 @@ class OfflineSyncService:
             if anime_id not in existing
         ]
         if to_create:
-            OfflineAnimeSyncState.objects.bulk_create(to_create, ignore_conflicts=True)
+            # Keep INSERT statements bounded during full offline-catalog reconciles.
+            OfflineAnimeSyncState.objects.bulk_create(
+                to_create,
+                batch_size=STATE_BULK_CREATE_BATCH_SIZE,
+                ignore_conflicts=True,
+            )
 
         updated = 0
         if reset_pipeline:
