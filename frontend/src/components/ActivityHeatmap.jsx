@@ -163,7 +163,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
         <div className="relative w-full max-w-full p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
                 <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">
-                    Activity Heatmap
+                    Activity
                 </h3>
 
                 {stats.totalActivity > 0 ? (

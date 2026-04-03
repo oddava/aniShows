@@ -580,10 +580,10 @@ export default function Navbar() {
     };
 
     const mobileTabClasses = (isActive) => `
-        group relative min-w-0 flex h-12 flex-col items-center justify-center rounded-xl border border-transparent px-0.5 transition-colors duration-200 outline-none
+        group relative min-w-0 flex h-12 flex-col items-center justify-center rounded-lg border border-transparent px-0.5 transition-colors duration-200 outline-none
         focus:outline-none focus-visible:outline-none focus-visible:ring-0 [-webkit-tap-highlight-color:transparent]
         ${isActive
-            ? 'border-accent/35 bg-accent/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]'
+            ? 'border-transparent text-white'
             : 'text-gray-300/90 hover:bg-white/[0.08] hover:text-white active:bg-white/[0.06]'
         }
     `;

@@ -30,14 +30,22 @@ const GENRE_COLORS = [
 ];
 
 // Flat Stat Card stripped of Icons and Gradients
-const StatCard = ({ icon: Icon, label, value, subtext, color = 'accent' }) => {
+const StatCard = ({ label, value, subtext }) => {
     return (
-        <div className="bg-dark-100/50 rounded-xl border border-gray-800 p-6">
+        <div className="rounded-xl border border-gray-800 bg-dark-100/50 p-3 sm:p-4 lg:p-6">
             <div className="flex flex-col gap-1">
-                <div className="text-xs text-gray-500 font-bold uppercase tracking-[0.16em] mb-4">{label}</div>
-                <div className="flex items-baseline gap-2">
-                    <div className="text-2xl font-black text-white tracking-tight">{value}</div>
-                    {subtext && <span className="text-xs text-gray-500 font-bold uppercase tracking-[0.16em] opacity-60">{subtext}</span>}
+                <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500 sm:mb-4 sm:text-xs">
+                    {label}
+                </div>
+                <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
+                    <div className="text-lg font-black tracking-tight text-white sm:text-xl lg:text-2xl">
+                        {value}
+                    </div>
+                    {subtext && (
+                        <span className="hidden text-xs font-bold uppercase tracking-[0.16em] text-gray-500 opacity-60 sm:inline">
+                            {subtext}
+                        </span>
+                    )}
                 </div>
             </div>
         </div>
@@ -257,7 +265,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     return (
         <div className="w-full space-y-6 overflow-x-hidden lg:space-y-8">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-6">
                 <StatCard icon={Tv} label="Total Anime" value={totalAnime} color="blue" />
                 <StatCard icon={Clock} label="Total Episodes" value={totalEpisodes.toLocaleString()} color="accent" />
                 <StatCard icon={TrendingUp} label="Completed" value={completedCount} color="green" />
@@ -271,7 +279,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-1">
-                                Anime DNA
+                                Genres
                             </h3>
                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">Your unique taste profile</p>
                         </div>
@@ -323,7 +331,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-1">
-                                Ratings Matrix
+                                Ratings
                             </h3>
                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">How you evaluate anime quality</p>
                         </div>
@@ -393,7 +401,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                 {/* Watching Progress - 7 cols on desktop */}
                 <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-6">
-                        Live Progress
+                        Progress
                     </h3>
                     <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                         {watchingCount > 0 ? (
