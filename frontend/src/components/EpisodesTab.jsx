@@ -48,23 +48,23 @@ export default function EpisodesTab({
     }
 
     return (
-        <div className="animate-tab-content min-w-0 space-y-4" data-testid="watch-tab">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-4 py-3 text-xs text-gray-400">
+        <div className="animate-tab-content min-w-0 space-y-3 sm:space-y-4" data-testid="watch-tab">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs text-gray-400">
                 <div>
                     Loaded <span className="font-bold text-gray-300">{episodes.length}</span> of <span className="font-bold text-gray-300">{resolvedCount}</span> episodes
                 </div>
                 <div>{duration}m average runtime</div>
             </div>
 
-            <div className="grid min-w-0 gap-3">
+            <div className="grid min-w-0 gap-2 sm:gap-3">
                 {episodes.map((episode) => (
                     <article
                         key={episode.number}
-                        className="group flex flex-row items-center justify-between gap-4 rounded-xl border border-white/5 bg-dark-200/40 p-3 transition-colors hover:border-gray-600 min-w-0 overflow-hidden"
+                        className="group flex flex-row items-center justify-between gap-2 sm:gap-4 rounded-lg sm:rounded-xl border border-white/5 bg-dark-200/40 p-2 sm:p-3 transition-colors hover:border-gray-600 min-w-0 overflow-hidden"
                     >
-                        <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                             {episode.thumbnail && (
-                                <div className="relative aspect-video w-24 sm:w-32 flex-shrink-0 overflow-hidden rounded-lg bg-dark-200 border border-transparent group-hover:border-white/10 transition-colors">
+                                <div className="relative aspect-video w-20 sm:w-32 flex-shrink-0 overflow-hidden rounded-md sm:rounded-lg bg-dark-200 border border-transparent group-hover:border-white/10 transition-colors">
                                     <img
                                         src={episode.thumbnail}
                                         alt={`${anime?.title || 'Anime'} episode ${episode.number}`}
@@ -75,11 +75,11 @@ export default function EpisodesTab({
                             )}
 
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors truncate">
+                                <h3 className="text-xs sm:text-sm font-bold text-gray-200 group-hover:text-white transition-colors truncate">
                                     <span className="text-gray-500 mr-1.5 sm:mr-2 flex-shrink-0">EP {episode.number}</span>
                                     {episode.title || `Episode ${episode.number}`}
                                 </h3>
-                                <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 font-medium truncate">
+                                <div className="mt-0.5 sm:mt-1 flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-gray-500 font-medium truncate">
                                     {episode.aired && (
                                         <>
                                             <span className="flex-shrink-0">{episode.aired}</span>
@@ -96,13 +96,13 @@ export default function EpisodesTab({
                                 href={episode.crunchyroll_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white transition-all bg-white/5 hover:!bg-[var(--hover-accent)] active:scale-95 w-full sm:w-auto"
+                                className="flex items-center justify-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg px-2.5 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-bold text-white transition-all bg-white/5 hover:!bg-[var(--hover-accent)] active:scale-95 w-full sm:w-auto"
                                 style={{ '--hover-accent': accentColor || '#75698d' }}
                             >
                                 {episode.has_real_crunchyroll_url ? (
-                                    <Play className="h-3.5 w-3.5 fill-current flex-shrink-0" />
+                                    <Play className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-current flex-shrink-0" />
                                 ) : (
-                                    <Search className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <Search className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
                                 )}
                                 <span className="truncate">
                                     {episode.has_real_crunchyroll_url ? 'Watch' : 'Search'}

@@ -151,13 +151,13 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
             )}
 
             {topEpisodes.length > 0 && (
-                <div className="min-w-0 space-y-4">
-                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                <div className="min-w-0 space-y-3 sm:space-y-4">
+                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-3 sm:mb-6">
                         Episodes
                     </h2>
                     <div className={topEpisodes.some(e => e.thumbnail) 
-                        ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" 
-                        : "grid grid-cols-1 sm:grid-cols-2 gap-3"}>
+                        ? "grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4" 
+                        : "grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3"}>
                         {topEpisodes.map((episode) => {
                             const hasThumbnail = episode.thumbnail;
                             
@@ -168,10 +168,10 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                         href={episode.crunchyroll_url}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="flex items-center gap-4 bg-dark-200/40 rounded-xl p-3 border border-white/5 hover:border-gray-700 transition-colors group"
+                                        className="flex items-center gap-3 sm:gap-4 bg-dark-200/40 rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-white/5 hover:border-gray-700 transition-colors group"
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="text-[13px] font-medium text-gray-300 truncate">
+                                            <h3 className="text-xs sm:text-[13px] font-medium text-gray-300 truncate">
                                                 Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
                                             </h3>
                                         </div>
@@ -189,7 +189,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                             href={episode.crunchyroll_url}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200"
+                                            className="relative block h-24 sm:h-auto sm:aspect-video overflow-hidden rounded-lg sm:rounded-2xl border border-white/5 bg-dark-200"
                                         >
                                             <img
                                                 src={episode.thumbnail}
@@ -197,22 +197,22 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                                 loading="lazy"
                                                 className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
                                             />
-                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
-                                                <h3 className="text-[12px] font-medium text-gray-300 line-clamp-1">
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-2.5 py-1.5 sm:px-3 sm:py-2 border-t border-white/5">
+                                                <h3 className="text-[11px] sm:text-[12px] font-medium text-gray-300 line-clamp-1">
                                                     Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
                                                 </h3>
                                             </div>
                                         </a>
                                     ) : (
-                                        <div className="relative block aspect-video overflow-hidden rounded-2xl border border-white/5 bg-dark-200">
+                                        <div className="relative block h-24 sm:h-auto sm:aspect-video overflow-hidden rounded-lg sm:rounded-2xl border border-white/5 bg-dark-200">
                                             <img
                                                 src={episode.thumbnail}
                                                 alt={`Episode ${episode.number}`}
                                                 loading="lazy"
                                                 className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
                                             />
-                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-3 py-2 border-t border-white/5">
-                                                <h3 className="text-[12px] font-medium text-gray-300 line-clamp-1">
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-2.5 py-1.5 sm:px-3 sm:py-2 border-t border-white/5">
+                                                <h3 className="text-[11px] sm:text-[12px] font-medium text-gray-300 line-clamp-1">
                                                     Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
                                                 </h3>
                                             </div>
