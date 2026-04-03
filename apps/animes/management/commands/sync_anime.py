@@ -113,7 +113,15 @@ class Command(BaseCommand):
         parser.add_argument(
             "--enqueue-enrichment",
             action="store_true",
+            dest="enqueue_enrichment",
+            default=None,
             help="Queue metadata, franchise, and theme enrichment after offline import",
+        )
+        parser.add_argument(
+            "--skip-enrichment",
+            action="store_false",
+            dest="enqueue_enrichment",
+            help="Import the offline catalog without starting the enrichment pipeline",
         )
         parser.add_argument(
             "--enrichment-chunk-size",
@@ -149,6 +157,11 @@ class Command(BaseCommand):
             type=int,
             default=100,
             help="Chunk size for reconciliation enqueue batches",
+        )
+        parser.add_argument(
+            "--reset-pipeline",
+            action="store_true",
+            help="Reset matching offline sync states to pending before reconciling",
         )
 
         # Recommendation options
@@ -328,6 +341,8 @@ class Command(BaseCommand):
         limit = options["import_limit"]
         resume = options["resume"]
         enqueue_enrichment = options["enqueue_enrichment"]
+        if enqueue_enrichment is None:
+            enqueue_enrichment = True
         enrichment_chunk_size = options["enrichment_chunk_size"]
 
         self.stdout.write(
@@ -350,26 +365,31 @@ class Command(BaseCommand):
         self._dispatch_task(task, run_async, queue)
 
     def _handle_reconcile_offline_sync(self, options, run_async, queue):
-        """Reconcile metadata/themes for all offline-imported anime."""
+        """Reconcile metadata, franchise, and themes for offline-imported anime."""
         from apps.animes.tasks import reconcile_offline_catalog_sync
 
         batch_size = options["batch_size"]
         chunk_size = options["chunk_size"]
         strict = options["strict"]
+        anime_id = options.get("anime_id")
+        reset_pipeline = options["reset_pipeline"]
         max_rounds = options["max_rounds"]
         round_interval_minutes = options["round_interval_minutes"]
+        scoped_ids = [anime_id] if anime_id else []
 
         self.stdout.write(
             "Reconciling Offline Catalog sync "
-            f"(batch_size={batch_size}, chunk_size={chunk_size}, strict={strict})"
+            f"(batch_size={batch_size}, chunk_size={chunk_size}, strict={strict}, "
+            f"reset={reset_pipeline}, anime_ids={scoped_ids or 'all'})"
         )
 
         task = reconcile_offline_catalog_sync.s(
-            anime_ids=[],
+            anime_ids=scoped_ids,
             batch_size=batch_size,
             chunk_size=chunk_size,
             require_themes=True,
             strict=strict,
+            reset_pipeline=reset_pipeline,
             max_rounds=max_rounds,
             round_number=1,
             round_interval_minutes=round_interval_minutes,

@@ -27,15 +27,35 @@ class OfflineSyncStatePipelineTests(TestCase):
         payload.update(overrides)
         return OfflineAnimeSyncState.objects.create(**payload)
 
-    def test_missing_ids_is_blocked_no_ids_without_mutating_identity(self):
+    @patch.object(AniListService, "search_anime", new_callable=AsyncMock)
+    def test_title_only_lookup_failure_marks_row_without_mutating_identity(self, mock_search):
         anime = self._anime("No IDs")
+        mock_search.return_value = []
         result = OfflineSyncService().sync_metadata_stage(anime)
         anime.refresh_from_db()
 
         self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS)
-        self.assertEqual(result.reason_code, "missing_ids")
+        self.assertEqual(result.reason_code, "not_found")
         self.assertIsNone(anime.anilist_id)
         self.assertIsNone(anime.mal_id)
+
+    @patch.object(AniListService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(AniListService, "search_anime", new_callable=AsyncMock)
+    def test_title_only_lookup_can_enrich_via_exact_match(self, mock_search, mock_update):
+        anime = self._anime("Title Only")
+        mock_search.return_value = [
+            {
+                "id": 321,
+                "idMal": 654,
+                "title": {"english": "Title Only", "romaji": "Title Only", "native": ""},
+            }
+        ]
+        mock_update.return_value = True
+
+        result = OfflineSyncService().sync_metadata_stage(anime)
+
+        self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
+        mock_update.assert_awaited_once()
 
     @patch.object(AniListService, "update_anime_manual", new_callable=AsyncMock)
     @patch.object(AniListService, "get_anime_by_id", new_callable=AsyncMock)
@@ -51,6 +71,31 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(anime.anilist_id, 111)
         self.assertEqual(anime.mal_id, 222)
         mock_update.assert_not_called()
+
+    @patch.object(AniListService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(AniListService, "search_by_mal_id", new_callable=AsyncMock)
+    @patch.object(AniListService, "get_anime_by_id", new_callable=AsyncMock)
+    def test_metadata_stage_falls_back_to_mal_when_anilist_lookup_misses(
+        self,
+        mock_get_by_id,
+        mock_search_by_mal_id,
+        mock_update,
+    ):
+        anime = self._anime("Fallback", anilist_id=111, mal_id=222)
+        mock_get_by_id.return_value = None
+        mock_search_by_mal_id.return_value = {
+            "id": 111,
+            "idMal": 222,
+            "title": {"english": "Fallback", "romaji": "Fallback", "native": ""},
+        }
+        mock_update.return_value = True
+
+        result = OfflineSyncService().sync_metadata_stage(anime)
+
+        self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
+        mock_get_by_id.assert_awaited_once_with(111)
+        mock_search_by_mal_id.assert_awaited_once_with(222)
+        mock_update.assert_awaited_once()
 
     @patch.object(OfflineSyncService, "sync_metadata_stage")
     def test_transient_failure_schedules_fast_retry_backoff(self, mock_stage):

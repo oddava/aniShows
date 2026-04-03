@@ -168,6 +168,19 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(result["sync_states_total"], 2)
         self.assertEqual(OfflineAnimeSyncState.objects.count(), 2)
 
+    def test_run_import_without_enrichment_does_not_create_pending_sync_states(self):
+        fixture_path = self._write_jsonl_fixture(self._entry(title="Import Only"))
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+            enqueue_enrichment=False,
+        )
+
+        self.assertEqual(result["records_created"], 1)
+        self.assertEqual(result["sync_states_total"], 0)
+        self.assertEqual(OfflineAnimeSyncState.objects.count(), 0)
+
     def test_run_import_prepares_sync_states_for_mal_only_entries(self):
         entry = self._entry(
             title="MAL Only Entry",

@@ -306,10 +306,9 @@ class OfflineCatalogImportService:
             ).count()
             import_run.records_marked_stale = stale_count
 
-            sync_state_summary = self._initialize_sync_states(created_ids, updated_ids)
-            summary.update(sync_state_summary)
-
             if enqueue_enrichment:
+                sync_state_summary = self._initialize_sync_states(created_ids, updated_ids)
+                summary.update(sync_state_summary)
                 queued = self._enqueue_enrichment(created_ids, updated_ids)
                 summary.update(queued)
 

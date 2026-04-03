@@ -131,14 +131,14 @@ sync-full:                      ## Run full sync pipeline (catalog + airing + me
 	$(EXEC) migrate
 	$(EXEC) sync_anime full-sync --async
 
-import-offline:                 ## Import Anime Offline Database (sync). Override RELEASE=..., IMPORT_LIMIT=..., SOURCE_PATH=...
+import-offline:                 ## Import Anime Offline Database and reconcile enrichment (sync)
 	$(EXEC) migrate
 	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} \
 		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
 		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
 		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
 
-import-offline-async:           ## Queue Anime Offline Database import. Override RELEASE=..., IMPORT_LIMIT=..., SOURCE_PATH=...
+import-offline-async:           ## Queue Anime Offline Database import and reconcile enrichment
 	$(EXEC) migrate
 	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --async --queue batch \
 		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
@@ -168,10 +168,9 @@ import-offline-full-async:      ## Queue offline import + enrichment in batch qu
 		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),) \
 		$(if $(ENRICHMENT_CHUNK_SIZE),--enrichment-chunk-size $(ENRICHMENT_CHUNK_SIZE),)
 
-offline-repair-run:             ## Re-run metadata/theme backfills for already imported rows
+offline-repair-run:             ## Reset and re-run offline enrichment pipeline for imported rows
 	$(EXEC) migrate
-	$(EXEC) sync_anime enrich-metadata --mode backfill --batch-size $${BATCH_SIZE:-200} --async
-	$(EXEC) sync_anime sync-themes --limit $${THEME_LIMIT:-200} --async
+	$(EXEC) sync_anime reconcile-offline-sync --reset-pipeline --batch-size $${BATCH_SIZE:-200} --async --queue batch
 
 ## ============================================================================
 ## Data Population & Backfill

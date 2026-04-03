@@ -1,5 +1,6 @@
 from django.conf import settings
 
+from apps.animes.models import Anime
 from apps.animes.services.offline_catalog import (
     DEFAULT_ASSET_NAME,
     OfflineCatalogImportService,
@@ -85,15 +86,49 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
         chunk_size: int = 100,
         require_themes: bool = True,
         strict: bool = False,
+        reset_pipeline: bool = False,
         max_rounds: int = 24,
         round_number: int = 1,
         round_interval_minutes: int = 15,
     ):
         self.metrics.start()
-        scoped_ids = anime_ids or None
+        scoped_ids = self._resolve_scope_ids(anime_ids)
+        if scoped_ids == []:
+            return {
+                "round_number": round_number,
+                "max_rounds": max_rounds,
+                "strict": strict,
+                "batch_size": batch_size,
+                "chunk_size": chunk_size,
+                "scoped_anime_count": 0,
+                "reset_pipeline": reset_pipeline,
+                "pending": 0,
+                "complete": 0,
+                "processed": 0,
+                "claimed": 0,
+                "blocked_without_ids": 0,
+                "waiting_for_mal_id": 0,
+                "metadata_candidates": 0,
+                "franchise_candidates": 0,
+                "theme_candidates": 0,
+                "metadata_jobs": 0,
+                "franchise_jobs": 0,
+                "theme_jobs": 0,
+                "metadata_task_ids": [],
+                "franchise_task_ids": [],
+                "theme_task_ids": [],
+                "stage_counts": {},
+                "reason_counts": {},
+                "transient_backlog": 0,
+                "quarantined_count": 0,
+                "top_quarantine_reasons": [],
+                "next_round_scheduled": False,
+                "next_round_task_id": None,
+                "rounds_exhausted": False,
+            }
         service = OfflineSyncService()
         if scoped_ids:
-            service.ensure_states_for_anime_ids(scoped_ids, reset_pipeline=False)
+            service.ensure_states_for_anime_ids(scoped_ids, reset_pipeline=reset_pipeline)
 
         reconcile_result = service.reconcile_due(
             batch_size=max(1, int(batch_size)),
@@ -124,6 +159,7 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
                     "chunk_size": chunk_size,
                     "require_themes": require_themes,
                     "strict": strict,
+                    "reset_pipeline": False,
                     "max_rounds": max_rounds,
                     "round_number": round_number + 1,
                     "round_interval_minutes": round_interval_minutes,
@@ -139,7 +175,8 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             "strict": strict,
             "batch_size": batch_size,
             "chunk_size": chunk_size,
-            "scoped_anime_count": len(anime_ids or []),
+            "scoped_anime_count": len(scoped_ids or []),
+            "reset_pipeline": reset_pipeline,
             "pending": pending,
             "complete": complete,
             "processed": reconcile_result.get("processed", 0),
@@ -176,6 +213,15 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             "next_round_task_id": next_round_task_id,
             "rounds_exhausted": round_number >= max_rounds and backlog_remaining,
         }
+
+    def _resolve_scope_ids(self, anime_ids: list[int] | None) -> list[int] | None:
+        scoped_ids = sorted({int(anime_id) for anime_id in (anime_ids or []) if anime_id})
+        if scoped_ids:
+            return scoped_ids
+
+        return list(
+            Anime.objects.filter(offline_db_last_seen_at__isnull=False).values_list("id", flat=True)
+        )
 
 
 @observed_shared_task(
@@ -224,6 +270,7 @@ def reconcile_offline_catalog_sync(
     chunk_size: int = 100,
     require_themes: bool = True,
     strict: bool = False,
+    reset_pipeline: bool = False,
     max_rounds: int = 24,
     round_number: int = 1,
     round_interval_minutes: int = 15,
@@ -234,6 +281,7 @@ def reconcile_offline_catalog_sync(
         chunk_size=chunk_size,
         require_themes=require_themes,
         strict=strict,
+        reset_pipeline=reset_pipeline,
         max_rounds=max_rounds,
         round_number=round_number,
         round_interval_minutes=round_interval_minutes,

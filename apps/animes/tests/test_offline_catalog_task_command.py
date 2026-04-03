@@ -12,6 +12,7 @@ except ModuleNotFoundError:  # pragma: no cover - depends on runtime image
     zstandard = None
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
 from apps.animes.tasks.offline_catalog import (
@@ -187,7 +188,6 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             "latest",
             "--import-limit",
             "2",
-            "--enqueue-enrichment",
             "--enrichment-chunk-size",
             "25",
             "--async",
@@ -210,6 +210,32 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         )
         mock_task.apply_async.assert_called_once_with(queue="batch")
 
+    @patch("apps.animes.tasks.offline_catalog.OfflineSyncService.reconcile_due")
+    def test_reconcile_task_creates_missing_states_for_offline_rows(self, mock_reconcile_due):
+        Anime.objects.create(
+            title="Needs State",
+            slug="needs-state",
+            synopsis="offline",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
+        mock_reconcile_due.return_value = {
+            "stage_counts": {},
+            "reason_counts": {},
+            "pending": 1,
+            "complete": 0,
+            "processed": 0,
+            "claimed": 0,
+            "transient_backlog": 0,
+            "quarantined_count": 0,
+            "top_quarantine_reasons": [],
+        }
+
+        OfflineCatalogReconcileSyncTask().execute()
+
+        self.assertEqual(OfflineAnimeSyncState.objects.count(), 1)
+
     @patch("apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync.apply_async")
     @patch("apps.animes.tasks.offline_catalog.OfflineSyncService")
     def test_reconcile_task_reschedules_when_default_path_has_backlog(
@@ -217,6 +243,14 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         mock_sync_service_cls,
         mock_apply_async,
     ):
+        Anime.objects.create(
+            title="Backlog Row",
+            slug="backlog-row",
+            synopsis="offline",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
         mock_sync_service_cls.return_value.reconcile_due.return_value = {
             "stage_counts": {},
             "reason_counts": {},
@@ -241,3 +275,33 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         self.assertEqual(result["next_round_task_id"], "next-round-1")
         self.assertFalse(result["rounds_exhausted"])
         mock_apply_async.assert_called_once()
+
+    @patch("apps.animes.tasks.reconcile_offline_catalog_sync.s")
+    def test_reconcile_command_scopes_and_resets_pipeline(self, mock_signature):
+        mock_task = Mock()
+        mock_task.apply_async.return_value = SimpleNamespace(id="reconcile-123")
+        mock_signature.return_value = mock_task
+        stdout = io.StringIO()
+
+        call_command(
+            "sync_anime",
+            "reconcile-offline-sync",
+            "--anime-id",
+            "42",
+            "--reset-pipeline",
+            "--async",
+            stdout=stdout,
+        )
+
+        mock_signature.assert_called_once_with(
+            anime_ids=[42],
+            batch_size=50,
+            chunk_size=100,
+            require_themes=True,
+            strict=False,
+            reset_pipeline=True,
+            max_rounds=24,
+            round_number=1,
+            round_interval_minutes=15,
+        )
+        mock_task.apply_async.assert_called_once_with()

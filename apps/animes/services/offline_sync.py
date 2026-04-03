@@ -244,46 +244,38 @@ class OfflineSyncService:
         return self._apply_stage_result(state_id=state.id, stage=claim.stage, result=result)
 
     def sync_metadata_stage(self, anime: Anime) -> StageResult:
-        if anime.anilist_id in (None, 0) and anime.mal_id in (None, 0):
+        if (
+            anime.anilist_id in (None, 0)
+            and anime.mal_id in (None, 0)
+            and not (anime.title or "").strip()
+        ):
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="missing_ids",
-                reason_message="Neither AniList ID nor MAL ID is set.",
+                reason_message="No AniList ID, MAL ID, or searchable title is set.",
             )
         return asyncio.run(self._sync_metadata_stage_async(anime))
 
     async def _sync_metadata_stage_async(self, anime: Anime) -> StageResult:
         service = AniListService(enable_caching=False, enable_rate_limiting=True)
         try:
-            media = None
-            if anime.anilist_id:
-                media = await service.get_anime_by_id(anime.anilist_id)
-                if media and media.get("id") != anime.anilist_id:
-                    return StageResult(
-                        status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
-                        reason_code="identity_conflict",
-                        reason_message=(
-                            f"AniList mismatch: expected {anime.anilist_id}, got {media.get('id')}"
-                        ),
-                    )
-                if media and anime.mal_id and media.get("idMal") and media.get("idMal") != anime.mal_id:
-                    return StageResult(
-                        status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
-                        reason_code="identity_conflict",
-                        reason_message=(
-                            f"MAL mismatch: expected {anime.mal_id}, got {media.get('idMal')}"
-                        ),
-                    )
-            elif anime.mal_id:
-                media = await service.search_by_mal_id(anime.mal_id)
-                if media and media.get("idMal") != anime.mal_id:
-                    return StageResult(
-                        status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
-                        reason_code="identity_conflict",
-                        reason_message=(
-                            f"MAL mismatch: expected {anime.mal_id}, got {media.get('idMal')}"
-                        ),
-                    )
+            media = await service.resolve_media_for_anime(anime)
+            if media and anime.anilist_id and media.get("id") != anime.anilist_id:
+                return StageResult(
+                    status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
+                    reason_code="identity_conflict",
+                    reason_message=(
+                        f"AniList mismatch: expected {anime.anilist_id}, got {media.get('id')}"
+                    ),
+                )
+            if media and anime.mal_id and media.get("idMal") and media.get("idMal") != anime.mal_id:
+                return StageResult(
+                    status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
+                    reason_code="identity_conflict",
+                    reason_message=(
+                        f"MAL mismatch: expected {anime.mal_id}, got {media.get('idMal')}"
+                    ),
+                )
 
             if not media:
                 return self._stage_result_from_external_error(

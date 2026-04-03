@@ -1526,6 +1526,63 @@ class AniListService:
             self._set_last_error("not_found", f"mal_id:{mal_id}")
         return None
 
+    async def resolve_media_for_anime(self, anime: Anime) -> dict | None:
+        """Resolve the safest AniList media payload for an existing Anime row."""
+        if anime.anilist_id:
+            item = await self.get_anime_by_id(anime.anilist_id)
+            if item:
+                return item
+
+        if anime.mal_id:
+            item = await self.search_by_mal_id(anime.mal_id)
+            if item:
+                return item
+
+        title = (anime.title or "").strip()
+        if not title:
+            if not self.last_error_code:
+                self._set_last_error("not_found", "missing_title")
+            return None
+
+        results = await self.search_anime(title)
+        if not results:
+            if not self.last_error_code:
+                self._set_last_error("not_found", f"title:{title}")
+            return None
+
+        expected_titles = {title.casefold()}
+        if anime.title_jp:
+            expected_titles.add(anime.title_jp.casefold())
+
+        for candidate in results:
+            candidate_anilist_id = candidate.get("id")
+            candidate_mal_id = candidate.get("idMal")
+
+            # If local IDs exist, never accept candidates with mismatched identity.
+            if anime.anilist_id and candidate_anilist_id != anime.anilist_id:
+                continue
+            if anime.mal_id and candidate_mal_id != anime.mal_id:
+                continue
+
+            titles = candidate.get("title", {})
+            candidate_titles = {
+                (titles.get("english") or "").casefold(),
+                (titles.get("romaji") or "").casefold(),
+                (titles.get("native") or "").casefold(),
+            }
+            if expected_titles.intersection(candidate_titles):
+                return candidate
+
+        if anime.anilist_id or anime.mal_id:
+            for candidate in results:
+                if anime.anilist_id and candidate.get("id") == anime.anilist_id:
+                    return candidate
+                if anime.mal_id and candidate.get("idMal") == anime.mal_id:
+                    return candidate
+
+        self._set_last_error("not_found", f"title:{title}")
+        return None
+
     def save_anime_to_db(self, item: dict) -> Anime:
         """Synchronously save anime data to database (for use in Celery tasks)"""
         # Use asgiref bridge instead of asyncio.run() to avoid executor/thread
