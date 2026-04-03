@@ -186,25 +186,27 @@ export default function InformationBox({ anime, className, accentColor }) {
                 {anime.tags && anime.tags.length > 0 && (
                     <div className="pt-5 mt-5 border-t border-white/5">
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Tags</p>
-                        <div className="flex flex-wrap gap-2">
-                            {anime.tags.map((tag) => (
-                                <Link
-                                    key={tag}
-                                    to={getBrowseFilterHref('tags', tag)}
-                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
-                                    style={getFilterPillStyles(accentColor)}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = accentColor || '#75698d';
-                                        e.currentTarget.style.color = 'white';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)';
-                                        e.currentTarget.style.color = accentColor || '#75698d';
-                                    }}
-                                >
-                                    {tag}
-                                </Link>
-                            ))}
+                        <div className="max-h-64 overflow-y-auto pr-1">
+                            <div className="flex flex-wrap gap-2">
+                                {anime.tags.map((tag) => (
+                                    <Link
+                                        key={tag}
+                                        to={getBrowseFilterHref('tags', tag)}
+                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
+                                        style={getFilterPillStyles(accentColor)}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = accentColor || '#75698d';
+                                            e.currentTarget.style.color = 'white';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)';
+                                            e.currentTarget.style.color = accentColor || '#75698d';
+                                        }}
+                                    >
+                                        {tag}
+                                    </Link>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
