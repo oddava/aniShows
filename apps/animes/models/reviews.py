@@ -51,42 +51,52 @@ class Review(TimestampMixin, Model):
 
 
 class ReviewVote(CreatedAtMixin, Model):
+    class VoteType(TextChoices):
+        HELPFUL = "helpful", "Helpful"
+        DISLIKE = "dislike", "Dislike"
+
     user = ForeignKey("users.CustomUser", CASCADE, related_name="review_votes")
     review = ForeignKey("anime.Review", CASCADE, related_name="votes")
-    is_helpful = BooleanField(default=True)
+    vote_type = CharField(max_length=20, choices=VoteType.choices)
 
     class Meta:
-        unique_together = ("user", "review")
+        unique_together = ("user", "review", "vote_type")
         indexes = [
-            Index(fields=["review", "is_helpful"]),
-            Index(fields=["user", "review"]),
+            Index(fields=["review", "vote_type"], name="anime_revie_review__5b332b_idx"),
+            Index(
+                fields=["user", "review", "vote_type"],
+                name="anime_revie_user_id_86991f_idx",
+            ),
         ]
 
     def __str__(self):
-        vote_type = "helpful" if self.is_helpful else "not helpful"
-        return f"{self.user.username} voted {vote_type} on review {self.review.id}"
+        return f"{self.user.username} voted {self.vote_type} on review {self.review.id}"
 
 
-class ReviewComment(TimestampMixin, Model):
-    user = ForeignKey("users.CustomUser", CASCADE, related_name="review_comments")
-    review = ForeignKey("anime.Review", CASCADE, related_name="comments")
-    text = TextField(max_length=2000)
-    is_deleted = BooleanField(default=False)
+class ReviewReaction(CreatedAtMixin, Model):
+    class ReactionType(TextChoices):
+        THUMBS_UP = "thumbs_up", "Thumbs Up"
+        HEART = "heart", "Heart"
+        LAUGH = "laugh", "Laugh"
+        SURPRISED = "surprised", "Surprised"
+        SAD = "sad", "Sad"
+
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="review_reactions")
+    review = ForeignKey("anime.Review", CASCADE, related_name="reactions")
+    reaction_type = CharField(max_length=20, choices=ReactionType.choices)
 
     class Meta:
-        ordering = ["-created_at"]
+        unique_together = ("user", "review", "reaction_type")
         indexes = [
-            Index(fields=["review", "-created_at"]),
-            Index(fields=["user", "-created_at"]),
-            Index(fields=["review", "is_deleted"]),
+            Index(fields=["review", "reaction_type"], name="anime_revie_review__9feeb4_idx"),
+            Index(
+                fields=["user", "review", "reaction_type"],
+                name="anime_revie_user_id_60a9d1_idx",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.user.username}'s comment on review {self.review.id}"
-
-    def soft_delete(self):
-        self.is_deleted = True
-        self.save(update_fields=["is_deleted", "updated_at"])
+        return f"{self.user.username} reacted {self.reaction_type} on review {self.review.id}"
 
 
 class ReviewReport(TimestampMixin, Model):

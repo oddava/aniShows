@@ -7,22 +7,19 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.animes.serializers import (
-    ReviewCommentSerializer,
+    ReviewReactionActionSerializer,
     ReviewReportCreateSerializer,
     ReviewSerializer,
+    ReviewVoteActionSerializer,
 )
-from apps.animes.serializers.reviews import ReviewCommentsQuerySerializer
 from apps.animes.services.reviews import (
-    add_review_comment,
     create_review,
     delete_review,
-    delete_review_comment,
-    get_review_comments,
     get_review_queryset,
     get_review_stats,
     report_review,
+    toggle_review_reaction,
     update_review,
-    update_review_comment,
     vote_on_review,
 )
 from apps.users.permissions import EmailVerificationMixin
@@ -56,67 +53,34 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     def perform_destroy(self, instance):
         delete_review(instance, self.request.user)
 
-    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
-    def vote(self, request, pk=None):
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="votes",
+    )
+    def votes(self, request, pk=None):
         review = self.get_object()
-        result = vote_on_review(review, request.user, request.data.get("is_helpful", True))
+        serializer = ReviewVoteActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = vote_on_review(review, request.user, serializer.validated_data["vote_type"])
         return Response(result.payload, status=result.status_code)
 
-    @action(detail=True, methods=["get"])
-    def comments(self, request, pk=None):
-        review = self.get_object()
-        query_serializer = ReviewCommentsQuerySerializer(data=request.query_params)
-        query_serializer.is_valid(raise_exception=True)
-        page = query_serializer.validated_data["page"]
-        page_size = query_serializer.validated_data["page_size"]
-        paginated_comments, total = get_review_comments(review, page, page_size)
-        serializer = ReviewCommentSerializer(
-            paginated_comments, many=True, context={"request": request}
-        )
-
-        return Response(
-            {
-                "results": serializer.data,
-                "count": total,
-                "next": page * page_size < total,
-                "page": page,
-            }
-        )
-
-    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
-    def add_comment(self, request, pk=None):
-        review = self.get_object()
-        result = add_review_comment(review, request.user, request.data.get("text", ""))
-        if result.status_code != 201:
-            return Response(result.payload, status=result.status_code)
-        comment = result.payload["comment"]
-        serializer = ReviewCommentSerializer(comment, context={"request": request})
-        return Response(serializer.data, status=HTTPStatus.CREATED)
-
     @action(
         detail=True,
-        methods=["patch"],
+        methods=["post"],
         permission_classes=[permissions.IsAuthenticated],
-        url_path="comments/(?P<comment_id>[^/.]+)",
+        url_path="reactions",
     )
-    def update_comment(self, request, pk=None, comment_id=None):
+    def reactions(self, request, pk=None):
         review = self.get_object()
-        result = update_review_comment(review, comment_id, request.user, request.data.get("text", ""))
-        if result.status_code != 200:
-            return Response(result.payload, status=result.status_code)
-        comment = result.payload["comment"]
-        serializer = ReviewCommentSerializer(comment, context={"request": request})
-        return Response(serializer.data)
-
-    @action(
-        detail=True,
-        methods=["delete"],
-        permission_classes=[permissions.IsAuthenticated],
-        url_path="comments/(?P<comment_id>[^/.]+)/delete",
-    )
-    def delete_comment(self, request, pk=None, comment_id=None):
-        review = self.get_object()
-        result = delete_review_comment(review, comment_id, request.user)
+        serializer = ReviewReactionActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = toggle_review_reaction(
+            review,
+            request.user,
+            serializer.validated_data["reaction_type"],
+        )
         return Response(result.payload, status=result.status_code)
 
     @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])

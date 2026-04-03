@@ -13,7 +13,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.models import Anime, Review
+from apps.animes.models import Anime, Review, ReviewReaction, ReviewVote
 from apps.users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
@@ -312,3 +312,164 @@ class ReviewSubRatingTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('rating_story', response.data)
 
+
+class ReviewInteractionTests(APITestCase):
+    """Tests for review votes and reactions."""
+
+    def setUp(self):
+        self.author = User.objects.create_user(
+            username="author",
+            email="author@example.com",
+            password="password123",
+        )
+        self.voter = User.objects.create_user(
+            username="voter",
+            email="voter@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=self.author, defaults={"email_verified": True})
+        UserProfile.objects.update_or_create(user=self.voter, defaults={"email_verified": True})
+
+        self.anime = Anime.objects.create(
+            title="Review Interaction Anime",
+            slug="review-interaction-anime",
+            synopsis="Anime for review interaction tests",
+            anime_type="TV",
+            status="Airing",
+        )
+        self.review = Review.objects.create(
+            user=self.author,
+            anime=self.anime,
+            rating=8,
+            text="A detailed review that should support multiple interactions.",
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.voter)
+
+    def test_vote_toggle_is_scoped_per_vote_type(self):
+        """Helpful and dislike votes toggle independently per user."""
+        votes_url = reverse("reviews-votes", args=[self.review.id])
+
+        helpful_response = self.client.post(
+            votes_url,
+            {"vote_type": ReviewVote.VoteType.HELPFUL},
+            format="json",
+        )
+        self.assertEqual(helpful_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(helpful_response.data["active"])
+
+        dislike_response = self.client.post(
+            votes_url,
+            {"vote_type": ReviewVote.VoteType.DISLIKE},
+            format="json",
+        )
+        self.assertEqual(dislike_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(dislike_response.data["active"])
+        self.assertEqual(
+            ReviewVote.objects.filter(user=self.voter, review=self.review).count(),
+            2,
+        )
+
+        toggle_off_response = self.client.post(
+            votes_url,
+            {"vote_type": ReviewVote.VoteType.HELPFUL},
+            format="json",
+        )
+        self.assertEqual(toggle_off_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(toggle_off_response.data["active"])
+        self.assertFalse(
+            ReviewVote.objects.filter(
+                user=self.voter,
+                review=self.review,
+                vote_type=ReviewVote.VoteType.HELPFUL,
+            ).exists()
+        )
+
+    def test_review_list_includes_vote_and_reaction_state(self):
+        """Serialized reviews expose counts and active states for the current user."""
+        ReviewVote.objects.create(
+            user=self.voter,
+            review=self.review,
+            vote_type=ReviewVote.VoteType.HELPFUL,
+        )
+        ReviewVote.objects.create(
+            user=self.voter,
+            review=self.review,
+            vote_type=ReviewVote.VoteType.DISLIKE,
+        )
+        ReviewReaction.objects.create(
+            user=self.voter,
+            review=self.review,
+            reaction_type=ReviewReaction.ReactionType.HEART,
+        )
+        ReviewReaction.objects.create(
+            user=self.author,
+            review=self.review,
+            reaction_type=ReviewReaction.ReactionType.HEART,
+        )
+
+        response = self.client.get(reverse("reviews-list"), {"anime": self.anime.slug})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = response.data["results"][0]
+
+        self.assertEqual(payload["helpful_count"], 1)
+        self.assertEqual(payload["dislike_count"], 1)
+        self.assertEqual(payload["user_votes"], {"helpful": True, "dislike": True})
+
+        reactions = {item["type"]: item for item in payload["reactions"]}
+        self.assertEqual(reactions["heart"]["count"], 2)
+        self.assertTrue(reactions["heart"]["active"])
+        self.assertEqual(reactions["thumbs_up"]["count"], 0)
+        self.assertFalse(reactions["thumbs_up"]["active"])
+
+    def test_reactions_toggle_per_emoji(self):
+        """Each reaction type toggles independently for a review."""
+        reactions_url = reverse("reviews-reactions", args=[self.review.id])
+
+        heart_response = self.client.post(
+            reactions_url,
+            {"reaction_type": ReviewReaction.ReactionType.HEART},
+            format="json",
+        )
+        self.assertEqual(heart_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(heart_response.data["active"])
+
+        laugh_response = self.client.post(
+            reactions_url,
+            {"reaction_type": ReviewReaction.ReactionType.LAUGH},
+            format="json",
+        )
+        self.assertEqual(laugh_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(laugh_response.data["active"])
+        self.assertEqual(
+            ReviewReaction.objects.filter(user=self.voter, review=self.review).count(),
+            2,
+        )
+
+        toggle_off_response = self.client.post(
+            reactions_url,
+            {"reaction_type": ReviewReaction.ReactionType.HEART},
+            format="json",
+        )
+        self.assertEqual(toggle_off_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(toggle_off_response.data["active"])
+        self.assertFalse(
+            ReviewReaction.objects.filter(
+                user=self.voter,
+                review=self.review,
+                reaction_type=ReviewReaction.ReactionType.HEART,
+            ).exists()
+        )
+
+    def test_users_cannot_vote_on_their_own_reviews(self):
+        """Authors cannot helpful/dislike their own reviews."""
+        self.client.force_authenticate(user=self.author)
+
+        response = self.client.post(
+            reverse("reviews-votes", args=[self.review.id]),
+            {"vote_type": ReviewVote.VoteType.HELPFUL},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["error"], "Cannot vote on your own review")

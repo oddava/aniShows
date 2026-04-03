@@ -32,7 +32,6 @@ SETTINGS_VALIDATION_RULES = {
     "content": {
         "enableReviews": {"type": "bool"},
         "requireApproval": {"type": "bool"},
-        "allowComments": {"type": "bool"},
         "autoFetchMetadata": {"type": "bool"},
         "maxUploadSize": {"type": "int", "min": 1, "max": 100},
         "allowedImageTypes": {"type": "str", "max_length": 120},

@@ -253,15 +253,6 @@ const AdminSettings = () => {
                 />
                 <span className="text-white/80">Enable Reviews</span>
               </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.content.allowComments}
-                  onChange={(e) => handleChange('content', 'allowComments', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Allow Comments</span>
-              </label>
             </div>
           </div>
         )}

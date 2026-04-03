@@ -2,15 +2,12 @@ from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
 from django.db import IntegrityError
-from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from apps.animes.models import Review, ReviewComment, ReviewReport, ReviewVote
-from apps.core.services.admin_settings_service import (
-    are_review_comments_enabled,
-    are_reviews_enabled,
-)
+from apps.animes.models import Review, ReviewReaction, ReviewReport, ReviewVote
+from apps.core.services.admin_settings_service import are_reviews_enabled
 from apps.users.models import UserAnimeList
 from apps.users.services.cache import invalidate_user_caches
 
@@ -24,12 +21,6 @@ class ReviewActionResult:
 def ensure_reviews_enabled():
     if not are_reviews_enabled():
         raise PermissionDenied("Reviews are currently disabled by the administrator.")
-
-
-def ensure_comments_enabled():
-    ensure_reviews_enabled()
-    if not are_review_comments_enabled():
-        raise PermissionDenied("Review comments are currently disabled by the administrator.")
 
 
 def get_review_queryset(request_user, query_params):
@@ -49,9 +40,27 @@ def get_review_queryset(request_user, query_params):
         ),
     )
     queryset = queryset.annotate(
-        _helpful_count=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
-        _comment_count=Count("comments", filter=Q(comments__is_deleted=False), distinct=True),
+        _helpful_count=Count(
+            "votes",
+            filter=Q(votes__vote_type=ReviewVote.VoteType.HELPFUL),
+            distinct=True,
+        ),
+        _dislike_count=Count(
+            "votes",
+            filter=Q(votes__vote_type=ReviewVote.VoteType.DISLIKE),
+            distinct=True,
+        ),
     )
+
+    reaction_annotations = {}
+    for reaction_type in ReviewReaction.ReactionType.values:
+        reaction_annotations[f"_reaction_count_{reaction_type}"] = Count(
+            "reactions",
+            filter=Q(reactions__reaction_type=reaction_type),
+            distinct=True,
+        )
+    queryset = queryset.annotate(**reaction_annotations)
+
     queryset = queryset.annotate(
         _is_completed=Exists(
             UserAnimeList.objects.filter(
@@ -63,13 +72,32 @@ def get_review_queryset(request_user, query_params):
     )
 
     if request_user.is_authenticated:
-        queryset = queryset.annotate(
-            _user_vote=Subquery(
+        vote_annotations = {
+            "_user_helpful_vote": Exists(
                 ReviewVote.objects.filter(
-                    user=request_user, review=OuterRef("pk")
-                ).values("is_helpful")[:1]
+                    user=request_user,
+                    review=OuterRef("pk"),
+                    vote_type=ReviewVote.VoteType.HELPFUL,
+                )
+            ),
+            "_user_dislike_vote": Exists(
+                ReviewVote.objects.filter(
+                    user=request_user,
+                    review=OuterRef("pk"),
+                    vote_type=ReviewVote.VoteType.DISLIKE,
+                )
+            ),
+        }
+        reaction_active_annotations = {}
+        for reaction_type in ReviewReaction.ReactionType.values:
+            reaction_active_annotations[f"_reaction_active_{reaction_type}"] = Exists(
+                ReviewReaction.objects.filter(
+                    user=request_user,
+                    review=OuterRef("pk"),
+                    reaction_type=reaction_type,
+                )
             )
-        )
+        queryset = queryset.annotate(**vote_annotations, **reaction_active_annotations)
 
     anime_slug = query_params.get("anime")
     if anime_slug:
@@ -187,7 +215,7 @@ def delete_review(instance, user):
     invalidate_user_caches(user.id, user.username)
 
 
-def vote_on_review(review, user, is_helpful):
+def vote_on_review(review, user, vote_type):
     ensure_reviews_enabled()
     if review.user == user:
         return ReviewActionResult(
@@ -195,86 +223,44 @@ def vote_on_review(review, user, is_helpful):
             status_code=400,
         )
 
-    existing_vote = ReviewVote.objects.filter(user=user, review=review).first()
+    existing_vote = ReviewVote.objects.filter(
+        user=user,
+        review=review,
+        vote_type=vote_type,
+    ).first()
     if existing_vote:
-        if existing_vote.is_helpful == is_helpful:
-            existing_vote.delete()
-            return ReviewActionResult(
-                payload={"voted": False, "is_helpful": None},
-                status_code=200,
-            )
-        existing_vote.is_helpful = is_helpful
-        existing_vote.save()
+        existing_vote.delete()
         return ReviewActionResult(
-            payload={"voted": True, "is_helpful": is_helpful},
+            payload={"active": False, "vote_type": vote_type},
             status_code=200,
         )
 
-    ReviewVote.objects.create(user=user, review=review, is_helpful=is_helpful)
+    ReviewVote.objects.create(user=user, review=review, vote_type=vote_type)
     return ReviewActionResult(
-        payload={"voted": True, "is_helpful": is_helpful},
+        payload={"active": True, "vote_type": vote_type},
         status_code=200,
     )
 
 
-def get_review_comments(review, page, page_size):
-    comments = (
-        review.comments.filter(is_deleted=False)
-        .select_related("user", "user__userprofile", "review__user")
-        .order_by("-created_at")
+def toggle_review_reaction(review, user, reaction_type):
+    ensure_reviews_enabled()
+    existing_reaction = ReviewReaction.objects.filter(
+        user=user,
+        review=review,
+        reaction_type=reaction_type,
+    ).first()
+    if existing_reaction:
+        existing_reaction.delete()
+        return ReviewActionResult(
+            payload={"active": False, "reaction_type": reaction_type},
+            status_code=200,
+        )
+
+    ReviewReaction.objects.create(user=user, review=review, reaction_type=reaction_type)
+    return ReviewActionResult(
+        payload={"active": True, "reaction_type": reaction_type},
+        status_code=200,
     )
-    start = (page - 1) * page_size
-    end = start + page_size
-    total = comments.count()
-    return comments[start:end], total
-
-
-def add_review_comment(review, user, text):
-    ensure_comments_enabled()
-    normalized_text = (text or "").strip()
-    if not normalized_text:
-        return ReviewActionResult(
-            payload={"text": ["Comment text is required."]},
-            status_code=400,
-        )
-
-    comment = ReviewComment.objects.create(user=user, review=review, text=normalized_text)
-    return ReviewActionResult(payload={"comment": comment}, status_code=201)
-
-
-def update_review_comment(review, comment_id, user, text):
-    ensure_comments_enabled()
-    try:
-        comment = review.comments.get(id=comment_id)
-    except ReviewComment.DoesNotExist:
-        return ReviewActionResult(payload={"detail": "Comment not found."}, status_code=404)
-
-    if comment.user != user:
-        raise PermissionDenied("You can only edit your own comments.")
-
-    normalized_text = (text or "").strip()
-    if not normalized_text:
-        return ReviewActionResult(
-            payload={"text": ["Comment text is required."]},
-            status_code=400,
-        )
-
-    comment.text = normalized_text
-    comment.save()
-    return ReviewActionResult(payload={"comment": comment}, status_code=200)
-
-
-def delete_review_comment(review, comment_id, user):
-    try:
-        comment = review.comments.get(id=comment_id)
-    except ReviewComment.DoesNotExist:
-        return ReviewActionResult(payload={"detail": "Comment not found."}, status_code=404)
-
-    if comment.user != user and review.user != user:
-        raise PermissionDenied("You don't have permission to delete this comment.")
-
-    comment.soft_delete()
-    return ReviewActionResult(payload={"deleted": True}, status_code=200)
 
 
 def report_review(review, user, validated_data):

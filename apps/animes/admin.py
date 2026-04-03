@@ -9,7 +9,7 @@ from .models import (
     Character,
     Genre,
     Review,
-    ReviewComment,
+    ReviewReaction,
     ReviewVote,
     Staff,
     Studio,
@@ -505,29 +505,21 @@ class UserHistoryAdmin(admin.ModelAdmin):
 class ReviewVoteAdmin(admin.ModelAdmin):
     """Admin for review votes."""
 
-    list_display = ["user", "review", "is_helpful", "created_at"]
-    list_filter = ["is_helpful"]
+    list_display = ["user", "review", "vote_type", "created_at"]
+    list_filter = ["vote_type"]
     search_fields = ["user__username"]
     raw_id_fields = ["user", "review"]
     ordering = ["-created_at"]
 
-@admin.register(ReviewComment)
-class ReviewCommentAdmin(admin.ModelAdmin):
-    """Admin for review comments."""
+@admin.register(ReviewReaction)
+class ReviewReactionAdmin(admin.ModelAdmin):
+    """Admin for review reactions."""
 
-    list_display = ["user", "review", "text_short", "is_deleted", "created_at"]
-    list_filter = ["is_deleted"]
-    search_fields = ["user__username", "text"]
+    list_display = ["user", "review", "reaction_type", "created_at"]
+    list_filter = ["reaction_type"]
+    search_fields = ["user__username", "review__anime__title"]
     raw_id_fields = ["user", "review"]
     ordering = ["-created_at"]
-
-    def text_short(self, obj):
-        """Return short version of the review comment text."""
-        if obj.text:
-            return obj.text[:80] + "..." if len(obj.text) > 80 else obj.text
-        return "-"
-
-    text_short.short_description = "Comment"
 
 @admin.register(UserRecommendation)
 class UserRecommendationAdmin(admin.ModelAdmin):

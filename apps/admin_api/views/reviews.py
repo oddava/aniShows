@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.animes.admin_serializers import AdminReviewSerializer
-from apps.animes.models import Review, ReviewReport
+from apps.animes.models import Review, ReviewReport, ReviewVote
 from apps.core.permissions import IsAdminUser
 
 
@@ -57,8 +57,16 @@ class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, 
         queryset = (
             Review.objects.select_related("user", "anime")
             .annotate(
-                helpful_votes=Count("votes", filter=Q(votes__is_helpful=True), distinct=True),
-                unhelpful_votes=Count("votes", filter=Q(votes__is_helpful=False), distinct=True),
+                helpful_votes=Count(
+                    "votes",
+                    filter=Q(votes__vote_type=ReviewVote.VoteType.HELPFUL),
+                    distinct=True,
+                ),
+                unhelpful_votes=Count(
+                    "votes",
+                    filter=Q(votes__vote_type=ReviewVote.VoteType.DISLIKE),
+                    distinct=True,
+                ),
                 open_user_reports=Count(
                     "reports",
                     filter=Q(reports__status__in=unresolved_report_statuses),

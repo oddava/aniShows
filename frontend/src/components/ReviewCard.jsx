@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, User, AlertTriangle, Eye, EyeOff, MoreVertical, Edit2, Trash2, Check, Book, Film, Music, Users, ThumbsUp } from 'lucide-react';
+import { Star, AlertTriangle, Eye, EyeOff, MoreVertical, Edit2, Trash2, Check, Book, Film, Music, Users, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewApi } from '../api/client';
-import ReviewComments from './ReviewComments';
 import MiniProfileHoverCard from './common/MiniProfileHoverCard';
 import AnimeMediaImage from './common/AnimeMediaImage';
 
@@ -108,31 +107,60 @@ const ScoreRow = ({ icon: Icon, label, value, accentColor }) => {  // eslint-dis
     );
 };
 
+const REVIEW_TEXT_COLLAPSE_LENGTH = 420;
+const DEFAULT_REACTIONS = [
+    { type: 'thumbs_up', emoji: '👍', count: 0, active: false, label: 'Thumbs up' },
+    { type: 'heart', emoji: '❤️', count: 0, active: false, label: 'Heart' },
+    { type: 'laugh', emoji: '😂', count: 0, active: false, label: 'Laugh' },
+    { type: 'surprised', emoji: '😮', count: 0, active: false, label: 'Surprised' },
+    { type: 'sad', emoji: '😢', count: 0, active: false, label: 'Sad' },
+];
+
 export default function ReviewCard({ review, onEdit, onDelete, showAnime = false, forceHideSpoilers = false, compact = false, accentColor = null }) {
     const { user, isAuthenticated } = useAuth();
     const [showSpoilers, setShowSpoilers] = useState(!review.has_spoilers && !forceHideSpoilers);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
     const queryClient = useQueryClient();
 
     const isOwner = user?.username === review.user?.username;
     const hasText = review.text && review.text.trim().length > 0;
     const hasSubRatings = review.rating_story || review.rating_animation || review.rating_music || review.rating_characters;
+    const shouldShowReadMore = hasText && (
+        review.text.trim().length > REVIEW_TEXT_COLLAPSE_LENGTH
+        || review.text.split(/\r?\n/).length > 5
+    );
+    const userVotes = review.user_votes || { helpful: false, dislike: false };
+    const reactionSummary = Array.isArray(review.reactions) && review.reactions.length > 0
+        ? review.reactions
+        : DEFAULT_REACTIONS;
 
-    // Vote mutation
     const voteMutation = useMutation({
-        mutationFn: () => reviewApi.vote(review.id, true),
+        mutationFn: (voteType) => reviewApi.vote(review.id, voteType),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviews'] });
         }
     });
 
-    const handleVote = () => {
+    const reactionMutation = useMutation({
+        mutationFn: (reactionType) => reviewApi.react(review.id, reactionType),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+        }
+    });
+
+    const handleVote = (voteType) => {
         if (!isAuthenticated || isOwner || voteMutation.isPending) return;
-        voteMutation.mutate();
+        voteMutation.mutate(voteType);
     };
 
-    const hasVoted = review.user_vote === true;
     const helpfulCount = review.helpful_count || 0;
+    const dislikeCount = review.dislike_count || 0;
+
+    const handleReaction = (reactionType) => {
+        if (!isAuthenticated || reactionMutation.isPending) return;
+        reactionMutation.mutate(reactionType);
+    };
 
     // Compact mode for rating-only reviews
     if (compact || (!hasText && !showAnime)) {
@@ -168,7 +196,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                         );
                     })}
                 </div>
-                <span className="text-[10px] text-gray-600 shrink-0">
+                <span className="text-[10px] text-gray-500 shrink-0">
                     {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
                 </span>
             </div>
@@ -178,7 +206,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     const renderContent = (text) => {
         if (!text || !text.trim()) return <p className="text-gray-500 text-sm italic">No text review provided.</p>;
         return (
-            <div className="text-white leading-relaxed">
+            <div className={`text-sm text-white leading-relaxed ${isExpanded ? '' : 'line-clamp-6'}`}>
                 {renderText(text)}
             </div>
         );
@@ -230,7 +258,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                         {review.user?.username}
                                     </Link>
                                 )}
-                                <span className="text-[10px] text-gray-700">
+                                <span className="text-[10px] text-gray-500">
                                     {formatDistanceToNow(new Date(review.created_at), { addSuffix: true })}
                                 </span>
                                 {review.is_completed && (
@@ -316,6 +344,15 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                             <div>
                                 {renderContent(review.text)}
 
+                                {shouldShowReadMore && (
+                                    <button
+                                        onClick={() => setIsExpanded((current) => !current)}
+                                        className="mt-3 text-[11px] font-medium text-gray-400 hover:text-white transition-colors"
+                                    >
+                                        {isExpanded ? 'Show less' : 'Read more'}
+                                    </button>
+                                )}
+
                                 {review.has_spoilers && (
                                     <button
                                         onClick={() => setShowSpoilers(false)}
@@ -354,28 +391,59 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                         </div>
                     )}
 
-                    {/* Helpful Button - Ghost style */}
-                    <div className="mt-3 pt-3 border-t border-gray-800/30 flex items-center">
-                        <button
-                            onClick={handleVote}
-                            disabled={!isAuthenticated || isOwner || voteMutation.isPending}
-                            className={`flex items-center gap-1.5 text-[11px] transition-all rounded-full px-2 py-1 ${hasVoted
-                                ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-                                : 'text-gray-500 hover:text-gray-400 border border-transparent hover:border-gray-700'
-                                } ${(!isAuthenticated || isOwner) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                            title={!isAuthenticated ? 'Login to vote' : isOwner ? 'Cannot vote on your own review' : 'Mark as helpful'}
-                        >
-                            <ThumbsUp className={`w-3 h-3 ${hasVoted ? 'fill-green-400' : ''}`} />
-                            <span>Helpful</span>
-                            {helpfulCount > 0 && <span>({helpfulCount})</span>}
-                        </button>
-                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-800/30 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                onClick={() => handleVote('helpful')}
+                                disabled={!isAuthenticated || isOwner || voteMutation.isPending}
+                                aria-pressed={userVotes.helpful}
+                                className={`flex items-center gap-1.5 text-[11px] transition-all rounded-full px-2.5 py-1 ${userVotes.helpful
+                                    ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                                    : 'text-gray-500 hover:text-gray-300 border border-gray-800/60 hover:border-gray-700'
+                                    } ${(!isAuthenticated || isOwner) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                title={!isAuthenticated ? 'Login to vote' : isOwner ? 'Cannot vote on your own review' : 'Mark as helpful'}
+                            >
+                                <ThumbsUp className={`w-3 h-3 ${userVotes.helpful ? 'fill-green-400' : ''}`} />
+                                <span>Helpful</span>
+                                <span>({helpfulCount})</span>
+                            </button>
 
-                    {/* Comments Section */}
-                    <ReviewComments
-                        reviewId={review.id}
-                        commentCount={review.comment_count}
-                    />
+                            <button
+                                onClick={() => handleVote('dislike')}
+                                disabled={!isAuthenticated || isOwner || voteMutation.isPending}
+                                aria-pressed={userVotes.dislike}
+                                className={`flex items-center gap-1.5 text-[11px] transition-all rounded-full px-2.5 py-1 ${userVotes.dislike
+                                    ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                                    : 'text-gray-500 hover:text-gray-300 border border-gray-800/60 hover:border-gray-700'
+                                    } ${(!isAuthenticated || isOwner) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                title={!isAuthenticated ? 'Login to vote' : isOwner ? 'Cannot vote on your own review' : 'Mark as disliked'}
+                            >
+                                <ThumbsDown className={`w-3 h-3 ${userVotes.dislike ? 'fill-red-400' : ''}`} />
+                                <span>Dislike</span>
+                                <span>({dislikeCount})</span>
+                            </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            {reactionSummary.map((reaction) => (
+                                <button
+                                    key={reaction.type}
+                                    onClick={() => handleReaction(reaction.type)}
+                                    disabled={!isAuthenticated || reactionMutation.isPending}
+                                    aria-label={reaction.label}
+                                    aria-pressed={reaction.active}
+                                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${reaction.active
+                                        ? 'border-accent/40 bg-accent/10 text-white'
+                                        : 'border-gray-800/60 bg-dark-50/60 text-gray-400 hover:border-gray-700 hover:text-gray-200'
+                                        } ${!isAuthenticated ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                    title={!isAuthenticated ? 'Login to react' : reaction.label}
+                                >
+                                    <span className="text-sm leading-none">{reaction.emoji}</span>
+                                    <span>{reaction.count || 0}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Right Column: Scorecard (desktop only) */}

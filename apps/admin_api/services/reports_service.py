@@ -440,8 +440,8 @@ def _engagement_payload(days: int) -> dict:
     )
 
     review_votes = {
-        "helpful": vote_queryset.filter(is_helpful=True).count(),
-        "unhelpful": vote_queryset.filter(is_helpful=False).count(),
+        "helpful": vote_queryset.filter(vote_type=ReviewVote.VoteType.HELPFUL).count(),
+        "unhelpful": vote_queryset.filter(vote_type=ReviewVote.VoteType.DISLIKE).count(),
     }
 
     most_reviewed = list(

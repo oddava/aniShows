@@ -12,14 +12,21 @@ from rest_framework.serializers import (
     SlugRelatedField,
 )
 
-from apps.animes.models import Anime, Review, ReviewComment, ReviewReport
+from apps.animes.models import Anime, Review, ReviewReaction, ReviewReport, ReviewVote
 from apps.animes.serializers.anime import AnimeListSerializer
 from apps.animes.serializers_mixins import UserProfileMixin
 
 User = get_user_model()
 
 MAX_REVIEW_LENGTH = getattr(settings, "MAX_REVIEW_LENGTH", 5000)
-MAX_COMMENT_LENGTH = getattr(settings, "MAX_COMMENT_LENGTH", 2000)
+
+REACTION_EMOJI_MAP = {
+    ReviewReaction.ReactionType.THUMBS_UP: "👍",
+    ReviewReaction.ReactionType.HEART: "❤️",
+    ReviewReaction.ReactionType.LAUGH: "😂",
+    ReviewReaction.ReactionType.SURPRISED: "😮",
+    ReviewReaction.ReactionType.SAD: "😢",
+}
 
 class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
     """Lightweight user serializer for reviews
@@ -47,8 +54,9 @@ class ReviewSerializer(ModelSerializer):
 
     is_completed = BooleanField(read_only=True, source="_is_completed")
     helpful_count = IntegerField(read_only=True, source="_helpful_count")
-    user_vote = SerializerMethodField()
-    comment_count = IntegerField(read_only=True, source="_comment_count")
+    dislike_count = IntegerField(read_only=True, source="_dislike_count")
+    user_votes = SerializerMethodField()
+    reactions = SerializerMethodField()
 
     class Meta:
         model = Review
@@ -66,8 +74,9 @@ class ReviewSerializer(ModelSerializer):
             "has_spoilers",
             "is_completed",
             "helpful_count",
-            "user_vote",
-            "comment_count",
+            "dislike_count",
+            "user_votes",
+            "reactions",
             "created_at",
             "updated_at",
         ]
@@ -79,73 +88,65 @@ class ReviewSerializer(ModelSerializer):
             return escape(value)
         return value
 
-    def get_user_vote(self, obj):
-        """Use the annotated _user_vote field to avoid N+1 queries.
-
-        Returns True (helpful), False (not helpful), or None (no vote).
-        _user_vote is a Subquery returning the is_helpful value directly,
-        so None means the user hasn't voted on this review.
-        """
-        if hasattr(obj, "_user_vote"):
-            return obj._user_vote
-
+    def get_user_votes(self, obj):
         request = self.context.get("request")
+        helpful_attr = getattr(obj, "_user_helpful_vote", None)
+        dislike_attr = getattr(obj, "_user_dislike_vote", None)
+
+        if helpful_attr is not None and dislike_attr is not None:
+            return {
+                "helpful": helpful_attr,
+                "dislike": dislike_attr,
+            }
+
         if request and request.user.is_authenticated:
-            vote = obj.votes.filter(user=request.user).first()
-            if vote:
-                return vote.is_helpful
-        return None
+            votes = set(
+                obj.votes.filter(user=request.user).values_list("vote_type", flat=True)
+            )
+            return {
+                "helpful": ReviewVote.VoteType.HELPFUL in votes,
+                "dislike": ReviewVote.VoteType.DISLIKE in votes,
+            }
 
+        return {
+            "helpful": False,
+            "dislike": False,
+        }
 
-class ReviewCommentSerializer(ModelSerializer):
-    """Serializer for review comments with soft delete support"""
-
-    user = ReviewUserSerializer(read_only=True)
-    text = CharField(required=True, allow_blank=False, max_length=MAX_COMMENT_LENGTH)
-    is_owner = SerializerMethodField()
-    can_delete = SerializerMethodField()
-
-    class Meta:
-        model = ReviewComment
-        fields = [
-            "id",
-            "user",
-            "text",
-            "is_deleted",
-            "is_owner",
-            "can_delete",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "user", "is_deleted", "created_at", "updated_at"]
-
-    def validate_text(self, value):
-        """Sanitize comment text to prevent XSS."""
-        if value:
-            return escape(value.strip())
-        return value
-
-    def get_is_owner(self, obj):
-        """Check if current user is the comment author"""
+    def get_reactions(self, obj):
         request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return obj.user == request.user
-        return False
+        request_user = getattr(request, "user", None)
+        has_all_active_annotations = all(
+            hasattr(obj, f"_reaction_active_{reaction_type}")
+            for reaction_type in ReviewReaction.ReactionType.values
+        )
+        fallback_active = set()
 
-    def get_can_delete(self, obj):
-        """Check if current user can delete this comment
+        if request_user and request_user.is_authenticated and not has_all_active_annotations:
+            fallback_active = set(
+                obj.reactions.filter(user=request_user).values_list("reaction_type", flat=True)
+            )
 
-        Users can delete their own comments, and review owners can delete
-        any comments on their reviews.
-        """
-        request = self.context.get("request")
-        if not request or not request.user.is_authenticated:
-            return False
+        reactions = []
+        for reaction_type in ReviewReaction.ReactionType.values:
+            count = getattr(obj, f"_reaction_count_{reaction_type}", None)
+            if count is None:
+                count = obj.reactions.filter(reaction_type=reaction_type).count()
 
-        if obj.user == request.user:
-            return True
+            active = getattr(obj, f"_reaction_active_{reaction_type}", None)
+            if active is None:
+                active = reaction_type in fallback_active
 
-        return obj.review.user == request.user
+            reactions.append(
+                {
+                    "type": reaction_type,
+                    "emoji": REACTION_EMOJI_MAP[reaction_type],
+                    "count": count,
+                    "active": active,
+                }
+            )
+
+        return reactions
 
 
 class ReviewReportCreateSerializer(Serializer):
@@ -153,7 +154,9 @@ class ReviewReportCreateSerializer(Serializer):
     description = CharField(required=False, allow_blank=True, max_length=500)
 
 
-class ReviewCommentsQuerySerializer(Serializer):
-    page = IntegerField(required=False, default=1, min_value=1)
-    page_size = IntegerField(required=False, default=10, min_value=1, max_value=100)
+class ReviewVoteActionSerializer(Serializer):
+    vote_type = ChoiceField(choices=ReviewVote.VoteType.choices)
 
+
+class ReviewReactionActionSerializer(Serializer):
+    reaction_type = ChoiceField(choices=ReviewReaction.ReactionType.choices)

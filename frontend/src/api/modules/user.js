@@ -34,14 +34,8 @@ export const reviewApi = {
     create: (data) => api.post('/reviews/', data),
     update: (id, data) => api.patch(`/reviews/${id}/`, data),
     delete: (id) => api.delete(`/reviews/${id}/`),
-    vote: (id, isHelpful = true) => api.post(`/reviews/${id}/vote/`, { is_helpful: isHelpful }),
-    getComments: (reviewId, page = 1, pageSize = 10) =>
-        api.get(`/reviews/${reviewId}/comments/`, { params: { page, page_size: pageSize } }),
-    addComment: (reviewId, text) => api.post(`/reviews/${reviewId}/add_comment/`, { text }),
-    updateComment: (reviewId, commentId, text) =>
-        api.patch(`/reviews/${reviewId}/comments/${commentId}/`, { text }),
-    deleteComment: (reviewId, commentId) =>
-        api.delete(`/reviews/${reviewId}/comments/${commentId}/delete/`),
+    vote: (id, voteType) => api.post(`/reviews/${id}/votes/`, { vote_type: voteType }),
+    react: (id, reactionType) => api.post(`/reviews/${id}/reactions/`, { reaction_type: reactionType }),
 };
 
 export const recommendationsApi = {

@@ -392,27 +392,3 @@ class TestRuntimePolicyControls(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_comments_can_be_disabled(self):
-        self._set_settings({"content": {"enableReviews": True, "allowComments": False}})
-
-        author = User.objects.create_user(
-            username="review_author",
-            email="review-author@example.com",
-            password="password123",
-        )
-        UserProfile.objects.update_or_create(user=author, defaults={"email_verified": True})
-        review = Review.objects.create(
-            user=author,
-            anime=self.anime,
-            rating=7,
-            text="Comment control test review.",
-        )
-
-        self.client.force_authenticate(user=self.regular_user)
-        response = self.client.post(
-            f"/api/v1/reviews/{review.id}/add_comment/",
-            {"text": "Comment should be blocked"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -36,7 +36,6 @@ DEFAULT_ADMIN_SETTINGS = {
     "content": {
         "enableReviews": True,
         "requireApproval": False,
-        "allowComments": True,
         "autoFetchMetadata": True,
         "maxUploadSize": 10,
         "allowedImageTypes": "jpg,jpeg,png,webp",
@@ -179,7 +178,3 @@ def username_length_limits() -> tuple[int, int]:
 
 def are_reviews_enabled() -> bool:
     return bool(get_admin_setting("content", "enableReviews", True))
-
-
-def are_review_comments_enabled() -> bool:
-    return bool(get_admin_setting("content", "allowComments", True))

@@ -28,7 +28,8 @@ from apps.animes.serializers.imports import (
     UserImportJobSerializer,
 )
 from apps.animes.serializers.reviews import (
-    ReviewCommentSerializer,
+    ReviewReactionActionSerializer,
+    ReviewVoteActionSerializer,
     ReviewReportCreateSerializer,
     ReviewSerializer,
     ReviewUserSerializer,

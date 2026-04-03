@@ -141,7 +141,7 @@ def update_points_on_vote_save(sender, instance, created, **kwargs):
     review_author = instance.review.user
     profile, _ = UserProfile.objects.get_or_create(user=review_author)
 
-    if instance.is_helpful:
+    if instance.vote_type == ReviewVote.VoteType.HELPFUL:
         profile.points = profile.points + 1
     else:
         profile.points = profile.points - 1
@@ -159,7 +159,7 @@ def update_points_on_vote_delete(sender, instance, **kwargs):
 
     profile, _ = UserProfile.objects.get_or_create(user=review_author)
 
-    if instance.is_helpful:
+    if instance.vote_type == ReviewVote.VoteType.HELPFUL:
         profile.points = profile.points - 1
     else:
         profile.points = profile.points + 1
@@ -179,8 +179,8 @@ def recalculate_user_points(user):
     result = ReviewVote.objects.filter(review__user=user).aggregate(
         total_points=Sum(
             Case(
-                When(is_helpful=True, then=1),
-                When(is_helpful=False, then=-1),
+                When(vote_type=ReviewVote.VoteType.HELPFUL, then=1),
+                When(vote_type=ReviewVote.VoteType.DISLIKE, then=-1),
                 default=0,
                 output_field=IntegerField(),
             )

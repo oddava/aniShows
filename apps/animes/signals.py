@@ -15,14 +15,13 @@ from apps.animes.tasks import (
     generate_recommendations,
     sync_watch_episodes_for_anime,
 )
-from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
 from apps.shared.public_cache import invalidate_public_cache_keys
 from apps.users.models import UserActivity, UserAnimeList
 from apps.users.services.cache import invalidate_user_caches
 from apps.users.services.stats_service import create_or_update_user_stats
 
-from .models import Anime, Review, ReviewComment, UserFavorite
+from .models import Anime, Review, UserFavorite
 
 User = get_user_model()
 
@@ -502,26 +501,3 @@ def handle_review_change(sender, instance, **kwargs):
 
         # Update stats immediately for real-time feedback
         update_user_stats_and_cache(instance.user)
-
-
-@receiver(post_save, sender=ReviewComment)
-def handle_review_comment_created(sender, instance, created, **kwargs):
-    """Send notification when a comment is created on a review."""
-    if not created:
-        return
-
-    # Don't notify if user commented on their own review
-    if instance.user == instance.review.user:
-        logger.debug(f"Skipping self-reply notification for user {instance.user.id}")
-        return
-
-    try:
-        NotificationService.create_review_reply_notification(
-            user=instance.review.user, review=instance.review, comment=instance
-        )
-        logger.info(
-            f"Created review reply notification for user {instance.review.user.id} "
-            f"from comment by {instance.user.id}"
-        )
-    except Exception as e:
-        logger.exception(f"Failed to create review reply notification: {e}")

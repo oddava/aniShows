@@ -36,8 +36,8 @@ class Command(BaseCommand):
             result = ReviewVote.objects.filter(review__user=profile.user).aggregate(
                 total_points=Sum(
                     Case(
-                        When(is_helpful=True, then=1),
-                        When(is_helpful=False, then=-1),
+                        When(vote_type=ReviewVote.VoteType.HELPFUL, then=1),
+                        When(vote_type=ReviewVote.VoteType.DISLIKE, then=-1),
                         default=0,
                         output_field=IntegerField(),
                     )

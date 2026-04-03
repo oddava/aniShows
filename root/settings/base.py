@@ -932,7 +932,7 @@ JAZZMIN_SETTINGS = {
         "animes.UserFavorite": "fas fa-heart",
         "animes.UserHistory": "fas fa-history",
         "animes.ReviewVote": "fas fa-thumbs-up",
-        "animes.ReviewComment": "fas fa-comment",
+        "animes.ReviewReaction": "fas fa-face-smile",
         "animes.UserRecommendation": "fas fa-magic",
         # Core app
         "core": "fas fa-cog",
