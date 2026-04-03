@@ -81,6 +81,7 @@ class AniListService:
         season seasonYear
         source
         genres
+        tags { name rank isGeneralSpoiler isMediaSpoiler }
         studios(isMain: true) { nodes { name } }
         description
         coverImage { large extraLarge }
@@ -464,6 +465,37 @@ class AniListService:
             and (status := entry.get("status"))
             and (amount := entry.get("amount")) is not None
         }
+
+    @staticmethod
+    def _normalized_tags(item: dict) -> list[str]:
+        raw_tags = item.get("tags") or []
+        if not isinstance(raw_tags, list):
+            return []
+
+        normalized_tags: list[str] = []
+        seen: set[str] = set()
+
+        for entry in raw_tags:
+            if isinstance(entry, dict):
+                if entry.get("isMediaSpoiler") or entry.get("isGeneralSpoiler"):
+                    continue
+                name = entry.get("name")
+            elif isinstance(entry, str):
+                name = entry
+            else:
+                continue
+
+            if not isinstance(name, str):
+                continue
+
+            clean_name = " ".join(name.split()).strip().lower()
+            if not clean_name or clean_name in seen:
+                continue
+
+            seen.add(clean_name)
+            normalized_tags.append(clean_name)
+
+        return normalized_tags
 
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
@@ -949,6 +981,8 @@ class AniListService:
             description = re.sub(r"<[^>]+>", "", description)
             description = description.strip()
 
+        tags = self._normalized_tags(item)
+
         return {
             "title": title,
             "title_jp": title_native or "",
@@ -983,6 +1017,7 @@ class AniListService:
             ),
             "status_distribution": status_distribution,
             "external_links": item.get("externalLinks", []),
+            "tags": tags,
             "relations": [
                 {
                     "id": edge["node"]["id"],

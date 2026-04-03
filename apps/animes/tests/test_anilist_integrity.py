@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from asgiref.sync import async_to_sync
+from contextlib import asynccontextmanager
 from django.test import TestCase
 
 from apps.animes.models import Anime
@@ -153,6 +154,77 @@ class AniListIntegrityTests(TestCase):
                 "endings": None,
             },
         )
+
+    def test_prepare_anime_data_includes_normalized_non_spoiler_tags(self):
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
+        self.addCleanup(lambda: async_to_sync(service.close)())
+
+        data = service._prepare_anime_data(
+            {
+                "format": "TV",
+                "status": "FINISHED",
+                "episodes": 12,
+                "duration": 24,
+                "tags": [
+                    {"name": "Time Loop", "isMediaSpoiler": False, "isGeneralSpoiler": False},
+                    {"name": "Female Protagonist", "isMediaSpoiler": False, "isGeneralSpoiler": False},
+                    {"name": "Time Loop", "isMediaSpoiler": False, "isGeneralSpoiler": False},
+                    {"name": "Final Battle", "isMediaSpoiler": True, "isGeneralSpoiler": False},
+                ],
+            },
+            "Tag Test",
+            "",
+            "tag-test",
+        )
+
+        self.assertEqual(data["tags"], ["time loop", "female protagonist"])
+
+    def test_metadata_backfill_can_target_anime_with_missing_tags_only(self):
+        missing_tags = Anime.objects.create(
+            title="Missing Tags",
+            slug="missing-tags",
+            synopsis="Complete synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            anilist_id=1234,
+            tags=[],
+        )
+        Anime.objects.create(
+            title="Has Tags",
+            slug="has-tags",
+            synopsis="Complete synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            anilist_id=5678,
+            tags=["magic"],
+        )
+
+        service = SimpleNamespace(
+            call_cache=None,
+            update_anime_manual=AsyncMock(return_value=True),
+        )
+        task = MetadataEnrichmentTask()
+
+        @asynccontextmanager
+        async def fake_service_context(**_kwargs):
+            yield service
+
+        task.service_context = fake_service_context
+        task._resolve_media_for_anime = AsyncMock(return_value={"id": 1234})
+
+        result = async_to_sync(task._enrich_batch)(
+            batch_size=10,
+            filters=None,
+            priority_field="-popularity_rank",
+            anime_ids=None,
+            missing_tags_only=True,
+        )
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["updated"], 1)
+        self.assertTrue(result["missing_tags_only"])
+        task._resolve_media_for_anime.assert_awaited_once_with(service, missing_tags)
+        service.update_anime_manual.assert_awaited_once()
 
     @patch("apps.animes.services.anilist.logger.warning")
     @patch("apps.animes.services.anilist.logger.info")

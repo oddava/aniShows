@@ -92,6 +92,7 @@ class AniListScraper:
                         endDate { year month day }
                         season seasonYear
                         genres
+                        tags { name isGeneralSpoiler isMediaSpoiler }
                         studios(isMain: true) { nodes { name } }
                         description
                         coverImage { large extraLarge }
@@ -114,6 +115,7 @@ class AniListScraper:
                         endDate { year month day }
                         season seasonYear
                         genres
+                        tags { name isGeneralSpoiler isMediaSpoiler }
                         studios(isMain: true) { nodes { name } }
                         description
                         coverImage { large extraLarge }
@@ -350,6 +352,37 @@ class Command(BaseCommand):
                 anime.studio = studio
                 anime.save()
 
+    @staticmethod
+    def _normalized_tags(item):
+        raw_tags = item.get("tags") or []
+        if not isinstance(raw_tags, list):
+            return []
+
+        normalized_tags = []
+        seen = set()
+
+        for entry in raw_tags:
+            if isinstance(entry, dict):
+                if entry.get("isMediaSpoiler") or entry.get("isGeneralSpoiler"):
+                    continue
+                name = entry.get("name")
+            elif isinstance(entry, str):
+                name = entry
+            else:
+                continue
+
+            if not isinstance(name, str):
+                continue
+
+            clean_name = " ".join(name.split()).strip().lower()
+            if not clean_name or clean_name in seen:
+                continue
+
+            seen.add(clean_name)
+            normalized_tags.append(clean_name)
+
+        return normalized_tags
+
     def _prepare_anime_data(self, item, title, title_native, slug):
         format_map = {
             "TV": AnimeType.tv,
@@ -390,6 +423,7 @@ class Command(BaseCommand):
             "release_date": start_date,
             "end_date": end_date,
             "rating": rating,
+            "tags": self._normalized_tags(item),
             "meta_description": (description[:157] + "...")
             if description and len(description) > 160
             else description,

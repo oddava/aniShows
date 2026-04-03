@@ -68,6 +68,11 @@ class Command(BaseCommand):
             help="Batch size for backfill mode",
         )
         parser.add_argument(
+            "--missing-tags-only",
+            action="store_true",
+            help="Backfill only anime rows whose tags array is currently empty",
+        )
+        parser.add_argument(
             "--status-filter",
             action="append",
             choices=["Airing", "Upcoming", "Finished", "Unknown"],
@@ -272,16 +277,24 @@ class Command(BaseCommand):
         mode = options["mode"]
         batch_size = options["batch_size"]
         anime_id = options.get("anime_id")
+        missing_tags_only = options["missing_tags_only"]
 
         if mode == "single" and not anime_id:
             raise CommandError("--anime-id required for single mode")
 
-        self.stdout.write(f"Enriching metadata: {mode}")
+        self.stdout.write(
+            f"Enriching metadata: {mode}"
+            f"{' (missing tags only)' if missing_tags_only and mode == 'backfill' else ''}"
+        )
 
         if mode == "single":
             task = enrich_metadata.s(anime_id=anime_id, mode="single")
         else:
-            task = enrich_metadata.s(mode="backfill", batch_size=batch_size)
+            task = enrich_metadata.s(
+                mode="backfill",
+                batch_size=batch_size,
+                missing_tags_only=missing_tags_only,
+            )
 
         self._dispatch_task(task, run_async, queue)
 

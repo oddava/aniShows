@@ -60,6 +60,7 @@ class MetadataEnrichmentTask(BaseTask):
         filters: dict | None = None,
         priority_field: str = "-popularity_rank",
         anime_ids: list[int] | None = None,
+        missing_tags_only: bool = False,
     ):
         """Run metadata enrichment.
 
@@ -79,7 +80,13 @@ class MetadataEnrichmentTask(BaseTask):
             return run_async_in_task(self._enrich_single(anime_id))
         elif mode == "backfill":
             return run_async_in_task(
-                self._enrich_batch(batch_size, filters, priority_field, anime_ids)
+                self._enrich_batch(
+                    batch_size,
+                    filters,
+                    priority_field,
+                    anime_ids,
+                    missing_tags_only,
+                )
             )
         else:
             raise ValueError(f"Invalid mode: {mode}. Use 'single' or 'backfill'")
@@ -143,19 +150,29 @@ class MetadataEnrichmentTask(BaseTask):
         filters: dict | None,
         priority_field: str,
         anime_ids: list[int] | None,
+        missing_tags_only: bool,
     ) -> dict:
         """Batch enrich metadata for multiple anime."""
         async with self.service_context() as service:
             # Build queryset
-            if anime_ids:
-                # Explicit IDs are passed by workflows like offline import; process all of them.
-                queryset = Anime.objects.filter(id__in=anime_ids)
-            else:
-                queryset = Anime.objects.filter(
+            missing_metadata_query = (
+                Q(tags=[])
+                if missing_tags_only
+                else (
                     Q(characters__isnull=True)
                     | Q(staff__isnull=True)
                     | Q(synopsis=PLACEHOLDER_SYNOPSIS)
-                ).distinct()
+                    | Q(tags=[])
+                )
+            )
+
+            if anime_ids:
+                # Explicit IDs are passed by workflows like offline import; process all of them.
+                queryset = Anime.objects.filter(id__in=anime_ids)
+                if missing_tags_only:
+                    queryset = queryset.filter(tags=[])
+            else:
+                queryset = Anime.objects.filter(missing_metadata_query).distinct()
 
             # Apply custom filters
             if filters:
@@ -175,6 +192,7 @@ class MetadataEnrichmentTask(BaseTask):
                     "total": 0,
                     "updated": 0,
                     "errors": 0,
+                    "missing_tags_only": missing_tags_only,
                 }
 
             logger.info(f"Found {total} anime to enrich (batch size: {batch_size})")
@@ -229,6 +247,7 @@ class MetadataEnrichmentTask(BaseTask):
                 "no_results": no_results_count,
                 "skipped_conflicts": skipped_conflicts_count,
                 "errors": error_count,
+                "missing_tags_only": missing_tags_only,
             }
 
 @observed_shared_task(
@@ -245,6 +264,7 @@ def enrich_metadata(
     filters: dict | None = None,
     priority_field: str = "-popularity_rank",
     anime_ids: list[int] | None = None,
+    missing_tags_only: bool = False,
 ):
     """Enrich anime metadata from AniList.
 
@@ -258,4 +278,12 @@ def enrich_metadata(
     Returns:
         Dict with enrichment results
     """
-    return self.execute(anime_id, mode, batch_size, filters, priority_field, anime_ids)
+    return self.execute(
+        anime_id,
+        mode,
+        batch_size,
+        filters,
+        priority_field,
+        anime_ids,
+        missing_tags_only,
+    )
