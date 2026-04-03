@@ -153,3 +153,12 @@ class AniListIntegrityTests(TestCase):
                 "endings": None,
             },
         )
+
+    @patch("apps.animes.services.anilist.logger.warning")
+    @patch("apps.animes.services.anilist.logger.info")
+    def test_untrusted_image_domains_log_at_info(self, mock_info, mock_warning):
+        resolved = AniListService.resolve_fetchable_image_url("https://media.kitsu.app/poster.jpg")
+
+        self.assertEqual(resolved, "")
+        mock_info.assert_called_once()
+        mock_warning.assert_not_called()

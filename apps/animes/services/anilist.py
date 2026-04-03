@@ -312,7 +312,10 @@ class AniListService:
                             await asyncio.sleep(wait_time)
                             continue
 
-                        logger.warning(
+                        log_method = (
+                            logger.info if e.response.status_code == 404 else logger.warning
+                        )
+                        log_method(
                             "AniList non-retryable client error %s (attempt %s): %s | body=%s",
                             e.response.status_code,
                             attempt + 1,
@@ -434,7 +437,7 @@ class AniListService:
         if cls._is_trusted_image_domain(domain):
             return normalized
 
-        logger.warning(f"Blocked untrusted image domain before fetch queue: {domain}")
+        logger.info(f"Blocked untrusted image domain before fetch queue: {domain}")
         return ""
 
     @staticmethod
@@ -678,7 +681,7 @@ class AniListService:
         try:
             item = await self._resolve_manual_update_item(anime, item)
             if not item:
-                logger.warning(
+                logger.info(
                     f"Skipped manual update for Anime ID {anime.id}: could not resolve matching AniList media"
                 )
                 return False
@@ -720,7 +723,7 @@ class AniListService:
 
         # Strongest identity: AniList ID
         if anime.anilist_id and incoming_anilist_id and anime.anilist_id != incoming_anilist_id:
-            logger.warning(
+            logger.info(
                 f"AniList mismatch for Anime ID {anime.id}: expected {anime.anilist_id}, got {incoming_anilist_id}. Re-fetching canonical media."
             )
             canonical_item = await self.get_anime_by_id(anime.anilist_id)
@@ -733,7 +736,7 @@ class AniListService:
             and incoming_mal_id
             and anime.mal_id != incoming_mal_id
         ):
-            logger.warning(
+            logger.info(
                 f"MAL mismatch for Anime ID {anime.id}: expected {anime.mal_id}, got {incoming_mal_id}. Re-fetching canonical media."
             )
             canonical_item = await self.search_by_mal_id(anime.mal_id)
@@ -748,7 +751,7 @@ class AniListService:
                 .first()
             )()
             if existing:
-                logger.warning(
+                logger.info(
                     f"Skipped manual update for Anime ID {anime.id}: incoming AniList ID {incoming_anilist_id} belongs to Anime ID {existing['id']} ({existing['title']})."
                 )
                 return None
@@ -761,7 +764,7 @@ class AniListService:
                 .first()
             )()
             if existing:
-                logger.warning(
+                logger.info(
                     f"Skipped manual update for Anime ID {anime.id}: incoming MAL ID {incoming_mal_id} belongs to Anime ID {existing['id']} ({existing['title']})."
                 )
                 return None
@@ -859,7 +862,7 @@ class AniListService:
                 id=anime.id
             ).exists()
             if conflict_exists:
-                logger.warning(
+                logger.info(
                     f"Skipping conflicting {unique_field} '{value}' while updating Anime ID {anime.id}"
                 )
                 anime_data[unique_field] = original_values.get(unique_field)

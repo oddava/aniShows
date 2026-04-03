@@ -52,6 +52,7 @@ NON_RETRYABLE_QUARANTINE_THRESHOLD = 3
 BLOCKED_QUARANTINE_THRESHOLD = 2
 TRANSIENT_QUARANTINE_THRESHOLD = 12
 IN_PROGRESS_LEASE_SECONDS = 10 * 60
+STATE_BULK_CREATE_BATCH_SIZE = 500
 
 
 @dataclass(slots=True)
@@ -94,7 +95,12 @@ class OfflineSyncService:
             if anime_id not in existing
         ]
         if to_create:
-            OfflineAnimeSyncState.objects.bulk_create(to_create, ignore_conflicts=True)
+            # Keep INSERT statements bounded during full offline-catalog reconciles.
+            OfflineAnimeSyncState.objects.bulk_create(
+                to_create,
+                batch_size=STATE_BULK_CREATE_BATCH_SIZE,
+                ignore_conflicts=True,
+            )
 
         updated = 0
         if reset_pipeline:
@@ -607,15 +613,32 @@ class OfflineSyncService:
         request_fingerprint = (
             f"a:{anime.anilist_id or '-'}|m:{anime.mal_id or '-'}|t:{(anime.title or '')[:40].casefold()}"
         )
-        logger.warning(
-            "Offline sync stage failure",
+        truncated_message = (message or "")[:500]
+        if quarantined:
+            log_method = logger.warning
+            event = "Offline sync stage quarantined"
+        elif reason_code in TRANSIENT_REASON_CODES:
+            log_method = logger.warning
+            event = "Offline sync stage retry scheduled"
+        else:
+            log_method = logger.info
+            event = "Offline sync stage blocked"
+
+        log_method(
+            "%s anime_id=%s stage=%s reason=%s quarantined=%s message=%s",
+            event,
+            anime.id,
+            stage,
+            reason_code,
+            quarantined,
+            truncated_message,
             extra={
                 "anime_id": anime.id,
                 "stage": stage,
                 "reason_code": reason_code,
                 "quarantined": quarantined,
                 "request_fingerprint": request_fingerprint,
-                "error_message": (message or "")[:500],
+                "error_message": truncated_message,
             },
         )
 

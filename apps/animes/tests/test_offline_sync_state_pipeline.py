@@ -6,7 +6,11 @@ from django.utils import timezone
 
 from apps.animes.models import Anime, OfflineAnimeSyncState
 from apps.animes.services.anilist import AniListService
-from apps.animes.services.offline_sync import OfflineSyncService, StageResult
+from apps.animes.services.offline_sync import (
+    STATE_BULK_CREATE_BATCH_SIZE,
+    OfflineSyncService,
+    StageResult,
+)
 
 
 class OfflineSyncStatePipelineTests(TestCase):
@@ -188,3 +192,47 @@ class OfflineSyncStatePipelineTests(TestCase):
         result = OfflineSyncService().reconcile_due(batch_size=1)
         self.assertEqual(result["claimed"], 0)
         self.assertEqual(result["processed"], 0)
+
+    @patch("apps.animes.services.offline_sync.OfflineAnimeSyncState.objects.bulk_create")
+    def test_ensure_states_uses_batched_bulk_create(self, mock_bulk_create):
+        anime_ids = [self._anime(f"Batch {index}", anilist_id=1000 + index).id for index in range(3)]
+
+        summary = OfflineSyncService().ensure_states_for_anime_ids(anime_ids)
+
+        self.assertEqual(summary, {"created": 3, "updated": 0})
+        mock_bulk_create.assert_called_once()
+        _, kwargs = mock_bulk_create.call_args
+        self.assertEqual(kwargs["batch_size"], STATE_BULK_CREATE_BATCH_SIZE)
+        self.assertTrue(kwargs["ignore_conflicts"])
+
+    @patch("apps.animes.services.offline_sync.logger.warning")
+    @patch("apps.animes.services.offline_sync.logger.info")
+    def test_blocked_stage_failure_logs_at_info(self, mock_info, mock_warning):
+        anime = self._anime("Blocked Log", anilist_id=404)
+
+        OfflineSyncService()._log_stage_failure(
+            anime=anime,
+            stage="metadata",
+            reason_code="not_found",
+            message="AniList media not found.",
+            quarantined=False,
+        )
+
+        mock_info.assert_called_once()
+        mock_warning.assert_not_called()
+
+    @patch("apps.animes.services.offline_sync.logger.warning")
+    @patch("apps.animes.services.offline_sync.logger.info")
+    def test_transient_stage_failure_logs_at_warning(self, mock_info, mock_warning):
+        anime = self._anime("Transient Log", anilist_id=505)
+
+        OfflineSyncService()._log_stage_failure(
+            anime=anime,
+            stage="metadata",
+            reason_code="transport_error",
+            message="timeout",
+            quarantined=False,
+        )
+
+        mock_warning.assert_called_once()
+        mock_info.assert_not_called()
