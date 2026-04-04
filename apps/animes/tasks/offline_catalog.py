@@ -1,6 +1,10 @@
-from django.conf import settings
+import uuid
 
-from apps.animes.models import Anime
+from django.conf import settings
+from django.core.cache import cache
+from django.db.models import Q
+
+from apps.animes.models import Anime, OfflineAnimeSyncState
 from apps.animes.services.offline_catalog import (
     DEFAULT_ASSET_NAME,
     OfflineCatalogImportService,
@@ -55,10 +59,10 @@ class OfflineCatalogImportTask(BaseTask):
             reconcile_offline_catalog_sync.delay(
                 anime_ids=[],
                 strict=False,
-                max_rounds=24,
+                max_rounds=settings.OFFLINE_RECONCILE_MAX_ROUNDS,
                 round_number=1,
-                round_interval_minutes=15,
-                batch_size=500,
+                round_interval_minutes=settings.OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
+                batch_size=settings.OFFLINE_RECONCILE_BATCH_SIZE,
                 chunk_size=enrichment_chunk_size,
                 require_themes=True,
             )
@@ -78,141 +82,176 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
 
     enable_locking = True
     lock_timeout = 7200
+    workflow_lock_key = "offline-sync:reconcile:global-workflow"
 
     def execute(
         self,
         anime_ids: list[int] | None = None,
-        batch_size: int = 500,
-        chunk_size: int = 100,
+        batch_size: int | None = None,
+        chunk_size: int | None = None,
         require_themes: bool = True,
         strict: bool = False,
         reset_pipeline: bool = False,
-        max_rounds: int = 24,
+        max_rounds: int | None = None,
         round_number: int = 1,
-        round_interval_minutes: int = 15,
+        round_interval_minutes: int | None = None,
+        workflow_key: str | None = None,
     ):
         self.metrics.start()
+        batch_size = max(1, int(batch_size or settings.OFFLINE_RECONCILE_BATCH_SIZE))
+        chunk_size = max(1, int(chunk_size or settings.OFFLINE_RECONCILE_CHUNK_SIZE))
+        max_rounds = max(1, int(max_rounds or settings.OFFLINE_RECONCILE_MAX_ROUNDS))
+        round_interval_minutes = max(
+            1,
+            int(round_interval_minutes or settings.OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES),
+        )
+        global_scope = not bool(anime_ids)
+        workflow_key = self._resolve_workflow_key(global_scope, workflow_key)
+        if global_scope and not self._acquire_workflow_lease(workflow_key):
+            return self._skipped_overlap_result(
+                max_rounds=max_rounds,
+                strict=strict,
+                batch_size=batch_size,
+                chunk_size=chunk_size,
+                round_number=round_number,
+                workflow_key=workflow_key,
+            )
+
         scoped_ids = self._resolve_scope_ids(anime_ids)
-        if scoped_ids == []:
+        should_schedule_next = False
+        next_round_task_id = None
+
+        try:
+            if scoped_ids == []:
+                return {
+                    "round_number": round_number,
+                    "max_rounds": max_rounds,
+                    "strict": strict,
+                    "batch_size": batch_size,
+                    "chunk_size": chunk_size,
+                    "scoped_anime_count": 0,
+                    "reset_pipeline": reset_pipeline,
+                    "pending": 0,
+                    "complete": 0,
+                    "processed": 0,
+                    "claimed": 0,
+                    "blocked_without_ids": 0,
+                    "waiting_for_mal_id": 0,
+                    "metadata_candidates": 0,
+                    "franchise_candidates": 0,
+                    "theme_candidates": 0,
+                    "metadata_jobs": 0,
+                    "franchise_jobs": 0,
+                    "theme_jobs": 0,
+                    "metadata_task_ids": [],
+                    "franchise_task_ids": [],
+                    "theme_task_ids": [],
+                    "stage_counts": {},
+                    "reason_counts": {},
+                    "transient_backlog": 0,
+                    "quarantined_count": 0,
+                    "top_quarantine_reasons": [],
+                    "next_round_scheduled": False,
+                    "next_round_task_id": None,
+                    "rounds_exhausted": False,
+                    "skipped_due_to_overlap": False,
+                    "workflow_key": workflow_key,
+                }
+            service = OfflineSyncService()
+            if scoped_ids:
+                service.ensure_states_for_anime_ids(scoped_ids, reset_pipeline=reset_pipeline)
+
+            reconcile_result = service.reconcile_due(
+                batch_size=max(1, int(batch_size)),
+                anime_ids=scoped_ids,
+            )
+
+            stage_counts = reconcile_result.get("stage_counts", {})
+            reason_counts = reconcile_result.get("reason_counts", {})
+            metadata_counts = stage_counts.get("metadata", {})
+            franchise_counts = stage_counts.get("franchise", {})
+            themes_counts = stage_counts.get("themes", {})
+            pending = reconcile_result.get("pending", 0)
+            complete = reconcile_result.get("complete", 0)
+            blocked_without_ids = sum(
+                reason_counts.get(code, 0)
+                for code in ("missing_ids", "invalid_ids", "invalid_variable", "not_found")
+            )
+            dispatched_jobs = reconcile_result.get("processed", 0)
+            backlog_remaining = pending > 0 or dispatched_jobs > 0
+            should_schedule_next = round_number < max_rounds and backlog_remaining
+
+            if should_schedule_next:
+                next_result = reconcile_offline_catalog_sync.apply_async(
+                    kwargs={
+                        "anime_ids": anime_ids or [],
+                        "batch_size": batch_size,
+                        "chunk_size": chunk_size,
+                        "require_themes": require_themes,
+                        "strict": strict,
+                        "reset_pipeline": False,
+                        "max_rounds": max_rounds,
+                        "round_number": round_number + 1,
+                        "round_interval_minutes": round_interval_minutes,
+                        "workflow_key": workflow_key,
+                    },
+                    countdown=max(60, int(round_interval_minutes) * 60),
+                )
+                next_round_task_id = getattr(next_result, "id", None)
+
+            self.metrics.record_records(reconcile_result.get("processed", 0))
             return {
                 "round_number": round_number,
                 "max_rounds": max_rounds,
                 "strict": strict,
                 "batch_size": batch_size,
                 "chunk_size": chunk_size,
-                "scoped_anime_count": 0,
+                "scoped_anime_count": len(scoped_ids or []),
                 "reset_pipeline": reset_pipeline,
-                "pending": 0,
-                "complete": 0,
-                "processed": 0,
-                "claimed": 0,
-                "blocked_without_ids": 0,
+                "pending": pending,
+                "complete": complete,
+                "processed": reconcile_result.get("processed", 0),
+                "claimed": reconcile_result.get("claimed", 0),
+                "blocked_without_ids": blocked_without_ids,
                 "waiting_for_mal_id": 0,
-                "metadata_candidates": 0,
-                "franchise_candidates": 0,
-                "theme_candidates": 0,
+                "metadata_candidates": metadata_counts.get("synced", 0)
+                + metadata_counts.get("transient_error", 0)
+                + metadata_counts.get("blocked_identity", 0)
+                + metadata_counts.get("blocked_no_ids", 0)
+                + metadata_counts.get("quarantined", 0),
+                "franchise_candidates": franchise_counts.get("synced", 0)
+                + franchise_counts.get("transient_error", 0)
+                + franchise_counts.get("blocked_identity", 0)
+                + franchise_counts.get("blocked_no_ids", 0)
+                + franchise_counts.get("quarantined", 0),
+                "theme_candidates": themes_counts.get("synced", 0)
+                + themes_counts.get("transient_error", 0)
+                + themes_counts.get("blocked_identity", 0)
+                + themes_counts.get("blocked_no_ids", 0)
+                + themes_counts.get("quarantined", 0),
                 "metadata_jobs": 0,
                 "franchise_jobs": 0,
                 "theme_jobs": 0,
                 "metadata_task_ids": [],
                 "franchise_task_ids": [],
                 "theme_task_ids": [],
-                "stage_counts": {},
-                "reason_counts": {},
-                "transient_backlog": 0,
-                "quarantined_count": 0,
-                "top_quarantine_reasons": [],
-                "next_round_scheduled": False,
-                "next_round_task_id": None,
-                "rounds_exhausted": False,
+                "stage_counts": stage_counts,
+                "reason_counts": reason_counts,
+                "transient_backlog": reconcile_result.get("transient_backlog", 0),
+                "quarantined_count": reconcile_result.get("quarantined_count", 0),
+                "top_quarantine_reasons": reconcile_result.get("top_quarantine_reasons", []),
+                "next_round_scheduled": bool(next_round_task_id),
+                "next_round_task_id": next_round_task_id,
+                "rounds_exhausted": round_number >= max_rounds and backlog_remaining,
+                "skipped_due_to_overlap": False,
+                "workflow_key": workflow_key,
             }
-        service = OfflineSyncService()
-        if scoped_ids:
-            service.ensure_states_for_anime_ids(scoped_ids, reset_pipeline=reset_pipeline)
-
-        reconcile_result = service.reconcile_due(
-            batch_size=max(1, int(batch_size)),
-            anime_ids=scoped_ids,
-        )
-
-        stage_counts = reconcile_result.get("stage_counts", {})
-        reason_counts = reconcile_result.get("reason_counts", {})
-        metadata_counts = stage_counts.get("metadata", {})
-        franchise_counts = stage_counts.get("franchise", {})
-        themes_counts = stage_counts.get("themes", {})
-        pending = reconcile_result.get("pending", 0)
-        complete = reconcile_result.get("complete", 0)
-        blocked_without_ids = sum(
-            reason_counts.get(code, 0)
-            for code in ("missing_ids", "invalid_ids", "invalid_variable", "not_found")
-        )
-        dispatched_jobs = reconcile_result.get("processed", 0)
-        backlog_remaining = pending > 0 or dispatched_jobs > 0
-        should_schedule_next = round_number < max_rounds and backlog_remaining
-
-        next_round_task_id = None
-        if should_schedule_next:
-            next_result = reconcile_offline_catalog_sync.apply_async(
-                kwargs={
-                    "anime_ids": anime_ids or [],
-                    "batch_size": batch_size,
-                    "chunk_size": chunk_size,
-                    "require_themes": require_themes,
-                    "strict": strict,
-                    "reset_pipeline": False,
-                    "max_rounds": max_rounds,
-                    "round_number": round_number + 1,
-                    "round_interval_minutes": round_interval_minutes,
-                },
-                countdown=max(60, int(round_interval_minutes) * 60),
-            )
-            next_round_task_id = getattr(next_result, "id", None)
-
-        self.metrics.record_records(reconcile_result.get("processed", 0))
-        return {
-            "round_number": round_number,
-            "max_rounds": max_rounds,
-            "strict": strict,
-            "batch_size": batch_size,
-            "chunk_size": chunk_size,
-            "scoped_anime_count": len(scoped_ids or []),
-            "reset_pipeline": reset_pipeline,
-            "pending": pending,
-            "complete": complete,
-            "processed": reconcile_result.get("processed", 0),
-            "claimed": reconcile_result.get("claimed", 0),
-            "blocked_without_ids": blocked_without_ids,
-            "waiting_for_mal_id": 0,
-            "metadata_candidates": metadata_counts.get("synced", 0)
-            + metadata_counts.get("transient_error", 0)
-            + metadata_counts.get("blocked_identity", 0)
-            + metadata_counts.get("blocked_no_ids", 0)
-            + metadata_counts.get("quarantined", 0),
-            "franchise_candidates": franchise_counts.get("synced", 0)
-            + franchise_counts.get("transient_error", 0)
-            + franchise_counts.get("blocked_identity", 0)
-            + franchise_counts.get("blocked_no_ids", 0)
-            + franchise_counts.get("quarantined", 0),
-            "theme_candidates": themes_counts.get("synced", 0)
-            + themes_counts.get("transient_error", 0)
-            + themes_counts.get("blocked_identity", 0)
-            + themes_counts.get("blocked_no_ids", 0)
-            + themes_counts.get("quarantined", 0),
-            "metadata_jobs": 0,
-            "franchise_jobs": 0,
-            "theme_jobs": 0,
-            "metadata_task_ids": [],
-            "franchise_task_ids": [],
-            "theme_task_ids": [],
-            "stage_counts": stage_counts,
-            "reason_counts": reason_counts,
-            "transient_backlog": reconcile_result.get("transient_backlog", 0),
-            "quarantined_count": reconcile_result.get("quarantined_count", 0),
-            "top_quarantine_reasons": reconcile_result.get("top_quarantine_reasons", []),
-            "next_round_scheduled": bool(next_round_task_id),
-            "next_round_task_id": next_round_task_id,
-            "rounds_exhausted": round_number >= max_rounds and backlog_remaining,
-        }
+        finally:
+            if global_scope and workflow_key:
+                if should_schedule_next:
+                    self._refresh_workflow_lease(workflow_key)
+                else:
+                    self._release_workflow_lease(workflow_key)
 
     def _resolve_scope_ids(self, anime_ids: list[int] | None) -> list[int] | None:
         scoped_ids = sorted({int(anime_id) for anime_id in (anime_ids or []) if anime_id})
@@ -220,8 +259,89 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
             return scoped_ids
 
         return list(
-            Anime.objects.filter(offline_db_last_seen_at__isnull=False).values_list("id", flat=True)
+            Anime.objects.filter(offline_db_last_seen_at__isnull=False)
+            .filter(
+                Q(offline_sync_state__isnull=True)
+                | (
+                    Q(offline_sync_state__quarantined=False)
+                    & ~Q(
+                        offline_sync_state__metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                        offline_sync_state__franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                        offline_sync_state__themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                    )
+                )
+            )
+            .values_list("id", flat=True)
         )
+
+    def _resolve_workflow_key(self, global_scope: bool, workflow_key: str | None) -> str | None:
+        if not global_scope:
+            return None
+        # Follow-up rounds forward this key, so a fresh UUID is sufficient for
+        # the first invocation and avoids touching Celery's lazy request object.
+        return workflow_key or uuid.uuid4().hex
+
+    def _workflow_lock_timeout(self) -> int:
+        return max(getattr(settings, "OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS", 7200), 60)
+
+    def _acquire_workflow_lease(self, workflow_key: str | None) -> bool:
+        existing = cache.get(self.workflow_lock_key)
+        if existing and existing != workflow_key:
+            return False
+        cache.set(self.workflow_lock_key, workflow_key, timeout=self._workflow_lock_timeout())
+        return True
+
+    def _refresh_workflow_lease(self, workflow_key: str | None) -> None:
+        cache.set(self.workflow_lock_key, workflow_key, timeout=self._workflow_lock_timeout())
+
+    def _release_workflow_lease(self, workflow_key: str | None) -> None:
+        if cache.get(self.workflow_lock_key) == workflow_key:
+            cache.delete(self.workflow_lock_key)
+
+    def _skipped_overlap_result(
+        self,
+        *,
+        max_rounds: int,
+        strict: bool,
+        batch_size: int,
+        chunk_size: int,
+        round_number: int,
+        workflow_key: str | None,
+    ) -> dict:
+        return {
+            "round_number": round_number,
+            "max_rounds": max_rounds,
+            "strict": strict,
+            "batch_size": batch_size,
+            "chunk_size": chunk_size,
+            "scoped_anime_count": 0,
+            "reset_pipeline": False,
+            "pending": 0,
+            "complete": 0,
+            "processed": 0,
+            "claimed": 0,
+            "blocked_without_ids": 0,
+            "waiting_for_mal_id": 0,
+            "metadata_candidates": 0,
+            "franchise_candidates": 0,
+            "theme_candidates": 0,
+            "metadata_jobs": 0,
+            "franchise_jobs": 0,
+            "theme_jobs": 0,
+            "metadata_task_ids": [],
+            "franchise_task_ids": [],
+            "theme_task_ids": [],
+            "stage_counts": {},
+            "reason_counts": {},
+            "transient_backlog": 0,
+            "quarantined_count": 0,
+            "top_quarantine_reasons": [],
+            "next_round_scheduled": False,
+            "next_round_task_id": None,
+            "rounds_exhausted": False,
+            "skipped_due_to_overlap": True,
+            "workflow_key": workflow_key,
+        }
 
 
 @observed_shared_task(
@@ -266,14 +386,15 @@ def import_offline_catalog(
 def reconcile_offline_catalog_sync(
     self,
     anime_ids: list[int] | None = None,
-    batch_size: int = 500,
-    chunk_size: int = 100,
+    batch_size: int | None = None,
+    chunk_size: int | None = None,
     require_themes: bool = True,
     strict: bool = False,
     reset_pipeline: bool = False,
-    max_rounds: int = 24,
+    max_rounds: int | None = None,
     round_number: int = 1,
-    round_interval_minutes: int = 15,
+    round_interval_minutes: int | None = None,
+    workflow_key: str | None = None,
 ):
     return self.execute(
         anime_ids=anime_ids,
@@ -285,4 +406,5 @@ def reconcile_offline_catalog_sync(
         max_rounds=max_rounds,
         round_number=round_number,
         round_interval_minutes=round_interval_minutes,
+        workflow_key=workflow_key,
     )

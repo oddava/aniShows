@@ -6,6 +6,7 @@ from datetime import timedelta
 
 import httpx
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -46,9 +47,10 @@ NON_RETRYABLE_REASON_CODES = {"invalid_variable", "not_found"}
 BLOCKED_REASON_CODES = {"identity_conflict", "missing_ids", "invalid_ids"}
 
 FAST_RETRY_SECONDS = [60, 300, 900]
+RATE_LIMIT_RETRY_SECONDS = [300, 900, 1800]
 MAX_BACKOFF_SECONDS = 24 * 60 * 60
 NON_RETRYABLE_BACKOFF_SECONDS = [1800, 21600, 86400]
-NON_RETRYABLE_QUARANTINE_THRESHOLD = 3
+NON_RETRYABLE_QUARANTINE_THRESHOLD = 2
 BLOCKED_QUARANTINE_THRESHOLD = 2
 TRANSIENT_QUARANTINE_THRESHOLD = 12
 IN_PROGRESS_LEASE_SECONDS = 10 * 60
@@ -71,6 +73,12 @@ class StageResult:
 
 
 class OfflineSyncService:
+    def __init__(self):
+        self.inter_stage_delay_seconds = max(
+            int(getattr(settings, "OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS", 60)),
+            0,
+        )
+
     def ensure_states_for_anime_ids(
         self,
         anime_ids: list[int],
@@ -145,21 +153,50 @@ class OfflineSyncService:
         reason_counts: dict[str, int] = {}
         processed = 0
 
-        for claim in claims:
-            if claim.retry_age_seconds is not None:
-                OFFLINE_SYNC_RETRY_AGE_SECONDS.labels(stage=claim.stage).observe(
-                    max(claim.retry_age_seconds, 0.0)
+        loop = None
+        anilist_service = None
+        jikan_http_client = None
+        jikan_rate_limiter = None
+        runner = None
+
+        try:
+            if claims:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                runner = loop.run_until_complete
+                anilist_service = AniListService(enable_caching=True, enable_rate_limiting=True)
+                jikan_http_client = httpx.AsyncClient(timeout=15.0)
+                jikan_rate_limiter = JikanRateLimiter(base_delay=0.8)
+
+            for claim in claims:
+                if claim.retry_age_seconds is not None:
+                    OFFLINE_SYNC_RETRY_AGE_SECONDS.labels(stage=claim.stage).observe(
+                        max(claim.retry_age_seconds, 0.0)
+                    )
+                outcome = self._execute_claim(
+                    claim,
+                    anilist_service=anilist_service,
+                    jikan_http_client=jikan_http_client,
+                    jikan_rate_limiter=jikan_rate_limiter,
+                    runner=runner,
                 )
-            outcome = self._execute_claim(claim)
-            if not outcome:
-                continue
-            processed += 1
-            stage = outcome["stage"]
-            status = outcome["status"]
-            reason = outcome.get("reason_code") or ""
-            stage_counts[stage][status] = stage_counts[stage].get(status, 0) + 1
-            if reason:
-                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                if not outcome:
+                    continue
+                processed += 1
+                stage = outcome["stage"]
+                status = outcome["status"]
+                reason = outcome.get("reason_code") or ""
+                stage_counts[stage][status] = stage_counts[stage].get(status, 0) + 1
+                if reason:
+                    reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        finally:
+            if loop is not None:
+                if anilist_service is not None:
+                    loop.run_until_complete(anilist_service.close())
+                if jikan_http_client is not None:
+                    loop.run_until_complete(jikan_http_client.aclose())
+                asyncio.set_event_loop(None)
+                loop.close()
 
         summary = self._state_summary(anime_ids=anime_ids)
         return {
@@ -234,22 +271,54 @@ class OfflineSyncService:
 
         return claims
 
-    def _execute_claim(self, claim: StageClaim) -> dict | None:
+    def _execute_claim(
+        self,
+        claim: StageClaim,
+        *,
+        anilist_service: AniListService | None = None,
+        jikan_http_client: httpx.AsyncClient | None = None,
+        jikan_rate_limiter: JikanRateLimiter | None = None,
+        runner=None,
+    ) -> dict | None:
         try:
             state = OfflineAnimeSyncState.objects.select_related("anime").get(id=claim.state_id)
         except OfflineAnimeSyncState.DoesNotExist:
             return None
 
         if claim.stage == STAGE_METADATA:
-            result = self.sync_metadata_stage(state.anime)
+            result = self.sync_metadata_stage(
+                state.anime,
+                service=anilist_service,
+                runner=runner,
+            )
         elif claim.stage == STAGE_FRANCHISE:
-            result = self.sync_franchise_stage(state.anime)
+            result = self.sync_franchise_stage(
+                state.anime,
+                service=anilist_service,
+                runner=runner,
+            )
         else:
-            result = self.sync_themes_stage(state.anime)
+            result = self.sync_themes_stage(
+                state.anime,
+                http_client=jikan_http_client,
+                rate_limiter=jikan_rate_limiter,
+                runner=runner,
+            )
 
         return self._apply_stage_result(state_id=state.id, stage=claim.stage, result=result)
 
-    def sync_metadata_stage(self, anime: Anime) -> StageResult:
+    def _run_stage_coroutine(self, coroutine, *, runner=None):
+        if runner is not None:
+            return runner(coroutine)
+        return asyncio.run(coroutine)
+
+    def sync_metadata_stage(
+        self,
+        anime: Anime,
+        *,
+        service: AniListService | None = None,
+        runner=None,
+    ) -> StageResult:
         if (
             anime.anilist_id in (None, 0)
             and anime.mal_id in (None, 0)
@@ -260,10 +329,19 @@ class OfflineSyncService:
                 reason_code="missing_ids",
                 reason_message="No AniList ID, MAL ID, or searchable title is set.",
             )
-        return asyncio.run(self._sync_metadata_stage_async(anime))
+        return self._run_stage_coroutine(
+            self._sync_metadata_stage_async(anime, service=service),
+            runner=runner,
+        )
 
-    async def _sync_metadata_stage_async(self, anime: Anime) -> StageResult:
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+    async def _sync_metadata_stage_async(
+        self,
+        anime: Anime,
+        *,
+        service: AniListService | None = None,
+    ) -> StageResult:
+        owned_service = service is None
+        service = service or AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
             media = await service.resolve_media_for_anime(anime)
             if media and anime.anilist_id and media.get("id") != anime.anilist_id:
@@ -306,19 +384,35 @@ class OfflineSyncService:
                 transient=True,
             )
         finally:
-            await service.close()
+            if owned_service:
+                await service.close()
 
-    def sync_franchise_stage(self, anime: Anime) -> StageResult:
+    def sync_franchise_stage(
+        self,
+        anime: Anime,
+        *,
+        service: AniListService | None = None,
+        runner=None,
+    ) -> StageResult:
         if not anime.anilist_id:
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="missing_ids",
                 reason_message="AniList ID is required for franchise stage.",
             )
-        return asyncio.run(self._sync_franchise_stage_async(anime))
+        return self._run_stage_coroutine(
+            self._sync_franchise_stage_async(anime, service=service),
+            runner=runner,
+        )
 
-    async def _sync_franchise_stage_async(self, anime: Anime) -> StageResult:
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+    async def _sync_franchise_stage_async(
+        self,
+        anime: Anime,
+        *,
+        service: AniListService | None = None,
+    ) -> StageResult:
+        owned_service = service is None
+        service = service or AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
             media = await service.get_anime_by_id(anime.anilist_id)
             if not media:
@@ -391,20 +485,43 @@ class OfflineSyncService:
                 transient=True,
             )
         finally:
-            await service.close()
+            if owned_service:
+                await service.close()
 
-    def sync_themes_stage(self, anime: Anime) -> StageResult:
+    def sync_themes_stage(
+        self,
+        anime: Anime,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+        rate_limiter: JikanRateLimiter | None = None,
+        runner=None,
+    ) -> StageResult:
         if not anime.mal_id or not isinstance(anime.mal_id, int) or anime.mal_id <= 0:
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="invalid_ids",
                 reason_message=f"Invalid MAL ID: {anime.mal_id}",
             )
-        return asyncio.run(self._sync_themes_stage_async(anime))
+        return self._run_stage_coroutine(
+            self._sync_themes_stage_async(
+                anime,
+                http_client=http_client,
+                rate_limiter=rate_limiter,
+            ),
+            runner=runner,
+        )
 
-    async def _sync_themes_stage_async(self, anime: Anime) -> StageResult:
-        rate_limiter = JikanRateLimiter(base_delay=0.8)
-        async with httpx.AsyncClient(timeout=15.0) as http_client:
+    async def _sync_themes_stage_async(
+        self,
+        anime: Anime,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+        rate_limiter: JikanRateLimiter | None = None,
+    ) -> StageResult:
+        owned_http_client = http_client is None
+        http_client = http_client or httpx.AsyncClient(timeout=15.0)
+        rate_limiter = rate_limiter or JikanRateLimiter(base_delay=0.8)
+        try:
             result = await fetch_themes_from_jikan_with_reason(
                 http_client=http_client,
                 mal_id=anime.mal_id,
@@ -427,6 +544,9 @@ class OfflineSyncService:
                 await task._save_theme_songs(anime, themes)
 
             return StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
+        finally:
+            if owned_http_client:
+                await http_client.aclose()
 
     def _stage_result_from_external_error(self, *, code: str, message: str) -> StageResult:
         reason_code = (code or "transport_error").strip()
@@ -569,7 +689,7 @@ class OfflineSyncService:
     def _next_attempt_after_success(self, state: OfflineAnimeSyncState):
         next_stage = self._next_stage(state)
         if next_stage:
-            return timezone.now()
+            return timezone.now() + timedelta(seconds=self.inter_stage_delay_seconds)
         return timezone.now() + timedelta(days=36500)
 
     def _next_stage(self, state: OfflineAnimeSyncState) -> str | None:
@@ -583,6 +703,12 @@ class OfflineSyncService:
         return None
 
     def _compute_backoff_seconds(self, *, reason_code: str, attempts: int, transient: bool) -> int:
+        if reason_code == "rate_limited":
+            if attempts <= len(RATE_LIMIT_RETRY_SECONDS):
+                return RATE_LIMIT_RETRY_SECONDS[attempts - 1]
+            exp_index = attempts - len(RATE_LIMIT_RETRY_SECONDS)
+            return min(MAX_BACKOFF_SECONDS, RATE_LIMIT_RETRY_SECONDS[-1] * (2**exp_index))
+
         if transient or reason_code in TRANSIENT_REASON_CODES:
             if attempts <= len(FAST_RETRY_SECONDS):
                 return FAST_RETRY_SECONDS[attempts - 1]

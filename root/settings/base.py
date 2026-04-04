@@ -28,6 +28,7 @@ def _env_int(name: str, default: int) -> int:
     except (TypeError, ValueError):
         return default
 
+
 def _env_float(name: str, default: float) -> float:
     """Parse a float env value with a safe default."""
     raw = os.getenv(name)
@@ -38,9 +39,11 @@ def _env_float(name: str, default: float) -> float:
     except (TypeError, ValueError):
         return default
 
+
 def _parse_csv(value: str) -> list[str]:
     """Parse comma-separated env values into a cleaned list."""
     return [item.strip() for item in value.split(",") if item.strip()]
+
 
 def _parse_sentinel_nodes(value: str) -> list[tuple[str, int]]:
     """Parse Redis Sentinel nodes from ``host:port,host:port`` env format."""
@@ -94,6 +97,21 @@ PUBLIC_API_CACHE_TTL_JITTER_SECONDS = _env_int("PUBLIC_API_CACHE_TTL_JITTER_SECO
 IMAGEKIT_GENERATE_DURING_REQUESTS = _env_bool("IMAGEKIT_GENERATE_DURING_REQUESTS", False)
 FORUM_VIEW_BUFFER_TTL_SECONDS = _env_int("FORUM_VIEW_BUFFER_TTL_SECONDS", 7200)
 FORUM_VIEW_FLUSH_BATCH_SIZE = _env_int("FORUM_VIEW_FLUSH_BATCH_SIZE", 500)
+OFFLINE_RECONCILE_BATCH_SIZE = max(_env_int("OFFLINE_RECONCILE_BATCH_SIZE", 50), 1)
+OFFLINE_RECONCILE_CHUNK_SIZE = max(_env_int("OFFLINE_RECONCILE_CHUNK_SIZE", 100), 1)
+OFFLINE_RECONCILE_MAX_ROUNDS = max(_env_int("OFFLINE_RECONCILE_MAX_ROUNDS", 4), 1)
+OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES = max(
+    _env_int("OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES", 15),
+    1,
+)
+OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS = max(
+    _env_int("OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS", 60),
+    0,
+)
+OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS = max(
+    _env_int("OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS", 7200),
+    60,
+)
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -741,10 +759,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute=45),  # Hourly at :45
         "kwargs": {
             "anime_ids": [],
-            "batch_size": 500,
-            "chunk_size": 100,
+            "batch_size": OFFLINE_RECONCILE_BATCH_SIZE,
+            "chunk_size": OFFLINE_RECONCILE_CHUNK_SIZE,
             "require_themes": True,
             "strict": False,
+            "max_rounds": OFFLINE_RECONCILE_MAX_ROUNDS,
+            "round_interval_minutes": OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
         },
         "options": {"queue": "batch"},
     },

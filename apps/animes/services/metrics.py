@@ -24,6 +24,27 @@ import time
 from collections.abc import Callable
 from contextlib import contextmanager
 
+
+class DummyMetric:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def labels(self, *args, **kwargs):
+        return self
+
+    def inc(self, *args, **kwargs):
+        pass
+
+    def observe(self, *args, **kwargs):
+        pass
+
+    def set(self, *args, **kwargs):
+        pass
+
+    def info(self, *args, **kwargs):
+        pass
+
+
 try:
     from prometheus_client import Counter, Gauge, Histogram, Info
 
@@ -33,35 +54,63 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
     logger.warning("prometheus_client not installed - metrics disabled")
 
-    class DummyMetric:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def labels(self, *args, **kwargs):
-            return self
-
-        def inc(self, *args, **kwargs):
-            pass
-
-        def observe(self, *args, **kwargs):
-            pass
-
-        def set(self, *args, **kwargs):
-            pass
-
-        def info(self, *args, **kwargs):
-            pass
-
     Counter = DummyMetric
     Histogram = DummyMetric
     Gauge = DummyMetric
     Info = DummyMetric
 
 
+class _MetricLabelProxy:
+    def __init__(self, metric):
+        self._metric = metric
+
+    def inc(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.inc, *args, **kwargs)
+
+    def observe(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.observe, *args, **kwargs)
+
+    def set(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.set, *args, **kwargs)
+
+    def info(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.info, *args, **kwargs)
+
+
+class _MetricProxy:
+    def __init__(self, metric):
+        self._metric = metric
+
+    def labels(self, *args, **kwargs):
+        labeled_metric = _safe_metric_operation(self._metric.labels, *args, **kwargs)
+        if labeled_metric is None:
+            return _MetricLabelProxy(DummyMetric())
+        return _MetricLabelProxy(labeled_metric)
+
+    def inc(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.inc, *args, **kwargs)
+
+    def observe(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.observe, *args, **kwargs)
+
+    def set(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.set, *args, **kwargs)
+
+    def info(self, *args, **kwargs):
+        _safe_metric_operation(self._metric.info, *args, **kwargs)
+
+
+def _safe_metric_operation(operation, *args, **kwargs):
+    try:
+        return operation(*args, **kwargs)
+    except (FileNotFoundError, OSError, ValueError):
+        return None
+
+
 def _safe_metric(metric_cls, *args, **kwargs):
     """Create a Prometheus metric, handling duplicate registration in multi-process mode."""
     try:
-        return metric_cls(*args, **kwargs)
+        return _MetricProxy(metric_cls(*args, **kwargs))
     except ValueError:
         # Already registered (happens in gunicorn preload+fork or module re-import)
         # Return a dummy that delegates to the existing registered metric

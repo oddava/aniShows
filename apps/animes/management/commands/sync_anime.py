@@ -4,6 +4,7 @@ Replaces multiple individual commands with a single interface.
 """
 
 from celery import chain
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 
@@ -148,19 +149,19 @@ class Command(BaseCommand):
         parser.add_argument(
             "--max-rounds",
             type=int,
-            default=24,
+            default=settings.OFFLINE_RECONCILE_MAX_ROUNDS,
             help="Maximum reconciliation rounds in strict mode",
         )
         parser.add_argument(
             "--round-interval-minutes",
             type=int,
-            default=15,
+            default=settings.OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
             help="Delay between strict reconciliation rounds",
         )
         parser.add_argument(
             "--chunk-size",
             type=int,
-            default=100,
+            default=settings.OFFLINE_RECONCILE_CHUNK_SIZE,
             help="Chunk size for reconciliation enqueue batches",
         )
         parser.add_argument(
