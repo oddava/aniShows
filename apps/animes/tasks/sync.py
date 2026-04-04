@@ -30,7 +30,7 @@ AIRING_MEDIA_QUERY = f"""
     query GetAiringAnime($status: MediaStatus, $page: Int, $perPage: Int, $sort: [MediaSort]) {{
         Page(page: $page, perPage: $perPage) {{
             pageInfo {{ total currentPage lastPage hasNextPage }}
-            media(type: ANIME, status: $status, sort: $sort, isAdult: false) {{
+            media(type: ANIME, status: $status, sort: $sort) {{
                 {AniListService.MEDIA_FIELDS}
             }}
         }}

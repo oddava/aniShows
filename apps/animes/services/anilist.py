@@ -506,7 +506,7 @@ class AniListService:
             query BySeason($season: MediaSeason, $year: Int, $page: Int, $perPage: Int, $sort: [MediaSort]) {{
                 Page(page: $page, perPage: $perPage) {{
                     pageInfo {{ total currentPage lastPage hasNextPage }}
-                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort, isAdult: false) {{
+                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort) {{
                         {media_fields}
                     }}
                 }}
@@ -517,7 +517,7 @@ class AniListService:
             query GetAnime($page: Int, $perPage: Int, $sort: [MediaSort]) {{
                 Page(page: $page, perPage: $perPage) {{
                     pageInfo {{ total currentPage lastPage hasNextPage }}
-                    media(type: ANIME, sort: $sort, isAdult: false) {{
+                    media(type: ANIME, sort: $sort) {{
                         {media_fields}
                     }}
                 }}
@@ -619,7 +619,7 @@ class AniListService:
         query = f"""
             query SearchAnime($search: String, $perPage: Int) {{
                 Page(page: 1, perPage: $perPage) {{
-                    media(type: ANIME, search: $search, isAdult: false) {{
+                    media(type: ANIME, search: $search) {{
                         {self.MEDIA_FIELDS}
                     }}
                 }}

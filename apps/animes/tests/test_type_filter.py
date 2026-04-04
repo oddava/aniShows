@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.models import Anime
+from apps.animes.models import Anime, Genre
 
 
 class AnimeTypeFilterTests(APITestCase):
@@ -141,3 +141,40 @@ class AnimeTypeFilterTests(APITestCase):
         titles = {item["title"] for item in response.data.get("results", [])}
 
         self.assertSetEqual(titles, {"Type TV Anime", "Type Special Anime"})
+
+    def test_popular_sort_with_genre_filter_includes_rows_without_popularity_rank(self):
+        hentai = Genre.objects.create(name="Hentai", slug="hentai")
+
+        higher_members = Anime.objects.create(
+            title="Hentai Entry High Members",
+            slug="hentai-entry-high-members",
+            synopsis="High member count hentai entry",
+            anime_type="OVA",
+            status="Finished",
+            member_count=5000,
+            popularity_rank=None,
+        )
+        lower_members = Anime.objects.create(
+            title="Hentai Entry Low Members",
+            slug="hentai-entry-low-members",
+            synopsis="Low member count hentai entry",
+            anime_type="OVA",
+            status="Finished",
+            member_count=1000,
+            popularity_rank=None,
+        )
+        higher_members.genres.add(hentai)
+        lower_members.genres.add(hentai)
+
+        response = self.client.get(self.list_url, {"sort": "popular", "genre": "hentai"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", [])
+        titles = [item["title"] for item in results]
+
+        self.assertIn("Hentai Entry High Members", titles)
+        self.assertIn("Hentai Entry Low Members", titles)
+        self.assertLess(
+            titles.index("Hentai Entry High Members"),
+            titles.index("Hentai Entry Low Members"),
+        )

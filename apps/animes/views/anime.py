@@ -361,6 +361,28 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 except (ValueError, TypeError):
                     pass
 
+        has_active_filters = any(
+            [
+                bool(search),
+                bool(genres),
+                bool(anime_status),
+                bool(anime_type),
+                bool(studio),
+                bool(min_rating),
+                bool(max_rating),
+                bool(source_material),
+                bool(tags),
+                bool(min_episodes),
+                bool(max_episodes),
+                bool(min_duration),
+                bool(max_duration),
+                bool(season),
+                bool(year),
+                bool(self.request.query_params.get("min_year")),
+                bool(self.request.query_params.get("max_year")),
+            ]
+        )
+
         sort = self.request.query_params.get("sort", "popular")
         sort_clean = sort.strip().lower()
         sort_mapping = {
@@ -381,13 +403,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         elif sort == "upcoming":
             queryset = queryset.filter(status="Upcoming")
         elif sort == "popular":
-            has_temporal_filter = bool(
-                season
-                or year
-                or self.request.query_params.get("min_year")
-                or self.request.query_params.get("max_year")
-            )
-            if not has_temporal_filter and not search:
+            if not has_active_filters:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             else:
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))

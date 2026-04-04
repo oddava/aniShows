@@ -84,7 +84,7 @@ class AniListScraper:
             query BySeason($season: MediaSeason, $year: Int, $page: Int, $perPage: Int, $sort: [MediaSort]) {
                 Page(page: $page, perPage: $perPage) {
                     pageInfo { total currentPage lastPage hasNextPage }
-                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort, isAdult: false) {
+                    media(type: ANIME, season: $season, seasonYear: $year, sort: $sort) {
                         id
                         title { romaji english native }
                         format status episodes averageScore popularity duration
@@ -107,7 +107,7 @@ class AniListScraper:
             query GetAnime($page: Int, $perPage: Int, $sort: [MediaSort]) {
                 Page(page: $page, perPage: $perPage) {
                     pageInfo { total currentPage lastPage hasNextPage }
-                    media(type: ANIME, sort: $sort, isAdult: false) {
+                    media(type: ANIME, sort: $sort) {
                         id
                         title { romaji english native }
                         format status episodes averageScore popularity duration
