@@ -130,6 +130,24 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertGreaterEqual((second_eta - timezone.now()).total_seconds(), 280)
 
     @patch.object(OfflineSyncService, "sync_metadata_stage")
+    def test_rate_limited_failure_uses_more_conservative_backoff(self, mock_stage):
+        anime = self._anime("Rate Limited", anilist_id=101, mal_id=201)
+        state = self._state(anime)
+
+        mock_stage.return_value = StageResult(
+            status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR,
+            reason_code="rate_limited",
+            reason_message="http_429",
+            transient=True,
+        )
+
+        OfflineSyncService().reconcile_due(batch_size=1)
+        state.refresh_from_db()
+
+        self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+        self.assertGreaterEqual((state.next_attempt_at - timezone.now()).total_seconds(), 280)
+
+    @patch.object(OfflineSyncService, "sync_metadata_stage")
     def test_blocked_status_quarantines_after_threshold(self, mock_stage):
         anime = self._anime("Blocked", anilist_id=10)
         state = self._state(anime)
@@ -179,6 +197,17 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(future.metadata_status, OfflineAnimeSyncState.StageStatus.PENDING)
 
     @patch.object(OfflineSyncService, "sync_metadata_stage")
+    def test_successful_stage_waits_before_advancing_to_next_stage(self, mock_stage):
+        mock_stage.return_value = StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
+        state = self._state(self._anime("Inter Stage Delay", anilist_id=88))
+
+        OfflineSyncService().reconcile_due(batch_size=1)
+        state.refresh_from_db()
+
+        self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.SYNCED)
+        self.assertGreaterEqual((state.next_attempt_at - timezone.now()).total_seconds(), 50)
+
+    @patch.object(OfflineSyncService, "sync_metadata_stage")
     def test_in_progress_state_is_not_reclaimed_during_lease(self, mock_stage):
         mock_stage.return_value = StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
         anime = self._anime("Lease", anilist_id=77)
@@ -218,7 +247,8 @@ class OfflineSyncStatePipelineTests(TestCase):
             quarantined=False,
         )
 
-        mock_info.assert_called_once()
+        self.assertGreaterEqual(mock_info.call_count, 1)
+        self.assertIn("Offline sync stage blocked", mock_info.call_args_list[-1].args[0])
         mock_warning.assert_not_called()
 
     @patch("apps.animes.services.offline_sync.logger.warning")
@@ -235,4 +265,4 @@ class OfflineSyncStatePipelineTests(TestCase):
         )
 
         mock_warning.assert_called_once()
-        mock_info.assert_not_called()
+        self.assertIn("Offline sync stage retry scheduled", mock_warning.call_args.args[0])

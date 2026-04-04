@@ -10,6 +10,7 @@ try:
     import zstandard
 except ModuleNotFoundError:  # pragma: no cover - depends on runtime image
     zstandard = None
+from django.conf import settings
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -236,6 +237,73 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
         self.assertEqual(OfflineAnimeSyncState.objects.count(), 1)
 
+    def test_reconcile_scope_ignores_terminal_rows_for_global_runs(self):
+        pending = Anime.objects.create(
+            title="Pending Row",
+            slug="pending-row",
+            synopsis="offline",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
+        complete = Anime.objects.create(
+            title="Complete Row",
+            slug="complete-row",
+            synopsis="offline",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
+        quarantined = Anime.objects.create(
+            title="Quarantined Row",
+            slug="quarantined-row",
+            synopsis="offline",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
+        unstaged = Anime.objects.create(
+            title="Missing State Row",
+            slug="missing-state-row",
+            synopsis="offline",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
+
+        OfflineAnimeSyncState.objects.create(anime=pending, next_attempt_at=timezone.now())
+        OfflineAnimeSyncState.objects.create(
+            anime=complete,
+            metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            next_attempt_at=timezone.now(),
+        )
+        OfflineAnimeSyncState.objects.create(
+            anime=quarantined,
+            metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
+            franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
+            themes_status=OfflineAnimeSyncState.StageStatus.PENDING,
+            quarantined=True,
+            quarantine_reason="not_found",
+            next_attempt_at=timezone.now(),
+        )
+
+        scoped_ids = OfflineCatalogReconcileSyncTask()._resolve_scope_ids([])
+
+        self.assertIn(pending.id, scoped_ids)
+        self.assertIn(unstaged.id, scoped_ids)
+        self.assertNotIn(complete.id, scoped_ids)
+        self.assertNotIn(quarantined.id, scoped_ids)
+
+    @patch.object(OfflineCatalogReconcileSyncTask, "_acquire_workflow_lease", return_value=False)
+    def test_reconcile_task_skips_when_another_global_workflow_is_active(self, mock_acquire):
+        result = OfflineCatalogReconcileSyncTask().execute()
+
+        self.assertTrue(result["skipped_due_to_overlap"])
+        self.assertFalse(result["next_round_scheduled"])
+        mock_acquire.assert_called_once()
+
     @patch("apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync.apply_async")
     @patch("apps.animes.tasks.offline_catalog.OfflineSyncService")
     def test_reconcile_task_reschedules_when_default_path_has_backlog(
@@ -300,8 +368,8 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             require_themes=True,
             strict=False,
             reset_pipeline=True,
-            max_rounds=24,
+            max_rounds=settings.OFFLINE_RECONCILE_MAX_ROUNDS,
             round_number=1,
-            round_interval_minutes=15,
+            round_interval_minutes=settings.OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
         )
         mock_task.apply_async.assert_called_once_with()

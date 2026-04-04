@@ -2,7 +2,11 @@
 Test settings for aniShows project.
 """
 
+import os
 import sys
+
+os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
+
 from .base import *
 
 # =============================================================================
