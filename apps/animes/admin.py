@@ -7,6 +7,7 @@ from .models import (
     AnimeCharacter,
     AnimeStaff,
     Character,
+    EpisodeRating,
     Genre,
     Review,
     ReviewReaction,
@@ -340,6 +341,14 @@ class AnimeAdmin(admin.ModelAdmin):
                 reviews_count=Count("reviews", distinct=True),
             )
         )
+
+
+@admin.register(EpisodeRating)
+class EpisodeRatingAdmin(admin.ModelAdmin):
+    list_display = ["anime", "episode_number", "user", "rating", "updated_at"]
+    list_filter = ["rating", "updated_at"]
+    search_fields = ["anime__title", "user__username"]
+    ordering = ["anime__title", "episode_number", "-updated_at"]
 
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):

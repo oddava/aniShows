@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import (
     CASCADE,
@@ -82,6 +84,32 @@ class UserHistory(Model):
 
     def __str__(self):
         return f"{self.user.username} viewed {self.anime.title}"
+
+
+class EpisodeRating(TimestampMixin, Model):
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="episode_ratings")
+    anime = ForeignKey("anime.Anime", CASCADE, related_name="episode_ratings")
+    episode_number = IntegerField(validators=[MinValueValidator(1)])
+    rating = DecimalField(
+        max_digits=2,
+        decimal_places=1,
+        validators=[MinValueValidator(Decimal("0.5")), MaxValueValidator(Decimal("5.0"))],
+    )
+
+    class Meta:
+        ordering = ["anime_id", "episode_number", "-updated_at"]
+        unique_together = ("user", "anime", "episode_number")
+        indexes = [
+            Index(fields=["anime", "episode_number"]),
+            Index(fields=["user", "anime"]),
+            Index(fields=["anime", "user", "episode_number"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user.username} rated {self.anime.title} episode "
+            f"{self.episode_number} {self.rating}/5"
+        )
 
 
 class UserRecommendation(TimestampMixin, Model):

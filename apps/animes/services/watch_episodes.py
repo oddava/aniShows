@@ -74,16 +74,33 @@ class AnimeWatchEpisodeService:
 
         mal_id = mal_id or self._coerce_positive_int(anilist_media.get("idMal"))
         if not mal_id:
-            return []
+            return self._build_fallback_episodes(anime)
 
         jikan_episodes = await self._fetch_jikan_episodes(mal_id)
         if not jikan_episodes:
-            return []
+            return self._build_fallback_episodes(anime)
 
         crunchyroll_index = self._index_streaming_episodes(anilist_media.get("streamingEpisodes") or [])
         return [
             self._merge_episode(anime, episode, crunchyroll_index.get(episode["number"]))
             for episode in jikan_episodes
+        ]
+
+    def _build_fallback_episodes(self, anime: Anime) -> list[dict]:
+        episode_count = int(anime.episode_count or 0)
+        if episode_count <= 0:
+            return []
+
+        return [
+            {
+                "number": episode_number,
+                "title": f"Episode {episode_number}",
+                "aired": "",
+                "thumbnail": "",
+                "crunchyroll_url": self._build_crunchyroll_search_url(anime.title, episode_number),
+                "has_real_crunchyroll_url": False,
+            }
+            for episode_number in range(1, episode_count + 1)
         ]
 
     async def _fetch_jikan_episodes(self, mal_id: int) -> list[dict]:

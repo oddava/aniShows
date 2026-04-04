@@ -5,6 +5,9 @@ from apps.animes.serializers.anime import (
     AnimeDetailSerializer,
     AnimeListSerializer,
     AnimeMinimalSerializer,
+    AnimeWatchEpisodeSerializer,
+    EpisodeRatingInputSerializer,
+    EpisodeRatingSummarySerializer,
 )
 from apps.animes.serializers.base import (
     AnimeCharacterSerializer,

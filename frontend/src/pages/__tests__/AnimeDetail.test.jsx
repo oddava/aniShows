@@ -11,6 +11,7 @@ vi.mock('../../api/client', () => ({
         getCharacters: vi.fn(),
         getStaff: vi.fn(),
         getWatchEpisodes: vi.fn(),
+        getEpisodeRatings: vi.fn(),
         getRecommendations: vi.fn(),
     },
     favoriteApi: {
@@ -176,6 +177,16 @@ describe('AnimeDetail list update invalidation', () => {
                 ],
             },
         });
+        animeApi.getEpisodeRatings.mockResolvedValue({
+            data: [
+                {
+                    episode_number: 1,
+                    average_rating: '4.50',
+                    rating_count: 2,
+                    user_rating: '4.5',
+                },
+            ],
+        });
         animeApi.getRecommendations.mockResolvedValue({ data: [] });
         reviewApi.getAll.mockResolvedValue({ data: { results: [], count: 0, next: null } });
         reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
@@ -216,6 +227,7 @@ describe('AnimeDetail list update invalidation', () => {
         });
 
         expect(animeApi.getRecommendations).toHaveBeenCalledWith('frieren');
+        expect(animeApi.getEpisodeRatings).toHaveBeenCalledWith('frieren');
         expect(animeApi.getCharacters).not.toHaveBeenCalled();
         expect(animeApi.getStaff).not.toHaveBeenCalled();
     });
@@ -251,6 +263,7 @@ describe('AnimeDetail list update invalidation', () => {
             page: 1,
             page_size: 50,
         });
+        expect(animeApi.getEpisodeRatings).toHaveBeenCalledWith('frieren');
         const watchLink = screen.getByRole('link', { name: /watch/i });
         expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch1');
         expect(animeApi.getCharacters).not.toHaveBeenCalled();
@@ -266,6 +279,7 @@ describe('AnimeDetail list update invalidation', () => {
                 results: [],
             },
         });
+        animeApi.getEpisodeRatings.mockResolvedValueOnce({ data: [] });
         const { wrapper } = createHarness('/anime/frieren/watch');
 
         render(<AnimeDetail />, { wrapper });

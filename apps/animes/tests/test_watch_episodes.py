@@ -127,6 +127,48 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         mock_streams.assert_awaited_once()
         mock_jikan_get.assert_awaited_once()
 
+    def test_falls_back_to_generic_episode_list_when_external_episode_data_is_missing(self):
+        anime = Anime.objects.create(
+            title='Fallback Show',
+            slug='fallback-show',
+            synopsis='Fallback episodes.',
+            anime_type='TV',
+            status='Finished',
+            episode_count=3,
+        )
+
+        episodes = self.service.get_for_anime(anime)
+
+        self.assertEqual(
+            episodes,
+            [
+                {
+                    'number': 1,
+                    'title': 'Episode 1',
+                    'aired': '',
+                    'thumbnail': '',
+                    'crunchyroll_url': 'https://www.crunchyroll.com/search?q=Fallback+Show+episode+1',
+                    'has_real_crunchyroll_url': False,
+                },
+                {
+                    'number': 2,
+                    'title': 'Episode 2',
+                    'aired': '',
+                    'thumbnail': '',
+                    'crunchyroll_url': 'https://www.crunchyroll.com/search?q=Fallback+Show+episode+2',
+                    'has_real_crunchyroll_url': False,
+                },
+                {
+                    'number': 3,
+                    'title': 'Episode 3',
+                    'aired': '',
+                    'thumbnail': '',
+                    'crunchyroll_url': 'https://www.crunchyroll.com/search?q=Fallback+Show+episode+3',
+                    'has_real_crunchyroll_url': False,
+                },
+            ],
+        )
+
 
 class AnimeWatchEpisodesEndpointTests(APITestCase):
     @patch('apps.animes.signals.enrich_metadata.delay')
@@ -161,6 +203,9 @@ class AnimeWatchEpisodesEndpointTests(APITestCase):
         self.assertEqual(len(response.data['results']), 20)
         self.assertEqual(response.data['results'][0]['number'], 21)
         self.assertEqual(response.data['results'][0]['title'], 'Episode 21')
+        self.assertIsNone(response.data['results'][0]['average_rating'])
+        self.assertEqual(response.data['results'][0]['rating_count'], 0)
+        self.assertIsNone(response.data['results'][0]['user_rating'])
 
 
 class AnimeWatchEpisodeTaskTests(TestCase):

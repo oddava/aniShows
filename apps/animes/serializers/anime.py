@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db.models import Count, Q
 from rest_framework.serializers import (
     BooleanField,
@@ -7,6 +9,7 @@ from rest_framework.serializers import (
     ModelSerializer,
     Serializer,
     SerializerMethodField,
+    ValidationError,
 )
 
 from apps.animes.models import Anime
@@ -26,6 +29,25 @@ class AnimeWatchEpisodeSerializer(Serializer):
     thumbnail = CharField(allow_blank=True)
     crunchyroll_url = CharField()
     has_real_crunchyroll_url = BooleanField()
+    average_rating = DecimalField(max_digits=4, decimal_places=2, allow_null=True, required=False)
+    rating_count = IntegerField(required=False)
+    user_rating = DecimalField(max_digits=2, decimal_places=1, allow_null=True, required=False)
+
+
+class EpisodeRatingSummarySerializer(Serializer):
+    episode_number = IntegerField()
+    average_rating = DecimalField(max_digits=4, decimal_places=2, allow_null=True)
+    rating_count = IntegerField()
+    user_rating = DecimalField(max_digits=2, decimal_places=1, allow_null=True)
+
+
+class EpisodeRatingInputSerializer(Serializer):
+    rating = DecimalField(max_digits=2, decimal_places=1, min_value=Decimal("0.5"), max_value=Decimal("5.0"))
+
+    def validate_rating(self, value):
+        if (value * 2) % 1 != 0:
+            raise ValidationError("Rating must use 0.5 increments.")
+        return value
 
 
 class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):

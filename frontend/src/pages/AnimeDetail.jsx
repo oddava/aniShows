@@ -371,6 +371,16 @@ export default function AnimeDetail() {
         staleTime: 300000,
     });
 
+    const {
+        data: episodeRatings,
+        isLoading: episodeRatingsLoading,
+    } = useQuery({
+        queryKey: ['anime', slug, 'episode-ratings', user?.id || 'anonymous'],
+        queryFn: () => animeApi.getEpisodeRatings(slug).then(res => res.data),
+        enabled: !!anime && (activeTab === 'watch' || activeTab === 'stats'),
+        staleTime: 60000,
+    });
+
     const { data: reviewsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading: reviewsLoading } = useInfiniteQuery({
         queryKey: ['reviews', slug, reviewSort, ratingFilter],
         queryFn: ({ pageParam }) => reviewApi.getAll({
@@ -480,6 +490,23 @@ export default function AnimeDetail() {
         },
     });
 
+    const setEpisodeRatingMutation = useMutation({
+        mutationFn: ({ episodeNumber, rating }) =>
+            animeApi.setEpisodeRating(slug, episodeNumber, { rating }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'watch-episodes'] });
+            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'episode-ratings'] });
+        },
+    });
+
+    const clearEpisodeRatingMutation = useMutation({
+        mutationFn: (episodeNumber) => animeApi.clearEpisodeRating(slug, episodeNumber),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'watch-episodes'] });
+            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'episode-ratings'] });
+        },
+    });
+
     // Handlers
     const handleFavorite = useCallback(async () => {
         if (!isAuthenticated) return;
@@ -512,6 +539,14 @@ export default function AnimeDetail() {
             await createReviewMutation.mutateAsync(data);
         }
     }, [editingReview, updateReviewMutation, createReviewMutation]);
+
+    const handleEpisodeRatingChange = useCallback(async (episodeNumber, rating) => {
+        await setEpisodeRatingMutation.mutateAsync({ episodeNumber, rating });
+    }, [setEpisodeRatingMutation]);
+
+    const handleEpisodeRatingClear = useCallback(async (episodeNumber) => {
+        await clearEpisodeRatingMutation.mutateAsync(episodeNumber);
+    }, [clearEpisodeRatingMutation]);
 
     useEffect(() => {
         setIsBannerLoaded(false);
@@ -815,11 +850,21 @@ export default function AnimeDetail() {
                                         anime={anime}
                                         accentColor={accentColor}
                                         episodes={watchEpisodes}
+                                        isAuthenticated={isAuthenticated}
                                         totalCount={watchEpisodesTotal}
                                         isLoading={watchEpisodesLoading}
                                         hasError={watchEpisodesIsError}
                                         hasNextPage={hasNextWatchEpisodesPage}
                                         isFetchingNextPage={isFetchingNextWatchEpisodesPage}
+                                        ratingPendingEpisodeNumber={
+                                            setEpisodeRatingMutation.isPending
+                                                ? setEpisodeRatingMutation.variables?.episodeNumber
+                                                : clearEpisodeRatingMutation.isPending
+                                                    ? clearEpisodeRatingMutation.variables
+                                                    : null
+                                        }
+                                        onRateEpisode={handleEpisodeRatingChange}
+                                        onClearEpisodeRating={handleEpisodeRatingClear}
                                         onLoadMore={fetchNextWatchEpisodesPage}
                                         onRetry={refetchWatchEpisodes}
                                     />
@@ -828,7 +873,12 @@ export default function AnimeDetail() {
                                     <ThemesTab anime={anime} accentColor={accentColor} />
                                 )}
                                 {activeTab === 'stats' && (
-                                    <StatsTab anime={anime} accentColor={accentColor} />
+                                    <StatsTab
+                                        anime={anime}
+                                        accentColor={accentColor}
+                                        episodeRatings={episodeRatings || []}
+                                        isEpisodeRatingsLoading={episodeRatingsLoading}
+                                    />
                                 )}
                                 {activeTab === 'characters' && (
                                     <CharactersTab

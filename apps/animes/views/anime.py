@@ -33,6 +33,7 @@ from apps.animes.models import (
     AnimeCharacter,
     AnimeStaff,
     Character,
+    EpisodeRating,
     Genre,
     Staff,
     Studio,
@@ -43,10 +44,14 @@ from apps.animes.serializers import (
     AnimeDetailSerializer,
     AnimeListSerializer,
     AnimeStaffSerializer,
+    AnimeWatchEpisodeSerializer,
+    EpisodeRatingInputSerializer,
+    EpisodeRatingSummarySerializer,
     GenreSerializer,
     StudioSerializer,
 )
 from apps.animes.services.anilist import AniListService
+from apps.animes.services.episode_ratings import EpisodeRatingSummaryService
 from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
 from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
 from apps.core.utils import get_client_ip
@@ -878,15 +883,89 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"], url_path="watch-episodes")
     def watch_episodes(self, request, slug=None):
         """Get paginated watch-episode data for this anime."""
-        from apps.animes.serializers.anime import AnimeWatchEpisodeSerializer
-
         anime = self.get_object()
         episodes = AnimeWatchEpisodeService().get_for_anime(anime)
+        episode_rating_map = {
+            item["episode_number"]: item
+            for item in EpisodeRatingSummaryService().get_for_anime(
+                anime,
+                user=request.user,
+                episode_numbers=[episode.get("number") for episode in episodes],
+            )
+        }
+        enriched_episodes = [
+            {
+                **episode,
+                "average_rating": (episode_rating_map.get(episode["number"]) or {}).get("average_rating"),
+                "rating_count": int(
+                    (episode_rating_map.get(episode["number"]) or {}).get("rating_count") or 0
+                ),
+                "user_rating": (episode_rating_map.get(episode["number"]) or {}).get("user_rating"),
+            }
+            for episode in episodes
+        ]
 
         paginator = WatchEpisodesPagination()
-        page = paginator.paginate_queryset(episodes, request, view=self)
+        page = paginator.paginate_queryset(enriched_episodes, request, view=self)
         serializer = AnimeWatchEpisodeSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="episode-ratings")
+    def episode_ratings(self, request, slug=None):
+        anime = self.get_object()
+        ratings = EpisodeRatingSummaryService().get_for_anime(anime, user=request.user)
+        serializer = EpisodeRatingSummarySerializer(ratings, many=True)
+        return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=["put", "patch", "delete"],
+        url_path=r"episode-ratings/(?P<episode_number>\d+)",
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def episode_rating(self, request, slug=None, episode_number=None):
+        anime = self.get_object()
+        resolved_episode_number = int(episode_number)
+        if resolved_episode_number <= 0:
+            return Response(
+                {"episode_number": "Episode number must be positive."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if anime.episode_count > 0 and resolved_episode_number > anime.episode_count:
+            return Response(
+                {
+                    "episode_number": (
+                        f"Episode number cannot exceed the known episode count ({anime.episode_count})."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.method == "DELETE":
+            EpisodeRating.objects.filter(
+                user=request.user,
+                anime=anime,
+                episode_number=resolved_episode_number,
+            ).delete()
+            status_code = status.HTTP_200_OK
+        else:
+            serializer = EpisodeRatingInputSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            _, created = EpisodeRating.objects.update_or_create(
+                user=request.user,
+                anime=anime,
+                episode_number=resolved_episode_number,
+                defaults={"rating": serializer.validated_data["rating"]},
+            )
+            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+
+        summary = EpisodeRatingSummaryService().get_for_anime(
+            anime,
+            user=request.user,
+            episode_numbers=[resolved_episode_number],
+        )[0]
+        response_serializer = EpisodeRatingSummarySerializer(summary)
+        return Response(response_serializer.data, status=status_code)
 
     @action(
         detail=False,
