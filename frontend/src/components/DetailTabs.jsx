@@ -68,9 +68,9 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                         {topCharacters.map((role) => (
                             <div 
                                 key={role.id}
-                                className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5"
+                                className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 min-h-[64px]"
                             >
-                                <Link to={`/character/${role.character.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0">
+                                <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
                                     <img
                                         src={role.character.image || '/placeholder-avatar.png'}
                                         alt={role.character.name}
@@ -78,32 +78,32 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                     />
                                 </Link>
 
-                                <div className="flex-1 flex justify-between p-3 min-w-0">
-                                    <div className="flex flex-col justify-between min-w-0 pr-2">
-                                        <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
+                                <div className="flex-1 grid grid-cols-2 gap-2 p-2 sm:px-3 sm:py-2 min-w-0">
+                                    <div className="flex flex-col justify-center min-w-0">
+                                        <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
                                             {role.character.name}
                                         </Link>
-                                        <span className="text-[11px] text-gray-500 truncate">
+                                        <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
                                             {role.role}
                                         </span>
                                     </div>
 
-                                    <div className="flex flex-col justify-between min-w-0 text-right pl-2">
+                                    <div className="flex flex-col justify-center text-right min-w-0">
                                         {role.voice_actor ? (
-                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
+                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
                                                 {role.voice_actor.name}
                                             </Link>
                                         ) : (
                                             <span className="text-[13px] font-medium text-gray-600">N/A</span>
                                         )}
-                                        <span className="text-[11px] text-gray-500">
+                                        <span className="text-[11px] text-gray-500 mt-0.5">
                                             Japanese
                                         </span>
                                     </div>
                                 </div>
 
                                 {role.voice_actor && (
-                                    <Link to={`/staff/${role.voice_actor.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0 border-l border-white/5">
+                                    <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
                                         <img
                                             src={role.voice_actor.image || '/placeholder-avatar.png'}
                                             alt={role.voice_actor.name}
@@ -330,13 +330,13 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 animate-tab-content">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 animate-tab-content">
             {uniqueCharacters.map((role) => (
                 <div 
                     key={role.id}
-                    className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5"
+                    className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 min-h-[64px]"
                 >
-                    <Link to={`/character/${role.character.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0">
+                    <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
                         <img
                             src={role.character.image || '/placeholder-avatar.png'}
                             alt={role.character.name}
@@ -344,32 +344,32 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
                         />
                     </Link>
 
-                    <div className="flex-1 flex justify-between p-3 min-w-0">
-                        <div className="flex flex-col justify-between min-w-0 pr-2">
-                            <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
+                    <div className="flex-1 grid grid-cols-2 gap-2 p-2 sm:px-3 sm:py-2 min-w-0">
+                        <div className="flex flex-col justify-center min-w-0">
+                            <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
                                 {role.character.name}
                             </Link>
-                            <span className="text-[11px] text-gray-500">
+                            <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
                                 {role.role}
                             </span>
                         </div>
 
-                        <div className="flex flex-col justify-between min-w-0 text-right pl-2">
+                        <div className="flex flex-col justify-center text-right min-w-0">
                             {role.voice_actor ? (
-                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 truncate hover:text-accent transition-colors">
+                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
                                     {role.voice_actor.name}
                                 </Link>
                             ) : (
                                 <span className="text-[13px] font-medium text-gray-600">N/A</span>
                             )}
-                            <span className="text-[11px] text-gray-500">
+                            <span className="text-[11px] text-gray-500 mt-0.5">
                                 Japanese
                             </span>
                         </div>
                     </div>
 
                     {role.voice_actor && (
-                        <Link to={`/staff/${role.voice_actor.id}`} className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0 border-l border-white/5">
+                        <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
                             <img
                                 src={role.voice_actor.image || '/placeholder-avatar.png'}
                                 alt={role.voice_actor.name}

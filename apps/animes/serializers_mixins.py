@@ -152,6 +152,7 @@ class UserStatusMixin:
                 "notes": entry.notes,
                 "started_at": entry.started_at,
                 "finished_at": entry.finished_at,
+                "total_rewatches": entry.total_rewatches,
                 "is_rewatching": entry.is_rewatching,
                 "progress": (entry.episodes_watched / obj.episode_count * 100)
                 if obj.episode_count and obj.episode_count > 0

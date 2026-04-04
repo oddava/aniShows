@@ -70,6 +70,11 @@ class UserDataExporter:
                     "status": entry.status,
                     "score": entry.score,
                     "episodes_watched": entry.episodes_watched,
+                    "notes": entry.notes,
+                    "started_at": entry.started_at.isoformat() if entry.started_at else None,
+                    "finished_at": entry.finished_at.isoformat() if entry.finished_at else None,
+                    "total_rewatches": entry.total_rewatches,
+                    "is_rewatching": entry.is_rewatching,
                     "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
                 }
             )

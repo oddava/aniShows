@@ -85,7 +85,15 @@ class AnimeListTests(APITestCase):
 
         # Update the entry
         detail_url = reverse('lists-detail', args=[entry.id])
-        data = {'status': 'Completed', 'episodes_watched': 12, 'score': 8}
+        data = {
+            'status': 'Completed',
+            'episodes_watched': 12,
+            'score': 8,
+            'started_at': '2024-01-05',
+            'finished_at': '2024-02-09',
+            'total_rewatches': 2,
+            'notes': 'Locked in for a rewatch.',
+        }
         response = self.client.patch(detail_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -93,6 +101,37 @@ class AnimeListTests(APITestCase):
         self.assertEqual(entry.status, 'Completed')
         self.assertEqual(entry.episodes_watched, 12)
         self.assertEqual(entry.score, 8)
+        self.assertEqual(str(entry.started_at), '2024-01-05')
+        self.assertEqual(str(entry.finished_at), '2024-02-09')
+        self.assertEqual(entry.total_rewatches, 2)
+        self.assertEqual(entry.notes, 'Locked in for a rewatch.')
+
+    def test_rejects_invalid_detail_values(self):
+        """Test validation for score, rewatch count, and date ordering."""
+        self.client.force_authenticate(user=self.user1)
+
+        entry = UserAnimeList.objects.create(
+            user=self.user1,
+            anime=self.anime,
+            status='Watching',
+        )
+
+        detail_url = reverse('lists-detail', args=[entry.id])
+
+        score_response = self.client.patch(detail_url, {'score': 11})
+        self.assertEqual(score_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('score', score_response.data)
+
+        rewatches_response = self.client.patch(detail_url, {'total_rewatches': -1})
+        self.assertEqual(rewatches_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('total_rewatches', rewatches_response.data)
+
+        dates_response = self.client.patch(
+            detail_url,
+            {'started_at': '2024-03-10', 'finished_at': '2024-03-01'},
+        )
+        self.assertEqual(dates_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('finished_at', dates_response.data)
 
     def test_cannot_update_others_list_entry(self):
         """Test that users cannot update other users' list entries."""

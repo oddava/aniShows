@@ -69,5 +69,6 @@ def serialize_user_list_entry(entry):
         "notes": entry.notes,
         "started_at": entry.started_at.isoformat() if entry.started_at else None,
         "finished_at": entry.finished_at.isoformat() if entry.finished_at else None,
+        "total_rewatches": entry.total_rewatches,
         "updated_at": entry.updated_at.isoformat(),
     }

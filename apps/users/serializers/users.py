@@ -8,6 +8,7 @@ from rest_framework.serializers import (
     BooleanField,
     CharField,
     ChoiceField,
+    DateField,
     FloatField,
     ImageField,
     IntegerField,
@@ -495,6 +496,12 @@ class UserAnimeListSerializer(ModelSerializer):
         required=False,
     )
     status = ChoiceField(choices=UserAnimeList.UserAnimeStatus.choices, required=False)
+    score = IntegerField(required=False, min_value=0, max_value=10)
+    episodes_watched = IntegerField(required=False, min_value=0)
+    notes = CharField(required=False, allow_blank=True)
+    started_at = DateField(required=False, allow_null=True)
+    finished_at = DateField(required=False, allow_null=True)
+    total_rewatches = IntegerField(required=False, min_value=0)
     progress = SerializerMethodField()
 
     class Meta:
@@ -509,6 +516,7 @@ class UserAnimeListSerializer(ModelSerializer):
             "notes",
             "started_at",
             "finished_at",
+            "total_rewatches",
             "is_rewatching",
             "progress",
             "updated_at",
@@ -526,9 +534,15 @@ class UserAnimeListSerializer(ModelSerializer):
         episodes_watched = attrs.get("episodes_watched")
         anime = attrs.get("anime")
         status = attrs.get("status")
+        started_at = attrs.get("started_at")
+        finished_at = attrs.get("finished_at")
 
         if not anime and self.instance:
             anime = self.instance.anime
+        if started_at is None and self.instance:
+            started_at = self.instance.started_at
+        if finished_at is None and self.instance:
+            finished_at = self.instance.finished_at
 
         if episodes_watched is not None and episodes_watched < 0:
             raise ValidationError({"episodes_watched": "Episodes watched cannot be negative."})
@@ -546,6 +560,9 @@ class UserAnimeListSerializer(ModelSerializer):
 
         if status == UserAnimeList.UserAnimeStatus.completed and anime and anime.episode_count > 0:
             attrs["episodes_watched"] = anime.episode_count
+
+        if started_at and finished_at and finished_at < started_at:
+            raise ValidationError({"finished_at": "Finish date cannot be earlier than start date."})
 
         return attrs
 

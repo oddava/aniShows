@@ -70,6 +70,7 @@ class UserAnimeList(Model):
     notes = TextField(blank=True, default="")
     started_at = DateField(null=True, blank=True)
     finished_at = DateField(null=True, blank=True)
+    total_rewatches = IntegerField(default=0)
     is_rewatching = BooleanField(default=False)
     updated_at = DateTimeField(auto_now=True)
 

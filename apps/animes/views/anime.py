@@ -482,6 +482,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                         "notes": entry.notes,
                         "started_at": str(entry.started_at) if entry.started_at else None,
                         "finished_at": str(entry.finished_at) if entry.finished_at else None,
+                        "total_rewatches": entry.total_rewatches,
                         "is_rewatching": entry.is_rewatching,
                         "progress": (entry.episodes_watched / data["episode_count"] * 100)
                         if data.get("episode_count") and data["episode_count"] > 0
@@ -644,6 +645,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                         "notes": entry.notes,
                         "started_at": str(entry.started_at) if entry.started_at else None,
                         "finished_at": str(entry.finished_at) if entry.finished_at else None,
+                        "total_rewatches": entry.total_rewatches,
                         "is_rewatching": entry.is_rewatching,
                         "progress": (
                             entry.episodes_watched / item["episode_count"] * 100

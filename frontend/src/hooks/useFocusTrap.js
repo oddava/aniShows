@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * Hook to trap focus within a container element
@@ -34,6 +34,7 @@ export function useFocusTrap(isActive, onEscape) {
         if (!isActive || !containerRef.current) return;
 
         const container = containerRef.current;
+        let focusTimerId = null;
 
         const handleKeyDown = (e) => {
             // Handle Escape key
@@ -74,14 +75,19 @@ export function useFocusTrap(isActive, onEscape) {
         );
         if (focusableElements.length > 0) {
             // Small delay to ensure DOM is ready
-            setTimeout(() => {
-                focusableElements[0].focus();
+            focusTimerId = window.setTimeout(() => {
+                if (!container.contains(document.activeElement)) {
+                    focusableElements[0].focus();
+                }
             }, 50);
         }
 
         document.addEventListener('keydown', handleKeyDown);
 
         return () => {
+            if (focusTimerId !== null) {
+                window.clearTimeout(focusTimerId);
+            }
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [isActive, onEscape]);
