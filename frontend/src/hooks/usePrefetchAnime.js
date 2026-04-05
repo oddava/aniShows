@@ -77,7 +77,7 @@ export function usePrefetchAnime() {
         if (!animeId) return;
 
         queryClient.prefetchQuery({
-            queryKey: ['anime', 'detail', animeId],
+            queryKey: ['anime', animeId, 'anonymous'],
             queryFn: () => animeApi.getBySlug(animeId).then(res => res.data),
             staleTime: 1000 * 60 * 10, // 10 minutes for detail pages
         });

@@ -210,7 +210,7 @@ describe('AnimeDetail list update invalidation', () => {
                 .filter(Boolean);
 
             expect(keys).toContain(JSON.stringify(['anime']));
-            expect(keys).toContain(JSON.stringify(['anime', 'frieren']));
+            expect(keys).toContain(JSON.stringify(['anime', 'frieren', 77]));
             expect(keys).toContain(JSON.stringify(['user', 'list', 'watching']));
             expect(keys).toContain(JSON.stringify(['lists']));
             expect(keys).toContain(JSON.stringify(['ownProfile']));

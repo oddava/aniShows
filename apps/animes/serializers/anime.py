@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.db.models import Count, Q
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -19,7 +18,6 @@ from apps.animes.serializers.base import (
     ThemeSongSerializer,
 )
 from apps.animes.serializers_mixins import ImageUrlMixin, UserStatusMixin
-from apps.users.models import UserAnimeList
 
 
 class AnimeWatchEpisodeSerializer(Serializer):
@@ -287,7 +285,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         return None
 
     def get_status_distribution(self, obj):
-        """Return live site list counts for the anime detail page."""
+        """Return the denormalized site list counts stored on the anime record."""
         if not obj.pk:
             return {
                 "watching": 0,
@@ -297,13 +295,9 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
                 "plan_to_watch": 0,
             }
 
-        distribution = UserAnimeList.objects.filter(anime_id=obj.pk).aggregate(
-            watching=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.watching)),
-            completed=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.completed)),
-            on_hold=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.on_hold)),
-            dropped=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.dropped)),
-            plan_to_watch=Count("id", filter=Q(status=UserAnimeList.UserAnimeStatus.plan_to_watch)),
-        )
+        distribution = getattr(obj, "status_distribution", None)
+        if not isinstance(distribution, dict):
+            distribution = {}
 
         return {
             key: int(distribution.get(key, 0) or 0)

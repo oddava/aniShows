@@ -20,6 +20,7 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -86,6 +87,23 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
     _PUBLIC_CACHE_VERSION = "v7"
+    _DETAIL_DEFER_FIELDS = (
+        "offline_db_payload",
+        "provider_ids",
+        "source_urls",
+        "synonyms",
+        "producers",
+        "meta_description",
+    )
+    _ACTION_ANIME_ONLY_FIELDS = (
+        "id",
+        "slug",
+        "title",
+        "episode_count",
+        "updated_at",
+        "mal_id",
+        "anilist_id",
+    )
 
     _LIST_FIELDS = (
         "id",
@@ -162,7 +180,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             queryset = queryset.prefetch_related(
                 "genres",
                 "theme_songs",
-            ).annotate(
+            ).defer(*self._DETAIL_DEFER_FIELDS).annotate(
                 character_count=Count("cast", distinct=True),
                 staff_count=Count("production_staff", distinct=True),
             )
@@ -515,6 +533,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 logger.warning(f"Error injecting user status for anime {slug}: {e}")
 
         return self._with_cache_status_header(Response(data), cache_status)
+
+    def _get_action_anime(self, slug: str) -> Anime:
+        return get_object_or_404(
+            Anime.public_queryset().only(*self._ACTION_ANIME_ONLY_FIELDS),
+            slug=slug,
+        )
 
     @staticmethod
     def _has_cover_media(data: dict) -> bool:
@@ -881,7 +905,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def characters(self, request, slug=None):
         """Get full characters list for this anime."""
-        instance = self.get_object()
+        instance = self._get_action_anime(slug)
         characters = AnimeCharacter.objects.filter(anime=instance).select_related(
             "character", "voice_actor"
         )
@@ -891,7 +915,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def staff(self, request, slug=None):
         """Get full staff list for this anime."""
-        instance = self.get_object()
+        instance = self._get_action_anime(slug)
         staff = AnimeStaff.objects.filter(anime=instance).select_related("staff")
         serializer = AnimeStaffSerializer(staff, many=True)
         return Response(serializer.data)
@@ -899,14 +923,17 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"], url_path="watch-episodes")
     def watch_episodes(self, request, slug=None):
         """Get paginated watch-episode data for this anime."""
-        anime = self.get_object()
+        anime = self._get_action_anime(slug)
         episodes = AnimeWatchEpisodeService().get_for_anime(anime)
+        paginator = WatchEpisodesPagination()
+        page = paginator.paginate_queryset(episodes, request, view=self)
+        episode_numbers = [episode.get("number") for episode in (page or [])]
         episode_rating_map = {
             item["episode_number"]: item
             for item in EpisodeRatingSummaryService().get_for_anime(
                 anime,
                 user=request.user,
-                episode_numbers=[episode.get("number") for episode in episodes],
+                episode_numbers=episode_numbers,
             )
         }
         enriched_episodes = [
@@ -918,17 +945,14 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 ),
                 "user_rating": (episode_rating_map.get(episode["number"]) or {}).get("user_rating"),
             }
-            for episode in episodes
+            for episode in (page or [])
         ]
-
-        paginator = WatchEpisodesPagination()
-        page = paginator.paginate_queryset(enriched_episodes, request, view=self)
-        serializer = AnimeWatchEpisodeSerializer(page, many=True)
+        serializer = AnimeWatchEpisodeSerializer(enriched_episodes, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @action(detail=True, methods=["get"], url_path="episode-ratings")
     def episode_ratings(self, request, slug=None):
-        anime = self.get_object()
+        anime = self._get_action_anime(slug)
         ratings = EpisodeRatingSummaryService().get_for_anime(anime, user=request.user)
         serializer = EpisodeRatingSummarySerializer(ratings, many=True)
         return Response(serializer.data)
@@ -940,7 +964,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         permission_classes=[permissions.IsAuthenticated],
     )
     def episode_rating(self, request, slug=None, episode_number=None):
-        anime = self.get_object()
+        anime = self._get_action_anime(slug)
         resolved_episode_number = int(episode_number)
         if resolved_episode_number <= 0:
             return Response(

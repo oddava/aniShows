@@ -59,7 +59,6 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -95,7 +94,6 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -131,7 +129,6 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -167,7 +164,6 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -206,7 +202,6 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -312,7 +307,6 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
-      DJANGO_SETTINGS_MODULE: "root.settings"
     depends_on:
       web:
         condition: service_healthy

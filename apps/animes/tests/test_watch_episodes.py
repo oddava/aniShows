@@ -3,8 +3,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
-from django.core.management import call_command
 from django.core.cache import cache
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -206,6 +206,49 @@ class AnimeWatchEpisodesEndpointTests(APITestCase):
         self.assertIsNone(response.data['results'][0]['average_rating'])
         self.assertEqual(response.data['results'][0]['rating_count'], 0)
         self.assertIsNone(response.data['results'][0]['user_rating'])
+
+    @patch('apps.animes.signals.enrich_metadata.delay')
+    @patch('apps.animes.views.anime.EpisodeRatingSummaryService.get_for_anime')
+    @patch('apps.animes.views.anime.AnimeWatchEpisodeService.get_for_anime')
+    def test_watch_episodes_endpoint_only_loads_ratings_for_current_page(
+        self,
+        mock_get_for_anime,
+        mock_get_episode_ratings,
+        _mock_delay,
+    ):
+        anime = Anime.objects.create(
+            title='Long Runner',
+            slug='long-runner',
+            synopsis='Very long show.',
+            anime_type='TV',
+            status='Finished',
+        )
+        mock_get_for_anime.return_value = [
+            {
+                'number': index,
+                'title': f'Episode {index}',
+                'aired': '2024-01-04',
+                'thumbnail': '',
+                'crunchyroll_url': 'https://www.crunchyroll.com/watch/GEXAMPLE',
+                'has_real_crunchyroll_url': True,
+            }
+            for index in range(1, 121)
+        ]
+        mock_get_episode_ratings.return_value = []
+
+        response = self.client.get(
+            reverse('anime-watch-episodes', args=[anime.slug]),
+            {'page': 3, 'page_size': 25},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['results']), 25)
+        self.assertEqual(response.data['results'][0]['number'], 51)
+        self.assertEqual(response.data['results'][-1]['number'], 75)
+        self.assertEqual(mock_get_episode_ratings.call_count, 1)
+        call_args = mock_get_episode_ratings.call_args
+        self.assertEqual(call_args.args[0].id, anime.id)
+        self.assertEqual(call_args.kwargs['episode_numbers'], list(range(51, 76)))
 
 
 class AnimeWatchEpisodeTaskTests(TestCase):

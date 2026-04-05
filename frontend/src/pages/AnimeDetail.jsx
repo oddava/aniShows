@@ -39,6 +39,8 @@ const TABS = [
 ];
 
 const DEFAULT_TAB_ID = 'overview';
+const WATCH_PREVIEW_PAGE_SIZE = 4;
+const WATCH_TAB_PAGE_SIZE = 50;
 
 const getTabByPath = (tabPath) => {
     const normalizedPath = tabPath?.replace(/^\/+|\/+$/g, '') || '';
@@ -123,26 +125,64 @@ const useAccentColor = (coverImage, bannerImage) => {
                 };
 
                 img.onerror = () => reject(new Error('Failed to load image'));
-                img.src = imageUrl + (imageUrl.includes('?') ? '&' : '?') + '_cb=' + Date.now();
+                img.src = imageUrl;
             });
         };
 
         const processColor = ({ r, g, b }) => {
-            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-            if (luminance > 0.85) {
-                setAccentColor(null);
-                return;
+            // Convert RGB to HSL
+            const rNorm = r / 255;
+            const gNorm = g / 255;
+            const bNorm = b / 255;
+            
+            const max = Math.max(rNorm, gNorm, bNorm);
+            const min = Math.min(rNorm, gNorm, bNorm);
+            let h, s, l = (max + min) / 2;
+
+            if (max === min) {
+                h = s = 0; // achromatic
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
+                    case gNorm: h = (bNorm - rNorm) / d + 2; break;
+                    case bNorm: h = (rNorm - gNorm) / d + 4; break;
+                }
+                h /= 6;
             }
 
-            let finalR = r, finalG = g, finalB = b;
-            if (luminance < 0.25) {
-                const lightenFactor = 0.25 / Math.max(luminance, 0.01);
-                finalR = Math.min(255, Math.round(r * lightenFactor));
-                finalG = Math.min(255, Math.round(g * lightenFactor));
-                finalB = Math.min(255, Math.round(b * lightenFactor));
+            // Clamp lightness and saturation for a better dark theme experience
+            const minLightness = 0.45;
+            const maxLightness = 0.65;
+            const minSaturation = 0.3;
+
+            l = Math.max(minLightness, Math.min(maxLightness, l));
+            if (s > 0) {
+                s = Math.max(minSaturation, s);
             }
 
-            const toHex = (c) => c.toString(16).padStart(2, '0');
+            // Convert back to RGB
+            let finalR, finalG, finalB;
+            if (s === 0) {
+                finalR = finalG = finalB = l; // achromatic
+            } else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                finalR = hue2rgb(p, q, h + 1/3);
+                finalG = hue2rgb(p, q, h);
+                finalB = hue2rgb(p, q, h - 1/3);
+            }
+
+            const toHex = (c) => Math.round(c * 255).toString(16).padStart(2, '0');
             setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
         };
 
@@ -318,10 +358,15 @@ export default function AnimeDetail() {
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
+    const animeDetailQueryKey = useMemo(() => ['anime', slug, user?.id || 'anonymous'], [slug, user?.id]);
+    const watchPreviewQueryKey = useMemo(() => ['anime', slug, 'watch-episodes-preview'], [slug]);
+    const watchEpisodesQueryKey = useMemo(() => ['anime', slug, 'watch-episodes', WATCH_TAB_PAGE_SIZE], [slug]);
+    const shouldLoadWatchPreview = activeTab === 'overview';
+    const shouldLoadWatchTab = activeTab === 'watch';
 
     // Queries
     const { data: anime, isLoading, isError } = useQuery({
-        queryKey: ['anime', slug, user?.id],
+        queryKey: animeDetailQueryKey,
         queryFn: () => animeApi.getBySlug(slug).then(res => res.data),
         staleTime: 300000, // 5 minutes
         gcTime: 600000, // 10 minutes
@@ -342,6 +387,18 @@ export default function AnimeDetail() {
     });
 
     const {
+        data: watchPreviewData,
+    } = useQuery({
+        queryKey: watchPreviewQueryKey,
+        queryFn: () => animeApi.getWatchEpisodes(slug, {
+            page: 1,
+            page_size: WATCH_PREVIEW_PAGE_SIZE,
+        }).then((res) => res.data),
+        enabled: !!anime && shouldLoadWatchPreview,
+        staleTime: 300000,
+    });
+
+    const {
         data: watchEpisodesData,
         fetchNextPage: fetchNextWatchEpisodesPage,
         hasNextPage: hasNextWatchEpisodesPage,
@@ -350,10 +407,10 @@ export default function AnimeDetail() {
         isError: watchEpisodesIsError,
         refetch: refetchWatchEpisodes,
     } = useInfiniteQuery({
-        queryKey: ['anime', slug, 'watch-episodes'],
+        queryKey: watchEpisodesQueryKey,
         queryFn: ({ pageParam }) => animeApi.getWatchEpisodes(slug, {
             page: pageParam,
-            page_size: 50,
+            page_size: WATCH_TAB_PAGE_SIZE,
         }).then(res => res.data),
         initialPageParam: 1,
         getNextPageParam: (lastPage) => {
@@ -367,7 +424,7 @@ export default function AnimeDetail() {
             }
             return undefined;
         },
-        enabled: !!anime && (activeTab === 'watch' || activeTab === 'overview'),
+        enabled: !!anime && shouldLoadWatchTab,
         staleTime: 300000,
     });
 
@@ -427,7 +484,12 @@ export default function AnimeDetail() {
         watchEpisodesData?.pages.flatMap((page) => page?.results || []) || [],
         [watchEpisodesData]
     );
-    const rawWatchEpisodesCount = watchEpisodesData?.pages?.[0]?.count;
+    const previewEpisodes = useMemo(
+        () => watchPreviewData?.results || [],
+        [watchPreviewData]
+    );
+    const displayEpisodes = activeTab === 'watch' ? watchEpisodes : previewEpisodes;
+    const rawWatchEpisodesCount = watchEpisodesData?.pages?.[0]?.count ?? watchPreviewData?.count;
     const parsedWatchEpisodesCount = Number(rawWatchEpisodesCount);
     const watchEpisodesTotal = Number.isFinite(parsedWatchEpisodesCount) && parsedWatchEpisodesCount >= 0
         ? parsedWatchEpisodesCount
@@ -453,12 +515,28 @@ export default function AnimeDetail() {
         }
     }, [anime]);
 
+    useEffect(() => {
+        if (!anime || activeTab !== 'overview') {
+            return;
+        }
+
+        queryClient.prefetchInfiniteQuery({
+            queryKey: watchEpisodesQueryKey,
+            queryFn: ({ pageParam = 1 }) => animeApi.getWatchEpisodes(slug, {
+                page: pageParam,
+                page_size: WATCH_TAB_PAGE_SIZE,
+            }).then((res) => res.data),
+            initialPageParam: 1,
+            staleTime: 300000,
+        });
+    }, [anime, activeTab, queryClient, slug, watchEpisodesQueryKey]);
+
     // Mutations
     const createReviewMutation = useMutation({
         mutationFn: (data) => reviewApi.create({ ...data, anime_slug: slug }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviews'] });
-            queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (user?.username) {
                 queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
@@ -471,7 +549,7 @@ export default function AnimeDetail() {
         mutationFn: ({ id, data }) => reviewApi.update(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviews'] });
-            queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             setEditingReview(null);
         },
     });
@@ -480,7 +558,7 @@ export default function AnimeDetail() {
         mutationFn: (id) => reviewApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['reviews'] });
-            queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+            queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
             if (user?.username) {
                 queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
@@ -494,7 +572,8 @@ export default function AnimeDetail() {
         mutationFn: ({ episodeNumber, rating }) =>
             animeApi.setEpisodeRating(slug, episodeNumber, { rating }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'watch-episodes'] });
+            queryClient.invalidateQueries({ queryKey: watchEpisodesQueryKey });
+            queryClient.invalidateQueries({ queryKey: watchPreviewQueryKey });
             queryClient.invalidateQueries({ queryKey: ['anime', slug, 'episode-ratings'] });
         },
     });
@@ -502,7 +581,8 @@ export default function AnimeDetail() {
     const clearEpisodeRatingMutation = useMutation({
         mutationFn: (episodeNumber) => animeApi.clearEpisodeRating(slug, episodeNumber),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'watch-episodes'] });
+            queryClient.invalidateQueries({ queryKey: watchEpisodesQueryKey });
+            queryClient.invalidateQueries({ queryKey: watchPreviewQueryKey });
             queryClient.invalidateQueries({ queryKey: ['anime', slug, 'episode-ratings'] });
         },
     });
@@ -526,11 +606,11 @@ export default function AnimeDetail() {
 
     const handleListUpdate = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: ['anime'] });
-        queryClient.invalidateQueries({ queryKey: ['anime', slug] });
+        queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
         queryClient.invalidateQueries({ queryKey: ['user', 'list', 'watching'] });
         queryClient.invalidateQueries({ queryKey: ['lists'] });
         queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-    }, [queryClient, slug]);
+    }, [animeDetailQueryKey, queryClient]);
 
     const handleReviewSubmit = useCallback(async (data) => {
         if (editingReview) {
@@ -841,7 +921,7 @@ export default function AnimeDetail() {
                                         accentColor={accentColor}
                                         characters={characters}
                                         staff={staff}
-                                        episodes={watchEpisodes}
+                                        episodes={displayEpisodes}
                                         onStaffClick={setSelectedStaff}
                                     />
                                 )}
@@ -849,7 +929,7 @@ export default function AnimeDetail() {
                                     <EpisodesTab
                                         anime={anime}
                                         accentColor={accentColor}
-                                        episodes={watchEpisodes}
+                                        episodes={displayEpisodes}
                                         isAuthenticated={isAuthenticated}
                                         totalCount={watchEpisodesTotal}
                                         isLoading={watchEpisodesLoading}

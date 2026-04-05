@@ -1,6 +1,7 @@
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -18,6 +19,7 @@ RUN uv sync --frozen --no-dev
 FROM python:3.12-slim AS dev-builder
 
 WORKDIR /app
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -45,9 +47,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /opt/venv /opt/venv
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY . .
 
@@ -77,6 +79,6 @@ CMD ["gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py"]
 FROM runtime AS development
 
 USER root
-COPY --from=dev-builder /app/.venv /app/.venv
-RUN chown -R aniuser:aniuser /app/.venv
+COPY --from=dev-builder /opt/venv /opt/venv
+RUN chown -R aniuser:aniuser /opt/venv
 USER aniuser

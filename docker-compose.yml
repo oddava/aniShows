@@ -28,7 +28,6 @@ services:
       AWS_S3_REGION_NAME: "${AWS_S3_REGION_NAME:-us-east-1}"
       MINIO_PUBLIC_DOMAIN: "${MINIO_PUBLIC_DOMAIN:-localhost:9000}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,0.0.0.0}"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -73,7 +72,6 @@ services:
       AWS_S3_REGION_NAME: "${AWS_S3_REGION_NAME:-us-east-1}"
       MINIO_PUBLIC_DOMAIN: "${MINIO_PUBLIC_DOMAIN:-localhost:9000}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,daphne,localhost,127.0.0.1,0.0.0.0}"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
@@ -233,7 +231,6 @@ services:
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
       REDIS_DB: "${REDIS_DB:-0}"
 
-      DJANGO_SETTINGS_MODULE: "root.settings"
       # Prometheus multi-process metrics
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       # Sentry
@@ -277,7 +274,6 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
       REDIS_DB: "${REDIS_DB:-0}"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
@@ -313,7 +309,6 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
       REDIS_DB: "${REDIS_DB:-0}"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
@@ -349,7 +344,6 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
       REDIS_DB: "${REDIS_DB:-0}"
-      DJANGO_SETTINGS_MODULE: "root.settings"
       PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
@@ -386,7 +380,6 @@ services:
       REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
       REDIS_DB: "${REDIS_DB:-0}"
 
-      DJANGO_SETTINGS_MODULE: "root.settings"
       # Sentry
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"

@@ -85,10 +85,10 @@ superuser:                      ## Create superuser
 	$(EXEC) createsuperuser
 
 test:                           ## Run tests
-	docker compose run --rm --no-deps -e DJANGO_SETTINGS_MODULE=root.settings.test web python -m pytest
+	docker compose run --rm --no-deps -e DJANGO_SETTINGS_MODULE=root.settings.test web /opt/venv/bin/python -m pytest
 
 lint:                           ## Run linter (ruff)
-	docker compose exec web uv run ruff check .
+	docker compose run --rm --no-deps web /opt/venv/bin/python -m ruff check .
 
 collectstatic:                  ## Collect static files
 	$(EXEC) collectstatic --noinput
