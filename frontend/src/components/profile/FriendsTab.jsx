@@ -12,24 +12,28 @@ function FriendItem({ item }) {
     return (
         <Link
             to={`/u/${user.username}`}
-            className="flex flex-col items-center gap-2"
+            className="group relative flex flex-col items-center"
             title={user.username}
         >
-            {showAvatarImage ? (
-                <img
-                    src={user.avatar}
-                    alt=""
-                    onError={() => setAvatarFailed(true)}
-                    className="h-20 w-20 rounded-md border border-gray-700 object-cover"
-                />
-            ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-md border border-gray-700 bg-dark-50">
-                    <UserRound className="h-10 w-10 text-slate-500" aria-hidden="true" />
+            <div className="relative h-20 w-20 overflow-hidden rounded-md">
+                {showAvatarImage ? (
+                    <img
+                        src={user.avatar}
+                        alt=""
+                        onError={() => setAvatarFailed(true)}
+                        className="h-full w-full object-cover transition-transform"
+                    />
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-dark-50">
+                        <UserRound className="h-10 w-10 text-slate-500" aria-hidden="true" />
+                    </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                    <span className="truncate px-2 text-center text-xs font-bold text-white drop-shadow-md">
+                        {user.username}
+                    </span>
                 </div>
-            )}
-            <span className="max-w-[88px] truncate text-xs font-medium text-gray-400">
-                {user.username}
-            </span>
+            </div>
         </Link>
     );
 }
