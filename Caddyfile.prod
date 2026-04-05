@@ -221,3 +221,14 @@
         output file /var/log/caddy/access.log
     }
 }
+
+oddava.me {
+    encode zstd gzip
+
+    reverse_proxy oddava-app:4321 {
+        header_up Host {host}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-For {remote_host}
+    }
+}
