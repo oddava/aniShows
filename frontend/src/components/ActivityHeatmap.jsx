@@ -133,27 +133,33 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     // Get color intensity based on count - using inline styles for better theme support
     const getColorStyle = (count) => {
         if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.25)' };
-        if (count <= 2) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
         if (isPastel) {
-            if (count <= 4) return { backgroundColor: 'rgba(232, 90, 156, 0.6)' };
-            if (count <= 6) return { backgroundColor: 'rgba(232, 90, 156, 0.85)' };
+            if (count <= 1) return { backgroundColor: 'rgba(232, 90, 156, 0.2)' };
+            if (count <= 3) return { backgroundColor: 'rgba(232, 90, 156, 0.4)' };
+            if (count <= 5) return { backgroundColor: 'rgba(232, 90, 156, 0.6)' };
+            if (count <= 7) return { backgroundColor: 'rgba(232, 90, 156, 0.8)' };
             return { backgroundColor: 'rgb(232, 90, 156)' };
         }
-        if (count <= 4) return { backgroundColor: toRgba(profileAccentColor, 0.6) };
-        if (count <= 6) return { backgroundColor: toRgba(profileAccentColor, 0.85) };
+        if (count <= 1) return { backgroundColor: toRgba(profileAccentColor, 0.2) };
+        if (count <= 3) return { backgroundColor: toRgba(profileAccentColor, 0.4) };
+        if (count <= 5) return { backgroundColor: toRgba(profileAccentColor, 0.6) };
+        if (count <= 7) return { backgroundColor: toRgba(profileAccentColor, 0.8) };
         return { backgroundColor: profileAccentColor };
     };
 
     const getHoverStyle = (count) => {
         if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
-        if (count <= 2) return { backgroundColor: 'rgba(100, 100, 110, 0.65)' };
         if (isPastel) {
-            if (count <= 4) return { backgroundColor: 'rgba(232, 90, 156, 0.8)' };
-            if (count <= 6) return { backgroundColor: 'rgba(232, 90, 156, 1)' };
+            if (count <= 1) return { backgroundColor: 'rgba(232, 90, 156, 0.4)' };
+            if (count <= 3) return { backgroundColor: 'rgba(232, 90, 156, 0.6)' };
+            if (count <= 5) return { backgroundColor: 'rgba(232, 90, 156, 0.8)' };
+            if (count <= 7) return { backgroundColor: 'rgb(232, 90, 156)' };
             return { backgroundColor: 'rgba(255, 133, 184, 1)' };
         }
-        if (count <= 4) return { backgroundColor: toRgba(profileAccentColor, 0.8) };
-        if (count <= 6) return { backgroundColor: profileAccentColor };
+        if (count <= 1) return { backgroundColor: toRgba(profileAccentColor, 0.4) };
+        if (count <= 3) return { backgroundColor: toRgba(profileAccentColor, 0.6) };
+        if (count <= 5) return { backgroundColor: toRgba(profileAccentColor, 0.8) };
+        if (count <= 7) return { backgroundColor: profileAccentColor };
         return { backgroundColor: profileAccentLight };
     };
 
@@ -247,10 +253,10 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                     <div className="flex items-center gap-3">
                         <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Less</span>
                         <div className="flex gap-1">
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.25)' }} />
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.45)' }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.2)' : toRgba(profileAccentColor, 0.2) }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.4)' : toRgba(profileAccentColor, 0.4) }} />
                             <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : toRgba(profileAccentColor, 0.6) }} />
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.85)' : toRgba(profileAccentColor, 0.85) }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.8)' : toRgba(profileAccentColor, 0.8) }} />
                             <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : profileAccentColor }} />
                         </div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
