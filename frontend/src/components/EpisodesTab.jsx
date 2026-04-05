@@ -1,4 +1,4 @@
-import { Loader, Play, Search, Star, Tv, X } from 'lucide-react';
+import { Loader, Star, Tv, X } from 'lucide-react';
 
 const RATING_OPTIONS = ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0'];
 
@@ -74,9 +74,19 @@ export default function EpisodesTab({
                     return (
                         <article
                             key={episode.number}
-                            className="group flex flex-col justify-between gap-3 rounded-lg sm:rounded-xl border border-white/5 bg-dark-200/40 p-2 sm:p-3 transition-colors hover:border-gray-600 min-w-0 overflow-hidden md:flex-row md:items-center md:gap-4"
+                            className="relative group flex flex-col justify-between gap-3 rounded-lg sm:rounded-xl border border-white/5 bg-dark-200/40 p-2 sm:p-3 transition-colors hover:border-gray-600 hover:bg-dark-200/60 min-w-0 overflow-hidden md:flex-row md:items-center md:gap-4"
                         >
-                            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                            <a 
+                                href={episode.crunchyroll_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="absolute inset-0 z-0"
+                                aria-label={`Watch episode ${episode.number}`}
+                            >
+                                <span className="sr-only">Watch episode {episode.number}</span>
+                            </a>
+                            
+                            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0 relative z-10 pointer-events-none">
                                 {episode.thumbnail && (
                                     <div className="relative aspect-video w-20 sm:w-32 flex-shrink-0 overflow-hidden rounded-md sm:rounded-lg bg-dark-200 border border-transparent group-hover:border-white/10 transition-colors">
                                         <img
@@ -112,24 +122,7 @@ export default function EpisodesTab({
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2 md:items-end">
-                                <a
-                                    href={episode.crunchyroll_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center justify-center gap-1 sm:gap-1.5 rounded-md sm:rounded-lg px-2.5 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-bold text-white transition-all bg-white/5 hover:!bg-[var(--hover-accent)] active:scale-95 w-full md:w-auto"
-                                    style={{ '--hover-accent': accentColor || '#75698d' }}
-                                >
-                                    {episode.has_real_crunchyroll_url ? (
-                                        <Play className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-current flex-shrink-0" />
-                                    ) : (
-                                        <Search className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
-                                    )}
-                                    <span className="truncate">
-                                        {episode.has_real_crunchyroll_url ? 'Watch' : 'Search'}
-                                    </span>
-                                </a>
-
+                            <div className="flex flex-col gap-2 md:items-end relative z-10">
                                 {isAuthenticated && (
                                     <div className="flex items-center gap-2">
                                         <label htmlFor={`episode-rating-${episode.number}`} className="sr-only">

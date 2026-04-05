@@ -105,15 +105,10 @@ export default function StatsTab({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2">
-                            <BarChart3 className="w-4 h-4 text-gray-500" />
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
                                 Episode Ratings
                             </h3>
                         </div>
-                        <p className="mt-2 max-w-2xl text-sm text-gray-400">
-                            Community scores per episode. Bars show vote volume and the line tracks
-                            how the season’s quality curve shifts over time.
-                        </p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-right text-xs sm:text-sm">
                         <div>
