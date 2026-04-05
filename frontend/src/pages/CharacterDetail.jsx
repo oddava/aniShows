@@ -83,12 +83,17 @@ function CharacterDetailSkeleton() {
         <div className="min-h-screen bg-dark animate-pulse">
             <div className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">
                 <div className="mb-8 h-5 w-24 rounded bg-dark-200" />
-                <div className="mb-10 flex flex-col gap-6 sm:flex-row sm:gap-8">
-                    <div className="mx-auto h-60 w-44 rounded-lg bg-dark-200 sm:mx-0" />
-                    <div className="flex-1 space-y-3 pt-2">
-                        <div className="h-8 w-64 rounded bg-dark-200" />
-                        <div className="h-5 w-40 rounded bg-dark-200" />
-                        <div className="h-10 w-64 rounded bg-dark-200" />
+                <div className="mb-10 grid grid-cols-[112px_1fr] sm:grid-cols-[176px_1fr] gap-x-4 sm:gap-x-8 gap-y-6">
+                    <div className="col-start-1 row-start-1 sm:row-span-2 h-40 w-28 sm:h-60 sm:w-44 rounded-lg bg-dark-200 mx-auto sm:mx-0" />
+                    <div className="col-start-2 row-start-1 flex flex-row items-start justify-between gap-3 sm:gap-4 pt-2">
+                        <div className="space-y-3 flex-1 min-w-0">
+                            <div className="h-6 sm:h-8 w-full max-w-[16rem] rounded bg-dark-200" />
+                            <div className="h-4 sm:h-5 w-24 sm:w-40 rounded bg-dark-200" />
+                            <div className="h-4 w-20 sm:w-32 rounded bg-dark-200 mt-4" />
+                        </div>
+                        <div className="h-9 sm:h-10 w-16 sm:w-20 rounded-xl bg-dark-200 flex-shrink-0" />
+                    </div>
+                    <div className="col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 space-y-3">
                         <div className="h-4 w-full rounded bg-dark-200" />
                         <div className="h-4 w-5/6 rounded bg-dark-200" />
                     </div>
@@ -180,9 +185,9 @@ export default function CharacterDetail() {
                         Back
                     </button>
 
-                    <div className="mb-8 flex flex-col gap-6 sm:mb-10 sm:flex-row sm:gap-8">
-                        <div className="mx-auto flex-shrink-0 sm:mx-0">
-                            <div className="h-60 w-44 overflow-hidden rounded-lg bg-dark-200">
+                    <div className="mb-8 grid grid-cols-[112px_1fr] sm:grid-cols-[176px_1fr] gap-x-4 sm:gap-x-8 gap-y-6 sm:mb-10">
+                        <div className="col-start-1 row-start-1 sm:row-span-2 mx-auto sm:mx-0">
+                            <div className="h-40 w-28 sm:h-60 sm:w-44 overflow-hidden rounded-lg bg-dark-200">
                                 <img
                                     src={character.image || '/placeholder-avatar.png'}
                                     alt={character.name}
@@ -201,45 +206,43 @@ export default function CharacterDetail() {
                             )}
                         </div>
 
-                        <div className="flex-1 pt-1 pb-4">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="text-center sm:text-left">
-                                    <h1 className="mb-1 text-2xl font-black text-white sm:text-3xl">
-                                        {character.name}
-                                    </h1>
-                                    {character.name_native && (
-                                        <p className="mb-3 text-base text-gray-400 sm:text-lg">
-                                            {character.name_native}
-                                        </p>
-                                    )}
+                        <div className="col-start-2 row-start-1 flex flex-row items-start justify-between gap-3 sm:gap-4 pt-1">
+                            <div className="text-left min-w-0">
+                                <h1 className="mb-1 text-xl font-black text-white sm:text-3xl break-words">
+                                    {character.name}
+                                </h1>
+                                {character.name_native && (
+                                    <p className="mb-3 text-sm text-gray-400 sm:text-lg break-words">
+                                        {character.name_native}
+                                    </p>
+                                )}
 
-                                    {appearanceCount > 0 && (
-                                        <div className="mb-4">
-                                            <span className="text-sm font-medium text-gray-400">
-                                                {appearanceCount} {appearanceCount === 1 ? 'Appearance' : 'Appearances'}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex justify-center sm:justify-end">
-                                    <EntityFavoriteButton
-                                        isAuthenticated={isAuthenticated}
-                                        isFavorite={favoriteState.isFavorite}
-                                        favoriteCount={favoriteState.favoriteCount}
-                                        isPending={toggleFavoriteMutation.isPending}
-                                        onToggle={() => toggleFavoriteMutation.mutate()}
-                                        entityLabel="Character"
-                                    />
-                                </div>
+                                {appearanceCount > 0 && (
+                                    <div className="mb-4">
+                                        <span className="text-xs sm:text-sm font-medium text-gray-400">
+                                            {appearanceCount} {appearanceCount === 1 ? 'Appearance' : 'Appearances'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
-                            {character.description && (
-                                <div className="max-w-3xl text-sm leading-relaxed text-gray-200 font-medium">
-                                    {parsedDescription}
-                                </div>
-                            )}
+                            <div className="flex flex-shrink-0">
+                                <EntityFavoriteButton
+                                    isAuthenticated={isAuthenticated}
+                                    isFavorite={favoriteState.isFavorite}
+                                    favoriteCount={favoriteState.favoriteCount}
+                                    isPending={toggleFavoriteMutation.isPending}
+                                    onToggle={() => toggleFavoriteMutation.mutate()}
+                                    entityLabel="Character"
+                                />
+                            </div>
                         </div>
+
+                        {character.description && (
+                            <div className="col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 max-w-3xl text-sm leading-relaxed text-gray-200 font-medium">
+                                {parsedDescription}
+                            </div>
+                        )}
                     </div>
 
                     <section>

@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Flame } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import {
     getProfileAccentTheme,
@@ -180,8 +181,11 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                         </div>
                         <div className="w-px h-6 bg-gray-700/30" />
                         <div className="flex flex-col items-end">
-                            <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
-                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Day Streak</span>
+                            <div className="flex items-center gap-1.5">
+                                <Flame size={14} className="text-accent" strokeWidth={2.5} fill="currentColor" fillOpacity={0.2} />
+                                <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
+                            </div>
+                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Day Streak</span>
                         </div>
                     </div>
                 ) : (
