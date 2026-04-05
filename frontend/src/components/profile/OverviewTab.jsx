@@ -57,7 +57,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
         <div className="mb-10">
             <div className="ui-surface-subtle p-5">
                 <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {watchingItems.map((item) => {
                         const eps = item.episodes_watched || 0;
                         const total = item.anime?.episode_count || 0;
@@ -128,7 +128,7 @@ function AnimeFavoritesGrid({ favoritesData }) {
         <div className="mb-10">
             <div className="ui-surface-subtle p-5">
                 <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {favorites.map((fav) => (
                         <div key={fav.id} className="group relative">
                             <Link
@@ -179,7 +179,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
         <div className="mb-10">
             <div className="ui-surface-subtle p-5">
                 <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {items.map((entry) => {
                         const item = entry[itemKey];
                         return (
