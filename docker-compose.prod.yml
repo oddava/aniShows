@@ -216,9 +216,12 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
-    # Disable the Dockerfile HEALTHCHECK (it targets port 8000 / Gunicorn)
     healthcheck:
-      disable: true
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/v1/health/', timeout=5)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       web:
         condition: service_healthy
@@ -243,7 +246,7 @@ services:
       web:
         condition: service_healthy
       daphne:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:

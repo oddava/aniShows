@@ -1,5 +1,6 @@
 import asyncio
 import re
+from typing import Literal
 from urllib.parse import quote_plus, urlparse
 
 import httpx
@@ -19,6 +20,8 @@ class AnimeWatchEpisodeService:
     CACHE_VERSION = "v1"
     CACHE_TTL = 60 * 60 * 6
     EMPTY_CACHE_TTL = 60 * 30
+    REQUEST_BUDGET_DEFAULT = "default"
+    REQUEST_BUDGET_INTERACTIVE = "interactive"
     _STREAMING_EPISODE_PATTERNS = (
         re.compile(r"(?i)\bepisode\s+(\d{1,4})\b"),
         re.compile(r"(?i)\bep\.?\s*(\d{1,4})\b"),
@@ -26,13 +29,18 @@ class AnimeWatchEpisodeService:
     )
     _JIKAN_EPISODE_URL_PATTERN = re.compile(r"/episode/(\d+)")
 
-    def get_for_anime(self, anime: Anime) -> list[dict]:
+    def get_for_anime(
+        self,
+        anime: Anime,
+        *,
+        request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
+    ) -> list[dict]:
         cache_key = self._cache_key(anime)
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
-        episodes = async_to_sync(self._build_for_anime)(anime)
+        episodes = async_to_sync(self._build_for_anime)(anime, request_budget=request_budget)
         cache.set(cache_key, episodes, timeout=self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL)
         return episodes
 
@@ -52,7 +60,12 @@ class AnimeWatchEpisodeService:
         updated_at_token = int(updated_at.timestamp()) if getattr(updated_at, "timestamp", None) else 0
         return f"anime_watch_episodes:{cls.CACHE_VERSION}:{anime_id}:{updated_at_token}"
 
-    async def _build_for_anime(self, anime: Anime) -> list[dict]:
+    async def _build_for_anime(
+        self,
+        anime: Anime,
+        *,
+        request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
+    ) -> list[dict]:
         anilist_media: dict = {}
         mal_id = anime.mal_id
 
@@ -62,6 +75,7 @@ class AnimeWatchEpisodeService:
                 anilist_media = await service.get_streaming_episodes_for_anime(
                     anilist_id=anime.anilist_id,
                     mal_id=mal_id,
+                    request_budget=request_budget,
                 ) or {}
             except Exception as exc:
                 logger.warning(
@@ -76,7 +90,7 @@ class AnimeWatchEpisodeService:
         if not mal_id:
             return self._build_fallback_episodes(anime)
 
-        jikan_episodes = await self._fetch_jikan_episodes(mal_id)
+        jikan_episodes = await self._fetch_jikan_episodes(mal_id, request_budget=request_budget)
         if not jikan_episodes:
             return self._build_fallback_episodes(anime)
 
@@ -103,15 +117,28 @@ class AnimeWatchEpisodeService:
             for episode_number in range(1, episode_count + 1)
         ]
 
-    async def _fetch_jikan_episodes(self, mal_id: int) -> list[dict]:
+    async def _fetch_jikan_episodes(
+        self,
+        mal_id: int,
+        *,
+        request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
+    ) -> list[dict]:
         limiter = JikanRateLimiter(base_delay=0.4)
         url = f"{JIKAN_BASE_URL}/anime/{mal_id}/episodes"
         episodes: list[dict] = []
         page = 1
+        max_retries = 0 if request_budget == self.REQUEST_BUDGET_INTERACTIVE else 3
+        request_timeout = 8.0 if request_budget == self.REQUEST_BUDGET_INTERACTIVE else 15.0
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
             while True:
-                payload = await self._get_jikan_page(client, url, page, limiter)
+                payload = await self._get_jikan_page(
+                    client,
+                    url,
+                    page,
+                    limiter,
+                    max_retries=max_retries,
+                )
                 if not payload:
                     break
 

@@ -169,6 +169,37 @@ class AnimeWatchEpisodeServiceTests(TestCase):
             ],
         )
 
+    @patch(
+        'apps.animes.services.watch_episodes.AniListService.get_streaming_episodes_for_anime',
+        new_callable=AsyncMock,
+    )
+    @patch('apps.animes.services.watch_episodes.httpx.AsyncClient.get', new_callable=AsyncMock)
+    def test_interactive_budget_falls_back_quickly_when_jikan_times_out(
+        self,
+        mock_jikan_get,
+        mock_streams,
+    ):
+        anime = Anime.objects.create(
+            title='Fallback With Timeout',
+            slug='fallback-with-timeout',
+            synopsis='Timeout fallback.',
+            anime_type='TV',
+            status='Finished',
+            mal_id=53000,
+            anilist_id=154600,
+            episode_count=3,
+        )
+        mock_streams.return_value = {'idMal': anime.mal_id, 'streamingEpisodes': []}
+        mock_jikan_get.side_effect = httpx.TimeoutException(
+            'timed out',
+            request=httpx.Request('GET', f'https://api.jikan.moe/v4/anime/{anime.mal_id}/episodes'),
+        )
+
+        episodes = self.service.get_for_anime(anime, request_budget='interactive')
+
+        self.assertEqual([episode['number'] for episode in episodes], [1, 2, 3])
+        self.assertTrue(all(not episode['has_real_crunchyroll_url'] for episode in episodes))
+
 
 class AnimeWatchEpisodesEndpointTests(APITestCase):
     @patch('apps.animes.signals.enrich_metadata.delay')

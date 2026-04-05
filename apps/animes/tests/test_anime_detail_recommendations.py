@@ -81,7 +81,11 @@ class AnimeDetailRecommendationsTests(APITestCase):
             [item["slug"] for item in response.data],
             [self.anilist_recommendation.slug],
         )
-        mock_get_recommendations.assert_awaited_once_with(self.anime.anilist_id, limit=12)
+        mock_get_recommendations.assert_awaited_once_with(
+            self.anime.anilist_id,
+            limit=12,
+            request_budget="interactive",
+        )
 
     @patch(
         "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
@@ -98,3 +102,18 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertIn(self.fallback_recommendation.slug, returned_slugs)
         self.assertNotIn(self.franchise_entry.slug, returned_slugs)
         self.assertNotIn(self.anime.slug, returned_slugs)
+
+    @patch(
+        "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
+        new_callable=AsyncMock,
+    )
+    def test_timeout_uses_fallback_recommendations(self, mock_get_recommendations):
+        mock_get_recommendations.side_effect = TimeoutError("AniList timed out")
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        returned_slugs = [item["slug"] for item in response.data]
+
+        self.assertIn(self.fallback_recommendation.slug, returned_slugs)
+        self.assertNotIn(self.franchise_entry.slug, returned_slugs)

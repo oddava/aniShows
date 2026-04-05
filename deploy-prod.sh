@@ -43,6 +43,147 @@ if [ "$FRONTEND_HOST" != "localhost" ] && [ "$FRONTEND_HOST" != "127.0.0.1" ]; t
     FRONTEND_CURL+=(-L --resolve "${FRONTEND_HOST}:80:127.0.0.1" --resolve "${FRONTEND_HOST}:443:127.0.0.1")
 fi
 
+array_contains() {
+    local needle="$1"
+    shift
+    local item
+    for item in "$@"; do
+        if [ "$item" = "$needle" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+container_readiness() {
+    docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}{{else}}stopped{{end}}' "$1" 2>/dev/null || echo "missing"
+}
+
+wait_for_container_ready() {
+    local container_id="$1"
+    local service_name="$2"
+    local timeout_seconds="${3:-180}"
+    local status
+
+    for _ in $(seq 1 "$timeout_seconds"); do
+        status="$(container_readiness "$container_id")"
+        case "$status" in
+            healthy|running)
+                return 0
+                ;;
+            unhealthy|stopped|missing|dead|exited)
+                break
+                ;;
+        esac
+        sleep 1
+    done
+
+    echo -e "${RED}  ${service_name} container ${container_id} did not become ready.${NC}"
+    return 1
+}
+
+wait_for_service_replicas_ready() {
+    local service_name="$1"
+    local expected_count="$2"
+    local timeout_seconds="${3:-180}"
+    local ids=()
+    local ready_count
+    local status
+
+    for _ in $(seq 1 "$timeout_seconds"); do
+        mapfile -t ids < <($COMPOSE_CMD ps -q "$service_name")
+        if [ "${#ids[@]}" -ne "$expected_count" ]; then
+            sleep 2
+            continue
+        fi
+
+        ready_count=0
+        for container_id in "${ids[@]}"; do
+            status="$(container_readiness "$container_id")"
+            case "$status" in
+                healthy|running)
+                    ready_count=$((ready_count + 1))
+                    ;;
+            esac
+        done
+
+        if [ "$ready_count" -eq "$expected_count" ]; then
+            return 0
+        fi
+
+        sleep 2
+    done
+
+    echo -e "${RED}  ${service_name} did not reach ${expected_count} ready replicas in time.${NC}"
+    $COMPOSE_CMD ps "$service_name" || true
+    $COMPOSE_CMD logs --tail=50 "$service_name" || true
+    return 1
+}
+
+rolling_refresh_service() {
+    local service_name="$1"
+    local desired_count="$2"
+    local timeout_seconds="${3:-180}"
+    local original_ids=()
+    local current_ids=()
+    local pre_ids=()
+    local old_id
+    local candidate_id=""
+    local surge_target
+
+    mapfile -t original_ids < <($COMPOSE_CMD ps -q "$service_name")
+
+    if [ "${#original_ids[@]}" -eq 0 ]; then
+        echo -e "${BLUE}  Bootstrapping ${service_name} to ${desired_count} replicas...${NC}"
+        $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${desired_count}" "$service_name"
+        wait_for_service_replicas_ready "$service_name" "$desired_count" "$timeout_seconds"
+        return 0
+    fi
+
+    for old_id in "${original_ids[@]}"; do
+        if ! docker inspect "$old_id" >/dev/null 2>&1; then
+            continue
+        fi
+
+        mapfile -t pre_ids < <($COMPOSE_CMD ps -q "$service_name")
+        surge_target=$((${#pre_ids[@]} + 1))
+        candidate_id=""
+
+        echo -e "${BLUE}  Launching replacement for ${service_name} container ${old_id:0:12}...${NC}"
+        $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${surge_target}" "$service_name"
+
+        for _ in $(seq 1 "$timeout_seconds"); do
+            mapfile -t current_ids < <($COMPOSE_CMD ps -q "$service_name")
+            for container_id in "${current_ids[@]}"; do
+                if ! array_contains "$container_id" "${pre_ids[@]}"; then
+                    candidate_id="$container_id"
+                    break
+                fi
+            done
+
+            if [ -n "$candidate_id" ]; then
+                break
+            fi
+            sleep 1
+        done
+
+        if [ -z "$candidate_id" ]; then
+            echo -e "${RED}  Failed to identify new ${service_name} container during rollout.${NC}"
+            $COMPOSE_CMD logs --tail=50 "$service_name" || true
+            return 1
+        fi
+
+        wait_for_container_ready "$candidate_id" "$service_name" "$timeout_seconds"
+
+        echo -e "${BLUE}  Removing old ${service_name} container ${old_id:0:12}...${NC}"
+        docker rm -f "$old_id" >/dev/null
+        wait_for_service_replicas_ready "$service_name" "${#pre_ids[@]}" "$timeout_seconds"
+    done
+
+    $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${desired_count}" "$service_name"
+    wait_for_service_replicas_ready "$service_name" "$desired_count" "$timeout_seconds"
+}
+
 echo -e "${BLUE}Starting full deployment (frontend + backend)...${NC}"
 echo ""
 
@@ -154,11 +295,9 @@ $COMPOSE_CMD up -d --no-deps \
   --scale celery_analytics=$SCALE_CELERY_ANALYTICS \
   celery celery_priority celery_images celery_analytics beat
 sleep 2
-$COMPOSE_CMD up -d --no-deps \
-  --scale web=$SCALE_WEB \
-  --scale daphne=$SCALE_DAPHNE \
-  web daphne
-echo -e "${GREEN}All containers started!${NC}"
+rolling_refresh_service web "$SCALE_WEB"
+rolling_refresh_service daphne "$SCALE_DAPHNE"
+echo -e "${GREEN}Web and Daphne replicas refreshed with rolling replacement!${NC}"
 echo -e "${BLUE}  Scale profile: web=$SCALE_WEB daphne=$SCALE_DAPHNE celery=$SCALE_CELERY celery_priority=$SCALE_CELERY_PRIORITY celery_images=$SCALE_CELERY_IMAGES celery_analytics=$SCALE_CELERY_ANALYTICS${NC}"
 echo ""
 
@@ -180,6 +319,10 @@ fi
 echo ""
 
 echo -e "${BLUE}Step 6: Ensuring Caddy is running...${NC}"
+echo -e "${BLUE}  Verifying web and websocket upstream readiness...${NC}"
+wait_for_service_replicas_ready web "$SCALE_WEB"
+wait_for_service_replicas_ready daphne "$SCALE_DAPHNE"
+
 $COMPOSE_CMD up -d --no-deps caddy
 
 CADDY_RUNNING=false
@@ -211,6 +354,16 @@ if ! "${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}/api/v1/health/" >/dev/null; the
     echo -e "${RED}Caddy endpoint health check failed.${NC}"
     echo -e "${YELLOW}  Probe URL: ${FRONTEND_BASE_URL}/api/v1/health/ (host=${FRONTEND_HOST})${NC}"
     $COMPOSE_CMD logs --tail=50 caddy || true
+    exit 1
+fi
+echo -e "${BLUE}  Verifying Daphne websocket upstream health...${NC}"
+if ! $COMPOSE_CMD exec -T daphne python -c "
+import urllib.request
+response = urllib.request.urlopen('http://localhost:8001/api/v1/health/', timeout=5)
+print(response.read().decode())
+" 2>/dev/null; then
+    echo -e "${RED}Daphne websocket upstream health check failed.${NC}"
+    $COMPOSE_CMD logs --tail=50 daphne || true
     exit 1
 fi
 echo -e "${GREEN}Caddy is running and serving traffic.${NC}"

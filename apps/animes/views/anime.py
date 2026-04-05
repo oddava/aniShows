@@ -776,6 +776,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 recommendations = async_to_sync(service.get_recommendations_for_anime)(
                     anime.anilist_id,
                     limit=12,
+                    request_budget=service.REQUEST_BUDGET_INTERACTIVE,
                 )
             except Exception as exc:
                 logger.warning(
@@ -924,7 +925,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def watch_episodes(self, request, slug=None):
         """Get paginated watch-episode data for this anime."""
         anime = self._get_action_anime(slug)
-        episodes = AnimeWatchEpisodeService().get_for_anime(anime)
+        episodes = AnimeWatchEpisodeService().get_for_anime(
+            anime,
+            request_budget=AnimeWatchEpisodeService.REQUEST_BUDGET_INTERACTIVE,
+        )
         paginator = WatchEpisodesPagination()
         page = paginator.paginate_queryset(episodes, request, view=self)
         episode_numbers = [episode.get("number") for episode in (page or [])]

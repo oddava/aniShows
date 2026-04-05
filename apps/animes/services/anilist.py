@@ -4,7 +4,7 @@ import json
 import re
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -59,6 +59,8 @@ class MediaFormat(StrEnum):
 class AniListService:
     BASE_URL = "https://graphql.anilist.co"
     MAX_PER_PAGE = 50
+    REQUEST_BUDGET_DEFAULT = "default"
+    REQUEST_BUDGET_INTERACTIVE = "interactive"
     TRUSTED_IMAGE_DOMAINS = (
         "s4.anilist.co",
         "anilist.co",
@@ -182,7 +184,14 @@ class AniListService:
         self.circuit_breaker.record_failure()
 
     async def _query(
-        self, query: str, variables: dict, retry_count: int = 5, use_cache: bool = True
+        self,
+        query: str,
+        variables: dict,
+        retry_count: int = 5,
+        use_cache: bool = True,
+        *,
+        max_rate_limit_wait: float | None = None,
+        request_timeout: float | None = None,
     ) -> dict:
         """Execute GraphQL query with rate limiting, caching, and circuit breaker.
 
@@ -229,7 +238,9 @@ class AniListService:
 
                 try:
                     response = await self.client.post(
-                        self.BASE_URL, json={"query": query, "variables": variables}
+                        self.BASE_URL,
+                        json={"query": query, "variables": variables},
+                        timeout=request_timeout if request_timeout is not None else self.client.timeout,
                     )
 
                     # Check for rate limits
@@ -250,6 +261,16 @@ class AniListService:
                         )
                         self._set_last_error("rate_limited", "http_429")
                         _status = "rate_limited"
+                        if (
+                            max_rate_limit_wait is not None
+                            and wait_time > max_rate_limit_wait
+                        ):
+                            logger.warning(
+                                "AniList rate limit wait %.2fs exceeds budget %.2fs; failing fast",
+                                wait_time,
+                                max_rate_limit_wait,
+                            )
+                            return {}
                         await asyncio.sleep(wait_time)
                         continue
 
@@ -262,6 +283,12 @@ class AniListService:
                             logger.warning("AniList GraphQL Rate Limit Error. Sleeping 60s...")
                             self._set_last_error("rate_limited", error_msg)
                             _status = "rate_limited"
+                            if max_rate_limit_wait is not None and 60 > max_rate_limit_wait:
+                                logger.warning(
+                                    "AniList GraphQL rate limit wait exceeds budget %.2fs; failing fast",
+                                    max_rate_limit_wait,
+                                )
+                                return {}
                             await asyncio.sleep(60)
                             continue
                         logger.error(f"GraphQL Error: {error_msg}")
@@ -310,6 +337,16 @@ class AniListService:
                                 retry_count,
                                 response_excerpt,
                             )
+                            if (
+                                max_rate_limit_wait is not None
+                                and wait_time > max_rate_limit_wait
+                            ):
+                                logger.warning(
+                                    "AniList edge rate limit wait %.2fs exceeds budget %.2fs; failing fast",
+                                    wait_time,
+                                    max_rate_limit_wait,
+                                )
+                                return {}
                             await asyncio.sleep(wait_time)
                             continue
 
@@ -1414,6 +1451,7 @@ class AniListService:
         *,
         anilist_id: int | None = None,
         mal_id: int | None = None,
+        request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> dict | None:
         """Fetch AniList streaming episode metadata for an anime."""
         resolved_anilist_id = (
@@ -1452,7 +1490,7 @@ class AniListService:
             }}
         """
 
-        data = await self._query(query, variables)
+        data = await self._query(query, variables, **self._query_options_for_budget(request_budget))
         media = data.get("Media") if isinstance(data, dict) else None
         if isinstance(media, dict):
             return media
@@ -1462,7 +1500,11 @@ class AniListService:
         return None
 
     async def get_recommendations_for_anime(
-        self, anilist_id: int, *, limit: int = 8
+        self,
+        anilist_id: int,
+        *,
+        limit: int = 8,
+        request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> list[dict]:
         """Fetch AniList recommendations for a specific anime."""
         if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > 2_147_483_647:
@@ -1493,7 +1535,7 @@ class AniListService:
         """
 
         variables = {"id": anilist_id, "perPage": min(limit, self.MAX_PER_PAGE)}
-        data = await self._query(query, variables)
+        data = await self._query(query, variables, **self._query_options_for_budget(request_budget))
 
         recommendation_nodes = (
             ((data.get("Media") or {}).get("recommendations") or {}).get("nodes") or []
@@ -1540,6 +1582,20 @@ class AniListService:
             )
 
         return recommendations
+
+    @classmethod
+    def _query_options_for_budget(
+        cls,
+        request_budget: Literal["default", "interactive"],
+    ) -> dict[str, Any]:
+        if request_budget == cls.REQUEST_BUDGET_INTERACTIVE:
+            return {
+                "retry_count": 1,
+                "max_rate_limit_wait": 0.0,
+                "request_timeout": 8.0,
+            }
+
+        return {}
 
     async def search_by_mal_id(self, mal_id: int) -> dict | None:
         """Search for anime by MyAnimeList ID"""
