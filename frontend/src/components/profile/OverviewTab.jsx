@@ -42,9 +42,9 @@ function TopStatsRow({ user }) {
 function CurrentlyWatchingGrid({ watchingItems }) {
     if (!watchingItems || watchingItems.length === 0) {
         return (
-            <div className="mb-10">
-                <div className="ui-surface-subtle p-5">
-                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
+        <div className="mb-10">
+            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
+            <div className="ui-surface-subtle p-5">
                     <div className="text-center py-6 text-gray-500">
                         <p className="text-sm">Not watching anything right now</p>
                     </div>
@@ -55,8 +55,8 @@ function CurrentlyWatchingGrid({ watchingItems }) {
 
     return (
         <div className="mb-10">
+            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
             <div className="ui-surface-subtle p-5">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {watchingItems.map((item) => {
                         const eps = item.episodes_watched || 0;
@@ -114,8 +114,8 @@ function AnimeFavoritesGrid({ favoritesData }) {
     if (!favorites || favorites.length === 0) {
         return (
             <div className="mb-10">
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
                 <div className="ui-surface-subtle p-5">
-                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
                     <div className="text-center py-6 text-gray-500">
                         <p className="text-sm">No favorites yet</p>
                     </div>
@@ -126,8 +126,8 @@ function AnimeFavoritesGrid({ favoritesData }) {
 
     return (
         <div className="mb-10">
+            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
             <div className="ui-surface-subtle p-5">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {favorites.map((fav) => (
                         <div key={fav.id} className="group relative">
@@ -165,8 +165,8 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
     if (!items || items.length === 0) {
         return (
             <div className="mb-10">
+                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
                 <div className="ui-surface-subtle p-5">
-                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
                     <div className="py-6 text-center text-gray-500">
                         <p className="text-sm">{emptyText}</p>
                     </div>
@@ -177,8 +177,8 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
 
     return (
         <div className="mb-10">
+            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
             <div className="ui-surface-subtle p-5">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {items.map((entry) => {
                         const item = entry[itemKey];
@@ -254,9 +254,8 @@ function GenreOverviewSidebar({ username, isPrivate }) {
 
     return (
         <div className="mb-8">
+            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Top Genres</h3>
             <div className="ui-surface-subtle p-5">
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">Top Genres</h3>
-
                 <div className="mb-4 pb-4 border-b border-gray-800/30">
                     <div className="flex items-baseline justify-between mb-2">
                         <span className="text-lg font-bold text-white">{sortedGenres[0].name}</span>
@@ -312,7 +311,7 @@ function ActivityHistorySidebar({ username, isPrivate, accentColor }) {
     if (isPrivate || isLoading || isError || !heatmapData) return null;
 
     return (
-        <div className="ui-surface-subtle w-full overflow-hidden">
+        <div className="mb-8">
             <ActivityHeatmap activityData={heatmapData} accentColor={accentColor} />
         </div>
     );
@@ -368,29 +367,33 @@ export default function OverviewTab({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                 <div className="lg:col-span-6 space-y-8">
                     {displayUser?.bio ? (
-                        <div className="ui-surface-subtle p-6">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">About</h3>
-                            <div className="text-sm text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar pr-3">
-                                <MarkdownRenderer content={displayUser.bio} />
+                        <div className="mb-8">
+                            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">About</h3>
+                            <div className="ui-surface-subtle p-6">
+                                <div className="text-sm text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar pr-3">
+                                    <MarkdownRenderer content={displayUser.bio} />
+                                </div>
                             </div>
                         </div>
                     ) : null}
 
                     {displayUser?.social_links && displayUser.social_links.length > 0 ? (
-                        <div className="ui-surface-subtle p-5">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">Links</h3>
-                            <div className="flex flex-wrap gap-2">
-                                {displayUser.social_links.map((link, i) => (
-                                    <a
-                                        key={i}
-                                        href={link.value}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="px-4 py-2 bg-dark-100 hover:bg-dark-50 text-xs text-gray-300 hover:text-white rounded-lg border border-gray-800/60 transition-colors"
-                                    >
-                                        {link.platform}
-                                    </a>
-                                ))}
+                        <div className="mb-8">
+                            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Links</h3>
+                            <div className="ui-surface-subtle p-5">
+                                <div className="flex flex-wrap gap-2">
+                                    {displayUser.social_links.map((link, i) => (
+                                        <a
+                                            key={i}
+                                            href={link.value}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="px-4 py-2 bg-dark-100 hover:bg-dark-50 text-xs text-gray-300 hover:text-white rounded-lg border border-gray-800/60 transition-colors"
+                                        >
+                                            {link.platform}
+                                        </a>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     ) : null}
@@ -405,8 +408,8 @@ export default function OverviewTab({
 
                     <GenreOverviewSidebar username={targetUsername} isPrivate={isPrivate} />
 
-                    <div className="ui-surface-subtle p-5">
-                        <div className="mb-5 flex items-center justify-between gap-4">
+                    <div className="mb-8">
+                        <div className="mb-4 ml-4 flex items-center justify-between gap-4">
                             <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Activity</h3>
                             <button
                                 type="button"
@@ -416,7 +419,9 @@ export default function OverviewTab({
                                 View Full Feed
                             </button>
                         </div>
-                        <ActivityFeed username={targetUsername} isPrivate={isPrivate} compact />
+                        <div className="ui-surface-subtle p-5">
+                            <ActivityFeed username={targetUsername} isPrivate={isPrivate} compact />
+                        </div>
                     </div>
                 </div>
 

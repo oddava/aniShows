@@ -160,8 +160,8 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     return (
-        <div className="relative w-full max-w-full p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
+        <div className="relative w-full max-w-full">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 ml-4 mr-4 gap-4">
                 <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">
                     Activity
                 </h3>
@@ -183,62 +183,77 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                 )}
             </div>
 
-            <div ref={scrollRef} className="flex gap-3 min-h-[140px] overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="ui-surface-subtle p-5">
+                <div ref={scrollRef} className="flex gap-3 min-h-[140px] overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                    {/* Overflown Content Area */}
+                    <div className="py-1 min-w-full">
+                        <div className="inline-block min-w-max">
+                            {/* Month labels */}
+                            <div className="mb-1 flex h-6 gap-[4px] text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+                                {weeks.map((week, i) => {
+                                    const firstDay = new Date(week[0].date);
+                                    const isNewMonth = firstDay.getDate() <= 7;
+                                    const alignRight = i >= weeks.length - 2;
 
-                {/* Overflown Content Area */}
-                <div className="py-1 min-w-full">
-                    <div className="inline-block min-w-max">
-                        {/* Month labels */}
-                        <div className="mb-1 flex h-6 gap-[4px] text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
-                            {weeks.map((week, i) => {
-                                const firstDay = new Date(week[0].date);
-                                const isNewMonth = firstDay.getDate() <= 7;
-                                const alignRight = i >= weeks.length - 2;
+                                    return (
+                                        <div key={week[0].date} className="relative w-[14px]">
+                                            {isNewMonth && (
+                                                <span className={`absolute top-0 whitespace-nowrap ${alignRight ? 'right-0 text-right' : 'left-0'}`}>
+                                                    {months[firstDay.getMonth()]}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
 
-                                return (
-                                    <div key={week[0].date} className="relative w-[14px]">
-                                        {isNewMonth && (
-                                            <span className={`absolute top-0 whitespace-nowrap ${alignRight ? 'right-0 text-right' : 'left-0'}`}>
-                                                {months[firstDay.getMonth()]}
-                                            </span>
-                                        )}
+                            {/* Cells Grid */}
+                            <div className="flex gap-[4px]">
+                                {weeks.map((week, weekIndex) => (
+                                    <div key={weekIndex} className="flex flex-col gap-[4px]">
+                                        {week.map((day) => (
+                                            <div
+                                                key={day.date}
+                                                onMouseMove={(e) => {
+                                                    setHoveredDay(day);
+                                                    setTooltipPos({
+                                                        x: e.clientX,
+                                                        y: e.clientY
+                                                    });
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    setHoveredDay(day);
+                                                    setTooltipPos({
+                                                        x: e.clientX,
+                                                        y: e.clientY
+                                                    });
+                                                }}
+                                                onMouseLeave={() => {
+                                                    setHoveredDay(null);
+                                                }}
+                                                className="w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer"
+                                                style={hoveredDay?.date === day.date ? getHoverStyle(day.count) : getColorStyle(day.count)}
+                                            />
+                                        ))}
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
                         </div>
+                    </div>
+                </div>
 
-                        {/* Cells Grid */}
-                        <div className="flex gap-[4px]">
-                            {weeks.map((week, weekIndex) => (
-                                <div key={weekIndex} className="flex flex-col gap-[4px]">
-                                    {week.map((day) => (
-                                        <div
-                                            key={day.date}
-                                            onMouseMove={(e) => {
-                                                setHoveredDay(day);
-                                                setTooltipPos({
-                                                    x: e.clientX,
-                                                    y: e.clientY
-                                                });
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                setHoveredDay(day);
-                                                setTooltipPos({
-                                                    x: e.clientX,
-                                                    y: e.clientY
-                                                });
-                                            }}
-                                            onMouseLeave={() => {
-                                                setHoveredDay(null);
-                                            }}
-                                            className="w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer"
-                                            style={hoveredDay?.date === day.date ? getHoverStyle(day.count) : getColorStyle(day.count)}
-                                        />
-                                    ))}
-                                </div>
-                            ))}
+                {/* Legend */}
+                <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 mt-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Less</span>
+                        <div className="flex gap-1">
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.25)' }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.45)' }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : toRgba(profileAccentColor, 0.6) }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.85)' : toRgba(profileAccentColor, 0.85) }} />
+                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : profileAccentColor }} />
                         </div>
-
+                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
                     </div>
                 </div>
             </div>
@@ -283,21 +298,6 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                     )}
                 </div>
             </TooltipPortal>
-
-            {/* Legend */}
-            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 mt-4">
-                <div className="flex items-center gap-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Less</span>
-                    <div className="flex gap-1">
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.25)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: 'rgba(100, 100, 110, 0.45)' }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : toRgba(profileAccentColor, 0.6) }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.85)' : toRgba(profileAccentColor, 0.85) }} />
-                        <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : profileAccentColor }} />
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
-                </div>
-            </div>
         </div>
     );
 }
