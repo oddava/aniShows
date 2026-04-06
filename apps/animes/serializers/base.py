@@ -236,7 +236,7 @@ class CharacterDetailSerializer(ImageUrlMixin, ModelSerializer):
         favorite_count = getattr(obj, "_favorite_count", None)
         if favorite_count is not None:
             return favorite_count
-        return obj.favorites.count()
+        return 0
 
     def get_is_favorite(self, obj):
         return bool(getattr(obj, "_is_favorite", False))
@@ -299,7 +299,7 @@ class StaffDetailSerializer(ImageUrlMixin, ModelSerializer):
         favorite_count = getattr(obj, "_favorite_count", None)
         if favorite_count is not None:
             return favorite_count
-        return obj.favorites.count()
+        return 0
 
     def get_is_favorite(self, obj):
         return bool(getattr(obj, "_is_favorite", False))

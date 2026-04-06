@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
@@ -21,6 +21,19 @@ def build_admin_dashboard_payload():
     review_queryset = Review.objects.all()
     favorite_queryset = UserFavorite.objects.all()
     list_entry_queryset = UserAnimeList.objects.all()
+    user_stats = user_queryset.aggregate(
+        total=Count("id"),
+        new_7d=Count("id", filter=Q(date_joined__gte=last_7_days)),
+        new_30d=Count("id", filter=Q(date_joined__gte=last_30_days)),
+    )
+    content_stats = anime_queryset.aggregate(
+        total_anime=Count("id"),
+        airing_anime=Count("id", filter=Q(status="Airing")),
+    )
+    review_stats = review_queryset.aggregate(
+        total_reviews=Count("id"),
+        new_reviews_7d=Count("id", filter=Q(created_at__gte=last_7_days)),
+    )
 
     user_growth = (
         user_queryset.filter(date_joined__gte=last_30_days)
@@ -54,16 +67,16 @@ def build_admin_dashboard_payload():
     return {
         "statistics": {
             "users": {
-                "total": user_queryset.count(),
-                "new_7d": user_queryset.filter(date_joined__gte=last_7_days).count(),
-                "new_30d": user_queryset.filter(date_joined__gte=last_30_days).count(),
+                "total": user_stats["total"],
+                "new_7d": user_stats["new_7d"],
+                "new_30d": user_stats["new_30d"],
                 "verified": profile_queryset.filter(email_verified=True).count(),
             },
             "content": {
-                "total_anime": anime_queryset.count(),
-                "airing_anime": anime_queryset.filter(status="Airing").count(),
-                "total_reviews": review_queryset.count(),
-                "new_reviews_7d": review_queryset.filter(created_at__gte=last_7_days).count(),
+                "total_anime": content_stats["total_anime"],
+                "airing_anime": content_stats["airing_anime"],
+                "total_reviews": review_stats["total_reviews"],
+                "new_reviews_7d": review_stats["new_reviews_7d"],
             },
             "engagement": {
                 "total_favorites": favorite_queryset.count(),
@@ -87,18 +100,25 @@ def build_admin_stats_export_payload():
     favorite_queryset = UserFavorite.objects.all()
     list_entry_queryset = UserAnimeList.objects.all()
     history_queryset = UserHistory.objects.all()
+    user_stats = user_queryset.aggregate(
+        total=Count("id"),
+        active=Count("id", filter=Q(is_active=True)),
+        staff=Count("id", filter=Q(is_staff=True)),
+        superusers=Count("id", filter=Q(is_superuser=True)),
+    )
+    anime_stats = anime_queryset.aggregate(total=Count("id"))
 
     return {
         "generated_at": now.isoformat(),
         "users": {
-            "total": user_queryset.count(),
-            "active": user_queryset.filter(is_active=True).count(),
-            "staff": user_queryset.filter(is_staff=True).count(),
-            "superusers": user_queryset.filter(is_superuser=True).count(),
+            "total": user_stats["total"],
+            "active": user_stats["active"],
+            "staff": user_stats["staff"],
+            "superusers": user_stats["superusers"],
         },
         "content": {
             "anime": {
-                "total": anime_queryset.count(),
+                "total": anime_stats["total"],
                 "by_status": dict(anime_queryset.values_list("status").annotate(count=Count("id"))),
                 "by_type": dict(
                     anime_queryset.values_list("anime_type").annotate(count=Count("id"))

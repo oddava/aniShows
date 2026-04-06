@@ -9,6 +9,8 @@ Tests for:
 - XSS prevention in review text
 """
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
@@ -422,6 +424,41 @@ class ReviewInteractionTests(APITestCase):
         self.assertTrue(reactions["heart"]["active"])
         self.assertEqual(reactions["thumbs_up"]["count"], 0)
         self.assertFalse(reactions["thumbs_up"]["active"])
+
+    def test_review_list_query_count_stays_constant(self):
+        """Review list should not issue per-review vote/reaction queries."""
+        for index in range(2, 6):
+            reviewer = User.objects.create_user(
+                username=f"reviewer{index}",
+                email=f"reviewer{index}@example.com",
+                password="password123",
+            )
+            UserProfile.objects.update_or_create(
+                user=reviewer,
+                defaults={"email_verified": True},
+            )
+            review = Review.objects.create(
+                user=reviewer,
+                anime=self.anime,
+                rating=7,
+                text=f"Review {index}",
+            )
+            ReviewVote.objects.create(
+                user=self.voter,
+                review=review,
+                vote_type=ReviewVote.VoteType.HELPFUL,
+            )
+            ReviewReaction.objects.create(
+                user=self.voter,
+                review=review,
+                reaction_type=ReviewReaction.ReactionType.HEART,
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("reviews-list"), {"anime": self.anime.slug})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertLessEqual(len(queries), 5)
 
     def test_reactions_toggle_per_emoji(self):
         """Each reaction type toggles independently for a review."""

@@ -66,6 +66,7 @@ class Thread(TimestampMixin, Model):
         indexes = [
             Index(fields=["-is_pinned", "-updated_at"]),
             Index(fields=["category", "-is_pinned", "-updated_at"]),
+            Index(fields=["category", "-updated_at"]),
             Index(fields=["-updated_at"]),
             Index(fields=["-created_at"]),
         ]

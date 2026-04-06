@@ -89,7 +89,6 @@ class ReviewSerializer(ModelSerializer):
         return value
 
     def get_user_votes(self, obj):
-        request = self.context.get("request")
         helpful_attr = getattr(obj, "_user_helpful_vote", None)
         dislike_attr = getattr(obj, "_user_dislike_vote", None)
 
@@ -99,43 +98,21 @@ class ReviewSerializer(ModelSerializer):
                 "dislike": dislike_attr,
             }
 
-        if request and request.user.is_authenticated:
-            votes = set(
-                obj.votes.filter(user=request.user).values_list("vote_type", flat=True)
-            )
-            return {
-                "helpful": ReviewVote.VoteType.HELPFUL in votes,
-                "dislike": ReviewVote.VoteType.DISLIKE in votes,
-            }
-
         return {
             "helpful": False,
             "dislike": False,
         }
 
     def get_reactions(self, obj):
-        request = self.context.get("request")
-        request_user = getattr(request, "user", None)
-        has_all_active_annotations = all(
-            hasattr(obj, f"_reaction_active_{reaction_type}")
-            for reaction_type in ReviewReaction.ReactionType.values
-        )
-        fallback_active = set()
-
-        if request_user and request_user.is_authenticated and not has_all_active_annotations:
-            fallback_active = set(
-                obj.reactions.filter(user=request_user).values_list("reaction_type", flat=True)
-            )
-
         reactions = []
         for reaction_type in ReviewReaction.ReactionType.values:
             count = getattr(obj, f"_reaction_count_{reaction_type}", None)
             if count is None:
-                count = obj.reactions.filter(reaction_type=reaction_type).count()
+                count = 0
 
             active = getattr(obj, f"_reaction_active_{reaction_type}", None)
             if active is None:
-                active = reaction_type in fallback_active
+                active = False
 
             reactions.append(
                 {

@@ -32,8 +32,6 @@ def _get_google_avatar_url(user):
 
     accounts = getattr(user, "_prefetched_social_accounts", None)
     if accounts is None:
-        accounts = getattr(user, "_prefetched_objects_cache", {}).get("socialaccount_set")
-    if accounts is None:
         accounts = SocialAccount.objects.filter(user=user, provider="google").only("extra_data")
 
     for account in accounts:

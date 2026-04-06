@@ -80,6 +80,9 @@ class UserHistory(Model):
     class Meta:
         unique_together = ("user", "anime")
         ordering = ["-viewed_at"]
+        indexes = [
+            Index(fields=["-viewed_at"]),
+        ]
         verbose_name_plural = "User histories"
 
     def __str__(self):

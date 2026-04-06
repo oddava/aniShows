@@ -3,13 +3,16 @@ from unittest.mock import patch
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.animes.models import Anime, UserFavorite
-from apps.users.models import UserAnimeList, UserProfile
+from apps.users.models import UserAnimeList, UserFollow, UserProfile, UserStats
 
 User = get_user_model()
 
@@ -81,6 +84,30 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(stats["mean_score"], 8.0)
         self.assertEqual(stats["days_watched"], 0.4)
 
+    def test_current_profile_query_count_uses_prefetches(self):
+        """Current-profile fetch should stay on a fixed small query budget."""
+        UserStats.objects.update_or_create(
+            user=self.user,
+            defaults={
+                "followers_count": 2,
+                "following_count": 1,
+                "anime_count": 3,
+                "episodes_watched": 24,
+                "total_minutes": 576,
+                "days_watched": 0.4,
+                "mean_score": 8.0,
+                "favorites_count": 1,
+                "reviews_count": 2,
+            },
+        )
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(self.profile_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertLessEqual(len(queries), 4)
+
     def test_profile_update_social_links(self):
         """Test adding and removing social links."""
         # 1. Add links (mixture of usernames and full URLs)
@@ -100,15 +127,15 @@ class ProfileFeaturesTest(APITestCase):
         links = self.profile.social_links
         self.assertEqual(len(links), 3)
         # Twitter should be normalized
-        twitter_link = next(l for l in links if l["platform"] == "Twitter")
+        twitter_link = next(link for link in links if link["platform"] == "Twitter")
         self.assertEqual(twitter_link["value"], "https://x.com/testuser")
 
         # GitHub should be normalized
-        github_link = next(l for l in links if l["platform"] == "GitHub")
+        github_link = next(link for link in links if link["platform"] == "GitHub")
         self.assertEqual(github_link["value"], "https://github.com/testuser")
 
         # YouTube should be normalized
-        youtube_link = next(l for l in links if l["platform"] == "YouTube")
+        youtube_link = next(link for link in links if link["platform"] == "YouTube")
         self.assertEqual(youtube_link["value"], "https://youtube.com/@testuser")
 
         # 2. Clear links
@@ -154,6 +181,38 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["avatar"], google_avatar)
 
+    def test_public_profile_query_count_uses_prefetches(self):
+        """Public profile fetch should avoid extra badge/follow queries."""
+        other_user = User.objects.create_user(
+            username="publicperf",
+            email="publicperf@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=other_user, defaults={"email_verified": True})
+        UserStats.objects.update_or_create(
+            user=other_user,
+            defaults={
+                "followers_count": 5,
+                "following_count": 4,
+                "anime_count": 10,
+                "episodes_watched": 48,
+                "total_minutes": 1152,
+                "days_watched": 0.8,
+                "mean_score": 8.5,
+                "favorites_count": 3,
+                "reviews_count": 2,
+            },
+        )
+        UserFollow.objects.create(follower=self.user, following=other_user)
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(self.public_profile_url(other_user.username))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["is_following"])
+        self.assertLessEqual(len(queries), 4)
+
     def test_followers_list_falls_back_to_google_avatar_for_email_signup(self):
         """Follower cards should use the same avatar fallback as profile views."""
         target_user = User.objects.create_user(
@@ -186,6 +245,63 @@ class ProfileFeaturesTest(APITestCase):
 
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["results"][0]["user"]["avatar"], google_avatar)
+
+    def test_followers_list_query_count_stays_bounded(self):
+        """Followers list should not trigger an extra profile lookup per request."""
+        target_user = User.objects.create_user(
+            username="perf_target",
+            email="perf_target@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=target_user, defaults={"email_verified": True})
+
+        follower = User.objects.create_user(
+            username="perf_follower",
+            email="perf_follower@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=follower, defaults={"email_verified": True})
+        UserFollow.objects.create(follower=follower, following=target_user)
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(f"/api/v1/follows/followers/{target_user.username}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertLessEqual(len(queries), 5)
+
+    def test_friends_watching_query_count_skips_anime_lookup(self):
+        """Friends-watching should fetch from the list queryset directly."""
+        friend = User.objects.create_user(
+            username="friendwatcher",
+            email="friendwatcher@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=friend, defaults={"email_verified": True})
+        anime = Anime.objects.create(
+            title="Friend Watching Anime",
+            slug="friend-watching-anime",
+            synopsis="Anime for friends watching performance test",
+            anime_type="TV",
+            status="Airing",
+        )
+        UserFollow.objects.create(follower=self.user, following=friend)
+        UserFollow.objects.create(follower=friend, following=self.user)
+        UserAnimeList.objects.create(
+            user=friend,
+            anime=anime,
+            status="Watching",
+            episodes_watched=3,
+        )
+        cache.clear()
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("follows-friends-watching"), {"anime_id": anime.id})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertLessEqual(len(queries), 3)
 
     def test_profile_update_basic_info(self):
         """Test updating bio and ensure unsafe tags are removed."""

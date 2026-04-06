@@ -30,7 +30,7 @@ def _is_private(target_user, request_user) -> bool:
 
 def resolve_activity_user(username, request_user):
     if username:
-        target_user = get_object_or_404(User, username=username)
+        target_user = get_object_or_404(User.objects.select_related("userprofile"), username=username)
         if _is_private(target_user, request_user):
             return None
         return target_user
