@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminReviews = () => {
     const [reviews, setReviews] = useState([]);
@@ -109,40 +110,47 @@ const AdminReviews = () => {
                         </form>
 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <select
+                            <CustomSelect
                                 value={filters.has_spoilers}
-                                onChange={(e) => setFilters(f => ({ ...f, has_spoilers: e.target.value }))}
-                                className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'var(--color-dark-100)' }}
-                            >
-                                <option value="">All Reviews</option>
-                                <option value="true">With Spoilers</option>
-                                <option value="false">No Spoilers</option>
-                            </select>
+                                onChange={(nextValue) => setFilters((f) => ({ ...f, has_spoilers: nextValue }))}
+                                options={[
+                                    { value: '', label: 'All Reviews' },
+                                    { value: 'true', label: 'With Spoilers' },
+                                    { value: 'false', label: 'No Spoilers' },
+                                ]}
+                                triggerClassName="admin-btn admin-btn-secondary px-3 py-2 text-[0.85rem] bg-dark-100"
+                                menuClassName="z-[280]"
+                                ariaLabel="Filter reviews by spoiler"
+                            />
 
-                            <select
+                            <CustomSelect
                                 value={filters.min_rating}
-                                onChange={(e) => setFilters(f => ({ ...f, min_rating: e.target.value }))}
-                                className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'var(--color-dark-100)' }}
-                            >
-                                <option value="">Min Rating</option>
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => (
-                                    <option key={r} value={r}>≥ {r}</option>
-                                ))}
-                            </select>
+                                onChange={(nextValue) => setFilters((f) => ({ ...f, min_rating: nextValue }))}
+                                options={[
+                                    { value: '', label: 'Min Rating' },
+                                    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => ({
+                                        value: String(rating),
+                                        label: `>= ${rating}`,
+                                    })),
+                                ]}
+                                triggerClassName="admin-btn admin-btn-secondary px-3 py-2 text-[0.85rem] bg-dark-100"
+                                menuClassName="z-[280]"
+                                ariaLabel="Minimum review rating"
+                            />
 
-                            <select
+                            <CustomSelect
                                 value={filters.ordering}
-                                onChange={(e) => setFilters(f => ({ ...f, ordering: e.target.value }))}
-                                className="admin-btn admin-btn-secondary"
-                                style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', color: '#fff', background: 'var(--color-dark-100)' }}
-                            >
-                                <option value="-created_at">Newest First</option>
-                                <option value="created_at">Oldest First</option>
-                                <option value="-rating">Highest Rating</option>
-                                <option value="rating">Lowest Rating</option>
-                            </select>
+                                onChange={(nextValue) => setFilters((f) => ({ ...f, ordering: nextValue }))}
+                                options={[
+                                    { value: '-created_at', label: 'Newest First' },
+                                    { value: 'created_at', label: 'Oldest First' },
+                                    { value: '-rating', label: 'Highest Rating' },
+                                    { value: 'rating', label: 'Lowest Rating' },
+                                ]}
+                                triggerClassName="admin-btn admin-btn-secondary px-3 py-2 text-[0.85rem] bg-dark-100"
+                                menuClassName="z-[280]"
+                                ariaLabel="Sort reviews"
+                            />
                         </div>
                     </div>
                 </div>

@@ -5,6 +5,7 @@ import DataTable from './components/DataTable';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminUserLists = () => {
   const [entries, setEntries] = useState([]);
@@ -178,18 +179,20 @@ const AdminUserLists = () => {
             onChange={(e) => setFilters({ ...filters, anime: e.target.value })}
             className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-violet-500"
           />
-          <select
+          <CustomSelect
             value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-          >
-            <option value="" className="bg-gray-800">All Statuses</option>
-            <option value="Watching" className="bg-gray-800">Watching</option>
-            <option value="Completed" className="bg-gray-800">Completed</option>
-            <option value="On Hold" className="bg-gray-800">On Hold</option>
-            <option value="Dropped" className="bg-gray-800">Dropped</option>
-            <option value="Plan to Watch" className="bg-gray-800">Plan to Watch</option>
-          </select>
+            onChange={(nextValue) => setFilters({ ...filters, status: nextValue })}
+            options={[
+              { value: '', label: 'All Statuses' },
+              { value: 'Watching', label: 'Watching' },
+              { value: 'Completed', label: 'Completed' },
+              { value: 'On Hold', label: 'On Hold' },
+              { value: 'Dropped', label: 'Dropped' },
+              { value: 'Plan to Watch', label: 'Plan to Watch' },
+            ]}
+            triggerClassName="px-4 py-2 bg-white/10 rounded-lg focus-visible:ring-violet-500/50"
+            ariaLabel="Filter list entries by status"
+          />
           <button
             onClick={() => { setPage(1); fetchEntries(); }}
             className="px-6 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"

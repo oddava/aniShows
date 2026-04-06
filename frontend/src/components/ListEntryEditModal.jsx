@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, RotateCcw, Star, Tv, X } from 'lucide-react';
 import useFocusTrap from '../hooks/useFocusTrap';
+import CustomSelect from './common/CustomSelect';
 
 function buildFormState(entry) {
     return {
@@ -53,6 +54,7 @@ export default function ListEntryEditModal({
 }) {
     const [form, setForm] = useState(() => buildFormState(initialEntry));
     const [errorMessage, setErrorMessage] = useState('');
+    const wasOpenRef = useRef(false);
     const handleRequestClose = useCallback(() => {
         if (!isSaving) {
             onClose();
@@ -61,9 +63,12 @@ export default function ListEntryEditModal({
     const modalRef = useFocusTrap(isOpen, handleRequestClose);
 
     useEffect(() => {
-        if (!isOpen) return;
-        setForm(buildFormState(initialEntry));
-        setErrorMessage('');
+        if (isOpen && !wasOpenRef.current) {
+            setForm(buildFormState(initialEntry));
+            setErrorMessage('');
+        }
+
+        wasOpenRef.current = isOpen;
     }, [initialEntry, isOpen]);
 
     useEffect(() => {
@@ -142,7 +147,7 @@ export default function ListEntryEditModal({
 
     return (
         <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[120] flex items-end justify-center bg-black/75 p-2 backdrop-blur-sm sm:items-center sm:p-4"
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
@@ -150,12 +155,12 @@ export default function ListEntryEditModal({
         >
             <div
                 ref={modalRef}
-                className="w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-dark-100 shadow-[0_24px_120px_rgba(0,0,0,0.55)]"
+                className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-[0_24px_120px_rgba(0,0,0,0.55)] sm:max-h-[90dvh] sm:rounded-3xl"
             >
-                <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+                <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent/80">Add To List</p>
-                        <h2 id="list-entry-modal-title" className="mt-2 text-2xl font-black text-white">
+                        <h2 id="list-entry-modal-title" className="mt-2 text-xl font-black text-white sm:text-2xl">
                             Edit List Entry
                         </h2>
                         <p className="mt-1 text-sm text-gray-400">
@@ -173,21 +178,17 @@ export default function ListEntryEditModal({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="px-6 py-5">
+                <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
                     <div className="grid gap-4 md:grid-cols-2">
                         <Field label="Status" htmlFor="list-entry-status">
-                            <select
+                            <CustomSelect
                                 id="list-entry-status"
                                 value={form.status}
-                                onChange={(event) => updateField('status', event.target.value)}
-                                className="w-full rounded-2xl border border-white/10 bg-dark-200 px-4 py-3 text-sm font-semibold text-white outline-none transition-colors focus:border-accent/60"
-                            >
-                                {statusOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(nextValue) => updateField('status', nextValue)}
+                                options={statusOptions}
+                                className="w-full"
+                                triggerClassName="rounded-2xl bg-dark-200 focus-visible:ring-accent/60"
+                            />
                         </Field>
 
                         <Field label="Score" htmlFor="list-entry-score" hint="0-10">
@@ -310,13 +311,15 @@ export default function ListEntryEditModal({
 
 function Field({ label, htmlFor, hint, children }) {
     return (
-        <label htmlFor={htmlFor} className="block">
+        <div className="block">
             <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">{label}</span>
+                <label htmlFor={htmlFor} className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
+                    {label}
+                </label>
                 {hint ? <span className="text-xs text-gray-500">{hint}</span> : null}
             </div>
             {children}
-        </label>
+        </div>
     );
 }
 

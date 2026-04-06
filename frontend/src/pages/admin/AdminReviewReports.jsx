@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminReviewReports = () => {
   const [reports, setReports] = useState([]);
@@ -55,18 +56,20 @@ const AdminReviewReports = () => {
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm text-white/60">Min Score</label>
-          <select
+          <CustomSelect
             value={minScore}
-            onChange={(e) => {
-              setMinScore(e.target.value);
+            onChange={(nextValue) => {
+              setMinScore(nextValue);
               setPage(1);
             }}
-            className="px-3 py-2 bg-white/10 border border-white/10 rounded-lg text-white"
-          >
-            <option value="1" className="bg-gray-800">1+</option>
-            <option value="2" className="bg-gray-800">2+</option>
-            <option value="3" className="bg-gray-800">3+</option>
-          </select>
+            options={[
+              { value: '1', label: '1+' },
+              { value: '2', label: '2+' },
+              { value: '3', label: '3+' },
+            ]}
+            triggerClassName="px-3 py-2 bg-white/10 rounded-lg"
+            ariaLabel="Minimum review report score"
+          />
         </div>
       </div>
 

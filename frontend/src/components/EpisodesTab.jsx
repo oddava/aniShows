@@ -1,4 +1,5 @@
 import { Loader, Star, Tv, X } from 'lucide-react';
+import CustomSelect from './common/CustomSelect';
 
 const RATING_OPTIONS = ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0'];
 
@@ -128,23 +129,26 @@ export default function EpisodesTab({
                                         <label htmlFor={`episode-rating-${episode.number}`} className="sr-only">
                                             Rate episode {episode.number}
                                         </label>
-                                        <select
+                                        <CustomSelect
                                             id={`episode-rating-${episode.number}`}
                                             value={userRatingValue}
                                             disabled={isRatingPending}
-                                            onChange={(event) => {
-                                                if (!event.target.value) return;
-                                                onRateEpisode?.(episode.number, event.target.value);
+                                            onChange={(nextValue) => {
+                                                if (!nextValue) return;
+                                                onRateEpisode?.(episode.number, nextValue);
                                             }}
-                                            className="rounded-lg border border-white/10 bg-dark-100 px-2 py-1.5 sm:px-3 sm:py-2 text-xs font-semibold text-gray-200 outline-none transition-colors focus:border-white/20 disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            <option value="">Rate</option>
-                                            {RATING_OPTIONS.map((option) => (
-                                                <option key={option} value={option}>
-                                                    {option}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            options={[
+                                                { value: '', label: 'Rate' },
+                                                ...RATING_OPTIONS.map((option) => ({
+                                                    value: option,
+                                                    label: option,
+                                                })),
+                                            ]}
+                                            className="min-w-[88px]"
+                                            triggerClassName="rounded-lg bg-dark-100 px-2 py-1.5 text-xs sm:px-3 sm:py-2"
+                                            menuClassName="z-[320]"
+                                            ariaLabel={`Rate episode ${episode.number}`}
+                                        />
                                         <button
                                             type="button"
                                             disabled={!userRatingValue || isRatingPending}

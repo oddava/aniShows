@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../../api/client';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -117,30 +118,34 @@ const AdminUsers = () => {
                 </form>
 
                 <div className="flex w-full md:w-auto gap-3">
-                    <div className="relative group flex-1 md:flex-none">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                        <select
+                    <div className="flex-1 md:flex-none">
+                        <CustomSelect
                             value={filters.is_active}
-                            onChange={(e) => setFilters(f => ({ ...f, is_active: e.target.value }))}
-                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
-                        >
-                            <option value="" className="bg-dark-100">All Status</option>
-                            <option value="true" className="bg-dark-100">Active Only</option>
-                            <option value="false" className="bg-dark-100">Banned/Inactive</option>
-                        </select>
+                            onChange={(nextValue) => setFilters((f) => ({ ...f, is_active: nextValue }))}
+                            options={[
+                                { value: '', label: 'All Status' },
+                                { value: 'true', label: 'Active Only' },
+                                { value: 'false', label: 'Banned/Inactive' },
+                            ]}
+                            startIcon={Filter}
+                            triggerClassName="w-full bg-white/5 py-2 pl-3 pr-3 text-sm focus-visible:ring-purple-500/50"
+                            ariaLabel="Filter by user status"
+                        />
                     </div>
 
-                    <div className="relative group flex-1 md:flex-none">
-                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                        <select
+                    <div className="flex-1 md:flex-none">
+                        <CustomSelect
                             value={filters.is_staff}
-                            onChange={(e) => setFilters(f => ({ ...f, is_staff: e.target.value }))}
-                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
-                        >
-                            <option value="" className="bg-dark-100">All Roles</option>
-                            <option value="true" className="bg-dark-100">Staff & Admins</option>
-                            <option value="false" className="bg-dark-100">Regular Users</option>
-                        </select>
+                            onChange={(nextValue) => setFilters((f) => ({ ...f, is_staff: nextValue }))}
+                            options={[
+                                { value: '', label: 'All Roles' },
+                                { value: 'true', label: 'Staff & Admins' },
+                                { value: 'false', label: 'Regular Users' },
+                            ]}
+                            startIcon={Shield}
+                            triggerClassName="w-full bg-white/5 py-2 pl-3 pr-3 text-sm focus-visible:ring-purple-500/50"
+                            ariaLabel="Filter by user role"
+                        />
                     </div>
                 </div>
             </div>

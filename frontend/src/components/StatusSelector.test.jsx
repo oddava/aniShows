@@ -87,7 +87,7 @@ describe('StatusSelector', () => {
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
 
         const dialog = await screen.findByRole('dialog');
-        expect(within(dialog).getByLabelText(/status/i)).toHaveValue('Plan to Watch');
+        expect(within(dialog).getByLabelText(/status/i)).toHaveTextContent('Plan to Watch');
         expect(within(dialog).getByLabelText(/score/i)).toHaveValue(null);
         expect(within(dialog).getByLabelText(/episode progress/i)).toHaveValue(null);
         expect(within(dialog).getByLabelText(/total rewatches/i)).toHaveValue(null);
@@ -140,9 +140,9 @@ describe('StatusSelector', () => {
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
 
         const dialog = await screen.findByRole('dialog');
-        fireEvent.change(within(dialog).getByLabelText(/status/i), {
-            target: { value: 'Completed' },
-        });
+        fireEvent.click(within(dialog).getByLabelText(/status/i));
+        fireEvent.click(within(dialog).getByRole('option', { name: 'Completed' }));
+        expect(within(dialog).getByLabelText(/status/i)).toHaveTextContent('Completed');
         fireEvent.change(within(dialog).getByLabelText(/score/i), {
             target: { value: '9' },
         });

@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { ShieldAlert, Send, ArrowLeft, ChevronRight, ChevronDown, Eye, Hash } from 'lucide-react';
+import { ShieldAlert, Send, ArrowLeft, ChevronRight, Eye, Hash } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { forumsApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import CustomSelect from '../../components/common/CustomSelect';
 import RichTextEditor from '../../components/forums/RichTextEditor';
 import MarkdownRenderer from '../../components/common/MarkdownRenderer';
 import { preloadForumChunks } from '../../App';
@@ -16,20 +17,20 @@ import React, { memo } from 'react';
 const CategorySelector = memo(({ allCategories, selectedCategoryId, onChange }) => (
     <div className="px-5 py-4">
         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-3">Category</label>
-        <div className="relative">
-            <select
-                value={selectedCategoryId || ''}
-                onChange={(e) => onChange(parseInt(e.target.value) || null)}
-                className="w-full px-4 py-2.5 bg-dark border border-white/[0.08] rounded-xl text-sm text-white focus:outline-none focus:border-gray-600 appearance-none cursor-pointer transition-colors"
-                required
-            >
-                <option value="">Select a category...</option>
-                {allCategories?.results?.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-        </div>
+        <CustomSelect
+            value={selectedCategoryId ? String(selectedCategoryId) : ''}
+            onChange={(nextValue) => onChange(parseInt(nextValue, 10) || null)}
+            options={[
+                { value: '', label: 'Select a category...' },
+                ...(allCategories?.results?.map((cat) => ({
+                    value: String(cat.id),
+                    label: cat.name,
+                })) || []),
+            ]}
+            triggerClassName="w-full bg-dark border-white/[0.08] px-4 py-2.5 text-sm"
+            menuClassName="z-[280]"
+            ariaLabel="Select thread category"
+        />
     </div>
 ));
 CategorySelector.displayName = 'CategorySelector';

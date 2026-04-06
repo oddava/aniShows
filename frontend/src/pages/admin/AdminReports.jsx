@@ -18,6 +18,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   BarChart, Bar, Cell, PieChart as RechartsPieChart, Pie, Legend, LineChart, Line
 } from 'recharts';
+import CustomSelect from '../../components/common/CustomSelect';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1000,22 +1001,18 @@ const AdminReports = () => {
           <p className="text-gray-400 mt-1">Platform performance, growth, and engagement metrics.</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <select
+          <CustomSelect
             value={dateRange}
-            onChange={(e) => setDateRange(e.target.value)}
-            className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-white/20 appearance-none cursor-pointer pr-10 hover:bg-white/10 transition-colors"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255,255,255,0.5)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-              backgroundPosition: 'right 0.75rem center',
-              backgroundRepeat: 'no-repeat',
-              backgroundSize: '1.25em 1.25em',
-            }}
-          >
-            <option value="7" className="bg-dark-100">Last 7 days</option>
-            <option value="30" className="bg-dark-100">Last 30 days</option>
-            <option value="90" className="bg-dark-100">Last 90 days</option>
-            <option value="365" className="bg-dark-100">Last year</option>
-          </select>
+            onChange={(nextValue) => setDateRange(nextValue)}
+            options={[
+              { value: '7', label: 'Last 7 days' },
+              { value: '30', label: 'Last 30 days' },
+              { value: '90', label: 'Last 90 days' },
+              { value: '365', label: 'Last year' },
+            ]}
+            triggerClassName="px-4 py-2.5 bg-white/5 rounded-xl text-sm font-medium hover:bg-white/10 focus-visible:ring-white/20"
+            ariaLabel="Analytics date range"
+          />
           <button
             onClick={handleExport}
             disabled={exporting}

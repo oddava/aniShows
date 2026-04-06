@@ -19,6 +19,7 @@ import { OverviewTab, CharactersTab, StaffTab, ThemesTab } from '../components/D
 import EpisodesTab from '../components/EpisodesTab';
 import { AnimeDetailSkeleton } from '../components/skeletons';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
+import CustomSelect from '../components/common/CustomSelect';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -995,16 +996,19 @@ export default function AnimeDetail() {
                                         </span>
                                     </h2>
                                     <div className="flex items-center gap-3">
-                                        <select
+                                        <CustomSelect
                                             value={reviewSort}
-                                            onChange={(e) => setReviewSort(e.target.value)}
-                                            className="bg-dark-100 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-accent cursor-pointer"
-                                        >
-                                            <option value="helpful">Most Helpful</option>
-                                            <option value="newest">Newest</option>
-                                            <option value="highest">Highest Rated</option>
-                                            <option value="lowest">Lowest Rated</option>
-                                        </select>
+                                            onChange={(nextValue) => setReviewSort(nextValue)}
+                                            options={[
+                                                { value: 'helpful', label: 'Most Helpful' },
+                                                { value: 'newest', label: 'Newest' },
+                                                { value: 'highest', label: 'Highest Rated' },
+                                                { value: 'lowest', label: 'Lowest Rated' },
+                                            ]}
+                                            triggerClassName="bg-dark-100 border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300"
+                                            menuClassName="z-[320]"
+                                            ariaLabel="Sort reviews"
+                                        />
 
                                         {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
                                             canReview ? (

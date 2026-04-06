@@ -4,6 +4,7 @@ import { adminBadgeApi } from '../../api/client';
 import api from '../../api/client';
 import { Search, Plus, Edit2, Trash2, Award, UserPlus, UserMinus, Shield, Star, Zap, Crown, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AVAILABLE_ICONS = [
     { name: 'award', icon: Award },
@@ -331,27 +332,29 @@ export default function AdminBadges() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-300 mb-1">Icon</label>
-                                        <select
+                                        <CustomSelect
                                             name="icon"
                                             defaultValue={editingBadge?.icon || 'award'}
-                                            className="w-full bg-dark-100 border border-dark-300 rounded-lg px-4 py-2 text-white focus:border-accent outline-none"
-                                        >
-                                            {AVAILABLE_ICONS.map(i => (
-                                                <option key={i.name} value={i.name}>{i.name}</option>
-                                            ))}
-                                        </select>
+                                            options={AVAILABLE_ICONS.map((item) => ({
+                                                value: item.name,
+                                                label: item.name,
+                                            }))}
+                                            triggerClassName="w-full bg-dark-100 border-dark-300 rounded-lg px-4 py-2"
+                                            ariaLabel="Badge icon"
+                                        />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-300 mb-1">Color Scheme</label>
-                                        <select
+                                        <CustomSelect
                                             name="color"
                                             defaultValue={editingBadge?.color || 'blue'}
-                                            className="w-full bg-dark-100 border border-dark-300 rounded-lg px-4 py-2 text-white focus:border-accent outline-none"
-                                        >
-                                            {AVAILABLE_COLORS.map(c => (
-                                                <option key={c.value} value={c.value}>{c.label}</option>
-                                            ))}
-                                        </select>
+                                            options={AVAILABLE_COLORS.map((item) => ({
+                                                value: item.value,
+                                                label: item.label,
+                                            }))}
+                                            triggerClassName="w-full bg-dark-100 border-dark-300 rounded-lg px-4 py-2"
+                                            ariaLabel="Badge color scheme"
+                                        />
                                     </div>
                                 </div>
 

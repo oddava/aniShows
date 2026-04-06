@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import api from '../../api/client';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 // Custom Tooltip for Recharts
 const CustomTooltip = ({ active, payload, label }) => {
@@ -32,6 +33,7 @@ const AdminDashboard = () => {
     const navigate = useNavigate();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [acquisitionRange, setAcquisitionRange] = useState('last_30_days');
     const [error, setError] = useState(null);
 
     useEffect(() => {
@@ -192,10 +194,16 @@ const AdminDashboard = () => {
                                 <span className="text-emerald-400 font-semibold">+{stats?.statistics?.users?.new_30d || 0}</span> new users this month
                             </p>
                         </div>
-                        <select className="bg-white/5 border border-white/10 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/50">
-                            <option>Last 30 Days</option>
-                            <option>Last 7 Days</option>
-                        </select>
+                        <CustomSelect
+                            value={acquisitionRange}
+                            onChange={setAcquisitionRange}
+                            options={[
+                                { value: 'last_30_days', label: 'Last 30 Days' },
+                                { value: 'last_7_days', label: 'Last 7 Days' },
+                            ]}
+                            triggerClassName="bg-white/5 text-sm rounded-lg px-3 py-1.5 focus-visible:ring-purple-500/50"
+                            ariaLabel="User acquisition range"
+                        />
                     </div>
 
                     <div className="flex-1 min-h-[300px] w-full z-10 -ml-4">

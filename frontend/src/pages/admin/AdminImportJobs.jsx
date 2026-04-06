@@ -4,6 +4,7 @@ import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminImportJobs = () => {
   const FULL_CATALOG_LIMIT = 5000;
@@ -270,17 +271,13 @@ const AdminImportJobs = () => {
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2">
             <label className="text-white/70 text-sm">Status:</label>
-            <select
+            <CustomSelect
               value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="px-4 py-2 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-            >
-              {statusOptions.map(option => (
-                <option key={option.value} value={option.value} className="bg-dark-100">
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => handleStatusChange(nextValue)}
+              options={statusOptions}
+              triggerClassName="min-w-[180px] bg-white/10 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
+              ariaLabel="Filter import jobs by status"
+            />
           </div>
         </div>
       </div>
@@ -491,15 +488,17 @@ const AdminImportJobs = () => {
             <label className="block text-sm font-medium text-white/70 mb-1">
               Source
             </label>
-            <select
+            <CustomSelect
               value={triggerSource}
-              onChange={(e) => setTriggerSource(e.target.value)}
+              onChange={(nextValue) => setTriggerSource(nextValue)}
               disabled={isTriggering}
-              className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-            >
-              <option value="anilist_sync">AniList Sync</option>
-              <option value="offline_catalog">Anime Offline Database</option>
-            </select>
+              options={[
+                { value: 'anilist_sync', label: 'AniList Sync' },
+                { value: 'offline_catalog', label: 'Anime Offline Database' },
+              ]}
+              triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
+              ariaLabel="Import source"
+            />
           </div>
           {triggerSource === 'anilist_sync' ? (
             <>
@@ -507,24 +506,25 @@ const AdminImportJobs = () => {
                 <label className="block text-sm font-medium text-white/70 mb-1">
                   Sync Type
                 </label>
-                <select
+                <CustomSelect
                   value={triggerSyncType}
-                  onChange={(e) => {
-                    const nextType = e.target.value;
+                  onChange={(nextType) => {
                     setTriggerSyncType(nextType);
                     if (nextType === 'full_catalog') {
                       setTriggerLimit(FULL_CATALOG_LIMIT);
                     }
                   }}
                   disabled={isTriggering}
-                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-                >
-                  <option value="trending">Trending Anime</option>
-                  <option value="seasonal">Current Season</option>
-                  <option value="next_season">Next Season</option>
-                  <option value="airing">Currently Airing</option>
-                  <option value="full_catalog">Full Catalog (top 5000)</option>
-                </select>
+                  options={[
+                    { value: 'trending', label: 'Trending Anime' },
+                    { value: 'seasonal', label: 'Current Season' },
+                    { value: 'next_season', label: 'Next Season' },
+                    { value: 'airing', label: 'Currently Airing' },
+                    { value: 'full_catalog', label: 'Full Catalog (top 5000)' },
+                  ]}
+                  triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
+                  ariaLabel="AniList sync type"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-white/70 mb-1">

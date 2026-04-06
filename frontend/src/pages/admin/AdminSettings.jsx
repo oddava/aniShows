@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import api from '../../api/client';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminSettings = () => {
   const [activeTab, setActiveTab] = useState('general');
@@ -123,17 +124,19 @@ const AdminSettings = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-white/70 mb-2">Timezone</label>
-                <select
+                <CustomSelect
                   value={settings.general.timezone}
-                  onChange={(e) => handleChange('general', 'timezone', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                >
-                  <option value="UTC" className="bg-dark-100">UTC</option>
-                  <option value="America/New_York" className="bg-dark-100">Eastern Time</option>
-                  <option value="America/Los_Angeles" className="bg-dark-100">Pacific Time</option>
-                  <option value="Europe/London" className="bg-dark-100">London</option>
-                  <option value="Asia/Tokyo" className="bg-dark-100">Tokyo</option>
-                </select>
+                  onChange={(nextValue) => handleChange('general', 'timezone', nextValue)}
+                  options={[
+                    { value: 'UTC', label: 'UTC' },
+                    { value: 'America/New_York', label: 'Eastern Time' },
+                    { value: 'America/Los_Angeles', label: 'Pacific Time' },
+                    { value: 'Europe/London', label: 'London' },
+                    { value: 'Asia/Tokyo', label: 'Tokyo' },
+                  ]}
+                  triggerClassName="w-full bg-white/10 px-4 py-2.5 rounded-lg focus-visible:ring-violet-500/50"
+                  ariaLabel="Timezone"
+                />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-white/70 mb-2">Site Description</label>

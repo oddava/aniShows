@@ -8,6 +8,7 @@ import {
 import api from '../../api/client';
 import logger from '../../utils/logger';
 import AnimeMediaImage from '../../components/common/AnimeMediaImage';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminAnime = () => {
     const [animeList, setAnimeList] = useState([]);
@@ -110,47 +111,53 @@ const AdminAnime = () => {
                 </form>
 
                 <div className="flex w-full md:w-auto gap-3 flex-wrap md:flex-nowrap">
-                    <div className="relative group flex-1 md:flex-none">
-                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                        <select
+                    <div className="flex-1 md:flex-none">
+                        <CustomSelect
                             value={filters.status}
-                            onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))}
-                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
-                        >
-                            <option value="" className="bg-dark-100">All Statuses</option>
-                            <option value="Airing" className="bg-dark-100">Airing</option>
-                            <option value="Finished" className="bg-dark-100">Finished</option>
-                            <option value="Upcoming" className="bg-dark-100">Upcoming</option>
-                        </select>
+                            onChange={(nextValue) => setFilters((f) => ({ ...f, status: nextValue }))}
+                            options={[
+                                { value: '', label: 'All Statuses' },
+                                { value: 'Airing', label: 'Airing' },
+                                { value: 'Finished', label: 'Finished' },
+                                { value: 'Upcoming', label: 'Upcoming' },
+                            ]}
+                            startIcon={Filter}
+                            triggerClassName="w-full bg-white/5 py-2 pl-3 pr-3 text-sm focus-visible:ring-purple-500/50"
+                            ariaLabel="Filter anime by status"
+                        />
                     </div>
 
-                    <div className="relative group flex-1 md:flex-none">
-                        <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                        <select
+                    <div className="flex-1 md:flex-none">
+                        <CustomSelect
                             value={filters.type}
-                            onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
-                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
-                        >
-                            <option value="" className="bg-dark-100">All Types</option>
-                            <option value="TV" className="bg-dark-100">TV Show</option>
-                            <option value="Movie" className="bg-dark-100">Movie</option>
-                            <option value="OVA" className="bg-dark-100">OVA</option>
-                            <option value="Special" className="bg-dark-100">Special</option>
-                        </select>
+                            onChange={(nextValue) => setFilters((f) => ({ ...f, type: nextValue }))}
+                            options={[
+                                { value: '', label: 'All Types' },
+                                { value: 'TV', label: 'TV Show' },
+                                { value: 'Movie', label: 'Movie' },
+                                { value: 'OVA', label: 'OVA' },
+                                { value: 'Special', label: 'Special' },
+                            ]}
+                            startIcon={LayoutGrid}
+                            triggerClassName="w-full bg-white/5 py-2 pl-3 pr-3 text-sm focus-visible:ring-purple-500/50"
+                            ariaLabel="Filter anime by type"
+                        />
                     </div>
 
-                    <div className="relative group w-full md:w-auto md:flex-none">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                        <select
+                    <div className="w-full md:w-auto md:flex-none">
+                        <CustomSelect
                             value={filters.ordering}
-                            onChange={(e) => setFilters(f => ({ ...f, ordering: e.target.value }))}
-                            className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer"
-                        >
-                            <option value="-created_at" className="bg-dark-100">Newest First</option>
-                            <option value="created_at" className="bg-dark-100">Oldest First</option>
-                            <option value="-rating" className="bg-dark-100">Highest Rated</option>
-                            <option value="title" className="bg-dark-100">A-Z Title</option>
-                        </select>
+                            onChange={(nextValue) => setFilters((f) => ({ ...f, ordering: nextValue }))}
+                            options={[
+                                { value: '-created_at', label: 'Newest First' },
+                                { value: 'created_at', label: 'Oldest First' },
+                                { value: '-rating', label: 'Highest Rated' },
+                                { value: 'title', label: 'A-Z Title' },
+                            ]}
+                            startIcon={Clock}
+                            triggerClassName="w-full bg-white/5 py-2 pl-3 pr-3 text-sm focus-visible:ring-purple-500/50"
+                            ariaLabel="Sort anime list"
+                        />
                     </div>
                 </div>
             </div>

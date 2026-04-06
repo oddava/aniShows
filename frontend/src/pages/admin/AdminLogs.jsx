@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../api/client';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminLogs = () => {
   const [logs, setLogs] = useState([]);
@@ -158,28 +159,28 @@ const AdminLogs = () => {
           </div>
 
           {/* Level Filter */}
-          <select
+          <CustomSelect
             value={filters.level}
-            onChange={(e) => handleFilterChange('level', e.target.value)}
-            className="px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-          >
-            <option value="" className="bg-gray-800">All Levels</option>
-            {levels.slice(1).map((level) => (
-              <option key={level} value={level} className="bg-gray-800">{level}</option>
-            ))}
-          </select>
+            onChange={(nextValue) => handleFilterChange('level', nextValue)}
+            options={[
+              { value: '', label: 'All Levels' },
+              ...levels.slice(1).map((level) => ({ value: level, label: level })),
+            ]}
+            triggerClassName="px-4 py-2.5 bg-white/10 rounded-lg focus-visible:ring-violet-500/50"
+            ariaLabel="Filter logs by level"
+          />
 
           {/* Type Filter */}
-          <select
+          <CustomSelect
             value={filters.log_type}
-            onChange={(e) => handleFilterChange('log_type', e.target.value)}
-            className="px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-          >
-            <option value="" className="bg-gray-800">All Types</option>
-            {logTypes.slice(1).map((type) => (
-              <option key={type} value={type} className="bg-gray-800">{type}</option>
-            ))}
-          </select>
+            onChange={(nextValue) => handleFilterChange('log_type', nextValue)}
+            options={[
+              { value: '', label: 'All Types' },
+              ...logTypes.slice(1).map((type) => ({ value: type, label: type })),
+            ]}
+            triggerClassName="px-4 py-2.5 bg-white/10 rounded-lg focus-visible:ring-violet-500/50"
+            ariaLabel="Filter logs by type"
+          />
 
           {/* User Filter */}
           <input
