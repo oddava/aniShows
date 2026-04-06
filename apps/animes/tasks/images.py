@@ -169,8 +169,35 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
                     await asyncio.sleep(2 ** attempt)
                     continue
 
+                if response.status_code >= 500:
+                    limiter.record_error()
+                    logger.warning(
+                        "Jikan banner fallback returned server error for MAL %s (status=%s, attempt=%s)",
+                        mal_id,
+                        response.status_code,
+                        attempt + 1,
+                    )
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+
+                if 400 <= response.status_code < 500:
+                    logger.info(
+                        "Jikan banner fallback returned non-retryable response for MAL %s (status=%s)",
+                        mal_id,
+                        response.status_code,
+                    )
+                    return None
+
                 response.raise_for_status()
-                data = response.json().get("data", [])
+                try:
+                    data = response.json().get("data", [])
+                except ValueError:
+                    logger.warning(
+                        "Jikan banner fallback returned invalid JSON for MAL %s",
+                        mal_id,
+                        exc_info=True,
+                    )
+                    return None
 
                 # Find the largest picture
                 for pic in data:
@@ -179,10 +206,31 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
                     )
                     if large_img:
                         return large_img
-
-        except Exception as e:
-            logger.warning(f"Jikan fallback failed for MAL {mal_id}: {e}")
-            break
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError):
+            limiter.record_error()
+            logger.warning(
+                "Jikan banner fallback network failure for MAL %s (attempt=%s)",
+                mal_id,
+                attempt + 1,
+                exc_info=True,
+            )
+            await asyncio.sleep(2 ** attempt)
+        except httpx.HTTPStatusError as exc:
+            limiter.record_error()
+            status_code = exc.response.status_code if exc.response is not None else "unknown"
+            logger.warning(
+                "Jikan banner fallback HTTP error for MAL %s (status=%s, attempt=%s)",
+                mal_id,
+                status_code,
+                attempt + 1,
+                exc_info=True,
+            )
+            if exc.response is not None and 400 <= exc.response.status_code < 500:
+                return None
+            await asyncio.sleep(2 ** attempt)
+        except Exception:
+            logger.warning("Jikan banner fallback failed for MAL %s", mal_id, exc_info=True)
+            return None
 
     return None
 
@@ -309,7 +357,7 @@ def fetch_anime_images(
                 "storage_retry": storage_retry + 1,
             }
 
-        logger.error(f"Error fetching images for anime {anime_id}: {e}")
+        logger.error("Error fetching images for anime %s", anime_id, exc_info=True)
         raise self.retry(exc=e, countdown=60)
 
 
@@ -372,9 +420,13 @@ def generate_image_thumbnails(self, anime_id: int):
 
         anime = Anime.objects.get(id=anime_id)
         generated_count = 0
+        attempted_batches = 0
+        failed_batches = 0
+        last_error = None
 
         # Generate cover image thumbnails
         if anime.cover_image:
+            attempted_batches += 1
             try:
                 # Explicitly generate the thumbnails (since we use Optimistic cache strategy)
                 anime.cover_image_small.generate()
@@ -383,12 +435,15 @@ def generate_image_thumbnails(self, anime_id: int):
                 generated_count += 3
                 logger.info(f"Generated cover thumbnails for {anime.title}")
             except Exception as e:
+                failed_batches += 1
+                last_error = e
                 logger.warning(
                     f"Failed to generate cover thumbnails for {anime.title}: {e}"
                 )
 
         # Generate banner image thumbnails
         if anime.banner_image:
+            attempted_batches += 1
             try:
                 # Explicitly generate the thumbnails (since we use Optimistic cache strategy)
                 anime.banner_image_small.generate()
@@ -397,9 +452,14 @@ def generate_image_thumbnails(self, anime_id: int):
                 generated_count += 3
                 logger.info(f"Generated banner thumbnails for {anime.title}")
             except Exception as e:
+                failed_batches += 1
+                last_error = e
                 logger.warning(
                     f"Failed to generate banner thumbnails for {anime.title}: {e}"
                 )
+
+        if attempted_batches and failed_batches == attempted_batches and generated_count == 0:
+            raise last_error or RuntimeError("Thumbnail generation failed for all requested image variants")
 
         logger.info(
             f"Thumbnail generation complete for {anime.title}. Generated: {generated_count}"

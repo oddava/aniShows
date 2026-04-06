@@ -15,6 +15,9 @@ class MyAnimeListAPIImporter(BaseImporter):
     """Import from MyAnimeList API"""
 
     BASE_URL = "https://api.myanimelist.net/v2"
+    MAX_PAGE_RETRIES = 5
+    BASE_BACKOFF_SECONDS = 2
+    MAX_BACKOFF_SECONDS = 30
 
     def __init__(self, job: UserImportJob, username: str, client_id: str | None = None):
         super().__init__(job)
@@ -27,11 +30,22 @@ class MyAnimeListAPIImporter(BaseImporter):
                 "Please set it in your .env file or environment."
             )
 
+    def _retry_delay(self, attempt: int, response: requests.Response | None = None) -> float:
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    return max(float(retry_after), 1.0)
+                except ValueError:
+                    pass
+        return min(self.BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)), self.MAX_BACKOFF_SECONDS)
+
     def fetch_user_list(self) -> List[Dict]:
         """Fetch user's anime list from MAL API"""
         entries = []
         offset = 0
         limit = 100
+        attempt = 0
 
         headers = {"X-MAL-CLIENT-ID": self.client_id}
 
@@ -48,12 +62,59 @@ class MyAnimeListAPIImporter(BaseImporter):
                     raise ValueError(f"User '{self.username}' not found")
 
                 if response.status_code == 429:
-                    # Rate limited - wait and retry
-                    time.sleep(5)
+                    attempt += 1
+                    if attempt > self.MAX_PAGE_RETRIES:
+                        logger.error(
+                            "MAL list fetch exceeded rate-limit retries",
+                            extra={"username": self.username, "offset": offset},
+                        )
+                        raise ValueError(
+                            "MyAnimeList is rate limiting imports right now. Please try again later."
+                        )
+                    wait = self._retry_delay(attempt, response=response)
+                    logger.warning(
+                        "MAL list fetch rate-limited; retrying",
+                        extra={
+                            "username": self.username,
+                            "offset": offset,
+                            "attempt": attempt,
+                            "wait_seconds": wait,
+                        },
+                    )
+                    time.sleep(wait)
+                    continue
+
+                if response.status_code >= 500:
+                    attempt += 1
+                    if attempt > self.MAX_PAGE_RETRIES:
+                        logger.error(
+                            "MAL list fetch exceeded server-error retries",
+                            extra={
+                                "username": self.username,
+                                "offset": offset,
+                                "status_code": response.status_code,
+                            },
+                        )
+                        raise ValueError(
+                            "MyAnimeList API is currently unavailable. Please try again later."
+                        )
+                    wait = self._retry_delay(attempt, response=response)
+                    logger.warning(
+                        "MAL list fetch server error; retrying",
+                        extra={
+                            "username": self.username,
+                            "offset": offset,
+                            "status_code": response.status_code,
+                            "attempt": attempt,
+                            "wait_seconds": wait,
+                        },
+                    )
+                    time.sleep(wait)
                     continue
 
                 response.raise_for_status()
                 data = response.json()
+                attempt = 0
 
                 for item in data.get("data", []):
                     entries.append(
@@ -76,8 +137,27 @@ class MyAnimeListAPIImporter(BaseImporter):
                 time.sleep(0.5)
 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Error fetching MAL list: {e}")
-                raise
+                attempt += 1
+                if attempt > self.MAX_PAGE_RETRIES:
+                    logger.error(
+                        "Error fetching MAL list after retries",
+                        extra={"username": self.username, "offset": offset},
+                        exc_info=True,
+                    )
+                    raise ValueError(
+                        "MyAnimeList API is currently unavailable. Please try again later."
+                    ) from e
+                wait = self._retry_delay(attempt)
+                logger.warning(
+                    "MAL list fetch request failed; retrying",
+                    extra={
+                        "username": self.username,
+                        "offset": offset,
+                        "attempt": attempt,
+                        "wait_seconds": wait,
+                    },
+                )
+                time.sleep(wait)
 
         return entries
 

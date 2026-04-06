@@ -94,6 +94,7 @@ class WatchEpisodeBatchSyncTask(BaseTask):
         empty = 0
         failed = 0
         processed_ids: list[int] = []
+        failed_anime_ids: list[int] = []
 
         for anime in anime_list:
             processed_ids.append(anime.id)
@@ -109,6 +110,7 @@ class WatchEpisodeBatchSyncTask(BaseTask):
                     empty += 1
             except Exception:
                 failed += 1
+                failed_anime_ids.append(anime.id)
                 logger.error(
                     "Watch episode batch sync failed for anime %s",
                     anime.id,
@@ -120,6 +122,7 @@ class WatchEpisodeBatchSyncTask(BaseTask):
             "warmed": warmed,
             "empty": empty,
             "failed": failed,
+            "failed_anime_ids": failed_anime_ids,
             "forced": force,
             "statuses": statuses or [],
             "anime_ids": processed_ids,

@@ -67,6 +67,13 @@ Please verify your email: {link}
 Note: Unverified accounts are automatically deleted after 7 days.
 """
 
+
+def _response_excerpt(response: httpx.Response | None, limit: int = 300) -> str:
+    if response is None:
+        return ""
+    return (response.text or "")[:limit]
+
+
 @observed_shared_task(retry_policy="standard")
 def send_email_task(self, subject, message, recipient_list, html_message=None):
     """Celery task for sending emails through Resend HTTP API."""
@@ -123,7 +130,15 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
                 json=payload,
             )
             response.raise_for_status()
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError as exc:
+                logger.warning(
+                    "Email provider returned invalid JSON; retrying",
+                    extra={"recipient_list": recipient_list},
+                    exc_info=True,
+                )
+                raise self.retry(exc=exc, countdown=60)
 
         message_id = data.get("id")
         logger.info(
@@ -132,6 +147,39 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
             message_id,
         )
         return {"id": message_id, "to": recipient_list}
+    except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+        logger.warning(
+            "Transient email delivery failure; retrying",
+            extra={"recipient_list": recipient_list},
+            exc_info=True,
+        )
+        raise self.retry(exc=exc, countdown=60)
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        if status_code == 429 or (status_code is not None and status_code >= 500):
+            logger.warning(
+                "Email provider returned retryable response; retrying",
+                extra={
+                    "recipient_list": recipient_list,
+                    "status_code": status_code,
+                    "response_excerpt": _response_excerpt(exc.response),
+                },
+            )
+            raise self.retry(exc=exc, countdown=60)
+
+        logger.error(
+            "Email provider rejected message without retry",
+            extra={
+                "recipient_list": recipient_list,
+                "status_code": status_code,
+                "response_excerpt": _response_excerpt(exc.response),
+            },
+            exc_info=True,
+        )
+        raise
+    except ValueError:
+        logger.error("Email delivery misconfigured", extra={"recipient_list": recipient_list}, exc_info=True)
+        raise
     except Exception as exc:
-        logger.exception(f"Failed to send email to {recipient_list}: {exc}")
+        logger.exception("Failed to send email", extra={"recipient_list": recipient_list})
         raise self.retry(exc=exc, countdown=60)

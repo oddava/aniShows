@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+import httpx
 from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
@@ -14,6 +15,33 @@ from apps.users.services.email_service import send_email_task
 logger = logging.getLogger(__name__)
 
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
+RETRYABLE_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _iter_exception_chain(exc: Exception):
+    seen = set()
+    current = exc
+    while current and id(current) not in seen:
+        yield current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+
+
+def _can_retry(task, exc: Exception) -> bool:
+    max_retries = getattr(task, "max_retries", 0)
+    return task.request.retries < max_retries and max_retries > 0
+
+
+def _is_retryable_external_error(exc: Exception) -> bool:
+    for current in _iter_exception_chain(exc):
+        if isinstance(current, RETRYABLE_DB_ERRORS):
+            return True
+        if isinstance(current, (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError)):
+            return True
+        if isinstance(current, httpx.HTTPStatusError) and current.response is not None:
+            if current.response.status_code in RETRYABLE_HTTP_STATUS_CODES:
+                return True
+    return False
 
 
 @observed_shared_task(retry_policy="standard")
@@ -28,14 +56,18 @@ def cleanup_unverified_accounts(self, days: int = 7):
 @observed_shared_task(retry_policy="standard")
 def process_import_job(self, job_id: int, **kwargs):
     try:
-        return UserTaskService.process_import_job(job_id=job_id, **kwargs)
+        return UserTaskService.process_import_job(
+            job_id=job_id,
+            allow_processing_resume=self.request.retries > 0,
+            **kwargs,
+        )
     except Exception as exc:
         logger.exception("Import job processing failed", extra={"job_id": job_id})
-        UserTaskService.mark_import_job_failed(job_id=job_id, error_message=str(exc))
-        if isinstance(exc, RETRYABLE_DB_ERRORS):
+        if isinstance(exc, RETRYABLE_DB_ERRORS) and _can_retry(self, exc):
             close_old_connections()
             raise self.retry(exc=exc, countdown=60)
-        return {"job_id": job_id, "status": "failed", "reason": "import_failed"}
+        UserTaskService.mark_import_job_failed(job_id=job_id, error_message=str(exc))
+        raise
 
 
 @observed_shared_task(retry_policy="external_api")
@@ -57,7 +89,11 @@ def fetch_anime_by_external_id(
             "External anime fetch failed",
             extra={"mal_id": mal_id, "anilist_id": anilist_id, "title": title},
         )
-        raise self.retry(exc=exc, countdown=60)
+        if _is_retryable_external_error(exc) and _can_retry(self, exc):
+            if isinstance(exc, RETRYABLE_DB_ERRORS):
+                close_old_connections()
+            raise self.retry(exc=exc, countdown=60)
+        raise
 
 
 @observed_shared_task(retry_policy="standard")

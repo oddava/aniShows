@@ -84,7 +84,7 @@ class RecommendationTask(BaseTask):
 
                 RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(len(recs))
             except Exception:
-                pass
+                logger.debug("Unable to record recommendation metric for user %s", user_id, exc_info=True)
 
             logger.info(f"Generated {len(recs)} recommendations for {user.username}")
 
@@ -126,7 +126,7 @@ class RecommendationTask(BaseTask):
 
                 RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(total_recs)
             except Exception:
-                pass
+                logger.debug("Unable to record batch recommendation metrics", exc_info=True)
 
             logger.info(
                 f"Batch complete: {result.get('processed', 0)}/{total} users, "
@@ -139,6 +139,7 @@ class RecommendationTask(BaseTask):
                 "processed": result.get("processed", 0),
                 "recommendations_created": total_recs,
                 "errors": result.get("failed", 0),
+                "failed_user_ids": result.get("failed_user_ids", []),
                 "algorithm": algorithm,
             }
 

@@ -640,6 +640,7 @@ class RecommendationService:
             "processed": 0,
             "failed": 0,
             "total_recommendations": 0,
+            "failed_user_ids": [],
         }
 
         active_users = User.objects.filter(
@@ -653,9 +654,14 @@ class RecommendationService:
                 recs = self.generate_for_user(user)
                 stats["processed"] += 1
                 stats["total_recommendations"] += len(recs)
-            except Exception as e:
+            except Exception:
                 stats["failed"] += 1
-                logger.error(f"Failed to generate recommendations for user {user.username}: {e}")
+                stats["failed_user_ids"].append(user.id)
+                logger.error(
+                    "Failed to generate recommendations for user %s",
+                    user.username,
+                    exc_info=True,
+                )
 
         logger.info(f"Recommendation generation complete: {stats}")
         return stats

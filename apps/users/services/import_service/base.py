@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict, Tuple
 
 from django.core.cache import cache
+from django.db import IntegrityError, transaction
 
 from apps.animes.models import Anime
 from apps.shared.logger import logger
@@ -169,8 +170,12 @@ class BaseImporter:
                 cache.set(missing_cache_key, True, timeout=self.MISSING_ANIME_CACHE_TTL_SECONDS)
             return None
 
-        except Exception as e:
-            logger.error(f"Error fetching anime: {e}")
+        except Exception:
+            logger.error(
+                "Error fetching anime during import",
+                extra={"mal_id": mal_id, "anilist_id": anilist_id, "title": title},
+                exc_info=True,
+            )
             return None
 
     def _missing_anime_cache_key(
@@ -198,11 +203,30 @@ class BaseImporter:
         Returns (success, message)
         """
         try:
-            # Check if entry already exists
-            existing = UserAnimeList.objects.filter(user=self.user, anime=anime).first()
+            with transaction.atomic():
+                try:
+                    existing = UserAnimeList.objects.select_for_update().get(
+                        user=self.user,
+                        anime=anime,
+                    )
+                except UserAnimeList.DoesNotExist:
+                    try:
+                        created = UserAnimeList(
+                            user=self.user,
+                            anime=anime,
+                            status=status,
+                            score=score,
+                            episodes_watched=episodes_watched,
+                        )
+                        created._skip_activity = True
+                        created.save()
+                        return True, "Imported successfully"
+                    except IntegrityError:
+                        existing = UserAnimeList.objects.select_for_update().get(
+                            user=self.user,
+                            anime=anime,
+                        )
 
-            if existing:
-                # Update existing entry
                 existing._skip_activity = True
                 existing.status = status
                 existing.score = score
@@ -210,21 +234,8 @@ class BaseImporter:
                 existing.save()
                 return True, "Updated existing entry"
 
-            # Create new entry
-            created = UserAnimeList(
-                user=self.user,
-                anime=anime,
-                status=status,
-                score=score,
-                episodes_watched=episodes_watched,
-            )
-            created._skip_activity = True
-            created.save()
-
-            return True, "Imported successfully"
-
         except Exception as e:
-            logger.error(f"Error saving entry: {e}")
+            logger.error("Error saving entry", exc_info=True)
             return False, f"Error: {str(e)}"
 
     def trigger_post_import_refresh(self):

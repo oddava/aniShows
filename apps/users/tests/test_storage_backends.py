@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, PropertyMock, patch
 
+from botocore.exceptions import ClientError
 from django.test import SimpleTestCase, override_settings
 
 from root.storage_backends import MediaStorage
@@ -51,3 +52,31 @@ class MediaStorageTests(SimpleTestCase):
 
         client.head_bucket.assert_called_once_with(Bucket=storage.bucket_name)
         client.create_bucket.assert_not_called()
+
+    @override_settings(S3_RUNTIME_BUCKET_AUTOCREATE=True)
+    def test_bucket_probe_does_not_attempt_create_for_permission_error(self):
+        storage = MediaStorage()
+        previous_checked = MediaStorage._bucket_checked
+        self.addCleanup(setattr, MediaStorage, "_bucket_checked", previous_checked)
+        MediaStorage._bucket_checked = False
+
+        client = MagicMock()
+        client.head_bucket.side_effect = ClientError(
+            {
+                "Error": {"Code": "403", "Message": "Forbidden"},
+                "ResponseMetadata": {"HTTPStatusCode": 403},
+            },
+            "HeadBucket",
+        )
+        connection = MagicMock()
+        connection.meta.client = client
+
+        with patch.object(
+            MediaStorage, "connection", new_callable=PropertyMock
+        ) as mock_connection, patch("root.storage_backends.logger.warning") as mock_warning:
+            mock_connection.return_value = connection
+
+            storage._ensure_bucket_exists()
+
+        client.create_bucket.assert_not_called()
+        mock_warning.assert_called()

@@ -3,12 +3,25 @@ from storages.backends.s3boto3 import S3Boto3Storage
 
 from apps.shared.logger import logger
 
+try:
+    from botocore.exceptions import ClientError
+except Exception:  # pragma: no cover - botocore is available in runtime environments
+    ClientError = None
+
 
 class MediaStorage(S3Boto3Storage):
     location = "media"
     file_overwrite = False
 
     _bucket_checked = False
+
+    @staticmethod
+    def _is_missing_bucket_error(exc: Exception) -> bool:
+        if ClientError is not None and isinstance(exc, ClientError):
+            error_code = str(exc.response.get("Error", {}).get("Code", "")).lower()
+            status_code = str(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", ""))
+            return error_code in {"404", "no such bucket", "nosuchbucket", "notfound"} or status_code == "404"
+        return False
 
     def _ensure_bucket_exists(self):
         """
@@ -27,8 +40,14 @@ class MediaStorage(S3Boto3Storage):
         try:
             self.connection.meta.client.head_bucket(Bucket=self.bucket_name)
             return
-        except Exception:
-            pass
+        except Exception as exc:
+            if not self._is_missing_bucket_error(exc):
+                logger.warning(
+                    "Could not verify S3 bucket %s before save; skipping auto-create",
+                    self.bucket_name,
+                    exc_info=True,
+                )
+                return
 
         try:
             self.connection.meta.client.create_bucket(Bucket=self.bucket_name)

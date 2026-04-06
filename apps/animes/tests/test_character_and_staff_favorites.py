@@ -41,6 +41,9 @@ class CharacterAndStaffFavoriteTests(APITestCase):
             user=self.private_user,
             defaults={"email_verified": True, "is_private": True},
         )
+        self.user.refresh_from_db()
+        self.other_user.refresh_from_db()
+        self.private_user.refresh_from_db()
 
         self.character = Character.objects.create(name="Frieren", description="Mage")
         self.staff = Staff.objects.create(name="Atsumi Tanezaki", description="Voice actor")

@@ -66,15 +66,34 @@ class UserTaskService:
 
     @staticmethod
     def process_import_job(job_id: int, **kwargs) -> dict:
+        allow_processing_resume = kwargs.pop("allow_processing_resume", False)
+
         try:
-            job = UserImportJob.objects.get(id=job_id)
+            with transaction.atomic():
+                job = UserImportJob.objects.select_for_update().get(id=job_id)
+
+                if job.status == UserImportJob.ImportStatus.completed:
+                    logger.info("Import job skipped because it already completed", extra={"job_id": job_id})
+                    return {"job_id": job_id, "status": "skipped", "reason": "job_completed"}
+
+                if job.status == UserImportJob.ImportStatus.failed:
+                    logger.info("Import job skipped because it is already failed", extra={"job_id": job_id})
+                    return {"job_id": job_id, "status": "skipped", "reason": "job_cancelled"}
+
+                if job.status == UserImportJob.ImportStatus.processing and not allow_processing_resume:
+                    logger.warning(
+                        "Import job skipped because another worker is already processing it",
+                        extra={"job_id": job_id},
+                    )
+                    return {"job_id": job_id, "status": "skipped", "reason": "already_processing"}
+
+                if job.status != UserImportJob.ImportStatus.processing:
+                    job.status = UserImportJob.ImportStatus.processing
+                    job.started_at = timezone.now()
+                    job.save(update_fields=["status", "started_at"])
         except UserImportJob.DoesNotExist:
             logger.error("Import job not found", extra={"job_id": job_id})
             return {"job_id": job_id, "status": "error", "reason": "job_not_found"}
-
-        if job.status == UserImportJob.ImportStatus.failed:
-            logger.info("Import job skipped because it is already failed", extra={"job_id": job_id})
-            return {"job_id": job_id, "status": "skipped", "reason": "job_cancelled"}
 
         importer = ImportService.create_importer(job, **kwargs)
         result = importer.run()
@@ -95,18 +114,20 @@ class UserTaskService:
     @staticmethod
     def mark_import_job_failed(job_id: int, error_message: str) -> None:
         try:
-            job = UserImportJob.objects.get(id=job_id)
+            with transaction.atomic():
+                job = UserImportJob.objects.select_for_update().get(id=job_id)
+                job.status = UserImportJob.ImportStatus.failed
+                errors = list(job.errors or [])
+                if not errors or errors[-1] != error_message:
+                    errors.append(error_message)
+                job.errors = errors
+                job.save(update_fields=["status", "errors"])
         except UserImportJob.DoesNotExist:
             logger.warning(
                 "Import job disappeared before failure status could be stored",
                 extra={"job_id": job_id},
             )
             return
-
-        job.status = UserImportJob.ImportStatus.failed
-        if not job.errors or job.errors[-1] != error_message:
-            job.errors.append(error_message)
-        job.save(update_fields=["status", "errors"])
 
         try:
             from apps.animes.services.metrics import USER_IMPORTS_PROCESSED

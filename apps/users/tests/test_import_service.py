@@ -1,13 +1,18 @@
 from unittest.mock import Mock, patch
 
+from celery.exceptions import Retry
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db.utils import OperationalError
 from django.test import TestCase, TransactionTestCase
 
 from apps.animes.models import Anime
 from apps.users.models import UserActivity, UserImportJob
+from apps.users.services.import_job_service import create_mal_import_job
 from apps.users.services.import_service.anilist import AniListImporter
+from apps.users.services.import_service.mal_api import MyAnimeListAPIImporter
 from apps.users.services.import_service.mal_xml import MyAnimeListXMLImporter
+from apps.users.tasks import process_import_job
 
 User = get_user_model()
 
@@ -124,6 +129,36 @@ class AniListImporterTests(TestCase):
         self.assertEqual(service.calls, 1)
 
 
+class MyAnimeListImporterTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mal-importer-user",
+            email="mal-importer@example.com",
+            password="password123",
+        )
+        self.job = UserImportJob.objects.create(
+            user=self.user,
+            source=UserImportJob.ImportSource.myanimelist_api,
+            source_identifier="mal-importer-user",
+        )
+
+    @patch("apps.users.services.import_service.mal_api.time.sleep", return_value=None)
+    @patch("apps.users.services.import_service.mal_api.requests.get")
+    def test_fetch_user_list_fails_after_rate_limit_retry_budget(self, mock_get, _mock_sleep):
+        rate_limited = Mock(status_code=429, headers={"Retry-After": "0"})
+        rate_limited.raise_for_status.return_value = None
+        mock_get.return_value = rate_limited
+
+        importer = MyAnimeListAPIImporter(
+            job=self.job,
+            username="mal-importer-user",
+            client_id="test-client",
+        )
+
+        with self.assertRaisesMessage(ValueError, "MyAnimeList is rate limiting imports right now."):
+            importer.fetch_user_list()
+
+
 class ImportSaveEntryTests(TransactionTestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -160,3 +195,66 @@ class ImportSaveEntryTests(TransactionTestCase):
         )
         mock_update_stats.assert_not_called()
         mock_schedule_recommendations.assert_not_called()
+
+
+class ImportJobServiceTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="import-job-user",
+            email="import-job@example.com",
+            password="password123",
+        )
+
+    @patch("apps.users.services.import_job_service.process_import_job.delay")
+    @patch("apps.users.services.import_job_service.transaction.on_commit")
+    def test_create_mal_import_job_queues_task_on_commit(self, mock_on_commit, mock_delay):
+        result = create_mal_import_job(self.user, "sample-user")
+
+        self.assertEqual(mock_delay.call_count, 0)
+        self.assertEqual(mock_on_commit.call_count, 1)
+        callback = mock_on_commit.call_args.args[0]
+        callback()
+
+        self.assertEqual(result.status_code, 202)
+        self.assertEqual(mock_delay.call_count, 1)
+
+    @patch("apps.users.services.import_job_service.process_import_job.delay", side_effect=RuntimeError("broker down"))
+    def test_create_mal_import_job_marks_job_failed_when_enqueue_fails(self, _mock_delay):
+        with self.captureOnCommitCallbacks(execute=True):
+            result = create_mal_import_job(self.user, "sample-user")
+
+        job = UserImportJob.objects.get(id=result.payload["job_id"])
+        self.assertEqual(job.status, UserImportJob.ImportStatus.failed)
+        self.assertIn("Failed to queue import job", job.errors)
+
+
+class ImportTaskWrapperTests(TestCase):
+    @patch("apps.users.tasks.UserTaskService.mark_import_job_failed")
+    @patch("apps.users.tasks.UserTaskService.process_import_job", side_effect=OperationalError("db down"))
+    @patch("apps.users.tasks._can_retry", return_value=True)
+    @patch.object(process_import_job, "retry", side_effect=Retry())
+    def test_process_import_job_does_not_mark_failed_before_retry(
+        self,
+        _mock_retry,
+        _mock_can_retry,
+        _mock_process,
+        mock_mark_failed,
+    ):
+        with self.assertRaises(Retry):
+            process_import_job.run(job_id=123)
+
+        mock_mark_failed.assert_not_called()
+
+    @patch("apps.users.tasks.UserTaskService.mark_import_job_failed")
+    @patch("apps.users.tasks.UserTaskService.process_import_job", side_effect=OperationalError("db down"))
+    @patch("apps.users.tasks._can_retry", return_value=False)
+    def test_process_import_job_marks_failed_after_retry_budget_exhausted(
+        self,
+        _mock_can_retry,
+        _mock_process,
+        mock_mark_failed,
+    ):
+        with self.assertRaises(OperationalError):
+            process_import_job.run(job_id=123)
+
+        mock_mark_failed.assert_called_once()

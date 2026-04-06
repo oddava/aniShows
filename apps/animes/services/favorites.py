@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied
 
@@ -90,35 +91,43 @@ def _toggle_model_favorite(
         return FavoriteActionResult(payload={"error": f"{field_name}_id required"}, status_code=400)
 
     try:
-        instance = model.objects.get(id=object_id)
+        with transaction.atomic():
+            locked_user = User.objects.select_for_update().get(pk=user.pk)
+            instance = model.objects.select_for_update().get(id=object_id)
+
+            favorite = favorite_model.objects.select_for_update().filter(
+                user=locked_user,
+                **{field_name: instance},
+            ).first()
+            if favorite:
+                favorite.delete()
+                is_favorite = False
+                message = "Removed from favorites"
+                status_code = 200
+            else:
+                favorite_model.objects.create(user=locked_user, **{field_name: instance})
+                is_favorite = True
+                message = "Added to favorites"
+                status_code = 200
+
+            favorite_count = favorite_model.objects.filter(**{field_name: instance}).count()
+            transaction.on_commit(
+                lambda: invalidate_user_caches(
+                    locked_user.id,
+                    locked_user.username,
+                    trigger_stats_update=trigger_stats_update,
+                )
+            )
     except model.DoesNotExist:
         return FavoriteActionResult(payload={"error": not_found_message}, status_code=404)
 
-    favorite, created = favorite_model.objects.get_or_create(user=user, **{field_name: instance})
-    if not created:
-        favorite.delete()
-        favorite_count = favorite_model.objects.filter(**{field_name: instance}).count()
-        invalidate_user_caches(
-            user.id, user.username, trigger_stats_update=trigger_stats_update
-        )
-        return FavoriteActionResult(
-            payload={
-                "is_favorite": False,
-                "favorite_count": favorite_count,
-                "message": "Removed from favorites",
-            },
-            status_code=200,
-        )
-
-    favorite_count = favorite_model.objects.filter(**{field_name: instance}).count()
-    invalidate_user_caches(user.id, user.username, trigger_stats_update=trigger_stats_update)
     return FavoriteActionResult(
         payload={
-            "is_favorite": True,
+            "is_favorite": is_favorite,
             "favorite_count": favorite_count,
-            "message": "Added to favorites",
+            "message": message,
         },
-        status_code=200,
+        status_code=status_code,
     )
 
 
