@@ -36,70 +36,69 @@ class LoggingMiddleware:
         self.include_query_params = bool(getattr(settings, "REQUEST_LOG_INCLUDE_QUERY_PARAMS", False))
         self.include_user_agent = bool(getattr(settings, "REQUEST_LOG_INCLUDE_USER_AGENT", True))
 
+    def _is_excluded_path(self, path: str) -> bool:
+        return any(path.startswith(excluded_path) for excluded_path in self.excluded_paths)
+
+    def _request_user(self, request):
+        if hasattr(request, "user") and request.user.is_authenticated:
+            return request.user
+        return None
+
+    def _log_level(self, status_code: int) -> str:
+        if status_code >= 500:
+            return SystemLog.LogLevel.ERROR
+        if status_code >= 400:
+            return SystemLog.LogLevel.WARNING
+        return SystemLog.LogLevel.INFO
+
+    def _log_type(self, path: str) -> str:
+        if path.startswith("/api/v1/admin/"):
+            return SystemLog.LogType.ADMIN
+        if path.startswith("/api/v1/auth/"):
+            return SystemLog.LogType.AUTH
+        return SystemLog.LogType.REQUEST
+
+    def _request_details(self, request) -> dict:
+        details = {}
+        if self.include_user_agent:
+            details["user_agent"] = request.META.get("HTTP_USER_AGENT", "")
+        if self.include_query_params:
+            details["query_params"] = dict(request.GET)
+        return details
+
+    def _build_log_data(self, request, response, *, user_id: int | None, duration_ms: int) -> dict:
+        return {
+            "level": self._log_level(response.status_code),
+            "log_type": self._log_type(request.path),
+            "user_id": user_id,
+            "user_ip": get_client_ip(request),
+            "method": request.method,
+            "path": request.path[:500],
+            "status_code": response.status_code,
+            "message": f"{request.method} {request.path} - {response.status_code}",
+            "details": self._request_details(request),
+            "duration_ms": duration_ms,
+        }
+
     def __call__(self, request):
-        # Skip logging for excluded paths
-        if any(request.path.startswith(path) for path in self.excluded_paths):
+        if self._is_excluded_path(request.path):
             return self.get_response(request)
 
-        # Start timing
         start_time = time.time()
-
-        # Get user info before response
-        user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
+        user = self._request_user(request)
         user_id = user.id if user else None
-
-        # Process the request
         response = self.get_response(request)
-
-        # Calculate duration
         duration_ms = int((time.time() - start_time) * 1000)
-
-        # Determine log level based on status code
-        if response.status_code >= 500:
-            level = SystemLog.LogLevel.ERROR
-        elif response.status_code >= 400:
-            level = SystemLog.LogLevel.WARNING
-        else:
-            level = SystemLog.LogLevel.INFO
-
-        # Determine log type
-        if request.path.startswith("/api/v1/admin/"):
-            log_type = SystemLog.LogType.ADMIN
-        elif request.path.startswith("/api/v1/auth/"):
-            log_type = SystemLog.LogType.AUTH
-        else:
-            log_type = SystemLog.LogType.REQUEST
 
         if not self._should_log_request(request.path, response.status_code):
             return response
 
-        # Get client IP
-        ip = get_client_ip(request)
-
-        # Fire and forget - log asynchronously via Celery
         try:
-            details = {}
-            if self.include_user_agent:
-                details["user_agent"] = request.META.get("HTTP_USER_AGENT", "")
-            if self.include_query_params:
-                details["query_params"] = dict(request.GET)
-
-            log_data = {
-                "level": level,
-                "log_type": log_type,
-                "user_id": user_id,
-                "user_ip": ip,
-                "method": request.method,
-                "path": request.path[:500],
-                "status_code": response.status_code,
-                "message": f"{request.method} {request.path} - {response.status_code}",
-                "details": details,
-                "duration_ms": duration_ms,
-            }
-            log_request_async.delay(log_data)
-        except Exception as e:
-            # Don't let logging errors break the request
-            logger.error(f"Failed to queue async log entry: {e}")
+            log_request_async.delay(
+                self._build_log_data(request, response, user_id=user_id, duration_ms=duration_ms)
+            )
+        except Exception as exc:
+            logger.error("Failed to queue async log entry: %s", exc)
 
         return response
 
@@ -115,6 +114,7 @@ class LoggingMiddleware:
 
         return random.random() < self.success_sample_rate
 
+
 class AdminAuditMiddleware:
     """Middleware to audit admin actions."""
 
@@ -122,26 +122,19 @@ class AdminAuditMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Store the request method and path before processing
         method = request.method
         path = request.path
 
-        # Only audit admin actions that modify data
         if not path.startswith("/api/v1/admin/"):
             return self.get_response(request)
 
         if method not in ["POST", "PUT", "PATCH", "DELETE"]:
             return self.get_response(request)
 
-        # Get user info
         user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
         if not user or not (user.is_staff or user.is_superuser):
             return self.get_response(request)
 
-        # Get client IP
-        ip = get_client_ip(request)
-
-        # Determine action type
         action_map = {
             "POST": AuditLog.ActionType.CREATE,
             "PUT": AuditLog.ActionType.UPDATE,
@@ -149,32 +142,27 @@ class AdminAuditMiddleware:
             "DELETE": AuditLog.ActionType.DELETE,
         }
         action = action_map.get(method)
-
-        # Determine entity type from path
-        entity_type = self._get_entity_type(path)
-
-        # Process the request
         response = self.get_response(request)
 
-        # Log the audit entry asynchronously
         if response.status_code < 400:  # Only log successful actions
             try:
-                log_data = {
-                    "user_id": user.id,
-                    "user_ip": ip,
-                    "action": action,
-                    "entity_type": entity_type,
-                    "entity_id": self._extract_entity_id(path),
-                    "entity_repr": f"{method} {path}",
-                    "metadata": {
-                        "status_code": response.status_code,
-                        "method": method,
-                        "path": path,
-                    },
-                }
-                log_audit_async.delay(log_data)
-            except Exception as e:
-                logger.error(f"Failed to queue audit log: {e}")
+                log_audit_async.delay(
+                    {
+                        "user_id": user.id,
+                        "user_ip": get_client_ip(request),
+                        "action": action,
+                        "entity_type": self._get_entity_type(path),
+                        "entity_id": self._extract_entity_id(path),
+                        "entity_repr": f"{method} {path}",
+                        "metadata": {
+                            "status_code": response.status_code,
+                            "method": method,
+                            "path": path,
+                        },
+                    }
+                )
+            except Exception as exc:
+                logger.error("Failed to queue audit log: %s", exc)
 
         return response
 
@@ -257,30 +245,26 @@ class ExceptionLoggingMiddleware:
         """Log unhandled exceptions asynchronously."""
         user = request.user if hasattr(request, "user") and request.user.is_authenticated else None
 
-        # Get client IP
-        ip = get_client_ip(request)
-
         try:
-            log_data = {
-                "level": SystemLog.LogLevel.ERROR,
-                "log_type": SystemLog.LogType.ERROR,
-                "user_id": user.id if user else None,
-                "user_ip": ip,
-                "method": request.method,
-                "path": request.path[:500],
-                "message": str(exception),
-                "details": {
-                    "exception_type": type(exception).__name__,
-                    "user_agent": request.META.get("HTTP_USER_AGENT", ""),
-                },
-            }
-            log_exception_async.delay(log_data)
+            log_exception_async.delay(
+                {
+                    "level": SystemLog.LogLevel.ERROR,
+                    "log_type": SystemLog.LogType.ERROR,
+                    "user_id": user.id if user else None,
+                    "user_ip": get_client_ip(request),
+                    "method": request.method,
+                    "path": request.path[:500],
+                    "message": str(exception),
+                    "details": {
+                        "exception_type": type(exception).__name__,
+                        "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+                    },
+                }
+            )
         except Exception:
-            # Fallback to Python logger if Celery is unavailable
             logger.error(
                 f"Unhandled exception at {request.method} {request.path}: "
                 f"{type(exception).__name__}: {exception}"
             )
 
-        # Return None to let Django handle the exception normally
         return None

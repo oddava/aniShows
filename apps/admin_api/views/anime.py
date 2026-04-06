@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from apps.admin_api.services.anime_admin_service import (
-    AdminAnimeActionResult,
     apply_default_genre_slug,
     delete_genre,
     delete_studio,
@@ -28,17 +27,18 @@ from apps.animes.admin_serializers import (
     AdminStaffSerializer,
     AdminStudioSerializer,
 )
-from apps.animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
+from apps.animes.models import Anime
 from apps.animes.services.offline_sync import OfflineSyncService
 from apps.core.permissions import IsAdminUser
 
 
 class AnimeFilter(FilterSet):
-    status = CharFilter(field_name='status')
-    type = CharFilter(field_name='anime_type')
+    status = CharFilter(field_name="status")
+    type = CharFilter(field_name="anime_type")
+
     class Meta:
         model = Anime
-        fields = ['status', 'anime_type']
+        fields = ["status", "anime_type"]
 
 
 class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, GenericViewSet):

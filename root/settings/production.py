@@ -1,15 +1,14 @@
-"""
-Production settings for aniShows project.
-"""
+"""Production settings for aniShows project."""
 
 import os
-from .base import *
 
 import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.celery import CeleryIntegration
-from sentry_sdk.integrations.redis import RedisIntegration
+from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
+
+from .base import *
 
 # =============================================================================
 # SENTRY ERROR MONITORING
@@ -61,13 +60,13 @@ def _filter_sentry_event(event, hint):
     formatted = (logentry.get("formatted") or "").lower()
 
     # Ignore expected Gunicorn worker shutdown messages during deploy/reload.
-    # Example: "Worker (pid:22) was sent SIGTERM!"
     if logger_name == "gunicorn.error":
         combined = f"{message} {formatted}"
         if "was sent sigterm" in combined or "was sent sigquit" in combined:
             return None
 
     return event
+
 
 def _filter_sentry_transaction(event, hint):
     """Filter out noisy transaction events."""

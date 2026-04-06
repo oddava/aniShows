@@ -3,6 +3,7 @@
 from django.conf import settings
 from imagekit.cachefiles import ImageCacheFile
 
+from apps.animes.services.public_anime_service import build_user_list_status_payload
 from apps.shared.media_urls import normalize_media_url
 from apps.users.services.avatar_service import get_user_avatar_url
 
@@ -144,20 +145,7 @@ class UserStatusMixin:
         # Use prefetched list entries only - no fallback to avoid N+1
         if hasattr(obj, "_user_list_entries") and obj._user_list_entries:
             entry = obj._user_list_entries[0]
-            return {
-                "id": entry.id,
-                "status": entry.status,
-                "score": entry.score,
-                "episodes_watched": entry.episodes_watched,
-                "notes": entry.notes,
-                "started_at": entry.started_at,
-                "finished_at": entry.finished_at,
-                "total_rewatches": entry.total_rewatches,
-                "is_rewatching": entry.is_rewatching,
-                "progress": (entry.episodes_watched / obj.episode_count * 100)
-                if obj.episode_count and obj.episode_count > 0
-                else 0,
-            }
+            return build_user_list_status_payload(entry, obj.episode_count)
         return None
 
 class UserProfileMixin:

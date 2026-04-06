@@ -32,12 +32,43 @@ from apps.animes.serializers.imports import (
 )
 from apps.animes.serializers.reviews import (
     ReviewReactionActionSerializer,
-    ReviewVoteActionSerializer,
     ReviewReportCreateSerializer,
     ReviewSerializer,
     ReviewUserSerializer,
+    ReviewVoteActionSerializer,
 )
 
+_SERIALIZER_EXPORTS = [
+    "AnimeCharacterSerializer",
+    "AnimeCompactSerializer",
+    "AnimeDetailSerializer",
+    "AnimeListSerializer",
+    "AnimeMinimalSerializer",
+    "AnimeStaffSerializer",
+    "AnimeWatchEpisodeSerializer",
+    "CharacterAnimeRoleSerializer",
+    "CharacterCompactSerializer",
+    "CharacterDetailSerializer",
+    "CharacterSerializer",
+    "EpisodeRatingInputSerializer",
+    "EpisodeRatingSummarySerializer",
+    "GenreSerializer",
+    "ReviewReactionActionSerializer",
+    "ReviewReportCreateSerializer",
+    "ReviewSerializer",
+    "ReviewUserSerializer",
+    "ReviewVoteActionSerializer",
+    "StaffCompactSerializer",
+    "StaffDetailSerializer",
+    "StaffProductionCreditSerializer",
+    "StaffSerializer",
+    "StaffVoiceRoleAnimeSerializer",
+    "StaffVoiceRoleCharacterSerializer",
+    "StaffVoiceRoleSerializer",
+    "StudioSerializer",
+    "ThemeSongSerializer",
+    "UserImportJobSerializer",
+]
 _USER_SERIALIZER_EXPORTS = {
     "BadgeSerializer",
     "CharacterFavoriteSerializer",
@@ -59,6 +90,8 @@ _USER_SERIALIZER_EXPORTS = {
     "UserSerializer",
 }
 
+__all__ = [*_SERIALIZER_EXPORTS, *_USER_SERIALIZER_EXPORTS]
+
 
 def __getattr__(name: str):
     if name in _USER_SERIALIZER_EXPORTS:
@@ -70,4 +103,4 @@ def __getattr__(name: str):
 
 
 def __dir__():
-    return sorted([*globals().keys(), *_USER_SERIALIZER_EXPORTS])
+    return sorted([*globals().keys(), *_SERIALIZER_EXPORTS, *_USER_SERIALIZER_EXPORTS])

@@ -1,6 +1,4 @@
-"""
-Development settings for aniShows project.
-"""
+"""Development settings for aniShows project."""
 
 from .base import *
 
@@ -91,11 +89,6 @@ LOGGING = {
             "propagate": False,
         },
         "apps.users.views.auth": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "apps.animes": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,

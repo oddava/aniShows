@@ -1,11 +1,8 @@
-from rest_framework import mixins
-from django.contrib.auth import get_user_model
-from rest_framework import permissions
+from rest_framework import mixins, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from apps.animes.models import UserFavorite
 from apps.animes.services.favorites import (
     delete_favorite,
     get_character_favorite_queryset,
@@ -24,7 +21,6 @@ from apps.users.serializers.users import (
     StaffFavoriteSerializer,
 )
 
-User = get_user_model()
 
 class FavoriteViewSet(EmailVerificationMixin, ModelViewSet):
     """Manage user favorites with email verification enforcement."""
@@ -35,6 +31,7 @@ class FavoriteViewSet(EmailVerificationMixin, ModelViewSet):
         if self.request and self.request.query_params.get("compact") == "true":
             return FavoriteCompactSerializer
         return super().get_serializer_class()
+
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to add favorites."
 

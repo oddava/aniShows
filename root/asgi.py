@@ -23,10 +23,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "root.settings")
 django_asgi_app = get_asgi_application()
 
 # Import after Django setup to avoid AppRegistryNotReady
-from root.ws_auth import JWTAuthMiddleware  # noqa: E402
-from apps.core.routing import websocket_urlpatterns as core_ws_urls  # noqa: E402
-from apps.forums.routing import websocket_urlpatterns as forum_ws_urls  # noqa: E402
-from django.conf import settings  # noqa: E402
+from apps.core.routing import websocket_urlpatterns as core_ws_urls
+from apps.forums.routing import websocket_urlpatterns as forum_ws_urls
+from root.ws_auth import JWTAuthMiddleware
 
 application = ProtocolTypeRouter(
     {

@@ -1,5 +1,3 @@
-from apps.shared.logger import logger
-
 """
 WebSocket consumers for the core app.
 
@@ -10,6 +8,8 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from apps.core.services.notification_service import NotificationService
+from apps.shared.logger import logger
+
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for real-time user notifications.

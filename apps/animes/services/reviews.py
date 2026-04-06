@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
@@ -23,8 +23,8 @@ def ensure_reviews_enabled():
         raise PermissionDenied("Reviews are currently disabled by the administrator.")
 
 
-def get_review_queryset(request_user, query_params):
-    queryset = Review.objects.select_related(
+def _base_review_queryset():
+    return Review.objects.select_related(
         "user",
         "user__userprofile",
         "anime",
@@ -39,66 +39,55 @@ def get_review_queryset(request_user, query_params):
             to_attr="_prefetched_social_accounts",
         ),
     )
-    queryset = queryset.annotate(
-        _helpful_count=Count(
-            "votes",
-            filter=Q(votes__vote_type=ReviewVote.VoteType.HELPFUL),
-            distinct=True,
-        ),
-        _dislike_count=Count(
-            "votes",
-            filter=Q(votes__vote_type=ReviewVote.VoteType.DISLIKE),
-            distinct=True,
-        ),
-    )
 
-    reaction_annotations = {}
-    for reaction_type in ReviewReaction.ReactionType.values:
-        reaction_annotations[f"_reaction_count_{reaction_type}"] = Count(
+
+def _reaction_count_annotations() -> dict:
+    return {
+        f"_reaction_count_{reaction_type}": Count(
             "reactions",
             filter=Q(reactions__reaction_type=reaction_type),
             distinct=True,
         )
-    queryset = queryset.annotate(**reaction_annotations)
+        for reaction_type in ReviewReaction.ReactionType.values
+    }
 
-    queryset = queryset.annotate(
-        _is_completed=Exists(
-            UserAnimeList.objects.filter(
-                user=OuterRef("user"),
-                anime=OuterRef("anime"),
-                status=UserAnimeList.UserAnimeStatus.completed,
+
+def _viewer_review_annotations(request_user) -> dict:
+    if not request_user.is_authenticated:
+        return {}
+
+    annotations = {
+        "_user_helpful_vote": Exists(
+            ReviewVote.objects.filter(
+                user=request_user,
+                review=OuterRef("pk"),
+                vote_type=ReviewVote.VoteType.HELPFUL,
             )
-        )
-    )
-
-    if request_user.is_authenticated:
-        vote_annotations = {
-            "_user_helpful_vote": Exists(
-                ReviewVote.objects.filter(
-                    user=request_user,
-                    review=OuterRef("pk"),
-                    vote_type=ReviewVote.VoteType.HELPFUL,
-                )
-            ),
-            "_user_dislike_vote": Exists(
-                ReviewVote.objects.filter(
-                    user=request_user,
-                    review=OuterRef("pk"),
-                    vote_type=ReviewVote.VoteType.DISLIKE,
-                )
-            ),
-        }
-        reaction_active_annotations = {}
-        for reaction_type in ReviewReaction.ReactionType.values:
-            reaction_active_annotations[f"_reaction_active_{reaction_type}"] = Exists(
+        ),
+        "_user_dislike_vote": Exists(
+            ReviewVote.objects.filter(
+                user=request_user,
+                review=OuterRef("pk"),
+                vote_type=ReviewVote.VoteType.DISLIKE,
+            )
+        ),
+    }
+    annotations.update(
+        {
+            f"_reaction_active_{reaction_type}": Exists(
                 ReviewReaction.objects.filter(
                     user=request_user,
                     review=OuterRef("pk"),
                     reaction_type=reaction_type,
                 )
             )
-        queryset = queryset.annotate(**vote_annotations, **reaction_active_annotations)
+            for reaction_type in ReviewReaction.ReactionType.values
+        }
+    )
+    return annotations
 
+
+def _apply_review_filters(queryset, request_user, query_params):
     anime_slug = query_params.get("anime")
     if anime_slug:
         queryset = queryset.filter(anime__slug=anime_slug)
@@ -111,17 +100,20 @@ def get_review_queryset(request_user, query_params):
         queryset = queryset.filter(user=request_user)
 
     rating_filter = query_params.get("rating")
-    if rating_filter:
-        try:
-            stars = int(rating_filter)
-        except ValueError:
-            stars = None
+    if not rating_filter:
+        return queryset
 
-        if stars is not None:
-            min_rating = (stars - 1) * 2 + 1
-            max_rating = stars * 2
-            queryset = queryset.filter(rating__gte=min_rating, rating__lte=max_rating)
+    try:
+        stars = int(rating_filter)
+    except ValueError:
+        return queryset
 
+    min_rating = (stars - 1) * 2 + 1
+    max_rating = stars * 2
+    return queryset.filter(rating__gte=min_rating, rating__lte=max_rating)
+
+
+def _order_reviews(queryset, query_params):
     sort = query_params.get("sort", "helpful")
     if sort == "highest":
         return queryset.order_by("-rating", "-created_at")
@@ -130,6 +122,36 @@ def get_review_queryset(request_user, query_params):
     if sort == "newest":
         return queryset.order_by("-created_at")
     return queryset.order_by("-_helpful_count", "-created_at")
+
+
+def get_review_queryset(request_user, query_params):
+    queryset = _base_review_queryset().annotate(
+        _helpful_count=Count(
+            "votes",
+            filter=Q(votes__vote_type=ReviewVote.VoteType.HELPFUL),
+            distinct=True,
+        ),
+        _dislike_count=Count(
+            "votes",
+            filter=Q(votes__vote_type=ReviewVote.VoteType.DISLIKE),
+            distinct=True,
+        ),
+        **_reaction_count_annotations(),
+        _is_completed=Exists(
+            UserAnimeList.objects.filter(
+                user=OuterRef("user"),
+                anime=OuterRef("anime"),
+                status=UserAnimeList.UserAnimeStatus.completed,
+            )
+        )
+    )
+
+    viewer_annotations = _viewer_review_annotations(request_user)
+    if viewer_annotations:
+        queryset = queryset.annotate(**viewer_annotations)
+
+    queryset = _apply_review_filters(queryset, request_user, query_params)
+    return _order_reviews(queryset, query_params)
 
 
 def get_review_stats(anime_slug):
@@ -191,8 +213,9 @@ def create_review(serializer, user):
         )
 
     try:
-        serializer.save(user=user)
-        invalidate_user_caches(user.id, user.username)
+        with transaction.atomic():
+            serializer.save(user=user)
+            transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
     except IntegrityError as exc:
         raise serializers.ValidationError(
             {"non_field_errors": ["You have already reviewed this anime."]}
@@ -203,16 +226,18 @@ def update_review(serializer, user):
     ensure_reviews_enabled()
     if serializer.instance.user != user:
         raise PermissionDenied("You can only edit your own reviews.")
-    serializer.save()
-    invalidate_user_caches(user.id, user.username)
+    with transaction.atomic():
+        serializer.save()
+        transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
 
 
 def delete_review(instance, user):
     ensure_reviews_enabled()
     if instance.user != user:
         raise PermissionDenied("You can only delete your own reviews.")
-    instance.delete()
-    invalidate_user_caches(user.id, user.username)
+    with transaction.atomic():
+        instance.delete()
+        transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
 
 
 def vote_on_review(review, user, vote_type):
@@ -223,19 +248,22 @@ def vote_on_review(review, user, vote_type):
             status_code=400,
         )
 
-    existing_vote = ReviewVote.objects.filter(
-        user=user,
-        review=review,
-        vote_type=vote_type,
-    ).first()
-    if existing_vote:
-        existing_vote.delete()
-        return ReviewActionResult(
-            payload={"active": False, "vote_type": vote_type},
-            status_code=200,
-        )
+    with transaction.atomic():
+        locked_review = Review.objects.select_for_update().get(pk=review.pk)
+        locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
+        existing_vote = ReviewVote.objects.select_for_update().filter(
+            user=locked_user,
+            review=locked_review,
+            vote_type=vote_type,
+        ).first()
+        if existing_vote:
+            existing_vote.delete()
+            return ReviewActionResult(
+                payload={"active": False, "vote_type": vote_type},
+                status_code=200,
+            )
 
-    ReviewVote.objects.create(user=user, review=review, vote_type=vote_type)
+        ReviewVote.objects.create(user=locked_user, review=locked_review, vote_type=vote_type)
     return ReviewActionResult(
         payload={"active": True, "vote_type": vote_type},
         status_code=200,
@@ -244,19 +272,26 @@ def vote_on_review(review, user, vote_type):
 
 def toggle_review_reaction(review, user, reaction_type):
     ensure_reviews_enabled()
-    existing_reaction = ReviewReaction.objects.filter(
-        user=user,
-        review=review,
-        reaction_type=reaction_type,
-    ).first()
-    if existing_reaction:
-        existing_reaction.delete()
-        return ReviewActionResult(
-            payload={"active": False, "reaction_type": reaction_type},
-            status_code=200,
-        )
+    with transaction.atomic():
+        locked_review = Review.objects.select_for_update().get(pk=review.pk)
+        locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
+        existing_reaction = ReviewReaction.objects.select_for_update().filter(
+            user=locked_user,
+            review=locked_review,
+            reaction_type=reaction_type,
+        ).first()
+        if existing_reaction:
+            existing_reaction.delete()
+            return ReviewActionResult(
+                payload={"active": False, "reaction_type": reaction_type},
+                status_code=200,
+            )
 
-    ReviewReaction.objects.create(user=user, review=review, reaction_type=reaction_type)
+        ReviewReaction.objects.create(
+            user=locked_user,
+            review=locked_review,
+            reaction_type=reaction_type,
+        )
     return ReviewActionResult(
         payload={"active": True, "reaction_type": reaction_type},
         status_code=200,
