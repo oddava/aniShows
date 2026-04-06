@@ -3,11 +3,13 @@ from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.signals import social_account_added
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from apps.core.services.notification_service import NotificationService
 from apps.shared.logger import logger
+from apps.users.services.cache import invalidate_user_caches
 
 from .models import UserFollow, UserProfile
 
@@ -136,6 +138,9 @@ def update_points_on_vote_save(sender, instance, created, **kwargs):
     """Update author's points when a vote is added or changed."""
     if not created:
         recalculate_user_points(instance.review.user)
+        transaction.on_commit(
+            lambda: invalidate_user_caches(instance.review.user.id, instance.review.user.username)
+        )
         return
 
     review_author = instance.review.user
@@ -147,6 +152,7 @@ def update_points_on_vote_save(sender, instance, created, **kwargs):
         profile.points = profile.points - 1
 
     profile.save(update_fields=["points"])
+    transaction.on_commit(lambda: invalidate_user_caches(review_author.id, review_author.username))
 
 
 @receiver(post_delete, sender=ReviewVote)
@@ -165,6 +171,7 @@ def update_points_on_vote_delete(sender, instance, **kwargs):
         profile.points = profile.points + 1
 
     profile.save(update_fields=["points"])
+    transaction.on_commit(lambda: invalidate_user_caches(review_author.id, review_author.username))
 
 
 def recalculate_user_points(user):

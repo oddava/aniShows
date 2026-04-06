@@ -113,6 +113,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
                 "favorites_count": stats.favorites_count,
                 "reviews_count": stats.reviews_count,
+                "resonance_count": stats.resonance_count,
             }
 
             data["is_following"] = bool(getattr(user, "_is_following", False))

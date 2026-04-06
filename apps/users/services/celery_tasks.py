@@ -231,7 +231,7 @@ class UserTaskService:
         from django.db.models import Avg, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
         from django.db.models.functions import Coalesce
 
-        from apps.animes.models import Review, UserFavorite
+        from apps.animes.models import Review, ReviewVote, UserFavorite
         from apps.users.models import UserAnimeList, UserFollow, UserStats
 
         start_time = timezone.now()
@@ -293,6 +293,15 @@ class UserTaskService:
             .values("user_id")
             .annotate(total=Count("id"))
         }
+        resonance_counts = {
+            row["review__user_id"]: row["total"]
+            for row in ReviewVote.objects.filter(
+                review__user_id__in=user_ids,
+                vote_type=ReviewVote.VoteType.HELPFUL,
+            )
+            .values("review__user_id")
+            .annotate(total=Count("id"))
+        }
 
         existing_stats_map = {
             stats.user_id: stats for stats in UserStats.objects.filter(user_id__in=user_ids)
@@ -314,6 +323,7 @@ class UserTaskService:
                 "mean_score": anime_data.get("mean_score"),
                 "favorites_count": int(favorites_counts.get(uid, 0)),
                 "reviews_count": int(reviews_counts.get(uid, 0)),
+                "resonance_count": int(resonance_counts.get(uid, 0)),
                 "last_updated": now,
             }
 
@@ -340,6 +350,7 @@ class UserTaskService:
                     "mean_score",
                     "favorites_count",
                     "reviews_count",
+                    "resonance_count",
                     "last_updated",
                 ],
                 batch_size=500,

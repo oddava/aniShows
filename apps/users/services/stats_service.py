@@ -7,7 +7,7 @@ when UserStats materialized view is not available.
 from django.db.models import Avg, Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
-from apps.animes.models import Review, UserFavorite
+from apps.animes.models import Review, ReviewVote, UserFavorite
 from apps.users.models import UserAnimeList, UserFollow, UserStats
 
 
@@ -25,6 +25,7 @@ def serialize_user_stats(
         "mean_score": round(stats_data["mean_score"], 1) if stats_data.get("mean_score") else None,
         "favorites_count": int(stats_data.get("favorites_count", 0) or 0),
         "reviews_count": int(stats_data.get("reviews_count", 0) or 0),
+        "resonance_count": int(stats_data.get("resonance_count", 0) or 0),
     }
     if include_follow_counts:
         payload["followers_count"] = int(stats_data.get("followers_count", 0) or 0)
@@ -48,6 +49,7 @@ def get_materialized_user_stats_payload(
         "mean_score": stats.mean_score,
         "favorites_count": stats.favorites_count,
         "reviews_count": stats.reviews_count,
+        "resonance_count": stats.resonance_count,
         "followers_count": stats.followers_count,
         "following_count": stats.following_count,
         "last_updated": stats.last_updated,
@@ -103,6 +105,12 @@ def calculate_user_stats(user):
     # Reviews count
     reviews_count = Review.objects.filter(user=user).count()
 
+    # Helpful votes received across all of the user's reviews.
+    resonance_count = ReviewVote.objects.filter(
+        review__user=user,
+        vote_type=ReviewVote.VoteType.HELPFUL,
+    ).count()
+
     return {
         "anime_count": anime_count,
         "episodes_watched": episodes_watched,
@@ -111,6 +119,7 @@ def calculate_user_stats(user):
         "mean_score": round(mean_score, 1) if mean_score else None,
         "favorites_count": favorites_count,
         "reviews_count": reviews_count,
+        "resonance_count": resonance_count,
     }
 
 
@@ -146,6 +155,7 @@ def create_or_update_user_stats(user):
             "mean_score": stats_data["mean_score"],
             "favorites_count": stats_data["favorites_count"],
             "reviews_count": stats_data["reviews_count"],
+            "resonance_count": stats_data["resonance_count"],
         },
     )
 

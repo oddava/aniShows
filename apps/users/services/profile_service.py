@@ -137,6 +137,7 @@ def _get_stats_snapshot(user):
             "mean_score": round(stats.mean_score, 1) if stats.mean_score else None,
             "favorites_count": stats.favorites_count,
             "reviews_count": stats.reviews_count,
+            "resonance_count": stats.resonance_count,
         }
     except UserStats.DoesNotExist:
         from apps.users.services.stats_service import calculate_user_stats

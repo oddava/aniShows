@@ -17,24 +17,26 @@ function TopStatsRow({ user }) {
 
     const stats = [
         { label: 'Total Anime', value: user.anime_count || 0 },
-        { label: 'Days Watched', value: user.days_watched || 0 },
         { label: 'Mean Score', value: user.mean_score || 0 },
         { label: 'Favorites', value: user.favorites_count || 0 },
         { label: 'Reviews', value: user.reviews_count || 0 },
+        { label: 'Resonance', value: user.resonance_count || 0 },
     ];
 
     return (
-        <div className="flex items-center justify-center gap-8 sm:gap-12 flex-wrap py-4 border-b border-accent/30 mb-8">
-            {stats.map((stat, i) => (
-                <div key={i} className="text-center">
-                    <span className="text-xl sm:text-2xl font-bold text-white">
-                        {stat.value}
-                    </span>
-                    <span className="block text-[11px] uppercase tracking-wider mt-1 text-gray-500">
-                        {stat.label}
-                    </span>
-                </div>
-            ))}
+        <div className="mb-8 border-b border-accent/30 py-4">
+            <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-5 gap-y-3 text-center sm:gap-x-8">
+                {stats.map((stat, i) => (
+                    <div key={i} className="min-w-[78px]">
+                        <span className="text-xl sm:text-2xl font-bold text-white">
+                            {stat.value}
+                        </span>
+                        <span className="mt-1 block text-[11px] uppercase tracking-wider text-gray-500">
+                            {stat.label}
+                        </span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

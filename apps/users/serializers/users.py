@@ -133,6 +133,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     is_private = SerializerMethodField()
     favorites_count = IntegerField(read_only=True, source="_favorites_count")
     reviews_count = IntegerField(read_only=True, source="_reviews_count")
+    resonance_count = IntegerField(read_only=True, source="_resonance_count", default=0)
 
     days_watched = SerializerMethodField()
     mean_score = SerializerMethodField()
@@ -178,6 +179,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "is_private",
             "favorites_count",
             "reviews_count",
+            "resonance_count",
             "days_watched",
             "mean_score",
             "anime_count",
@@ -252,6 +254,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     bio = SerializerMethodField()
     favorites_count = IntegerField(read_only=True, source="_favorites_count")
     reviews_count = IntegerField(read_only=True, source="_reviews_count")
+    resonance_count = IntegerField(read_only=True, source="_resonance_count", default=0)
     is_private = SerializerMethodField()
 
     days_watched = SerializerMethodField()
@@ -294,6 +297,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "bio",
             "favorites_count",
             "reviews_count",
+            "resonance_count",
             "is_private",
             "days_watched",
             "mean_score",

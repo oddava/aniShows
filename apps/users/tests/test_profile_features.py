@@ -11,7 +11,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime, UserFavorite
+from apps.animes.models import Anime, Review, ReviewVote, UserFavorite
 from apps.users.models import UserAnimeList, UserFollow, UserProfile, UserStats
 
 User = get_user_model()
@@ -83,6 +83,43 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(stats["anime_count"], 2)
         self.assertEqual(stats["mean_score"], 8.0)
         self.assertEqual(stats["days_watched"], 0.4)
+        self.assertEqual(stats["resonance_count"], 0)
+
+    @patch("apps.animes.signals.enrich_metadata")
+    @patch("apps.animes.signals.generate_recommendations")
+    def test_profile_includes_resonance_count(self, mock_recommendations, mock_enrich):
+        anime = Anime.objects.create(
+            title="Review Anime", slug="review-anime", episode_count=12, duration_minutes=24
+        )
+        review = Review.objects.create(
+            user=self.user,
+            anime=anime,
+            rating=8,
+            text="Solid review",
+        )
+        other_user = User.objects.create_user(
+            username="resonance-fan",
+            email="resonance@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=other_user, defaults={"email_verified": True})
+        ReviewVote.objects.create(
+            user=other_user,
+            review=review,
+            vote_type=ReviewVote.VoteType.HELPFUL,
+        )
+
+        from apps.users.tasks import update_user_stats
+
+        update_user_stats(self.user.id)
+
+        own_profile_response = self.client.get(self.profile_url)
+        public_profile_response = self.client.get(self.public_profile_url(self.user.username))
+
+        self.assertEqual(own_profile_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(public_profile_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(own_profile_response.data["resonance_count"], 1)
+        self.assertEqual(public_profile_response.data["resonance_count"], 1)
 
     def test_current_profile_query_count_uses_prefetches(self):
         """Current-profile fetch should stay on a fixed small query budget."""
@@ -98,6 +135,7 @@ class ProfileFeaturesTest(APITestCase):
                 "mean_score": 8.0,
                 "favorites_count": 1,
                 "reviews_count": 2,
+                "resonance_count": 0,
             },
         )
         cache.clear()
@@ -201,6 +239,7 @@ class ProfileFeaturesTest(APITestCase):
                 "mean_score": 8.5,
                 "favorites_count": 3,
                 "reviews_count": 2,
+                "resonance_count": 0,
             },
         )
         UserFollow.objects.create(follower=self.user, following=other_user)

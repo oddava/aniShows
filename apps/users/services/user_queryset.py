@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 
+from apps.animes.models import ReviewVote
 from apps.users.models import UserAnimeList, UserBadge, UserFollow
 
 User = get_user_model()
@@ -37,6 +38,11 @@ def get_annotated_user_queryset(user=None, lightweight=False):
         queryset = queryset.annotate(
             _favorites_count=Count("favorites", distinct=True),
             _reviews_count=Count("reviews", distinct=True),
+            _resonance_count=Count(
+                "reviews__votes",
+                filter=Q(reviews__votes__vote_type=ReviewVote.VoteType.HELPFUL),
+                distinct=True,
+            ),
         )
 
         episodes_subquery = (

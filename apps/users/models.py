@@ -204,6 +204,7 @@ class UserStats(Model):
     mean_score = FloatField(null=True, blank=True)
     favorites_count = IntegerField(default=0)
     reviews_count = IntegerField(default=0)
+    resonance_count = IntegerField(default=0)
     last_updated = DateTimeField(auto_now=True)
     is_active = BooleanField(default=True)
 
