@@ -1,68 +1,39 @@
-from datetime import timedelta
-
 from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
-from django.utils import timezone as tz
 
+from apps.animes.services.public_anime_service import AnimePublicPayloadService
+from apps.animes.services.user_list_side_effects import (
+    handle_review_change as handle_review_change_service,
+)
+from apps.animes.services.user_list_side_effects import (
+    handle_user_anime_list_change as handle_user_anime_list_change_service,
+)
+from apps.animes.services.user_list_side_effects import (
+    handle_user_favorite_change as handle_user_favorite_change_service,
+)
+from apps.animes.services.user_list_side_effects import (
+    log_user_activity as log_user_activity_service,
+)
+from apps.animes.services.user_list_side_effects import (
+    log_user_activity_on_delete as log_user_activity_on_delete_service,
+)
+from apps.animes.services.user_list_side_effects import (
+    schedule_recommendations_debounced,
+    update_anime_status_distribution,
+    update_user_stats_and_cache,
+)
 from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
 from apps.animes.tasks import (
     enrich_metadata,
     generate_recommendations,
     sync_watch_episodes_for_anime,
 )
-from apps.shared.logger import logger
 from apps.shared.public_cache import invalidate_public_cache_keys
-from apps.users.models import UserActivity, UserAnimeList
-from apps.users.services.cache import invalidate_user_caches
-from apps.users.services.stats_service import create_or_update_user_stats
+from apps.users.models import UserAnimeList
 
 from .models import Anime, Review, UserFavorite
-
-User = get_user_model()
-
-
-def _user_exists(user):
-    """Check if a user still exists in the database (not mid-cascade-delete)."""
-    if not user or not user.pk:
-        return False
-    return User.objects.filter(pk=user.pk).exists()
-
-
-def update_user_stats_and_cache(user):
-    """Update user stats asynchronously and invalidate caches immediately.
-    Stats are offloaded to Celery to avoid blocking the request.
-    Cache invalidation happens synchronously so stale data is never served.
-    """
-    if not user:
-        return
-
-    try:
-        # Invalidate caches immediately so stale data is never served
-        invalidate_user_caches(user.id, user.username)
-
-        # Offload stats computation to Celery (non-blocking)
-        from apps.users.tasks import update_user_stats
-
-        update_user_stats.apply_async(
-            kwargs={"user_id": user.id},
-            countdown=2,  # Small delay to batch rapid updates
-            queue="default",
-        )
-
-        logger.debug(f"Invalidated cache and queued stats update for user {user.username}")
-    except Exception as e:
-        # Fallback: try synchronous update if Celery is unavailable
-        try:
-            create_or_update_user_stats(user)
-            invalidate_user_caches(user.id, user.username)
-        except Exception:
-            pass
-        logger.exception(f"Failed to update stats for user {user.username}: {e}")
 
 
 def _watch_episode_auto_sync_enabled() -> bool:
@@ -70,14 +41,33 @@ def _watch_episode_auto_sync_enabled() -> bool:
 
 
 def _queue_watch_episode_sync(anime_id: int, *, force: bool = False) -> None:
-    sync_watch_episodes_for_anime.apply_async(
-        kwargs={"anime_id": anime_id, "force": force}
+    sync_watch_episodes_for_anime.apply_async(kwargs={"anime_id": anime_id, "force": force})
+
+
+def _schedule_recommendations_debounced(user_id, countdown=300):
+    schedule_recommendations_debounced(user_id, task=generate_recommendations, countdown=countdown)
+
+
+def _invalidate_anime_public_caches(slug: str) -> None:
+    current = AnimePublicPayloadService.PUBLIC_CACHE_VERSION
+    invalidate_public_cache_keys(
+        f"anime_detail_base:{current}:{slug}",
+        f"anime_detail_base:v6:{slug}",
+        f"anime_detail_base:v5:{slug}",
+        f"anime_detail_base:v4:{slug}",
+        f"anime_detail_base:v3:{slug}",
+        f"anime_detail_base:v2:{slug}",
+        f"anime_detail_base:{slug}",
+        f"anime_trending:{current}",
+        f"anime_top_rated:{current}",
+        f"anime_related:{current}:{slug}",
+        f"anime_recommendations:{current}:{slug}",
+        f"anime_related:v2:{slug}",
     )
 
 
 @receiver(pre_save, sender=Anime)
 def capture_old_anime_watch_identity(sender, instance, **kwargs):
-    """Capture identity fields so watch-episode caches can be invalidated safely."""
     if not instance.pk:
         instance._old_watch_sync_identity = None
         return
@@ -102,22 +92,12 @@ def capture_old_anime_watch_identity(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
-    """Event-driven trigger: When a new Anime is created,
-    automatically queue a low-priority task to fetch deep metadata (characters, staff).
-    """
     if created:
-        logger.info(
-            f"New Anime created: {instance.title} (ID: {instance.id}). Triggering metadata fetch."
-        )
-        # This task routes to 'low_priority' queue via celery config
-        transaction.on_commit(
-            lambda: enrich_metadata.delay(anime_id=instance.id, mode="single")
-        )
+        transaction.on_commit(lambda: enrich_metadata.delay(anime_id=instance.id, mode="single"))
 
 
 @receiver(post_save, sender=Anime)
 def trigger_watch_episode_sync(sender, instance, created, **kwargs):
-    """Warm watch-episode cache for newly created or re-identified anime."""
     old_identity = getattr(instance, "_old_watch_sync_identity", None) or {}
     identity_changed = created or any(
         old_identity.get(field) != getattr(instance, field)
@@ -125,117 +105,29 @@ def trigger_watch_episode_sync(sender, instance, created, **kwargs):
     )
 
     if old_identity.get("updated_at") and identity_changed:
-        AnimeWatchEpisodeService.invalidate_for_anime_version(
-            instance.id,
-            old_identity["updated_at"],
-        )
+        AnimeWatchEpisodeService.invalidate_for_anime_version(instance.id, old_identity["updated_at"])
 
     if not _watch_episode_auto_sync_enabled():
         return
-
     if not identity_changed or not (instance.mal_id or instance.anilist_id):
         return
 
-    transaction.on_commit(
-        lambda: _queue_watch_episode_sync(instance.id, force=not created)
-    )
+    transaction.on_commit(lambda: _queue_watch_episode_sync(instance.id, force=not created))
 
 
 @receiver(post_save, sender=Anime)
 def invalidate_anime_detail_cache(sender, instance, **kwargs):
-    """Invalidate cached anime detail payload when anime fields change."""
-    invalidate_public_cache_keys(
-        f"anime_detail_base:v7:{instance.slug}",
-        f"anime_detail_base:v6:{instance.slug}",
-        f"anime_detail_base:v5:{instance.slug}",
-        f"anime_detail_base:v4:{instance.slug}",
-        f"anime_detail_base:v3:{instance.slug}",
-        f"anime_detail_base:v2:{instance.slug}",
-        f"anime_detail_base:{instance.slug}",
-        "anime_trending:v2",
-        f"anime_related:v2:{instance.slug}",
-    )
+    _invalidate_anime_public_caches(instance.slug)
 
 
 @receiver(post_delete, sender=Anime)
 def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
-    """Invalidate cached anime detail payload on delete."""
-    invalidate_public_cache_keys(
-        f"anime_detail_base:v7:{instance.slug}",
-        f"anime_detail_base:v6:{instance.slug}",
-        f"anime_detail_base:v5:{instance.slug}",
-        f"anime_detail_base:v4:{instance.slug}",
-        f"anime_detail_base:v3:{instance.slug}",
-        f"anime_detail_base:v2:{instance.slug}",
-        f"anime_detail_base:{instance.slug}",
-        "anime_trending:v2",
-        f"anime_related:v2:{instance.slug}",
-    )
+    _invalidate_anime_public_caches(instance.slug)
     AnimeWatchEpisodeService().invalidate_for_anime(instance)
-
-
-# =============================================================================
-# ACTIVITY LOGGING SIGNALS
-# =============================================================================
-
-
-def invalidate_heatmap_cache(user_id):
-    """Invalidate heatmap cache for a user when their activity changes."""
-    from apps.users.services.cache import get_user_heatmap_cache_key
-
-    cache_key = get_user_heatmap_cache_key(user_id)
-    cache.delete(cache_key)
-    logger.debug(f"Invalidated heatmap cache for user {user_id}")
-
-
-def update_anime_status_distribution(anime_id):
-    """Refresh the denormalized status summary stored on Anime."""
-    if not anime_id:
-        return
-
-    distribution = (
-        UserAnimeList.objects.filter(anime_id=anime_id)
-        .aggregate(
-            watching=Count(
-                "id",
-                filter=Q(status=UserAnimeList.UserAnimeStatus.watching),
-            ),
-            completed=Count(
-                "id",
-                filter=Q(status=UserAnimeList.UserAnimeStatus.completed),
-            ),
-            on_hold=Count(
-                "id",
-                filter=Q(status=UserAnimeList.UserAnimeStatus.on_hold),
-            ),
-            dropped=Count(
-                "id",
-                filter=Q(status=UserAnimeList.UserAnimeStatus.dropped),
-            ),
-            plan_to_watch=Count(
-                "id",
-                filter=Q(status=UserAnimeList.UserAnimeStatus.plan_to_watch),
-            ),
-        )
-    )
-    normalized_distribution = {
-        key: int(distribution.get(key, 0) or 0)
-        for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
-    }
-
-    try:
-        anime = Anime.objects.get(pk=anime_id)
-    except Anime.DoesNotExist:
-        return
-
-    if anime.status_distribution != normalized_distribution:
-        anime.status_distribution = normalized_distribution
-        anime.save(update_fields=["status_distribution"])
 
 
 @receiver(pre_save, sender=UserAnimeList)
 def capture_old_anime_list_state(sender, instance, **kwargs):
-    """Capture state before save for activity diff comparison."""
     if instance.pk:
         try:
             old = UserAnimeList.objects.get(pk=instance.pk)
@@ -258,248 +150,32 @@ def capture_old_anime_list_state(sender, instance, **kwargs):
         instance._old_notes = None
 
 
-def _create_activity_deduped(**kwargs):
-    """Create activity record with deduplication guard.
-
-    Prevents identical duplicate activities within 2 seconds (e.g. from rapid auto-saves).
-    Distinct progress changes (1->2, then 2->3) are treated as separate events.
-    """
-    user = kwargs.get("user")
-    if not _user_exists(user):
-        return
-
-    cutoff = tz.now() - timedelta(seconds=2)
-    dedupe_fields = {
-        "old_status": kwargs.get("old_status"),
-        "new_status": kwargs.get("new_status"),
-        "old_episodes": kwargs.get("old_episodes"),
-        "new_episodes": kwargs.get("new_episodes"),
-        "old_score": kwargs.get("old_score"),
-        "new_score": kwargs.get("new_score"),
-        "notes": kwargs.get("notes", ""),
-    }
-
-    if UserActivity.objects.filter(
-        user=user,
-        anime=kwargs["anime"],
-        activity_type=kwargs["activity_type"],
-        created_at__gte=cutoff,
-        **dedupe_fields,
-    ).exists():
-        logger.debug(
-            f"Skipping duplicate activity {kwargs['activity_type']} "
-            f"for user {kwargs['user'].username}"
-        )
-        return
-
-    try:
-        UserActivity.objects.create(**kwargs)
-    except IntegrityError:
-        logger.debug("Skipping activity creation for deleted user", exc_info=True)
-
-
 @receiver(post_save, sender=UserAnimeList)
 def log_user_activity(sender, instance, created, **kwargs):
-    """Create UserActivity record based on what changed.
-
-    Uses transaction.on_commit for atomicity and dedup guard for rapid saves.
-    """
-    if not instance or not instance.user:
-        return
-
-    # Skip activity logging during bulk imports
-    if getattr(instance, "_skip_activity", False):
-        return
-
-    try:
-        activity_kwargs = None
-
-        if created:
-            # Determine activity type for new entries
-            activity_type = UserActivity.ActivityType.ADDED
-            if instance.status == UserAnimeList.UserAnimeStatus.completed:
-                activity_type = UserActivity.ActivityType.COMPLETED
-
-            activity_kwargs = {
-                "user": instance.user,
-                "anime": instance.anime,
-                "activity_type": activity_type,
-                "new_status": instance.status,
-                "new_episodes": instance.episodes_watched,
-                "new_score": instance.score if instance.score else None,
-                "notes": instance.notes or "",
-            }
-        else:
-            # For updates, determine the most significant change
-            old_status = getattr(instance, "_old_status", None)
-            old_episodes = getattr(instance, "_old_episodes", None)
-            old_is_rewatching = getattr(instance, "_old_is_rewatching", None)
-
-            # Check for rewatching toggle
-            if instance.is_rewatching and not old_is_rewatching:
-                activity_kwargs = {
-                    "user": instance.user,
-                    "anime": instance.anime,
-                    "activity_type": UserActivity.ActivityType.REWATCHING,
-                    "old_status": old_status,
-                    "new_status": instance.status,
-                    "old_episodes": old_episodes,
-                    "new_episodes": instance.episodes_watched,
-                    "notes": instance.notes or "",
-                }
-            # Check for completion
-            elif (
-                instance.status == UserAnimeList.UserAnimeStatus.completed
-                and old_status != UserAnimeList.UserAnimeStatus.completed
-            ):
-                activity_kwargs = {
-                    "user": instance.user,
-                    "anime": instance.anime,
-                    "activity_type": UserActivity.ActivityType.COMPLETED,
-                    "old_status": old_status,
-                    "new_status": instance.status,
-                    "old_episodes": old_episodes,
-                    "new_episodes": instance.episodes_watched,
-                    "new_score": instance.score if instance.score else None,
-                    "notes": instance.notes or "",
-                }
-            # Check for status change
-            elif old_status and instance.status != old_status:
-                activity_kwargs = {
-                    "user": instance.user,
-                    "anime": instance.anime,
-                    "activity_type": UserActivity.ActivityType.STATUS_CHANGE,
-                    "old_status": old_status,
-                    "new_status": instance.status,
-                    "notes": instance.notes or "",
-                }
-            # Check for episode progress
-            elif old_episodes is not None and instance.episodes_watched != old_episodes:
-                activity_kwargs = {
-                    "user": instance.user,
-                    "anime": instance.anime,
-                    "activity_type": UserActivity.ActivityType.PROGRESS,
-                    "old_episodes": old_episodes,
-                    "new_episodes": instance.episodes_watched,
-                    "notes": instance.notes or "",
-                }
-            # Note: Score-only changes are intentionally NOT logged as per test requirements
-            # Notes-only updates are also NOT logged to avoid noise
-
-        if activity_kwargs:
-            transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
-            # Invalidate heatmap cache since activity changed
-            transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
-    except Exception as e:
-        logger.exception(f"Failed to log activity for user {instance.user.username}: {e}")
+    log_user_activity_service(instance, created=created)
 
 
 @receiver(post_delete, sender=UserAnimeList)
 def log_user_activity_on_delete(sender, instance, **kwargs):
-    """Log REMOVED activity when anime is deleted from user's list."""
-    if not instance or not instance.user:
-        return
-
-    # Skip activity logging during bulk imports
-    if getattr(instance, "_skip_activity", False):
-        return
-
-    # Skip if user is being deleted (cascade deletion)
-    if not _user_exists(instance.user):
-        return
-
-    try:
-        activity_kwargs = {
-            "user": instance.user,
-            "anime": instance.anime,
-            "activity_type": UserActivity.ActivityType.REMOVED,
-            "old_status": instance.status,
-            "notes": instance.notes or "",
-        }
-        transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
-        transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
-    except Exception as e:
-        logger.exception(f"Failed to log removal activity for user {instance.user.username}: {e}")
-
-
-def _schedule_recommendations_debounced(user_id, countdown=300):
-    """Schedule recommendation generation with cache-based deduplication.
-
-    Prevents duplicate Celery tasks when a user rapidly updates their list
-    (e.g., bulk imports). Uses a cache key with TTL matching the countdown
-    so only one task runs per window.
-    """
-    cache_key = f"reco_pending:{user_id}"
-    if cache.get(cache_key):
-        logger.debug(
-            f"Skipping duplicate recommendation task for user {user_id} "
-            f"(already scheduled within {countdown}s window)"
-        )
-        return
-
-    # Set the dedup key with TTL = countdown + small buffer
-    cache.set(cache_key, True, timeout=countdown + 30)
-
-    generate_recommendations.apply_async(
-        kwargs={"user_id": user_id},
-        countdown=countdown,
-    )
-    logger.debug(f"Scheduled recommendation generation for user {user_id} in {countdown}s")
+    log_user_activity_on_delete_service(instance)
 
 
 @receiver([post_save, post_delete], sender=UserAnimeList)
 def handle_user_anime_list_change(sender, instance, **kwargs):
-    """Update stats and regenerate recommendations when a user updates their anime list."""
-    if instance and instance.user:
-        # Bulk imports explicitly skip per-entry fan-out work.
-        if getattr(instance, "_skip_activity", False):
-            return
-
-        # Skip if user is being deleted (cascade deletion)
-        if not _user_exists(instance.user):
-            return
-
-        logger.info(
-            f"User {instance.user.username} updated anime list. Updating stats and triggering recommendations."
-        )
-
-        # Update stats immediately for real-time feedback
-        update_user_stats_and_cache(instance.user)
-
-        # Schedule recommendations with dedup (5-minute window)
-        _schedule_recommendations_debounced(instance.user.id, countdown=300)
-
-        transaction.on_commit(lambda anime_id=instance.anime_id: update_anime_status_distribution(anime_id))
+    handle_user_anime_list_change_service(
+        instance,
+        schedule_recommendations=_schedule_recommendations_debounced,
+    )
 
 
 @receiver([post_save, post_delete], sender=UserFavorite)
 def handle_user_favorite_change(sender, instance, **kwargs):
-    """Update stats and regenerate recommendations when a user adds/removes favorites."""
-    if instance and instance.user:
-        # Skip if user is being deleted (cascade deletion)
-        if not _user_exists(instance.user):
-            return
-
-        logger.info(
-            f"User {instance.user.username} updated favorites. Updating stats and triggering recommendations."
-        )
-
-        # Update stats immediately for real-time feedback
-        update_user_stats_and_cache(instance.user)
-
-        # Schedule recommendations with dedup (2-minute window)
-        _schedule_recommendations_debounced(instance.user.id, countdown=120)
+    handle_user_favorite_change_service(
+        instance,
+        schedule_recommendations=_schedule_recommendations_debounced,
+    )
 
 
 @receiver([post_save, post_delete], sender=Review)
 def handle_review_change(sender, instance, **kwargs):
-    """Update stats when a user creates/updates/deletes a review."""
-    if instance and instance.user:
-        # Skip if user is being deleted (cascade deletion)
-        if not _user_exists(instance.user):
-            return
-
-        logger.info(f"User {instance.user.username} updated reviews. Updating stats.")
-
-        # Update stats immediately for real-time feedback
-        update_user_stats_and_cache(instance.user)
+    handle_review_change_service(instance)
