@@ -894,7 +894,11 @@ export default function AnimeDetail() {
                                 )}
 
                                 <div className="lg:hidden mt-6 sm:mt-8 mb-8 sm:mb-12 space-y-4 sm:space-y-6">
-                                    <InformationBox anime={anime} accentColor={accentColor} />
+                                    <InformationBox
+                                        anime={anime}
+                                        accentColor={accentColor}
+                                        className="max-h-[22rem] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+                                    />
                                 </div>
                             </div>
 
