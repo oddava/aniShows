@@ -10,7 +10,6 @@ import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 import ReviewSummary from '../components/ReviewSummary';
-import StaffModal from '../components/StaffModal';
 import StatsTab from '../components/StatsTab';
 import InformationBox from '../components/InformationBox';
 import FriendsWatching from '../components/FriendsWatching';
@@ -352,7 +351,6 @@ export default function AnimeDetail() {
     const [reviewSort, setReviewSort] = useState('helpful');
     const [ratingFilter, setRatingFilter] = useState(null);
     const [hideSpoilersGlobal, setHideSpoilersGlobal] = useState(false);
-    const [selectedStaff, setSelectedStaff] = useState(null);
     const [isBannerLoaded, setIsBannerLoaded] = useState(false);
     const [isCoverLoaded, setIsCoverLoaded] = useState(false);
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
@@ -707,15 +705,6 @@ export default function AnimeDetail() {
         >
             <SEOHelmet anime={anime} />
 
-            {/* Modals */}
-            {selectedStaff && (
-                <StaffModal
-                    staffRole={selectedStaff}
-                    onClose={() => setSelectedStaff(null)}
-                    accentColor={accentColor}
-                />
-            )}
-
             {/* Banner */}
             <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200">
                 {!isBannerLoaded && (
@@ -936,7 +925,6 @@ export default function AnimeDetail() {
                                         characters={characters}
                                         staff={staff}
                                         episodes={displayEpisodes}
-                                        onStaffClick={setSelectedStaff}
                                     />
                                 )}
                                 {activeTab === 'watch' && (
@@ -986,8 +974,6 @@ export default function AnimeDetail() {
                                     <StaffTab
                                         anime={{ ...anime, staff }}
                                         isLoading={staffLoading}
-                                        accentColor={accentColor}
-                                        onStaffClick={setSelectedStaff}
                                     />
                                 )}
                             </div>

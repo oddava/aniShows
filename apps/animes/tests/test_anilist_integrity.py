@@ -1,11 +1,11 @@
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from asgiref.sync import async_to_sync
-from contextlib import asynccontextmanager
 from django.test import TestCase
 
-from apps.animes.models import Anime
+from apps.animes.models import Anime, Staff
 from apps.animes.services.anilist import AniListService
 from apps.animes.tasks.metadata import MetadataEnrichmentTask
 
@@ -154,6 +154,64 @@ class AniListIntegrityTests(TestCase):
                 "endings": None,
             },
         )
+
+    def test_handle_extended_info_persists_staff_descriptions(self):
+        anime = Anime.objects.create(
+            title="Staff Description Guard",
+            slug="staff-description-guard",
+            synopsis="resolver",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.airing,
+            anilist_id=45678,
+        )
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
+        self.addCleanup(lambda: async_to_sync(service.close)())
+
+        item = {
+            "characterPreview": {
+                "edges": [
+                    {
+                        "role": "MAIN",
+                        "node": {
+                            "id": 901,
+                            "name": {"full": "Test Character", "native": "テスト"},
+                            "image": {"large": "https://example.com/character.jpg"},
+                            "description": "Character description",
+                        },
+                        "voiceActors": [
+                            {
+                                "id": 902,
+                                "name": {"full": "Test Voice Actor", "native": "声優"},
+                                "image": {"large": "https://example.com/va.jpg"},
+                                "description": "Voice actor bio",
+                            }
+                        ],
+                    }
+                ]
+            },
+            "staffPreview": {
+                "edges": [
+                    {
+                        "role": "Director",
+                        "node": {
+                            "id": 903,
+                            "name": {"full": "Test Director", "native": "監督"},
+                            "image": {"large": "https://example.com/director.jpg"},
+                            "description": "Director bio",
+                        },
+                    }
+                ]
+            },
+            "openings": None,
+            "endings": None,
+        }
+
+        async_to_sync(service._handle_extended_info_async)(anime, item)
+
+        voice_actor = Staff.objects.get(anilist_id=902)
+        staff_member = Staff.objects.get(anilist_id=903)
+        self.assertEqual(voice_actor.description, "Voice actor bio")
+        self.assertEqual(staff_member.description, "Director bio")
 
     def test_prepare_anime_data_includes_normalized_non_spoiler_tags(self):
         service = AniListService(enable_caching=False, enable_rate_limiting=False)

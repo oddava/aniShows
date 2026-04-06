@@ -283,7 +283,7 @@ class AniListService:
                             logger.warning("AniList GraphQL Rate Limit Error. Sleeping 60s...")
                             self._set_last_error("rate_limited", error_msg)
                             _status = "rate_limited"
-                            if max_rate_limit_wait is not None and 60 > max_rate_limit_wait:
+                            if max_rate_limit_wait is not None and max_rate_limit_wait < 60:
                                 logger.warning(
                                     "AniList GraphQL rate limit wait exceeds budget %.2fs; failing fast",
                                     max_rate_limit_wait,
@@ -1191,6 +1191,7 @@ class AniListService:
                     va_name = va_node["name"].get("full")
                     va_native = va_node["name"].get("native")
                     va_img = va_node.get("image", {}).get("large")
+                    va_desc = va_node.get("description") or ""
                     va_anilist_id = va_node.get("id")
 
                     if va_anilist_id:
@@ -1200,12 +1201,17 @@ class AniListService:
                                 "name": va_name,
                                 "name_native": va_native or "",
                                 "image_url": va_img,
+                                "description": va_desc,
                             },
                         )
                     else:
                         voice_actor, _ = Staff.objects.update_or_create(
                             name=va_name,
-                            defaults={"name_native": va_native or "", "image_url": va_img},
+                            defaults={
+                                "name_native": va_native or "",
+                                "image_url": va_img,
+                                "description": va_desc,
+                            },
                         )
 
                 # Link Anime -> Character
@@ -1231,6 +1237,7 @@ class AniListService:
                 staff_name = node["name"].get("full")
                 staff_native = node["name"].get("native")
                 staff_img = node.get("image", {}).get("large")
+                staff_desc = node.get("description") or ""
                 staff_anilist_id = node.get("id")
 
                 if staff_anilist_id:
@@ -1240,12 +1247,17 @@ class AniListService:
                             "name": staff_name,
                             "name_native": staff_native or "",
                             "image_url": staff_img,
+                            "description": staff_desc,
                         },
                     )
                 else:
                     staff_member, _ = Staff.objects.update_or_create(
                         name=staff_name,
-                        defaults={"name_native": staff_native or "", "image_url": staff_img},
+                        defaults={
+                            "name_native": staff_native or "",
+                            "image_url": staff_img,
+                            "description": staff_desc,
+                        },
                     )
 
                 AnimeStaff.objects.update_or_create(

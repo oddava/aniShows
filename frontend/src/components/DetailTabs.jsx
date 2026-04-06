@@ -7,7 +7,7 @@ import LazyYouTube from './LazyYouTube';
 
 import StatusDistribution from './StatusDistribution';
 
-export function OverviewTab({ anime, accentColor, characters, staff, episodes, onStaffClick }) {
+export function OverviewTab({ anime, accentColor, characters, staff, episodes }) {
     // Extract YouTube video ID
     const getYouTubeId = (url) => {
         if (!url) return null;
@@ -124,10 +124,10 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {topStaff.map((staffRole) => (
-                            <div
+                            <Link
                                 key={staffRole.id}
-                                onClick={() => onStaffClick(staffRole)}
-                                className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 cursor-pointer"
+                                to={staffRole.staff?.id ? `/staff/${staffRole.staff.id}` : '#'}
+                                className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
                             >
                                 <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
                                     <img
@@ -144,7 +144,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes, o
                                         {staffRole.role}
                                     </p>
                                 </div>
-                            </div>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -383,7 +383,7 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
     );
 }
 
-export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
+export function StaffTab({ anime, isLoading }) {
     const uniqueStaff = useMemo(() => {
         if (!Array.isArray(anime.staff)) return [];
         const seen = new Set();
@@ -418,10 +418,10 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
     return (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-tab-content">
             {uniqueStaff.map((staffRole) => (
-                <div
+                <Link
                     key={staffRole.id}
-                    onClick={() => onStaffClick(staffRole)}
-                    className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 cursor-pointer"
+                    to={staffRole.staff?.id ? `/staff/${staffRole.staff.id}` : '#'}
+                    className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
                 >
                     <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
                         <img
@@ -432,17 +432,11 @@ export function StaffTab({ anime, isLoading, accentColor, onStaffClick }) {
                     </div>
                     <div className="flex flex-col min-w-0 pr-4">
                         <h4 className="font-medium text-gray-300 text-[13px] truncate">
-                            <Link
-                                to={`/staff/${staffRole.staff.id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="hover:text-accent transition-colors"
-                            >
-                                {staffRole.staff.name}
-                            </Link>
+                            <span className="transition-colors hover:text-accent">{staffRole.staff.name}</span>
                         </h4>
                         <p className="text-[11px] text-gray-500 mt-1 truncate">{staffRole.role}</p>
                     </div>
-                </div>
+                </Link>
             ))}
         </div>
     );

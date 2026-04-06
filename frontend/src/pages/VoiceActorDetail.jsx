@@ -35,31 +35,26 @@ function parseMarkdownLinks(text) {
 function StaffDetailSkeleton() {
     return (
         <div className="min-h-screen bg-dark animate-pulse">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-16">
-                {/* Back button skeleton */}
-                <div className="h-5 w-24 bg-dark-200 rounded mb-8" />
-
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 mb-10">
-                    <div className="w-44 h-60 rounded-lg bg-dark-200 mx-auto sm:mx-0 flex-shrink-0" />
-                    <div className="flex-1 space-y-3 pt-2">
-                        <div className="h-8 w-64 bg-dark-200 rounded mx-auto sm:mx-0" />
-                        <div className="h-5 w-40 bg-dark-200 rounded mx-auto sm:mx-0" />
-                        <div className="h-4 w-full bg-dark-200 rounded" />
-                        <div className="h-4 w-3/4 bg-dark-200 rounded" />
+            <div className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6">
+                <div className="mb-8 h-5 w-24 rounded bg-dark-200" />
+                <div className="mb-10 grid grid-cols-[112px_1fr] sm:grid-cols-[176px_1fr] gap-x-4 sm:gap-x-8 gap-y-6">
+                    <div className="col-start-1 row-start-1 sm:row-span-2 h-40 w-28 sm:h-60 sm:w-44 rounded-lg bg-dark-200 mx-auto sm:mx-0" />
+                    <div className="col-start-2 row-start-1 flex flex-row items-start justify-between gap-3 sm:gap-4 pt-2">
+                        <div className="space-y-3 flex-1 min-w-0">
+                            <div className="h-6 sm:h-8 w-full max-w-[16rem] rounded bg-dark-200" />
+                            <div className="h-4 sm:h-5 w-24 sm:w-40 rounded bg-dark-200" />
+                            <div className="h-4 w-20 sm:w-32 rounded bg-dark-200 mt-4" />
+                        </div>
+                        <div className="h-9 sm:h-10 w-16 sm:w-20 rounded-xl bg-dark-200 flex-shrink-0" />
+                    </div>
+                    <div className="col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 space-y-3">
+                        <div className="h-4 w-full rounded bg-dark-200" />
+                        <div className="h-4 w-5/6 rounded bg-dark-200" />
                     </div>
                 </div>
-
-                {/* Tabs skeleton */}
-                <div className="flex gap-4 mb-6">
-                    <div className="h-10 w-32 bg-dark-200 rounded-lg" />
-                    <div className="h-10 w-32 bg-dark-200 rounded-lg" />
-                </div>
-
-                {/* Grid skeleton */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
                     {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="h-28 bg-dark-200 rounded-xl" />
+                        <div key={i} className="h-20 bg-dark-200 rounded-lg" />
                     ))}
                 </div>
             </div>
@@ -71,7 +66,6 @@ export default function VoiceActorDetail() {
     const { id } = useParams();
     const { isAuthenticated, user } = useAuth();
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState('voice_roles');
     const [favoriteState, setFavoriteState] = useState({ isFavorite: false, favoriteCount: 0 });
 
     const { data: staff, isLoading, error } = useQuery({
@@ -133,10 +127,7 @@ export default function VoiceActorDetail() {
 
     const getImageUrl = (url) => url || '/placeholder-avatar.png';
 
-    const tabs = [
-        { id: 'voice_roles', label: 'Voice Roles', count: voiceRoleCount },
-        { id: 'production', label: 'Production', count: productionCreditCount },
-    ];
+    const appearanceCount = voiceRoleCount + productionCreditCount;
 
     return (
         <>
@@ -146,22 +137,23 @@ export default function VoiceActorDetail() {
             </Helmet>
 
             <div className="min-h-screen bg-dark">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-16">
+                <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
                     {/* Back navigation */}
                     <button
+                        type="button"
                         onClick={() => window.history.back()}
-                        className="inline-block text-sm font-medium text-gray-400 hover:text-white transition-colors mb-6 sm:mb-8"
+                        className="mb-6 inline-block text-sm font-medium text-gray-400 transition-colors hover:text-white sm:mb-8"
                     >
                         Back
                     </button>
 
-                    <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 mb-8 sm:mb-10">
-                        <div className="flex-shrink-0 mx-auto sm:mx-0">
-                            <div className="w-36 h-48 sm:w-44 sm:h-60 rounded-lg overflow-hidden bg-dark-200">
+                    <div className="mb-8 grid grid-cols-[112px_1fr] sm:grid-cols-[176px_1fr] gap-x-4 sm:gap-x-8 gap-y-6 sm:mb-10">
+                        <div className="col-start-1 row-start-1 sm:row-span-2 mx-auto sm:mx-0">
+                            <div className="h-40 w-28 sm:h-60 sm:w-44 overflow-hidden rounded-lg bg-dark-200">
                                 <img
                                     src={getImageUrl(staff.image)}
                                     alt={staff.name}
-                                    className="w-full h-full object-cover"
+                                    className="h-full w-full object-cover"
                                 />
                             </div>
                             {staff.anilist_id && (
@@ -169,93 +161,61 @@ export default function VoiceActorDetail() {
                                     href={`https://anilist.co/staff/${staff.anilist_id}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="block text-center mt-3 text-xs font-medium text-gray-500 hover:text-gray-300 transition-colors"
+                                    className="mt-3 block text-center text-xs font-medium text-gray-500 transition-colors hover:text-gray-300"
                                 >
                                     AniList
                                 </a>
                             )}
                         </div>
 
-                        {/* Staff info */}
-                        <div className="flex-1 pt-1 pb-4">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="text-center sm:text-left">
-                                    <h1 className="text-2xl sm:text-3xl font-black text-white mb-1">
-                                        {staff.name}
-                                    </h1>
-                                    {staff.name_native && (
-                                        <p className="text-gray-400 text-base sm:text-lg mb-4">
-                                            {staff.name_native}
-                                        </p>
-                                    )}
+                        <div className="col-start-2 row-start-1 flex flex-row items-start justify-between gap-3 sm:gap-4 pt-1">
+                            <div className="text-left min-w-0">
+                                <h1 className="mb-1 text-xl font-black text-white sm:text-3xl break-words">
+                                    {staff.name}
+                                </h1>
+                                {staff.name_native && (
+                                    <p className="mb-3 text-sm text-gray-400 sm:text-lg break-words">
+                                        {staff.name_native}
+                                    </p>
+                                )}
 
-                                    <div className="flex flex-wrap gap-2 justify-center sm:justify-start mb-5">
-                                        {voiceRoleCount > 0 && (
-                                            <span className="text-sm font-medium text-gray-400">
-                                                {voiceRoleCount} Voice {voiceRoleCount === 1 ? 'Role' : 'Roles'}
-                                            </span>
-                                        )}
-                                        {productionCreditCount > 0 && (
-                                            <span className="text-sm font-medium text-gray-400">
-                                                {productionCreditCount} Production {productionCreditCount === 1 ? 'Credit' : 'Credits'}
-                                            </span>
-                                        )}
+                                {appearanceCount > 0 && (
+                                    <div className="mb-4">
+                                        <span className="text-xs sm:text-sm font-medium text-gray-400">
+                                            {appearanceCount} {appearanceCount === 1 ? 'Appearance' : 'Appearances'}
+                                        </span>
                                     </div>
-                                </div>
-
-                                <div className="flex justify-center sm:justify-end">
-                                    <EntityFavoriteButton
-                                        isAuthenticated={isAuthenticated}
-                                        isFavorite={favoriteState.isFavorite}
-                                        favoriteCount={favoriteState.favoriteCount}
-                                        isPending={toggleFavoriteMutation.isPending}
-                                        onToggle={() => toggleFavoriteMutation.mutate()}
-                                        entityLabel="Voice Actor"
-                                    />
-                                </div>
+                                )}
                             </div>
 
-                            {staff.description && (
-                                <div className="max-w-3xl text-sm leading-relaxed text-gray-200 font-medium">
-                                    {parsedDescription}
-                                </div>
-                            )}
+                            <div className="flex flex-shrink-0">
+                                <EntityFavoriteButton
+                                    isAuthenticated={isAuthenticated}
+                                    isFavorite={favoriteState.isFavorite}
+                                    favoriteCount={favoriteState.favoriteCount}
+                                    isPending={toggleFavoriteMutation.isPending}
+                                    onToggle={() => toggleFavoriteMutation.mutate()}
+                                    entityLabel="Staff Member"
+                                />
+                            </div>
                         </div>
+
+                        {staff.description && (
+                            <div className="col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-2 max-w-3xl text-sm leading-relaxed text-gray-200 font-medium">
+                                {parsedDescription}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Tabs */}
-                    <div className="flex gap-2 mb-6 border-b border-white/5 pb-0">
-                        {tabs.map((tab) => {
-                            const isActive = activeTab === tab.id;
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px ${
-                                        isActive
-                                            ? 'text-white border-accent font-bold'
-                                            : 'text-gray-500 border-transparent hover:text-gray-300'
-                                    }`}
-                                >
-                                    {tab.label}
-                                    {tab.count > 0 && (
-                                        <span className={`text-xs px-1 font-medium ${
-                                            isActive ? 'text-accent' : 'text-gray-600'
-                                        }`}>
-                                            {tab.count}
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
+                    <VoiceRolesSection voiceRoles={staff.voice_roles} />
 
-                    {/* Tab content */}
-                    {activeTab === 'voice_roles' && (
-                        <VoiceRolesSection voiceRoles={staff.voice_roles} />
-                    )}
-                    {activeTab === 'production' && (
-                        <ProductionCreditsSection credits={staff.production_credits} />
+                    {productionCreditCount > 0 && (
+                        <section className="mt-10">
+                            <div className="mb-5">
+                                <h2 className="text-lg font-medium text-white sm:text-xl">Production Credits</h2>
+                            </div>
+                            <ProductionCreditsSection credits={staff.production_credits} />
+                        </section>
                     )}
                 </div>
             </div>
@@ -277,34 +237,36 @@ function VoiceRolesSection({ voiceRoles }) {
             {voiceRoles.map((vr) => (
                 <div
                     key={vr.id}
-                    className="flex items-center gap-4 py-3 group"
+                    className="group flex gap-4 py-3 transition-colors"
                 >
-                    {/* Character image */}
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-dark-200 flex-shrink-0">
-                        <img
-                            src={vr.character?.image || '/placeholder-avatar.png'}
-                            alt={vr.character?.name}
-                            className="w-full h-full object-cover transition-opacity hover:opacity-80"
-                            loading="lazy"
-                        />
+                    <div className="relative h-20 w-14 flex-shrink-0 overflow-hidden rounded bg-dark-200">
+                        <Link to={vr.anime?.slug ? `/anime/${vr.anime.slug}` : '#'} className="block h-full w-full">
+                            <AnimeMediaImage
+                                anime={vr.anime}
+                                kind="cover"
+                                size="small"
+                                alt={vr.anime?.title}
+                                className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                                loading="lazy"
+                            />
+                        </Link>
                     </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1 flex flex-col justify-center">
                         <Link
-                            to={`/character/${vr.character?.id}`}
-                            className="block truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
+                            to={vr.anime?.slug ? `/anime/${vr.anime.slug}` : '#'}
+                            className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
                         >
-                            {vr.character?.name}
+                            {vr.anime?.title}
                         </Link>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="mt-0.5 text-xs text-gray-500">
                             {vr.role}
                         </p>
                         <Link
-                            to={vr.anime?.slug ? `/anime/${vr.anime.slug}` : '#'}
-                            className="block truncate text-xs text-gray-400 mt-1 transition-colors hover:text-gray-300"
+                            to={`/character/${vr.character?.id}`}
+                            className="mt-1.5 block truncate text-xs text-gray-400 transition-colors hover:text-gray-300"
                         >
-                            {vr.anime?.title}
+                            {vr.character?.name}
                         </Link>
                     </div>
                 </div>
