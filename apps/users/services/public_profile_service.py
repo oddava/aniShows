@@ -1,17 +1,16 @@
 import re
 from dataclasses import dataclass
 
-from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Prefetch
+from django.db.models import Exists, OuterRef
 
 from apps.shared.logger import logger
 from apps.shared.media_urls import normalize_media_url
 from apps.users.serializers.users import PublicUserSerializer
 from apps.users.services.avatar_service import get_user_avatar_url
 from apps.users.services.cache import get_public_profile_cache_key
-from apps.users.services.profile_service import get_featured_badges
+from apps.users.services.profile_service import build_profile_user_queryset, get_featured_badges
 from apps.users.services.user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
@@ -60,19 +59,16 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
         return PublicProfileResult(data=cached_data, cache_hit=True, source="cache")
 
     try:
-        user = (
-            User.objects.select_related("userprofile", "stats")
-            .prefetch_related(
-                Prefetch(
-                    "socialaccount_set",
-                    queryset=SocialAccount.objects.filter(provider="google").only(
-                        "user_id", "provider", "extra_data"
-                    ),
-                    to_attr="_prefetched_social_accounts",
+        stats_queryset = build_profile_user_queryset(include_badges=False)
+        if is_authenticated:
+            from apps.users.models import UserFollow
+
+            stats_queryset = stats_queryset.annotate(
+                _is_following=Exists(
+                    UserFollow.objects.filter(follower=viewer, following=OuterRef("pk"))
                 )
             )
-            .get(username=username)
-        )
+        user = stats_queryset.get(username=username)
         is_private = user.userprofile.is_private if user.userprofile else False
         if is_private and not is_own_profile:
             raise PublicProfileError("Profile not found", 404)
@@ -119,14 +115,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "reviews_count": stats.reviews_count,
             }
 
-            if is_authenticated:
-                from apps.users.models import UserFollow
-
-                data["is_following"] = UserFollow.objects.filter(
-                    follower=viewer, following=user
-                ).exists()
-            else:
-                data["is_following"] = False
+            data["is_following"] = bool(getattr(user, "_is_following", False))
 
             badges, total_badges_count = get_featured_badges(user)
             data["badges"] = badges

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch, Q
 
 from apps.shared.logger import logger
 from apps.shared.media_urls import normalize_media_url
@@ -40,6 +40,41 @@ class ProfileResult:
     cache_hit: bool
 
 
+def _social_accounts_prefetch() -> Prefetch:
+    return Prefetch(
+        "socialaccount_set",
+        queryset=SocialAccount.objects.filter(provider="google").only(
+            "user_id", "provider", "extra_data"
+        ),
+        to_attr="_prefetched_social_accounts",
+    )
+
+
+def _featured_badges_prefetch() -> Prefetch:
+    return Prefetch(
+        "badges",
+        queryset=UserBadge.objects.filter(badge__is_active=True, is_featured=True)
+        .select_related("badge")
+        .order_by("-granted_at")[:3],
+        to_attr="_prefetched_badges",
+    )
+
+
+def build_profile_user_queryset(*, include_badges: bool = True):
+    queryset = User.objects.select_related("userprofile", "stats").prefetch_related(
+        _social_accounts_prefetch()
+    )
+    if include_badges:
+        queryset = queryset.prefetch_related(_featured_badges_prefetch()).annotate(
+            _total_badges_count=Count(
+                "badges",
+                filter=Q(badges__badge__is_active=True),
+                distinct=True,
+            )
+        )
+    return queryset
+
+
 def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
     cache_key = get_user_profile_cache_key(user_id, full=is_full)
     cached_data = cache.get(cache_key)
@@ -49,19 +84,7 @@ def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
             cache.set(cache_key, normalized, timeout=300)
         return ProfileResult(data=normalized, cache_hit=True)
 
-    user = (
-        User.objects.select_related("userprofile")
-        .prefetch_related(
-            Prefetch(
-                "socialaccount_set",
-                queryset=SocialAccount.objects.filter(provider="google").only(
-                    "user_id", "provider", "extra_data"
-                ),
-                to_attr="_prefetched_social_accounts",
-            )
-        )
-        .get(pk=user_id)
-    )
+    user = build_profile_user_queryset().get(pk=user_id)
     stats_data = _get_stats_snapshot(user)
     data = _build_profile_data(user, stats_data)
 
@@ -74,11 +97,13 @@ def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
 
 
 def get_featured_badges(user):
-    featured_badges = (
-        UserBadge.objects.filter(user=user, badge__is_active=True, is_featured=True)
-        .select_related("badge")
-        .order_by("-granted_at")[:3]
-    )
+    featured_badges = getattr(user, "_prefetched_badges", None)
+    if featured_badges is None:
+        featured_badges = list(
+            UserBadge.objects.filter(user=user, badge__is_active=True, is_featured=True)
+            .select_related("badge")
+            .order_by("-granted_at")[:4]
+        )
     badges = [
         {
             "id": ub.badge.id,
@@ -89,15 +114,19 @@ def get_featured_badges(user):
             "color": ub.badge.color,
             "description": ub.badge.description,
         }
-        for ub in featured_badges
+        for ub in featured_badges[:3]
     ]
-    total_count = UserBadge.objects.filter(user=user, badge__is_active=True).count()
+    total_count = getattr(user, "_total_badges_count", None)
+    if total_count is None:
+        total_count = len(featured_badges)
+        if total_count > 3:
+            total_count = UserBadge.objects.filter(user=user, badge__is_active=True).count()
     return badges, total_count
 
 
 def _get_stats_snapshot(user):
     try:
-        stats = UserStats.objects.get(user=user)
+        stats = user.stats
         return {
             "followers_count": stats.followers_count,
             "following_count": stats.following_count,

@@ -41,6 +41,7 @@ from apps.shared.logger import logger
 from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
 from apps.users.services.auth_service import AuthService
 from apps.users.services.avatar_service import get_user_avatar_url
+from apps.users.services.profile_update_service import validate_social_links_input
 
 User = get_user_model()
 
@@ -311,30 +312,15 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
 
     def get_is_following(self, obj):
         """Check if the current user is following this user"""
-        if hasattr(obj, "_is_following"):
-            return obj._is_following
-
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            # TODO: consider moving this fallback out of the serializer and into the service layer.
-            return obj.followers.filter(follower=request.user).exists()
-        return False
+        return bool(getattr(obj, "_is_following", False))
 
     def get_followers_count(self, obj):
-        """Return followers count from annotation or fallback to database query"""
-        count = getattr(obj, "_followers_count", None)
-        if count is not None:
-            return int(count)
-
-        return obj.followers.count()
+        """Return followers count from annotations only."""
+        return int(getattr(obj, "_followers_count", 0) or 0)
 
     def get_following_count(self, obj):
-        """Return following count from annotation or fallback to database query"""
-        count = getattr(obj, "_following_count", None)
-        if count is not None:
-            return int(count)
-
-        return obj.following.count()
+        """Return following count from annotations only."""
+        return int(getattr(obj, "_following_count", 0) or 0)
 
 class UserProfileUpdateSerializer(Serializer):
     username = CharField(max_length=150, required=False)
@@ -378,47 +364,13 @@ class UserProfileUpdateSerializer(Serializer):
     social_links = JSONField(required=False)
 
     def validate_social_links(self, value):
-        import json
-
-        from apps.core.services.social_links_service import (
-            SocialLinksService,
-            SocialLinkValidationError,
-        )
-
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                raise ValidationError("Social links must be valid JSON.")
-
-        if not isinstance(value, list):
-            raise ValidationError("Social links must be a list.")
-
-        if len(value) > 5:
-            raise ValidationError("Maximum 5 social links allowed.")
-
-        cleaned_links = []
-        for link in value:
-            if (
-                isinstance(link, dict)
-                and link.get("platform", "").strip()
-                and link.get("value", "").strip()
-            ):
-                cleaned_links.append(
-                    {
-                        "platform": link["platform"].strip(),
-                        "value": link["value"].strip(),
-                    }
-                )
-
-        service = SocialLinksService()
-
         try:
             user = self.context.get("request").user if self.context.get("request") else None
-            processed_links = service.validate_and_process(cleaned_links, user)
-            return processed_links
-        except SocialLinkValidationError as e:
-            raise ValidationError(str(e))
+            return validate_social_links_input(value, user)
+        except ValidationError:
+            raise
+        except Exception as exc:
+            raise ValidationError(str(exc))
 
     def validate_avatar(self, value):
         """Validate avatar file size, type, and content."""
