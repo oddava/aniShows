@@ -1,6 +1,8 @@
+import json
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -17,40 +19,79 @@ User = get_user_model()
 
 
 def update_user_profile(user, validated_data, ip_address: str | None = None) -> None:
-    _handle_username_change(user, validated_data)
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=user.pk)
+        profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
 
-    profile, _ = UserProfile.objects.get_or_create(user=user)
-    update_fields = []
+        _handle_username_change(user, validated_data, profile=profile)
 
-    if "avatar" in validated_data:
-        profile.avatar = validated_data["avatar"]
-        update_fields.append("avatar")
-    if "banner" in validated_data:
-        profile.banner = validated_data["banner"]
-        update_fields.append("banner")
-    if validated_data.get("remove_banner"):
-        profile.banner = None
-        if "banner" not in update_fields:
+        update_fields = []
+
+        if "avatar" in validated_data:
+            profile.avatar = validated_data["avatar"]
+            update_fields.append("avatar")
+        if "banner" in validated_data:
+            profile.banner = validated_data["banner"]
             update_fields.append("banner")
-    if "bio" in validated_data:
-        profile.bio = validated_data["bio"]
-        update_fields.append("bio")
-    if "is_private" in validated_data:
-        profile.is_private = validated_data["is_private"]
-        update_fields.append("is_private")
-    if "profile_primary_color" in validated_data:
-        profile.profile_primary_color = validated_data["profile_primary_color"]
-        update_fields.append("profile_primary_color")
-    if "social_links" in validated_data:
-        if _apply_social_links(profile, user, validated_data["social_links"], ip_address):
-            update_fields.append("social_links")
+        if validated_data.get("remove_banner"):
+            profile.banner = None
+            if "banner" not in update_fields:
+                update_fields.append("banner")
+        if "bio" in validated_data:
+            profile.bio = validated_data["bio"]
+            update_fields.append("bio")
+        if "is_private" in validated_data:
+            profile.is_private = validated_data["is_private"]
+            update_fields.append("is_private")
+        if "profile_primary_color" in validated_data:
+            profile.profile_primary_color = validated_data["profile_primary_color"]
+            update_fields.append("profile_primary_color")
+        if "social_links" in validated_data:
+            if _apply_social_links(profile, user, validated_data["social_links"], ip_address):
+                update_fields.append("social_links")
 
-    if update_fields:
-        profile.save(update_fields=update_fields)
-    invalidate_user_caches(user.id, user.username)
+        if update_fields:
+            profile.save(update_fields=update_fields)
+
+        transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
 
 
-def _handle_username_change(user, validated_data) -> None:
+def normalize_social_links_input(raw_value):
+    if isinstance(raw_value, str):
+        try:
+            raw_value = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            raise ValidationError("Social links must be valid JSON.") from exc
+
+    if not isinstance(raw_value, list):
+        raise ValidationError("Social links must be a list.")
+
+    if len(raw_value) > 5:
+        raise ValidationError("Maximum 5 social links allowed.")
+
+    cleaned_links = []
+    for link in raw_value:
+        if (
+            isinstance(link, dict)
+            and link.get("platform", "").strip()
+            and link.get("value", "").strip()
+        ):
+            cleaned_links.append(
+                {
+                    "platform": link["platform"].strip(),
+                    "value": link["value"].strip(),
+                }
+            )
+    return cleaned_links
+
+
+def validate_social_links_input(raw_value, user):
+    cleaned_links = normalize_social_links_input(raw_value)
+    service = SocialLinksService()
+    return service.validate_and_process(cleaned_links, user)
+
+
+def _handle_username_change(user, validated_data, *, profile=None) -> None:
     new_username = validated_data.get("username")
     if not new_username or new_username == user.username:
         return
@@ -65,7 +106,8 @@ def _handle_username_change(user, validated_data) -> None:
     if len(normalized_username) > max_length:
         raise ValidationError({"username": f"Username must be at most {max_length} characters."})
 
-    profile, _ = UserProfile.objects.get_or_create(user=user)
+    if profile is None:
+        profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
 
     if profile.last_username_change:
         elapsed = timezone.now() - profile.last_username_change

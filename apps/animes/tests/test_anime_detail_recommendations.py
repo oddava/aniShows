@@ -1,15 +1,24 @@
 from unittest.mock import AsyncMock, patch
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime, Genre
+from apps.animes.models import Anime, Genre, UserFavorite
+from apps.users.models import UserAnimeList
+
+User = get_user_model()
 
 
 class AnimeDetailRecommendationsTests(APITestCase):
     def setUp(self):
         cache.clear()
+        self.user = User.objects.create_user(
+            username="reco-user",
+            email="reco@example.com",
+            password="password123",
+        )
         self.genre = Genre.objects.create(name="Adventure", slug="adventure")
 
         self.anime = Anime.objects.create(
@@ -117,3 +126,26 @@ class AnimeDetailRecommendationsTests(APITestCase):
 
         self.assertIn(self.fallback_recommendation.slug, returned_slugs)
         self.assertNotIn(self.franchise_entry.slug, returned_slugs)
+
+    @patch(
+        "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
+        new_callable=AsyncMock,
+    )
+    def test_authenticated_recommendations_include_user_context(self, mock_get_recommendations):
+        mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]
+        UserFavorite.objects.create(user=self.user, anime=self.anilist_recommendation)
+        UserAnimeList.objects.create(
+            user=self.user,
+            anime=self.anilist_recommendation,
+            status=UserAnimeList.UserAnimeStatus.watching,
+            episodes_watched=4,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]["slug"], self.anilist_recommendation.slug)
+        self.assertTrue(response.data[0]["is_favorite"])
+        self.assertEqual(response.data[0]["user_list_status"]["status"], "Watching")
+        self.assertEqual(response.data[0]["user_list_status"]["episodes_watched"], 4)

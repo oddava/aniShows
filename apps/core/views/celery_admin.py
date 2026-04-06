@@ -26,7 +26,6 @@ from apps.core.serializers import (
 )
 from apps.core.services.celery_admin_service import (
     AVAILABLE_TASKS,
-    CeleryAdminActionResult,
     build_dashboard_payload,
     build_task_result_stats,
     bulk_delete_task_results,
