@@ -105,7 +105,7 @@ describe('Home', () => {
         render(<Home />, { wrapper: createWrapper() });
 
         await waitFor(() => {
-            expect(screen.getByText('Play Now')).toBeInTheDocument();
+            expect(screen.getByText('View Details')).toBeInTheDocument();
         });
 
         expect(screen.getByText('Add to List')).toBeInTheDocument();

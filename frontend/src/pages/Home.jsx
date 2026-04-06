@@ -320,7 +320,7 @@ function MemberCarouselHero({
                                 className="btn-primary min-w-[140px] rounded-lg px-6 py-2.5 text-sm sm:px-8 sm:py-3 sm:text-base"
                             >
                                 <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
-                                Play Now
+                                View Details
                             </Link>
                             <button
                                 onClick={onAddToList}
