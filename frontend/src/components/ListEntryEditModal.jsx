@@ -97,12 +97,36 @@ export default function ListEntryEditModal({
         setForm((current) => ({ ...current, [field]: value }));
     };
 
+    const updateStatus = (nextStatus) => {
+        setForm((current) => {
+            const nextForm = { ...current, status: nextStatus };
+
+            if (episodeCap == null) {
+                return nextForm;
+            }
+
+            const currentEpisodes =
+                current.episodes_watched === '' ? 0 : Number.parseInt(current.episodes_watched, 10) || 0;
+
+            if (nextStatus === 'Completed') {
+                nextForm.episodes_watched = String(episodeCap);
+                return nextForm;
+            }
+
+            if (currentEpisodes >= episodeCap) {
+                nextForm.episodes_watched = String(Math.max(episodeCap - 1, 0));
+            }
+
+            return nextForm;
+        });
+    };
+
     const handleSubmit = async (event) => {
         event.preventDefault();
         setErrorMessage('');
 
         const score = form.score === '' ? 0 : Number(form.score);
-        const episodesWatched = form.episodes_watched === '' ? 0 : Number(form.episodes_watched);
+        let episodesWatched = form.episodes_watched === '' ? 0 : Number(form.episodes_watched);
         const totalRewatches = form.total_rewatches === '' ? 0 : Number(form.total_rewatches);
 
         if (!Number.isInteger(score) || score < 0 || score > 10) {
@@ -118,6 +142,10 @@ export default function ListEntryEditModal({
         if (episodeCap != null && episodesWatched > episodeCap) {
             setErrorMessage(`Episode progress cannot exceed ${episodeCap}.`);
             return;
+        }
+
+        if (episodeCap != null && form.status !== 'Completed' && episodesWatched >= episodeCap) {
+            episodesWatched = Math.max(episodeCap - 1, 0);
         }
 
         if (!Number.isInteger(totalRewatches) || totalRewatches < 0) {
@@ -184,7 +212,7 @@ export default function ListEntryEditModal({
                             <CustomSelect
                                 id="list-entry-status"
                                 value={form.status}
-                                onChange={(nextValue) => updateField('status', nextValue)}
+                                onChange={updateStatus}
                                 options={statusOptions}
                                 className="w-full"
                                 triggerClassName="rounded-2xl bg-dark-200 focus-visible:ring-accent/60"

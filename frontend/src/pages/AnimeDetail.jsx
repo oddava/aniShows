@@ -605,7 +605,16 @@ export default function AnimeDetail() {
         }
     }, [isAuthenticated, anime?.id, user, queryClient]);
 
-    const handleListUpdate = useCallback(() => {
+    const handleListUpdate = useCallback((nextEntry) => {
+        queryClient.setQueryData(animeDetailQueryKey, (currentAnime) => {
+            if (!currentAnime) return currentAnime;
+
+            return {
+                ...currentAnime,
+                user_list_status: nextEntry,
+            };
+        });
+
         queryClient.invalidateQueries({ queryKey: ['anime'] });
         queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
         queryClient.invalidateQueries({ queryKey: ['user', 'list', 'watching'] });

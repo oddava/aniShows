@@ -64,4 +64,49 @@ describe('ListEntryEditModal', () => {
 
         expect(screen.getByLabelText(/status/i)).toHaveTextContent('On Hold');
     });
+
+    it('reduces full progress when switching away from completed so the saved status can persist', async () => {
+        const onClose = vi.fn();
+        const onSave = vi.fn().mockResolvedValue(undefined);
+
+        render(
+            <ListEntryEditModal
+                isOpen
+                onClose={onClose}
+                onSave={onSave}
+                initialEntry={{
+                    id: 1,
+                    status: 'Completed',
+                    episodes_watched: 19,
+                    score: 8,
+                    started_at: '2024-01-01',
+                    finished_at: '2024-01-10',
+                    total_rewatches: 1,
+                    notes: 'Finished',
+                }}
+                totalEpisodes={19}
+                statusOptions={STATUS_OPTIONS}
+                isSaving={false}
+            />
+        );
+
+        const dialog = screen.getByRole('dialog');
+        fireEvent.click(within(dialog).getByLabelText(/status/i));
+        fireEvent.click(within(dialog).getByRole('option', { name: 'On Hold' }));
+
+        expect(within(dialog).getByLabelText(/status/i)).toHaveTextContent('On Hold');
+        expect(within(dialog).getByLabelText(/episode progress/i)).toHaveValue(18);
+
+        fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+
+        expect(onSave).toHaveBeenCalledWith({
+            status: 'On Hold',
+            score: 8,
+            episodes_watched: 18,
+            started_at: '2024-01-01',
+            finished_at: '2024-01-10',
+            total_rewatches: 1,
+            notes: 'Finished',
+        });
+    });
 });

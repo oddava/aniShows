@@ -205,6 +205,11 @@ describe('AnimeDetail list update invalidation', () => {
         fireEvent.click(screen.getAllByTestId('status-update-trigger')[0]);
 
         await waitFor(() => {
+            expect(queryClient.getQueryData(['anime', 'frieren', 77])?.user_list_status).toEqual({
+                id: 1,
+                status: 'Watching',
+            });
+
             const keys = invalidateSpy.mock.calls
                 .map(([arg]) => JSON.stringify(arg?.queryKey))
                 .filter(Boolean);
