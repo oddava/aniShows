@@ -41,9 +41,8 @@ describe('EpisodesTab', () => {
         expect(screen.getByText('4.25')).toBeInTheDocument();
         expect(screen.getByText('(3)')).toBeInTheDocument();
 
-        fireEvent.change(screen.getByLabelText(/rate episode 1/i), {
-            target: { value: '5.0' },
-        });
+        fireEvent.click(screen.getByRole('button', { name: /rate episode 1/i }));
+        fireEvent.click(screen.getByRole('option', { name: '5.0' }));
         expect(onRateEpisode).toHaveBeenCalledWith(1, '5.0');
 
         fireEvent.click(screen.getByLabelText(/clear rating for episode 1/i));

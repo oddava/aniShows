@@ -1,7 +1,7 @@
 import { Loader, Star, Tv, X } from 'lucide-react';
 import CustomSelect from './common/CustomSelect';
 
-const RATING_OPTIONS = ['0.5', '1.0', '1.5', '2.0', '2.5', '3.0', '3.5', '4.0', '4.5', '5.0'];
+const RATING_OPTIONS = ['5.0', '4.5', '4.0', '3.5', '3.0', '2.5', '2.0', '1.5', '1.0', '0.5'];
 
 export default function EpisodesTab({
     anime,
@@ -65,7 +65,7 @@ export default function EpisodesTab({
                 </div>
             </div>
 
-            <div className="grid min-w-0 gap-2 sm:gap-3">
+            <div className="grid min-w-0 gap-3 sm:gap-4">
                 {episodes.map((episode) => {
                     const publicAverage = episode.average_rating != null ? Number(episode.average_rating) : null;
                     const ratingCount = Number(episode.rating_count || 0);
@@ -75,7 +75,7 @@ export default function EpisodesTab({
                     return (
                         <article
                             key={episode.number}
-                            className="relative group flex flex-col justify-between gap-3 rounded-lg sm:rounded-xl border border-white/5 bg-dark-200/40 p-2 sm:p-3 transition-colors hover:border-gray-600 hover:bg-dark-200/60 min-w-0 overflow-hidden md:flex-row md:items-center md:gap-4"
+                            className="relative group min-w-0 overflow-visible rounded-xl border border-white/5 bg-dark-200/40 px-3 py-3.5 sm:px-4 sm:py-4 transition-colors hover:border-gray-600 hover:bg-dark-200/60 focus-within:z-30"
                         >
                             <a 
                                 href={episode.crunchyroll_url}
@@ -86,46 +86,46 @@ export default function EpisodesTab({
                             >
                                 <span className="sr-only">Watch episode {episode.number}</span>
                             </a>
-                            
-                            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0 relative z-10 pointer-events-none">
-                                {episode.thumbnail && (
-                                    <div className="relative aspect-video w-20 sm:w-32 flex-shrink-0 overflow-hidden rounded-md sm:rounded-lg bg-dark-200 border border-transparent group-hover:border-white/10 transition-colors">
-                                        <img
-                                            src={episode.thumbnail}
-                                            alt={`${anime?.title || 'Anime'} episode ${episode.number}`}
-                                            loading="lazy"
-                                            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        />
-                                    </div>
-                                )}
 
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs sm:text-sm font-bold text-gray-200 group-hover:text-white transition-colors truncate">
-                                        <span className="text-gray-500 mr-1.5 sm:mr-2 flex-shrink-0">EP {episode.number}</span>
-                                        {episode.title || `Episode ${episode.number}`}
-                                    </h3>
-                                    <div className="mt-0.5 sm:mt-1 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-gray-500 font-medium">
-                                        {episode.aired && <span className="flex-shrink-0">{episode.aired}</span>}
-                                        {episode.aired && <span className="flex-shrink-0">•</span>}
-                                        <span className="flex-shrink-0">{duration}m</span>
-                                    </div>
-                                    {publicAverage != null && ratingCount > 0 && (
-                                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
-                                            <span className="inline-flex items-center gap-1 font-semibold text-amber-400">
-                                                <Star className="h-3 w-3 fill-current" />
-                                                {publicAverage.toFixed(2)}
-                                            </span>
-                                            <span className="text-gray-500">
-                                                ({ratingCount})
-                                            </span>
+                            <div className="relative z-10 flex min-w-0 items-start justify-between gap-3 sm:gap-4">
+                                <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3.5 pointer-events-none">
+                                    {episode.thumbnail && (
+                                        <div className="relative aspect-video w-20 sm:w-32 flex-shrink-0 overflow-hidden rounded-md sm:rounded-lg bg-dark-200 border border-transparent group-hover:border-white/10 transition-colors">
+                                            <img
+                                                src={episode.thumbnail}
+                                                alt={`${anime?.title || 'Anime'} episode ${episode.number}`}
+                                                loading="lazy"
+                                                className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                            />
                                         </div>
                                     )}
-                                </div>
-                            </div>
 
-                            <div className="flex flex-col gap-2 md:items-end relative z-10">
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="truncate text-xs font-bold text-gray-200 transition-colors group-hover:text-white sm:text-sm">
+                                            <span className="mr-1.5 flex-shrink-0 text-gray-500 sm:mr-2">EP {episode.number}</span>
+                                            {episode.title || `Episode ${episode.number}`}
+                                        </h3>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-gray-500 sm:mt-1 sm:gap-2 sm:text-xs">
+                                            {episode.aired && <span className="flex-shrink-0">{episode.aired}</span>}
+                                            {episode.aired && <span className="flex-shrink-0">•</span>}
+                                            <span className="flex-shrink-0">{duration}m</span>
+                                        </div>
+                                        {publicAverage != null && ratingCount > 0 && (
+                                            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
+                                                <span className="inline-flex items-center gap-1 font-semibold text-amber-400">
+                                                    <Star className="h-3 w-3 fill-current" />
+                                                    {publicAverage.toFixed(2)}
+                                                </span>
+                                                <span className="text-gray-500">
+                                                    ({ratingCount})
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 {isAuthenticated && (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex shrink-0 self-center items-center gap-1.5 sm:gap-2">
                                         <label htmlFor={`episode-rating-${episode.number}`} className="sr-only">
                                             Rate episode {episode.number}
                                         </label>
@@ -144,8 +144,8 @@ export default function EpisodesTab({
                                                     label: option,
                                                 })),
                                             ]}
-                                            className="min-w-[88px]"
-                                            triggerClassName="rounded-lg bg-dark-100 px-2 py-1.5 text-xs sm:px-3 sm:py-2"
+                                            className="min-w-[70px] sm:min-w-[80px]"
+                                            triggerClassName="!rounded-lg !border-0 !bg-dark-100 !px-2.5 !py-1 !text-xs !font-semibold text-gray-200 sm:!px-2.5 sm:!py-1"
                                             menuClassName="z-[320]"
                                             ariaLabel={`Rate episode ${episode.number}`}
                                         />
@@ -153,7 +153,7 @@ export default function EpisodesTab({
                                             type="button"
                                             disabled={!userRatingValue || isRatingPending}
                                             onClick={() => onClearEpisodeRating?.(episode.number)}
-                                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-dark-100 text-gray-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                            className="inline-flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-white/10 bg-dark-100 text-gray-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                                             aria-label={`Clear rating for episode ${episode.number}`}
                                         >
                                             {isRatingPending ? <Loader className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
