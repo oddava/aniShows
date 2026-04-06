@@ -207,7 +207,12 @@ export default function VoiceActorDetail() {
                         )}
                     </div>
 
-                    <VoiceRolesSection voiceRoles={staff.voice_roles} />
+                    <section>
+                        <div className="mb-5">
+                            <h2 className="text-lg font-medium text-white sm:text-xl">Voice Roles</h2>
+                        </div>
+                        <VoiceRolesSection voiceRoles={staff.voice_roles} />
+                    </section>
 
                     {productionCreditCount > 0 && (
                         <section className="mt-10">
@@ -225,11 +230,7 @@ export default function VoiceActorDetail() {
 
 function VoiceRolesSection({ voiceRoles }) {
     if (!voiceRoles || voiceRoles.length === 0) {
-        return (
-            <div className="text-center py-16">
-                <p className="text-gray-400 text-sm">No voice roles found.</p>
-            </div>
-        );
+        return null;
     }
 
     return (
