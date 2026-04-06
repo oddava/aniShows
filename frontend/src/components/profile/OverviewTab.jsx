@@ -414,7 +414,7 @@ export default function OverviewTab({
                             <button
                                 type="button"
                                 onClick={() => onTabChange && onTabChange('activity')}
-                                className="rounded-lg border border-gray-700 bg-dark-100 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:border-accent/50 hover:text-white"
+                                className="rounded-lg bg-dark-100 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-dark-50 hover:text-white"
                             >
                                 View Full Feed
                             </button>
