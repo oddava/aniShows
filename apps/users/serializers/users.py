@@ -41,6 +41,7 @@ from apps.shared.logger import logger
 from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
 from apps.users.services.auth_service import AuthService
 from apps.users.services.avatar_service import get_user_avatar_url
+from apps.users.services.profile_update_service import validate_social_links_input
 
 User = get_user_model()
 
@@ -363,47 +364,13 @@ class UserProfileUpdateSerializer(Serializer):
     social_links = JSONField(required=False)
 
     def validate_social_links(self, value):
-        import json
-
-        from apps.core.services.social_links_service import (
-            SocialLinksService,
-            SocialLinkValidationError,
-        )
-
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                raise ValidationError("Social links must be valid JSON.")
-
-        if not isinstance(value, list):
-            raise ValidationError("Social links must be a list.")
-
-        if len(value) > 5:
-            raise ValidationError("Maximum 5 social links allowed.")
-
-        cleaned_links = []
-        for link in value:
-            if (
-                isinstance(link, dict)
-                and link.get("platform", "").strip()
-                and link.get("value", "").strip()
-            ):
-                cleaned_links.append(
-                    {
-                        "platform": link["platform"].strip(),
-                        "value": link["value"].strip(),
-                    }
-                )
-
-        service = SocialLinksService()
-
         try:
             user = self.context.get("request").user if self.context.get("request") else None
-            processed_links = service.validate_and_process(cleaned_links, user)
-            return processed_links
-        except SocialLinkValidationError as e:
-            raise ValidationError(str(e))
+            return validate_social_links_input(value, user)
+        except ValidationError:
+            raise
+        except Exception as exc:
+            raise ValidationError(str(exc))
 
     def validate_avatar(self, value):
         """Validate avatar file size, type, and content."""

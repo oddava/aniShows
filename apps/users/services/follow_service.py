@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -59,43 +59,44 @@ def toggle_follow(user, username) -> FollowActionResult:
             status_code=400,
         )
 
-    follow, created = UserFollow.objects.get_or_create(follower=user, following=target_user)
-    if not created:
-        follow.delete()
-        logger.info("%s unfollowed %s", user.username, target_user.username)
-        invalidate_user_caches(target_user.id, target_user.username)
-        invalidate_user_caches(user.id, user.username)
+    with transaction.atomic():
+        locked_users = User.objects.select_for_update().filter(pk__in=[user.pk, target_user.pk]).in_bulk()
+        acting_user = locked_users[user.pk]
+        locked_target_user = locked_users[target_user.pk]
 
-        counts = User.objects.filter(pk__in=[target_user.pk, user.pk]).aggregate(
-            target_followers=Count("followers", filter=models.Q(pk=target_user.pk)),
-            user_following=Count("following", filter=models.Q(pk=user.pk)),
+        follow = UserFollow.objects.select_for_update().filter(
+            follower=acting_user,
+            following=locked_target_user,
+        ).first()
+        if follow:
+            follow.delete()
+            status_code = 200
+            payload_status = "unfollowed"
+            is_following = False
+            logger.info("%s unfollowed %s", acting_user.username, locked_target_user.username)
+        else:
+            UserFollow.objects.create(follower=acting_user, following=locked_target_user)
+            status_code = 201
+            payload_status = "followed"
+            is_following = True
+            logger.info("%s followed %s", acting_user.username, locked_target_user.username)
+
+        counts = User.objects.filter(pk__in=[locked_target_user.pk, acting_user.pk]).aggregate(
+            target_followers=Count("followers", filter=models.Q(pk=locked_target_user.pk)),
+            user_following=Count("following", filter=models.Q(pk=acting_user.pk)),
         )
-        return FollowActionResult(
-            payload={
-                "status": "unfollowed",
-                "is_following": False,
-                "followers_count": counts["target_followers"],
-                "following_count": counts["user_following"],
-            },
-            status_code=200,
-        )
 
-    logger.info("%s followed %s", user.username, target_user.username)
-    invalidate_user_caches(target_user.id, target_user.username)
-    invalidate_user_caches(user.id, user.username)
+        transaction.on_commit(lambda: invalidate_user_caches(locked_target_user.id, locked_target_user.username))
+        transaction.on_commit(lambda: invalidate_user_caches(acting_user.id, acting_user.username))
 
-    counts = User.objects.filter(pk__in=[target_user.pk, user.pk]).aggregate(
-        target_followers=Count("followers", filter=models.Q(pk=target_user.pk)),
-        user_following=Count("following", filter=models.Q(pk=user.pk)),
-    )
     return FollowActionResult(
         payload={
-            "status": "followed",
-            "is_following": True,
+            "status": payload_status,
+            "is_following": is_following,
             "followers_count": counts["target_followers"],
             "following_count": counts["user_following"],
         },
-        status_code=201,
+        status_code=status_code,
     )
 
 
