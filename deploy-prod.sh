@@ -233,6 +233,14 @@ echo -e "${GREEN}Backend images pulled!${NC}"
 echo ""
 
 # =========================================================================
+# PULL THIRD-PARTY SERVICE IMAGES
+# =========================================================================
+echo -e "${BLUE}Step 2a: Pulling analytics images...${NC}"
+$COMPOSE_CMD pull umami || true
+echo -e "${GREEN}Analytics images pulled!${NC}"
+echo ""
+
+# =========================================================================
 # BUILD LOCAL-ONLY SERVICES
 # =========================================================================
 echo -e "${BLUE}Step 2b: Building local infrastructure images...${NC}"
@@ -287,6 +295,36 @@ echo ""
 # =========================================================================
 echo -e "${BLUE}Step 4: Restarting services...${NC}"
 $COMPOSE_CMD up -d --no-deps backup
+$COMPOSE_CMD up -d umami_db
+echo -e "${BLUE}  Waiting for Umami database to be healthy...${NC}"
+for i in $(seq 1 20); do
+    if $COMPOSE_CMD exec -T umami_db pg_isready -U "${UMAMI_DB_USER:-umami}" -d "${UMAMI_DB_NAME:-umami}" >/dev/null 2>&1; then
+        echo -e "${GREEN}  Umami database is ready!${NC}"
+        break
+    fi
+    if [ "$i" -eq 20 ]; then
+        echo -e "${RED}  Umami database failed to become ready after 20 attempts!${NC}"
+        $COMPOSE_CMD logs --tail=50 umami_db || true
+        exit 1
+    fi
+    sleep 2
+done
+
+$COMPOSE_CMD up -d umami
+echo -e "${BLUE}  Waiting for Umami to start...${NC}"
+for i in $(seq 1 20); do
+    if $COMPOSE_CMD ps --status running umami | grep -q "umami"; then
+        echo -e "${GREEN}  Umami is running!${NC}"
+        break
+    fi
+    if [ "$i" -eq 20 ]; then
+        echo -e "${RED}  Umami failed to start after 20 attempts!${NC}"
+        $COMPOSE_CMD logs --tail=50 umami || true
+        exit 1
+    fi
+    sleep 2
+done
+
 # Restart workers first, then web (reverse proxy keeps serving old containers until healthy)
 $COMPOSE_CMD up -d --no-deps \
   --scale celery=$SCALE_CELERY \
