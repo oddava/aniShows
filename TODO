@@ -17,7 +17,7 @@ CURRENT STRENGTHS
 - Notifications (in-app + web push + email) ✅
 - Gamification (badges, points, reputation) 🔧
 - Admin panel with Celery task management, user/content moderation ✅
-- Monitoring (Prometheus + Grafana dashboards + Sentry) ✅
+- Monitoring (metrics instrumentation + Sentry) ✅
 - Automated backups (daily + weekly, DB + MinIO) ✅
 - CI/CD pipeline (GitHub Actions → GHCR → EC2) ✅
 - PWA with offline support and service worker caching ✅

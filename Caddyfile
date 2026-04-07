@@ -70,7 +70,7 @@
     #     }
     # }
 
-    # Metrics endpoint for Prometheus
+    # Metrics endpoint
     handle /metrics {
         reverse_proxy web:8000
     }
@@ -109,28 +109,5 @@
 
     log {
         output file /var/log/caddy/access.log
-    }
-}
-
-# Grafana - Local development (port 8080)
-:8080 {
-    encode gzip zstd
-
-    reverse_proxy grafana:3000 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
-    }
-
-    header {
-        Strict-Transport-Security "max-age=31536000;"
-        X-Content-Type-Options nosniff
-        X-Frame-Options SAMEORIGIN
-        Referrer-Policy no-referrer-when-downgrade
-    }
-
-    log {
-        output file /var/log/caddy/grafana-access.log
     }
 }

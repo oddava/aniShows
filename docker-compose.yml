@@ -472,7 +472,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # Grafana local development
     env_file:
       - .env
     volumes:
@@ -484,7 +483,6 @@ services:
       - web
       - daphne
       - frontend
-      - grafana
     deploy:
       resources:
         limits:
@@ -492,87 +490,9 @@ services:
         reservations:
           memory: 32M
 
-  # Prometheus - Metrics collection
-  prometheus:
-    image: prom/prometheus:v2.48.0
-    restart: always
-    ports:
-      - "9090:9090"
-    env_file:
-      - .env
-    volumes:
-      - ./monitoring/prometheus/entrypoint.sh:/entrypoint.sh:ro
-      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus_data:/prometheus
-    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
-    depends_on:
-      - web
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-
-  # Grafana - Metrics visualization
-  grafana:
-    image: grafana/grafana:10.2.3
-    restart: always
-    expose:
-      - "3000"
-    env_file:
-      - .env
-    environment:
-      # Admin Configuration
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_SECURITY_DISABLE_GRAVATAR=true
-      - GF_SECURITY_ANGULAR_SUPPORT_ENABLED=false
-      # User Registration
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_USERS_ALLOW_ORG_CREATE=false
-      - GF_USERS_AUTO_ASSIGN_ORG=true
-      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
-      # Anonymous Access
-      - GF_AUTH_ANONYMOUS_ENABLED=false
-      # Server Configuration
-      - GF_SERVER_ROOT_URL=http://localhost:8080
-      - GF_SERVER_SERVE_FROM_SUB_PATH=false
-      # Session & Security
-      - GF_SESSION_PROVIDER=file
-      - GF_SESSION_PROVIDER_CONFIG=sessions
-      - GF_SECURITY_COOKIE_SECURE=false
-      - GF_SECURITY_COOKIE_SAMESITE=strict
-      - GF_SECURITY_STRICT_TRANSPORT_SECURITY=true
-      - GF_SECURITY_STRICT_TRANSPORT_SECURITY_MAX_AGE_SECONDS=31536000
-      # Logging
-      - GF_LOG_MODE=console
-      - GF_LOG_LEVEL=warn
-      - GF_SECURITY_AUDIT_LOGGING=true
-      # Snapshots
-      - GF_SNAPSHOTS_ENABLED=false
-      # Explore
-      - GF_EXPLORE_ENABLED=true
-      # News Feed
-      - GF_NEWS_NEWS_FEED_ENABLED=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      - prometheus
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
-
 volumes:
   db_data:
   redis_data:
   minio_data:
   caddy_data:
   caddy_config:
-  prometheus_data:
-  grafana_data:

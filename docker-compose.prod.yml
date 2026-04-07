@@ -324,10 +324,6 @@ services:
         reservations:
           memory: 64M
 
-  grafana:
-    deploy:
-      replicas: 0
-
 volumes:
   frontend_dist:
   prometheus_multiproc:
