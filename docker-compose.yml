@@ -193,9 +193,12 @@ services:
     environment:
       DATABASE_URL: "postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}"
       DATABASE_TYPE: "postgresql"
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-redispassword123}@redis:6379/0"
       APP_SECRET: "${UMAMI_APP_SECRET:-change-me}"
     depends_on:
       umami_db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     deploy:
       resources:
