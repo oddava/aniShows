@@ -236,6 +236,49 @@ services:
         reservations:
           memory: 128M
 
+  umami_db:
+    image: postgres:18-alpine
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: "${UMAMI_DB_USER:-umami}"
+      POSTGRES_PASSWORD: "${UMAMI_DB_PASSWORD:-umami}"
+      POSTGRES_DB: "${UMAMI_DB_NAME:-umami}"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - umami_db_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}"
+      DATABASE_TYPE: "postgresql"
+      APP_SECRET: "${UMAMI_APP_SECRET:-change-me}"
+    depends_on:
+      umami_db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
   caddy:
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile
@@ -247,6 +290,8 @@ services:
         condition: service_healthy
       daphne:
         condition: service_healthy
+      umami:
+        condition: service_started
     deploy:
       resources:
         limits:

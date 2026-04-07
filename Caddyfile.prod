@@ -216,11 +216,29 @@
 		# Debug header to identify deployment
 		header X-Deployment-Time "{http.request.time}"
 		# Content Security Policy for the React Frontend
-		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: https://www.google-analytics.com https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' {$UMAMI_PUBLIC_ORIGIN}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
 	}
 
 	log {
 		output file /var/log/caddy/access.log
+	}
+}
+
+{$UMAMI_DOMAIN} {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy umami:3000
+
+	log {
+		output file /var/log/caddy/umami-access.log
 	}
 }
 

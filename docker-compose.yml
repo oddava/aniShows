@@ -111,6 +111,8 @@ services:
       target: development
       args:
         - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+        - VITE_UMAMI_SCRIPT_URL=${VITE_UMAMI_SCRIPT_URL:-}
+        - VITE_UMAMI_WEBSITE_ID=${VITE_UMAMI_WEBSITE_ID:-}
         - VITE_SENTRY_DSN=${VITE_SENTRY_DSN:-}
         - VITE_ENVIRONMENT=${VITE_ENVIRONMENT:-development}
         - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
@@ -154,6 +156,53 @@ services:
           memory: 512M
         reservations:
           memory: 256M
+
+  # Umami PostgreSQL Database
+  umami_db:
+    image: postgres:18-alpine
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: "${UMAMI_DB_USER:-umami}"
+      POSTGRES_PASSWORD: "${UMAMI_DB_PASSWORD:-umami}"
+      POSTGRES_DB: "${UMAMI_DB_NAME:-umami}"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - umami_db_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Umami Analytics
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}"
+      DATABASE_TYPE: "postgresql"
+      APP_SECRET: "${UMAMI_APP_SECRET:-change-me}"
+    depends_on:
+      umami_db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
   # PgBouncer - PostgreSQL connection pooling
   pgbouncer:
@@ -492,6 +541,7 @@ services:
 
 volumes:
   db_data:
+  umami_db_data:
   redis_data:
   minio_data:
   caddy_data:

@@ -1,12 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 
 /**
  * Simple analytics hook for tracking user interactions
- * In production, this would integrate with Google Analytics, Mixpanel, etc.
  */
 export function useAnalytics() {
-    const isFirstRender = useRef(true);
-
     const track = useCallback((event, properties = {}) => {
         // Analytics events are silently tracked - no console output
         // Uncomment below for debugging:
@@ -14,17 +11,8 @@ export function useAnalytics() {
         //     console.debug('[Analytics]', event, properties);
         // }
 
-        // Send to Google Analytics if available
-        if (typeof window !== 'undefined' && window.gtag) {
-            window.gtag('event', event, properties);
-        }
-
-        // Send to data layer for GTM
-        if (typeof window !== 'undefined' && window.dataLayer) {
-            window.dataLayer.push({
-                event: event,
-                ...properties
-            });
+        if (typeof window !== 'undefined' && window.umami) {
+            window.umami.track(event, properties);
         }
     }, []);
 

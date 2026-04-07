@@ -5,8 +5,8 @@ import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter } from 'react-router-dom';
 
 import ErrorBoundary from '../components/ErrorBoundary';
-import GoogleAnalytics from '../components/GoogleAnalytics';
 import ScrollToTop from '../components/ScrollToTop';
+import UmamiAnalytics from '../components/UmamiAnalytics';
 import { AuthProvider } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 
@@ -30,7 +30,7 @@ export default function AppProviders({ children }) {
                         <AuthProvider>
                             <BrowserRouter>
                                 <ScrollToTop />
-                                <GoogleAnalytics />
+                                <UmamiAnalytics />
                                 {children}
                                 <Toaster
                                     position="bottom-right"
