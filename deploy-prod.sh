@@ -397,7 +397,11 @@ fi
 echo -e "${BLUE}  Verifying Daphne websocket upstream health...${NC}"
 if ! $COMPOSE_CMD exec -T daphne python -c "
 import urllib.request
-response = urllib.request.urlopen('http://localhost:8001/api/v1/health/', timeout=5)
+request = urllib.request.Request(
+    'http://localhost:8001/api/v1/health/',
+    headers={'Host': '${FRONTEND_HOST}'},
+)
+response = urllib.request.urlopen(request, timeout=5)
 print(response.read().decode())
 " 2>/dev/null; then
     echo -e "${RED}Daphne websocket upstream health check failed.${NC}"
