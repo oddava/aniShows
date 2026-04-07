@@ -1,7 +1,7 @@
 from apps.shared.logger import logger
 
 """
-Prometheus metrics integration for Celery tasks.
+Metrics integration for Celery tasks.
 
 Provides:
 - Task execution metrics (duration, counts, failures)
@@ -108,7 +108,7 @@ def _safe_metric_operation(operation, *args, **kwargs):
 
 
 def _safe_metric(metric_cls, *args, **kwargs):
-    """Create a Prometheus metric, handling duplicate registration in multi-process mode."""
+    """Create a metric, handling duplicate registration in multi-process mode."""
     try:
         return _MetricProxy(metric_cls(*args, **kwargs))
     except ValueError:
@@ -271,7 +271,7 @@ _CB_STATE_MAP = {
 }
 
 def update_circuit_breaker_state(name: str, state: str):
-    """Update the circuit breaker state Prometheus metric.
+    """Update the circuit breaker state metric.
 
     Args:
         name: Circuit breaker name (e.g., 'anilist_api')
@@ -428,7 +428,7 @@ def record_task_retry(task_name: str):
         TASK_RETRY_COUNT.labels(task_name=task_name).inc()
 
 def get_metrics_registry():
-    """Get the Prometheus metrics registry for exposing metrics.
+    """Get the metrics registry for exposing metrics.
 
     Returns:
         Registry or None if prometheus_client not available

@@ -231,7 +231,7 @@ class BaseTask(ObservedTask):
         except Exception as e:
             logger.error(f"Failed to update CeleryTaskResult on success: {e}")
 
-        # Emit Prometheus metrics
+        # Emit task metrics
         try:
             from apps.animes.services.metrics import (
                 ANIME_SYNCED,
@@ -257,7 +257,7 @@ class BaseTask(ObservedTask):
                 ).inc(self.metrics.records_processed)
 
         except Exception as e:
-            logger.warning(f"Failed to emit Prometheus metrics: {e}")
+            logger.warning(f"Failed to emit task metrics: {e}")
         super().on_success(retval, task_id, args, kwargs)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
@@ -288,7 +288,7 @@ class BaseTask(ObservedTask):
         except Exception as e:
             logger.error(f"Failed to update CeleryTaskResult on failure: {e}")
 
-        # Emit Prometheus metrics for failure
+        # Emit failure metrics
         try:
             from apps.animes.services.metrics import (
                 TASK_EXECUTION_COUNT,
@@ -307,7 +307,7 @@ class BaseTask(ObservedTask):
             TASK_EXECUTION_COUNT.labels(task_name=self.name, queue=queue, status="failure").inc()
 
         except Exception as e:
-            logger.warning(f"Failed to emit Prometheus metrics: {e}")
+            logger.warning(f"Failed to emit failure metrics: {e}")
         super().on_failure(exc, task_id, args, kwargs, einfo)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -324,7 +324,7 @@ class BaseTask(ObservedTask):
         except Exception as e:
             logger.error(f"Failed to update CeleryTaskResult on retry: {e}")
 
-        # Emit Prometheus retry metric
+        # Emit retry metric
         try:
             from apps.animes.services.metrics import TASK_RETRY_COUNT
 

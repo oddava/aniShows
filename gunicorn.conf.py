@@ -74,17 +74,17 @@ limit_request_field_size = 8190
 
 
 # =============================================================================
-# Prometheus Metrics (Multiprocess Mode)
+# Metrics Collection (Multiprocess Mode)
 # =============================================================================
 def child_exit(server, worker):
-    """Mark process dead for Prometheus multiprocess mode"""
+    """Mark process dead for multiprocess metrics collection."""
     from prometheus_client import multiprocess
 
     multiprocess.mark_process_dead(worker.pid)
 
 
 def on_starting(server):
-    """Clean up Prometheus multiprocess directory on start"""
+    """Clean up the multiprocess metrics directory on start."""
     import glob
 
     path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")

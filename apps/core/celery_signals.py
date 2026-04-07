@@ -23,7 +23,7 @@ from apps.shared.logger import logger
 
 @celeryd_init.connect
 def clean_multiproc_dir(sender, instance, **kwargs):
-    """Clean up the Prometheus multiprocess directory before worker starts."""
+    """Clean up the multiprocess metrics directory before worker starts."""
     path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
     if path:
         multiproc_dir = Path(path)
@@ -190,7 +190,7 @@ def on_task_retry(request, reason, einfo, **kwargs):
             return
         logger.error(f"Error in task_retry signal for task {request.id}: {e}")
 
-    # Emit Prometheus retry metric
+    # Emit retry metric
     try:
         from apps.animes.services.metrics import TASK_RETRY_COUNT
 
@@ -266,13 +266,13 @@ def start_queue_monitor(sender, **kwargs):
                         pass
             except Exception:
                 pass
-            time.sleep(15)  # Update every 15 seconds (matches Prometheus scrape interval)
+            time.sleep(15)  # Update every 15 seconds to keep queue gauges fresh.
 
     thread = threading.Thread(target=monitor_queue_sizes, daemon=True)
     thread.start()
-    logger.info("Started Prometheus queue size monitor thread")
+    logger.info("Started queue size monitor thread")
 
-    # Start Prometheus metrics server for Celery if multiprocess dir is set
+    # Start the worker metrics server if the multiprocess dir is set.
     path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
     if path:
         try:
@@ -280,8 +280,8 @@ def start_queue_monitor(sender, **kwargs):
 
             registry = CollectorRegistry()
             multiprocess.MultiProcessCollector(registry, path=path)
-            # Port 8000 is used by web, we use 9090 for celery metrics
+            # Port 8000 is used by web, so workers expose metrics on 9090.
             start_http_server(9090, registry=registry)
-            logger.info("Started Prometheus metrics server on port 9090")
+            logger.info("Started worker metrics server on port 9090")
         except Exception as e:
-            logger.error(f"Failed to start Prometheus metrics server: {e}")
+            logger.error(f"Failed to start worker metrics server: {e}")

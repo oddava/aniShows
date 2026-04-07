@@ -291,7 +291,7 @@ class ThemeSongSyncTask(BaseTask):
 
         self.metrics.record_records(stats["with_themes"] + stats["without_themes"])
 
-        # Record Prometheus metric for theme sync
+        # Record a metric for theme sync
         try:
             from apps.animes.services.metrics import ANIME_SYNCED
 

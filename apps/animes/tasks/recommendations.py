@@ -78,7 +78,7 @@ class RecommendationTask(BaseTask):
             # Generate recommendations
             recs = service.generate_for_user(user, limit=limit)
 
-            # Record Prometheus metric
+            # Record a metric
             try:
                 from apps.animes.services.metrics import RECOMMENDATIONS_GENERATED
 
@@ -120,7 +120,7 @@ class RecommendationTask(BaseTask):
             total = result.get("total_users", 0)
             total_recs = result.get("total_recommendations", 0)
 
-            # Record Prometheus metric
+            # Record a metric
             try:
                 from apps.animes.services.metrics import RECOMMENDATIONS_GENERATED
 
