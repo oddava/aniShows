@@ -75,7 +75,7 @@ describe('BrowseRowMode', () => {
         vi.restoreAllMocks();
     });
 
-    it('removes trending duplicates from the popular this season row', async () => {
+    it('keeps the seasonal row aligned with the actual seasonal popularity ordering', async () => {
         const queryClient = new QueryClient({
             defaultOptions: {
                 queries: {
@@ -92,12 +92,12 @@ describe('BrowseRowMode', () => {
 
         await waitFor(() => {
             expect(screen.getByTestId('Trending Now')).toHaveTextContent('Trend 1');
-            expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 7');
+            expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Trend 1');
         });
 
-        expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 1');
-        expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 2');
-        expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 12');
-        expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('exclude_ids=1%2C2%2C3%2C4%2C5%2C6');
+        expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Trend 2');
+        expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
+        expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
+        expect(screen.getByTestId('Popular This Season-link')).not.toHaveTextContent('exclude_ids=');
     });
 });
