@@ -120,6 +120,46 @@ wait_for_service_replicas_ready() {
     return 1
 }
 
+validate_jikan_catalog() {
+    echo -e "${BLUE}  Validating Jikan catalog readiness...${NC}"
+
+    local validation_output
+    if ! validation_output="$($COMPOSE_CMD exec -T jikan python -c "
+import json
+import sys
+import urllib.request
+
+BASE_URL = 'http://127.0.0.1:8080/v4'
+MIN_SEASON_NOW = 6
+MIN_TOP_AIRING = 6
+
+def fetch_count(path):
+    with urllib.request.urlopen(f'{BASE_URL}{path}', timeout=15) as response:
+        payload = json.load(response)
+    data = payload.get('data') or []
+    return len(data)
+
+season_now = fetch_count('/seasons/now?page=1&limit=25')
+top_airing = fetch_count('/top/anime?filter=airing&page=1&limit=25')
+
+print(f'seasons_now_count={season_now}')
+print(f'top_airing_count={top_airing}')
+
+if season_now < MIN_SEASON_NOW and top_airing < MIN_TOP_AIRING:
+    sys.exit(1)
+" 2>&1)"; then
+        echo -e "${RED}  Jikan catalog validation failed.${NC}"
+        if [ -n "$validation_output" ]; then
+            echo "$validation_output"
+        fi
+        $COMPOSE_CMD logs --tail=50 jikan_mongodb jikan_typesense jikan || true
+        exit 1
+    fi
+
+    echo "$validation_output"
+    echo -e "${GREEN}  Jikan catalog readiness looks valid.${NC}"
+}
+
 rolling_refresh_service() {
     local service_name="$1"
     local desired_count="$2"
@@ -289,6 +329,7 @@ for i in $(seq 1 30); do
     fi
     sleep 2
 done
+validate_jikan_catalog
 echo ""
 
 # Start PgBouncer now that DB is ready (web and workers connect through it)

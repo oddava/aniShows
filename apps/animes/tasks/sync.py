@@ -11,7 +11,6 @@ from datetime import datetime
 
 from asgiref.sync import sync_to_async
 
-from apps.animes.models import Anime
 from apps.animes.services.catalog_sync import CatalogSyncService
 from apps.animes.services.jikan import JikanService
 from apps.shared.celery import observed_shared_task
@@ -58,6 +57,7 @@ class SyncAnimeCatalogTask(BaseTask):
 
     service_class = CatalogSyncService
     service_kwargs = {}
+    MIN_TRENDING_RESULTS = 6
 
     def execute(self, sync_type: str = "trending", limit: int = 50, **kwargs):
         """Run sync based on sync_type."""
@@ -105,6 +105,26 @@ class SyncAnimeCatalogTask(BaseTask):
                 if not data:
                     logger.warning("No data returned for %s sync", sync_type)
                     return {"sync_type": sync_type, "status": "no_data"}
+
+                minimum_expected_results = self._minimum_trending_results(limit)
+                if total_items < minimum_expected_results:
+                    logger.error(
+                        "Rejecting %s sync because Jikan returned only %s rows (minimum required: %s)",
+                        sync_type,
+                        total_items,
+                        minimum_expected_results,
+                    )
+                    return {
+                        "sync_type": sync_type,
+                        "status": "source_unhealthy",
+                        "records_processed": 0,
+                        "created": 0,
+                        "updated": 0,
+                        "matched": 0,
+                        "fetched": total_items,
+                        "reason": "jikan_result_set_too_small",
+                        "minimum_expected": minimum_expected_results,
+                    }
 
                 ranked_ids = await self._sync_trending_anime_rows(service, data)
                 ranked_count = await sync_to_async(CatalogSyncService().refresh_trending_ranks)(ranked_ids)
@@ -234,18 +254,11 @@ class SyncAnimeCatalogTask(BaseTask):
         return current_season, year
 
     @staticmethod
-    def _ordered_anime_ids_for_mal_ids(mal_ids: list[int]) -> list[int]:
-        local_rows = Anime.public_queryset().filter(mal_id__in=mal_ids).values_list("mal_id", "id")
-        anime_id_by_mal_id = dict(local_rows)
-
-        ranked_ids: list[int] = []
-        seen_ids: set[int] = set()
-        for mal_id in mal_ids:
-            anime_id = anime_id_by_mal_id.get(mal_id)
-            if anime_id and anime_id not in seen_ids:
-                ranked_ids.append(anime_id)
-                seen_ids.add(anime_id)
-        return ranked_ids
+    def _minimum_trending_results(limit: int) -> int:
+        resolved_limit = max(int(limit or 0), 0)
+        if resolved_limit == 0:
+            return 0
+        return min(resolved_limit, SyncAnimeCatalogTask.MIN_TRENDING_RESULTS)
 
     async def _sync_trending_anime_rows(
         self,
