@@ -25,6 +25,20 @@ function excludeIds(items, blockedIds, limit = ROW_PAGE_SIZE) {
     return list.filter((item) => item?.id && !blocked.has(item.id)).slice(0, limit);
 }
 
+function buildPopularSeasonViewAllLink(season, year, excludedIds) {
+    const params = new URLSearchParams({
+        season,
+        year: String(year),
+        sort: 'popular',
+    });
+
+    if (excludedIds.length > 0) {
+        params.set('exclude_ids', excludedIds.join(','));
+    }
+
+    return `/browse?${params.toString()}`;
+}
+
 export default function BrowseRowMode({ titleLanguage }) {
     // Helper to get current and next seasons
     const d = new Date();
@@ -77,6 +91,11 @@ export default function BrowseRowMode({ titleLanguage }) {
     const trendingRow = trendingUnique.slice(0, ROW_PAGE_SIZE);
     const trendingIds = new Set(trendingRow.map((anime) => anime.id));
     const popularSeasonRow = excludeIds(uniqueById(popularSeason), trendingIds);
+    const popularSeasonViewAllLink = buildPopularSeasonViewAllLink(
+        currentSeason,
+        y,
+        trendingRow.map((anime) => anime.id)
+    );
 
     return (
         <div className="space-y-2 md:space-y-6 pb-0 sm:pb-8 pt-2">
@@ -90,7 +109,7 @@ export default function BrowseRowMode({ titleLanguage }) {
                 title="Popular This Season" 
                 animeList={popularSeasonRow} 
                 isLoading={popularSeasonLoading} 
-                viewAllLink={`/browse?season=${currentSeason}&year=${y}&sort=popular`} 
+                viewAllLink={popularSeasonViewAllLink} 
             />
             <CategoryRow 
                 title="Upcoming Next Season" 

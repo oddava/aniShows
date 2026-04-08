@@ -154,6 +154,15 @@ export default function Browse() {
   const currentMinRating = searchParams.get('min_rating') || '';
   const currentMaxRating = searchParams.get('max_rating') || '';
   const currentSource = searchParams.get('source') || '';
+  const currentExcludedIds = useMemo(
+    () =>
+      searchParams
+        .get('exclude_ids')
+        ?.split(',')
+        .map((value) => Number.parseInt(value, 10))
+        .filter((value) => Number.isInteger(value) && value > 0) || [],
+    [searchParams]
+  );
   const currentMinEpisodes = searchParams.get('min_episodes') || '';
   const currentMaxEpisodes = searchParams.get('max_episodes') || '';
   const currentMinDuration = searchParams.get('min_duration') || '';
@@ -309,6 +318,7 @@ export default function Browse() {
     newParams.delete('status');
     newParams.delete('season');
     newParams.delete('year');
+    newParams.delete('exclude_ids');
 
     const d = new Date();
     const month = d.getMonth();
@@ -496,6 +506,14 @@ export default function Browse() {
     data?.pages?.flatMap(page => page.results) || [],
     [data]
   );
+  const visibleAnime = useMemo(() => {
+    if (currentExcludedIds.length === 0) {
+      return allAnime;
+    }
+
+    const excludedIds = new Set(currentExcludedIds);
+    return allAnime.filter((anime) => anime?.id && !excludedIds.has(anime.id));
+  }, [allAnime, currentExcludedIds]);
 
   // Infinite scroll
   const observer = useRef(null);
@@ -592,6 +610,7 @@ export default function Browse() {
   // Filter helpers
   const updateParam = useCallback((key, value) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (value) {
       newParams.set(key, value);
     } else {
@@ -606,6 +625,7 @@ export default function Browse() {
     newParams.delete('year');
     newParams.delete('min_year');
     newParams.delete('max_year');
+    newParams.delete('exclude_ids');
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
@@ -613,11 +633,13 @@ export default function Browse() {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('min_year');
     newParams.delete('max_year');
+    newParams.delete('exclude_ids');
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
   const toggleArrayParam = useCallback((key, value) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     const current = newParams.get(key)?.split(',').filter(Boolean) || [];
     const updated = current.includes(value)
       ? current.filter(v => v !== value)
@@ -659,6 +681,7 @@ export default function Browse() {
     if (!paramKey) return;
 
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (value) {
       newParams.set(paramKey, value);
     } else {
@@ -685,6 +708,7 @@ export default function Browse() {
     setLocalFilters(prev => ({ ...prev, genres: updated }));
 
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (updated.length > 0) {
       newParams.set('genre', updated.join(','));
     } else {
@@ -703,6 +727,7 @@ export default function Browse() {
     setLocalFilters(prev => ({ ...prev, tags: updated }));
 
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (updated.length > 0) {
       newParams.set('tags', updated.join(','));
     } else {
@@ -885,7 +910,7 @@ export default function Browse() {
               <GridSkeleton count={skeletonCount} />
               <div ref={loadMoreRef} className="h-0 overflow-hidden" />
             </div>
-          ) : allAnime.length === 0 ? (
+          ) : visibleAnime.length === 0 ? (
             <EmptyState
               onClearFilters={clearAllFilters}
               hasActiveFilters={hasActiveFilters || currentSearch !== ''}
@@ -894,7 +919,7 @@ export default function Browse() {
           ) : (
             <>
               <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 anime-card-grid-gap">
-                {allAnime.map((anime, index) => (
+                {visibleAnime.map((anime, index) => (
                   <AnimeCard
                     key={anime.id}
                     anime={anime}
@@ -927,16 +952,16 @@ export default function Browse() {
               <ListSkeleton count={skeletonCount} />
               <div ref={loadMoreRef} className="h-0 overflow-hidden" />
             </div>
-          ) : allAnime.length === 0 ? (
+          ) : visibleAnime.length === 0 ? (
             <EmptyState
               onClearFilters={clearAllFilters}
               hasActiveFilters={hasActiveFilters || currentSearch !== ''}
               searchQuery={currentSearch}
             />
-          ) : allAnime.length > 20 ? (
+          ) : visibleAnime.length > 20 ? (
             <>
               <VirtualizedAnimeList
-                items={allAnime}
+                items={visibleAnime}
                 renderRow={(anime) => (
                   <AnimeListRow anime={anime} titleLanguage={titleLanguage} />
                 )}
@@ -951,7 +976,7 @@ export default function Browse() {
             </>
           ) : (
             <>
-              {allAnime.map((anime) => (
+              {visibleAnime.map((anime) => (
                 <AnimeListRow key={anime.id} anime={anime} titleLanguage={titleLanguage} />
               ))}
               <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">
@@ -975,7 +1000,7 @@ export default function Browse() {
             <MinimalSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />
           </div>
-        ) : allAnime.length === 0 ? (
+        ) : visibleAnime.length === 0 ? (
           <div className="col-span-full">
             <EmptyState
               onClearFilters={clearAllFilters}
@@ -985,7 +1010,7 @@ export default function Browse() {
           </div>
         ) : (
           <>
-            {allAnime.map((anime) => (
+            {visibleAnime.map((anime) => (
               <AnimeMinimalCard key={anime.id} anime={anime} titleLanguage={titleLanguage} />
             ))}
             <div ref={loadMoreRef} className="col-span-full h-10 flex justify-center items-center py-8">
