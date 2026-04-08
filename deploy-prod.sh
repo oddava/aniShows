@@ -139,12 +139,19 @@ fi
         if [ -n "$validation_output" ]; then
             echo "$validation_output"
         fi
-        $COMPOSE_CMD logs --tail=50 jikan_mongodb jikan_typesense jikan || true
-        exit 1
+        return 1
     fi
 
     echo "$validation_output"
     echo -e "${GREEN}  Jikan catalog readiness looks valid.${NC}"
+}
+
+hydrate_jikan_catalog() {
+    echo -e "${YELLOW}  Jikan catalog is under-populated. Running bootstrap indexers...${NC}"
+    $COMPOSE_CMD exec -T jikan php artisan indexer:genres
+    $COMPOSE_CMD exec -T jikan php artisan indexer:common
+    $COMPOSE_CMD exec -T jikan php artisan indexer:anime-current-season
+    $COMPOSE_CMD exec -T jikan php artisan indexer:anime-schedule
 }
 
 rolling_refresh_service() {
@@ -316,7 +323,13 @@ for i in $(seq 1 30); do
     fi
     sleep 2
 done
-validate_jikan_catalog
+if ! validate_jikan_catalog; then
+    hydrate_jikan_catalog
+    if ! validate_jikan_catalog; then
+        $COMPOSE_CMD logs --tail=50 jikan_mongodb jikan_typesense jikan || true
+        exit 1
+    fi
+fi
 echo ""
 
 # Start PgBouncer now that DB is ready (web and workers connect through it)
