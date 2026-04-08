@@ -235,9 +235,9 @@ echo ""
 # =========================================================================
 # PULL THIRD-PARTY SERVICE IMAGES
 # =========================================================================
-echo -e "${BLUE}Step 2a: Pulling analytics images...${NC}"
-$COMPOSE_CMD pull umami || true
-echo -e "${GREEN}Analytics images pulled!${NC}"
+echo -e "${BLUE}Step 2a: Pulling third-party service images...${NC}"
+$COMPOSE_CMD pull umami jikan jikan_mongodb jikan_typesense || true
+echo -e "${GREEN}Third-party service images pulled!${NC}"
 echo ""
 
 # =========================================================================
@@ -271,6 +271,24 @@ done
 # Run migrations using compose run with --no-deps to avoid recreating other services
 $COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --noinput
 echo -e "${GREEN}Migrations complete!${NC}"
+echo ""
+
+# Start self-hosted Jikan infrastructure before rolling app services that depend on it.
+echo -e "${BLUE}Step 3a: Starting self-hosted Jikan services...${NC}"
+$COMPOSE_CMD up -d jikan_mongodb jikan_typesense jikan
+echo -e "${BLUE}  Waiting for Jikan API to start...${NC}"
+for i in $(seq 1 30); do
+    if $COMPOSE_CMD ps --status running jikan | grep -q "jikan"; then
+        echo -e "${GREEN}  Jikan API is running!${NC}"
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo -e "${RED}  Jikan failed to start after 30 attempts!${NC}"
+        $COMPOSE_CMD logs --tail=50 jikan_mongodb jikan_typesense jikan || true
+        exit 1
+    fi
+    sleep 2
+done
 echo ""
 
 # Start PgBouncer now that DB is ready (web and workers connect through it)
