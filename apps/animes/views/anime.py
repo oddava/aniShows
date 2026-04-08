@@ -19,7 +19,6 @@ from apps.animes.serializers import (
     GenreSerializer,
     StudioSerializer,
 )
-from apps.animes.services.anilist import AniListService
 from apps.animes.services.episode_ratings import (
     EpisodeRatingCommandService,
     EpisodeRatingSummaryService,

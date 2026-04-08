@@ -10,7 +10,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from apps.animes.models import Anime
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 
 
 class Command(BaseCommand):
@@ -75,7 +75,7 @@ class Command(BaseCommand):
     async def _process_anime(self, queryset, batch_size):
         from asgiref.sync import sync_to_async
 
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        service = JikanService(enable_caching=False, enable_rate_limiting=True)
 
         # Fetch list synchronously before entering async context
         anime_list = await sync_to_async(list)(queryset)
@@ -100,7 +100,7 @@ class Command(BaseCommand):
 
             for idx, anime in enumerate(batch, start=i + 1):
                 try:
-                    # Fetch from AniList
+                    # Fetch from Jikan
                     data = await service.get_anime_by_id(anime.anilist_id)
 
                     if not data:

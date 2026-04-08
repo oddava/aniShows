@@ -9,34 +9,21 @@ from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerS
 
 AVAILABLE_TASKS = {
     "apps.animes.tasks.sync.sync_anime_catalog": {
-        "name": "Sync Anime Catalog",
-        "description": "Synchronize anime catalog from AniList",
+        "name": "Refresh Anime Catalog Slice",
+        "description": "Refresh trending from Jikan and other catalog slices from local Anime fields",
         "args_schema": {
             "sync_type": {
                 "type": "string",
-                "enum": ["trending", "seasonal", "next_season", "airing"],
+                "enum": ["trending", "seasonal", "next_season", "airing", "full_catalog"],
                 "required": True,
             },
             "limit": {"type": "integer", "default": 50},
         },
-        "default_queue": "default",
-    },
-    "apps.animes.tasks.airing.sync_airing_workflow": {
-        "name": "Sync Airing Workflow",
-        "description": "Run the complete airing anime workflow",
-        "args_schema": {
-            "phases": {
-                "type": "array",
-                "items": {"type": "string"},
-                "default": ["sync"],
-            },
-            "batch_size": {"type": "integer", "default": 100},
-        },
-        "default_queue": "default",
+        "default_queue": "high_priority",
     },
     "apps.animes.tasks.metadata.enrich_metadata": {
         "name": "Enrich Metadata",
-        "description": "Enrich anime metadata from external sources",
+        "description": "Enrich anime metadata from Jikan (self-hosted)",
         "args_schema": {
             "mode": {
                 "type": "string",
@@ -45,7 +32,7 @@ AVAILABLE_TASKS = {
             },
             "batch_size": {"type": "integer", "default": 100},
         },
-        "default_queue": "low_priority",
+        "default_queue": "batch",
     },
     "apps.animes.tasks.themes.sync_theme_songs": {
         "name": "Sync Theme Songs",

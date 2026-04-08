@@ -10,7 +10,7 @@ from asgiref.sync import sync_to_async
 from django.db.models import Q
 
 from apps.animes.models import Anime
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.shared.celery import observed_shared_task
 
 from .base import BaseTask, run_async_in_task
@@ -19,7 +19,7 @@ from .base import BaseTask, run_async_in_task
 class FranchiseSyncTask(BaseTask):
     """Unified task for syncing anime franchise/relations data."""
 
-    service_class = AniListService
+    service_class = JikanService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -146,7 +146,7 @@ class FranchiseSyncTask(BaseTask):
             }
 
     async def _process_anime_franchises(
-        self, service: AniListService, anime: Anime, import_missing: bool, max_imports: int
+        self, service: JikanService, anime: Anime, import_missing: bool, max_imports: int
     ) -> dict:
         """Process franchises for a single anime."""
         try:
@@ -156,7 +156,7 @@ class FranchiseSyncTask(BaseTask):
             data = await service.get_anime_by_id(anime.anilist_id)
 
             if not data:
-                return {"status": "error", "error": "No data from AniList", "relations_count": 0}
+                return {"status": "error", "error": "No data from Jikan", "relations_count": 0}
 
             # Extract relations
             relations_data = data.get("relations", {})
@@ -254,7 +254,7 @@ class FranchiseSyncTask(BaseTask):
             return {"status": "error", "error": str(e), "relations_count": 0}
 
     async def _get_existing_slugs(self, anilist_ids: set[int]) -> dict[int, str]:
-        """Get slug mapping for existing anime by AniList ID."""
+        """Get slug mapping for existing anime by sync ID."""
         if not anilist_ids:
             return {}
 
@@ -269,10 +269,10 @@ class FranchiseSyncTask(BaseTask):
         return await fetch_slugs()
 
     async def _import_missing_anime_batch(
-        self, service: AniListService, anime_relations: list[dict],
+        self, service: JikanService, anime_relations: list[dict],
         ids_to_import: set[int], max_imports: int
     ) -> set[int]:
-        """Import missing related anime from AniList."""
+        """Import missing related anime from Jikan."""
         imported_ids = set()
 
         # Build node map
@@ -336,7 +336,7 @@ def sync_franchises(
     update_window: int = 3600,
     anime_ids: list[int] | None = None,
 ):
-    """Sync anime franchise/relations data from AniList."""
+    """Sync anime franchise/relations data from Jikan."""
     return self.execute(
         anime_id=anime_id, mode=mode, batch_size=batch_size,
         import_missing=import_missing, max_imports=max_imports,

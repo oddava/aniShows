@@ -18,7 +18,7 @@ from asgiref.sync import sync_to_async
 from django.db.models import Q
 
 from apps.animes.models import Anime
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.animes.services.offline_catalog import PLACEHOLDER_SYNOPSIS
 from apps.shared.celery import observed_shared_task
 
@@ -49,7 +49,7 @@ class MetadataEnrichmentTask(BaseTask):
         )
     """
 
-    service_class = AniListService
+    service_class = JikanService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -139,9 +139,9 @@ class MetadataEnrichmentTask(BaseTask):
                 raise self.retry(exc=e, countdown=60)
 
     async def _resolve_media_for_anime(
-        self, service: AniListService, anime: Anime
+        self, service: JikanService, anime: Anime
     ) -> dict | None:
-        """Resolve the best AniList media payload for a local Anime row."""
+        """Resolve the best Jikan media payload for a local Anime row."""
         return await service.resolve_media_for_anime(anime)
 
     async def _enrich_batch(
@@ -266,7 +266,7 @@ def enrich_metadata(
     anime_ids: list[int] | None = None,
     missing_tags_only: bool = False,
 ):
-    """Enrich anime metadata from AniList.
+    """Enrich anime metadata from Jikan.
 
     Args:
         anime_id: Specific anime ID (for single mode)

@@ -252,8 +252,12 @@ class BaseTask(ObservedTask):
 
             # Record anime synced if applicable
             if hasattr(self, "sync_type") and self.metrics.records_processed > 0:
+                source = "jikan"
+                service_class = getattr(self, "service_class", None)
+                if service_class is not None and getattr(service_class, "__name__", "") == "AniListService":
+                    source = "anilist"
                 ANIME_SYNCED.labels(
-                    sync_type=getattr(self, "sync_type", "unknown"), source="anilist"
+                    sync_type=getattr(self, "sync_type", "unknown"), source=source
                 ).inc(self.metrics.records_processed)
 
         except Exception as e:

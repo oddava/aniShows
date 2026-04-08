@@ -8,9 +8,9 @@ from apps.animes.services.franchise_import import FranchiseImportService
 
 class FranchiseImportServiceTests(TestCase):
     @patch("apps.animes.signals.enrich_metadata.delay")
-    @patch("apps.animes.services.franchise_import.AniListService")
+    @patch("apps.animes.services.franchise_import.JikanService")
     def test_existing_anime_refreshes_when_images_missing(
-        self, mock_anilist_service_cls, _mock_enrich_metadata
+        self, mock_jikan_service_cls, _mock_enrich_metadata
     ):
         source = Anime.objects.create(
             title="Source Anime",
@@ -45,7 +45,8 @@ class FranchiseImportServiceTests(TestCase):
             "id": 1001,
             "title": {"english": "Target Anime", "romaji": "Target Anime"},
         }
-        mock_service = mock_anilist_service_cls.return_value
+        mock_jikan_service_cls.normalize_external_image_url.side_effect = lambda value: value or ""
+        mock_service = mock_jikan_service_cls.return_value
         mock_service.get_anime_by_id = AsyncMock(return_value=anilist_payload)
         mock_service.close = AsyncMock(return_value=None)
         mock_service.save_anime_to_db.return_value = existing
@@ -67,9 +68,9 @@ class FranchiseImportServiceTests(TestCase):
         mock_service.close.assert_awaited_once()
 
     @patch("apps.animes.signals.enrich_metadata.delay")
-    @patch("apps.animes.services.franchise_import.AniListService")
+    @patch("apps.animes.services.franchise_import.JikanService")
     def test_existing_anime_skips_refresh_when_images_present(
-        self, mock_anilist_service_cls, _mock_enrich_metadata
+        self, mock_jikan_service_cls, _mock_enrich_metadata
     ):
         source = Anime.objects.create(
             title="Source Anime 2",
@@ -112,4 +113,4 @@ class FranchiseImportServiceTests(TestCase):
         source.refresh_from_db()
         self.assertEqual(source.relations[0]["slug"], existing.slug)
 
-        mock_anilist_service_cls.assert_not_called()
+        mock_jikan_service_cls.assert_not_called()

@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.animes.models import Anime, OfflineCatalogImport, Studio
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.animes.services.offline_sync import OfflineSyncService
 from apps.shared.logger import logger
 from apps.shared.public_cache import invalidate_public_cache_keys
@@ -489,11 +489,11 @@ class OfflineCatalogImportService:
         season = self._truncate_text(season_info.get("season") or "", ANIME_SEASON_MAX_LENGTH)
         season_year = season_info.get("year")
         picture = self._truncate_text(
-            AniListService.normalize_external_image_url(payload.get("picture")),
+            JikanService.normalize_external_image_url(payload.get("picture")),
             ANIME_URL_MAX_LENGTH,
         )
         thumbnail = self._truncate_text(
-            AniListService.normalize_external_image_url(payload.get("thumbnail")),
+            JikanService.normalize_external_image_url(payload.get("thumbnail")),
             ANIME_URL_MAX_LENGTH,
         )
         studio = self._truncate_text(

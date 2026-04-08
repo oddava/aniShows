@@ -73,7 +73,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.fallback_recommendation.genres.add(self.genre)
 
     @patch(
-        "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
+        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
         new_callable=AsyncMock,
     )
     def test_anilist_recommendations_exclude_franchise_entries(self, mock_get_recommendations):
@@ -97,7 +97,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         )
 
     @patch(
-        "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
+        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
         new_callable=AsyncMock,
     )
     def test_fallback_recommendations_also_exclude_franchise_entries(self, mock_get_recommendations):
@@ -113,7 +113,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertNotIn(self.anime.slug, returned_slugs)
 
     @patch(
-        "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
+        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
         new_callable=AsyncMock,
     )
     def test_timeout_uses_fallback_recommendations(self, mock_get_recommendations):
@@ -128,7 +128,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertNotIn(self.franchise_entry.slug, returned_slugs)
 
     @patch(
-        "apps.animes.views.anime.AniListService.get_recommendations_for_anime",
+        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
         new_callable=AsyncMock,
     )
     def test_authenticated_recommendations_include_user_context(self, mock_get_recommendations):

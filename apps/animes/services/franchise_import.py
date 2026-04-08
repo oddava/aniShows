@@ -4,7 +4,7 @@ from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
 from apps.animes.models import Anime
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.shared.logger import logger
 from apps.shared.public_cache import invalidate_public_cache_keys
 
@@ -57,7 +57,7 @@ class FranchiseImportService:
 
         self._enforce_rate_limit(rate_limit_key or client_ip)
 
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        service = JikanService(enable_caching=False, enable_rate_limiting=True)
         try:
             item = async_to_sync(service.get_anime_by_id)(anilist_id)
             if not item:
@@ -93,8 +93,8 @@ class FranchiseImportService:
             async_to_sync(service.close)()
 
     def _refresh_existing_anime(self, anime: Anime, anilist_id: int) -> None:
-        """Fetch fresh AniList data for an existing anime with missing media metadata."""
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        """Fetch fresh sync data for an existing anime with missing media metadata."""
+        service = JikanService(enable_caching=False, enable_rate_limiting=True)
         try:
             item = async_to_sync(service.get_anime_by_id)(anilist_id)
             if item:
@@ -102,7 +102,7 @@ class FranchiseImportService:
                 self._ensure_external_image_refs(refreshed, item)
             else:
                 logger.warning(
-                    f"No AniList payload returned while refreshing existing anime {anilist_id}"
+                    f"No Jikan payload returned while refreshing existing anime {anilist_id}"
                 )
         except Exception as exc:
             logger.warning(f"Failed to refresh existing anime {anime.slug} ({anilist_id}): {exc}")
@@ -125,10 +125,10 @@ class FranchiseImportService:
         if not isinstance(cover_image, dict):
             cover_image = {}
 
-        cover_url = AniListService.normalize_external_image_url(
+        cover_url = JikanService.normalize_external_image_url(
             cover_image.get("extraLarge") or cover_image.get("large")
         )
-        banner_url = AniListService.normalize_external_image_url(item.get("bannerImage"))
+        banner_url = JikanService.normalize_external_image_url(item.get("bannerImage"))
 
         update_fields: list[str] = []
         if not anime.cover_image and not anime.cover_image_external_url and cover_url:

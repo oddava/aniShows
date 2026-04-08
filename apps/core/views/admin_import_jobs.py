@@ -14,7 +14,10 @@ from apps.core.services.admin_import_jobs_service import (
     cancel_import_job,
     format_task_result,
     trigger_anilist_import,
+    trigger_catalog_import,
+    trigger_metadata_enrichment,
     trigger_offline_import,
+    trigger_trending_refresh,
 )
 
 __all__ = ["OFFLINE_RECONCILE_TASK", "AdminImportJobFilter", "AdminImportJobViewSet"]
@@ -84,20 +87,34 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     @action(detail=False, methods=["post"])
     def trigger(self, request):
         """Trigger a new import job."""
-        source = request.data.get("source", "anilist_sync")
+        source = request.data.get("source", "jikan_trending")
+        sync_type = request.data.get("sync_type", "trending")
 
         try:
-            if source in {"anilist_sync", "anilist"}:
-                result = trigger_anilist_import(request.data, request.user)
+            if source in {"jikan_trending", "trending", "internal_activity"}:
+                result = trigger_trending_refresh(request.data, request.user)
+                return Response(result.payload, status=result.status_code)
+            if source in {"anime_catalog", "catalog_sync"}:
+                result = trigger_catalog_import(request.data, request.user)
+                return Response(result.payload, status=result.status_code)
+            if source in {"jikan_enrichment", "metadata_enrichment"}:
+                result = trigger_metadata_enrichment(request.data, request.user)
                 return Response(result.payload, status=result.status_code)
             if source in {"offline_catalog", "anime_offline_database"}:
                 result = trigger_offline_import(request.data, request.user)
+                return Response(result.payload, status=result.status_code)
+            if source in {"anilist_sync", "anilist"}:
+                result = trigger_anilist_import(
+                    {**request.data, "sync_type": sync_type},
+                    request.user,
+                )
                 return Response(result.payload, status=result.status_code)
 
             return Response(
                 {
                     "detail": (
-                        "Invalid source. Allowed: anilist_sync, offline_catalog"
+                        "Invalid source. Allowed: jikan_trending, anime_catalog, "
+                        "jikan_enrichment, offline_catalog"
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,

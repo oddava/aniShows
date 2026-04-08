@@ -36,7 +36,7 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         )
 
     @patch(
-        'apps.animes.services.watch_episodes.AniListService.get_streaming_episodes_for_anime',
+        'apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime',
         new_callable=AsyncMock,
     )
     @patch('apps.animes.services.watch_episodes.httpx.AsyncClient.get', new_callable=AsyncMock)
@@ -100,7 +100,7 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         self.assertFalse(episodes[1]['has_real_crunchyroll_url'])
 
     @patch(
-        'apps.animes.services.watch_episodes.AniListService.get_streaming_episodes_for_anime',
+        'apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime',
         new_callable=AsyncMock,
     )
     @patch('apps.animes.services.watch_episodes.httpx.AsyncClient.get', new_callable=AsyncMock)
@@ -170,7 +170,7 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         )
 
     @patch(
-        'apps.animes.services.watch_episodes.AniListService.get_streaming_episodes_for_anime',
+        'apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime',
         new_callable=AsyncMock,
     )
     @patch('apps.animes.services.watch_episodes.httpx.AsyncClient.get', new_callable=AsyncMock)

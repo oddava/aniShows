@@ -9,11 +9,21 @@ from django.utils import timezone
 from apps.animes.models import OfflineAnimeSyncState, OfflineCatalogImport
 from apps.core.models import CeleryTaskResult
 
-ANILIST_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
+CATALOG_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
+METADATA_ENRICHMENT_TASK = "apps.animes.tasks.metadata.enrich_metadata"
 OFFLINE_IMPORT_TASK = "apps.animes.tasks.offline_catalog.import_offline_catalog"
 OFFLINE_RECONCILE_TASK = "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync"
-IMPORT_TASKS = [ANILIST_SYNC_TASK, OFFLINE_IMPORT_TASK, OFFLINE_RECONCILE_TASK]
+IMPORT_TASKS = [
+    CATALOG_SYNC_TASK,
+    METADATA_ENRICHMENT_TASK,
+    OFFLINE_IMPORT_TASK,
+    OFFLINE_RECONCILE_TASK,
+]
 FULL_CATALOG_LIMIT = 5000
+
+# Backward-compatible alias retained for older tests/callers.
+ANILIST_SYNC_TASK = CATALOG_SYNC_TASK
+TRENDING_REFRESH_TASK = CATALOG_SYNC_TASK
 
 
 @dataclass(slots=True)
@@ -112,6 +122,23 @@ def summarize_task_group(*, queued_count: int, task_ids: list[str]):
         "running": running,
         "completion_percent": completion_percent,
     }
+
+
+def describe_catalog_sync(sync_type: str) -> tuple[str, str]:
+    mapping = {
+        "trending": ("Jikan (self-hosted)", "Trending"),
+        "seasonal": ("Anime Model Fields", "Seasonal"),
+        "next_season": ("Anime Model Fields", "Next Season"),
+        "airing": ("Anime Model Fields", "Airing"),
+        "full_catalog": ("Anime Model Fields", "Full Catalog"),
+    }
+    return mapping.get(sync_type, ("Anime Model Fields", "Catalog Sync"))
+
+
+def describe_metadata_mode(mode: str) -> str:
+    if mode == "single":
+        return "Metadata Enrichment"
+    return "Metadata Enrichment"
 
 
 def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
@@ -235,13 +262,39 @@ def format_task_result(result):
     error_message = result.error_message
     extra_metadata = {}
 
-    if result.task_name == ANILIST_SYNC_TASK:
-        source = "AniList API"
-        source_type = task_kwargs.get("sync_type", "unknown")
+    if result.task_name == CATALOG_SYNC_TASK:
+        sync_type = task_kwargs.get("sync_type", "unknown")
+        source, source_type = describe_catalog_sync(sync_type)
         if isinstance(result.result_data, dict):
             processed_items = result.result_data.get("records_processed", 0)
         total_items = task_kwargs.get("limit", processed_items) if task_kwargs else processed_items
         error_count = 1 if result.status == "FAILURE" else 0
+
+    elif result.task_name == METADATA_ENRICHMENT_TASK:
+        mode = task_kwargs.get("mode", "backfill")
+        source = "Jikan (self-hosted)"
+        source_type = describe_metadata_mode(mode)
+        if isinstance(result.result_data, dict):
+            if mode == "single":
+                terminal_statuses = {"success", "no_results", "skipped_conflict", "not_found"}
+                processed_items = 1 if result.result_data.get("status") in terminal_statuses else 0
+                total_items = 1
+            else:
+                total_items = coerce_int_or_none(result.result_data.get("total"))
+                if total_items is None:
+                    total_items = coerce_int_or_none(task_kwargs.get("batch_size")) or 0
+                processed_items = (
+                    (coerce_int_or_none(result.result_data.get("updated")) or 0)
+                    + (coerce_int_or_none(result.result_data.get("no_results")) or 0)
+                    + (coerce_int_or_none(result.result_data.get("skipped_conflicts")) or 0)
+                    + (coerce_int_or_none(result.result_data.get("errors")) or 0)
+                )
+                error_count = coerce_int_or_none(result.result_data.get("errors")) or 0
+        else:
+            total_items = 1 if mode == "single" else coerce_int_or_none(task_kwargs.get("batch_size")) or 0
+
+        if result.status == "FAILURE" and error_count == 0:
+            error_count = 1
 
     elif result.task_name == OFFLINE_IMPORT_TASK:
         source = "Anime Offline Database"
@@ -276,7 +329,7 @@ def format_task_result(result):
 
     elif result.task_name == OFFLINE_RECONCILE_TASK:
         source = "Offline Sync Reconcile"
-        source_type = "metadata+themes"
+        source_type = "Metadata + relations + themes"
         if isinstance(result.result_data, dict):
             complete_items = coerce_int_or_none(result.result_data.get("complete")) or 0
             pending_items = coerce_int_or_none(result.result_data.get("pending")) or 0
@@ -324,11 +377,38 @@ def create_pending_job(*, user, task_path: str, task_module: str, kwargs, queue:
     )
 
 
-def trigger_anilist_import(payload, user) -> AdminImportJobActionResult:
-    sync_type = payload.get("sync_type", "trending")
+def trigger_trending_refresh(payload, user) -> AdminImportJobActionResult:
+    limit = payload.get("limit", 50)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        return AdminImportJobActionResult(
+            payload={"detail": "Limit must be an integer."},
+            status_code=400,
+        )
+
+    job = create_pending_job(
+        user=user,
+        task_path=TRENDING_REFRESH_TASK,
+        task_module="apps.animes.tasks.sync",
+        kwargs={"sync_type": "trending", "limit": limit},
+        queue="high_priority",
+    )
+    return AdminImportJobActionResult(
+        payload={
+            "message": "Jikan trending sync job triggered successfully.",
+            "job_id": job.id,
+            "status": "pending",
+        },
+        status_code=202,
+    )
+
+
+def trigger_catalog_import(payload, user) -> AdminImportJobActionResult:
+    sync_type = payload.get("sync_type", "seasonal")
     default_limit = FULL_CATALOG_LIMIT if sync_type == "full_catalog" else 50
     limit = payload.get("limit", default_limit)
-    allowed_sync_types = ["trending", "seasonal", "next_season", "airing", "full_catalog"]
+    allowed_sync_types = ["seasonal", "next_season", "airing", "full_catalog"]
     if sync_type not in allowed_sync_types:
         return AdminImportJobActionResult(
             payload={"detail": f"Invalid sync_type. Allowed: {allowed_sync_types}"},
@@ -345,19 +425,68 @@ def trigger_anilist_import(payload, user) -> AdminImportJobActionResult:
 
     job = create_pending_job(
         user=user,
-        task_path=ANILIST_SYNC_TASK,
+        task_path=CATALOG_SYNC_TASK,
         task_module="apps.animes.tasks.sync",
         kwargs={"sync_type": sync_type, "limit": limit},
-        queue="default",
+        queue="high_priority" if sync_type in {"trending", "airing"} else "default",
     )
     return AdminImportJobActionResult(
         payload={
-            "message": "AniList sync job triggered successfully.",
+            "message": "Catalog sync job triggered successfully.",
             "job_id": job.id,
             "status": "pending",
         },
         status_code=202,
     )
+
+
+def trigger_metadata_enrichment(payload, user) -> AdminImportJobActionResult:
+    try:
+        batch_size = int(payload.get("batch_size", 100))
+    except (TypeError, ValueError):
+        return AdminImportJobActionResult(
+            payload={"detail": "Batch size must be an integer."},
+            status_code=400,
+        )
+
+    if batch_size < 1:
+        return AdminImportJobActionResult(
+            payload={"detail": "Batch size must be at least 1."},
+            status_code=400,
+        )
+
+    kwargs = {
+        "mode": "backfill",
+        "batch_size": batch_size,
+        "missing_tags_only": coerce_bool(payload.get("missing_tags_only"), default=False),
+    }
+    status_filter = payload.get("status")
+    if status_filter:
+        kwargs["filters"] = {"status": status_filter}
+
+    job = create_pending_job(
+        user=user,
+        task_path=METADATA_ENRICHMENT_TASK,
+        task_module="apps.animes.tasks.metadata",
+        kwargs=kwargs,
+        queue="batch",
+    )
+    return AdminImportJobActionResult(
+        payload={
+            "message": "Jikan metadata enrichment job triggered successfully.",
+            "job_id": job.id,
+            "status": "pending",
+        },
+        status_code=202,
+    )
+
+
+def trigger_anilist_import(payload, user) -> AdminImportJobActionResult:
+    """Backward-compatible wrapper for legacy callers."""
+    sync_type = payload.get("sync_type", "trending")
+    if sync_type == "trending":
+        return trigger_trending_refresh(payload, user)
+    return trigger_catalog_import(payload, user)
 
 
 def trigger_offline_import(payload, user) -> AdminImportJobActionResult:

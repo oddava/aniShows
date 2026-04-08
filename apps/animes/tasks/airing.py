@@ -15,7 +15,7 @@ from asgiref.sync import sync_to_async
 from django.utils import timezone
 
 from apps.animes.models import Anime
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.animes.services.rate_limiting import APICallCache
 from apps.shared.celery import observed_shared_task
 
@@ -41,7 +41,7 @@ class AiringWorkflowTask(BaseTask):
         sync_airing_workflow.delay(batch_size=200)
     """
 
-    service_class = AniListService
+    service_class = JikanService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -111,7 +111,7 @@ class AiringWorkflowTask(BaseTask):
 
     async def _sync_airing(
         self,
-        service: AniListService,
+        service: JikanService,
         call_cache: APICallCache,
         batch_size: int,
     ) -> dict:
@@ -120,7 +120,7 @@ class AiringWorkflowTask(BaseTask):
         Updates next_airing_date for anime with status='airing'.
         Uses deduplication to prevent redundant API calls.
         """
-        # Get airing anime with AniList IDs
+        # Get airing anime with sync IDs
         airing_anime = await sync_to_async(list)(
             Anime.objects.filter(status=Anime.AnimeStatus.airing).exclude(
                 anilist_id__isnull=True
@@ -173,7 +173,7 @@ class AiringWorkflowTask(BaseTask):
                 logger.error(f"Error updating {anime.title}: {e}")
                 error_count += 1
 
-        self.metrics.record_api_call("anilist", updated_count)
+        self.metrics.record_api_call("jikan", updated_count)
         self.metrics.record_records(updated_count)
 
         return {
@@ -186,7 +186,7 @@ class AiringWorkflowTask(BaseTask):
 
     async def _cleanup_finished(
         self,
-        service: AniListService,
+        service: JikanService,
         batch_size: int,
     ) -> dict:
         """Clear next_airing_date for finished anime.
@@ -252,7 +252,7 @@ class AiringWorkflowTask(BaseTask):
 
     async def _backfill_missing(
         self,
-        service: AniListService,
+        service: JikanService,
         call_cache: APICallCache,
         batch_size: int,
     ) -> dict:
@@ -292,7 +292,7 @@ class AiringWorkflowTask(BaseTask):
                     else:
                         still_missing_count += 1
                 else:
-                    logger.warning(f"No AniList data for: {anime.title}")
+                    logger.warning(f"No Jikan data for: {anime.title}")
 
                 if (i + 1) % 10 == 0 or (i + 1) == total:
                     logger.info(f"Backfill progress: {i + 1}/{total}")

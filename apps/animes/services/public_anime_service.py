@@ -23,7 +23,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 
 from apps.animes.models import Anime, UserFavorite
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.shared.logger import logger
 from apps.shared.public_cache import (
     get_or_build_public_payload,
@@ -180,7 +180,7 @@ class AnimeQueryService:
     def recommendations_queryset(self, anime):
         relation_anilist_ids = set(self._relation_anilist_ids(anime))
         if anime.anilist_id:
-            service = AniListService()
+            service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
                 recommendations = async_to_sync(service.get_recommendations_for_anime)(
                     anime.anilist_id,
@@ -189,7 +189,7 @@ class AnimeQueryService:
                 )
             except Exception as exc:
                 logger.warning(
-                    "Failed to fetch AniList recommendations for %s (%s): %s",
+                    "Failed to fetch Jikan recommendations for %s (%s): %s",
                     anime.slug,
                     anime.anilist_id,
                     exc,

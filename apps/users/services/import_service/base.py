@@ -5,6 +5,7 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
 from apps.animes.models import Anime
+from apps.animes.services.jikan import JikanService
 from apps.shared.logger import logger
 from apps.users.models import UserAnimeList, UserImportJob
 
@@ -55,16 +56,14 @@ class BaseImporter:
         self.failed_count = 0
         self.fetched_count = 0  # New: track fetched anime
         self._progress_counter = 0
-        self._anilist_service = None  # Lazy-loaded, shared across calls
+        self._sync_service = None  # Lazy-loaded, shared across calls
         self._event_loop = None  # Reusable event loop
 
-    def _get_anilist_service(self):
-        """Get or create a shared AniListService instance."""
-        if self._anilist_service is None:
-            from apps.animes.services.anilist import AniListService
-
-            self._anilist_service = AniListService()
-        return self._anilist_service
+    def _get_sync_service(self):
+        """Get or create a shared JikanService instance."""
+        if self._sync_service is None:
+            self._sync_service = JikanService(enable_caching=True, enable_rate_limiting=True)
+        return self._sync_service
 
     def _get_event_loop(self):
         """Get or create a reusable event loop for async operations."""
@@ -80,6 +79,14 @@ class BaseImporter:
 
     def _cleanup(self):
         """Cleanup resources like the event loop."""
+        if self._sync_service is not None:
+            try:
+                self._run_async(self._sync_service.close())
+            except Exception:
+                logger.debug("Failed to close shared sync service", exc_info=True)
+            finally:
+                self._sync_service = None
+
         if self._event_loop and not self._event_loop.is_closed():
             self._event_loop.close()
             self._event_loop = None
@@ -128,20 +135,9 @@ class BaseImporter:
             return None
 
         # Anime not found - fetch it using shared service and event loop
-        service = self._get_anilist_service()
+        service = self._get_sync_service()
 
         try:
-            # Try to fetch by AniList ID first (most reliable)
-            if anilist_id:
-                logger.info(f"Fetching anime by AniList ID: {anilist_id}")
-                anime_data = self._run_async(service.get_anime_by_id(anilist_id))
-                if anime_data:
-                    anime = self._run_async(service._save_anime_to_db_async(anime_data))
-                    logger.info(f"Fetched and saved: {anime.title}")
-                    self.fetched_count += 1
-                    return anime
-
-            # Try to fetch by MAL ID
             if mal_id:
                 logger.info(f"Fetching anime by MAL ID: {mal_id}")
                 anime_data = self._run_async(service.search_by_mal_id(mal_id))
@@ -151,9 +147,16 @@ class BaseImporter:
                     self.fetched_count += 1
                     return anime
 
-            # External title search is disabled by default to avoid false matches and
-            # unnecessary API pressure during bulk imports.
-            if title and allow_title_search:
+            if anilist_id and anilist_id >= JikanService.ANIME_ID_OFFSET:
+                logger.info(f"Fetching anime by sync ID: {anilist_id}")
+                anime_data = self._run_async(service.get_anime_by_id(anilist_id))
+                if anime_data:
+                    anime = self._run_async(service._save_anime_to_db_async(anime_data))
+                    logger.info(f"Fetched and saved: {anime.title}")
+                    self.fetched_count += 1
+                    return anime
+
+            if title and (allow_title_search or (anilist_id and not mal_id)):
                 logger.info(f"Searching anime by title: {title}")
                 results = self._run_async(service.search_anime(title))
                 if results:

@@ -18,9 +18,10 @@ const AdminImportJobs = () => {
 
   // Trigger modal state
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
-  const [triggerSource, setTriggerSource] = useState('anilist_sync');
+  const [triggerSource, setTriggerSource] = useState('jikan_trending');
   const [triggerSyncType, setTriggerSyncType] = useState('trending');
   const [triggerLimit, setTriggerLimit] = useState(50);
+  const [triggerBatchSize, setTriggerBatchSize] = useState(100);
   const [triggerReleaseTag, setTriggerReleaseTag] = useState('latest');
   const [triggerImportLimit, setTriggerImportLimit] = useState('');
   const [triggerEnrichment, setTriggerEnrichment] = useState(true);
@@ -89,18 +90,30 @@ const AdminImportJobs = () => {
     e.preventDefault();
     setIsTriggering(true);
     try {
-      const payload = triggerSource === 'offline_catalog'
-        ? {
+      let payload;
+      if (triggerSource === 'offline_catalog') {
+        payload = {
           source: 'offline_catalog',
           release_tag: triggerReleaseTag || 'latest',
           import_limit: triggerImportLimit === '' ? null : Number(triggerImportLimit),
           enqueue_enrichment: triggerEnrichment,
-        }
-        : {
-          source: 'anilist_sync',
+        };
+      } else if (triggerSource === 'anime_catalog') {
+        payload = {
+          source: 'anime_catalog',
           sync_type: triggerSyncType,
           limit: Number(triggerLimit),
         };
+      } else if (triggerSource === 'jikan_enrichment') {
+        payload = {
+          source: 'jikan_enrichment',
+          batch_size: Number(triggerBatchSize),
+        };
+      } else {
+        payload = {
+          source: 'jikan_trending',
+        };
+      }
 
       await api.post('/admin/import-jobs/trigger/', payload);
       toast.success('Import job triggered successfully');
@@ -122,6 +135,17 @@ const AdminImportJobs = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedJob(null);
+  };
+
+  const handleTriggerSourceChange = (nextSource) => {
+    setTriggerSource(nextSource);
+    if (nextSource === 'jikan_trending') {
+      setTriggerSyncType('trending');
+      return;
+    }
+    if (nextSource === 'anime_catalog' && triggerSyncType === 'trending') {
+      setTriggerSyncType('seasonal');
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -172,7 +196,7 @@ const AdminImportJobs = () => {
       title: 'Source',
       render: (item) => (
         <div>
-          <span className="font-medium text-white capitalize">{item.source}</span>
+          <span className="font-medium text-white">{item.source}</span>
           <span className="text-white/40 text-sm ml-2">({item.source_type})</span>
         </div>
       ),
@@ -255,7 +279,7 @@ const AdminImportJobs = () => {
             onClick={() => setIsTriggerModalOpen(true)}
             className="px-4 py-2 bg-green-600/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-600/30 transition-colors flex items-center gap-2"
           >
-            <span>▶️</span> Trigger Import
+            <span>▶️</span> Trigger Job
           </button>
           <button
             onClick={fetchJobs}
@@ -335,11 +359,11 @@ const AdminImportJobs = () => {
               </div>
               <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                 <span className="text-sm text-white/60">Source</span>
-                <p className="text-white font-medium mt-1 capitalize">{selectedJob.source}</p>
+                <p className="text-white font-medium mt-1">{selectedJob.source}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                 <span className="text-sm text-white/60">Type</span>
-                <p className="text-white font-medium mt-1 capitalize">{selectedJob.source_type}</p>
+                <p className="text-white font-medium mt-1">{selectedJob.source_type}</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                 <span className="text-sm text-white/60">Duration</span>
@@ -480,7 +504,7 @@ const AdminImportJobs = () => {
       <Modal
         isOpen={isTriggerModalOpen}
         onClose={() => !isTriggering && setIsTriggerModalOpen(false)}
-        title="Trigger New Import Job"
+        title="Trigger New Job"
         size="medium"
       >
         <form onSubmit={handleTriggerJob} className="space-y-4">
@@ -490,21 +514,28 @@ const AdminImportJobs = () => {
             </label>
             <CustomSelect
               value={triggerSource}
-              onChange={(nextValue) => setTriggerSource(nextValue)}
+              onChange={handleTriggerSourceChange}
               disabled={isTriggering}
               options={[
-                { value: 'anilist_sync', label: 'AniList Sync' },
+                { value: 'jikan_trending', label: 'Jikan (self-hosted) Trending' },
+                { value: 'anime_catalog', label: 'Anime Model Fields' },
+                { value: 'jikan_enrichment', label: 'Jikan (self-hosted) Metadata' },
                 { value: 'offline_catalog', label: 'Anime Offline Database' },
               ]}
               triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
               ariaLabel="Import source"
             />
           </div>
-          {triggerSource === 'anilist_sync' ? (
+          {triggerSource === 'jikan_trending' ? (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+              Trending refresh pulls the recent-updates feed from the self-hosted
+              Jikan service and maps returned MAL IDs onto local anime rows.
+            </div>
+          ) : triggerSource === 'anime_catalog' ? (
             <>
               <div>
                 <label className="block text-sm font-medium text-white/70 mb-1">
-                  Sync Type
+                  Derived Slice
                 </label>
                 <CustomSelect
                   value={triggerSyncType}
@@ -516,19 +547,18 @@ const AdminImportJobs = () => {
                   }}
                   disabled={isTriggering}
                   options={[
-                    { value: 'trending', label: 'Trending Anime' },
-                    { value: 'seasonal', label: 'Current Season' },
+                    { value: 'seasonal', label: 'Seasonal' },
+                    { value: 'airing', label: 'Airing' },
                     { value: 'next_season', label: 'Next Season' },
-                    { value: 'airing', label: 'Currently Airing' },
                     { value: 'full_catalog', label: 'Full Catalog (top 5000)' },
                   ]}
                   triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
-                  ariaLabel="AniList sync type"
+                  ariaLabel="Catalog slice type"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-white/70 mb-1">
-                  Limit (Number of Anime)
+                  Limit (number of anime)
                 </label>
                 <input
                   type="number"
@@ -536,6 +566,26 @@ const AdminImportJobs = () => {
                   max={FULL_CATALOG_LIMIT}
                   value={triggerLimit}
                   onChange={(e) => setTriggerLimit(e.target.value)}
+                  disabled={isTriggering}
+                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+                />
+              </div>
+            </>
+          ) : triggerSource === 'jikan_enrichment' ? (
+            <>
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                Metadata enrichment pulls characters, staff, themes, and relations
+                from the self-hosted Jikan service for existing MAL-linked anime rows.
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-white/70 mb-1">
+                  Batch Size
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={triggerBatchSize}
+                  onChange={(e) => setTriggerBatchSize(e.target.value)}
                   disabled={isTriggering}
                   className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
                 />
@@ -578,7 +628,7 @@ const AdminImportJobs = () => {
                   disabled={isTriggering}
                   className="rounded border-white/20 bg-dark-100"
                 />
-                Queue metadata enrichment after import (synopsis, characters, staff, stats)
+                Queue Jikan (self-hosted) enrichment after import (metadata, themes, relations)
               </label>
             </>
           )}

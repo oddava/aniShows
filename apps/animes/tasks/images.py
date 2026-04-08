@@ -14,8 +14,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 
-from apps.animes.services.anilist import AniListService
-from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter
+from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 from apps.shared.celery import observed_shared_task
 
 try:
@@ -94,8 +93,8 @@ def _queue_image_fetch(
     force_replace: bool = False,
 ) -> bool:
     """Queue image fetch task with per-anime dedupe to prevent retry storms."""
-    resolved_cover_url = AniListService.resolve_fetchable_image_url(cover_url)
-    resolved_banner_url = AniListService.resolve_fetchable_image_url(banner_url)
+    resolved_cover_url = JikanService.resolve_fetchable_image_url(cover_url)
+    resolved_banner_url = JikanService.resolve_fetchable_image_url(banner_url)
 
     if not resolved_cover_url and cover_url:
         logger.info(
@@ -256,12 +255,12 @@ def fetch_anime_images(
         anime = Anime.objects.get(id=anime_id)
 
         async def _download_job():
-            service = AniListService(enable_caching=False, enable_rate_limiting=False)
+            service = JikanService(enable_caching=False, enable_rate_limiting=False)
             try:
                 nonlocal banner_url
 
-                cover_url_resolved = AniListService.resolve_fetchable_image_url(cover_url)
-                banner_url = AniListService.resolve_fetchable_image_url(banner_url)
+                cover_url_resolved = JikanService.resolve_fetchable_image_url(cover_url)
+                banner_url = JikanService.resolve_fetchable_image_url(banner_url)
 
                 # Persist external URLs so the API can always fall back even while
                 # local storage is degraded.

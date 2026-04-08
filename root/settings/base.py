@@ -74,6 +74,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "http://jikan:8080/v4").strip().rstrip("/")
 
 # Runtime controls for request logging overhead and policy checks
 REQUEST_LOGGING_ENABLED = _env_bool("REQUEST_LOGGING_ENABLED", True)
@@ -696,7 +697,7 @@ CELERY_BEAT_SCHEDULE = {
     # UNIFIED TASK SCHEDULE
     # =========================================================================
     #
-    # Hourly Tasks (Staggered to avoid API spikes)
+    # Hourly Tasks (staggered refreshes)
     # -------------------------------------------------------------------------
     "sync-trending-hourly": {
         "task": "apps.animes.tasks.sync.sync_anime_catalog",
@@ -704,10 +705,10 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"sync_type": "trending", "limit": 50},
         "options": {"queue": "high_priority"},
     },
-    "sync-airing-workflow-hourly": {
-        "task": "apps.animes.tasks.airing.sync_airing_workflow",
+    "derive-airing-hourly": {
+        "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(minute=30),  # 30 min past hour
-        "kwargs": {"phases": ["sync"], "batch_size": 100},
+        "kwargs": {"sync_type": "airing", "limit": 500},
         "options": {"queue": "high_priority"},
     },
     # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
@@ -728,12 +729,6 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.animes.tasks.watch_episodes.sync_watch_episodes_batch",
         "schedule": crontab(hour="*/6", minute=15),
         "kwargs": {"statuses": ["Airing", "Upcoming"], "force": True},
-        "options": {"queue": "low_priority"},
-    },
-    "airing-workflow-cleanup-daily": {
-        "task": "apps.animes.tasks.airing.sync_airing_workflow",
-        "schedule": crontab(hour=4, minute=0),  # 4:00 AM
-        "kwargs": {"phases": ["cleanup", "backfill"], "batch_size": 100},
         "options": {"queue": "low_priority"},
     },
     "generate-recommendations-daily": {
@@ -817,14 +812,14 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"sync_type": "next_season", "limit": 100},
         "options": {"queue": "default"},
     },
-    # Weekly: Fetch popular anime to build comprehensive catalog
+    # Weekly: refresh a broader airing slice from local Anime fields
     "sync-popular-weekly": {
         "task": "apps.animes.tasks.sync.sync_anime_catalog",
         "schedule": crontab(day_of_week=1, hour=2, minute=0),  # Monday 2:00 AM
         "kwargs": {
             "sync_type": "airing",
             "limit": 500,
-        },  # Fetch 500 popular/airing anime
+        },
         "options": {"queue": "low_priority"},
     },
     # Notification Tasks

@@ -10,8 +10,7 @@ from django.core.cache import cache
 from apps.animes.models import Anime
 from apps.shared.logger import logger
 
-from .anilist import AniListService
-from .jikan import JIKAN_BASE_URL, JikanRateLimiter
+from .jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 
 class AnimeWatchEpisodeService:
@@ -66,27 +65,27 @@ class AnimeWatchEpisodeService:
         *,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> list[dict]:
-        anilist_media: dict = {}
+        episode_media: dict = {}
         mal_id = anime.mal_id
 
         if anime.anilist_id or mal_id:
-            service = AniListService()
+            service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
-                anilist_media = await service.get_streaming_episodes_for_anime(
+                episode_media = await service.get_streaming_episodes_for_anime(
                     anilist_id=anime.anilist_id,
                     mal_id=mal_id,
                     request_budget=request_budget,
                 ) or {}
             except Exception as exc:
                 logger.warning(
-                    "Failed to fetch AniList streaming episodes for %s: %s",
+                    "Failed to fetch episode streaming metadata for %s: %s",
                     anime.slug,
                     exc,
                 )
             finally:
                 await service.close()
 
-        mal_id = mal_id or self._coerce_positive_int(anilist_media.get("idMal"))
+        mal_id = mal_id or self._coerce_positive_int(episode_media.get("idMal"))
         if not mal_id:
             return self._build_fallback_episodes(anime)
 
@@ -94,7 +93,7 @@ class AnimeWatchEpisodeService:
         if not jikan_episodes:
             return self._build_fallback_episodes(anime)
 
-        crunchyroll_index = self._index_streaming_episodes(anilist_media.get("streamingEpisodes") or [])
+        crunchyroll_index = self._index_streaming_episodes(episode_media.get("streamingEpisodes") or [])
         return [
             self._merge_episode(anime, episode, crunchyroll_index.get(episode["number"]))
             for episode in jikan_episodes
@@ -262,7 +261,7 @@ class AnimeWatchEpisodeService:
 
             index[episode_number] = {
                 "title": str(item.get("title") or "").strip(),
-                "thumbnail": AniListService.normalize_external_image_url(item.get("thumbnail")),
+                "thumbnail": JikanService.normalize_external_image_url(item.get("thumbnail")),
                 "crunchyroll_url": url,
             }
 

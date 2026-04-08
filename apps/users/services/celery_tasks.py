@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.users.models import UserImportJob
 from apps.users.services.import_service import ImportService
 from apps.users.services.user_queryset import get_annotated_user_queryset
@@ -145,11 +145,11 @@ class UserTaskService:
         anilist_id: int | None = None,
         title: str | None = None,
     ) -> int | None:
-        service = AniListService()
+        service = JikanService(enable_caching=True, enable_rate_limiting=True)
 
         try:
             if anilist_id:
-                logger.info("Fetching anime by AniList ID", extra={"anilist_id": anilist_id})
+                logger.info("Fetching anime by sync ID", extra={"anilist_id": anilist_id})
                 anime_data = asyncio.run(service.get_anime_by_id(anilist_id))
                 if anime_data:
                     anime = asyncio.run(service._save_anime_to_db_async(anime_data))

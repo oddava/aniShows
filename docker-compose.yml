@@ -263,6 +263,89 @@ services:
         reservations:
           memory: 64M
 
+  # MongoDB backing store for the self-hosted Jikan API
+  jikan_mongodb:
+    image: mongo:7
+    restart: always
+    command: [ "--bind_ip_all" ]
+    volumes:
+      - jikan_mongodb_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # Typesense index used by the self-hosted Jikan API
+  jikan_typesense:
+    image: typesense/typesense:0.25.2
+    restart: always
+    command:
+      [
+        "--data-dir",
+        "/data",
+        "--api-key=${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}",
+        "--enable-cors",
+      ]
+    volumes:
+      - jikan_typesense_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # Self-hosted Jikan REST API
+  jikan:
+    image: jikanme/jikan-rest:latest
+    restart: always
+    expose:
+      - "8080"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: "http://jikan:8080"
+      DB_CACHING: "true"
+      DB_CONNECTION: mongodb
+      DB_HOST: jikan_mongodb
+      DB_PORT: "27017"
+      DB_DATABASE: jikan
+      DB_ADMIN: jikan
+      CACHING: "true"
+      CACHE_DRIVER: redis
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      QUEUE_CONNECTION: sync
+      SCOUT_DRIVER: typesense
+      SCOUT_QUEUE: "false"
+      TYPESENSE_HOST: jikan_typesense
+      TYPESENSE_PORT: "8108"
+      TYPESENSE_API_KEY: "${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}"
+      SOURCE: local
+      MAX_RESULTS_PER_PAGE: "25"
+    depends_on:
+      jikan_mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jikan_typesense:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
+
   # Celery Worker - default/batch/background queues
   celery:
     image: anishows_web:latest
@@ -546,6 +629,8 @@ volumes:
   db_data:
   umami_db_data:
   redis_data:
+  jikan_mongodb_data:
+  jikan_typesense_data:
   minio_data:
   caddy_data:
   caddy_config:

@@ -81,7 +81,7 @@ class AniListImporterTests(TestCase):
     def test_get_or_fetch_skips_external_lookup_without_stable_ids(self):
         importer = MyAnimeListXMLImporter(job=self.job, xml_content="<myanimelist></myanimelist>")
 
-        with patch.object(importer, "_get_anilist_service") as mock_get_service:
+        with patch.object(importer, "_get_sync_service") as mock_get_service:
             anime = importer.get_or_fetch_anime_sync(
                 mal_id=None,
                 anilist_id=None,
@@ -97,23 +97,25 @@ class AniListImporterTests(TestCase):
         missing_anilist_id = 9999999
         cache.delete(f"import:missing:anilist:{missing_anilist_id}")
 
-        class DummyAniListService:
+        class DummyJikanService:
             def __init__(self):
-                self.calls = 0
+                self.get_calls = 0
+                self.search_calls = 0
 
             async def get_anime_by_id(self, _anilist_id):
-                self.calls += 1
+                self.get_calls += 1
                 return None
 
             async def search_by_mal_id(self, _mal_id):
                 return None
 
             async def search_anime(self, _query_string):
+                self.search_calls += 1
                 return []
 
-        service = DummyAniListService()
+        service = DummyJikanService()
 
-        with patch.object(importer, "_get_anilist_service", return_value=service):
+        with patch.object(importer, "_get_sync_service", return_value=service):
             first = importer.get_or_fetch_anime_sync(
                 anilist_id=missing_anilist_id,
                 title="Missing Anime",
@@ -126,7 +128,8 @@ class AniListImporterTests(TestCase):
         importer._cleanup()
         self.assertIsNone(first)
         self.assertIsNone(second)
-        self.assertEqual(service.calls, 1)
+        self.assertEqual(service.get_calls, 0)
+        self.assertEqual(service.search_calls, 1)
 
 
 class MyAnimeListImporterTests(TestCase):

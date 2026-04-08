@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.animes.models import Anime, OfflineAnimeSyncState
-from apps.animes.services.anilist import AniListService
+from apps.animes.services.jikan import JikanService
 from apps.animes.services.offline_sync import (
     STATE_BULK_CREATE_BATCH_SIZE,
     OfflineSyncService,
@@ -31,7 +31,7 @@ class OfflineSyncStatePipelineTests(TestCase):
         payload.update(overrides)
         return OfflineAnimeSyncState.objects.create(**payload)
 
-    @patch.object(AniListService, "search_anime", new_callable=AsyncMock)
+    @patch.object(JikanService, "search_anime", new_callable=AsyncMock)
     def test_title_only_lookup_failure_marks_row_without_mutating_identity(self, mock_search):
         anime = self._anime("No IDs")
         mock_search.return_value = []
@@ -43,8 +43,8 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertIsNone(anime.anilist_id)
         self.assertIsNone(anime.mal_id)
 
-    @patch.object(AniListService, "update_anime_manual", new_callable=AsyncMock)
-    @patch.object(AniListService, "search_anime", new_callable=AsyncMock)
+    @patch.object(JikanService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(JikanService, "search_anime", new_callable=AsyncMock)
     def test_title_only_lookup_can_enrich_via_exact_match(self, mock_search, mock_update):
         anime = self._anime("Title Only")
         mock_search.return_value = [
@@ -61,8 +61,8 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
         mock_update.assert_awaited_once()
 
-    @patch.object(AniListService, "update_anime_manual", new_callable=AsyncMock)
-    @patch.object(AniListService, "get_anime_by_id", new_callable=AsyncMock)
+    @patch.object(JikanService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
     def test_identity_conflict_never_updates_identity_fields(self, mock_get_by_id, mock_update):
         anime = self._anime("Conflict", anilist_id=111, mal_id=222)
         mock_get_by_id.return_value = {"id": 999, "idMal": 333}
@@ -76,9 +76,9 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(anime.mal_id, 222)
         mock_update.assert_not_called()
 
-    @patch.object(AniListService, "update_anime_manual", new_callable=AsyncMock)
-    @patch.object(AniListService, "search_by_mal_id", new_callable=AsyncMock)
-    @patch.object(AniListService, "get_anime_by_id", new_callable=AsyncMock)
+    @patch.object(JikanService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
+    @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
     def test_metadata_stage_falls_back_to_mal_when_anilist_lookup_misses(
         self,
         mock_get_by_id,
@@ -248,7 +248,7 @@ class OfflineSyncStatePipelineTests(TestCase):
         )
 
         self.assertGreaterEqual(mock_info.call_count, 1)
-        self.assertIn("Offline sync stage blocked", mock_info.call_args_list[-1].args[0])
+        self.assertEqual(mock_info.call_args_list[-1].args[1], "Offline sync stage blocked")
         mock_warning.assert_not_called()
 
     @patch("apps.animes.services.offline_sync.logger.warning")
@@ -265,4 +265,4 @@ class OfflineSyncStatePipelineTests(TestCase):
         )
 
         mock_warning.assert_called_once()
-        self.assertIn("Offline sync stage retry scheduled", mock_warning.call_args.args[0])
+        self.assertEqual(mock_warning.call_args.args[1], "Offline sync stage retry scheduled")

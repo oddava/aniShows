@@ -12,9 +12,9 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.animes.models import Anime, OfflineAnimeSyncState
-from apps.animes.services.anilist import AniListService
 from apps.animes.services.jikan import (
     JikanRateLimiter,
+    JikanService,
     fetch_themes_from_jikan_with_reason,
 )
 from apps.animes.services.metrics import (
@@ -154,7 +154,7 @@ class OfflineSyncService:
         processed = 0
 
         loop = None
-        anilist_service = None
+        jikan_service = None
         jikan_http_client = None
         jikan_rate_limiter = None
         runner = None
@@ -164,7 +164,7 @@ class OfflineSyncService:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 runner = loop.run_until_complete
-                anilist_service = AniListService(enable_caching=True, enable_rate_limiting=True)
+                jikan_service = JikanService(enable_caching=True, enable_rate_limiting=True)
                 jikan_http_client = httpx.AsyncClient(timeout=15.0)
                 jikan_rate_limiter = JikanRateLimiter(base_delay=0.8)
 
@@ -175,7 +175,7 @@ class OfflineSyncService:
                     )
                 outcome = self._execute_claim(
                     claim,
-                    anilist_service=anilist_service,
+                    jikan_service=jikan_service,
                     jikan_http_client=jikan_http_client,
                     jikan_rate_limiter=jikan_rate_limiter,
                     runner=runner,
@@ -191,8 +191,8 @@ class OfflineSyncService:
                     reason_counts[reason] = reason_counts.get(reason, 0) + 1
         finally:
             if loop is not None:
-                if anilist_service is not None:
-                    loop.run_until_complete(anilist_service.close())
+                if jikan_service is not None:
+                    loop.run_until_complete(jikan_service.close())
                 if jikan_http_client is not None:
                     loop.run_until_complete(jikan_http_client.aclose())
                 asyncio.set_event_loop(None)
@@ -275,7 +275,7 @@ class OfflineSyncService:
         self,
         claim: StageClaim,
         *,
-        anilist_service: AniListService | None = None,
+        jikan_service: JikanService | None = None,
         jikan_http_client: httpx.AsyncClient | None = None,
         jikan_rate_limiter: JikanRateLimiter | None = None,
         runner=None,
@@ -288,13 +288,13 @@ class OfflineSyncService:
         if claim.stage == STAGE_METADATA:
             result = self.sync_metadata_stage(
                 state.anime,
-                service=anilist_service,
+                service=jikan_service,
                 runner=runner,
             )
         elif claim.stage == STAGE_FRANCHISE:
             result = self.sync_franchise_stage(
                 state.anime,
-                service=anilist_service,
+                service=jikan_service,
                 runner=runner,
             )
         else:
@@ -316,7 +316,7 @@ class OfflineSyncService:
         self,
         anime: Anime,
         *,
-        service: AniListService | None = None,
+        service: JikanService | None = None,
         runner=None,
     ) -> StageResult:
         if (
@@ -327,7 +327,7 @@ class OfflineSyncService:
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="missing_ids",
-                reason_message="No AniList ID, MAL ID, or searchable title is set.",
+                reason_message="No sync ID, MAL ID, or searchable title is set.",
             )
         return self._run_stage_coroutine(
             self._sync_metadata_stage_async(anime, service=service),
@@ -338,10 +338,10 @@ class OfflineSyncService:
         self,
         anime: Anime,
         *,
-        service: AniListService | None = None,
+        service: JikanService | None = None,
     ) -> StageResult:
         owned_service = service is None
-        service = service or AniListService(enable_caching=True, enable_rate_limiting=True)
+        service = service or JikanService(enable_caching=True, enable_rate_limiting=True)
         try:
             media = await service.resolve_media_for_anime(anime)
             if media and anime.anilist_id and media.get("id") != anime.anilist_id:
@@ -349,7 +349,7 @@ class OfflineSyncService:
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
                     reason_code="identity_conflict",
                     reason_message=(
-                        f"AniList mismatch: expected {anime.anilist_id}, got {media.get('id')}"
+                        f"Sync ID mismatch: expected {anime.anilist_id}, got {media.get('id')}"
                     ),
                 )
             if media and anime.mal_id and media.get("idMal") and media.get("idMal") != anime.mal_id:
@@ -364,7 +364,7 @@ class OfflineSyncService:
             if not media:
                 return self._stage_result_from_external_error(
                     code=service.last_error_code or "not_found",
-                    message=service.last_error_message or "AniList media not found.",
+                    message=service.last_error_message or "Jikan media not found.",
                 )
 
             updated = await service.update_anime_manual(anime, media)
@@ -372,7 +372,7 @@ class OfflineSyncService:
                 return StageResult(
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
                     reason_code="identity_conflict",
-                    reason_message="AniList update rejected due to identity conflict.",
+                    reason_message="Jikan update rejected due to identity conflict.",
                 )
 
             return StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
@@ -391,14 +391,14 @@ class OfflineSyncService:
         self,
         anime: Anime,
         *,
-        service: AniListService | None = None,
+        service: JikanService | None = None,
         runner=None,
     ) -> StageResult:
         if not anime.anilist_id:
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="missing_ids",
-                reason_message="AniList ID is required for franchise stage.",
+                reason_message="Sync ID is required for franchise stage.",
             )
         return self._run_stage_coroutine(
             self._sync_franchise_stage_async(anime, service=service),
@@ -409,23 +409,23 @@ class OfflineSyncService:
         self,
         anime: Anime,
         *,
-        service: AniListService | None = None,
+        service: JikanService | None = None,
     ) -> StageResult:
         owned_service = service is None
-        service = service or AniListService(enable_caching=True, enable_rate_limiting=True)
+        service = service or JikanService(enable_caching=True, enable_rate_limiting=True)
         try:
             media = await service.get_anime_by_id(anime.anilist_id)
             if not media:
                 return self._stage_result_from_external_error(
                     code=service.last_error_code or "not_found",
-                    message=service.last_error_message or "AniList media not found.",
+                    message=service.last_error_message or "Jikan media not found.",
                 )
             if media.get("id") != anime.anilist_id:
                 return StageResult(
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
                     reason_code="identity_conflict",
                     reason_message=(
-                        f"AniList mismatch: expected {anime.anilist_id}, got {media.get('id')}"
+                        f"Sync ID mismatch: expected {anime.anilist_id}, got {media.get('id')}"
                     ),
                 )
 

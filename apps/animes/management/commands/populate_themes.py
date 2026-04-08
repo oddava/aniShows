@@ -22,8 +22,7 @@ from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 
 from apps.animes.models import Anime, ThemeSong
-from apps.animes.services.anilist import AniListService
-from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter
+from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 
 class Command(BaseCommand):
@@ -236,31 +235,29 @@ class Command(BaseCommand):
         return False
 
     async def ensure_mal_id(self, anime, http_client, rate_limiter: JikanRateLimiter):
-        """Ensure the anime has a MAL ID, looking it up via AniList if needed."""
+        """Ensure the anime has a MAL ID, looking it up via Jikan sync metadata if needed."""
         if anime.mal_id:
             return anime.mal_id
 
-        # Try to look up MAL ID via AniList using anilist_id or title search
-        anilist_service = AniListService()
+        sync_service = JikanService(enable_caching=True, enable_rate_limiting=True)
         try:
-            results = await anilist_service.search_anime(anime.title)
-            if results:
-                mal_id = results[0].get("idMal")
-                anilist_id = results[0].get("id")
+            item = await sync_service.resolve_media_for_anime(anime)
+            if item:
+                mal_id = item.get("idMal")
+                sync_id = item.get("id")
                 if mal_id:
-                    # Save for future use
-                    await self._save_mal_id(anime, mal_id, anilist_id)
+                    await self._save_mal_id(anime, mal_id, sync_id)
                     return mal_id
         except Exception as e:
-            logger.warning(f"AniList lookup failed for {anime.title}: {e}")
+            logger.warning(f"Jikan lookup failed for {anime.title}: {e}")
         finally:
-            await anilist_service.close()
+            await sync_service.close()
 
         return None
 
     @sync_to_async
     def _save_mal_id(self, anime, mal_id, anilist_id=None):
-        """Save MAL ID (and optionally AniList ID) to the anime record."""
+        """Save MAL ID (and optionally sync ID) to the anime record."""
         update_fields = []
         if not anime.mal_id:
             anime.mal_id = mal_id
