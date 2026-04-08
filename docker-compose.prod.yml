@@ -17,6 +17,7 @@ services:
       DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
       DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
       DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     depends_on:
@@ -28,6 +29,8 @@ services:
         condition: service_healthy
       createbuckets:
         condition: service_completed_successfully
+      jikan:
+        condition: service_started
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)" ]
       interval: 30s
@@ -50,6 +53,89 @@ services:
       timeout: 3s
       retries: 3
 
+  # MongoDB backing store for the self-hosted Jikan API
+  jikan_mongodb:
+    image: mongo:7
+    restart: always
+    command: [ "--bind_ip_all" ]
+    volumes:
+      - jikan_mongodb_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # Typesense index used by the self-hosted Jikan API
+  jikan_typesense:
+    image: typesense/typesense:0.25.2
+    restart: always
+    command:
+      [
+        "--data-dir",
+        "/data",
+        "--api-key=${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}",
+        "--enable-cors",
+      ]
+    volumes:
+      - jikan_typesense_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # Self-hosted Jikan REST API
+  jikan:
+    image: jikanme/jikan-rest:latest
+    restart: always
+    expose:
+      - "8080"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: "http://jikan:8080"
+      DB_CACHING: "true"
+      DB_CONNECTION: mongodb
+      DB_HOST: jikan_mongodb
+      DB_PORT: "27017"
+      DB_DATABASE: jikan
+      DB_ADMIN: jikan
+      CACHING: "true"
+      CACHE_DRIVER: redis
+      REDIS_HOST: "${REDIS_HOST:-redis}"
+      REDIS_PORT: "${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      QUEUE_CONNECTION: sync
+      SCOUT_DRIVER: typesense
+      SCOUT_QUEUE: "false"
+      TYPESENSE_HOST: jikan_typesense
+      TYPESENSE_PORT: "8108"
+      TYPESENSE_API_KEY: "${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}"
+      SOURCE: local
+      MAX_RESULTS_PER_PAGE: "25"
+    depends_on:
+      jikan_mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jikan_typesense:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
+
   celery:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
@@ -71,6 +157,7 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     depends_on:
@@ -78,6 +165,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jikan:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -106,6 +195,7 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     depends_on:
@@ -113,6 +203,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jikan:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -141,6 +233,7 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     depends_on:
@@ -148,6 +241,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jikan:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -176,6 +271,7 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     depends_on:
@@ -183,6 +279,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jikan:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -214,6 +312,7 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       SENTRY_ENVIRONMENT: "production"
     healthcheck:
@@ -229,6 +328,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jikan:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -358,6 +459,7 @@ services:
       REDIS_PORT: "${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
       REDIS_DB: "${REDIS_DB:-0}"
+      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
     depends_on:
       web:
         condition: service_healthy
@@ -365,6 +467,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jikan:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -375,3 +479,9 @@ services:
 volumes:
   frontend_dist:
   prometheus_multiproc:
+  caddy_data:
+  caddy_config:
+  minio_data:
+  umami_db_data:
+  jikan_mongodb_data:
+  jikan_typesense_data:
