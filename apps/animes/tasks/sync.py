@@ -106,8 +106,7 @@ class SyncAnimeCatalogTask(BaseTask):
                     logger.warning("No data returned for %s sync", sync_type)
                     return {"sync_type": sync_type, "status": "no_data"}
 
-                mal_ids = [item.get("idMal") for item in data if item.get("idMal")]
-                ranked_ids = await sync_to_async(self._ordered_anime_ids_for_mal_ids)(mal_ids)
+                ranked_ids = await self._sync_trending_anime_rows(service, data)
                 ranked_count = await sync_to_async(CatalogSyncService().refresh_trending_ranks)(ranked_ids)
 
                 await update_job_progress(total_items, total_items)
@@ -246,6 +245,30 @@ class SyncAnimeCatalogTask(BaseTask):
             if anime_id and anime_id not in seen_ids:
                 ranked_ids.append(anime_id)
                 seen_ids.add(anime_id)
+        return ranked_ids
+
+    async def _sync_trending_anime_rows(
+        self,
+        service: JikanService,
+        items: list[dict],
+    ) -> list[int]:
+        ranked_ids: list[int] = []
+        seen_ids: set[int] = set()
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            mal_id = item.get("idMal")
+            if not mal_id:
+                continue
+
+            anime = await service._save_anime_to_db_async(item)
+            if anime.id in seen_ids:
+                continue
+
+            ranked_ids.append(anime.id)
+            seen_ids.add(anime.id)
+
         return ranked_ids
 
 

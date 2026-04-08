@@ -303,44 +303,78 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(payload["id"], 111)
         self.assertEqual(payload["idMal"], 1)
 
-    def test_get_recent_updates_follows_top_anime_pagination(self):
+    def test_get_recent_updates_prefers_current_season_and_falls_back_to_top_airing(self):
         async def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             query = dict(request.url.params)
-            if path != "/v4/top/anime":
-                raise AssertionError(f"Unexpected path: {path}")
+            if path == "/v4/seasons/now":
+                page = int(query["page"])
+                if page != 1:
+                    raise AssertionError(f"Unexpected seasons page: {page}")
+                return httpx.Response(
+                    200,
+                    request=request,
+                    json={
+                        "data": [
+                            {
+                                "mal_id": 20,
+                                "title": "Finished Season Show",
+                                "title_english": "Finished Season Show",
+                                "title_japanese": "",
+                                "type": "TV",
+                                "status": "Finished Airing",
+                                "episodes": 12,
+                                "score": 8.1,
+                                "members": 1800,
+                                "popularity": 20,
+                                "rank": 30,
+                                "duration": "24 min per ep",
+                                "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 1}}},
+                                "images": {"jpg": {"large_image_url": "https://cdn.test/20.jpg"}},
+                                "genres": [],
+                                "studios": [],
+                                "relations": [],
+                            }
+                        ],
+                        "pagination": {"has_next_page": False},
+                    },
+                )
 
-            page = int(query["page"])
-            return httpx.Response(
-                200,
-                request=request,
-                json={
-                    "data": [
-                        {
-                            "mal_id": page,
-                            "title": f"Anime {page}",
-                            "title_english": f"Anime {page}",
-                            "title_japanese": "",
-                            "type": "TV",
-                            "status": "Finished Airing",
-                            "episodes": 12,
-                            "score": 8.0,
-                            "members": 1000 - page,
-                            "duration": "24 min per ep",
-                            "aired": {"prop": {"from": {"year": 2024, "month": 1, "day": page}}},
-                            "images": {"jpg": {"large_image_url": f"https://cdn.test/{page}.jpg"}},
-                            "genres": [],
-                            "studios": [],
-                            "relations": [],
-                        }
-                    ],
-                    "pagination": {"has_next_page": page == 1},
-                },
-            )
+            if path == "/v4/top/anime":
+                return httpx.Response(
+                    200,
+                    request=request,
+                    json={
+                        "data": [
+                            {
+                                "mal_id": 10,
+                                "title": "Airing Fallback Show",
+                                "title_english": "Airing Fallback Show",
+                                "title_japanese": "",
+                                "type": "TV",
+                                "status": "Currently Airing",
+                                "episodes": 12,
+                                "score": 8.7,
+                                "members": 2500,
+                                "popularity": 10,
+                                "rank": 15,
+                                "duration": "24 min per ep",
+                                "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 2}}},
+                                "images": {"jpg": {"large_image_url": "https://cdn.test/10.jpg"}},
+                                "genres": [],
+                                "studios": [],
+                                "relations": [],
+                            }
+                        ],
+                        "pagination": {"has_next_page": False},
+                    },
+                )
+
+            raise AssertionError(f"Unexpected path: {path}")
 
         service = self._build_service(handler)
         payload = asyncio.run(service.get_recent_updates(limit=30))
 
         self.assertEqual(len(payload), 2)
-        self.assertEqual(payload[0]["idMal"], 1)
-        self.assertEqual(payload[1]["idMal"], 2)
+        self.assertEqual(payload[0]["idMal"], 10)
+        self.assertEqual(payload[1]["idMal"], 20)

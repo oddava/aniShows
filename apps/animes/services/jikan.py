@@ -537,15 +537,34 @@ class JikanService:
         return {}
 
     async def get_recent_updates(self, limit: int = 50) -> list[dict]:
+        results = await self._fetch_current_season_anime(limit=limit)
+        if len(results) < limit:
+            fallback_results = await self._fetch_top_airing_anime(limit=limit - len(results))
+            results.extend(fallback_results)
+
+        deduped_results: list[dict] = []
+        seen_mal_ids: set[int] = set()
+        for item in self._sort_trending_candidates(results):
+            mal_id = self._coerce_positive_int(item.get("idMal"))
+            if not mal_id or mal_id in seen_mal_ids:
+                continue
+            seen_mal_ids.add(mal_id)
+            deduped_results.append(item)
+            if len(deduped_results) >= limit:
+                break
+
+        return deduped_results[:limit]
+
+    async def _fetch_current_season_anime(self, *, limit: int) -> list[dict]:
         results: list[dict] = []
         page = 1
         per_page = min(max(1, limit), self.MAX_PER_PAGE)
 
         while len(results) < limit:
             payload = await self._get(
-                "/top/anime",
-                params={"filter": "bypopularity", "page": page, "limit": per_page},
-                endpoint="top_anime",
+                "/seasons/now",
+                params={"page": page, "limit": per_page},
+                endpoint="seasons_now",
             )
             page_items = payload.get("data") or []
             if not isinstance(page_items, list) or not page_items:
@@ -564,7 +583,64 @@ class JikanService:
             page += 1
             per_page = min(self.MAX_PER_PAGE, max(1, limit - len(results)))
 
-        return results[:limit]
+        return results
+
+    async def _fetch_top_airing_anime(self, *, limit: int) -> list[dict]:
+        results: list[dict] = []
+        page = 1
+        per_page = min(max(1, limit), self.MAX_PER_PAGE)
+
+        while len(results) < limit:
+            payload = await self._get(
+                "/top/anime",
+                params={"filter": "airing", "page": page, "limit": per_page},
+                endpoint="top_airing_anime",
+            )
+            page_items = payload.get("data") or []
+            if not isinstance(page_items, list) or not page_items:
+                break
+
+            results.extend(
+                self._normalize_anime_item(item)
+                for item in page_items
+                if isinstance(item, dict)
+            )
+
+            pagination = payload.get("pagination") or {}
+            if not pagination.get("has_next_page"):
+                break
+
+            page += 1
+            per_page = min(self.MAX_PER_PAGE, max(1, limit - len(results)))
+
+        return results
+
+    @staticmethod
+    def _sort_trending_candidates(items: list[dict]) -> list[dict]:
+        def ranking_value(item: dict, ranking_type: str) -> int:
+            for ranking in item.get("rankings") or []:
+                if (
+                    isinstance(ranking, dict)
+                    and ranking.get("type") == ranking_type
+                    and ranking.get("rank") is not None
+                ):
+                    return int(ranking["rank"])
+            return 1_000_000
+
+        def sort_key(item: dict) -> tuple:
+            status = item.get("status")
+            average_score = item.get("averageScore")
+            members = item.get("popularity")
+            return (
+                0 if status == "RELEASING" else 1,
+                ranking_value(item, "POPULAR"),
+                ranking_value(item, "RATED"),
+                -(int(average_score) if average_score is not None else 0),
+                -(int(members) if members is not None else 0),
+                -(int(item.get("idMal") or 0)),
+            )
+
+        return sorted(items, key=sort_key)
 
     async def search_anime(self, query_string: str, *, per_page: int = 5) -> list[dict]:
         for variant in self._search_variants(query_string):
