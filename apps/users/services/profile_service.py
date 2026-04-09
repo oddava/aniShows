@@ -6,13 +6,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Count, Prefetch, Q
 
-from apps.shared.logger import logger
-from apps.shared.media_urls import normalize_media_url
-from apps.users.models import UserBadge, UserStats
-from apps.users.services.avatar_service import get_user_avatar_url
+from ...shared.logger import logger
+from ...shared.media_urls import normalize_media_url
+from ..models import UserBadge, UserStats
+from .avatar_service import get_user_avatar_url
 
 try:
-    from apps.users.services.cache import get_user_profile_cache_key
+    from .cache import get_user_profile_cache_key
 except ImportError:
     # Backward-compatible fallback for environments with older cache service exports.
     def get_user_profile_cache_key(user_id, full=False):
@@ -140,13 +140,13 @@ def _get_stats_snapshot(user):
             "resonance_count": stats.resonance_count,
         }
     except UserStats.DoesNotExist:
-        from apps.users.services.stats_service import calculate_user_stats
+        from .stats_service import calculate_user_stats
 
         stats_data = calculate_user_stats(user)
         stats_data["followers_count"] = 0
         stats_data["following_count"] = 0
 
-        from apps.users.tasks import update_user_stats
+        from ..tasks import update_user_stats
 
         update_user_stats.delay(user.id)
         return stats_data

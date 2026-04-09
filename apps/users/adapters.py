@@ -5,7 +5,7 @@ from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 
-from apps.shared.logger import logger
+from ..shared.logger import logger
 
 User = get_user_model()
 

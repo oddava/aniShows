@@ -3,8 +3,8 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from apps.users.models import UserProfile
-from apps.users.services.profile_update_service import update_user_profile
+from ..models import UserProfile
+from ..services.profile_update_service import update_user_profile
 
 User = get_user_model()
 

@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Count, Max
 
-from apps.users.models import UserAnimeList
+from ...models import UserAnimeList
 
 
 class Command(BaseCommand):

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
-from apps.animes.serializers.anime import AnimeDetailSerializer
+from ..serializers.anime import AnimeDetailSerializer
 
 
 class AnimeDetailStatusDistributionTests(SimpleTestCase):

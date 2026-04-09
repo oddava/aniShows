@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from apps.forums.models import Category, Tag
+from ...models import Category, Tag
 
 
 class Command(BaseCommand):

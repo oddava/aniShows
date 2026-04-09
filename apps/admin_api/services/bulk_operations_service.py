@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from django.contrib.auth import get_user_model
 from django.db.models import BooleanField, Case, Count, Value, When
 
-from apps.animes.models import Anime, Character, Genre, Review, Staff, Studio, UserFavorite
+from ...animes.models import Anime, Character, Genre, Review, Staff, Studio, UserFavorite
 
 User = get_user_model()
 

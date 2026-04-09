@@ -23,7 +23,7 @@ import idna
 import whois
 from django.core.cache import cache
 
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 
 class URLValidationError(Exception):

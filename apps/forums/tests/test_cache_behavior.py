@@ -3,9 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.forums.cache_utils import flush_buffered_thread_views
-from apps.forums.models import Category, Thread
-
+from ..cache_utils import flush_buffered_thread_views
+from ..models import Category, Thread
 
 User = get_user_model()
 

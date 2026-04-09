@@ -12,9 +12,9 @@ from rest_framework.serializers import (
     SlugRelatedField,
 )
 
-from apps.animes.models import Anime, Review, ReviewReaction, ReviewReport, ReviewVote
-from apps.animes.serializers.anime import AnimeListSerializer
-from apps.animes.serializers_mixins import UserProfileMixin
+from ..models import Anime, Review, ReviewReaction, ReviewReport, ReviewVote
+from ..serializers_mixins import UserProfileMixin
+from .anime import AnimeListSerializer
 
 User = get_user_model()
 

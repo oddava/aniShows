@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Image processing tasks for anime.
@@ -14,8 +14,8 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 
-from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
-from apps.shared.celery import observed_shared_task
+from ...shared.celery import observed_shared_task
+from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 try:
     from botocore.exceptions import ConnectionClosedError, EndpointConnectionError
@@ -249,7 +249,7 @@ def fetch_anime_images(
     """
     logger.info(f"Starting image fetch for Anime ID: {anime_id}")
 
-    from apps.animes.models import Anime
+    from ..models import Anime
 
     try:
         anime = Anime.objects.get(id=anime_id)
@@ -363,7 +363,7 @@ def fetch_anime_images(
 @observed_shared_task(retry_policy="none", time_limit_preset="quick")
 def heal_missing_anime_media(self, batch_size: int = 100):
     """Periodic self-heal task for anime missing local media files."""
-    from apps.animes.models import Anime
+    from ..models import Anime
 
     if not _is_storage_available():
         logger.warning("Skipping media self-heal run because storage is unavailable")
@@ -415,7 +415,7 @@ def generate_image_thumbnails(self, anime_id: int):
     logger.info(f"Starting thumbnail generation for Anime ID: {anime_id}")
 
     try:
-        from apps.animes.models import Anime
+        from ..models import Anime
 
         anime = Anime.objects.get(id=anime_id)
         generated_count = 0

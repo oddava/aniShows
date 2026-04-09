@@ -8,8 +8,8 @@ from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
-from apps.core.services.admin_settings_service import is_email_verification_required
-from apps.users.services.user_queryset import get_annotated_user_queryset
+from ...core.services.admin_settings_service import is_email_verification_required
+from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
 

@@ -17,7 +17,7 @@ class EmailVerificationFlowTests(APITestCase):
         )
         self.user.is_active = True
         self.user.save()
-        from apps.users.models import UserProfile
+        from ..models import UserProfile
         UserProfile.objects.get_or_create(user=self.user)
 
     def test_verify_email_returns_tokens(self):
@@ -55,7 +55,7 @@ class EmailVerificationFlowTests(APITestCase):
         # Mark as verified
         profile = getattr(self.user, 'userprofile', None)
         if not profile:
-             from apps.users.models import UserProfile
+             from ..models import UserProfile
              profile, _ = UserProfile.objects.get_or_create(user=self.user)
 
         profile.email_verified = True

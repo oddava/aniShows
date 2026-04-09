@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from apps.core.services.admin_import_jobs_service import (
+from ..services.admin_import_jobs_service import (
     ANILIST_SYNC_TASK,
     FULL_CATALOG_LIMIT,
     TRENDING_REFRESH_TASK,

@@ -5,10 +5,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.animes.models import Anime
-from apps.core.models import Notification
-from apps.core.tasks.notifications import check_new_episodes, send_pending_notifications
-from apps.users.models import UserAnimeList
+from ...animes.models import Anime
+from ...users.models import UserAnimeList
+from ..models import Notification
+from ..tasks.notifications import check_new_episodes, send_pending_notifications
 
 User = get_user_model()
 

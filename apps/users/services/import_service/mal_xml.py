@@ -3,9 +3,8 @@ from typing import Dict, List, Tuple
 from defusedxml import ElementTree
 from django.utils import timezone
 
-from apps.shared.logger import logger
-from apps.users.models import UserImportJob
-
+from ....shared.logger import logger
+from ...models import UserImportJob
 from .base import BaseImporter, MALStatusMapper
 
 

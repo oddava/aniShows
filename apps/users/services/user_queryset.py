@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 
-from apps.animes.models import ReviewVote
-from apps.users.models import UserAnimeList, UserBadge, UserFollow
+from ...animes.models import ReviewVote
+from ..models import UserAnimeList, UserBadge, UserFollow
 
 User = get_user_model()
 

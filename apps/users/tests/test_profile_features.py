@@ -11,8 +11,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime, Review, ReviewVote, UserFavorite
-from apps.users.models import UserAnimeList, UserFollow, UserProfile, UserStats
+from ...animes.models import Anime, Review, ReviewVote
+from ..models import UserAnimeList, UserFollow, UserProfile, UserStats
 
 User = get_user_model()
 
@@ -73,7 +73,7 @@ class ProfileFeaturesTest(APITestCase):
 
         # Trigger stats update manually since it's normally a periodic task
         # and the view only triggers it asynchronously if missing (returning 0s first time)
-        from apps.users.tasks import update_user_stats
+        from ..tasks import update_user_stats
 
         update_user_stats(self.user.id)
 
@@ -109,7 +109,7 @@ class ProfileFeaturesTest(APITestCase):
             vote_type=ReviewVote.VoteType.HELPFUL,
         )
 
-        from apps.users.tasks import update_user_stats
+        from ..tasks import update_user_stats
 
         update_user_stats(self.user.id)
 
@@ -276,7 +276,7 @@ class ProfileFeaturesTest(APITestCase):
             extra_data={"picture": google_avatar},
         )
 
-        from apps.users.models import UserFollow
+        from ..models import UserFollow
 
         UserFollow.objects.create(follower=follower, following=target_user)
 

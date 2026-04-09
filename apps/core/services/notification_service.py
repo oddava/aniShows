@@ -7,10 +7,10 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.models import Notification, PushSubscription
-from apps.shared.logger import logger
-from apps.users.models import UserProfile
-from apps.users.services.avatar_service import get_user_avatar_url
+from ...shared.logger import logger
+from ...users.models import UserProfile
+from ...users.services.avatar_service import get_user_avatar_url
+from ..models import Notification
 
 UNREAD_COUNT_CACHE_TTL_SECONDS = 24 * 60 * 60
 

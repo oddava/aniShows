@@ -6,9 +6,9 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.core.models import CeleryTaskResult
-from apps.core.permissions import IsAdminUser
-from apps.core.services.admin_import_jobs_service import (
+from ..models import CeleryTaskResult
+from ..permissions import IsAdminUser
+from ..services.admin_import_jobs_service import (
     IMPORT_TASKS,
     OFFLINE_RECONCILE_TASK,
     cancel_import_job,

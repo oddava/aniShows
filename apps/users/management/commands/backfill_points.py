@@ -8,8 +8,8 @@ Usage:
 from django.core.management.base import BaseCommand
 from django.db.models import Case, IntegerField, Sum, When
 
-from apps.animes.models import ReviewVote
-from apps.users.models import UserProfile
+from ....animes.models import ReviewVote
+from ...models import UserProfile
 
 
 class Command(BaseCommand):

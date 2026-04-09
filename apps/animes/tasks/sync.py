@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Unified catalog synchronization task.
@@ -11,10 +11,9 @@ from datetime import datetime
 
 from asgiref.sync import sync_to_async
 
-from apps.animes.services.catalog_sync import CatalogSyncService
-from apps.animes.services.jikan import JikanService
-from apps.shared.celery import observed_shared_task
-
+from ...shared.celery import observed_shared_task
+from ..services.catalog_sync import CatalogSyncService
+from ..services.jikan import JikanService
 from .base import BaseTask, run_async_in_task
 
 SYNC_CONFIGS = {
@@ -87,7 +86,7 @@ class SyncAnimeCatalogTask(BaseTask):
                     if not task_id:
                         return
                     try:
-                        from apps.core.models import CeleryTaskResult
+                        from ...core.models import CeleryTaskResult
 
                         job = CeleryTaskResult.objects.get(task_id=task_id)
                         if job.result_data is None or not isinstance(job.result_data, dict):
@@ -171,7 +170,7 @@ class SyncAnimeCatalogTask(BaseTask):
                     if not task_id:
                         return
                     try:
-                        from apps.core.models import CeleryTaskResult
+                        from ...core.models import CeleryTaskResult
 
                         job = CeleryTaskResult.objects.get(task_id=task_id)
                         if job.result_data is None or not isinstance(job.result_data, dict):

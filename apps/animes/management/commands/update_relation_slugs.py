@@ -4,7 +4,7 @@ This updates existing relations data to include the slug field for proper naviga
 
 from django.core.management.base import BaseCommand
 
-from apps.animes.models import Anime
+from ...models import Anime
 
 
 class Command(BaseCommand):

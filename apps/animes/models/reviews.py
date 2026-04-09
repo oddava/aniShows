@@ -13,7 +13,7 @@ from django.db.models import (
 )
 from django.db.models.enums import TextChoices
 
-from apps.shared.models import CreatedAtMixin, TimestampMixin
+from ...shared.models import CreatedAtMixin, TimestampMixin
 
 
 class Review(TimestampMixin, Model):

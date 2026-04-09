@@ -3,7 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.animes.models import (
+from ...users.models import UserProfile
+from ..models import (
     Anime,
     AnimeCharacter,
     AnimeStaff,
@@ -12,7 +13,6 @@ from apps.animes.models import (
     UserFavoriteCharacter,
     UserFavoriteStaff,
 )
-from apps.users.models import UserProfile
 
 User = get_user_model()
 

@@ -7,9 +7,9 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIRequestFactory, APITestCase
 
-from apps.animes.models import Anime
-from apps.animes.serializers_mixins import ImageUrlMixin
-from apps.animes.services.anilist import AniListService
+from ..models import Anime
+from ..serializers_mixins import ImageUrlMixin
+from ..services.anilist import AniListService
 
 
 class AniListPrepareAnimeDataTests(SimpleTestCase):

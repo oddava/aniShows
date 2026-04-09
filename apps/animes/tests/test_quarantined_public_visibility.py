@@ -3,8 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime, OfflineAnimeSyncState, UserRecommendation
-from apps.animes.services.recommendations import RecommendationService
+from ..models import Anime, OfflineAnimeSyncState, UserRecommendation
+from ..services.recommendations import RecommendationService
 
 User = get_user_model()
 

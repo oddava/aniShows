@@ -6,11 +6,11 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.utils import timezone as tz
 
-from apps.animes.models import Anime
-from apps.shared.logger import logger
-from apps.users.models import UserActivity, UserAnimeList
-from apps.users.services.cache import invalidate_user_caches
-from apps.users.services.stats_service import create_or_update_user_stats
+from ...shared.logger import logger
+from ...users.models import UserActivity, UserAnimeList
+from ...users.services.cache import invalidate_user_caches
+from ...users.services.stats_service import create_or_update_user_stats
+from ..models import Anime
 
 User = get_user_model()
 
@@ -28,7 +28,7 @@ def update_user_stats_and_cache(user):
     try:
         invalidate_user_caches(user.id, user.username)
 
-        from apps.users.tasks import update_user_stats
+        from ...users.tasks import update_user_stats
 
         update_user_stats.apply_async(
             kwargs={"user_id": user.id},
@@ -46,7 +46,7 @@ def update_user_stats_and_cache(user):
 
 
 def invalidate_heatmap_cache(user_id):
-    from apps.users.services.cache import get_user_heatmap_cache_key
+    from ...users.services.cache import get_user_heatmap_cache_key
 
     cache_key = get_user_heatmap_cache_key(user_id)
     cache.delete(cache_key)

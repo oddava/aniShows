@@ -10,7 +10,7 @@ This module provides a consolidated task system with:
 - Franchise/relations synchronization
 
 Usage:
-    from apps.animes.tasks import sync_anime_catalog, sync_airing_workflow
+    from . import sync_anime_catalog, sync_airing_workflow
 
     # Sync trending anime
     sync_anime_catalog.delay(sync_type='trending', limit=50)

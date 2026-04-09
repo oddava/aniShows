@@ -1,7 +1,6 @@
 import base64
 import os
 
-from django.conf import settings
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views import View
 from prometheus_client import (
@@ -11,7 +10,7 @@ from prometheus_client import (
     multiprocess,
 )
 
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 
 class MetricsView(View):
@@ -89,7 +88,7 @@ class MetricsView(View):
             )
             return generate_latest(registry)
         else:
-            from apps.animes.services.metrics import get_metrics_registry
+            from ...animes.services.metrics import get_metrics_registry
 
             registry = get_metrics_registry()
             if registry:

@@ -9,14 +9,14 @@ from django.db import transaction
 from django.db.models.functions import Lower
 from django.utils import timezone
 
-from apps.core.services.notification_service import NotificationService
-from apps.forums.cache_utils import (
+from ...core.services.notification_service import NotificationService
+from ...shared.logger import logger
+from ..cache_utils import (
     invalidate_post_list_cache,
     invalidate_thread_caches,
     invalidate_thread_list_cache,
 )
-from apps.forums.models import PostLike, ThreadLike
-from apps.shared.logger import logger
+from ..models import PostLike, ThreadLike
 
 User = get_user_model()
 

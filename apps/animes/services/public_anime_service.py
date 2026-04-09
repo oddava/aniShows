@@ -22,15 +22,15 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce
 
-from apps.animes.models import Anime, UserFavorite
-from apps.animes.services.jikan import JikanService
-from apps.shared.logger import logger
-from apps.shared.public_cache import (
+from ...shared.logger import logger
+from ...shared.public_cache import (
     get_or_build_public_payload,
     invalidate_public_cache_keys,
     public_cache_stale_key,
 )
-from apps.users.models import UserAnimeList
+from ...users.models import UserAnimeList
+from ..models import Anime, UserFavorite
+from .jikan import JikanService
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
 VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
@@ -453,11 +453,21 @@ class AnimeQueryService:
                 season_clean = season.strip().lower() if season else None
                 if season_clean and season_clean in VALID_SEASONS:
                     start, end = season_ranges[season_clean]
-                    return queryset.filter(
+                    explicit_season_match = Q(season__iexact=season_clean, season_year=year_int)
+                    release_date_fallback = (
+                        Q(season="", season_year__isnull=True)
+                        | Q(season="", season_year=year_int)
+                        | Q(season_year__isnull=True)
+                    ) & Q(
                         release_date__gte=date(*start),
                         release_date__lte=date(*end),
                     )
-                return queryset.filter(release_date__year=year_int)
+                    return queryset.filter(
+                        explicit_season_match | release_date_fallback
+                    )
+                return queryset.filter(
+                    Q(season_year=year_int) | Q(season_year__isnull=True, release_date__year=year_int)
+                )
             return queryset
 
         min_year = query_params.get("min_year")
@@ -619,7 +629,7 @@ class AnimePublicPayloadService:
 
         if needs_refresh:
             def build_base_payload():
-                from apps.animes.serializers.anime import AnimeDetailSerializer
+                from ..serializers.anime import AnimeDetailSerializer
 
                 instance = query_service.build_queryset(
                     request,

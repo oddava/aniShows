@@ -244,7 +244,7 @@ class Command(BaseCommand):
 
     def _handle_sync_catalog(self, options, run_async, queue):
         """Handle catalog sync workflow."""
-        from apps.animes.tasks import sync_anime_catalog
+        from ...tasks import sync_anime_catalog
 
         sync_type = options["sync_type"]
         limit = options["limit"]
@@ -257,7 +257,7 @@ class Command(BaseCommand):
 
     def _handle_sync_airing(self, options, run_async, queue):
         """Handle airing workflow."""
-        from apps.animes.tasks import sync_airing_workflow
+        from ...tasks import sync_airing_workflow
 
         phases = options.get("phases") or ["sync", "cleanup", "backfill"]
         batch_size = options.get("batch_size", 100)
@@ -273,7 +273,7 @@ class Command(BaseCommand):
 
     def _handle_enrich_metadata(self, options, run_async, queue):
         """Handle metadata enrichment."""
-        from apps.animes.tasks import enrich_metadata
+        from ...tasks import enrich_metadata
 
         mode = options["mode"]
         batch_size = options["batch_size"]
@@ -301,7 +301,7 @@ class Command(BaseCommand):
 
     def _handle_sync_watch_episodes(self, options, run_async, queue):
         """Handle watch-episode cache sync."""
-        from apps.animes.tasks import (
+        from ...tasks import (
             sync_watch_episodes_batch,
             sync_watch_episodes_for_anime,
         )
@@ -329,7 +329,7 @@ class Command(BaseCommand):
 
     def _handle_sync_themes(self, options, run_async, queue):
         """Handle theme song sync."""
-        from apps.animes.tasks import sync_theme_songs
+        from ...tasks import sync_theme_songs
 
         limit = options["limit"]
         force_resync = options["force_resync"]
@@ -346,7 +346,7 @@ class Command(BaseCommand):
 
     def _handle_import_offline_catalog(self, options, run_async, queue):
         """Handle Anime Offline Database import."""
-        from apps.animes.tasks import import_offline_catalog
+        from ...tasks import import_offline_catalog
 
         release_tag = options["release_tag"]
         asset_name = options["asset_name"]
@@ -380,7 +380,7 @@ class Command(BaseCommand):
 
     def _handle_reconcile_offline_sync(self, options, run_async, queue):
         """Reconcile metadata, franchise, and themes for offline-imported anime."""
-        from apps.animes.tasks import reconcile_offline_catalog_sync
+        from ...tasks import reconcile_offline_catalog_sync
 
         batch_size = options["batch_size"]
         chunk_size = options["chunk_size"]
@@ -413,7 +413,7 @@ class Command(BaseCommand):
 
     def _handle_generate_recommendations(self, options, run_async, queue):
         """Handle recommendation generation."""
-        from apps.animes.tasks import generate_recommendations
+        from ...tasks import generate_recommendations
 
         user_id = options.get("user_id")
         limit = options["rec_limit"]
@@ -429,7 +429,7 @@ class Command(BaseCommand):
 
     def _handle_full_sync(self, options, run_async, queue):
         """Handle full synchronization workflow."""
-        from apps.animes.tasks import (
+        from ...tasks import (
             enrich_metadata,
             generate_recommendations,
             sync_airing_workflow,

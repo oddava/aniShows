@@ -1,4 +1,3 @@
-from apps.shared.logger import logger
 
 """
 Export service for user data
@@ -10,7 +9,7 @@ from typing import Any, Dict
 
 from django.contrib.auth import get_user_model
 
-from apps.users.models import UserAnimeList, UserProfile
+from ..models import UserAnimeList, UserProfile
 
 User = get_user_model()
 

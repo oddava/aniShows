@@ -4,10 +4,10 @@ from typing import Dict, Tuple
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
-from apps.animes.models import Anime
-from apps.animes.services.jikan import JikanService
-from apps.shared.logger import logger
-from apps.users.models import UserAnimeList, UserImportJob
+from ....animes.models import Anime
+from ....animes.services.jikan import JikanService
+from ....shared.logger import logger
+from ...models import UserAnimeList, UserImportJob
 
 
 class MALStatusMapper:
@@ -244,8 +244,8 @@ class BaseImporter:
     def trigger_post_import_refresh(self):
         """Trigger expensive derived-data refresh once per import job."""
         try:
-            from apps.animes.tasks.recommendations import generate_recommendations
-            from apps.users.tasks import update_user_stats
+            from ....animes.tasks.recommendations import generate_recommendations
+            from ...tasks import update_user_stats
 
             update_user_stats.delay(user_id=self.user.id)
             generate_recommendations.apply_async(kwargs={"user_id": self.user.id}, countdown=30)

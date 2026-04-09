@@ -11,11 +11,11 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
-from apps.core.services.admin_settings_service import is_registration_enabled
-from apps.shared.logger import logger
-from apps.users import throttling
-from apps.users.serializers.users import RegisterSerializer
-from apps.users.services.auth_flow_service import (
+from ...core.services.admin_settings_service import is_registration_enabled
+from ...shared.logger import logger
+from .. import throttling
+from ..serializers.users import RegisterSerializer
+from ..services.auth_flow_service import (
     AuthFlowError,
     password_reset_confirm_flow,
     password_reset_flow,
@@ -23,8 +23,8 @@ from apps.users.services.auth_flow_service import (
     resend_verification_flow,
     verify_email_flow,
 )
-from apps.users.services.auth_service import AuthService
-from apps.users.services.email_service import EmailService
+from ..services.auth_service import AuthService
+from ..services.email_service import EmailService
 
 User = get_user_model()
 

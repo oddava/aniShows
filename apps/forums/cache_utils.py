@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import F
 
-from apps.shared.public_cache import invalidate_public_cache_keys
+from ..shared.public_cache import invalidate_public_cache_keys
 
 # Cache key templates
 THREAD_LIST_CACHE_KEY = "forum:threads:{category_slug}:{tag_slug}:{page}:{ordering}"

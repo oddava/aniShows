@@ -4,16 +4,14 @@ from django.core.exceptions import ImproperlyConfigured, MultipleObjectsReturned
 from django.http import HttpRequest, HttpResponseBadRequest
 from django.urls.exceptions import NoReverseMatch
 from django.utils.translation import gettext_lazy as _
-from requests.exceptions import HTTPError
-from requests.exceptions import RequestException
-from rest_framework import serializers
+from requests.exceptions import HTTPError, RequestException
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import CharField
 from rest_framework.reverse import reverse
 from rest_framework.serializers import Serializer
 
-from apps.shared.logger import logger
-from apps.users.services.auth_service import AuthService
+from ...shared.logger import logger
+from ..services.auth_service import AuthService
 
 
 class SocialLoginSerializer(Serializer):

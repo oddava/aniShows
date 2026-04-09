@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
-from apps.users.services.email_service import EmailService
+from .email_service import EmailService
 
 User = get_user_model()
 

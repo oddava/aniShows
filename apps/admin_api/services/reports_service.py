@@ -7,10 +7,10 @@ from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
-from apps.animes.models import Anime, Genre, Review, ReviewVote, Studio, UserFavorite
-from apps.core.models import AuditLog
-from apps.shared.logger import logger
-from apps.users.models import UserAnimeList, UserProfile
+from ...animes.models import Anime, Genre, Review, ReviewVote, Studio, UserFavorite
+from ...core.models import AuditLog
+from ...shared.logger import logger
+from ...users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 REPORT_CACHE_PREFIX = "admin:reports:v2"

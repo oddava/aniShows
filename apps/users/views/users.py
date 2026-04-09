@@ -4,25 +4,25 @@ from botocore.exceptions import EndpointConnectionError
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.shared.logger import logger
-from apps.users import throttling
-from apps.users.serializers.users import (
+from ...shared.logger import logger
+from .. import throttling
+from ..serializers.users import (
     PublicUserSerializer,
     UserProfileUpdateSerializer,
 )
-from apps.users.services.profile_service import get_current_user_profile
-from apps.users.services.profile_update_service import update_user_profile
-from apps.users.services.public_profile_service import (
+from ..services.profile_service import get_current_user_profile
+from ..services.profile_update_service import update_user_profile
+from ..services.public_profile_service import (
     PublicProfileError,
     get_public_profile,
 )
-from apps.users.services.user_queryset import get_annotated_user_queryset
-from apps.users.services.user_stats_service import get_user_stats
+from ..services.user_queryset import get_annotated_user_queryset
+from ..services.user_stats_service import get_user_stats
 
 User = get_user_model()
 

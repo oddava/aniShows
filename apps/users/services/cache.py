@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Cache invalidation utilities for user-related data.
@@ -51,7 +51,7 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
     # Trigger async stats update for immediate data consistency
     if trigger_stats_update:
         try:
-            from apps.users.tasks import update_user_stats
+            from ..tasks import update_user_stats
 
             update_user_stats.delay(user_id)
             logger.debug(f"Triggered stats update for user {user_id}")

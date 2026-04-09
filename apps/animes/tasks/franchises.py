@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Franchise/Relations synchronization task.
@@ -9,10 +9,9 @@ import asyncio
 from asgiref.sync import sync_to_async
 from django.db.models import Q
 
-from apps.animes.models import Anime
-from apps.animes.services.jikan import JikanService
-from apps.shared.celery import observed_shared_task
-
+from ...shared.celery import observed_shared_task
+from ..models import Anime
+from ..services.jikan import JikanService
 from .base import BaseTask, run_async_in_task
 
 

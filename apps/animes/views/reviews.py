@@ -1,19 +1,19 @@
 from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
-from rest_framework import permissions
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.animes.serializers import (
+from ...users.permissions import EmailVerificationMixin
+from ..serializers import (
     ReviewReactionActionSerializer,
     ReviewReportCreateSerializer,
     ReviewSerializer,
     ReviewVoteActionSerializer,
 )
-from apps.animes.services.reviews import (
+from ..services.reviews import (
     create_review,
     delete_review,
     get_review_queryset,
@@ -23,7 +23,6 @@ from apps.animes.services.reviews import (
     update_review,
     vote_on_review,
 )
-from apps.users.permissions import EmailVerificationMixin
 
 User = get_user_model()
 

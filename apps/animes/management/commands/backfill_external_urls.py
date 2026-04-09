@@ -9,8 +9,8 @@ import asyncio
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from apps.animes.models import Anime
-from apps.animes.services.jikan import JikanService
+from ...models import Anime
+from ...services.jikan import JikanService
 
 
 class Command(BaseCommand):

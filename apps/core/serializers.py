@@ -1,10 +1,15 @@
 from celery import current_app
-from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import IntegerField, CharField, SerializerMethodField, ListField, DictField
-from rest_framework.serializers import Serializer, ModelSerializer
+from rest_framework.fields import (
+    CharField,
+    DictField,
+    IntegerField,
+    ListField,
+    SerializerMethodField,
+)
+from rest_framework.serializers import ModelSerializer, Serializer
 
-from apps.core.models import CeleryTaskResult, CeleryTaskSchedule
+from .models import CeleryTaskResult, CeleryTaskSchedule
 
 
 class TriggeredBySerializer(Serializer):

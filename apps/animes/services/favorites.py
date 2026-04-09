@@ -5,7 +5,8 @@ from django.db import transaction
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied
 
-from apps.animes.models import (
+from ...users.services.cache import invalidate_user_caches
+from ..models import (
     Anime,
     Character,
     Staff,
@@ -13,7 +14,6 @@ from apps.animes.models import (
     UserFavoriteCharacter,
     UserFavoriteStaff,
 )
-from apps.users.services.cache import invalidate_user_caches
 
 User = get_user_model()
 

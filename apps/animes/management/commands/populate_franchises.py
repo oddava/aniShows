@@ -28,7 +28,7 @@ from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from apps.animes.models import Anime
+from ...models import Anime
 
 
 class Command(BaseCommand):
@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
     def _handle_async(self, anime_id, batch_size, import_missing, max_imports, priority_field):
         """Handle via Celery tasks."""
-        from apps.animes.tasks import sync_franchises
+        from ...tasks import sync_franchises
 
         if anime_id:
             # Single anime
@@ -162,7 +162,7 @@ class Command(BaseCommand):
 
     async def process_single_anime(self, anime, import_missing: bool, max_imports: int):
         """Process relations for a single anime using the franchise task logic."""
-        from apps.animes.tasks.franchises import FranchiseSyncTask
+        from ...tasks.franchises import FranchiseSyncTask
 
         task = FranchiseSyncTask()
         async with task.service_context() as service:
@@ -198,7 +198,7 @@ class Command(BaseCommand):
         self, queryset, batch_size: int, import_missing: bool, max_imports: int
     ):
         """Process relations for multiple anime."""
-        from apps.animes.tasks.franchises import FranchiseSyncTask
+        from ...tasks.franchises import FranchiseSyncTask
 
         # Evaluate queryset in a sync context
         anime_list = await sync_to_async(list)(queryset[:batch_size])

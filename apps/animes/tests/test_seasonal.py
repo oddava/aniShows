@@ -16,8 +16,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.models import Anime, Studio
-from apps.animes.signals import trigger_metadata_fetch
+from ..models import Anime, Studio
+from ..signals import trigger_metadata_fetch
 
 User = get_user_model()
 
@@ -131,6 +131,62 @@ class SeasonalAnimeTests(APITestCase):
         self.assertIn("Spring Anime", titles)
         self.assertIn("Summer Anime", titles)
         self.assertIn("Fall Anime", titles)
+
+    def test_filter_by_season_uses_explicit_season_fields(self):
+        """Season/year metadata should override misleading release dates."""
+        Anime.objects.create(
+            title="Summer Metadata Anime",
+            slug="summer-metadata-anime",
+            synopsis="Uses explicit season metadata",
+            anime_type="TV",
+            status="Upcoming",
+            release_date=date(2026, 10, 1),
+            season="SUMMER",
+            season_year=2026,
+            member_count=300000,
+        )
+        Anime.objects.create(
+            title="Wrong Release Date Match",
+            slug="wrong-release-date-match",
+            synopsis="Release date overlaps but season metadata does not",
+            anime_type="TV",
+            status="Upcoming",
+            release_date=date(2026, 7, 10),
+            season="FALL",
+            season_year=2026,
+            member_count=350000,
+        )
+
+        response = self.client.get(self.list_url, {"season": "summer", "year": "2026"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
+
+        self.assertIn("Summer Metadata Anime", titles)
+        self.assertNotIn("Wrong Release Date Match", titles)
+
+    def test_filter_by_year_uses_season_year_when_release_date_missing(self):
+        """Year filters should include records that only have season-year metadata."""
+        Anime.objects.create(
+            title="Year Metadata Only",
+            slug="year-metadata-only",
+            synopsis="No release date yet",
+            anime_type="TV",
+            status="Upcoming",
+            release_date=None,
+            season="SUMMER",
+            season_year=2026,
+            member_count=275000,
+        )
+
+        response = self.client.get(self.list_url, {"year": "2026"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
+
+        self.assertIn("Year Metadata Only", titles)
 
     def test_invalid_season_rejected(self):
         """Test that invalid season values are rejected."""

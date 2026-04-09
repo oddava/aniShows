@@ -8,7 +8,7 @@ from django.views import View
 from django.views.decorators.http import require_http_methods
 from PIL import Image
 
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 IMAGE_FORMATS = {
     "JPEG": {"format": "JPEG", "mime": "image/jpeg"},

@@ -15,8 +15,8 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
-from apps.animes.tasks.offline_catalog import (
+from ..models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
+from ..tasks.offline_catalog import (
     OfflineCatalogImportTask,
     OfflineCatalogReconcileSyncTask,
 )

@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Unified theme song synchronization task.
@@ -14,10 +14,9 @@ import httpx
 from asgiref.sync import sync_to_async
 from django.utils import timezone
 
-from apps.animes.models import Anime, ThemeSong
-from apps.animes.services.jikan import JikanRateLimiter, fetch_themes_from_jikan
-from apps.shared.celery import observed_shared_task
-
+from ...shared.celery import observed_shared_task
+from ..models import Anime, ThemeSong
+from ..services.jikan import JikanRateLimiter, fetch_themes_from_jikan
 from .base import BaseTask, run_async_in_task
 
 
@@ -293,7 +292,7 @@ class ThemeSongSyncTask(BaseTask):
 
         # Record a metric for theme sync
         try:
-            from apps.animes.services.metrics import ANIME_SYNCED
+            from ..services.metrics import ANIME_SYNCED
 
             if stats["with_themes"] > 0:
                 ANIME_SYNCED.labels(sync_type="themes", source="jikan").inc(
@@ -541,7 +540,7 @@ def backfill_theme_youtube_urls(self, limit: int = 100):
 
     Runs daily to catch any themes that were created without YouTube URLs.
     """
-    from apps.animes.models import ThemeSong
+    from ..models import ThemeSong
 
     logger.info(f"Starting YouTube URL backfill for up to {limit} themes")
 

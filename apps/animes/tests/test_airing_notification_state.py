@@ -4,8 +4,8 @@ from asgiref.sync import async_to_sync
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.animes.models import Anime
-from apps.animes.services.anilist import AniListService
+from ..models import Anime
+from ..services.anilist import AniListService
 
 
 class AiringNotificationStateTests(TestCase):

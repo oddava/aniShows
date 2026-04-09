@@ -6,10 +6,10 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime, Genre, Studio, UserRecommendation
-from apps.animes.services.offline_catalog import PLACEHOLDER_SYNOPSIS
-from apps.animes.services.recommendations import RecommendationService
-from apps.users.models import UserAnimeList
+from ...users.models import UserAnimeList
+from ..models import Anime, Genre, Studio, UserRecommendation
+from ..services.offline_catalog import PLACEHOLDER_SYNOPSIS
+from ..services.recommendations import RecommendationService
 
 User = get_user_model()
 

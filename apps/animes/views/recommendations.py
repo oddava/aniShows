@@ -9,8 +9,8 @@ from rest_framework.response import Response
 from rest_framework.serializers import IntegerField, Serializer
 from rest_framework.viewsets import ViewSet
 
-from apps.shared.logger import logger
-from apps.users.serializers.users import UserRecommendationSerializer
+from ...shared.logger import logger
+from ...users.serializers.users import UserRecommendationSerializer
 
 
 def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) -> bool:
@@ -46,7 +46,7 @@ class RecommendationsViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
-        from apps.animes.services.recommendations import RecommendationService
+        from ..services.recommendations import RecommendationService
 
         class RecommendationsQuerySerializer(Serializer):
             limit = IntegerField(required=False, default=12, min_value=1, max_value=100)
@@ -85,7 +85,7 @@ class RecommendationsViewSet(ViewSet):
 
     @action(detail=False, methods=["post"])
     def refresh(self, request):
-        from apps.animes.services.recommendations import RecommendationService
+        from ..services.recommendations import RecommendationService
 
         try:
             cache_key = f"user_recommendations:{request.user.id}"
@@ -110,7 +110,7 @@ class RecommendationsViewSet(ViewSet):
 
     @action(detail=True, methods=["post"])
     def dismiss(self, request, pk=None):
-        from apps.animes.services.recommendations import RecommendationService
+        from ..services.recommendations import RecommendationService
 
         try:
             anime_id = int(pk)

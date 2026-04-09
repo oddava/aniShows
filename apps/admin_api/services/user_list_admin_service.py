@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from apps.users.models import UserAnimeList
+from ...users.models import UserAnimeList
 
 
 def build_user_list_queryset(params):

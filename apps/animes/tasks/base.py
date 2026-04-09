@@ -15,8 +15,8 @@ from typing import Any
 
 from django.core.cache import cache
 
-from apps.shared.celery import RETRY_POLICIES, TIME_LIMIT_PRESETS, ObservedTask
-from apps.shared.logger import logger
+from ...shared.celery import RETRY_POLICIES, ObservedTask
+from ...shared.logger import logger
 
 # Retry configuration presets
 RETRY_PRESETS = RETRY_POLICIES
@@ -215,7 +215,7 @@ class BaseTask(ObservedTask):
         try:
             from django.utils import timezone
 
-            from apps.core.models import CeleryTaskResult
+            from ...core.models import CeleryTaskResult
 
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.SUCCESS
@@ -233,7 +233,7 @@ class BaseTask(ObservedTask):
 
         # Emit task metrics
         try:
-            from apps.animes.services.metrics import (
+            from ..services.metrics import (
                 ANIME_SYNCED,
                 TASK_EXECUTION_COUNT,
                 TASK_EXECUTION_TIME,
@@ -271,7 +271,7 @@ class BaseTask(ObservedTask):
         try:
             from django.utils import timezone
 
-            from apps.core.models import CeleryTaskResult
+            from ...core.models import CeleryTaskResult
 
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.FAILURE
@@ -294,7 +294,7 @@ class BaseTask(ObservedTask):
 
         # Emit failure metrics
         try:
-            from apps.animes.services.metrics import (
+            from ..services.metrics import (
                 TASK_EXECUTION_COUNT,
                 TASK_EXECUTION_TIME,
             )
@@ -318,7 +318,7 @@ class BaseTask(ObservedTask):
         """Called when task retries."""
         # Update CeleryTaskResult
         try:
-            from apps.core.models import CeleryTaskResult
+            from ...core.models import CeleryTaskResult
 
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.RETRY
@@ -330,7 +330,7 @@ class BaseTask(ObservedTask):
 
         # Emit retry metric
         try:
-            from apps.animes.services.metrics import TASK_RETRY_COUNT
+            from ..services.metrics import TASK_RETRY_COUNT
 
             TASK_RETRY_COUNT.labels(task_name=self.name).inc()
         except Exception:

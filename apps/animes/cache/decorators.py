@@ -4,7 +4,7 @@ from functools import wraps
 
 from django.core.cache import cache
 
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 
 def cached_response(key_func, ttl=300):

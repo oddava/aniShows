@@ -5,7 +5,7 @@ from celery import current_app
 from django.db.models import Avg, Count, Q
 from django.utils import timezone
 
-from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
+from ..models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
 
 AVAILABLE_TASKS = {
     "apps.animes.tasks.sync.sync_anime_catalog": {

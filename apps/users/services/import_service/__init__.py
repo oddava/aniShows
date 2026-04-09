@@ -1,5 +1,4 @@
-from apps.users.models import UserImportJob
-
+from ...models import UserImportJob
 from .anilist import AniListImporter
 from .base import BaseImporter
 from .mal_api import MyAnimeListAPIImporter

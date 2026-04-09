@@ -5,8 +5,8 @@ from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from apps.animes.models import Anime, Genre, Review, Studio, UserFavorite, UserHistory
-from apps.users.models import UserAnimeList, UserProfile
+from ...animes.models import Anime, Genre, Review, Studio, UserFavorite, UserHistory
+from ...users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 

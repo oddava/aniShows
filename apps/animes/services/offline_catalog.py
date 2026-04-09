@@ -10,16 +10,15 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import httpx
-from django.core.cache import cache
 from django.db import DataError, IntegrityError, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from apps.animes.models import Anime, OfflineCatalogImport, Studio
-from apps.animes.services.jikan import JikanService
-from apps.animes.services.offline_sync import OfflineSyncService
-from apps.shared.logger import logger
-from apps.shared.public_cache import invalidate_public_cache_keys
+from ...shared.logger import logger
+from ...shared.public_cache import invalidate_public_cache_keys
+from ..models import Anime, OfflineCatalogImport, Studio
+from .jikan import JikanService
+from .offline_sync import OfflineSyncService
 
 DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250

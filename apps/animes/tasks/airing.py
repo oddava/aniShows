@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Unified airing workflow task.
@@ -14,11 +14,10 @@ Into a chained workflow with smart deduplication and batching.
 from asgiref.sync import sync_to_async
 from django.utils import timezone
 
-from apps.animes.models import Anime
-from apps.animes.services.jikan import JikanService
-from apps.animes.services.rate_limiting import APICallCache
-from apps.shared.celery import observed_shared_task
-
+from ...shared.celery import observed_shared_task
+from ..models import Anime
+from ..services.jikan import JikanService
+from ..services.rate_limiting import APICallCache
 from .base import BaseTask, run_async_in_task
 
 

@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 
-from apps.core.services.admin_settings_service import is_maintenance_mode_enabled
+from ..services.admin_settings_service import is_maintenance_mode_enabled
 
 
 class SiteControlMiddleware:

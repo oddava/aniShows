@@ -1,11 +1,11 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.admin_api.services.dashboard_service import (
+from ...core.permissions import IsAdminUser
+from ..services.dashboard_service import (
     build_admin_dashboard_payload,
     build_admin_stats_export_payload,
 )
-from apps.core.permissions import IsAdminUser
 
 
 class AdminDashboardView(APIView):

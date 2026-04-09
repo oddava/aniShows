@@ -1,6 +1,5 @@
 import asyncio
 import contextlib
-import json
 import re
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -14,8 +13,10 @@ from django.db import IntegrityError
 from django.utils import timezone
 from django.utils.text import slugify
 
+from ...shared.logger import logger
+
 # Import models
-from apps.animes.models import (
+from ..models import (
     Anime,
     AnimeCharacter,
     AnimeStaff,
@@ -24,7 +25,6 @@ from apps.animes.models import (
     Staff,
     Studio,
 )
-from apps.shared.logger import logger
 
 # Import rate limiting utilities
 from .rate_limiting import (
@@ -1076,7 +1076,7 @@ class AniListService:
 
     def _process_theme_songs(self, anime, item):
         """Process openings and endings from AniList data"""
-        from apps.animes.models import ThemeSong
+        from ..models import ThemeSong
 
         # Get openings and endings from AniList
         openings = item.get("openings") or []
@@ -1187,7 +1187,7 @@ class AniListService:
                 or (not has_banner and mal_id)
                 or force_replace
             ):
-                from apps.animes.tasks.images import _queue_image_fetch
+                from ..tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
                 await sync_to_async(_queue_image_fetch)(
@@ -1225,7 +1225,7 @@ class AniListService:
 
         # Queue thumbnail generation asynchronously to avoid blocking import
         # This runs in the background via Celery
-        from apps.animes.tasks import generate_image_thumbnails
+        from ..tasks import generate_image_thumbnails
 
         generate_image_thumbnails.delay(anime.id)
 
@@ -1658,7 +1658,7 @@ class AniListService:
 
         @sync_to_async
         def update_slugs():
-            from apps.animes.models import Anime
+            from ..models import Anime
 
             # Step 1: Collect all anilist_ids referenced in relations that need slug lookup
             anime_list = list(Anime.objects.filter(id__in=anime_ids))

@@ -3,9 +3,9 @@
 from django.conf import settings
 from imagekit.cachefiles import ImageCacheFile
 
-from apps.animes.services.public_anime_service import build_user_list_status_payload
-from apps.shared.media_urls import normalize_media_url
-from apps.users.services.avatar_service import get_user_avatar_url
+from ..shared.media_urls import normalize_media_url
+from ..users.services.avatar_service import get_user_avatar_url
+from .services.public_anime_service import build_user_list_status_payload
 
 
 def _decode_escaped_html_entities(value: str) -> str:

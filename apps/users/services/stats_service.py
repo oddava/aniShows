@@ -7,8 +7,8 @@ when UserStats materialized view is not available.
 from django.db.models import Avg, Count, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 
-from apps.animes.models import Review, ReviewVote, UserFavorite
-from apps.users.models import UserAnimeList, UserFollow, UserStats
+from ...animes.models import Review, ReviewVote, UserFavorite
+from ..models import UserAnimeList, UserFollow, UserStats
 
 
 def serialize_user_stats(

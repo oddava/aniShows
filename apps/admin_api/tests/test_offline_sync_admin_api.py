@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.animes.models import Anime, OfflineAnimeSyncState
+from ...animes.models import Anime, OfflineAnimeSyncState
 
 User = get_user_model()
 

@@ -5,16 +5,16 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from apps.shared.logger import logger
-from apps.users import throttling
-from apps.users.serializers.users import ChangePasswordSerializer
-from apps.users.services.account_management_service import (
+from ...shared.logger import logger
+from .. import throttling
+from ..serializers.users import ChangePasswordSerializer
+from ..services.account_management_service import (
     change_password,
     confirm_email_change,
     delete_account,
     request_email_change,
 )
-from apps.users.services.email_service import EmailService
+from ..services.email_service import EmailService
 
 User = get_user_model()
 

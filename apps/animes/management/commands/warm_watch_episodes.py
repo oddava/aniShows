@@ -1,9 +1,9 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from apps.animes.models import Anime
-from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
-from apps.animes.tasks import sync_watch_episodes_batch
+from ...models import Anime
+from ...services.watch_episodes import AnimeWatchEpisodeService
+from ...tasks import sync_watch_episodes_batch
 
 
 class Command(BaseCommand):

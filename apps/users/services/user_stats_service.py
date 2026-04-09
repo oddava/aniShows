@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from django.core.cache import cache
 from django.utils import timezone
 
-from apps.users.models import UserStats
-from apps.users.services.cache import get_user_stats_cache_key
-from apps.users.services.stats_service import (
+from ..models import UserStats
+from .cache import get_user_stats_cache_key
+from .stats_service import (
     calculate_user_stats,
     get_materialized_user_stats_payload,
     serialize_user_stats,

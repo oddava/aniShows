@@ -21,8 +21,9 @@ from django.db.models.indexes import Index
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
 
-from apps.shared.models import SlugMixin, TimestampMixin
 from root.storage_backends import MediaStorage
+
+from ...shared.models import SlugMixin, TimestampMixin
 
 
 class Anime(TimestampMixin, SlugMixin, Model):

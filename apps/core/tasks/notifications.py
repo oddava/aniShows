@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from apps.core.services.celery_tasks import CoreTaskService
-from apps.shared.celery import observed_shared_task
+from ...shared.celery import observed_shared_task
+from ..services.celery_tasks import CoreTaskService
 
 logger = logging.getLogger(__name__)
 

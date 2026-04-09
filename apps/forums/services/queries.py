@@ -1,7 +1,7 @@
 from allauth.socialaccount.models import SocialAccount
 from django.db.models import Count, Exists, OuterRef, Prefetch, Subquery
 
-from apps.forums.models import Category, Post, PostLike, Thread, ThreadLike
+from ..models import Category, Post, PostLike, Thread, ThreadLike
 
 _GOOGLE_ACCOUNTS_PREFETCH_AUTHOR = Prefetch(
     "author__socialaccount_set",

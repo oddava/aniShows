@@ -7,8 +7,8 @@ Provides real-time notification delivery.
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from apps.core.services.notification_service import NotificationService
-from apps.shared.logger import logger
+from ..shared.logger import logger
+from .services.notification_service import NotificationService
 
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):

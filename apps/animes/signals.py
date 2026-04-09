@@ -3,37 +3,34 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from apps.animes.services.public_anime_service import AnimePublicPayloadService
-from apps.animes.services.user_list_side_effects import (
+from ..shared.public_cache import invalidate_public_cache_keys
+from ..users.models import UserAnimeList
+from .models import Anime, Review, UserFavorite
+from .services.public_anime_service import AnimePublicPayloadService
+from .services.user_list_side_effects import (
     handle_review_change as handle_review_change_service,
 )
-from apps.animes.services.user_list_side_effects import (
+from .services.user_list_side_effects import (
     handle_user_anime_list_change as handle_user_anime_list_change_service,
 )
-from apps.animes.services.user_list_side_effects import (
+from .services.user_list_side_effects import (
     handle_user_favorite_change as handle_user_favorite_change_service,
 )
-from apps.animes.services.user_list_side_effects import (
+from .services.user_list_side_effects import (
     log_user_activity as log_user_activity_service,
 )
-from apps.animes.services.user_list_side_effects import (
+from .services.user_list_side_effects import (
     log_user_activity_on_delete as log_user_activity_on_delete_service,
 )
-from apps.animes.services.user_list_side_effects import (
+from .services.user_list_side_effects import (
     schedule_recommendations_debounced,
-    update_anime_status_distribution,
-    update_user_stats_and_cache,
 )
-from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
-from apps.animes.tasks import (
+from .services.watch_episodes import AnimeWatchEpisodeService
+from .tasks import (
     enrich_metadata,
     generate_recommendations,
     sync_watch_episodes_for_anime,
 )
-from apps.shared.public_cache import invalidate_public_cache_keys
-from apps.users.models import UserAnimeList
-
-from .models import Anime, Review, UserFavorite
 
 
 def _watch_episode_auto_sync_enabled() -> bool:

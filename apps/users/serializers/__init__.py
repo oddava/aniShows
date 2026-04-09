@@ -1,4 +1,4 @@
-from apps.users.serializers.users import (
+from .users import (
     BadgeSerializer,
     ChangePasswordSerializer,
     FavoriteCompactSerializer,

@@ -9,7 +9,7 @@ class UserImportJobSerializer(ModelSerializer):
     progress_percentage = IntegerField(read_only=True)
 
     class Meta:
-        from apps.users.models import UserImportJob
+        from ...users.models import UserImportJob
 
         model = UserImportJob
         fields = [

@@ -1,20 +1,18 @@
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Prefetch
-from django.shortcuts import get_object_or_404
-from django.utils.text import slugify
-from rest_framework import status, viewsets
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from apps.core.models import AuditLog
-from apps.core.permissions import IsAdminUser
-from apps.core.services.notification_service import NotificationService
-from apps.shared.logger import logger
-from apps.users.models import Badge, UserBadge
-from apps.users.serializers.users import BadgeSerializer
-from apps.users.services.avatar_service import get_user_avatar_url
+from ...core.models import AuditLog
+from ...core.permissions import IsAdminUser
+from ...core.services.notification_service import NotificationService
+from ...shared.logger import logger
+from ..models import Badge, UserBadge
+from ..serializers.users import BadgeSerializer
+from ..services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 
@@ -154,7 +152,7 @@ class AdminBadgeViewSet(ModelViewSet):
             )
 
             # Invalidate user caches for all affected users
-            from apps.users.services.cache import invalidate_user_caches
+            from ..services.cache import invalidate_user_caches
 
             for user in users_to_grant:
                 invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
@@ -203,7 +201,7 @@ class AdminBadgeViewSet(ModelViewSet):
         )
 
         # Invalidate user caches for all affected users
-        from apps.users.services.cache import invalidate_user_caches
+        from ..services.cache import invalidate_user_caches
 
         users = User.objects.filter(id__in=user_ids)
         for user in users:

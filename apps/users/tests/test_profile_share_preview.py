@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from apps.users.models import UserProfile, UserStats
+from ..models import UserProfile, UserStats
 
 User = get_user_model()
 

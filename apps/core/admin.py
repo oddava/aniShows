@@ -5,8 +5,7 @@ from django.contrib.admin.sites import AlreadyRegistered, NotRegistered
 from django.utils.html import format_html
 
 # Import celery admin to register models (registers automatically via @admin.register)
-from apps.core import celery_admin
-from apps.core.models import AuditLog, Notification, PushSubscription, SystemLog
+from .models import AuditLog, Notification, PushSubscription, SystemLog
 
 try:
     from django_celery_results.models import TaskResult as DjangoTaskResult

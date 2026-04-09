@@ -9,13 +9,13 @@ Tests cover:
 """
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime
-from apps.users.models import UserActivity, UserAnimeList
+from ...animes.models import Anime
+from ..models import UserActivity, UserAnimeList
 
 User = get_user_model()
 
@@ -269,7 +269,7 @@ class HeatmapAPITests(APITestCase):
         # Clear heatmap cache to ensure fresh data for each test
         from django.core.cache import cache
 
-        from apps.users.services.cache import get_user_heatmap_cache_key
+        from ..services.cache import get_user_heatmap_cache_key
 
         cache.delete(get_user_heatmap_cache_key(self.user.id))
 

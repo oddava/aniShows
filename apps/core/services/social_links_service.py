@@ -4,11 +4,10 @@ from typing import Any, Dict, List
 
 from django.conf import settings
 
-from apps.shared.logger import logger
-from apps.users.models import SocialLinkChangeLog
-
+from ...shared.logger import logger
+from ...users.models import SocialLinkChangeLog
 from .metadata_service import MetadataService
-from .url_validator import URLValidationError, URLValidator
+from .url_validator import URLValidator
 
 
 class SocialLinkValidationError(Exception):
@@ -119,7 +118,7 @@ class SocialLinksService:
     def _trigger_async_metadata_fetch(self, urls: List[str], user_id: int):
         """Trigger async metadata fetching for URLs."""
         try:
-            from apps.core.tasks import fetch_multiple_link_metadata
+            from ..tasks import fetch_multiple_link_metadata
 
             fetch_multiple_link_metadata.delay(urls, user_id)
             logger.info(f"Triggered async metadata fetch for {len(urls)} URLs")

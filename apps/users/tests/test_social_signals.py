@@ -1,11 +1,11 @@
 from unittest.mock import MagicMock
 
-from allauth.socialaccount.models import SocialAccount, SocialLogin
+from allauth.socialaccount.models import SocialLogin
 from allauth.socialaccount.signals import social_account_added
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from apps.users.models import UserProfile
+from ..models import UserProfile
 
 User = get_user_model()
 

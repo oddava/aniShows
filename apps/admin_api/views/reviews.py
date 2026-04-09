@@ -8,9 +8,9 @@ from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveMod
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.animes.admin_serializers import AdminReviewSerializer
-from apps.animes.models import Review, ReviewReport, ReviewVote
-from apps.core.permissions import IsAdminUser
+from ...animes.admin_serializers import AdminReviewSerializer
+from ...animes.models import Review, ReviewReport, ReviewVote
+from ...core.permissions import IsAdminUser
 
 
 class ReviewFilter(FilterSet):

@@ -4,7 +4,14 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
-from apps.animes.services.favorites import (
+from ...users.permissions import EmailVerificationMixin
+from ...users.serializers.users import (
+    CharacterFavoriteSerializer,
+    FavoriteCompactSerializer,
+    FavoriteSerializer,
+    StaffFavoriteSerializer,
+)
+from ..services.favorites import (
     delete_favorite,
     get_character_favorite_queryset,
     get_favorite_queryset,
@@ -13,13 +20,6 @@ from apps.animes.services.favorites import (
     toggle_character_favorite,
     toggle_favorite,
     toggle_staff_favorite,
-)
-from apps.users.permissions import EmailVerificationMixin
-from apps.users.serializers.users import (
-    CharacterFavoriteSerializer,
-    FavoriteCompactSerializer,
-    FavoriteSerializer,
-    StaffFavoriteSerializer,
 )
 
 

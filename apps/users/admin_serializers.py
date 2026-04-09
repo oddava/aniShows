@@ -1,12 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Count
-from rest_framework import serializers
 from rest_framework.fields import IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
 
-from apps.core.models import AuditLog, SystemLog
-from apps.users.models import UserProfile
-from apps.users.services.avatar_service import get_user_avatar_url
+from ..core.models import AuditLog, SystemLog
+from .services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 

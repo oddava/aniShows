@@ -3,12 +3,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.users.serializers.users import (
+from ..serializers.users import (
     FollowSerializer,
     FriendWatchingSerializer,
     UserFollowListSerializer,
 )
-from apps.users.services.follow_service import (
+from ..services.follow_service import (
     get_followers_queryset,
     get_following_queryset,
     get_friends_watching_queryset,

@@ -1,9 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django.db.models import Count
 from django.utils.html import format_html
 
-from apps.users.models import (
+from .models import (
     CustomUser,
     SocialLinkChangeLog,
     UserActivity,
@@ -348,7 +347,7 @@ class UserImportJobAdmin(admin.ModelAdmin):
     @admin.action(description="Retry selected failed jobs")
     def retry_jobs(self, request, queryset):
         """Retry failed import jobs."""
-        from apps.users.tasks import process_import_job
+        from .tasks import process_import_job
 
         retried = 0
         for job in queryset.filter(status="failed"):

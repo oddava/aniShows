@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from apps.forums.models import Category, Post, Thread
+from ...models import Category, Post, Thread
 
 
 class Command(BaseCommand):

@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Recommendation Engine Service
@@ -16,9 +16,9 @@ from django.db.models import Q, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from apps.animes.models import Anime, UserFavorite, UserRecommendation
-from apps.animes.services.offline_catalog import PLACEHOLDER_SYNOPSIS
-from apps.users.models import UserAnimeList
+from ...users.models import UserAnimeList
+from ..models import Anime, UserFavorite, UserRecommendation
+from .offline_catalog import PLACEHOLDER_SYNOPSIS
 
 User = get_user_model()
 

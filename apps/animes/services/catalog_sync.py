@@ -3,9 +3,9 @@ from __future__ import annotations
 from django.db import transaction
 from django.db.models import Case, IntegerField, Q, QuerySet, Value, When
 
-from apps.animes.models import Anime
-from apps.animes.services.public_anime_service import AnimePublicPayloadService
-from apps.shared.public_cache import invalidate_public_cache_keys
+from ...shared.public_cache import invalidate_public_cache_keys
+from ..models import Anime
+from .public_anime_service import AnimePublicPayloadService
 
 
 class CatalogSyncService:

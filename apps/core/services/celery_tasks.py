@@ -10,16 +10,16 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.animes.models import Anime
-from apps.core.db_safety import (
+from ...animes.models import Anime
+from ...users.models import UserProfile
+from ..db_safety import (
     model_table_exists,
     warn_missing_table_once,
 )
-from apps.core.models import AuditLog, Notification, SystemLog
-from apps.core.services.metadata_service import MetadataService
-from apps.core.services.notification_service import NotificationService
-from apps.core.services.push_service import PushService
-from apps.users.models import UserProfile
+from ..models import AuditLog, Notification, SystemLog
+from .metadata_service import MetadataService
+from .notification_service import NotificationService
+from .push_service import PushService
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class CoreTaskService:
 
     @staticmethod
     def cleanup_old_task_results(days: int = 7, batch_size: int = 1000) -> dict:
-        from apps.core.models import CeleryTaskResult
+        from ..models import CeleryTaskResult
 
         cutoff_date = timezone.now() - timedelta(days=days)
         total_to_delete = CeleryTaskResult.objects.filter(date_created__lt=cutoff_date).count()
@@ -83,7 +83,7 @@ class CoreTaskService:
 
     @staticmethod
     def health_check_workers() -> dict:
-        from apps.core.models import CeleryWorkerStatus
+        from ..models import CeleryWorkerStatus
 
         timeout_threshold = timezone.now() - timedelta(minutes=5)
         workers = list(CeleryWorkerStatus.objects.all())
@@ -119,7 +119,7 @@ class CoreTaskService:
 
     @staticmethod
     def flush_forum_view_counts(max_threads: int | None = None) -> dict:
-        from apps.forums.cache_utils import flush_buffered_thread_views
+        from ...forums.cache_utils import flush_buffered_thread_views
 
         result = flush_buffered_thread_views(max_threads=max_threads)
         logger.info("Flushed buffered forum views", extra=result)
@@ -315,7 +315,7 @@ class CoreTaskService:
 
     @staticmethod
     def check_new_episodes() -> dict:
-        from apps.users.models import UserAnimeList
+        from ...users.models import UserAnimeList
 
         now = timezone.now()
         window_start = now - timedelta(hours=NEW_EPISODE_LOOKBACK_HOURS)
@@ -397,7 +397,7 @@ def _should_send_push(notification, profile):
 
 
 def _send_notification_email(notification):
-    from apps.users.tasks import send_email_task
+    from ...users.tasks import send_email_task
 
     if notification.notification_type != Notification.NotificationType.NEW_EPISODE:
         logger.warning(

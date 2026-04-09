@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 from django.test import SimpleTestCase, TestCase
 
-from apps.animes.models import Anime
-from apps.animes.services.jikan import (
+from ..services.jikan import (
     JikanRateLimiter,
     JikanService,
     fetch_themes_from_jikan,

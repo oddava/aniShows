@@ -7,4 +7,4 @@ class CoreConfig(AppConfig):
     label = "core"
 
     def ready(self):
-        import apps.core.celery_signals
+        from . import celery_signals  # noqa: F401

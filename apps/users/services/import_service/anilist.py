@@ -6,9 +6,8 @@ import requests
 from django.core.cache import cache
 from django.utils import timezone
 
-from apps.shared.logger import logger
-from apps.users.models import UserImportJob
-
+from ....shared.logger import logger
+from ...models import UserImportJob
 from .base import AniListStatusMapper, BaseImporter
 
 

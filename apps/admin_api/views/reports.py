@@ -1,13 +1,12 @@
-from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.admin_api.services.bulk_operations_service import (
+from ...core.permissions import IsAdminUser
+from ..services.bulk_operations_service import (
     BulkOperationError,
     perform_bulk_operation,
 )
-from apps.admin_api.services.reports_service import ReportError, generate_report
-from apps.core.permissions import IsAdminUser
+from ..services.reports_service import ReportError, generate_report
 
 
 class AdminReportsView(APIView):

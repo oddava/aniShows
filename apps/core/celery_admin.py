@@ -11,13 +11,10 @@ Provides comprehensive admin interface for:
 from datetime import timedelta
 
 from django.contrib import admin, messages
-from django.db.models import Avg, Count
-from django.shortcuts import redirect
-from django.urls import path
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 
-from apps.core.models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
+from .models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
 
 
 @admin.register(CeleryTaskResult)
@@ -346,7 +343,6 @@ class CeleryWorkerStatusAdmin(admin.ModelAdmin):
     def refresh_worker_status(self, request, queryset):
         """Refresh worker status from Celery."""
         from celery import current_app
-        from celery.result import AsyncResult
 
         try:
             inspector = current_app.control.inspect()

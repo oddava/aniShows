@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.db.models import Avg, Count
 
-from apps.animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
-from apps.animes.services.offline_sync import OfflineSyncService
+from ...animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
+from ...animes.services.offline_sync import OfflineSyncService
 
 
 @dataclass(slots=True)

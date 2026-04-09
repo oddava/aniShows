@@ -48,7 +48,7 @@ def user_avatar_path(instance, filename):
     Generate secure upload path for user avatars.
     Stores files in avatars/<user_id>/<secure_filename>
     """
-    from apps.users.models import UserProfile
+    from ..models import UserProfile
 
     user_id = instance.user.id if isinstance(instance, UserProfile) else instance.id
 
@@ -64,7 +64,7 @@ def user_banner_path(instance, filename):
     Generate secure upload path for user banners.
     Stores files in banners/<user_id>/<secure_filename>
     """
-    from apps.users.models import UserProfile
+    from ..models import UserProfile
 
     user_id = instance.user.id if isinstance(instance, UserProfile) else instance.id
 

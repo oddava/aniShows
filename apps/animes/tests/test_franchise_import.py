@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, patch
 
 from django.test import TestCase
 
-from apps.animes.models import Anime
-from apps.animes.services.franchise_import import FranchiseImportService
+from ..models import Anime
+from ..services.franchise_import import FranchiseImportService
 
 
 class FranchiseImportServiceTests(TestCase):

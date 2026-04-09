@@ -6,8 +6,8 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
 
-from apps.shared.logger import logger
-from apps.users.views.social_auth import SocialLoginView
+from ...shared.logger import logger
+from .social_auth import SocialLoginView
 
 
 class GoogleLogin(SocialLoginView):

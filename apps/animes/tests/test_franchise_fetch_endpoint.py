@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.services.franchise_import import FranchiseImportResult
+from ..services.franchise_import import FranchiseImportResult
 
 
 class FranchiseFetchEndpointTests(APITestCase):

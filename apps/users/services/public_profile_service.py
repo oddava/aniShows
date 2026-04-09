@@ -5,13 +5,13 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models import Exists, OuterRef
 
-from apps.shared.logger import logger
-from apps.shared.media_urls import normalize_media_url
-from apps.users.serializers.users import PublicUserSerializer
-from apps.users.services.avatar_service import get_user_avatar_url
-from apps.users.services.cache import get_public_profile_cache_key
-from apps.users.services.profile_service import build_profile_user_queryset, get_featured_badges
-from apps.users.services.user_queryset import get_annotated_user_queryset
+from ...shared.logger import logger
+from ...shared.media_urls import normalize_media_url
+from ..serializers.users import PublicUserSerializer
+from .avatar_service import get_user_avatar_url
+from .cache import get_public_profile_cache_key
+from .profile_service import build_profile_user_queryset, get_featured_badges
+from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
 DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
@@ -61,7 +61,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     try:
         stats_queryset = build_profile_user_queryset(include_badges=False)
         if is_authenticated:
-            from apps.users.models import UserFollow
+            from ..models import UserFollow
 
             stats_queryset = stats_queryset.annotate(
                 _is_following=Exists(
@@ -76,7 +76,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
         if hasattr(user, "stats"):
             stats = user.stats
             if stats.anime_count == 0:
-                from apps.users.models import UserAnimeList
+                from ..models import UserAnimeList
 
                 has_anime = UserAnimeList.objects.filter(user=user).exists()
                 if has_anime:
@@ -85,7 +85,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                         "falling through to live query",
                         username,
                     )
-                    from apps.users.tasks import update_user_stats
+                    from ..tasks import update_user_stats
 
                     update_user_stats.delay(user.id)
                     raise ValueError("Stale UserStats detected")
@@ -147,7 +147,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     data = _normalize_public_profile_payload(serializer.data)
     cache.set(cache_key, data, timeout=300)
 
-    from apps.users.tasks import update_user_stats
+    from ..tasks import update_user_stats
 
     update_user_stats.delay(user.id)
 

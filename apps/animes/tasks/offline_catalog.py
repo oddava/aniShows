@@ -4,14 +4,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 
-from apps.animes.models import Anime, OfflineAnimeSyncState
-from apps.animes.services.offline_catalog import (
+from ...shared.celery import observed_shared_task
+from ..models import Anime, OfflineAnimeSyncState
+from ..services.offline_catalog import (
     DEFAULT_ASSET_NAME,
     OfflineCatalogImportService,
 )
-from apps.animes.services.offline_sync import OfflineSyncService
-from apps.shared.celery import observed_shared_task
-
+from ..services.offline_sync import OfflineSyncService
 from .base import BaseTask
 from .watch_episodes import sync_watch_episodes_batch
 

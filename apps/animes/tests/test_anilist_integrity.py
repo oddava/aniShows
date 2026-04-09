@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 from asgiref.sync import async_to_sync
 from django.test import TestCase
 
-from apps.animes.models import Anime, Staff
-from apps.animes.services.anilist import AniListService
-from apps.animes.tasks.metadata import MetadataEnrichmentTask
+from ..models import Anime, Staff
+from ..services.anilist import AniListService
+from ..tasks.metadata import MetadataEnrichmentTask
 
 
 class AniListIntegrityTests(TestCase):

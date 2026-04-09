@@ -3,13 +3,12 @@ from dataclasses import dataclass
 from allauth.socialaccount.models import SocialAccount
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
-from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from apps.animes.models import Review, ReviewReaction, ReviewReport, ReviewVote
-from apps.core.services.admin_settings_service import are_reviews_enabled
-from apps.users.models import UserAnimeList
-from apps.users.services.cache import invalidate_user_caches
+from ...core.services.admin_settings_service import are_reviews_enabled
+from ...users.models import UserAnimeList
+from ...users.services.cache import invalidate_user_caches
+from ..models import Review, ReviewReaction, ReviewReport, ReviewVote
 
 
 @dataclass(slots=True)

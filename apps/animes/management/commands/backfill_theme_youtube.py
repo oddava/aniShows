@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 
 from django.core.management.base import BaseCommand
 
-from apps.animes.models import ThemeSong
+from ...models import ThemeSong
 
 
 class Command(BaseCommand):

@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, patch
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.animes.models import Anime, OfflineAnimeSyncState
-from apps.animes.services.jikan import JikanService
-from apps.animes.services.offline_sync import (
+from ..models import Anime, OfflineAnimeSyncState
+from ..services.jikan import JikanService
+from ..services.offline_sync import (
     STATE_BULK_CREATE_BATCH_SIZE,
     OfflineSyncService,
     StageResult,

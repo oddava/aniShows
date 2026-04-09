@@ -8,9 +8,8 @@ import httpx
 from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
-from apps.shared.celery import observed_shared_task
-from apps.users.services.celery_tasks import UserTaskService
-from apps.users.services.email_service import send_email_task
+from ..shared.celery import observed_shared_task
+from .services.celery_tasks import UserTaskService
 
 logger = logging.getLogger(__name__)
 

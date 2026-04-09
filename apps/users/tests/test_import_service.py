@@ -6,13 +6,13 @@ from django.core.cache import cache
 from django.db.utils import OperationalError
 from django.test import TestCase, TransactionTestCase
 
-from apps.animes.models import Anime
-from apps.users.models import UserActivity, UserImportJob
-from apps.users.services.import_job_service import create_mal_import_job
-from apps.users.services.import_service.anilist import AniListImporter
-from apps.users.services.import_service.mal_api import MyAnimeListAPIImporter
-from apps.users.services.import_service.mal_xml import MyAnimeListXMLImporter
-from apps.users.tasks import process_import_job
+from ...animes.models import Anime
+from ..models import UserActivity, UserImportJob
+from ..services.import_job_service import create_mal_import_job
+from ..services.import_service.anilist import AniListImporter
+from ..services.import_service.mal_api import MyAnimeListAPIImporter
+from ..services.import_service.mal_xml import MyAnimeListXMLImporter
+from ..tasks import process_import_job
 
 User = get_user_model()
 

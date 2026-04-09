@@ -14,7 +14,7 @@ from django.db.models import (
     TextField,
 )
 
-from apps.shared.models import CreatedAtMixin, TimestampMixin
+from ..shared.models import CreatedAtMixin, TimestampMixin
 
 
 class Category(Model):

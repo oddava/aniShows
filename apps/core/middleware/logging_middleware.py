@@ -4,10 +4,10 @@ from uuid import UUID
 
 from django.conf import settings
 
-from apps.core.models import AuditLog, SystemLog
-from apps.core.tasks.logging_tasks import log_audit_async, log_exception_async, log_request_async
-from apps.core.utils import get_client_ip
-from apps.shared.logger import logger
+from ...shared.logger import logger
+from ..models import AuditLog, SystemLog
+from ..tasks.logging_tasks import log_audit_async, log_exception_async, log_request_async
+from ..utils import get_client_ip
 
 
 class LoggingMiddleware:

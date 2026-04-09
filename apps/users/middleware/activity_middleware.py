@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Middleware for tracking user activity timestamps.
@@ -39,7 +39,7 @@ class UserActivityMiddleware:
         db_update_key = f"user_db_update:{user_id}"
         if cache.add(db_update_key, True, timeout=DB_UPDATE_THROTTLE):
             try:
-                from apps.users.models import UserProfile
+                from ..models import UserProfile
 
                 queryset = UserProfile.objects.filter(user=user_id)
                 queryset.update(

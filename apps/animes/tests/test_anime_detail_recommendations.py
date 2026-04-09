@@ -5,8 +5,8 @@ from django.core.cache import cache
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime, Genre, UserFavorite
-from apps.users.models import UserAnimeList
+from ...users.models import UserAnimeList
+from ..models import Anime, Genre, UserFavorite
 
 User = get_user_model()
 

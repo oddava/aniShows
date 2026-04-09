@@ -3,8 +3,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.users.serializers.users import UserActivitySerializer
-from apps.users.services.activity_service import build_activity_queryset, get_heatmap_data
+from ..serializers.users import UserActivitySerializer
+from ..services.activity_service import build_activity_queryset, get_heatmap_data
 
 
 class UserActivityViewSet(ReadOnlyModelViewSet):

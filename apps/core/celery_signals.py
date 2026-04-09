@@ -13,12 +13,12 @@ from celery.signals import (
 )
 from django.utils import timezone
 
-from apps.core.db_safety import (
+from ..shared.logger import logger
+from .db_safety import (
     is_missing_relation_error,
     model_table_exists,
     warn_missing_table_once,
 )
-from apps.shared.logger import logger
 
 
 @celeryd_init.connect
@@ -37,7 +37,7 @@ def clean_multiproc_dir(sender, instance, **kwargs):
 
 @task_prerun.connect
 def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
-    from apps.core.models import CeleryTaskResult
+    from .models import CeleryTaskResult
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
@@ -85,7 +85,7 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
 
 @task_success.connect
 def on_task_success(sender=None, result=None, **kwargs):
-    from apps.core.models import CeleryTaskResult
+    from .models import CeleryTaskResult
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
@@ -126,7 +126,7 @@ def on_task_success(sender=None, result=None, **kwargs):
 
 @task_failure.connect
 def on_task_failure(task_id, exception, traceback, **kwargs):
-    from apps.core.models import CeleryTaskResult
+    from .models import CeleryTaskResult
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
@@ -166,7 +166,7 @@ def on_task_failure(task_id, exception, traceback, **kwargs):
 
 @task_retry.connect
 def on_task_retry(request, reason, einfo, **kwargs):
-    from apps.core.models import CeleryTaskResult
+    from .models import CeleryTaskResult
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
@@ -192,7 +192,7 @@ def on_task_retry(request, reason, einfo, **kwargs):
 
     # Emit retry metric
     try:
-        from apps.animes.services.metrics import TASK_RETRY_COUNT
+        from ..animes.services.metrics import TASK_RETRY_COUNT
 
         task_name = getattr(request, "task", "unknown") if hasattr(request, "task") else "unknown"
         TASK_RETRY_COUNT.labels(task_name=task_name).inc()
@@ -202,7 +202,7 @@ def on_task_retry(request, reason, einfo, **kwargs):
 
 @task_revoked.connect
 def on_task_revoked(request, terminated, signum, expired, **kwargs):
-    from apps.core.models import CeleryTaskResult
+    from .models import CeleryTaskResult
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
@@ -242,7 +242,7 @@ def start_queue_monitor(sender, **kwargs):
 
         from django.core.cache import cache
 
-        from apps.animes.services.metrics import update_queue_size
+        from ..animes.services.metrics import update_queue_size
 
         queue_names = [
             "critical",

@@ -1,6 +1,6 @@
 from allauth.socialaccount.models import SocialAccount
 
-from apps.shared.media_urls import normalize_media_url
+from ...shared.media_urls import normalize_media_url
 
 GOOGLE_AVATAR_KEYS = ("picture", "avatar_url", "photoURL", "photoUrl")
 

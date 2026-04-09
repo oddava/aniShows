@@ -23,9 +23,10 @@ from django.db.models.fields import (
 )
 from django.utils.text import slugify
 
-from apps.shared.models import CreatedAtMixin
-from apps.users.utils.file_security import badge_image_path, user_avatar_path, user_banner_path
 from root.storage_backends import MediaStorage
+
+from ..shared.models import CreatedAtMixin
+from .utils.file_security import badge_image_path, user_avatar_path, user_banner_path
 
 
 class CustomUser(AbstractUser):

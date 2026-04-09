@@ -7,7 +7,7 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django.db.utils import OperationalError, ProgrammingError
 
-from apps.core.models import AdminPanelSettings
+from ..models import AdminPanelSettings
 
 ADMIN_SETTINGS_CACHE_KEY = "admin:panel_settings:v1"
 ADMIN_SETTINGS_DB_KEY = "global"

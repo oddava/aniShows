@@ -1,5 +1,5 @@
 # api/utils/__init__.py
-from apps.users.utils.file_security import (
+from .file_security import (
     anime_image_path,
     generate_secure_filename,
     user_avatar_path,

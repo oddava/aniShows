@@ -7,8 +7,7 @@ import httpx
 from bs4 import BeautifulSoup
 from django.core.cache import cache
 
-from apps.shared.logger import logger
-
+from ...shared.logger import logger
 from .url_validator import URLValidationError, URLValidator
 
 

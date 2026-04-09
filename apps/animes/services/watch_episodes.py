@@ -7,9 +7,8 @@ import httpx
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
-from apps.animes.models import Anime
-from apps.shared.logger import logger
-
+from ...shared.logger import logger
+from ..models import Anime
 from .jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 

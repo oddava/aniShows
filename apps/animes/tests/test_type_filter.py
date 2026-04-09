@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.models import Anime, Genre
+from ..models import Anime, Genre
 
 
 class AnimeTypeFilterTests(APITestCase):

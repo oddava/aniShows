@@ -4,8 +4,8 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.animes.models import Anime
-from apps.animes.services.catalog_sync import CatalogSyncService
+from ..models import Anime
+from ..services.catalog_sync import CatalogSyncService
 
 
 class CatalogSyncServiceTests(TestCase):

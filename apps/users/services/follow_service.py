@@ -7,9 +7,9 @@ from django.db.models import Count, Exists, OuterRef, Prefetch
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.shared.logger import logger
-from apps.users.models import UserAnimeList, UserFollow
-from apps.users.services.cache import invalidate_user_caches
+from ...shared.logger import logger
+from ..models import UserAnimeList, UserFollow
+from .cache import invalidate_user_caches
 
 User = get_user_model()
 

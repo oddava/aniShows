@@ -3,9 +3,9 @@ from dataclasses import dataclass
 
 from django.db import transaction
 
-from apps.shared.logger import logger
-from apps.users.models import UserImportJob
-from apps.users.tasks import process_import_job
+from ...shared.logger import logger
+from ..models import UserImportJob
+from ..tasks import process_import_job
 
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
 

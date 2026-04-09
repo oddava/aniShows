@@ -7,4 +7,4 @@ class AnimeConfig(AppConfig):
     label = "anime"
 
     def ready(self):
-        import apps.animes.signals
+        from . import signals  # noqa: F401

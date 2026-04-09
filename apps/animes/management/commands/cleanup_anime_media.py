@@ -22,9 +22,9 @@ from contextlib import suppress
 
 from django.core.management.base import BaseCommand
 
-from apps.animes.models import Anime
-from apps.animes.tasks.images import _queue_image_fetch
-from apps.shared.logger import logger
+from ....shared.logger import logger
+from ...models import Anime
+from ...tasks.images import _queue_image_fetch
 
 MEDIA_FIELDS = {
     "cover_image": ["cover_image_small", "cover_image_medium", "cover_image_large"],

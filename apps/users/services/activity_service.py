@@ -7,10 +7,10 @@ from django.db.models.functions import Greatest, TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from apps.users.models import UserActivity
+from ..models import UserActivity
 
 try:
-    from apps.users.services.cache import get_user_heatmap_cache_key
+    from .cache import get_user_heatmap_cache_key
 except ImportError:
     # Backward-compatible fallback for environments that still run older cache service code.
     def get_user_heatmap_cache_key(user_id):

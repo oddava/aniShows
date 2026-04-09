@@ -11,13 +11,13 @@ from rest_framework.serializers import (
     ValidationError,
 )
 
-from apps.animes.models import Anime
-from apps.animes.serializers.base import (
+from ..models import Anime
+from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
+from .base import (
     GenreSerializer,
     StudioSerializer,
     ThemeSongSerializer,
 )
-from apps.animes.serializers_mixins import ImageUrlMixin, UserStatusMixin
 
 
 class AnimeWatchEpisodeSerializer(Serializer):

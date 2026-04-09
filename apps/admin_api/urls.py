@@ -1,8 +1,8 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.core.views.admin_import_jobs import AdminImportJobViewSet
-from apps.core.views.celery_admin import (
+from ..core.views.admin_import_jobs import AdminImportJobViewSet
+from ..core.views.celery_admin import (
     CeleryAdminControlViewSet,
     CeleryTaskResultViewSet,
     CeleryTaskScheduleViewSet,
@@ -10,8 +10,7 @@ from apps.core.views.celery_admin import (
 
 # Import the badge and import views from their respective apps for now
 # or we can move them later. We'll leave them in their original spots and route them here.
-from apps.users.views import AdminBadgeViewSet
-
+from ..users.views import AdminBadgeViewSet
 from .views.anime import (
     AdminAnimeViewSet,
     AdminCharacterViewSet,

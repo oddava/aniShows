@@ -1,7 +1,7 @@
 from allauth.account.adapter import get_adapter
 from dj_rest_auth.views import LoginView
 
-from apps.users.serializers.social_auth import SocialLoginSerializer
+from ..serializers.social_auth import SocialLoginSerializer
 
 
 class SocialLoginView(LoginView):

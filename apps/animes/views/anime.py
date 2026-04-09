@@ -8,11 +8,14 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from apps.animes.models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
-from apps.animes.serializers import (
+from ...core.utils import get_client_ip
+from ...shared.logger import logger
+from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
+from ..serializers import (
     AnimeCharacterSerializer,
     AnimeDetailSerializer,
     AnimeListSerializer,
+    ReviewSerializer,
     AnimeStaffSerializer,
     AnimeWatchEpisodeSerializer,
     EpisodeRatingInputSerializer,
@@ -20,18 +23,16 @@ from apps.animes.serializers import (
     GenreSerializer,
     StudioSerializer,
 )
-from apps.animes.services.episode_ratings import (
+from ..services.episode_ratings import (
     EpisodeRatingCommandService,
     EpisodeRatingSummaryService,
 )
-from apps.animes.services.franchise_import import FranchiseImportError, FranchiseImportService
-from apps.animes.services.public_anime_service import (
+from ..services.franchise_import import FranchiseImportError, FranchiseImportService
+from ..services.public_anime_service import (
     AnimePublicPayloadService,
     AnimeQueryService,
 )
-from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
-from apps.core.utils import get_client_ip
-from apps.shared.logger import logger
+from ..services.watch_episodes import AnimeWatchEpisodeService
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -46,6 +47,7 @@ class WatchEpisodesPagination(PageNumberPagination):
 
 
 class AnimeViewSet(ReadOnlyModelViewSet):
+    serializer_class = AnimeListSerializer
     lookup_field = "slug"
     franchise_import_service = FranchiseImportService()
     payload_service = AnimePublicPayloadService()
@@ -69,7 +71,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def get_serializer_class(self):
         if self.action == "retrieve":
             return AnimeDetailSerializer
-        return AnimeListSerializer
+        return super().get_serializer_class()
 
     def retrieve(self, request, *args, **kwargs):
         slug = kwargs.get("slug")
@@ -125,19 +127,15 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             lambda qs: qs.filter(rating__isnull=False).order_by("-rating")[:12],
         )
 
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], serializer_class=ReviewSerializer)
     def reviews(self, request, slug=None):
-        from apps.animes.serializers import ReviewSerializer
-        from apps.animes.services.reviews import get_review_queryset
+        from ..services.reviews import get_review_queryset
 
         anime = self.get_object()
         reviews = get_review_queryset(request.user, request.query_params).filter(anime=anime)
-
-        paginator = PageNumberPagination()
-        paginator.page_size = 20
-        result_page = paginator.paginate_queryset(reviews, request)
-        serializer = ReviewSerializer(result_page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        page = self.paginate_queryset(reviews)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
 
     @action(detail=True, methods=["get"])
     def related(self, request, slug=None):

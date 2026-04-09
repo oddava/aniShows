@@ -5,8 +5,8 @@ from django.core.mail import send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from apps.shared.celery import observed_shared_task
-from apps.shared.logger import logger
+from ...shared.celery import observed_shared_task
+from ...shared.logger import logger
 
 
 class EmailService:

@@ -1,8 +1,8 @@
 from django.db.models import Count, Exists, OuterRef, Prefetch
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.animes.models import AnimeCharacter, Character, UserFavoriteCharacter
-from apps.animes.serializers import CharacterDetailSerializer
+from ..models import AnimeCharacter, Character, UserFavoriteCharacter
+from ..serializers import CharacterDetailSerializer
 
 
 class CharacterViewSet(ReadOnlyModelViewSet):

@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from apps.animes.models import UserFavorite
+from ...animes.models import UserFavorite
 
 
 def build_user_favorites_queryset(params):

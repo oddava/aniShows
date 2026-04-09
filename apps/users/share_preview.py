@@ -8,9 +8,9 @@ from django.http import HttpResponse
 from django.utils.html import strip_tags
 from django.views import View
 
-from apps.shared.media_urls import normalize_media_url
-from apps.users.models import UserProfile, UserStats
-from apps.users.services.avatar_service import get_user_avatar_url
+from ..shared.media_urls import normalize_media_url
+from .models import UserProfile, UserStats
+from .services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 

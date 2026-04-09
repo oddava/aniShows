@@ -6,9 +6,9 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.core.services.admin_settings_service import is_email_verification_required
-from apps.users.serializers.users import UserSerializer
-from apps.users.services.cache import invalidate_user_caches
+from ...core.services.admin_settings_service import is_email_verification_required
+from ..serializers.users import UserSerializer
+from .cache import invalidate_user_caches
 
 User = get_user_model()
 

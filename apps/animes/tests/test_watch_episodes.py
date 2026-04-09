@@ -9,9 +9,9 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from apps.animes.models import Anime
-from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
-from apps.animes.tasks.watch_episodes import WatchEpisodeBatchSyncTask, WatchEpisodeSyncTask
+from ..models import Anime
+from ..services.watch_episodes import AnimeWatchEpisodeService
+from ..tasks.watch_episodes import WatchEpisodeBatchSyncTask, WatchEpisodeSyncTask
 
 
 class AnimeWatchEpisodeServiceTests(TestCase):

@@ -11,19 +11,19 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from apps.animes.models import Anime, OfflineAnimeSyncState
-from apps.animes.services.jikan import (
+from ...shared.logger import logger
+from ..models import Anime, OfflineAnimeSyncState
+from .jikan import (
     JikanRateLimiter,
     JikanService,
     fetch_themes_from_jikan_with_reason,
 )
-from apps.animes.services.metrics import (
+from .metrics import (
     OFFLINE_SYNC_QUARANTINE_TOTAL,
     OFFLINE_SYNC_RETRY_AGE_SECONDS,
     OFFLINE_SYNC_STAGE_FAILURE_TOTAL,
     OFFLINE_SYNC_STAGE_SUCCESS_TOTAL,
 )
-from apps.shared.logger import logger
 
 STAGE_METADATA = "metadata"
 STAGE_FRANCHISE = "franchise"
@@ -538,7 +538,7 @@ class OfflineSyncService:
             openings = themes.get("openings", [])
             endings = themes.get("endings", [])
             if openings or endings:
-                from apps.animes.tasks.themes import ThemeSongSyncTask
+                from ..tasks.themes import ThemeSongSyncTask
 
                 task = ThemeSongSyncTask()
                 await task._save_theme_songs(anime, themes)

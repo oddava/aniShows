@@ -1,9 +1,8 @@
-import asyncio
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, PropertyMock, patch
 
-from apps.animes.tasks.sync import SyncAnimeCatalogTask
+from ..tasks.sync import SyncAnimeCatalogTask
 
 
 class SyncAnimeCatalogTaskTests(IsolatedAsyncioTestCase):

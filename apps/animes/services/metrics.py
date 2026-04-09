@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Metrics integration for Celery tasks.
@@ -10,7 +10,7 @@ Provides:
 - Custom metrics for business logic
 
 Usage:
-    from apps.animes.services.metrics import task_timer, increment_counter
+    from .metrics import task_timer, increment_counter
 
     @shared_task(bind=True)
     def my_task(self):

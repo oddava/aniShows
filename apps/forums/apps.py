@@ -6,4 +6,4 @@ class ForumsConfig(AppConfig):
     name = "apps.forums"
 
     def ready(self):
-        import apps.forums.signals
+        from . import signals  # noqa: F401

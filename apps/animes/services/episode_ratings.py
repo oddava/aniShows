@@ -1,7 +1,7 @@
 from django.db import models
 from rest_framework import status
 
-from apps.animes.models import EpisodeRating
+from ..models import EpisodeRating
 
 
 class EpisodeRatingSummaryService:

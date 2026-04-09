@@ -10,10 +10,10 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from apps.animes.services.jikan import JikanService
-from apps.users.models import UserImportJob
-from apps.users.services.import_service import ImportService
-from apps.users.services.user_queryset import get_annotated_user_queryset
+from ...animes.services.jikan import JikanService
+from ..models import UserImportJob
+from .import_service import ImportService
+from .user_queryset import get_annotated_user_queryset
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class UserTaskService:
         result = importer.run()
 
         try:
-            from apps.animes.services.metrics import USER_IMPORTS_PROCESSED
+            from ...animes.services.metrics import USER_IMPORTS_PROCESSED
 
             USER_IMPORTS_PROCESSED.labels(
                 source=getattr(job, "source", "unknown"),
@@ -130,7 +130,7 @@ class UserTaskService:
             return
 
         try:
-            from apps.animes.services.metrics import USER_IMPORTS_PROCESSED
+            from ...animes.services.metrics import USER_IMPORTS_PROCESSED
 
             USER_IMPORTS_PROCESSED.labels(
                 source=getattr(job, "source", "unknown"),
@@ -202,7 +202,7 @@ class UserTaskService:
         unverified_days: int = 7,
         import_days: int = 30,
     ) -> dict:
-        from apps.users.tasks import cleanup_old_import_jobs, cleanup_unverified_accounts
+        from ..tasks import cleanup_old_import_jobs, cleanup_unverified_accounts
 
         task_ids: dict[str, str] = {}
 
@@ -231,8 +231,8 @@ class UserTaskService:
         from django.db.models import Avg, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
         from django.db.models.functions import Coalesce
 
-        from apps.animes.models import Review, ReviewVote, UserFavorite
-        from apps.users.models import UserAnimeList, UserFollow, UserStats
+        from ...animes.models import Review, ReviewVote, UserFavorite
+        from ..models import UserAnimeList, UserFollow, UserStats
 
         start_time = timezone.now()
 
@@ -372,8 +372,8 @@ class UserTaskService:
         from django.core.cache import cache
         from django.db.models import Count
 
-        from apps.users.serializers.users import PublicUserSerializer
-        from apps.users.services.cache import get_public_profile_cache_key
+        from ..serializers.users import PublicUserSerializer
+        from .cache import get_public_profile_cache_key
 
         selected_usernames = usernames
         if not selected_usernames:

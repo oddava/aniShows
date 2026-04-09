@@ -2,9 +2,9 @@ from django.contrib.auth import get_user_model
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.viewsets import ModelViewSet
 
-from apps.users.permissions import EmailVerificationMixin
-from apps.users.serializers.users import UserAnimeListSerializer
-from apps.users.services.list_service import (
+from ..permissions import EmailVerificationMixin
+from ..serializers.users import UserAnimeListSerializer
+from ..services.list_service import (
     create_user_anime_list_entry,
     delete_user_anime_list_entry,
     get_user_anime_list_queryset,

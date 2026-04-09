@@ -15,16 +15,16 @@ from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 
-from apps.core.models import CeleryTaskResult, CeleryTaskSchedule
-from apps.core.permissions import IsAdminUser
-from apps.core.serializers import (
+from ..models import CeleryTaskResult, CeleryTaskSchedule
+from ..permissions import IsAdminUser
+from ..serializers import (
     CeleryTaskResultDetailSerializer,
     CeleryTaskResultListSerializer,
     CeleryTaskScheduleDetailSerializer,
     CeleryTaskScheduleListSerializer,
     CeleryTaskScheduleWriteSerializer,
 )
-from apps.core.services.celery_admin_service import (
+from ..services.celery_admin_service import (
     AVAILABLE_TASKS,
     build_dashboard_payload,
     build_task_result_stats,

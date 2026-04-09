@@ -1,6 +1,6 @@
 # Import notification tasks
 # Import cleanup tasks
-from apps.core.tasks.cleanup_tasks import (
+from .cleanup_tasks import (
     cleanup_celery_backend,
     cleanup_old_task_results,
     flush_forum_view_counts,
@@ -8,16 +8,16 @@ from apps.core.tasks.cleanup_tasks import (
 )
 
 # Import metadata tasks
-from apps.core.tasks.logging_tasks import (
+from .logging_tasks import (
     log_audit_async,
     log_exception_async,
     log_request_async,
 )
-from apps.core.tasks.metadata import (
+from .metadata import (
     fetch_link_metadata_async,
     fetch_multiple_link_metadata,
 )
-from apps.core.tasks.notifications import (
+from .notifications import (
     check_new_episodes,
     cleanup_old_notifications_task,
     send_pending_notifications,

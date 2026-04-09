@@ -1,8 +1,8 @@
 from django.db.models import Count, Exists, OuterRef, Prefetch
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from apps.animes.models import AnimeCharacter, AnimeStaff, Staff, UserFavoriteStaff
-from apps.animes.serializers import StaffDetailSerializer
+from ..models import AnimeCharacter, AnimeStaff, Staff, UserFavoriteStaff
+from ..serializers import StaffDetailSerializer
 
 
 class StaffViewSet(ReadOnlyModelViewSet):

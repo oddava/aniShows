@@ -1,11 +1,11 @@
-from rest_framework import permissions, status, viewsets
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.users.models import UserBadge
-from apps.users.serializers.users import UserBadgeSerializer
+from ..models import UserBadge
+from ..serializers.users import UserBadgeSerializer
 
 
 class UserBadgeViewSet(GenericViewSet):
@@ -56,7 +56,7 @@ class UserBadgeViewSet(GenericViewSet):
             self.get_queryset().filter(id__in=badge_ids).update(is_featured=True)
 
         # Invalidate user cache so profile shows updated badges
-        from apps.users.services.cache import invalidate_user_caches
+        from ..services.cache import invalidate_user_caches
 
         invalidate_user_caches(request.user.id, request.user.username, trigger_stats_update=False)
 

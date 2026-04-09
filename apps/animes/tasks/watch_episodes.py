@@ -1,10 +1,9 @@
 from django.db.models import Q
 
-from apps.animes.models import Anime
-from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
-from apps.shared.celery import observed_shared_task
-from apps.shared.logger import logger
-
+from ...shared.celery import observed_shared_task
+from ...shared.logger import logger
+from ..models import Anime
+from ..services.watch_episodes import AnimeWatchEpisodeService
 from .base import BaseTask
 
 

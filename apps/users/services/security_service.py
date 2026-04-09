@@ -1,8 +1,8 @@
 """Security validation utilities."""
 
-from apps.users.services.password_policy import validate_password_strength
-from apps.users.services.search_sanitizer import sanitize_search_query
-from apps.users.services.username_sanitizer import sanitize_username
+from .password_policy import validate_password_strength
+from .search_sanitizer import sanitize_search_query
+from .username_sanitizer import sanitize_username
 
 
 class SecurityService:

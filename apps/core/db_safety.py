@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from django.db import connection
 from django.db.utils import OperationalError, ProgrammingError
 
-from apps.shared.logger import logger
+from ..shared.logger import logger
 
 if TYPE_CHECKING:
     from django.db.models import Model

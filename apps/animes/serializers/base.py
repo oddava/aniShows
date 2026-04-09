@@ -1,9 +1,8 @@
 from django.conf import settings
-from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
 
-from apps.animes.models import (
+from ..models import (
     Anime,
     AnimeCharacter,
     AnimeStaff,
@@ -13,7 +12,7 @@ from apps.animes.models import (
     Studio,
     ThemeSong,
 )
-from apps.animes.serializers_mixins import ImageUrlMixin
+from ..serializers_mixins import ImageUrlMixin
 
 ALLOWED_IMAGE_TYPES = getattr(
     settings,
@@ -46,7 +45,7 @@ def validate_image_content(file, max_size, field_name):
                 f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
             )
     except Exception as e:
-        from apps.shared.logger import logger
+        from ...shared.logger import logger
         logger.warning(f"Image magic validation failed for {field_name}: {e}")
 
     try:

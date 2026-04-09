@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ...shared.logger import logger
 
 """
 Unified recommendation generation task.
@@ -15,9 +15,8 @@ With support for:
 
 from django.contrib.auth import get_user_model
 
-from apps.animes.services.recommendations import RecommendationService
-from apps.shared.celery import observed_shared_task
-
+from ...shared.celery import observed_shared_task
+from ..services.recommendations import RecommendationService
 from .base import BaseTask
 
 User = get_user_model()
@@ -80,7 +79,7 @@ class RecommendationTask(BaseTask):
 
             # Record a metric
             try:
-                from apps.animes.services.metrics import RECOMMENDATIONS_GENERATED
+                from ..services.metrics import RECOMMENDATIONS_GENERATED
 
                 RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(len(recs))
             except Exception:
@@ -122,7 +121,7 @@ class RecommendationTask(BaseTask):
 
             # Record a metric
             try:
-                from apps.animes.services.metrics import RECOMMENDATIONS_GENERATED
+                from ..services.metrics import RECOMMENDATIONS_GENERATED
 
                 RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(total_recs)
             except Exception:

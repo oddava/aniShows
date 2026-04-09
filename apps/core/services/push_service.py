@@ -1,11 +1,10 @@
-from typing import Optional
 
 from django.conf import settings
 from django.utils import timezone
 from pywebpush import WebPushException, webpush
 
-from apps.core.models import PushSubscription
-from apps.shared.logger import logger
+from ...shared.logger import logger
+from ..models import PushSubscription
 
 
 class PushService:

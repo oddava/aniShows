@@ -151,11 +151,11 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
-    "apps.core",
-    "apps.users",
-    "apps.animes",
-    "apps.forums",
-    "apps.admin_api",
+    "apps.core.apps.CoreConfig",
+    "apps.users.apps.UsersConfig",
+    "apps.animes.apps.AnimeConfig",
+    "apps.forums.apps.ForumsConfig",
+    "apps.admin_api.apps.AdminApiConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

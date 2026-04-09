@@ -1,7 +1,7 @@
 from rest_framework.fields import FloatField, IntegerField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer
 
-from apps.animes.models import (
+from .models import (
     Anime,
     Character,
     Genre,

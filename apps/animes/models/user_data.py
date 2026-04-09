@@ -16,7 +16,7 @@ from django.db.models import (
 from django.db.models.enums import TextChoices
 from django.utils import timezone
 
-from apps.shared.models import TimestampMixin
+from ...shared.models import TimestampMixin
 
 
 class UserFavorite(Model):

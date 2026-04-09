@@ -1,20 +1,24 @@
 from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import permissions, serializers, status
 from rest_framework.decorators import action
 from rest_framework.fields import IntegerField
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import BasePermission, SAFE_METHODS, AllowAny, IsAuthenticatedOrReadOnly, \
-    IsAuthenticated, IsAdminUser
+from rest_framework.permissions import (
+    SAFE_METHODS,
+    AllowAny,
+    BasePermission,
+    IsAdminUser,
+    IsAuthenticated,
+    IsAuthenticatedOrReadOnly,
+)
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 from rest_framework.throttling import BaseThrottle
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
-from apps.core.utils import get_client_ip
-from apps.shared.public_cache import get_or_build_public_payload
-from apps.users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
-
+from ..core.utils import get_client_ip
+from ..shared.public_cache import get_or_build_public_payload
+from ..users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 from .cache_utils import (
     buffer_thread_view_increment,
     cache_category_detail,
@@ -27,11 +31,8 @@ from .cache_utils import (
     get_cached_tag_list,
     get_thread_detail_cache_key,
     get_thread_list_cache_key,
-    invalidate_post_list_cache,
-    invalidate_thread_caches,
-    invalidate_thread_list_cache,
 )
-from .models import Category, Post, PostLike, Tag, Thread, ThreadLike
+from .models import Tag
 from .serializers import (
     CategorySerializer,
     PostSerializer,

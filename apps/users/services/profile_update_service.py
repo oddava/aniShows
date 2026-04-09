@@ -6,14 +6,14 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.core.services.admin_settings_service import (
+from ...core.services.admin_settings_service import (
     is_username_change_allowed,
     username_length_limits,
 )
-from apps.core.services.social_links_service import SocialLinksService
-from apps.shared.logger import logger
-from apps.users.models import UserProfile
-from apps.users.services.cache import invalidate_user_caches
+from ...core.services.social_links_service import SocialLinksService
+from ...shared.logger import logger
+from ..models import UserProfile
+from .cache import invalidate_user_caches
 
 User = get_user_model()
 

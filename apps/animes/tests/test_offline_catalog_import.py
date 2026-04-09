@@ -8,8 +8,8 @@ from django.db import DataError, IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
-from apps.animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
-from apps.animes.services.offline_catalog import OfflineCatalogImportService
+from ..models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
+from ..services.offline_catalog import OfflineCatalogImportService
 
 
 class OfflineCatalogImportServiceTests(TestCase):

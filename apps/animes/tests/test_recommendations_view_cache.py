@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.test import SimpleTestCase
 from django.utils import timezone
 
-from apps.animes.views.recommendations import _is_recommendations_cache_fresh
+from ..views.recommendations import _is_recommendations_cache_fresh
 
 
 class RecommendationsCacheFreshnessTests(SimpleTestCase):

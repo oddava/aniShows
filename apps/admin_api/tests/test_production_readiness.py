@@ -6,11 +6,11 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.admin_api.services.reports_service import generate_report
-from apps.animes.models import Anime, Genre, Review, ReviewReport
-from apps.core.middleware.logging_middleware import AdminAuditMiddleware
-from apps.core.models import AdminPanelSettings
-from apps.users.models import UserAnimeList, UserProfile
+from ...animes.models import Anime, Genre, Review, ReviewReport
+from ...core.middleware.logging_middleware import AdminAuditMiddleware
+from ...core.models import AdminPanelSettings
+from ...users.models import UserAnimeList, UserProfile
+from ..services.reports_service import generate_report
 
 User = get_user_model()
 

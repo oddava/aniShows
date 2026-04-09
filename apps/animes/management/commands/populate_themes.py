@@ -1,4 +1,4 @@
-from apps.shared.logger import logger
+from ....shared.logger import logger
 
 """
 Management command to populate theme songs for existing anime.
@@ -21,8 +21,8 @@ import httpx
 from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 
-from apps.animes.models import Anime, ThemeSong
-from apps.animes.services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
+from ...models import Anime, ThemeSong
+from ...services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 
 class Command(BaseCommand):

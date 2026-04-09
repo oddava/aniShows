@@ -12,8 +12,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.models import Anime
-from apps.users.models import UserAnimeList, UserProfile
+from ...users.models import UserAnimeList, UserProfile
+from ..models import Anime
 
 User = get_user_model()
 

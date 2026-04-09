@@ -9,25 +9,25 @@ from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from apps.admin_api.services.user_admin_service import (
+from ...animes.models import UserFavorite
+from ...core.permissions import IsAdminUser
+from ...users.admin_serializers import AdminUserSerializer
+from ...users.models import UserAnimeList
+from ..services.user_admin_service import (
     AdminUserActionError,
     delete_user_account,
     toggle_user_active,
     toggle_user_staff,
 )
-from apps.admin_api.services.user_favorites_admin_service import (
+from ..services.user_favorites_admin_service import (
     build_user_favorites_queryset,
     serialize_user_favorites,
 )
-from apps.admin_api.services.user_list_admin_service import (
+from ..services.user_list_admin_service import (
     build_user_list_queryset,
     serialize_user_list_entries,
     serialize_user_list_entry,
 )
-from apps.animes.models import UserFavorite
-from apps.core.permissions import IsAdminUser
-from apps.users.admin_serializers import AdminUserSerializer
-from apps.users.models import UserAnimeList
 
 User = get_user_model()
 

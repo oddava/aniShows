@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 
-from apps.forums.cache_utils import flush_buffered_thread_views
-from apps.forums.models import Category, Post, PostLike, Tag, Thread, ThreadLike
+from .cache_utils import flush_buffered_thread_views
+from .models import Category, Post, Tag, Thread, ThreadLike
 
 User = get_user_model()
 

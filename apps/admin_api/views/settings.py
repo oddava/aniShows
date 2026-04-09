@@ -1,12 +1,11 @@
-from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.admin_api.services.settings_service import (
+from ...core.permissions import IsAdminUser
+from ..services.settings_service import (
     get_admin_settings_payload,
     save_admin_settings_payload,
 )
-from apps.core.permissions import IsAdminUser
 
 
 class AdminSettingsView(APIView):

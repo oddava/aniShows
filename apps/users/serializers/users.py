@@ -19,28 +19,28 @@ from rest_framework.serializers import (
     SerializerMethodField,
 )
 
-from apps.animes.models import (
+from ...animes.models import (
     Anime,
     UserFavorite,
     UserFavoriteCharacter,
     UserFavoriteStaff,
 )
-from apps.animes.serializers.anime import (
+from ...animes.serializers.anime import (
     AnimeCompactSerializer,
     AnimeListSerializer,
     AnimeMinimalSerializer,
 )
-from apps.animes.serializers.base import (
+from ...animes.serializers.base import (
     CharacterCompactSerializer,
     StaffCompactSerializer,
     validate_image_content,
 )
-from apps.animes.serializers_mixins import BadgesMixin, UserProfileMixin
-from apps.core.services.admin_settings_service import username_length_limits
-from apps.shared.logger import logger
-from apps.users.models import Badge, UserActivity, UserAnimeList, UserBadge
-from apps.users.services.auth_service import AuthService
-from apps.users.services.avatar_service import get_user_avatar_url
+from ...animes.serializers_mixins import BadgesMixin, UserProfileMixin
+from ...core.services.admin_settings_service import username_length_limits
+from ...shared.logger import logger
+from ..models import Badge, UserActivity, UserAnimeList, UserBadge
+from ..services.auth_service import AuthService
+from ..services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 
@@ -369,7 +369,7 @@ class UserProfileUpdateSerializer(Serializer):
     def validate_social_links(self, value):
         import json
 
-        from apps.core.services.social_links_service import (
+        from ...core.services.social_links_service import (
             SocialLinksService,
             SocialLinkValidationError,
         )
@@ -650,7 +650,7 @@ class UserRecommendationSerializer(ModelSerializer):
     reason_text = CharField(source="get_reason_display_text", read_only=True)
 
     class Meta:
-        from apps.animes.models import UserRecommendation
+        from ...animes.models import UserRecommendation
 
         model = UserRecommendation
         fields = [
@@ -679,7 +679,7 @@ class UserFollowListSerializer(ModelSerializer):
     is_follower = SerializerMethodField()
 
     class Meta:
-        from apps.users.models import UserFollow
+        from ..models import UserFollow
 
         model = UserFollow
         fields = ["id", "user", "is_following", "is_follower", "created_at"]

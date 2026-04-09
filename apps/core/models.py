@@ -20,7 +20,7 @@ from django.db.models import (
 from django.db.models.indexes import Index
 from django.utils import timezone
 
-from apps.shared.models import CreatedAtMixin, TimestampMixin
+from ..shared.models import CreatedAtMixin, TimestampMixin
 
 
 class SystemLog(Model):
@@ -359,7 +359,6 @@ class CeleryTaskSchedule(TimestampMixin, Model):
                 month_of_year=self.crontab_month_of_year,
             )
         elif self.schedule_type == self.ScheduleType.INTERVAL:
-            import datetime
 
             from celery.schedules import schedule
 

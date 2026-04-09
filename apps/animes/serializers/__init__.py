@@ -1,6 +1,6 @@
 from importlib import import_module
 
-from apps.animes.serializers.anime import (
+from .anime import (
     AnimeCompactSerializer,
     AnimeDetailSerializer,
     AnimeListSerializer,
@@ -9,7 +9,7 @@ from apps.animes.serializers.anime import (
     EpisodeRatingInputSerializer,
     EpisodeRatingSummarySerializer,
 )
-from apps.animes.serializers.base import (
+from .base import (
     AnimeCharacterSerializer,
     AnimeStaffSerializer,
     CharacterAnimeRoleSerializer,
@@ -27,10 +27,10 @@ from apps.animes.serializers.base import (
     StudioSerializer,
     ThemeSongSerializer,
 )
-from apps.animes.serializers.imports import (
+from .imports import (
     UserImportJobSerializer,
 )
-from apps.animes.serializers.reviews import (
+from .reviews import (
     ReviewReactionActionSerializer,
     ReviewReportCreateSerializer,
     ReviewSerializer,

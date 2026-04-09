@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
-from apps.animes.models import Anime
-from apps.animes.services.jikan import JikanService
-from apps.shared.logger import logger
-from apps.shared.public_cache import invalidate_public_cache_keys
+from ...shared.logger import logger
+from ...shared.public_cache import invalidate_public_cache_keys
+from ..models import Anime
+from .jikan import JikanService
 
 
 class FranchiseImportError(Exception):
@@ -72,7 +72,7 @@ class FranchiseImportService:
             )
 
             if anime.mal_id:
-                from apps.animes.tasks.themes import sync_theme_songs
+                from ..tasks.themes import sync_theme_songs
 
                 sync_theme_songs.delay(anime_id=anime.id)
 

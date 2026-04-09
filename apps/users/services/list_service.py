@@ -4,8 +4,8 @@ from django.http import Http404
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
-from apps.users.models import UserAnimeList
-from apps.users.services.cache import (
+from ..models import UserAnimeList
+from .cache import (
     invalidate_anime_detail_cache,
     invalidate_user_anime_caches,
     invalidate_user_caches,

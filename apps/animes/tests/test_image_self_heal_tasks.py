@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 from django.test import TestCase
 
-from apps.animes.models import Anime
-from apps.animes.tasks.images import (
+from ..models import Anime
+from ..tasks.images import (
     _is_storage_endpoint_error,
     _queue_image_fetch,
     fetch_anime_images,

@@ -3,8 +3,8 @@ from django.core.cache import cache
 from django.db import connection
 from django.http import JsonResponse
 
-from apps.core.services.admin_settings_service import is_maintenance_mode_enabled
-from apps.shared.logger import logger
+from ...shared.logger import logger
+from ..services.admin_settings_service import is_maintenance_mode_enabled
 
 
 def _safe_maintenance_mode() -> bool:

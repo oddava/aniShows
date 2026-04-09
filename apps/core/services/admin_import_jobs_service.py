@@ -6,8 +6,8 @@ from django.db.models import Count, Q
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 
-from apps.animes.models import OfflineAnimeSyncState, OfflineCatalogImport
-from apps.core.models import CeleryTaskResult
+from ...animes.models import OfflineAnimeSyncState, OfflineCatalogImport
+from ..models import CeleryTaskResult
 
 CATALOG_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
 METADATA_ENRICHMENT_TASK = "apps.animes.tasks.metadata.enrich_metadata"

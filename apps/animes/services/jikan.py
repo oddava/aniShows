@@ -20,9 +20,8 @@ from django.db import IntegrityError
 from django.utils import timezone
 from django.utils.text import slugify
 
-from apps.animes.models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
-from apps.shared.logger import logger
-
+from ...shared.logger import logger
+from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
 from .rate_limiting import APICallCache, CircuitBreaker
 
 DEFAULT_JIKAN_BASE_URL = "http://jikan:8080/v4"
@@ -413,7 +412,7 @@ class JikanService:
         request_timeout: float | None = None,
         endpoint: str | None = None,
     ) -> dict:
-        from apps.animes.services.metrics import API_CALL_COUNT, API_CALL_DURATION
+        from .metrics import API_CALL_COUNT, API_CALL_DURATION
 
         self._reset_last_error()
 
@@ -1674,7 +1673,7 @@ class JikanService:
         self._process_theme_songs(anime, item)
 
     def _process_theme_songs(self, anime, item):
-        from apps.animes.models import ThemeSong
+        from ..models import ThemeSong
 
         openings = item.get("openings") or []
         endings = item.get("endings") or []
@@ -1734,7 +1733,7 @@ class JikanService:
                 or (not has_banner and mal_id)
                 or force_replace
             ):
-                from apps.animes.tasks.images import _queue_image_fetch
+                from ..tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
                 await sync_to_async(_queue_image_fetch)(
@@ -2087,7 +2086,7 @@ async def fetch_themes_from_jikan_with_reason(
     rate_limiter: JikanRateLimiter,
     max_retries: int = 3,
 ) -> JikanThemesFetchResult:
-    from apps.animes.services.metrics import API_CALL_COUNT, API_CALL_DURATION
+    from .metrics import API_CALL_COUNT, API_CALL_DURATION
 
     url = f"{get_jikan_base_url()}/anime/{mal_id}/themes"
     transient_status_codes = {500, 502, 503, 504}

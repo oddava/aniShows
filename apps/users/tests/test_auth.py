@@ -15,17 +15,17 @@ from unittest.mock import patch
 from allauth.socialaccount.providers.oauth2.client import OAuth2Error
 from botocore.exceptions import EndpointConnectionError
 from django.conf import settings
-from django.core.exceptions import MultipleObjectsReturned
 from django.contrib.auth import get_user_model
+from django.core.exceptions import MultipleObjectsReturned
 from django.test import RequestFactory, SimpleTestCase
 from django.urls import reverse
 from requests.exceptions import RequestException
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.users.models import UserProfile
-from apps.users.serializers.social_auth import SocialLoginSerializer
-from apps.users.views.google import GoogleLogin
+from ..models import UserProfile
+from ..serializers.social_auth import SocialLoginSerializer
+from ..views.google import GoogleLogin
 
 User = get_user_model()
 

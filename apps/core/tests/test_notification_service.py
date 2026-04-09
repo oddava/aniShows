@@ -5,10 +5,10 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
-from apps.core.models import Notification
-from apps.core.services.notification_service import NotificationService
-from apps.forums.models import Category, Post, Thread
-from apps.users.models import UserProfile
+from ...forums.models import Category, Post, Thread
+from ...users.models import UserProfile
+from ..models import Notification
+from ..services.notification_service import NotificationService
 
 User = get_user_model()
 

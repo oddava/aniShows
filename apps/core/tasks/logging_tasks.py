@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from apps.core.db_safety import is_missing_relation_error
-from apps.core.services.celery_tasks import CoreTaskService, log_data_preview
-from apps.shared.celery import observed_shared_task
+from ...shared.celery import observed_shared_task
+from ..db_safety import is_missing_relation_error
+from ..services.celery_tasks import CoreTaskService, log_data_preview
 
 logger = logging.getLogger(__name__)
 

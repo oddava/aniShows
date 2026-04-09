@@ -1,5 +1,4 @@
 from allauth.account.signals import user_signed_up
-from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.signals import social_account_added
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -7,11 +6,10 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from apps.core.services.notification_service import NotificationService
-from apps.shared.logger import logger
-from apps.users.services.cache import invalidate_user_caches
-
+from ..core.services.notification_service import NotificationService
+from ..shared.logger import logger
 from .models import UserFollow, UserProfile
+from .services.cache import invalidate_user_caches
 
 User = get_user_model()
 
@@ -130,7 +128,7 @@ def handle_profile_update(sender, instance, created, **kwargs):
 # Points signals (from review votes)
 # =============================================================================
 
-from apps.animes.models import ReviewVote
+from ..animes.models import ReviewVote
 
 
 @receiver(post_save, sender=ReviewVote)

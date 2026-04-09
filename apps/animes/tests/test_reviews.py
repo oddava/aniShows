@@ -15,8 +15,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.animes.models import Anime, Review, ReviewReaction, ReviewVote
-from apps.users.models import UserAnimeList, UserProfile
+from ...users.models import UserAnimeList, UserProfile
+from ..models import Anime, Review, ReviewReaction, ReviewVote
 
 User = get_user_model()
 
@@ -510,3 +510,43 @@ class ReviewInteractionTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"], "Cannot vote on your own review")
+
+
+class AnimeReviewPaginationTests(APITestCase):
+    """Tests for anime detail review pagination."""
+
+    def setUp(self):
+        self.anime = Anime.objects.create(
+            title="Paginated Review Anime",
+            slug="paginated-review-anime",
+            synopsis="Anime for review pagination tests",
+            anime_type="TV",
+            status="Airing",
+        )
+
+        for index in range(25):
+            reviewer = User.objects.create_user(
+                username=f"pagination-user-{index}",
+                email=f"pagination-user-{index}@example.com",
+                password="password123",
+            )
+            Review.objects.create(
+                user=reviewer,
+                anime=self.anime,
+                rating=8,
+                text=f"Review {index}",
+            )
+
+        self.client = APIClient()
+
+    def test_anime_reviews_action_uses_standard_pagination(self):
+        """Anime review action should honor the shared page_size query param."""
+        response = self.client.get(
+            reverse("anime-reviews", args=[self.anime.slug]),
+            {"page_size": 5},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 25)
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertIsNotNone(response.data["next"])

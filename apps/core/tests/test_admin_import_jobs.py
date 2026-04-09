@@ -1,10 +1,10 @@
 from django.test import SimpleTestCase
 from django.utils import timezone
 
-from apps.core.models import CeleryTaskResult
-from apps.core.views.admin_import_jobs import (
-    AdminImportJobViewSet,
+from ..models import CeleryTaskResult
+from ..views.admin_import_jobs import (
     OFFLINE_RECONCILE_TASK,
+    AdminImportJobViewSet,
 )
 
 

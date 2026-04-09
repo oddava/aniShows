@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 from django.db import transaction
 
-from apps.core.models import AdminPanelSettings
-from apps.core.services.admin_settings_service import (
+from ...core.models import AdminPanelSettings
+from ...core.services.admin_settings_service import (
     ADMIN_SETTINGS_DB_KEY,
     DEFAULT_ADMIN_SETTINGS,
     cache_admin_settings,

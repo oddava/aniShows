@@ -15,7 +15,7 @@ import time
 from django.core.management.base import BaseCommand
 from imagekit.cachefiles import ImageCacheFile
 
-from apps.animes.models import Anime, Character, Staff
+from ...models import Anime, Character, Staff
 
 # Map of model -> (source_field, [spec_field_names])
 MODEL_SPECS = {
