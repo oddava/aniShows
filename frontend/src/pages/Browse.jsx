@@ -152,6 +152,7 @@ export default function Browse() {
   const currentStudio = searchParams.get('studio') || '';
   const currentSeason = searchParams.get('season') || '';
   const currentYearParam = searchParams.get('year') || '';
+  const currentExcludeIds = searchParams.get('exclude_ids') || '';
   const currentMinRating = searchParams.get('min_rating') || '';
   const currentMaxRating = searchParams.get('max_rating') || '';
   const currentSource = searchParams.get('source') || '';
@@ -337,6 +338,7 @@ export default function Browse() {
 
   const handleTabChange = useCallback((key) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     newParams.delete('sort');
     newParams.delete('status');
     newParams.delete('season');
@@ -430,6 +432,7 @@ export default function Browse() {
       currentStudio,
       currentSeason,
       currentYearParam,
+      currentExcludeIds,
       currentMinRating,
       currentMaxRating,
       currentSource,
@@ -454,6 +457,7 @@ export default function Browse() {
         studio: currentStudio || undefined,
         season: currentSeason || undefined,
         year: currentYearParam || undefined,
+        exclude_ids: currentExcludeIds || undefined,
         min_rating: currentMinRating || undefined,
         max_rating: currentMaxRating || undefined,
         source: currentSource || undefined,
@@ -565,6 +569,7 @@ export default function Browse() {
               studio: currentStudio,
               season: currentSeason,
               year: currentYearParam,
+              excludeIds: currentExcludeIds,
               minRating: currentMinRating,
               maxRating: currentMaxRating,
               source: currentSource,
@@ -604,6 +609,7 @@ export default function Browse() {
     currentStudio,
     currentSeason,
     currentYearParam,
+    currentExcludeIds,
     currentMinRating,
     currentMaxRating,
     currentSource,
@@ -622,6 +628,7 @@ export default function Browse() {
   // Filter helpers
   const updateParam = useCallback((key, value) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (value) {
       newParams.set(key, value);
     } else {
@@ -632,6 +639,7 @@ export default function Browse() {
 
   const clearSeasonAndYear = useCallback(() => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     newParams.delete('season');
     newParams.delete('year');
     newParams.delete('min_year');
@@ -641,6 +649,7 @@ export default function Browse() {
 
   const clearYearRange = useCallback(() => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     newParams.delete('min_year');
     newParams.delete('max_year');
     setSearchParams(newParams);
@@ -648,6 +657,7 @@ export default function Browse() {
 
   const toggleArrayParam = useCallback((key, value) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     const current = newParams.get(key)?.split(',').filter(Boolean) || [];
     const updated = current.includes(value)
       ? current.filter(v => v !== value)
@@ -689,6 +699,7 @@ export default function Browse() {
     if (!paramKey) return;
 
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (value) {
       newParams.set(paramKey, value);
     } else {
@@ -715,6 +726,7 @@ export default function Browse() {
     setLocalFilters(prev => ({ ...prev, genres: updated }));
 
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (updated.length > 0) {
       newParams.set('genre', updated.join(','));
     } else {
@@ -733,6 +745,7 @@ export default function Browse() {
     setLocalFilters(prev => ({ ...prev, tags: updated }));
 
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
     if (updated.length > 0) {
       newParams.set('tags', updated.join(','));
     } else {

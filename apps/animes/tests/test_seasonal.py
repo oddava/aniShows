@@ -188,6 +188,43 @@ class SeasonalAnimeTests(APITestCase):
 
         self.assertIn("Year Metadata Only", titles)
 
+    def test_exclude_ids_removes_shelf_duplicates_from_seasonal_browse(self):
+        """Shelf deep links should be able to hide cards already shown in previous rows."""
+        first = Anime.objects.create(
+            title="Excluded Seasonal Favorite",
+            slug="excluded-seasonal-favorite",
+            synopsis="Should be excluded from the deep link",
+            anime_type="TV",
+            status="Airing",
+            season="SPRING",
+            season_year=2026,
+            member_count=350000,
+            popularity_rank=1,
+        )
+        kept = Anime.objects.create(
+            title="Kept Seasonal Favorite",
+            slug="kept-seasonal-favorite",
+            synopsis="Should remain visible",
+            anime_type="TV",
+            status="Airing",
+            season="SPRING",
+            season_year=2026,
+            member_count=275000,
+            popularity_rank=2,
+        )
+
+        response = self.client.get(
+            self.list_url,
+            {"season": "spring", "year": "2026", "sort": "popular", "exclude_ids": str(first.id)},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
+
+        self.assertNotIn("Excluded Seasonal Favorite", titles)
+        self.assertIn("Kept Seasonal Favorite", titles)
+
     def test_invalid_season_rejected(self):
         """Test that invalid season values are rejected."""
         response = self.client.get(self.list_url, {"season": "invalid_season", "year": "2024"})

@@ -22,6 +22,14 @@ function takeUniqueAnime(animeList = [], seenIds, limit = ROW_PAGE_SIZE) {
     return uniqueItems;
 }
 
+function buildBrowseLink(baseParams, excludedIds = []) {
+    const params = new URLSearchParams(baseParams);
+    if (excludedIds.length > 0) {
+        params.set('exclude_ids', excludedIds.join(','));
+    }
+    return `/browse?${params.toString()}`;
+}
+
 export default function BrowseRowMode({ titleLanguage }) {
     const { user } = useAuth();
     const adultContentEnabled = Boolean(user?.show_adult_content);
@@ -82,35 +90,36 @@ export default function BrowseRowMode({ titleLanguage }) {
                 title: 'Trending Now',
                 animeList: trending,
                 isLoading: trendingLoading,
-                viewAllLink: '/browse?sort=trending',
+                browseParams: { sort: 'trending' },
             },
             {
                 title: 'Popular This Season',
                 animeList: popularSeason,
                 isLoading: popularSeasonLoading,
-                viewAllLink: `/browse?season=${currentSeason}&year=${y}&sort=popular`,
+                browseParams: { season: currentSeason, year: y.toString(), sort: 'popular' },
             },
             {
                 title: 'Upcoming Next Season',
                 animeList: upcoming,
                 isLoading: upcomingLoading,
-                viewAllLink: `/browse?season=${nextSeason}&year=${nextYear}&sort=popular`,
+                browseParams: { season: nextSeason, year: nextYear.toString(), sort: 'popular' },
             },
             {
                 title: 'All Time Popular',
                 animeList: allTime,
                 isLoading: allTimeLoading,
-                viewAllLink: '/browse?sort=popular',
+                browseParams: { sort: 'popular' },
             },
             {
                 title: 'Top Rated',
                 animeList: topRated,
                 isLoading: topRatedLoading,
-                viewAllLink: '/browse?sort=rating',
+                browseParams: { sort: 'rating' },
             },
         ];
 
         for (const row of rowConfigs) {
+            const excludedIds = [...seenIds];
             const uniqueItems = takeUniqueAnime(row.animeList, seenIds);
             // Hiding shelves with no unique cards avoids duplicated rows that read like a backend bug.
             if (!row.isLoading && uniqueItems.length === 0) continue;
@@ -118,6 +127,8 @@ export default function BrowseRowMode({ titleLanguage }) {
             resolvedRows.push({
                 ...row,
                 animeList: uniqueItems,
+                // "View all" should land on the same deduplicated slice the shelf represented.
+                viewAllLink: buildBrowseLink(row.browseParams, excludedIds),
             });
         }
 

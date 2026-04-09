@@ -60,6 +60,7 @@ export default function TopFilterBar({
         const timeout = setTimeout(() => {
             if (searchInput !== currentQuery) {
                 const newParams = new URLSearchParams(searchParams);
+                newParams.delete('exclude_ids');
                 if (searchInput) {
                     newParams.set('q', searchInput);
                 } else {
@@ -73,6 +74,7 @@ export default function TopFilterBar({
 
     const handleSingleToggle = (key, value) => {
         const newParams = new URLSearchParams(searchParams);
+        newParams.delete('exclude_ids');
         if (newParams.get(key) === value) {
             newParams.delete(key);
             if (key === 'season') {
@@ -89,6 +91,7 @@ export default function TopFilterBar({
 
     const handleGenreToggle = (genreSlug) => {
         const newParams = new URLSearchParams(searchParams);
+        newParams.delete('exclude_ids');
         const updated = currentGenres.includes(genreSlug)
             ? currentGenres.filter(g => g !== genreSlug)
             : [...currentGenres, genreSlug];
@@ -113,6 +116,7 @@ export default function TopFilterBar({
         if (newYear < minYear) newYear = minYear;
 
         const newParams = new URLSearchParams(searchParams);
+        newParams.delete('exclude_ids');
         newParams.set('year', newYear.toString());
         setSearchParams(newParams);
     };
@@ -120,6 +124,7 @@ export default function TopFilterBar({
     const clearSearch = () => {
         setSearchInput('');
         const newParams = new URLSearchParams(searchParams);
+        newParams.delete('exclude_ids');
         newParams.delete('q');
         setSearchParams(newParams);
     };

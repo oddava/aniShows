@@ -393,6 +393,11 @@ class AnimeQueryService:
             tags = [tag.strip().lower() for tag in tags_param.split(",") if tag.strip()]
             queryset = self._apply_tags_filter(queryset, tags)
 
+        exclude_ids = self._parse_positive_int_params(query_params.get("exclude_ids"))
+        if exclude_ids:
+            # Home shelves may deep-link into browse with already-shown cards removed.
+            queryset = queryset.exclude(id__in=exclude_ids)
+
         queryset = self._apply_numeric_range_filter(
             queryset,
             "episode_count",
@@ -536,6 +541,22 @@ class AnimeQueryService:
             elif param:
                 values.append(param)
         return values
+
+    @staticmethod
+    def _parse_positive_int_params(raw_value: str | None) -> list[int]:
+        if not raw_value:
+            return []
+
+        resolved_ids = []
+        for value in raw_value.split(","):
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                continue
+            if parsed > 0:
+                resolved_ids.append(parsed)
+
+        return resolved_ids
 
     @staticmethod
     def _filter_case_insensitive_values(queryset, raw_value, field_name: str, valid_values: set[str]):

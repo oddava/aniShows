@@ -103,6 +103,7 @@ describe('BrowseRowMode', () => {
         expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 2');
         expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
+        expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('exclude_ids=1%2C2%2C3%2C4%2C5%2C6');
     });
 
     it('hides a shelf when every card is already shown in an earlier row', async () => {
