@@ -157,18 +157,43 @@ class SeasonalAnimeTests(APITestCase):
         results = response.data.get("results", response.data)
         self.assertGreater(len(results), 0)
 
-    def test_seasonal_sorting_by_member_count(self):
-        """Test that seasonal views sort by member_count."""
+    def test_seasonal_sorting_prefers_popularity_rank(self):
+        """Test that seasonal popular views sort by popularity rank."""
+        self.spring_anime.popularity_rank = 50
+        self.spring_anime.save(update_fields=["popularity_rank"])
+
+        Anime.objects.create(
+            title="Spring Ranked Favorite",
+            slug="spring-ranked-favorite",
+            synopsis="A ranked spring anime",
+            anime_type="TV",
+            status="Airing",
+            release_date=date(2024, 4, 20),
+            member_count=150000,
+            popularity_rank=10,
+        )
+        Anime.objects.create(
+            title="Spring Unranked Hype",
+            slug="spring-unranked-hype",
+            synopsis="A spring anime without popularity rank",
+            anime_type="TV",
+            status="Airing",
+            release_date=date(2024, 4, 25),
+            member_count=500000,
+            popularity_rank=None,
+        )
+
         response = self.client.get(
             self.list_url, {"season": "spring", "year": "2024", "sort": "popular"}
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
 
-        # Spring anime has highest member_count (200000)
-        if results:
-            self.assertEqual(results[0]["title"], "Spring Anime")
+        self.assertGreaterEqual(len(titles), 3)
+        self.assertEqual(titles[0], "Spring Ranked Favorite")
+        self.assertLess(titles.index("Spring Anime"), titles.index("Spring Unranked Hype"))
 
     def test_null_rating_handling(self):
         """Test that anime with null ratings are included."""

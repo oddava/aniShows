@@ -7,18 +7,21 @@ from django.utils.translation import gettext_lazy as _
 from requests.exceptions import HTTPError
 from requests.exceptions import RequestException
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import CharField
 from rest_framework.reverse import reverse
+from rest_framework.serializers import Serializer
 
 from apps.shared.logger import logger
 from apps.users.services.auth_service import AuthService
 
 
-class SocialLoginSerializer(serializers.Serializer):
+class SocialLoginSerializer(Serializer):
     """Serializer for social auth flows (OAuth code or access token)."""
 
-    access_token = serializers.CharField(required=False, allow_blank=True)
-    code = serializers.CharField(required=False, allow_blank=True)
-    id_token = serializers.CharField(required=False, allow_blank=True)
+    access_token = CharField(required=False, allow_blank=True)
+    code = CharField(required=False, allow_blank=True)
+    id_token = CharField(required=False, allow_blank=True)
     auth_service = AuthService()
 
     def _get_request(self):
@@ -42,20 +45,20 @@ class SocialLoginSerializer(serializers.Serializer):
                     request=self._get_request(),
                 )
             except NoReverseMatch as exc:
-                raise serializers.ValidationError(_("Define callback_url in view")) from exc
+                raise ValidationError(_("Define callback_url in view")) from exc
 
     def validate(self, attrs):
         view = self.context.get("view")
         request = self._get_request()
 
         if not view:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 _("View is not defined, pass it as a context variable")
             )
 
         adapter_class = getattr(view, "adapter_class", None)
         if not adapter_class:
-            raise serializers.ValidationError(_("Define adapter_class in view"))
+            raise ValidationError(_("Define adapter_class in view"))
 
         try:
             adapter = adapter_class(request)
@@ -65,7 +68,7 @@ class SocialLoginSerializer(serializers.Serializer):
                 "Social auth provider configuration error",
                 extra={"provider": getattr(adapter_class, "provider_id", "unknown")},
             )
-            raise serializers.ValidationError(_("Social login is temporarily unavailable.")) from exc
+            raise ValidationError(_("Social login is temporarily unavailable.")) from exc
 
         access_token = attrs.get("access_token")
         code = attrs.get("code")
@@ -81,7 +84,7 @@ class SocialLoginSerializer(serializers.Serializer):
             self.client_class = getattr(view, "client_class", None)
 
             if not self.client_class:
-                raise serializers.ValidationError(_("Define client_class in view"))
+                raise ValidationError(_("Define client_class in view"))
 
             client = self.client_class(
                 request,
@@ -105,7 +108,7 @@ class SocialLoginSerializer(serializers.Serializer):
                     },
                     exc_info=True,
                 )
-                raise serializers.ValidationError(
+                raise ValidationError(
                     _("Failed to exchange code for access token")
                 ) from exc
 
@@ -116,7 +119,7 @@ class SocialLoginSerializer(serializers.Serializer):
                 if key in token:
                     tokens_to_parse[key] = token[key]
         else:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 _("Incorrect input. access_token or code is required.")
             )
 
@@ -132,25 +135,25 @@ class SocialLoginSerializer(serializers.Serializer):
                 login = self.get_social_login(adapter, app, social_token, token)
             ret = complete_social_login(request, login)
         except (OAuth2Error, HTTPError) as exc:
-            raise serializers.ValidationError(_("Incorrect value")) from exc
+            raise ValidationError(_("Incorrect value")) from exc
         except Exception as exc:
             logger.exception(
                 "Unhandled social auth completion error",
                 extra={"provider": getattr(adapter, "provider_id", "unknown")},
             )
-            raise serializers.ValidationError(_("Failed to authenticate with social provider.")) from exc
+            raise ValidationError(_("Failed to authenticate with social provider.")) from exc
 
         if isinstance(ret, HttpResponseBadRequest):
-            raise serializers.ValidationError(ret.content)
+            raise ValidationError(ret.content)
 
         try:
             attrs["user"] = self.auth_service.finalize_social_login(request, login)
-        except serializers.ValidationError:
+        except ValidationError:
             raise
         except Exception as exc:
             logger.exception(
                 "Unhandled social auth finalization error",
                 extra={"provider": getattr(adapter, "provider_id", "unknown")},
             )
-            raise serializers.ValidationError(_("Failed to finalize social login.")) from exc
+            raise ValidationError(_("Failed to finalize social login.")) from exc
         return attrs

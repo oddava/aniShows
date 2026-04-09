@@ -205,10 +205,10 @@ def create_review(serializer, user):
     ensure_reviews_enabled()
     anime = serializer.validated_data.get("anime")
     if not anime:
-        raise serializers.ValidationError({"non_field_errors": ["Anime not found."]})
+        raise ValidationError({"non_field_errors": ["Anime not found."]})
 
     if not UserAnimeList.objects.filter(user=user, anime=anime).exists():
-        raise serializers.ValidationError(
+        raise ValidationError(
             {"non_field_errors": ["You must add this anime to your list before writing a review."]}
         )
 
@@ -217,7 +217,7 @@ def create_review(serializer, user):
             serializer.save(user=user)
             transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
     except IntegrityError as exc:
-        raise serializers.ValidationError(
+        raise ValidationError(
             {"non_field_errors": ["You have already reviewed this anime."]}
         ) from exc
 

@@ -322,6 +322,15 @@ class AnimeQueryService:
 
         queryset = self._apply_year_filters(queryset, query_params)
 
+        has_temporal_filters = any(
+            [
+                bool(query_params.get("season")),
+                bool(query_params.get("year")),
+                bool(query_params.get("min_year")),
+                bool(query_params.get("max_year")),
+            ]
+        )
+
         has_active_filters = any(
             [
                 bool(search),
@@ -337,10 +346,7 @@ class AnimeQueryService:
                 bool(query_params.get("max_episodes")),
                 bool(query_params.get("min_duration")),
                 bool(query_params.get("max_duration")),
-                bool(query_params.get("season")),
-                bool(query_params.get("year")),
-                bool(query_params.get("min_year")),
-                bool(query_params.get("max_year")),
+                has_temporal_filters,
             ]
         )
 
@@ -356,6 +362,11 @@ class AnimeQueryService:
         elif sort_clean == "popular":
             if not has_active_filters:
                 queryset = queryset.filter(popularity_rank__isnull=False)
+            elif has_temporal_filters:
+                queryset = queryset.annotate(
+                    popularity_sort=Coalesce(F("popularity_rank"), Value(1_000_000))
+                )
+                sort_field = "popularity_sort"
             else:
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))
                 sort_field = "-member_sort"

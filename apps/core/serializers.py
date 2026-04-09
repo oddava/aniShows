@@ -1,19 +1,22 @@
 from celery import current_app
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import IntegerField, CharField, SerializerMethodField, ListField, DictField
+from rest_framework.serializers import Serializer, ModelSerializer
 
 from apps.core.models import CeleryTaskResult, CeleryTaskSchedule
 
 
-class TriggeredBySerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    username = serializers.CharField()
+class TriggeredBySerializer(Serializer):
+    id = IntegerField()
+    username = CharField()
 
 
-class CeleryTaskResultListSerializer(serializers.ModelSerializer):
-    task_name_short = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
-    triggered_by = serializers.SerializerMethodField()
-    error_message = serializers.SerializerMethodField()
+class CeleryTaskResultListSerializer(ModelSerializer):
+    task_name_short = SerializerMethodField()
+    status_display = CharField(source="get_status_display", read_only=True)
+    triggered_by = SerializerMethodField()
+    error_message = SerializerMethodField()
 
     class Meta:
         model = CeleryTaskResult
@@ -47,9 +50,9 @@ class CeleryTaskResultListSerializer(serializers.ModelSerializer):
         return obj.error_message[:200] if obj.error_message else None
 
 
-class CeleryTaskResultDetailSerializer(serializers.ModelSerializer):
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
-    triggered_by = serializers.SerializerMethodField()
+class CeleryTaskResultDetailSerializer(ModelSerializer):
+    status_display = CharField(source="get_status_display", read_only=True)
+    triggered_by = SerializerMethodField()
 
     class Meta:
         model = CeleryTaskResult
@@ -82,9 +85,9 @@ class CeleryTaskResultDetailSerializer(serializers.ModelSerializer):
         return {"id": obj.triggered_by.id, "username": obj.triggered_by.username}
 
 
-class CeleryTaskScheduleWriteSerializer(serializers.ModelSerializer):
-    task_args = serializers.ListField(required=False, allow_empty=True)
-    task_kwargs = serializers.DictField(required=False)
+class CeleryTaskScheduleWriteSerializer(ModelSerializer):
+    task_args = ListField(required=False, allow_empty=True)
+    task_kwargs = DictField(required=False)
 
     class Meta:
         model = CeleryTaskSchedule
@@ -109,7 +112,7 @@ class CeleryTaskScheduleWriteSerializer(serializers.ModelSerializer):
 
     def validate_task_name(self, value):
         if not isinstance(value, str) or not value.startswith("apps.") or value not in current_app.tasks:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 "Task name must reference a registered application task."
             )
         return value
@@ -118,7 +121,7 @@ class CeleryTaskScheduleWriteSerializer(serializers.ModelSerializer):
         queue_name = (value or "default").strip()
         available_queues = {queue.name for queue in (current_app.conf.task_queues or [])}
         if queue_name not in available_queues:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 "Queue must be one of the configured Celery queues."
             )
         return queue_name
@@ -146,16 +149,16 @@ class CeleryTaskScheduleWriteSerializer(serializers.ModelSerializer):
         )
 
         if schedule_type == CeleryTaskSchedule.ScheduleType.DATETIME and not one_time_datetime:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 {"one_time_datetime": "One-time schedules require a run datetime."}
             )
         if schedule_type == CeleryTaskSchedule.ScheduleType.INTERVAL:
             if interval_every is None or interval_every < 1:
-                raise serializers.ValidationError(
+                raise ValidationError(
                     {"interval_every": "Interval schedules require a positive interval."}
                 )
             if interval_period not in valid_interval_periods:
-                raise serializers.ValidationError(
+                raise ValidationError(
                     {"interval_period": "Interval schedules require a valid period."}
                 )
 
@@ -181,11 +184,11 @@ class CeleryTaskScheduleWriteSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class CeleryTaskScheduleListSerializer(serializers.ModelSerializer):
-    task_name_short = serializers.SerializerMethodField()
-    schedule_type_display = serializers.CharField(source="get_schedule_type_display", read_only=True)
-    schedule_display = serializers.SerializerMethodField()
-    status_display = serializers.CharField(source="get_status_display", read_only=True)
+class CeleryTaskScheduleListSerializer(ModelSerializer):
+    task_name_short = SerializerMethodField()
+    schedule_type_display = CharField(source="get_schedule_type_display", read_only=True)
+    schedule_display = SerializerMethodField()
+    status_display = CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = CeleryTaskSchedule
@@ -227,7 +230,7 @@ class CeleryTaskScheduleListSerializer(serializers.ModelSerializer):
         return "-"
 
 
-class CeleryTaskScheduleDetailSerializer(serializers.ModelSerializer):
+class CeleryTaskScheduleDetailSerializer(ModelSerializer):
     class Meta:
         model = CeleryTaskSchedule
         fields = [

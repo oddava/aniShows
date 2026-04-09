@@ -2,8 +2,10 @@ from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import permissions, serializers, status
 from rest_framework.decorators import action
+from rest_framework.fields import IntegerField
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
+from rest_framework.serializers import Serializer
 from rest_framework.throttling import BaseThrottle
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
@@ -62,12 +64,12 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.author == request.user
 
 
-class ThreadListQuerySerializer(serializers.Serializer):
-    page = serializers.IntegerField(required=False, default=1, min_value=1)
+class ThreadListQuerySerializer(Serializer):
+    page = IntegerField(required=False, default=1, min_value=1)
 
 
-class PostListQuerySerializer(serializers.Serializer):
-    page = serializers.IntegerField(required=False, default=1, min_value=1)
+class PostListQuerySerializer(Serializer):
+    page = IntegerField(required=False, default=1, min_value=1)
 
 class TagViewSet(ReadOnlyModelViewSet):
     queryset = Tag.objects.all()

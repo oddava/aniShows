@@ -86,6 +86,7 @@ class UserFavorite(Model):
 - anime degan app ichidagi modelni bolaklash kerak +
 - querysetlarni xammasini tepaga olib chiqish kerak +
 
+
 - apps. dan importlar chaqirishni toxtatish kerek
 - Serializers. Permissions.
 

@@ -1,5 +1,6 @@
 from django.conf import settings
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
 
 from apps.animes.models import (
@@ -30,7 +31,7 @@ def validate_image_content(file, max_size, field_name):
     from PIL import Image
 
     if file.size > max_size:
-        raise serializers.ValidationError(
+        raise ValidationError(
             f"{field_name} file too large. Maximum size is {max_size // (1024 * 1024)}MB."
         )
 
@@ -41,7 +42,7 @@ def validate_image_content(file, max_size, field_name):
     try:
         mime = magic.from_buffer(magic_bytes, mime=True)
         if mime not in ALLOWED_IMAGE_TYPES:
-            raise serializers.ValidationError(
+            raise ValidationError(
                 f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
             )
     except Exception as e:
@@ -53,7 +54,7 @@ def validate_image_content(file, max_size, field_name):
         img.verify()
         file.seek(0)
     except Exception:
-        raise serializers.ValidationError(f"Invalid or corrupted image file for {field_name}.")
+        raise ValidationError(f"Invalid or corrupted image file for {field_name}.")
 
     return file
 
