@@ -251,6 +251,45 @@ class SeasonalAnimeTests(APITestCase):
         self.assertEqual(titles[0], "Spring Ranked Favorite")
         self.assertLess(titles.index("Spring Anime"), titles.index("Spring Unranked Hype"))
 
+    def test_seasonal_sorting_falls_back_to_member_count_for_unranked_future_titles(self):
+        """Future seasonal rows without ranks should still sort by popularity-like demand."""
+        Anime.objects.create(
+            title="Summer Lower Demand",
+            slug="summer-lower-demand",
+            synopsis="Less anticipated summer show",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=25000,
+            popularity_rank=None,
+            site_rank=None,
+            rating=None,
+        )
+        Anime.objects.create(
+            title="Summer Higher Demand",
+            slug="summer-higher-demand",
+            synopsis="More anticipated summer show",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=125000,
+            popularity_rank=None,
+            site_rank=None,
+            rating=None,
+        )
+
+        response = self.client.get(
+            self.list_url, {"season": "summer", "year": "2026", "sort": "popular"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
+
+        self.assertLess(titles.index("Summer Higher Demand"), titles.index("Summer Lower Demand"))
+
     def test_null_rating_handling(self):
         """Test that anime with null ratings are included."""
         response = self.client.get(self.list_url, {"season": "winter", "year": "2024"})

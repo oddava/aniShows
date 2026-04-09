@@ -454,7 +454,9 @@ if ! "${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}/api/v1/health/" >/dev/null; the
     exit 1
 fi
 echo -e "${BLUE}  Verifying Daphne websocket upstream health...${NC}"
-if ! $COMPOSE_CMD exec -T daphne python -c "
+DAPHNE_UPSTREAM_OK=false
+for i in $(seq 1 12); do
+if $COMPOSE_CMD exec -T daphne python -c "
 import urllib.request
 request = urllib.request.Request(
     'http://localhost:8001/api/v1/health/',
@@ -463,8 +465,17 @@ request = urllib.request.Request(
 response = urllib.request.urlopen(request, timeout=5)
 print(response.read().decode())
 " 2>/dev/null; then
+    DAPHNE_UPSTREAM_OK=true
+    break
+fi
+echo -e "${YELLOW}  Daphne upstream check attempt $i failed, retrying in 3s...${NC}"
+sleep 3
+done
+
+if [ "$DAPHNE_UPSTREAM_OK" != "true" ]; then
     echo -e "${RED}Daphne websocket upstream health check failed.${NC}"
-    $COMPOSE_CMD logs --tail=50 daphne || true
+    $COMPOSE_CMD ps daphne || true
+    $COMPOSE_CMD logs --tail=80 daphne || true
     exit 1
 fi
 echo -e "${GREEN}Caddy is running and serving traffic.${NC}"

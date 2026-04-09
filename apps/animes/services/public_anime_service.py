@@ -444,6 +444,7 @@ class AnimeQueryService:
 
         sort_clean = (query_params.get("sort", "popular") or "popular").strip().lower()
         sort_field = self.SORT_MAPPING.get(sort_clean, "popularity_rank")
+        ordering = [sort_field, "-id"]
 
         if sort_clean == "rating":
             queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
@@ -456,16 +457,42 @@ class AnimeQueryService:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             elif has_temporal_filters:
                 queryset = queryset.annotate(
-                    popularity_sort=Coalesce(F("popularity_rank"), Value(1_000_000))
+                    popularity_missing=Case(
+                        # Future-season rows often arrive before a canonical popularity rank exists.
+                        When(popularity_rank__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    site_missing=Case(
+                        # Keep site_rank as a secondary signal before falling back to raw member counts.
+                        When(site_rank__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    rating_missing=Case(
+                        When(rating__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    member_sort=Coalesce(F("member_count"), Value(0)),
                 )
-                sort_field = "popularity_sort"
+                ordering = [
+                    "popularity_missing",
+                    "popularity_rank",
+                    "site_missing",
+                    "site_rank",
+                    "rating_missing",
+                    "-rating",
+                    "-member_sort",
+                    "-id",
+                ]
             else:
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))
-                sort_field = "-member_sort"
+                ordering = ["-member_sort", "-id"]
         elif sort_clean == "trending":
             queryset = queryset.filter(trending_rank__isnull=False)
 
-        queryset = queryset.order_by(sort_field, "-id")
+        queryset = queryset.order_by(*ordering)
         if needs_distinct:
             queryset = queryset.distinct()
         return queryset
