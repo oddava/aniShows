@@ -3,8 +3,8 @@ from datetime import timedelta
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from rest_framework import permissions
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import IntegerField, Serializer
 from rest_framework.viewsets import ViewSet
@@ -43,7 +43,7 @@ def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) ->
 class RecommendationsViewSet(ViewSet):
     """Personalized anime recommendations for authenticated users"""
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def list(self, request):
         from apps.animes.services.recommendations import RecommendationService

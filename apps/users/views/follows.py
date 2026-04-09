@@ -1,10 +1,8 @@
-from allauth.socialaccount.models import SocialAccount
-from rest_framework import permissions, status
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from apps.users.models import UserFollow
 from apps.users.serializers.users import (
     FollowSerializer,
     FriendWatchingSerializer,
@@ -23,7 +21,7 @@ from apps.users.services.follow_service import (
 class FollowViewSet(GenericViewSet):
     """Handle follow/unfollow operations and listing followers/following"""
 
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     @action(detail=False, methods=["POST"])
     def toggle(self, request):
@@ -36,7 +34,7 @@ class FollowViewSet(GenericViewSet):
         detail=False,
         methods=["GET"],
         url_path="followers/(?P<username>[^/.]+)",
-        permission_classes=[permissions.AllowAny],
+        permission_classes=[AllowAny],
     )
     def followers(self, request, username=None):
         queryset = get_followers_queryset(username, request.user)
@@ -61,7 +59,7 @@ class FollowViewSet(GenericViewSet):
         detail=False,
         methods=["GET"],
         url_path="following/(?P<username>[^/.]+)",
-        permission_classes=[permissions.AllowAny],
+        permission_classes=[AllowAny],
     )
     def following(self, request, username=None):
         queryset = get_following_queryset(username, request.user)
@@ -84,7 +82,7 @@ class FollowViewSet(GenericViewSet):
         detail=False,
         methods=["GET"],
         url_path="mutuals/(?P<username>[^/.]+)",
-        permission_classes=[permissions.AllowAny],
+        permission_classes=[AllowAny],
     )
     def mutuals(self, request, username=None):
         queryset = get_mutuals_queryset(username, request.user)
@@ -107,7 +105,7 @@ class FollowViewSet(GenericViewSet):
         detail=False,
         methods=["GET"],
         url_path="check/(?P<username>[^/.]+)",
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
     )
     def check(self, request, username=None):
         return Response({"is_following": is_following(request.user, username)})
@@ -116,7 +114,7 @@ class FollowViewSet(GenericViewSet):
         detail=False,
         methods=["GET"],
         url_path="friends/watching",
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
     )
     def friends_watching(self, request):
         friends_watching = get_friends_watching_queryset(

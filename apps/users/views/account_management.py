@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
-from rest_framework import permissions, status
+from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
@@ -24,15 +25,14 @@ class AccountManagementViewSet(ViewSet):
     Consolidates previously separate APIViews.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
         """Allow unauthenticated access only for email change confirmation links."""
         if self.action == "confirm_email_change":
-            return [permissions.AllowAny()]
+            return [AllowAny()]
         return super().get_permissions()
 
-    # Specific actions might need specific rate limiting
     def get_throttles(self):
         if self.action in ["delete_account", "change_email", "confirm_email_change"]:
             return [throttling.StrictUserRateThrottle()]
@@ -52,7 +52,6 @@ class AccountManagementViewSet(ViewSet):
         user = request.user
         password = request.data.get("password")
 
-        # Log account deletion attempt without sensitive details
         logger.info("Account deletion attempt initiated")
 
         result = delete_account(user, password)
@@ -69,7 +68,7 @@ class AccountManagementViewSet(ViewSet):
         result = request_email_change(user, new_email, password, email_service)
         return Response(result.payload, status=result.status_code)
 
-    @action(detail=False, methods=["post"], permission_classes=[permissions.AllowAny])
+    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def confirm_email_change(self, request):
         """Confirm email change with token."""
         uidb64 = request.data.get("uid")

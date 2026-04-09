@@ -1,5 +1,6 @@
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
@@ -10,7 +11,7 @@ from apps.users.serializers.users import UserBadgeSerializer
 class UserBadgeViewSet(GenericViewSet):
     """User-facing API for managing featured badges."""
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return UserBadge.objects.filter(user=self.request.user).select_related("badge")

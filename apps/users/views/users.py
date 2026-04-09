@@ -2,16 +2,15 @@ import time
 
 from botocore.exceptions import EndpointConnectionError
 from django.contrib.auth import get_user_model
-from rest_framework import permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from apps.shared.logger import logger
 from apps.users import throttling
-from apps.users.models import UserStats
 from apps.users.serializers.users import (
     PublicUserSerializer,
     UserProfileUpdateSerializer,
@@ -36,7 +35,7 @@ class UserProfileView(APIView):
     Supports 'full' query param for complete stats.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
@@ -115,7 +114,7 @@ class UserProfileView(APIView):
 class UserStatsView(APIView):
     """Get detailed user statistics (separate endpoint for heavy calculations)."""
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         result = get_user_stats(request.user)
@@ -126,7 +125,7 @@ class PublicUserProfileViewSet(ReadOnlyModelViewSet):
     """Public profile view by username"""
 
     serializer_class = PublicUserSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
     throttle_classes = [throttling.PublicUserProfileRateThrottle]
     lookup_field = "username"
 

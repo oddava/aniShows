@@ -4,6 +4,8 @@ from rest_framework import permissions, serializers, status
 from rest_framework.decorators import action
 from rest_framework.fields import IntegerField
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.permissions import BasePermission, SAFE_METHODS, AllowAny, IsAuthenticatedOrReadOnly, \
+    IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 from rest_framework.throttling import BaseThrottle
@@ -57,9 +59,9 @@ from .services import (
 from .services.interactions import hash_viewer_identifier
 
 
-class IsOwnerOrReadOnly(permissions.BasePermission):
+class IsOwnerOrReadOnly(BasePermission):
     def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS:
+        if request.method in SAFE_METHODS:
             return True
         return obj.author == request.user
 
@@ -74,7 +76,7 @@ class PostListQuerySerializer(Serializer):
 class TagViewSet(ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
     lookup_field = "slug"
     ordering_fields = ["name"]
     ordering = ["name"]
@@ -91,7 +93,7 @@ class TagViewSet(ReadOnlyModelViewSet):
 
 
 class CategoryViewSet(ReadOnlyModelViewSet):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
     serializer_class = CategorySerializer
     lookup_field = "slug"
     ordering_fields = ["order", "name"]
@@ -128,7 +130,7 @@ class CategoryViewSet(ReadOnlyModelViewSet):
 
 
 class ThreadViewSet(ModelViewSet):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["category__slug", "author__username", "tags__slug"]
     search_fields = ["title", "content"]
@@ -212,7 +214,7 @@ class ThreadViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def like(self, request, pk=None):
@@ -223,7 +225,7 @@ class ThreadViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAdminUser],
+        permission_classes=[IsAdminUser],
         url_path="toggle_pin",
     )
     def toggle_pin(self, request, pk=None):
@@ -234,7 +236,7 @@ class ThreadViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def unlike(self, request, pk=None):
@@ -245,7 +247,7 @@ class ThreadViewSet(ModelViewSet):
 
 class PostViewSet(ModelViewSet):
     serializer_class = PostSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["thread__id"]
     ordering_fields = ["created_at"]
@@ -279,8 +281,6 @@ class PostViewSet(ModelViewSet):
 
             page_obj = self.paginate_queryset(top_level_queryset)
             if page_obj is not None:
-                # We have a page of top-level posts. Now fetch only their descendants
-                # instead of loading ALL child posts for the entire thread.
                 final_posts = get_threaded_posts_page(queryset, thread_id, list(page_obj))
 
                 serializer = self.get_serializer(final_posts, many=True)
@@ -311,7 +311,7 @@ class PostViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def like(self, request, pk=None):
@@ -322,7 +322,7 @@ class PostViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def unlike(self, request, pk=None):

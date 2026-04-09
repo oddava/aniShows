@@ -1,5 +1,6 @@
-from rest_framework import mixins, permissions
+from rest_framework import mixins
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
@@ -32,7 +33,7 @@ class FavoriteViewSet(EmailVerificationMixin, ModelViewSet):
             return FavoriteCompactSerializer
         return super().get_serializer_class()
 
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to add favorites."
 
     def get_queryset(self):
@@ -63,7 +64,7 @@ class CharacterFavoriteViewSet(
     GenericViewSet,
 ):
     serializer_class = CharacterFavoriteSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to add favorite characters."
 
     def get_queryset(self):
@@ -86,7 +87,7 @@ class StaffFavoriteViewSet(
     GenericViewSet,
 ):
     serializer_class = StaffFavoriteSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to add favorite voice actors."
 
     def get_queryset(self):

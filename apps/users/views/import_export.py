@@ -4,6 +4,7 @@ from django.http import HttpResponse
 from rest_framework import permissions, status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 
@@ -29,7 +30,7 @@ class ImportExportViewSet(ViewSet):
     Consolidates previously separate APIViews for MAL, AniList, and Exports.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=["post"])
     def import_mal(self, request):
@@ -153,7 +154,7 @@ class UserImportJobViewSet(ReadOnlyModelViewSet):
     Read-only but includes a cancel action.
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     serializer_class = UserImportJobSerializer
 
     def get_queryset(self):

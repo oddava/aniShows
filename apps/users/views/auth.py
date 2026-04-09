@@ -1,6 +1,9 @@
 from django.contrib.auth import get_user_model
-from rest_framework import generics, permissions, serializers, status
+from rest_framework import generics, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.fields import CharField, EmailField
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
@@ -28,8 +31,8 @@ User = get_user_model()
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["username"] = serializers.CharField(required=False)
-        self.fields["email"] = serializers.EmailField(required=False)
+        self.fields["username"] = CharField(required=False)
+        self.fields["email"] = EmailField(required=False)
 
     @classmethod
     def get_token(cls, user):
@@ -66,7 +69,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 class RegisterView(generics.CreateAPIView):
     """Handle user registration with email verification."""
 
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
     authentication_classes = []
     throttle_classes = [throttling.RegisterRateThrottle]
     serializer_class = RegisterSerializer
@@ -82,7 +85,7 @@ class RegisterView(generics.CreateAPIView):
         email = validated_data["email"]
 
         if self.auth_service.username_exists(username) or self.auth_service.email_exists(email):
-            raise serializers.ValidationError(
+            raise ValidationError(
                 {
                     "username": [generic_message],
                     "email": [generic_message],
@@ -114,7 +117,7 @@ class AuthViewSet(ViewSet):
     ViewSet to handle email verification and password reset workflows.
     Consolidates verify_email, resend_verification, password_reset, and password_reset_confirm.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
     authentication_classes = []
 
     def __init__(self, **kwargs):

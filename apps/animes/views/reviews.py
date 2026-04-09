@@ -3,6 +3,7 @@ from http import HTTPStatus
 from django.contrib.auth import get_user_model
 from rest_framework import permissions
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
@@ -28,7 +29,7 @@ User = get_user_model()
 
 class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     serializer_class = ReviewSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     verification_error_message = "Please verify your email to write reviews."
 
     def get_queryset(self):
@@ -56,7 +57,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         url_path="votes",
     )
     def votes(self, request, pk=None):
@@ -69,7 +70,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         url_path="reactions",
     )
     def reactions(self, request, pk=None):
@@ -83,7 +84,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         )
         return Response(result.payload, status=result.status_code)
 
-    @action(detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def report(self, request, pk=None):
         review = self.get_object()
         serializer = ReviewReportCreateSerializer(data=request.data)

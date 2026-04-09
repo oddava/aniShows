@@ -1,8 +1,9 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import permissions, status
+from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -234,7 +235,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         detail=True,
         methods=["put", "patch", "delete"],
         url_path=r"episode-ratings/(?P<episode_number>\d+)",
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
     )
     def episode_rating(self, request, slug=None, episode_number=None):
         anime = self._get_action_anime(slug)
@@ -270,7 +271,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         detail=False,
         methods=["post"],
         url_path="franchise/fetch",
-        permission_classes=[permissions.IsAuthenticated],
+        permission_classes=[IsAuthenticated],
         authentication_classes=[JWTAuthentication, CsrfExemptSessionAuthentication],
     )
     def franchise_fetch(self, request):
