@@ -94,7 +94,21 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     def list(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return super().list(request, *args, **kwargs)
+            queryset = self.filter_queryset(self.get_queryset())
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                data = self.payload_service.enrich_collection_payload_for_user(
+                    serializer.data,
+                    request.user,
+                )
+                return self.get_paginated_response(data)
+            serializer = self.get_serializer(queryset, many=True)
+            data = self.payload_service.enrich_collection_payload_for_user(
+                serializer.data,
+                request.user,
+            )
+            return Response(data)
         result = self.payload_service.cache_list_payload(
             request,
             lambda: super(AnimeViewSet, self).list(request, *args, **kwargs).data,

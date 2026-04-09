@@ -223,9 +223,13 @@ class AnimeQueryService:
 
         user = request.user
         if include_user_context and user.is_authenticated:
-            queryset = queryset.annotate(
-                _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
-            ).prefetch_related(self._user_list_prefetch(user))
+            if is_list:
+                # Keep browse queries lean. User-specific status is added after pagination.
+                queryset = queryset
+            else:
+                queryset = queryset.annotate(
+                    _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
+                ).prefetch_related(self._user_list_prefetch(user))
 
         if not is_list:
             return queryset.annotate(
@@ -514,10 +518,15 @@ class AnimeQueryService:
 
     @classmethod
     def _exclude_adult_content(cls, queryset):
-        adult_ids = Anime.objects.using(queryset.db).filter(
-            Q(genres__slug__in=ADULT_GENRE_SLUGS) | cls._adult_tags_q(queryset.db)
+        adult_genre_ids = (
+            Anime.objects.using(queryset.db)
+            .filter(genres__slug__in=ADULT_GENRE_SLUGS)
+            .values("pk")
         )
-        return queryset.exclude(pk__in=adult_ids.values("pk"))
+        adult_tag_ids = (
+            Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values("pk")
+        )
+        return queryset.exclude(pk__in=adult_genre_ids).exclude(pk__in=adult_tag_ids)
 
     @staticmethod
     def _adult_tags_q(database_alias: str) -> Q:
