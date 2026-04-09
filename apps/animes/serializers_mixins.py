@@ -196,6 +196,10 @@ class UserProfileMixin:
             return profile.profile_primary_color
         return "#8b5cf6"
 
+    def get_show_adult_content(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.show_adult_content if profile else False
+
 class BadgesMixin:
     """Mixin for serializers that display user badges.
     Used by UserSerializer and PublicUserSerializer.

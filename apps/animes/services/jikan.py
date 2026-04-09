@@ -556,6 +556,7 @@ class JikanService:
 
     async def _fetch_current_season_anime(self, *, limit: int) -> list[dict]:
         results: list[dict] = []
+        seen_mal_ids: set[int] = set()
         page = 1
         per_page = min(max(1, limit), self.MAX_PER_PAGE)
 
@@ -569,11 +570,7 @@ class JikanService:
             if not isinstance(page_items, list) or not page_items:
                 break
 
-            results.extend(
-                self._normalize_anime_item(item)
-                for item in page_items
-                if isinstance(item, dict)
-            )
+            self._extend_unique_anime_results(results, seen_mal_ids, page_items)
 
             pagination = payload.get("pagination") or {}
             if not pagination.get("has_next_page"):
@@ -586,6 +583,7 @@ class JikanService:
 
     async def _fetch_top_airing_anime(self, *, limit: int) -> list[dict]:
         results: list[dict] = []
+        seen_mal_ids: set[int] = set()
         page = 1
         per_page = min(max(1, limit), self.MAX_PER_PAGE)
 
@@ -599,11 +597,7 @@ class JikanService:
             if not isinstance(page_items, list) or not page_items:
                 break
 
-            results.extend(
-                self._normalize_anime_item(item)
-                for item in page_items
-                if isinstance(item, dict)
-            )
+            self._extend_unique_anime_results(results, seen_mal_ids, page_items)
 
             pagination = payload.get("pagination") or {}
             if not pagination.get("has_next_page"):
@@ -613,6 +607,25 @@ class JikanService:
             per_page = min(self.MAX_PER_PAGE, max(1, limit - len(results)))
 
         return results
+
+    def _extend_unique_anime_results(
+        self,
+        results: list[dict],
+        seen_mal_ids: set[int],
+        items: list[dict],
+    ) -> None:
+        # The self-hosted Jikan instance can emit duplicate MAL IDs within the same page.
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            normalized = self._normalize_anime_item(item)
+            mal_id = self._coerce_positive_int(normalized.get("idMal"))
+            if not mal_id or mal_id in seen_mal_ids:
+                continue
+
+            seen_mal_ids.add(mal_id)
+            results.append(normalized)
 
     @staticmethod
     def _sort_trending_candidates(items: list[dict]) -> list[dict]:

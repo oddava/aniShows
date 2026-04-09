@@ -374,6 +374,14 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("profile_primary_color", res.data)
 
+    def test_profile_update_show_adult_content(self):
+        res = self.client.patch(self.profile_url, {"show_adult_content": True}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.show_adult_content)
+        self.assertTrue(res.data["show_adult_content"])
+
     def test_profile_update_bio_preserves_allowed_html(self):
         """Test that safe formatting tags remain intact after save."""
         data = {

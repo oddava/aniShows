@@ -37,6 +37,7 @@ export function usePrefetchAnime() {
             currentParams.maxDuration || '',
             currentParams.minYear || '',
             currentParams.maxYear || '',
+            Boolean(currentParams.adultContentEnabled),
         ];
 
         // Prefetch with shorter stale time since it's the next page

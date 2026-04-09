@@ -308,12 +308,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
 
 class GenreViewSet(ReadOnlyModelViewSet):
-    queryset = Genre.objects.all().order_by("name")
+    queryset = Genre.objects.only("id", "name", "slug").order_by("name")
     serializer_class = GenreSerializer
     pagination_class = None
 
 
 class StudioViewSet(ReadOnlyModelViewSet):
-    queryset = Studio.objects.all().order_by("name")
+    queryset = Studio.objects.only("id", "name", "website").order_by("name")
     serializer_class = StudioSerializer
     pagination_class = None

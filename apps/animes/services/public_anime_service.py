@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.core.cache import cache
+from django.db import connections
 from django.db.models import (
     Avg,
     Case,
@@ -28,8 +29,8 @@ from ...shared.public_cache import (
     invalidate_public_cache_keys,
     public_cache_stale_key,
 )
-from ...users.models import UserAnimeList
-from ..models import Anime, UserFavorite
+from ...users.models import UserAnimeList, UserProfile
+from ..models import Anime, Genre, ThemeSong, UserFavorite
 from .jikan import JikanService
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
@@ -37,6 +38,48 @@ VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
 VALID_SEASONS = {"winter", "spring", "summer", "fall"}
 MAX_RATING = 10.0
 MIN_RATING = 0.0
+ADULT_GENRE_SLUGS = {"erotica", "hentai"}
+ADULT_TAGS = {
+    "ahegao",
+    "anal sex",
+    "ashikoki",
+    "boobjob",
+    "cervix penetration",
+    "cumflation",
+    "cunnilingus",
+    "deepthroat",
+    "defloration",
+    "double penetration",
+    "explicit sex",
+    "facial",
+    "fellatio",
+    "femdom",
+    "futanari",
+    "group sex",
+    "handjob",
+    "incest",
+    "inseki",
+    "irrumatio",
+    "lactation",
+    "masturbation",
+    "mating press",
+    "nakadashi",
+    "netorare",
+    "netorase",
+    "netori",
+    "nsfw",
+    "oyakodon",
+    "prostitution",
+    "public sex",
+    "rape",
+    "rimjob",
+    "sex",
+    "sex toys",
+    "succubus",
+    "squirting",
+    "sumata",
+    "threesome",
+}
 
 
 def build_user_list_status_payload(entry, episode_count: int | None) -> dict:
@@ -101,10 +144,30 @@ class AnimeQueryService:
         "next_airing_episode",
         "next_airing_date",
         "studio_id",
-        "popularity_rank",
-        "trending_rank",
-        "member_count",
-        "site_rank",
+    )
+    GENRE_FIELDS = ("id", "name", "slug")
+    THEME_SONG_FIELDS = (
+        "id",
+        "anime_id",
+        "song_type",
+        "track_number",
+        "title",
+        "artist",
+        "episodes",
+        "spotify_url",
+        "youtube_url",
+    )
+    USER_LIST_FIELDS = (
+        "id",
+        "anime_id",
+        "status",
+        "score",
+        "episodes_watched",
+        "notes",
+        "started_at",
+        "finished_at",
+        "total_rewatches",
+        "is_rewatching",
     )
     SORT_MAPPING = {
         "popular": "popularity_rank",
@@ -115,32 +178,54 @@ class AnimeQueryService:
         "trending": "trending_rank",
     }
 
+    @classmethod
+    def _genre_prefetch(cls) -> Prefetch:
+        return Prefetch(
+            "genres",
+            queryset=Genre.objects.only(*cls.GENRE_FIELDS).order_by("name"),
+        )
+
+    @classmethod
+    def _theme_song_prefetch(cls) -> Prefetch:
+        return Prefetch(
+            "theme_songs",
+            # Detail payloads only expose a small slice of theme-song fields.
+            queryset=ThemeSong.objects.only(*cls.THEME_SONG_FIELDS).order_by(
+                "song_type", "track_number"
+            ),
+        )
+
+    @classmethod
+    def _user_list_prefetch(cls, user) -> Prefetch:
+        return Prefetch(
+            "user_lists",
+            # Keeping this narrow prevents browse pages from pulling the whole list table into memory.
+            queryset=UserAnimeList.objects.filter(user=user).only(*cls.USER_LIST_FIELDS),
+            to_attr="_user_list_entries",
+        )
+
     def build_queryset(self, request, *, action: str, include_user_context: bool = True):
         is_list = action == "list"
         queryset = Anime.public_queryset().select_related("studio")
 
         if is_list:
             queryset = queryset.only(*self.LIST_FIELDS, "studio__id", "studio__name")
-            queryset = queryset.prefetch_related("genres")
+            queryset = queryset.prefetch_related(self._genre_prefetch())
         else:
-            queryset = queryset.prefetch_related("genres", "theme_songs").defer(
-                *self.DETAIL_DEFER_FIELDS
-            ).annotate(
-                character_count=Count("cast", distinct=True),
-                staff_count=Count("production_staff", distinct=True),
+            queryset = (
+                queryset.prefetch_related(self._genre_prefetch(), self._theme_song_prefetch())
+                .defer(*self.DETAIL_DEFER_FIELDS)
+                .annotate(
+                    character_count=Count("cast", distinct=True),
+                    staff_count=Count("production_staff", distinct=True),
+                )
             )
 
         user = request.user
         if include_user_context and user.is_authenticated:
             queryset = queryset.annotate(
                 _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
-            ).prefetch_related(
-                Prefetch(
-                    "user_lists",
-                    queryset=UserAnimeList.objects.filter(user=user),
-                    to_attr="_user_list_entries",
-                )
-            )
+            ).prefetch_related(self._user_list_prefetch(user))
 
         if not is_list:
             return queryset.annotate(
@@ -169,7 +254,7 @@ class AnimeQueryService:
                 .order_by("relation_order", "-id")
             )
 
-        genre_ids = anime.genres.values_list("id", flat=True)
+        genre_ids = self._genre_ids(anime)
         return (
             base_queryset.filter(genres__in=genre_ids)
             .exclude(id=anime.id)
@@ -233,11 +318,19 @@ class AnimeQueryService:
 
     @staticmethod
     def base_shelf_queryset():
-        return Anime.public_queryset().select_related("studio").prefetch_related("genres")
+        return (
+            Anime.public_queryset()
+            .select_related("studio")
+            .only(*AnimeQueryService.LIST_FIELDS, "studio__id", "studio__name")
+            .prefetch_related(AnimeQueryService._genre_prefetch())
+        )
 
     def _apply_list_filters(self, queryset, request):
         needs_distinct = False
         query_params = request.query_params
+
+        if not self._can_view_adult_content(request.user):
+            queryset = self._exclude_adult_content(queryset)
 
         search = query_params.get("q")
         if search:
@@ -298,8 +391,7 @@ class AnimeQueryService:
         tags_param = query_params.get("tags")
         if tags_param:
             tags = [tag.strip().lower() for tag in tags_param.split(",") if tag.strip()]
-            for tag in tags:
-                queryset = queryset.filter(tags__contains=[tag])
+            queryset = self._apply_tags_filter(queryset, tags)
 
         queryset = self._apply_numeric_range_filter(
             queryset,
@@ -379,6 +471,34 @@ class AnimeQueryService:
         return queryset
 
     @staticmethod
+    def _can_view_adult_content(user) -> bool:
+        if not getattr(user, "is_authenticated", False):
+            return False
+        return bool(
+            UserProfile.objects.filter(user_id=user.id, show_adult_content=True).values_list(
+                "show_adult_content", flat=True
+            ).first()
+        )
+
+    @classmethod
+    def _exclude_adult_content(cls, queryset):
+        adult_ids = Anime.objects.using(queryset.db).filter(
+            Q(genres__slug__in=ADULT_GENRE_SLUGS) | cls._adult_tags_q(queryset.db)
+        )
+        return queryset.exclude(pk__in=adult_ids.values("pk"))
+
+    @staticmethod
+    def _adult_tags_q(database_alias: str) -> Q:
+        vendor = connections[database_alias].vendor
+        condition = Q()
+        for tag in ADULT_TAGS:
+            if vendor == "postgresql":
+                condition |= Q(tags__contains=[tag])
+            else:
+                condition |= Q(tags__icontains=json.dumps(tag))
+        return condition
+
+    @staticmethod
     def _parse_multi_value_params(params: list[str]) -> list[str]:
         values = []
         for param in params:
@@ -435,6 +555,26 @@ class AnimeQueryService:
         return queryset
 
     @staticmethod
+    def _apply_tags_filter(queryset, tags: list[str]):
+        if not tags:
+            return queryset
+
+        db_vendor = connections[queryset.db].vendor
+        for tag in tags:
+            if db_vendor == "postgresql":
+                queryset = queryset.filter(tags__contains=[tag])
+                continue
+
+            # SQLite lacks JSON contains lookups, so match the quoted JSON string instead.
+            queryset = queryset.filter(tags__icontains=json.dumps(tag))
+
+        return queryset
+
+    @staticmethod
+    def _year_bounds(year: int) -> tuple[date, date]:
+        return date(year, 1, 1), date(year, 12, 31)
+
+    @staticmethod
     def _apply_year_filters(queryset, query_params):
         season = query_params.get("season")
         year = query_params.get("year")
@@ -465,8 +605,10 @@ class AnimeQueryService:
                     return queryset.filter(
                         explicit_season_match | release_date_fallback
                     )
+                start, end = AnimeQueryService._year_bounds(year_int)
                 return queryset.filter(
-                    Q(season_year=year_int) | Q(season_year__isnull=True, release_date__year=year_int)
+                    Q(season_year=year_int)
+                    | Q(season_year__isnull=True, release_date__gte=start, release_date__lte=end)
                 )
             return queryset
 
@@ -477,7 +619,12 @@ class AnimeQueryService:
             except (TypeError, ValueError):
                 min_year_int = None
             if min_year_int and 1980 <= min_year_int <= 2050:
-                queryset = queryset.filter(release_date__year__gte=min_year_int)
+                min_start, _ = AnimeQueryService._year_bounds(min_year_int)
+                queryset = queryset.filter(
+                    # Upcoming rows often only have season metadata, so keep them in year-range views.
+                    Q(season_year__gte=min_year_int)
+                    | Q(season_year__isnull=True, release_date__gte=min_start)
+                )
 
         max_year = query_params.get("max_year")
         if max_year:
@@ -486,7 +633,12 @@ class AnimeQueryService:
             except (TypeError, ValueError):
                 max_year_int = None
             if max_year_int and 1980 <= max_year_int <= 2050:
-                queryset = queryset.filter(release_date__year__lte=max_year_int)
+                _, max_end = AnimeQueryService._year_bounds(max_year_int)
+                queryset = queryset.filter(
+                    # Treat season_year as the canonical year when release_date is still unknown.
+                    Q(season_year__lte=max_year_int)
+                    | Q(season_year__isnull=True, release_date__lte=max_end)
+                )
 
         return queryset
 
@@ -512,10 +664,18 @@ class AnimeQueryService:
                 relation_slugs.append(relation_slug)
         return list(dict.fromkeys(relation_slugs))
 
+    @staticmethod
+    def _genre_ids(anime) -> list[int]:
+        prefetched_genres = getattr(anime, "_prefetched_objects_cache", {}).get("genres")
+        if prefetched_genres is not None:
+            # Related/recommendation actions already prefetch genres on the source anime.
+            return [genre.id for genre in prefetched_genres]
+        return list(anime.genres.values_list("id", flat=True))
+
     def _fallback_recommendations_queryset(self, anime):
         relation_anilist_ids = self._relation_anilist_ids(anime)
         relation_slugs = self._relation_slugs(anime)
-        genre_ids = anime.genres.values_list("id", flat=True)
+        genre_ids = self._genre_ids(anime)
 
         queryset = self.base_shelf_queryset().exclude(id=anime.id)
         if relation_anilist_ids:
@@ -531,7 +691,7 @@ class AnimeQueryService:
 
 
 class AnimePublicPayloadService:
-    PUBLIC_CACHE_VERSION = "v7"
+    PUBLIC_CACHE_VERSION = "v9"
     INTERNAL_MEDIA_HOSTS = {"localhost", "127.0.0.1", "minio", "web"}
     MEDIA_URL_FIELDS = (
         "cover_image",
@@ -550,7 +710,16 @@ class AnimePublicPayloadService:
 
     @classmethod
     def detail_cache_keys(cls, slug: str) -> tuple[str, ...]:
-        return (cls.detail_cache_key(slug),)
+        return (
+            cls.detail_cache_key(slug),
+            # Read through older keys so stale detail caches can self-heal after deploys.
+            f"anime_detail_base:{slug}",
+            f"anime_detail_base:v6:{slug}",
+            f"anime_detail_base:v5:{slug}",
+            f"anime_detail_base:v4:{slug}",
+            f"anime_detail_base:v3:{slug}",
+            f"anime_detail_base:v2:{slug}",
+        )
 
     @staticmethod
     def sanitize_public_user_fields(payload):
@@ -648,6 +817,11 @@ class AnimePublicPayloadService:
                     and not cls.item_has_stale_imagekit_cache_urls(payload)
                 ),
             )
+            if cache_hit_key and cache_hit_key != primary_cache_key:
+                ttl = 3600 if cls.has_cover_media(data) else 60
+                # Rehydrate the legacy key that was actually requested so older readers converge.
+                cache.set(cache_hit_key, data, ttl)
+                cache.set(public_cache_stale_key(cache_hit_key), data, ttl + 900)
 
         if request.user.is_authenticated:
             data = cls.enrich_detail_payload_for_user(data, request.user)

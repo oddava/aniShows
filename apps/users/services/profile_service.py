@@ -163,6 +163,7 @@ def _build_profile_data(user, stats_data):
         "banner": normalize_media_url(profile.banner.url) if profile and profile.banner else None,
         "bio": _normalize_bio(profile.bio if profile else None),
         "is_private": profile.is_private if profile else False,
+        "show_adult_content": profile.show_adult_content if profile else False,
         "email_verified": profile.email_verified if profile else False,
         "social_links": profile.social_links if profile else [],
         "profile_primary_color": _normalize_profile_primary_color(
@@ -195,6 +196,7 @@ def _normalize_profile_payload(data):
     normalized["profile_primary_color"] = _normalize_profile_primary_color(
         normalized.get("profile_primary_color")
     )
+    normalized["show_adult_content"] = bool(normalized.get("show_adult_content", False))
     return normalized
 
 

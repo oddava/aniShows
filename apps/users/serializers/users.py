@@ -161,6 +161,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
 
     points = SerializerMethodField()
     profile_primary_color = SerializerMethodField()
+    show_adult_content = SerializerMethodField()
     followers_count = IntegerField(read_only=True, source="_followers_count")
     following_count = IntegerField(read_only=True, source="_following_count")
 
@@ -191,6 +192,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "is_superuser",
             "points",
             "profile_primary_color",
+            "show_adult_content",
             "followers_count",
             "following_count",
             "badges",
@@ -215,6 +217,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
     has_password = SerializerMethodField()
     social_links = SerializerMethodField()
     profile_primary_color = SerializerMethodField()
+    show_adult_content = SerializerMethodField()
 
     anime_count = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
@@ -233,6 +236,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
             "has_password",
             "social_links",
             "profile_primary_color",
+            "show_adult_content",
             "anime_count",
             "episodes_watched",
             "days_watched",
@@ -332,6 +336,7 @@ class UserProfileUpdateSerializer(Serializer):
     remove_banner = BooleanField(required=False, default=False)
     bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
     is_private = BooleanField(required=False, default=False)
+    show_adult_content = BooleanField(required=False)
     profile_primary_color = CharField(required=False, max_length=7)
 
     def validate_is_private(self, value):
@@ -340,6 +345,11 @@ class UserProfileUpdateSerializer(Serializer):
         return value
 
     def validate_remove_banner(self, value):
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes", "on")
+        return value
+
+    def validate_show_adult_content(self, value):
         if isinstance(value, str):
             return value.lower() in ("true", "1", "yes", "on")
         return value

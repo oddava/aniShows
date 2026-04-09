@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { animeApi } from '../api/client';
+import { getNextPageNumber } from '../api/pagination';
 
 /**
  * Hook to fetch anime with infinite scroll/pagination
@@ -49,13 +50,7 @@ export function useInfiniteAnime({
                 min_rating: currentMinRating || undefined,
                 max_rating: currentMaxRating || undefined,
             }).then(res => res.data),
-        getNextPageParam: (lastPage) => {
-            if (lastPage.next) {
-                const url = new URL(lastPage.next);
-                return url.searchParams.get('page');
-            }
-            return undefined;
-        },
+        getNextPageParam: (lastPage) => getNextPageNumber(lastPage?.next),
         staleTime: 1000 * 60 * 5, // 5 minutes
     });
 }

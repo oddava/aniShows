@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
-import { Search, X, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, X, Filter, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 const Pill = ({ active, label, onClick }) => (
@@ -30,7 +30,11 @@ export default function TopFilterBar({
     yearOptions,
     searchInputRef,
     onOpenMobileFilters,
-    hasActiveFilters
+    hasActiveFilters,
+    adultContentEnabled,
+    onToggleAdultContent,
+    isUpdatingAdultContent,
+    canToggleAdultContent,
 }) {
     const [searchParams, setSearchParams] = useSearchParams();
     const localSearchInputRef = useRef(null);
@@ -172,6 +176,29 @@ export default function TopFilterBar({
                     </button>
                 </div>
 
+                {/* Adult Content Toggle */}
+                <button
+                    onClick={onToggleAdultContent}
+                    disabled={isUpdatingAdultContent || !canToggleAdultContent}
+                    className={`hidden sm:flex flex-shrink-0 items-center justify-center w-[48px] h-[48px] rounded-xl transition-colors ${
+                        adultContentEnabled
+                            ? 'bg-accent/20 text-accent'
+                            : 'bg-dark-200 text-gray-400 hover:text-white'
+                    } ${isUpdatingAdultContent || !canToggleAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    aria-label={
+                        adultContentEnabled ? 'Hide explicit hentai content' : 'Show explicit hentai content'
+                    }
+                    title={
+                        !canToggleAdultContent
+                            ? 'Log in to change explicit content visibility'
+                            : adultContentEnabled
+                                ? 'Explicit hentai: visible'
+                                : 'Explicit hentai: hidden'
+                    }
+                >
+                    {adultContentEnabled ? <Eye className="w-[18px] h-[18px]" /> : <EyeOff className="w-[18px] h-[18px]" />}
+                </button>
+
                 {/* Advanced Filters Button */}
                 <button
                     onClick={onOpenMobileFilters}
@@ -241,5 +268,9 @@ TopFilterBar.propTypes = {
         PropTypes.shape({ current: PropTypes.any })
     ]),
     onOpenMobileFilters: PropTypes.func,
-    hasActiveFilters: PropTypes.bool
+    hasActiveFilters: PropTypes.bool,
+    adultContentEnabled: PropTypes.bool,
+    onToggleAdultContent: PropTypes.func,
+    isUpdatingAdultContent: PropTypes.bool,
+    canToggleAdultContent: PropTypes.bool,
 };

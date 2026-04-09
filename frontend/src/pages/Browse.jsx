@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Search, X, Filter, TrendingUp, Play, Trophy, Clock, Sparkles, ArrowDownAZ, Users, Loader2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -13,7 +13,8 @@ import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
 import ViewModeToggle from '../components/browse/ViewModeToggle';
 import TrendingCarousel from '../components/browse/TrendingCarousel';
-import { animeApi, genreApi, studioApi } from '../api/client';
+import { animeApi, genreApi, studioApi, authApi } from '../api/client';
+import { getNextPageNumber } from '../api/pagination';
 import { useAuth } from '../context/AuthContext';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import { usePrefetchAnime } from '../hooks/usePrefetchAnime';
@@ -221,7 +222,10 @@ export default function Browse() {
   }, [setSearchParams]);
 
   // Hooks
-  const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const { isAuthenticated, user, refreshProfile } = useAuth();
+  const adultContentEnabled = Boolean(user?.show_adult_content);
+  const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
   const skeletonCount = useSkeletonCount(viewMode);
   const { prefetchNextPage } = usePrefetchAnime();
   const { trackTabChange, trackViewModeChange, trackSearch } = useAnalytics();
@@ -254,6 +258,34 @@ export default function Browse() {
   useEffect(() => {
     if (currentSearch) trackSearch(currentSearch);
   }, [currentSearch, trackSearch]);
+
+  const handleToggleAdultContent = useCallback(async () => {
+    if (!isAuthenticated || isUpdatingAdultContent) return;
+
+    const nextValue = !adultContentEnabled;
+    setIsUpdatingAdultContent(true);
+    try {
+      const response = await authApi.updateProfile({ show_adult_content: nextValue });
+      const updatedProfile = response?.data;
+      if (updatedProfile && typeof updatedProfile === 'object') {
+        await refreshProfile(updatedProfile);
+        queryClient.setQueryData(['ownProfile'], updatedProfile);
+      } else {
+        await refreshProfile();
+      }
+      queryClient.removeQueries({ queryKey: ['anime'] });
+      queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    } finally {
+      setIsUpdatingAdultContent(false);
+    }
+  }, [
+    adultContentEnabled,
+    isAuthenticated,
+    isUpdatingAdultContent,
+    queryClient,
+    refreshProfile,
+  ]);
 
   // Sync local filters when URL params change
   useEffect(() => {
@@ -407,6 +439,7 @@ export default function Browse() {
       currentMaxDuration,
       currentMinYear,
       currentMaxYear,
+      adultContentEnabled,
     ],
     queryFn: ({ pageParam }) =>
       animeApi.getAll({
@@ -434,11 +467,7 @@ export default function Browse() {
     initialPageParam: 1,
     placeholderData: (previousData) => previousData,
     getNextPageParam: (lastPage) => {
-      if (lastPage && lastPage.next) {
-        const url = new URL(lastPage.next);
-        return url.searchParams.get('page');
-      }
-      return undefined;
+      return getNextPageNumber(lastPage?.next);
     },
     staleTime: 1000 * 60 * 5,
     enabled: isGridMode,
@@ -545,6 +574,7 @@ export default function Browse() {
               maxDuration: currentMaxDuration,
               minYear: currentMinYear,
               maxYear: currentMaxYear,
+              adultContentEnabled,
               pageSize: 12,
             }, nextPage);
 
@@ -778,6 +808,10 @@ export default function Browse() {
                   searchInputRef={searchInputRef}
                   onOpenMobileFilters={() => setShowFilters(!showFilters)}
                   hasActiveFilters={hasActiveFilters}
+                  adultContentEnabled={adultContentEnabled}
+                  onToggleAdultContent={handleToggleAdultContent}
+                  isUpdatingAdultContent={isUpdatingAdultContent}
+                  canToggleAdultContent={isAuthenticated}
                 />
 
                 <AdvancedFiltersPanel

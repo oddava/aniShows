@@ -103,9 +103,6 @@ export default function Footer({ className = '' }) {
                     <p className="text-gray-400 text-sm">
                         © {new Date().getFullYear()} aniShows. All rights reserved.
                     </p>
-                    <p className="text-gray-400 text-sm flex items-center gap-1">
-                        Made with <Heart className="w-4 h-4 text-red-500 fill-red-500" /> by oddava
-                    </p>
                 </div>
             </div>
         </footer>

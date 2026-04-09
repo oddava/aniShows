@@ -377,3 +377,117 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(len(payload), 2)
         self.assertEqual(payload[0]["idMal"], 10)
         self.assertEqual(payload[1]["idMal"], 20)
+
+    def test_get_recent_updates_keeps_paging_when_source_page_contains_duplicates(self):
+        async def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            query = dict(request.url.params)
+
+            if path == "/v4/seasons/now":
+                page = int(query["page"])
+                if page == 1:
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        json={
+                            "data": [
+                                {
+                                    "mal_id": 1,
+                                    "title": "Duplicate A",
+                                    "title_english": "Duplicate A",
+                                    "title_japanese": "",
+                                    "type": "TV",
+                                    "status": "Currently Airing",
+                                    "episodes": 12,
+                                    "score": 8.1,
+                                    "members": 1800,
+                                    "popularity": 20,
+                                    "rank": 30,
+                                    "duration": "24 min per ep",
+                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 1}}},
+                                    "images": {"jpg": {"large_image_url": "https://cdn.test/1.jpg"}},
+                                    "genres": [],
+                                    "studios": [],
+                                    "relations": [],
+                                },
+                                {
+                                    "mal_id": 1,
+                                    "title": "Duplicate A",
+                                    "title_english": "Duplicate A",
+                                    "title_japanese": "",
+                                    "type": "TV",
+                                    "status": "Currently Airing",
+                                    "episodes": 12,
+                                    "score": 8.1,
+                                    "members": 1800,
+                                    "popularity": 20,
+                                    "rank": 30,
+                                    "duration": "24 min per ep",
+                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 1}}},
+                                    "images": {"jpg": {"large_image_url": "https://cdn.test/1.jpg"}},
+                                    "genres": [],
+                                    "studios": [],
+                                    "relations": [],
+                                },
+                            ],
+                            "pagination": {"has_next_page": True},
+                        },
+                    )
+                if page == 2:
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        json={
+                            "data": [
+                                {
+                                    "mal_id": 2,
+                                    "title": "Unique B",
+                                    "title_english": "Unique B",
+                                    "title_japanese": "",
+                                    "type": "TV",
+                                    "status": "Currently Airing",
+                                    "episodes": 12,
+                                    "score": 8.0,
+                                    "members": 1500,
+                                    "popularity": 25,
+                                    "rank": 35,
+                                    "duration": "24 min per ep",
+                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 2}}},
+                                    "images": {"jpg": {"large_image_url": "https://cdn.test/2.jpg"}},
+                                    "genres": [],
+                                    "studios": [],
+                                    "relations": [],
+                                },
+                                {
+                                    "mal_id": 3,
+                                    "title": "Unique C",
+                                    "title_english": "Unique C",
+                                    "title_japanese": "",
+                                    "type": "TV",
+                                    "status": "Currently Airing",
+                                    "episodes": 12,
+                                    "score": 7.9,
+                                    "members": 1400,
+                                    "popularity": 30,
+                                    "rank": 40,
+                                    "duration": "24 min per ep",
+                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 3}}},
+                                    "images": {"jpg": {"large_image_url": "https://cdn.test/3.jpg"}},
+                                    "genres": [],
+                                    "studios": [],
+                                    "relations": [],
+                                },
+                            ],
+                            "pagination": {"has_next_page": False},
+                        },
+                    )
+
+            if path == "/v4/top/anime":
+                raise AssertionError("Fallback should not be needed when later season pages fill the unique limit")
+
+            raise AssertionError(f"Unexpected path: {request.url}")
+
+        service = self._build_service(handler)
+        payload = asyncio.run(service.get_recent_updates(limit=3))
+
+        self.assertEqual([item["idMal"] for item in payload], [1, 2, 3])

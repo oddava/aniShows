@@ -203,6 +203,7 @@ class Anime(TimestampMixin, SlugMixin, Model):
             GinIndex(
                 fields=["synopsis"], name="anime_synopsis_trgm_gin", opclasses=["gin_trgm_ops"]
             ),
+            GinIndex(fields=["tags"], name="anime_tags_gin"),
         ]
 
     def __str__(self):

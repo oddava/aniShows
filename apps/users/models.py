@@ -40,6 +40,7 @@ class UserProfile(Model):
     bio = TextField(blank=True, null=True)
     last_username_change = DateTimeField(null=True, blank=True)
     is_private = BooleanField(default=False)
+    show_adult_content = BooleanField(default=False)
     email_verified = BooleanField(default=False)
     points = IntegerField(default=0)
     social_links = JSONField(default=list, blank=True)

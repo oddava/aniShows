@@ -12,6 +12,10 @@ vi.mock('../../api/client', () => ({
     },
 }));
 
+vi.mock('../../context/AuthContext', () => ({
+    useAuth: () => ({ user: null }),
+}));
+
 vi.mock('./CategoryRow', () => ({
     default: ({ title, animeList = [], viewAllLink = '' }) => (
         <section data-testid={title}>
@@ -75,7 +79,7 @@ describe('BrowseRowMode', () => {
         vi.restoreAllMocks();
     });
 
-    it('keeps the seasonal row aligned with the actual seasonal popularity ordering', async () => {
+    it('keeps the seasonal row filled with unique titles after removing trending duplicates', async () => {
         const queryClient = new QueryClient({
             defaultOptions: {
                 queries: {
@@ -92,12 +96,71 @@ describe('BrowseRowMode', () => {
 
         await waitFor(() => {
             expect(screen.getByTestId('Trending Now')).toHaveTextContent('Trend 1');
-            expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Trend 1');
+            expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 7');
         });
 
-        expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Trend 2');
+        expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 1');
+        expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 2');
         expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
-        expect(screen.getByTestId('Popular This Season-link')).not.toHaveTextContent('exclude_ids=');
+    });
+
+    it('hides a shelf when every card is already shown in an earlier row', async () => {
+        mockGetAll.mockImplementation((params) => {
+            if (params.sort === 'trending') {
+                return Promise.resolve({
+                    data: {
+                        results: Array.from({ length: 6 }, (_, index) => ({
+                            id: index + 1,
+                            title: `Trend ${index + 1}`,
+                        })),
+                    },
+                });
+            }
+
+            if (params.sort === 'popular') {
+                return Promise.resolve({
+                    data: {
+                        results: Array.from({ length: 6 }, (_, index) => ({
+                            id: index + 1,
+                            title: `Trend ${index + 1}`,
+                        })),
+                    },
+                });
+            }
+
+            if (params.sort === 'rating') {
+                return Promise.resolve({
+                    data: {
+                        results: Array.from({ length: 6 }, (_, index) => ({
+                            id: index + 101,
+                            title: `Top ${index + 1}`,
+                        })),
+                    },
+                });
+            }
+
+            return Promise.resolve({ data: { results: [] } });
+        });
+
+        const queryClient = new QueryClient({
+            defaultOptions: {
+                queries: {
+                    retry: false,
+                },
+            },
+        });
+
+        render(
+            <QueryClientProvider client={queryClient}>
+                <BrowseRowMode />
+            </QueryClientProvider>
+        );
+
+        await waitFor(() => {
+            expect(screen.getByTestId('Trending Now')).toHaveTextContent('Trend 1');
+        });
+
+        expect(screen.queryByTestId('Popular This Season')).not.toBeInTheDocument();
     });
 });

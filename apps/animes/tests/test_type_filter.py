@@ -1,10 +1,14 @@
 from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from ..models import Anime, Genre
+from ...users.models import UserProfile
+
+User = get_user_model()
 
 
 class AnimeTypeFilterTests(APITestCase):
@@ -142,8 +146,33 @@ class AnimeTypeFilterTests(APITestCase):
 
         self.assertSetEqual(titles, {"Type TV Anime", "Type Special Anime"})
 
+    def test_year_range_filter_includes_metadata_only_rows(self):
+        Anime.objects.create(
+            title="Metadata Only Future Anime",
+            slug="metadata-only-future-anime",
+            synopsis="Release date not announced yet",
+            anime_type="TV",
+            status="Upcoming",
+            release_date=None,
+            season="SUMMER",
+            season_year=2024,
+        )
+
+        response = self.client.get(
+            self.list_url,
+            {**self.base_params, "min_year": "2024", "max_year": "2024"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = {item["title"] for item in response.data.get("results", [])}
+
+        self.assertIn("Metadata Only Future Anime", titles)
+
     def test_popular_sort_with_genre_filter_includes_rows_without_popularity_rank(self):
         hentai = Genre.objects.create(name="Hentai", slug="hentai")
+        viewer = User.objects.create_user(username="adultviewer", password="password123")
+        UserProfile.objects.update_or_create(user=viewer, defaults={"show_adult_content": True})
+        self.client.force_authenticate(user=viewer)
 
         higher_members = Anime.objects.create(
             title="Hentai Entry High Members",
@@ -178,3 +207,90 @@ class AnimeTypeFilterTests(APITestCase):
             titles.index("Hentai Entry High Members"),
             titles.index("Hentai Entry Low Members"),
         )
+
+    def test_adult_themed_anime_is_hidden_from_browse_by_default(self):
+        hentai = Genre.objects.create(name="Hentai", slug="hentai")
+        hidden = Anime.objects.create(
+            title="Hidden Explicit Anime",
+            slug="hidden-explicit-anime",
+            synopsis="Should not appear by default",
+            anime_type="OVA",
+            status="Finished",
+            tags=["fellatio", "nakadashi"],
+            release_date=date(2022, 1, 1),
+        )
+        hidden.genres.add(hentai)
+
+        visible = Anime.objects.create(
+            title="Visible General Anime",
+            slug="visible-general-anime",
+            synopsis="Safe to browse",
+            anime_type="TV",
+            status="Finished",
+            tags=["heterosexual"],
+            release_date=date(2022, 1, 2),
+        )
+
+        response = self.client.get(self.list_url, self.base_params)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = {item["title"] for item in response.data.get("results", [])}
+        self.assertIn(visible.title, titles)
+        self.assertNotIn(hidden.title, titles)
+
+    def test_harmless_relationship_tags_remain_visible_by_default(self):
+        anime = Anime.objects.create(
+            title="Relationship Tag Anime",
+            slug="relationship-tag-anime",
+            synopsis="Should remain visible",
+            anime_type="TV",
+            status="Finished",
+            tags=["heterosexual", "male protagonist"],
+            release_date=date(2022, 1, 4),
+        )
+
+        response = self.client.get(self.list_url, {**self.base_params, "q": "Relationship"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = {item["title"] for item in response.data.get("results", [])}
+        self.assertIn(anime.title, titles)
+
+    def test_ecchi_anime_remains_visible_by_default(self):
+        ecchi = Genre.objects.create(name="Ecchi", slug="ecchi")
+        anime = Anime.objects.create(
+            title="Visible Ecchi Anime",
+            slug="visible-ecchi-anime",
+            synopsis="Suggestive but not explicit hentai",
+            anime_type="TV",
+            status="Finished",
+            tags=["nudity", "heterosexual"],
+            release_date=date(2022, 1, 5),
+        )
+        anime.genres.add(ecchi)
+
+        response = self.client.get(self.list_url, {**self.base_params, "q": "Visible Ecchi"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = {item["title"] for item in response.data.get("results", [])}
+        self.assertIn(anime.title, titles)
+
+    def test_opted_in_user_can_browse_adult_themed_anime(self):
+        viewer = User.objects.create_user(username="opted-in-viewer", password="password123")
+        UserProfile.objects.update_or_create(user=viewer, defaults={"show_adult_content": True})
+        self.client.force_authenticate(user=viewer)
+
+        anime = Anime.objects.create(
+            title="Opted In Adult Anime",
+            slug="opted-in-adult-anime",
+            synopsis="Visible after opt in",
+            anime_type="OVA",
+            status="Finished",
+            tags=["ecchi"],
+            release_date=date(2022, 1, 3),
+        )
+
+        response = self.client.get(self.list_url, self.base_params)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = {item["title"] for item in response.data.get("results", [])}
+        self.assertIn(anime.title, titles)
