@@ -33,6 +33,7 @@ from ..services.public_anime_service import (
     AnimeQueryService,
 )
 from ..services.watch_episodes import AnimeWatchEpisodeService
+from ...shared.pagination import NoCountPagination
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -49,6 +50,7 @@ class WatchEpisodesPagination(PageNumberPagination):
 class AnimeViewSet(ReadOnlyModelViewSet):
     serializer_class = AnimeListSerializer
     lookup_field = "slug"
+    pagination_class = NoCountPagination
     franchise_import_service = FranchiseImportService()
     payload_service = AnimePublicPayloadService()
     query_service = AnimeQueryService()
