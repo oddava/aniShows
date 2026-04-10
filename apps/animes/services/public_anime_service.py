@@ -3,6 +3,7 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from asgiref.sync import async_to_sync
 from django.conf import settings
@@ -22,6 +23,7 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 
 from ...shared.logger import logger
 from ...shared.public_cache import (
@@ -109,6 +111,9 @@ class CachedPayloadResult:
 
 
 class AnimeQueryService:
+    BROWSE_ROW_PAGE_SIZE = 18
+    SCHEDULE_DAY_NAMES = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    SCHEDULE_DAY_LOOKUP = {day.lower(): day for day in SCHEDULE_DAY_NAMES}
     DETAIL_DEFER_FIELDS = (
         "offline_db_payload",
         "provider_ids",
@@ -133,14 +138,14 @@ class AnimeQueryService:
         "slug",
         "cover_image",
         "cover_image_external_url",
-        "banner_image",
-        "banner_image_external_url",
         "rating",
         "episode_count",
         "anime_type",
         "status",
-        "synopsis",
         "release_date",
+        "broadcast_day",
+        "broadcast_time",
+        "broadcast_timezone",
         "next_airing_episode",
         "next_airing_date",
         "studio_id",
@@ -234,6 +239,47 @@ class AnimeQueryService:
             ).order_by("-id")
 
         return self._apply_list_filters(queryset, request)
+
+    def schedule_queryset(self, user, *, include_user_context: bool = True):
+        queryset = (
+            Anime.public_queryset()
+            .filter(status=Anime.AnimeStatus.airing)
+            .filter(Q(broadcast_day__in=self.SCHEDULE_DAY_NAMES) | Q(next_airing_date__isnull=False))
+            .select_related("studio")
+            .only(*self.LIST_FIELDS, "studio__id", "studio__name")
+            .prefetch_related(self._genre_prefetch())
+            .order_by("broadcast_day", "broadcast_time", "next_airing_date", "title", "id")
+        )
+
+        if include_user_context and user.is_authenticated:
+            queryset = queryset.annotate(
+                _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
+            ).prefetch_related(self._user_list_prefetch(user))
+
+        return queryset
+
+    @classmethod
+    def normalize_schedule_day(cls, day: str | None) -> str | None:
+        return cls.SCHEDULE_DAY_LOOKUP.get(str(day or "").strip().lower())
+
+    @classmethod
+    def resolve_schedule_day(cls, anime) -> str | None:
+        broadcast_day = cls.normalize_schedule_day(getattr(anime, "broadcast_day", None))
+        if broadcast_day:
+            return broadcast_day
+
+        next_airing_date = getattr(anime, "next_airing_date", None)
+        if next_airing_date is None:
+            return None
+
+        timezone_name = getattr(anime, "broadcast_timezone", "") or "Asia/Tokyo"
+        try:
+            local_tz = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            local_tz = ZoneInfo("Asia/Tokyo")
+        # Jikan next-airing timestamps are tied to the broadcast timezone; UTC shifts late-night JST shows backward.
+        localized = timezone.localtime(next_airing_date, local_tz)
+        return cls.SCHEDULE_DAY_NAMES[(localized.weekday() + 1) % 7]
 
     def get_action_anime(self, slug: str) -> Anime:
         return Anime.public_queryset().only(*self.ACTION_ANIME_ONLY_FIELDS).get(slug=slug)
@@ -329,7 +375,7 @@ class AnimeQueryService:
         needs_distinct = False
         query_params = request.query_params
 
-        if not self._can_view_adult_content(request.user):
+        if not self.can_view_adult_content(request.user):
             queryset = self._exclude_adult_content(queryset)
 
         search = query_params.get("q")
@@ -448,7 +494,173 @@ class AnimeQueryService:
         )
 
         sort_clean = (query_params.get("sort", "popular") or "popular").strip().lower()
-        sort_field = self.SORT_MAPPING.get(sort_clean, "popularity_rank")
+        queryset, ordering = self._apply_sort(
+            queryset,
+            sort_clean=sort_clean,
+            has_active_filters=has_active_filters,
+            has_temporal_filters=has_temporal_filters,
+        )
+
+        queryset = queryset.order_by(*ordering)
+        if needs_distinct:
+            queryset = queryset.distinct()
+        return queryset
+
+    @staticmethod
+    def can_view_adult_content(user) -> bool:
+        if not getattr(user, "is_authenticated", False):
+            return False
+
+        cached_value = getattr(user, "_show_adult_content_cache", None)
+        if cached_value is not None:
+            return cached_value
+
+        profile = getattr(user, "userprofile", None)
+        if profile is not None:
+            resolved = bool(profile.show_adult_content)
+        else:
+            resolved = bool(
+                UserProfile.objects.filter(user_id=user.id, show_adult_content=True)
+                .values_list("show_adult_content", flat=True)
+                .first()
+            )
+
+        # Cache the preference on the user object so multi-shelf browse requests only resolve it once.
+        user._show_adult_content_cache = resolved
+        return resolved
+
+    def browse_row_queryset(
+        self,
+        *,
+        can_view_adult_content: bool,
+        sort: str,
+        season: str | None = None,
+        year: int | None = None,
+        limit: int | None = None,
+    ):
+        queryset = self.base_shelf_queryset()
+
+        if not can_view_adult_content:
+            queryset = self._exclude_adult_content(queryset)
+
+        has_temporal_filters = bool(season or year)
+        if has_temporal_filters:
+            queryset = self._apply_year_filters(
+                queryset,
+                {"season": season or "", "year": str(year or "")},
+            )
+
+        queryset, ordering = self._apply_sort(
+            queryset,
+            sort_clean=sort,
+            has_active_filters=has_temporal_filters,
+            has_temporal_filters=has_temporal_filters,
+        )
+        queryset = queryset.order_by(*ordering)
+
+        resolved_limit = limit or self.BROWSE_ROW_PAGE_SIZE
+        return queryset[:resolved_limit]
+
+    def browse_row_definitions(self, *, can_view_adult_content: bool) -> list[dict]:
+        current_season, current_year, next_season, next_year = self._current_and_next_seasons()
+        return [
+            {
+                "key": "trending",
+                "title": "Trending Now",
+                "browse_params": {"sort": "trending"},
+                "queryset": self.browse_row_queryset(
+                    can_view_adult_content=can_view_adult_content,
+                    sort="trending",
+                ),
+            },
+            {
+                "key": "popular-season",
+                "title": "Popular This Season",
+                "browse_params": {
+                    "season": current_season,
+                    "year": str(current_year),
+                    "sort": "popular",
+                },
+                "queryset": self.browse_row_queryset(
+                    can_view_adult_content=can_view_adult_content,
+                    season=current_season,
+                    year=current_year,
+                    sort="popular",
+                ),
+            },
+            {
+                "key": "upcoming",
+                "title": "Upcoming Next Season",
+                "browse_params": {
+                    "season": next_season,
+                    "year": str(next_year),
+                    "sort": "popular",
+                },
+                "queryset": self.browse_row_queryset(
+                    can_view_adult_content=can_view_adult_content,
+                    season=next_season,
+                    year=next_year,
+                    sort="popular",
+                ),
+            },
+            {
+                "key": "all-time",
+                "title": "All Time Popular",
+                "browse_params": {"sort": "popular"},
+                "queryset": self.browse_row_queryset(
+                    can_view_adult_content=can_view_adult_content,
+                    sort="popular",
+                ),
+            },
+            {
+                "key": "top-rated",
+                "title": "Top Rated",
+                "browse_params": {"sort": "rating"},
+                "queryset": self.browse_row_queryset(
+                    can_view_adult_content=can_view_adult_content,
+                    sort="rating",
+                ),
+            },
+        ]
+
+    @classmethod
+    def _current_and_next_seasons(cls) -> tuple[str, int, str, int]:
+        today = date.today()
+        month = today.month
+        year = today.year
+
+        current_season = "winter"
+        if 4 <= month <= 6:
+            current_season = "spring"
+        elif 7 <= month <= 9:
+            current_season = "summer"
+        elif 10 <= month <= 12:
+            current_season = "fall"
+
+        next_season = "winter"
+        next_year = year
+        if 1 <= month <= 3:
+            next_season = "spring"
+        elif 4 <= month <= 6:
+            next_season = "summer"
+        elif 7 <= month <= 9:
+            next_season = "fall"
+        else:
+            next_season = "winter"
+            next_year = year + 1
+
+        return current_season, year, next_season, next_year
+
+    @classmethod
+    def _apply_sort(
+        cls,
+        queryset,
+        *,
+        sort_clean: str,
+        has_active_filters: bool,
+        has_temporal_filters: bool,
+    ):
+        sort_field = cls.SORT_MAPPING.get(sort_clean, "popularity_rank")
         ordering = [sort_field, "-id"]
 
         if sort_clean == "rating":
@@ -497,20 +709,7 @@ class AnimeQueryService:
         elif sort_clean == "trending":
             queryset = queryset.filter(trending_rank__isnull=False)
 
-        queryset = queryset.order_by(*ordering)
-        if needs_distinct:
-            queryset = queryset.distinct()
-        return queryset
-
-    @staticmethod
-    def _can_view_adult_content(user) -> bool:
-        if not getattr(user, "is_authenticated", False):
-            return False
-        return bool(
-            UserProfile.objects.filter(user_id=user.id, show_adult_content=True).values_list(
-                "show_adult_content", flat=True
-            ).first()
-        )
+        return queryset, ordering
 
     @classmethod
     def _exclude_adult_content(cls, queryset):
@@ -924,6 +1123,55 @@ class AnimePublicPayloadService:
         ]
 
     @classmethod
+    def enrich_browse_rows_payload_for_user(cls, data: list[dict], user):
+        if not data or not getattr(user, "is_authenticated", False):
+            return data
+
+        anime_ids = [
+            anime["id"]
+            for row in data
+            for anime in row.get("anime_list", [])
+            if isinstance(anime, dict) and anime.get("id")
+        ]
+        if not anime_ids:
+            return data
+
+        favorite_ids = set(
+            UserFavorite.objects.filter(user=user, anime_id__in=anime_ids).values_list(
+                "anime_id", flat=True
+            )
+        )
+        list_entries = {
+            entry.anime_id: entry
+            for entry in UserAnimeList.objects.filter(user=user, anime_id__in=anime_ids)
+        }
+
+        enriched_rows = []
+        for row in data:
+            enriched_rows.append(
+                {
+                    **row,
+                    "anime_list": [
+                        {
+                            **anime,
+                            "is_favorite": anime["id"] in favorite_ids,
+                            "user_list_status": (
+                                build_user_list_status_payload(
+                                    list_entries[anime["id"]],
+                                    anime.get("episode_count"),
+                                )
+                                if anime["id"] in list_entries
+                                else None
+                            ),
+                        }
+                        for anime in row.get("anime_list", [])
+                    ],
+                }
+            )
+
+        return enriched_rows
+
+    @classmethod
     def item_has_internal_media_urls(cls, item: dict) -> bool:
         if not isinstance(item, dict):
             return False
@@ -940,11 +1188,14 @@ class AnimePublicPayloadService:
     @classmethod
     def payload_has_internal_media_urls(cls, payload) -> bool:
         if isinstance(payload, list):
-            return any(cls.item_has_internal_media_urls(item) for item in payload)
+            return any(cls.payload_has_internal_media_urls(item) for item in payload)
         if isinstance(payload, dict):
             results = payload.get("results")
             if isinstance(results, list):
                 return any(cls.item_has_internal_media_urls(item) for item in results)
+            anime_list = payload.get("anime_list")
+            if isinstance(anime_list, list):
+                return any(cls.item_has_internal_media_urls(item) for item in anime_list)
             return cls.item_has_internal_media_urls(payload)
         return False
 
@@ -987,11 +1238,14 @@ class AnimePublicPayloadService:
     @classmethod
     def payload_has_stale_imagekit_cache_urls(cls, payload) -> bool:
         if isinstance(payload, list):
-            return any(cls.item_has_stale_imagekit_cache_urls(item) for item in payload)
+            return any(cls.payload_has_stale_imagekit_cache_urls(item) for item in payload)
         if isinstance(payload, dict):
             results = payload.get("results")
             if isinstance(results, list):
                 return any(cls.item_has_stale_imagekit_cache_urls(item) for item in results)
+            anime_list = payload.get("anime_list")
+            if isinstance(anime_list, list):
+                return any(cls.item_has_stale_imagekit_cache_urls(item) for item in anime_list)
             return cls.item_has_stale_imagekit_cache_urls(payload)
         return False
 

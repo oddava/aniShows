@@ -337,7 +337,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         cache.clear()
 
     @patch("apps.animes.signals.enrich_metadata.delay")
-    def test_list_uses_external_cover_and_banner_when_local_images_missing(self, _mock_delay):
+    def test_list_uses_external_cover_when_local_images_missing(self, _mock_delay):
         anime = Anime.objects.create(
             title="External Image Fallback Anime",
             slug="external-image-fallback-anime",
@@ -356,11 +356,13 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         self.assertEqual(payload["id"], anime.id)
         self.assertEqual(payload["cover_image"], "https://img.anilist.co/external-cover.jpg")
         self.assertEqual(payload["cover_image_small"], "https://img.anilist.co/external-cover.jpg")
-        self.assertEqual(payload["banner_image"], "https://img.anilist.co/external-banner.jpg")
-        self.assertEqual(payload["banner_image_small"], "https://img.anilist.co/external-banner.jpg")
+        self.assertEqual(
+            payload["cover_image_external_url"],
+            "https://img.anilist.co/external-cover.jpg",
+        )
 
     @patch("apps.animes.signals.enrich_metadata.delay")
-    def test_list_includes_external_image_fields_for_frontend_failover(self, _mock_delay):
+    def test_list_strips_browse_only_fields_to_keep_payloads_small(self, _mock_delay):
         anime = Anime.objects.create(
             title="External Image Field Anime",
             slug="external-image-field-anime",
@@ -381,10 +383,9 @@ class AnimeListImageFieldFallbackTests(APITestCase):
             payload["cover_image_external_url"],
             "https://img.anilist.co/external-cover-2.jpg",
         )
-        self.assertEqual(
-            payload["banner_image_external_url"],
-            "https://img.anilist.co/external-banner-2.jpg",
-        )
+        self.assertNotIn("banner_image", payload)
+        self.assertNotIn("banner_image_external_url", payload)
+        self.assertNotIn("synopsis", payload)
 
     @patch("apps.animes.signals.enrich_metadata.delay")
     def test_list_response_includes_cache_status_header(self, _mock_delay):

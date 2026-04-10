@@ -174,64 +174,28 @@ export default function Schedule() {
 
   // Fetch schedule data
   const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ['schedule', currentWeek.toISOString(), isAuthenticated],
+    queryKey: ['schedule', isAuthenticated],
     queryFn: async () => {
-      // For now, fetch airing anime and filter client-side
-      // Later this should be a dedicated endpoint
-      const response = await animeApi.getAll({
-        status: 'Airing',
-        sort: 'title', // Use 'title' to avoid filters that remove airing anime
-        page_size: 200 // Increased to capture more airing anime
-      });
+      const response = await animeApi.getSchedule();
+      const apiDays = response.data?.days || {};
 
-      const animeList = response.data.results || [];
-
-      // Group by day of week based on next_airing_date
-      const days = Array(7).fill(null).map(() => []);
-
-      // Get week boundaries in local time
-      const weekStart = getWeekStart(currentWeek);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-
-      animeList.forEach(anime => {
-        if (anime.next_airing_date) {
-          // Parse the UTC date and convert to local timezone
-          let airDate = new Date(anime.next_airing_date);
-
-          // Check if date is valid before processing
-          if (isNaN(airDate.getTime())) {
-            return; // Skip anime with invalid dates
-          }
-
-          if (anime.status === 'Airing' && airDate < weekStart) {
-            const msInWeek = 7 * 24 * 60 * 60 * 1000;
-            const weeksToAdvance = Math.ceil((weekStart.getTime() - airDate.getTime()) / msInWeek);
-            airDate = new Date(airDate.getTime() + (weeksToAdvance * msInWeek));
-          }
-
-          // Check if airing date is within current week
-          // Compare using local time
-          if (airDate >= weekStart && airDate < weekEnd) {
-            // Get the day of week in local timezone (0 = Sunday, 1 = Monday, etc.)
-            const dayIndex = airDate.getDay();
-            days[dayIndex].push(anime);
-          }
-        }
-      });
-
-      // Sort each day by airing time
-      days.forEach(dayAnime => {
-        dayAnime.sort((a, b) => {
+      const days = DAY_NAMES.map((dayName) => {
+        const items = Array.isArray(apiDays[dayName.toLowerCase()]) ? [...apiDays[dayName.toLowerCase()]] : [];
+        items.sort((a, b) => {
           const dateA = a.next_airing_date ? new Date(a.next_airing_date) : null;
           const dateB = b.next_airing_date ? new Date(b.next_airing_date) : null;
 
-          // Handle null/invalid dates
-          if (!dateA || isNaN(dateA.getTime())) return 1;
-          if (!dateB || isNaN(dateB.getTime())) return -1;
+          if (dateA && !isNaN(dateA.getTime()) && dateB && !isNaN(dateB.getTime())) {
+            return dateA - dateB;
+          }
 
-          return dateA - dateB;
+          if (a.broadcast_time && b.broadcast_time) {
+            return String(a.broadcast_time).localeCompare(String(b.broadcast_time));
+          }
+
+          return a.title.localeCompare(b.title);
         });
+        return items;
       });
 
       return { days };

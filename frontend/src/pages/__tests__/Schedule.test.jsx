@@ -19,7 +19,7 @@ vi.mock('../../components/AnimeCard', () => ({
 // Mock the API client
 vi.mock('../../api/client', () => ({
   animeApi: {
-    getAll: vi.fn(),
+    getSchedule: vi.fn(),
   },
 }));
 
@@ -67,6 +67,21 @@ const createWrapper = () => {
   );
 };
 
+const buildScheduleResponse = (overrides = {}) => ({
+  data: {
+    days: {
+      sunday: [],
+      monday: [],
+      tuesday: [],
+      wednesday: [],
+      thursday: [],
+      friday: [],
+      saturday: [],
+      ...overrides,
+    },
+  },
+});
+
 describe('Schedule Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,7 +93,7 @@ describe('Schedule Component', () => {
   });
 
   it('renders loading state initially', () => {
-    animeApi.getAll.mockImplementation(() => new Promise(() => {}));
+    animeApi.getSchedule.mockImplementation(() => new Promise(() => {}));
     
     render(<Schedule />, { wrapper: createWrapper() });
     
@@ -86,17 +101,7 @@ describe('Schedule Component', () => {
   });
 
   it('renders schedule with anime successfully', async () => {
-    const now = new Date();
-    const today = now.getDay();
-    
-    // Create airing dates for the current week
-    const getDateForDay = (dayIndex) => {
-      const date = new Date(now);
-      const diff = dayIndex - today;
-      date.setDate(date.getDate() + diff);
-      date.setHours(14, 0, 0, 0);
-      return date.toISOString();
-    };
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
 
     const mockAnime = [
       {
@@ -104,7 +109,7 @@ describe('Schedule Component', () => {
         title: 'Attack on Titan',
         slug: 'attack-on-titan',
         cover_image: 'https://example.com/aot.jpg',
-        next_airing_date: getDateForDay(today),
+        next_airing_date: new Date().toISOString(),
         next_airing_episode: 5,
         anime_type: 'TV',
         episode_count: 24,
@@ -115,7 +120,7 @@ describe('Schedule Component', () => {
         title: 'Demon Slayer',
         slug: 'demon-slayer',
         cover_image: 'https://example.com/ds.jpg',
-        next_airing_date: getDateForDay(today),
+        next_airing_date: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         next_airing_episode: 12,
         anime_type: 'TV',
         episode_count: 26,
@@ -123,9 +128,7 @@ describe('Schedule Component', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [todayKey]: mockAnime }));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -140,7 +143,7 @@ describe('Schedule Component', () => {
   });
 
   it('handles API error gracefully', async () => {
-    animeApi.getAll.mockRejectedValue(new Error('API Error'));
+    animeApi.getSchedule.mockRejectedValue(new Error('API Error'));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -152,9 +155,7 @@ describe('Schedule Component', () => {
   });
 
   it('renders empty state when no anime scheduled for selected day', async () => {
-    animeApi.getAll.mockResolvedValue({
-      data: { results: [] },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -162,17 +163,12 @@ describe('Schedule Component', () => {
       expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
     });
 
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const today = new Date().getDay();
-    // Check the empty state paragraph contains the day name
     const emptyStateParagraph = screen.getByText(/Check other days or weeks/i);
     expect(emptyStateParagraph).toBeInTheDocument();
   });
 
   it('navigates between weeks using prev/next buttons', async () => {
-    animeApi.getAll.mockResolvedValue({
-      data: { results: [] },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -193,13 +189,11 @@ describe('Schedule Component', () => {
     fireEvent.click(prevButton);
     
     // API should have been called multiple times
-    expect(animeApi.getAll).toHaveBeenCalled();
+    expect(animeApi.getSchedule).toHaveBeenCalledTimes(1);
   });
 
   it('returns to current week when clicking Today button', async () => {
-    animeApi.getAll.mockResolvedValue({
-      data: { results: [] },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -214,25 +208,14 @@ describe('Schedule Component', () => {
   });
 
   it('allows selecting different days of the week', async () => {
-    const now = new Date();
-    const today = now.getDay();
-    const tomorrow = (today + 1) % 7;
-    
-    const getDateForDay = (dayIndex) => {
-      const date = new Date(now);
-      const diff = dayIndex - today;
-      date.setDate(date.getDate() + diff);
-      date.setHours(14, 0, 0, 0);
-      return date.toISOString();
-    };
-
+    const tomorrowKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][(new Date().getDay() + 1) % 7];
     const mockAnime = [
       {
         id: 1,
         title: 'Anime for Tomorrow',
         slug: 'anime-tomorrow',
         cover_image: 'https://example.com/tomorrow.jpg',
-        next_airing_date: getDateForDay(tomorrow),
+        next_airing_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         next_airing_episode: 1,
         anime_type: 'TV',
         episode_count: 12,
@@ -240,9 +223,7 @@ describe('Schedule Component', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [tomorrowKey]: mockAnime }));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -256,9 +237,7 @@ describe('Schedule Component', () => {
   });
 
   it('displays correct SEO metadata', async () => {
-    animeApi.getAll.mockResolvedValue({
-      data: { results: [] },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -271,24 +250,14 @@ describe('Schedule Component', () => {
   });
 
   it('shows episode count in day selector', async () => {
-    const now = new Date();
-    const today = now.getDay();
-    
-    const getDateForDay = (dayIndex) => {
-      const date = new Date(now);
-      const diff = dayIndex - today;
-      date.setDate(date.getDate() + diff);
-      date.setHours(14, 0, 0, 0);
-      return date.toISOString();
-    };
-
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
     const mockAnime = [
       {
         id: 1,
         title: 'Anime Today',
         slug: 'anime-today',
         cover_image: 'https://example.com/today.jpg',
-        next_airing_date: getDateForDay(today),
+        next_airing_date: new Date().toISOString(),
         next_airing_episode: 3,
         anime_type: 'TV',
         episode_count: 12,
@@ -296,9 +265,7 @@ describe('Schedule Component', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [todayKey]: mockAnime }));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -310,6 +277,7 @@ describe('Schedule Component', () => {
   });
 
   it('handles anime with invalid airing dates gracefully', async () => {
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
     const mockAnime = [
       {
         id: 1,
@@ -335,19 +303,15 @@ describe('Schedule Component', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [todayKey]: mockAnime }));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      // Should still render valid anime
       expect(screen.getByText('Valid Anime')).toBeInTheDocument();
     });
 
-    // Invalid date anime should not appear
-    expect(screen.queryByText('Invalid Date Anime')).not.toBeInTheDocument();
+    expect(screen.getByText('Invalid Date Anime')).toBeInTheDocument();
   });
 
   it('renders airing time countdown for upcoming episodes', async () => {
@@ -357,6 +321,7 @@ describe('Schedule Component', () => {
     if (future.getDay() !== new Date().getDay()) {
       future.setDate(future.getDate() - 1);
     }
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
     
     const mockAnime = [
       {
@@ -372,9 +337,7 @@ describe('Schedule Component', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [todayKey]: mockAnime }));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -391,6 +354,7 @@ describe('Schedule Component', () => {
     if (airDate.getDay() !== now.getDay()) {
       airDate.setDate(airDate.getDate() + 1);
     }
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
     
     const mockAnime = [
       {
@@ -406,9 +370,7 @@ describe('Schedule Component', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [todayKey]: mockAnime }));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -418,7 +380,7 @@ describe('Schedule Component', () => {
   });
 
   it('handles retry button click on error', async () => {
-    animeApi.getAll.mockRejectedValue(new Error('API Error'));
+    animeApi.getSchedule.mockRejectedValue(new Error('API Error'));
 
     render(<Schedule />, { wrapper: createWrapper() });
 
@@ -467,9 +429,8 @@ describe('Schedule Component - Authenticated User', () => {
       },
     ];
 
-    animeApi.getAll.mockResolvedValue({
-      data: { results: mockAnime },
-    });
+    const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({ [todayKey]: mockAnime }));
 
     const { rerender } = render(<Schedule />, { wrapper: createWrapper() });
 

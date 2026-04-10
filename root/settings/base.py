@@ -711,6 +711,12 @@ CELERY_BEAT_SCHEDULE = {
         "kwargs": {"sync_type": "airing", "limit": 500},
         "options": {"queue": "high_priority"},
     },
+    "sync-airing-schedule-daily": {
+        "task": "apps.animes.tasks.airing.sync_airing_workflow",
+        "schedule": crontab(hour=1, minute=45),  # Daily before browse/schedule traffic ramps up
+        "kwargs": {"phases": ["sync", "cleanup", "backfill"]},
+        "options": {"queue": "high_priority"},
+    },
     # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
     # -------------------------------------------------------------------------
     "sync-seasonal-daily": {

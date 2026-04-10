@@ -10,17 +10,18 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from ...core.utils import get_client_ip
 from ...shared.logger import logger
+from ...shared.public_cache import get_or_build_public_payload
 from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
 from ..serializers import (
     AnimeCharacterSerializer,
     AnimeDetailSerializer,
     AnimeListSerializer,
-    ReviewSerializer,
     AnimeStaffSerializer,
     AnimeWatchEpisodeSerializer,
     EpisodeRatingInputSerializer,
     EpisodeRatingSummarySerializer,
     GenreSerializer,
+    ReviewSerializer,
     StudioSerializer,
 )
 from ..services.episode_ratings import (
@@ -52,6 +53,13 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     franchise_import_service = FranchiseImportService()
     payload_service = AnimePublicPayloadService()
     query_service = AnimeQueryService()
+    PUBLIC_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=900"
+
+    @classmethod
+    def _with_public_cache_control(cls, response: Response, request) -> Response:
+        if not request.user.is_authenticated:
+            response["Cache-Control"] = cls.PUBLIC_CACHE_CONTROL
+        return response
 
     @staticmethod
     def _with_cache_status_header(response: Response, cache_status: str) -> Response:
@@ -85,7 +93,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 {"error": "Internal server error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        return self._with_cache_status_header(Response(result.data), result.cache_status)
+        response = self._with_cache_status_header(Response(result.data), result.cache_status)
+        return self._with_public_cache_control(response, request)
 
     def _get_action_anime(self, slug: str) -> Anime:
         return get_object_or_404(Anime.public_queryset(), slug=slug)
@@ -97,7 +106,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             request,
             lambda: super(AnimeViewSet, self).list(request, *args, **kwargs).data,
         )
-        return self._with_cache_status_header(Response(result.data), result.cache_status)
+        response = self._with_cache_status_header(Response(result.data), result.cache_status)
+        return self._with_public_cache_control(response, request)
 
     def _get_cached_shelf(self, request, cache_key: str, queryset_fn):
         result = self.payload_service.cache_shelf_payload(
@@ -109,7 +119,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             ).data,
         )
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
-        return self._with_cache_status_header(Response(data), result.cache_status)
+        response = self._with_cache_status_header(Response(data), result.cache_status)
+        return self._with_public_cache_control(response, request)
 
     @action(detail=False, methods=["get"])
     def trending(self, request):
@@ -126,6 +137,73 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             f"anime_top_rated:{self.payload_service.PUBLIC_CACHE_VERSION}",
             lambda qs: qs.filter(rating__isnull=False).order_by("-rating")[:12],
         )
+
+    @action(detail=False, methods=["get"])
+    def schedule(self, request):
+        requested_day = self.query_service.normalize_schedule_day(request.query_params.get("day"))
+        if request.query_params.get("day") and requested_day is None:
+            return Response({"detail": "Invalid schedule day."}, status=status.HTTP_400_BAD_REQUEST)
+
+        anime_list = list(self.query_service.schedule_queryset(request.user, include_user_context=True))
+        serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
+        schedule_days = {day.lower(): [] for day in self.query_service.SCHEDULE_DAY_NAMES}
+        resolved_days = {
+            anime.id: self.query_service.resolve_schedule_day(anime)
+            for anime in anime_list
+        }
+
+        for item in serializer.data:
+            schedule_day = resolved_days.get(item["id"])
+            if schedule_day:
+                schedule_days[schedule_day.lower()].append(item)
+
+        if requested_day:
+            key = requested_day.lower()
+            response = Response({"day": key, "items": schedule_days[key], "count": len(schedule_days[key])})
+            return self._with_public_cache_control(response, request)
+
+        response = Response(
+            {
+                "days": schedule_days,
+                "counts": {day: len(items) for day, items in schedule_days.items()},
+                "total": sum(len(items) for items in schedule_days.values()),
+            }
+        )
+        return self._with_public_cache_control(response, request)
+
+    @action(detail=False, methods=["get"], url_path="browse-rows")
+    def browse_rows(self, request):
+        can_view_adult_content = self.query_service.can_view_adult_content(request.user)
+        cache_key = (
+            f"anime_browse_rows:{self.payload_service.PUBLIC_CACHE_VERSION}:"
+            f"adult:{int(can_view_adult_content)}"
+        )
+
+        def build_payload():
+            rows = []
+            row_definitions = self.query_service.browse_row_definitions(
+                can_view_adult_content=can_view_adult_content
+            )
+            for row in row_definitions:
+                # Serialize one combined browse payload so the default page avoids five separate cold starts.
+                rows.append(
+                    {
+                        "key": row["key"],
+                        "title": row["title"],
+                        "browse_params": row["browse_params"],
+                        "anime_list": AnimeListSerializer(
+                            row["queryset"],
+                            many=True,
+                            context={"request": request},
+                        ).data,
+                    }
+                )
+            return rows
+
+        result = self.payload_service.cache_shelf_payload(cache_key, build_payload)
+        data = self.payload_service.enrich_browse_rows_payload_for_user(result.data, request.user)
+        response = self._with_cache_status_header(Response(data), result.cache_status)
+        return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"], serializer_class=ReviewSerializer)
     def reviews(self, request, slug=None):
@@ -312,8 +390,32 @@ class GenreViewSet(ReadOnlyModelViewSet):
     serializer_class = GenreSerializer
     pagination_class = None
 
+    def list(self, request, *args, **kwargs):
+        data, cache_status = get_or_build_public_payload(
+            "anime_genres:v1",
+            # Use an explicit super() target because the cache builder runs in a nested callable.
+            lambda: super(GenreViewSet, self).list(request, *args, **kwargs).data,
+            ttl=3600,
+        )
+        response = Response(data)
+        response["X-Cache-Status"] = cache_status
+        response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=900"
+        return response
+
 
 class StudioViewSet(ReadOnlyModelViewSet):
     queryset = Studio.objects.only("id", "name", "website").order_by("name")
     serializer_class = StudioSerializer
     pagination_class = None
+
+    def list(self, request, *args, **kwargs):
+        data, cache_status = get_or_build_public_payload(
+            "anime_studios:v1",
+            # Use an explicit super() target because the cache builder runs in a nested callable.
+            lambda: super(StudioViewSet, self).list(request, *args, **kwargs).data,
+            ttl=3600,
+        )
+        response = Response(data)
+        response["X-Cache-Status"] = cache_status
+        response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=900"
+        return response

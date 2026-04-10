@@ -152,6 +152,7 @@ export default function Browse() {
   const currentStudio = searchParams.get('studio') || '';
   const currentSeason = searchParams.get('season') || '';
   const currentYearParam = searchParams.get('year') || '';
+  const currentYear = currentYearParam || (currentSeason ? new Date().getFullYear().toString() : '');
   const currentExcludeIds = searchParams.get('exclude_ids') || '';
   const currentMinRating = searchParams.get('min_rating') || '';
   const currentMaxRating = searchParams.get('max_rating') || '';
@@ -173,7 +174,8 @@ export default function Browse() {
     if (!currentSeason || currentYearParam) return;
     const newParams = new URLSearchParams(searchParams);
     newParams.set('year', new Date().getFullYear().toString());
-    setSearchParams(newParams);
+    // Replace avoids polluting history while still normalizing shared seasonal URLs.
+    setSearchParams(newParams, { replace: true });
   }, [currentSeason, currentYearParam, searchParams, setSearchParams]);
 
   const isGridMode = Boolean(
@@ -183,7 +185,7 @@ export default function Browse() {
     currentTypes || 
     currentStatuses || 
     currentSeason || 
-    currentYearParam || 
+    currentYear || 
     currentMinRating || 
     currentMaxRating || 
     currentSource ||
@@ -203,7 +205,7 @@ export default function Browse() {
     type: currentTypes,
     status: currentStatuses,
     season: currentSeason,
-    year: currentYearParam,
+    year: currentYear,
     minRating: currentMinRating,
     maxRating: currentMaxRating,
     studio: currentStudio,
@@ -295,7 +297,7 @@ export default function Browse() {
       type: currentTypes,
       status: currentStatuses,
       season: currentSeason,
-      year: currentYearParam,
+      year: currentYear,
       minRating: currentMinRating,
       maxRating: currentMaxRating,
       studio: currentStudio,
@@ -313,7 +315,7 @@ export default function Browse() {
   // Update active tab based on params
   useEffect(() => {
     if (currentSort === 'trending') setActiveTab('trending');
-    else if (currentSeason && currentYearParam) {
+    else if (currentSeason && currentYear) {
       const d = new Date();
       const m = d.getMonth();
       const y = d.getFullYear();
@@ -322,7 +324,7 @@ export default function Browse() {
       else if (m >= 6 && m <= 8) thisSeason = 'summer';
       else if (m >= 9 && m <= 11) thisSeason = 'fall';
 
-      if (currentSeason === thisSeason && parseInt(currentYearParam) === y) {
+      if (currentSeason === thisSeason && parseInt(currentYear, 10) === y) {
         setActiveTab('current');
       } else {
         setActiveTab('upcoming');
@@ -334,7 +336,7 @@ export default function Browse() {
     else if (currentSearch && !searchParams.get('sort') && !currentSeason) setActiveTab('search');
     else if (currentSort === 'popular') setActiveTab('popular');
     else setActiveTab(null);
-  }, [currentSort, currentSeason, currentYearParam, currentSearch, searchParams]);
+  }, [currentSort, currentSeason, currentYear, currentSearch, searchParams]);
 
   const handleTabChange = useCallback((key) => {
     const newParams = new URLSearchParams(searchParams);
@@ -396,6 +398,8 @@ export default function Browse() {
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
+  const shouldLoadStudios = showFilters || Boolean(currentStudio);
+
   // Fetch genres
   const { data: genres, isError: isGenresError } = useQuery({
     queryKey: ['genres'],
@@ -408,6 +412,7 @@ export default function Browse() {
     queryKey: ['studios'],
     queryFn: () => studioApi.getAll().then(res => res.data),
     staleTime: 1000 * 60 * 30,
+    enabled: shouldLoadStudios,
   });
 
   // Fetch anime
@@ -431,7 +436,7 @@ export default function Browse() {
       currentStatuses,
       currentStudio,
       currentSeason,
-      currentYearParam,
+      currentYear,
       currentExcludeIds,
       currentMinRating,
       currentMaxRating,
@@ -456,7 +461,7 @@ export default function Browse() {
         status: currentStatuses || undefined,
         studio: currentStudio || undefined,
         season: currentSeason || undefined,
-        year: currentYearParam || undefined,
+        year: currentYear || undefined,
         exclude_ids: currentExcludeIds || undefined,
         min_rating: currentMinRating || undefined,
         max_rating: currentMaxRating || undefined,
@@ -568,7 +573,7 @@ export default function Browse() {
               status: currentStatuses,
               studio: currentStudio,
               season: currentSeason,
-              year: currentYearParam,
+              year: currentYear,
               excludeIds: currentExcludeIds,
               minRating: currentMinRating,
               maxRating: currentMaxRating,
@@ -608,7 +613,7 @@ export default function Browse() {
     currentStatuses,
     currentStudio,
     currentSeason,
-    currentYearParam,
+    currentYear,
     currentExcludeIds,
     currentMinRating,
     currentMaxRating,
@@ -761,7 +766,7 @@ export default function Browse() {
     currentStatuses ||
     currentStudio ||
     currentSeason ||
-    currentYearParam ||
+    currentYear ||
     currentMinRating ||
     currentMaxRating ||
     currentSource ||
@@ -856,7 +861,7 @@ export default function Browse() {
                   currentTypes={currentTypes}
                   currentStatuses={currentStatuses}
                   currentSeason={currentSeason}
-                  currentYear={currentYearParam}
+                  currentYear={currentYear}
                   currentMinRating={currentMinRating}
                   currentMaxRating={currentMaxRating}
                   currentStudio={currentStudio}
@@ -942,15 +947,17 @@ export default function Browse() {
             <>
               <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 anime-card-grid-gap">
                 {allAnime.map((anime, index) => (
-                  <AnimeCard
-                    key={anime.id}
-                    anime={anime}
-                    titleLanguage={titleLanguage}
-                    rank={currentSort === 'rating' ? (index + 1) : null}
-                    priority={index < 6}
-                    index={index}
-                  />
-                ))}
+                    <AnimeCard
+                      key={anime.id}
+                      anime={anime}
+                      titleLanguage={titleLanguage}
+                      rank={currentSort === 'rating' ? (index + 1) : null}
+                      priority={index < 6}
+                      index={index}
+                      // Browse grids render many cards at once, so skip banner color extraction here.
+                      useBannerAccentTitleHover={false}
+                    />
+                  ))}
               </div>
               <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">
                 {isFetchingNextPage && (

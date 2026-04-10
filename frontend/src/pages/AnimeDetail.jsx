@@ -22,6 +22,7 @@ import CustomSelect from '../components/common/CustomSelect';
 import {
     applyImageFallback,
     getImageFallbackUrl,
+    getImageUrl,
     getImageSrcSet,
     getOptimizedImageUrl,
     isSameOriginImageUrl,
@@ -90,8 +91,7 @@ const getUniqueStaffCount = (staff) => {
     return seen.size;
 };
 
-const getCoverPlaceholder = (title = 'Anime') =>
-    `https://placehold.co/10131b/75698d?text=${encodeURIComponent(title)}`;
+const getCoverPlaceholder = (title = 'Anime') => getImageUrl(null, title);
 
 // Extract and memoize color from image
 const useAccentColor = (coverImage, bannerImage) => {
@@ -664,10 +664,10 @@ export default function AnimeDetail() {
     const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
         getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
-        `https://placehold.co/10131b/75698d?text=${encodeURIComponent(anime.title)}`;
+        getImageUrl(null, anime.title);
     const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
-        `https://placehold.co/10131b/75698d?text=${encodeURIComponent(anime.title)}`;
+        getImageUrl(null, anime.title);
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');
     const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');

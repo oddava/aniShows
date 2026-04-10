@@ -36,7 +36,8 @@ export default function CategoryRow({ title, animeList, isLoading, viewAllLink, 
                     ) : animeList?.length > 0 ? (
                         animeList.map((anime, index) => (
                             <div key={anime.id} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
-                                <AnimeCard anime={anime} priority={index < 6} useBannerAccentTitleHover />
+                                {/* Browse rows skip per-card color sampling so the landing page stays cheap to render. */}
+                                <AnimeCard anime={anime} priority={index < 6} useBannerAccentTitleHover={false} />
                             </div>
                         ))
                     ) : (

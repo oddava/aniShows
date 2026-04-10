@@ -47,10 +47,34 @@ const appendCacheBuster = (url) => {
     return `${url}${separator}cb=${Date.now()}`;
 };
 
+const buildInlinePlaceholder = (title = 'Anime') => {
+    const safeTitle = String(title || 'Anime').trim() || 'Anime';
+    const clippedTitle = safeTitle.length > 48 ? `${safeTitle.slice(0, 45)}...` : safeTitle;
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900" role="img" aria-label="${clippedTitle}">
+            <defs>
+                <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#10131b" />
+                    <stop offset="100%" stop-color="#171b25" />
+                </linearGradient>
+            </defs>
+            <rect width="600" height="900" fill="url(#bg)" />
+            <circle cx="500" cy="160" r="120" fill="#75698d" opacity="0.16" />
+            <circle cx="110" cy="780" r="150" fill="#75698d" opacity="0.12" />
+            <rect x="72" y="96" width="456" height="708" rx="28" fill="none" stroke="#75698d" stroke-opacity="0.28" />
+            <text x="300" y="430" text-anchor="middle" fill="#a89cbf" font-size="36" font-family="Georgia, serif" letter-spacing="6">ANISHOWS</text>
+            <text x="300" y="495" text-anchor="middle" fill="#e6e0ef" font-size="28" font-family="system-ui, sans-serif">${clippedTitle}</text>
+        </svg>
+    `.replace(/\s+/g, ' ').trim();
+
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
 export const getImageUrl = (url, title = 'Anime') => {
     const normalizedUrl = coerceUrl(url);
     if (!normalizedUrl) {
-        return `https://placehold.co/10131b/75698d?text=${encodeURIComponent(title)}`;
+        // Inline placeholders avoid cross-origin fallback requests that browsers can block noisily.
+        return buildInlinePlaceholder(title);
     }
 
     let cleanUrl = normalizedUrl;

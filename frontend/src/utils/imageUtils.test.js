@@ -52,9 +52,9 @@ describe('imageUtils failover behavior', () => {
         const nullLike = getImageUrl('null', 'NullLike');
         const undefinedLike = getImageUrl('undefined', 'UndefinedLike');
 
-        expect(placeholder).toContain('placehold.co');
-        expect(nullLike).toContain('placehold.co');
-        expect(undefinedLike).toContain('placehold.co');
+        expect(placeholder).toContain('data:image/svg+xml');
+        expect(nullLike).toContain('data:image/svg+xml');
+        expect(undefinedLike).toContain('data:image/svg+xml');
     });
 
     it('uses external image as optimized fallback when local sizes are missing', () => {

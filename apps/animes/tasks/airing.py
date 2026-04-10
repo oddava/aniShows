@@ -46,7 +46,7 @@ class AiringWorkflowTask(BaseTask):
     def execute(
         self,
         phases: list[str] | None = None,
-        batch_size: int = 100,
+        batch_size: int | None = None,
         dedup_window: int = 1800,
     ):
         """Run airing workflow.
@@ -71,7 +71,7 @@ class AiringWorkflowTask(BaseTask):
     async def _async_workflow(
         self,
         phases: list[str],
-        batch_size: int,
+        batch_size: int | None,
         dedup_window: int,
     ):
         """Async workflow implementation."""
@@ -112,7 +112,7 @@ class AiringWorkflowTask(BaseTask):
         self,
         service: JikanService,
         call_cache: APICallCache,
-        batch_size: int,
+        batch_size: int | None,
     ) -> dict:
         """Sync all currently airing anime.
 
@@ -120,33 +120,34 @@ class AiringWorkflowTask(BaseTask):
         Uses deduplication to prevent redundant API calls.
         """
         # Get airing anime with sync IDs
-        airing_anime = await sync_to_async(list)(
-            Anime.objects.filter(status=Anime.AnimeStatus.airing).exclude(
-                anilist_id__isnull=True
-            )[:batch_size]
-        )
+        airing_queryset = Anime.objects.filter(status=Anime.AnimeStatus.airing).order_by("id")
+        if batch_size:
+            airing_queryset = airing_queryset[:batch_size]
+        airing_anime = await sync_to_async(list)(airing_queryset)
 
         total = len(airing_anime)
         if total == 0:
             logger.info("No airing anime found to sync")
-            return {"total": 0, "updated": 0, "skipped": 0, "errors": 0}
+            return {"total": 0, "updated": 0, "skipped": 0, "missing_dates": 0, "rate_limited": 0, "errors": 0}
 
         logger.info(f"Found {total} airing anime to sync")
 
         updated_count = 0
         skipped_count = 0
         missing_date_count = 0
+        rate_limited_count = 0
         error_count = 0
 
         for i, anime in enumerate(airing_anime):
             try:
+                cache_key = anime.anilist_id or anime.mal_id or anime.id
                 # Deduplication check
-                if call_cache.is_recently_updated(anime.anilist_id, window=1800):
+                if call_cache.is_recently_updated(cache_key, window=1800):
                     skipped_count += 1
                     continue
 
-                # Fetch and update
-                result = await service.get_anime_by_id(anime.anilist_id)
+                # Airing refresh uses the lightweight resolver so daily sync can cover the full catalog.
+                result = await service.resolve_airing_media_for_anime(anime)
 
                 if result:
                     await service.update_anime_manual(anime, result)
@@ -157,9 +158,16 @@ class AiringWorkflowTask(BaseTask):
                         missing_date_count += 1
 
                     updated_count += 1
-                    call_cache.mark_updated(anime.anilist_id)
+                    call_cache.mark_updated(cache_key)
                 else:
-                    logger.warning(f"No results for anime ID: {anime.anilist_id}")
+                    if service.last_error_code == "rate_limited":
+                        rate_limited_count += 1
+                    logger.warning(
+                        "No Jikan results for %s (anime_id=%s, reason=%s)",
+                        anime.title,
+                        anime.id,
+                        service.last_error_code or "unknown",
+                    )
 
                 # Progress logging
                 if (i + 1) % 10 == 0 or (i + 1) == total:
@@ -180,25 +188,27 @@ class AiringWorkflowTask(BaseTask):
             "updated": updated_count,
             "skipped": skipped_count,
             "missing_dates": missing_date_count,
+            "rate_limited": rate_limited_count,
             "errors": error_count,
         }
 
     async def _cleanup_finished(
         self,
         service: JikanService,
-        batch_size: int,
+        batch_size: int | None,
     ) -> dict:
         """Clear next_airing_date for finished anime.
 
         Also updates status from 'airing' to 'finished' if detected.
         """
         # Find anime with past airing dates
-        past_airing = await sync_to_async(list)(
-            Anime.objects.filter(
-                next_airing_date__isnull=False,
-                next_airing_date__lt=timezone.now(),
-            ).exclude(anilist_id__isnull=True)[:batch_size]
-        )
+        past_airing_queryset = Anime.objects.filter(
+            next_airing_date__isnull=False,
+            next_airing_date__lt=timezone.now(),
+        ).order_by("next_airing_date")
+        if batch_size:
+            past_airing_queryset = past_airing_queryset[:batch_size]
+        past_airing = await sync_to_async(list)(past_airing_queryset)
 
         cleared_count = 0
         status_changed_count = 0
@@ -206,7 +216,7 @@ class AiringWorkflowTask(BaseTask):
 
         for anime in past_airing:
             try:
-                result = await service.get_anime_by_id(anime.anilist_id)
+                result = await service.resolve_airing_media_for_anime(anime)
 
                 if result:
                     anilist_status = result.get("status", "")
@@ -253,33 +263,35 @@ class AiringWorkflowTask(BaseTask):
         self,
         service: JikanService,
         call_cache: APICallCache,
-        batch_size: int,
+        batch_size: int | None,
     ) -> dict:
         """Backfill missing next_airing_date for airing anime.
 
         Processes anime with status='airing' but no next_airing_date.
         """
-        missing_dates = await sync_to_async(list)(
-            Anime.objects.filter(
-                status=Anime.AnimeStatus.airing,
-                next_airing_date__isnull=True,
-            ).exclude(anilist_id__isnull=True)[:batch_size]
-        )
+        missing_dates_queryset = Anime.objects.filter(
+            status=Anime.AnimeStatus.airing,
+            next_airing_date__isnull=True,
+        ).order_by("id")
+        if batch_size:
+            missing_dates_queryset = missing_dates_queryset[:batch_size]
+        missing_dates = await sync_to_async(list)(missing_dates_queryset)
 
         total = len(missing_dates)
         if total == 0:
             logger.info("No anime with missing airing dates found")
-            return {"total": 0, "populated": 0, "still_missing": 0, "errors": 0}
+            return {"total": 0, "populated": 0, "still_missing": 0, "rate_limited": 0, "errors": 0}
 
         logger.info(f"Found {total} airing anime missing next_airing_date")
 
         updated_count = 0
         still_missing_count = 0
+        rate_limited_count = 0
         error_count = 0
 
         for i, anime in enumerate(missing_dates):
             try:
-                result = await service.get_anime_by_id(anime.anilist_id)
+                result = await service.resolve_airing_media_for_anime(anime)
 
                 if result:
                     await service.update_anime_manual(anime, result)
@@ -291,7 +303,14 @@ class AiringWorkflowTask(BaseTask):
                     else:
                         still_missing_count += 1
                 else:
-                    logger.warning(f"No Jikan data for: {anime.title}")
+                    if service.last_error_code == "rate_limited":
+                        rate_limited_count += 1
+                    logger.warning(
+                        "No Jikan data for %s (anime_id=%s, reason=%s)",
+                        anime.title,
+                        anime.id,
+                        service.last_error_code or "unknown",
+                    )
 
                 if (i + 1) % 10 == 0 or (i + 1) == total:
                     logger.info(f"Backfill progress: {i + 1}/{total}")
@@ -304,6 +323,7 @@ class AiringWorkflowTask(BaseTask):
             "total": total,
             "populated": updated_count,
             "still_missing": still_missing_count,
+            "rate_limited": rate_limited_count,
             "errors": error_count,
         }
 
@@ -322,6 +342,7 @@ class AiringWorkflowTask(BaseTask):
                 "updated": results["sync"]["updated"],
                 "skipped": results["sync"]["skipped"],
                 "missing_dates": results["sync"]["missing_dates"],
+                "rate_limited": results["sync"]["rate_limited"],
             }
 
         if "cleanup" in results:
@@ -336,6 +357,7 @@ class AiringWorkflowTask(BaseTask):
                 "total": results["backfill"]["total"],
                 "populated": results["backfill"]["populated"],
                 "still_missing": results["backfill"]["still_missing"],
+                "rate_limited": results["backfill"]["rate_limited"],
             }
 
         return summary
@@ -349,7 +371,7 @@ class AiringWorkflowTask(BaseTask):
 def sync_airing_workflow(
     self,
     phases: list[str] | None = None,
-    batch_size: int = 100,
+    batch_size: int | None = None,
     dedup_window: int = 1800,
 ):
     """Run unified airing workflow.

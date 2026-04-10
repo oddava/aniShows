@@ -29,4 +29,27 @@ describe('InformationBox', () => {
             '/browse?tags=time+travel'
         );
     });
+
+    it('renders next episode countdown whenever next_airing_date is present', () => {
+        const anime = {
+            anime_type: 'TV',
+            episode_count: 12,
+            status: 'Unknown',
+            next_airing_episode: 8,
+            next_airing_date: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+            status_distribution: {},
+            genres: [],
+            tags: [],
+            external_links: [],
+        };
+
+        render(
+            <MemoryRouter>
+                <InformationBox anime={anime} />
+            </MemoryRouter>
+        );
+
+        expect(screen.getByText('Next Episode')).toBeInTheDocument();
+        expect(screen.getByText('Episode 8')).toBeInTheDocument();
+    });
 });

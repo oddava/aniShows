@@ -2,6 +2,8 @@ import api from '../httpClient';
 
 export const animeApi = {
     getAll: (params, signal) => api.get('/anime/', { params, signal }),
+    getBrowseRows: (signal) => api.get('/anime/browse-rows/', { signal }),
+    getSchedule: (params, signal) => api.get('/anime/schedule/', { params, signal }),
     getBySlug: (slug, signal) => api.get(`/anime/${slug}/`, { signal }),
     getTrending: (signal) => api.get('/anime/trending/', { signal }),
     getTopRated: (signal) => api.get('/anime/top_rated/', { signal }),

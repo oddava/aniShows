@@ -80,6 +80,9 @@ class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "is_favorite",
             "user_list_status",
             "release_date",
+            "broadcast_day",
+            "broadcast_time",
+            "broadcast_timezone",
             "next_airing_episode",
             "next_airing_date",
         ]
@@ -99,7 +102,7 @@ class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
 
 
 class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
-    """Lightweight serializer for lists with synopsis"""
+    """Lightweight serializer for browse/list surfaces."""
 
     genres = GenreSerializer(many=True, read_only=True)
     studio_name = CharField(source="studio.name", read_only=True, default=None)
@@ -108,9 +111,6 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
-    banner_image = SerializerMethodField()
-    banner_image_small = SerializerMethodField()
-    banner_image_medium = SerializerMethodField()
 
     class Meta:
         model = Anime
@@ -123,10 +123,6 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "cover_image_small",
             "cover_image_medium",
             "cover_image_external_url",
-            "banner_image",
-            "banner_image_small",
-            "banner_image_medium",
-            "banner_image_external_url",
             "rating",
             "episode_count",
             "anime_type",
@@ -135,8 +131,10 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "studio_name",
             "is_favorite",
             "user_list_status",
-            "synopsis",
             "release_date",
+            "broadcast_day",
+            "broadcast_time",
+            "broadcast_timezone",
             "next_airing_episode",
             "next_airing_date",
         ]
@@ -152,19 +150,6 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     def get_cover_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(
             obj, "cover_image_medium", "cover_image", "cover_image_external_url"
-        )
-
-    def get_banner_image(self, obj):
-        return self.get_image_url(obj, "banner_image", "banner_image_external_url")
-
-    def get_banner_image_small(self, obj):
-        return self.get_image_url_with_thumbnail(
-            obj, "banner_image_small", "banner_image", "banner_image_external_url"
-        )
-
-    def get_banner_image_medium(self, obj):
-        return self.get_image_url_with_thumbnail(
-            obj, "banner_image_medium", "banner_image", "banner_image_external_url"
         )
 
 
@@ -233,6 +218,9 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "review_count",
             "avg_rating",
             "created_at",
+            "broadcast_day",
+            "broadcast_time",
+            "broadcast_timezone",
             "next_airing_episode",
             "next_airing_date",
             "status_distribution",

@@ -102,7 +102,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
                 <InfoRow icon={Users} label="Members" value={formatCompactCount(totalMembers)} />
 
-                {anime.status === 'Airing' && anime.next_airing_date && (
+                {anime.status !== 'Finished' && anime.next_airing_date && (
                     <div className="pt-4 mt-4 border-t border-white/10">
                         <div
                             className="p-4 rounded-xl border"

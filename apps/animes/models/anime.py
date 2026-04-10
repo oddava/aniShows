@@ -14,6 +14,7 @@ from django.db.models import (
     ManyToManyField,
     Model,
     TextField,
+    TimeField,
     URLField,
 )
 from django.db.models.enums import TextChoices
@@ -154,6 +155,9 @@ class Anime(TimestampMixin, SlugMixin, Model):
 
     next_airing_episode = IntegerField(null=True, blank=True)
     next_airing_date = DateTimeField(null=True, blank=True)
+    broadcast_day = CharField(max_length=16, blank=True, db_index=True)
+    broadcast_time = TimeField(null=True, blank=True)
+    broadcast_timezone = CharField(max_length=64, blank=True)
     last_aired_episode = IntegerField(null=True, blank=True)
     last_aired_at = DateTimeField(null=True, blank=True, db_index=True)
 
@@ -194,8 +198,13 @@ class Anime(TimestampMixin, SlugMixin, Model):
             Index(fields=["season_year", "season", "-member_count"]),
             Index(fields=["status", "-site_rank", "-rating"]),
             Index(fields=["anime_type", "status", "-rating"]),
+            Index(fields=["source_material"], name="anime_source_material_idx"),
+            Index(fields=["episode_count"], name="anime_episode_count_idx"),
+            Index(fields=["duration_minutes"], name="anime_duration_minutes_idx"),
+            Index(fields=["season_year", "-popularity_rank"], name="anime_season_year_pop_idx"),
             Index(fields=["title", "status"]),
             Index(fields=["title_jp", "status"]),
+            Index(fields=["status", "broadcast_day", "next_airing_date"], name="anime_schedule_day_idx"),
             GinIndex(fields=["title"], name="anime_title_trgm_gin", opclasses=["gin_trgm_ops"]),
             GinIndex(
                 fields=["title_jp"], name="anime_title_jp_trgm_gin", opclasses=["gin_trgm_ops"]

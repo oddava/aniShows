@@ -275,6 +275,7 @@ class JikanService:
         "sunday": 6,
         "sundays": 6,
     }
+    _WEEKDAY_LABELS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
     def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
         self.base_url = get_jikan_base_url()
@@ -698,6 +699,26 @@ class JikanService:
             self._set_last_error("not_found", f"sync_id:{anilist_id}")
         return None
 
+    async def get_airing_anime_by_id(self, anilist_id: int) -> dict | None:
+        if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > self.MAX_INT_32:
+            self._set_last_error("invalid_variable", "invalid_sync_id")
+            return None
+
+        mal_id, preserve_requested_id = await self._resolve_mal_id_for_service_id(anilist_id)
+        if not mal_id:
+            self._set_last_error("not_found", f"sync_id:{anilist_id}")
+            return None
+
+        item = await self._get_airing_anime_payload(
+            mal_id,
+            preserve_service_id=anilist_id if preserve_requested_id else None,
+        )
+        if item:
+            return item
+        if not self.last_error_code:
+            self._set_last_error("not_found", f"sync_id:{anilist_id}")
+        return None
+
     async def search_by_mal_id(self, mal_id: int) -> dict | None:
         resolved_mal_id = self._coerce_positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
@@ -710,6 +731,54 @@ class JikanService:
         if not self.last_error_code:
             self._set_last_error("not_found", f"mal_id:{resolved_mal_id}")
         return None
+
+    async def search_airing_by_mal_id(self, mal_id: int) -> dict | None:
+        resolved_mal_id = self._coerce_positive_int(mal_id)
+        if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
+            self._set_last_error("invalid_variable", "invalid_mal_id")
+            return None
+
+        item = await self._get_airing_anime_payload(resolved_mal_id)
+        if item:
+            return item
+        if not self.last_error_code:
+            self._set_last_error("not_found", f"mal_id:{resolved_mal_id}")
+        return None
+
+    async def update_anime_manual(self, anime: Anime, item: dict | None = None) -> bool:
+        """Update local anime fields from Jikan without the heavier media refresh path."""
+        media = item or await self.resolve_media_for_anime(anime)
+        if not media:
+            logger.info("Skipped manual Jikan update for Anime ID %s: no matching media", anime.id)
+            return False
+
+        title_payload = media.get("title") or {}
+        title_romaji = title_payload.get("romaji", "")
+        title_english = title_payload.get("english", "")
+        title_native = title_payload.get("native", "")
+        title = title_english or title_romaji or anime.title
+
+        anime_data_dict = self._prepare_anime_data(media, title, title_native, anime.slug)
+        anime_data_dict.pop("slug", None)
+
+        # Airing sync only needs fresh schedule/status fields, not a full metadata/image refresh.
+        await self._update_anime(anime, anime_data_dict)
+        return True
+
+    async def resolve_airing_media_for_anime(self, anime: Anime) -> dict | None:
+        if anime.anilist_id:
+            item = await self.get_airing_anime_by_id(anime.anilist_id)
+            if item:
+                return item
+
+        if anime.mal_id:
+            item = await self.search_airing_by_mal_id(anime.mal_id)
+            if item:
+                if anime.anilist_id and item.get("id") != anime.anilist_id:
+                    item = {**item, "id": anime.anilist_id}
+                return item
+
+        return await self.resolve_media_for_anime(anime)
 
     async def resolve_media_for_anime(self, anime: Anime) -> dict | None:
         if anime.anilist_id:
@@ -774,12 +843,103 @@ class JikanService:
         self._set_last_error("not_found", f"title:{title}")
         return None
 
+    @classmethod
+    def _normalize_broadcast_day(cls, day_name: str | None) -> str:
+        weekday = cls._WEEKDAY_MAP.get(str(day_name or "").strip().lower())
+        if weekday is None:
+            return ""
+        return cls._WEEKDAY_LABELS[weekday]
+
+    @staticmethod
+    def _parse_broadcast_time(time_text: str | None):
+        candidate = str(time_text or "").strip()
+        if not candidate:
+            return None
+
+        for fmt in ("%H:%M", "%H:%M:%S"):
+            try:
+                return datetime.strptime(candidate, fmt).time()
+            except ValueError:
+                continue
+        return None
+
+    def _normalize_broadcast_payload(self, payload: dict[str, Any] | None) -> dict[str, str]:
+        broadcast = payload if isinstance(payload, dict) else {}
+        return {
+            "day": self._normalize_broadcast_day(broadcast.get("day")),
+            "time": str(broadcast.get("time") or "").strip(),
+            "timezone": str(broadcast.get("timezone") or "").strip(),
+        }
+
+    def _has_broadcast_payload(self, item: dict[str, Any] | None) -> bool:
+        broadcast = self._normalize_broadcast_payload((item or {}).get("broadcast"))
+        return any(broadcast.values())
+
+    @staticmethod
+    def _parse_next_episode_airing_at(value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+
+        if isinstance(value, (int, float)):
+            resolved = int(value)
+            return resolved if resolved > 0 else None
+
+        if isinstance(value, str):
+            candidate = value.strip()
+            if not candidate:
+                return None
+            try:
+                return int(candidate)
+            except ValueError:
+                try:
+                    parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+                except ValueError:
+                    return None
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UTC)
+                return int(parsed.astimezone(UTC).timestamp())
+
+        return None
+
+    def _merge_next_airing_payload(
+        self,
+        item: dict[str, Any],
+        estimated_next_airing: dict[str, int] | None,
+    ) -> dict[str, int] | None:
+        raw_candidates = [item.get("next_episode"), item.get("nextEpisode")]
+
+        for candidate in raw_candidates:
+            if not isinstance(candidate, dict):
+                continue
+
+            airing_at = self._parse_next_episode_airing_at(
+                candidate.get("aired_at") or candidate.get("airedAt")
+            )
+            if not airing_at:
+                continue
+
+            merged = {"airingAt": airing_at}
+            episode = self._coerce_positive_int(
+                candidate.get("episode") or candidate.get("number")
+            )
+            if episode:
+                merged["episode"] = episode
+            elif estimated_next_airing and estimated_next_airing.get("episode"):
+                merged["episode"] = estimated_next_airing["episode"]
+            return merged
+
+        return estimated_next_airing
+
+    def _has_next_airing_payload(self, item: dict[str, Any] | None) -> bool:
+        return self._merge_next_airing_payload(item or {}, None) is not None
+
     def _prepare_anime_data(self, item, title, title_native, slug):
         rankings = self._iter_rankings(item)
         status_distribution = self._status_distribution(item)
         cover_image = item.get("coverImage") or {}
         if not isinstance(cover_image, dict):
             cover_image = {}
+        broadcast = item.get("broadcast") or {}
 
         format_map = {
             "TV": Anime.AnimeType.tv,
@@ -870,6 +1030,9 @@ class JikanService:
             )
             if item.get("nextAiringEpisode") and item["nextAiringEpisode"].get("airingAt")
             else None,
+            "broadcast_day": self._normalize_broadcast_day(broadcast.get("day")),
+            "broadcast_time": self._parse_broadcast_time(broadcast.get("time")),
+            "broadcast_timezone": str(broadcast.get("timezone") or "").strip()[:64],
             "source_material": self._map_source_material(item.get("source")),
             "season": item.get("season") or "",
             "season_year": item.get("seasonYear"),
@@ -912,6 +1075,30 @@ class JikanService:
             staff_payload=staff_payload,
             themes_payload=themes_payload,
             stats_payload=stats_payload,
+            next_airing=next_airing,
+            preserve_service_id=preserve_service_id,
+        )
+
+    async def _get_airing_anime_payload(
+        self,
+        mal_id: int,
+        *,
+        preserve_service_id: int | None = None,
+    ) -> dict | None:
+        anime_payload = await self._get(
+            f"/anime/{mal_id}/full",
+            endpoint="anime_full_airing",
+        )
+        anime_data = anime_payload.get("data")
+        if not isinstance(anime_data, dict):
+            return None
+
+        next_airing = self._merge_next_airing_payload(anime_data, None)
+        if next_airing is None and self._normalize_status(anime_data.get("status")) == "RELEASING":
+            next_airing = await self._estimate_next_airing_episode(mal_id, anime_data=anime_data)
+
+        return self._normalize_anime_item(
+            anime_data,
             next_airing=next_airing,
             preserve_service_id=preserve_service_id,
         )
@@ -1175,6 +1362,8 @@ class JikanService:
         preserve_service_id: int | None = None,
     ) -> dict[str, Any]:
         mal_id = self._coerce_positive_int(item.get("mal_id"))
+        broadcast = self._normalize_broadcast_payload(item.get("broadcast"))
+        next_airing_payload = self._merge_next_airing_payload(item, next_airing)
         aired = item.get("aired") or {}
         aired_prop = aired.get("prop") or {}
         start_date = self._normalize_jikan_date(aired_prop.get("from"))
@@ -1237,7 +1426,8 @@ class JikanService:
             "producers": self._normalize_name_list(item.get("producers")),
             "sourceUrls": [url for url in [item.get("url")] if url],
             "providerIds": {"myanimelist": mal_id, "jikan": mal_id},
-            "nextAiringEpisode": next_airing,
+            "nextAiringEpisode": next_airing_payload,
+            "broadcast": broadcast,
         }
 
         if not normalized["bannerImage"]:
@@ -1878,6 +2068,14 @@ class JikanService:
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
 
+        if not self._has_broadcast_payload(item):
+            anime_data["broadcast_day"] = anime.broadcast_day
+            anime_data["broadcast_time"] = anime.broadcast_time
+            anime_data["broadcast_timezone"] = anime.broadcast_timezone
+        if not self._has_next_airing_payload(item):
+            anime_data["next_airing_episode"] = anime.next_airing_episode
+            anime_data["next_airing_date"] = anime.next_airing_date
+
         relations = anime_data.get("relations", [])
         for rel in relations:
             related_sync_id = rel.get("id")
@@ -1991,9 +2189,15 @@ class JikanService:
 
         return recommendations
 
-    async def _estimate_next_airing_episode(self, mal_id: int) -> dict[str, int] | None:
-        anime_payload = await self._get(f"/anime/{mal_id}", endpoint="anime_core")
-        anime_data = anime_payload.get("data")
+    async def _estimate_next_airing_episode(
+        self,
+        mal_id: int,
+        *,
+        anime_data: dict[str, Any] | None = None,
+    ) -> dict[str, int] | None:
+        if anime_data is None:
+            anime_payload = await self._get(f"/anime/{mal_id}", endpoint="anime_core")
+            anime_data = anime_payload.get("data")
         if not isinstance(anime_data, dict):
             return None
         if self._normalize_status(anime_data.get("status")) != "RELEASING":
