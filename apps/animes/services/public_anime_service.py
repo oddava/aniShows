@@ -112,7 +112,15 @@ class CachedPayloadResult:
 
 class AnimeQueryService:
     BROWSE_ROW_PAGE_SIZE = 18
-    SCHEDULE_DAY_NAMES = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+    SCHEDULE_DAY_NAMES = (
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+    )
     SCHEDULE_DAY_LOOKUP = {day.lower(): day for day in SCHEDULE_DAY_NAMES}
     DETAIL_DEFER_FIELDS = (
         "offline_db_payload",
@@ -233,7 +241,9 @@ class AnimeQueryService:
                 queryset = queryset
             else:
                 queryset = queryset.annotate(
-                    _is_favorite=Exists(UserFavorite.objects.filter(user=user, anime=OuterRef("pk")))
+                    _is_favorite=Exists(
+                        UserFavorite.objects.filter(user=user, anime=OuterRef("pk"))
+                    )
                 ).prefetch_related(self._user_list_prefetch(user))
 
         if not is_list:
@@ -248,12 +258,17 @@ class AnimeQueryService:
         queryset = (
             Anime.public_queryset()
             .filter(status=Anime.AnimeStatus.airing)
-            .filter(Q(broadcast_day__in=self.SCHEDULE_DAY_NAMES) | Q(next_airing_date__isnull=False))
+            .filter(
+                Q(broadcast_day__in=self.SCHEDULE_DAY_NAMES) | Q(next_airing_date__isnull=False)
+            )
             .select_related("studio")
             .only(*self.LIST_FIELDS, "studio__id", "studio__name")
             .prefetch_related(self._genre_prefetch())
             .order_by("broadcast_day", "broadcast_time", "next_airing_date", "title", "id")
         )
+
+        if not self.can_view_adult_content(user):
+            queryset = self._exclude_adult_content(queryset)
 
         if include_user_context and user.is_authenticated:
             queryset = queryset.annotate(
@@ -718,9 +733,7 @@ class AnimeQueryService:
     @classmethod
     def _exclude_adult_content(cls, queryset):
         adult_genre_ids = (
-            Anime.objects.using(queryset.db)
-            .filter(genres__slug__in=ADULT_GENRE_SLUGS)
-            .values("pk")
+            Anime.objects.using(queryset.db).filter(genres__slug__in=ADULT_GENRE_SLUGS).values("pk")
         )
         adult_tag_ids = (
             Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values("pk")
@@ -767,7 +780,9 @@ class AnimeQueryService:
         return resolved_ids
 
     @staticmethod
-    def _filter_case_insensitive_values(queryset, raw_value, field_name: str, valid_values: set[str]):
+    def _filter_case_insensitive_values(
+        queryset, raw_value, field_name: str, valid_values: set[str]
+    ):
         if not raw_value:
             return queryset
 
@@ -858,9 +873,7 @@ class AnimeQueryService:
                         release_date__gte=date(*start),
                         release_date__lte=date(*end),
                     )
-                    return queryset.filter(
-                        explicit_season_match | release_date_fallback
-                    )
+                    return queryset.filter(explicit_season_match | release_date_fallback)
                 start, end = AnimeQueryService._year_bounds(year_int)
                 return queryset.filter(
                     Q(season_year=year_int)
@@ -1040,9 +1053,11 @@ class AnimePublicPayloadService:
         if cached_base:
             data = cls.sanitize_public_user_fields(cached_base)
             cache_payload_changed = data != cached_base
-            if not cls.has_cover_media(data) or cls.item_has_internal_media_urls(
-                data
-            ) or cls.item_has_stale_imagekit_cache_urls(data):
+            if (
+                not cls.has_cover_media(data)
+                or cls.item_has_internal_media_urls(data)
+                or cls.item_has_stale_imagekit_cache_urls(data)
+            ):
                 needs_refresh = True
                 invalidate_public_cache_keys(*cache_keys)
             elif cache_hit_key != primary_cache_key or cache_payload_changed:
@@ -1053,6 +1068,7 @@ class AnimePublicPayloadService:
             data = None
 
         if needs_refresh:
+
             def build_base_payload():
                 from ..serializers.anime import AnimeDetailSerializer
 
@@ -1094,9 +1110,7 @@ class AnimePublicPayloadService:
         enriched["is_favorite"] = UserFavorite.objects.filter(user=user, anime_id=anime_id).exists()
         entry = UserAnimeList.objects.filter(user=user, anime_id=anime_id).first()
         enriched["user_list_status"] = (
-            build_user_list_status_payload(entry, enriched.get("episode_count"))
-            if entry
-            else None
+            build_user_list_status_payload(entry, enriched.get("episode_count")) if entry else None
         )
         return enriched
 
