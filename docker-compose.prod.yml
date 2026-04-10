@@ -300,6 +300,7 @@ services:
     environment:
       DEBUG: "False"
       DJANGO_ENV: "production"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-localhost,127.0.0.1,web},daphne"
       DB_NAME: "${DB_NAME}"
       DB_USER: "${DB_USER}"
       DB_PASSWORD: "${DB_PASSWORD}"
