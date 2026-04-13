@@ -153,6 +153,59 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         )
 
 
+class AnimeShelfSerializer(AnimeListSerializer):
+    """Serializer for shelf surfaces that need hero/banner artwork."""
+
+    synopsis = CharField(read_only=True)
+    banner_image = SerializerMethodField()
+    banner_image_medium = SerializerMethodField()
+    banner_image_large = SerializerMethodField()
+
+    class Meta(AnimeListSerializer.Meta):
+        fields = [
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "synopsis",
+            "cover_image",
+            "cover_image_small",
+            "cover_image_medium",
+            "cover_image_external_url",
+            "banner_image",
+            "banner_image_medium",
+            "banner_image_large",
+            "banner_image_external_url",
+            "rating",
+            "episode_count",
+            "anime_type",
+            "status",
+            "genres",
+            "studio_name",
+            "is_favorite",
+            "user_list_status",
+            "release_date",
+            "broadcast_day",
+            "broadcast_time",
+            "broadcast_timezone",
+            "next_airing_episode",
+            "next_airing_date",
+        ]
+
+    def get_banner_image(self, obj):
+        return self.get_image_url(obj, "banner_image", "banner_image_external_url")
+
+    def get_banner_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_medium", "banner_image", "banner_image_external_url"
+        )
+
+    def get_banner_image_large(self, obj):
+        return self.get_image_url_with_thumbnail(
+            obj, "banner_image_large", "banner_image", "banner_image_external_url"
+        )
+
+
 class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Full serializer for detail page"""
 

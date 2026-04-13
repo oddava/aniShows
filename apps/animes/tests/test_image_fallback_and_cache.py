@@ -405,3 +405,30 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(first["X-Cache-Status"], "miss")
         self.assertEqual(second["X-Cache-Status"], "hit")
+
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_trending_shelf_exposes_banner_and_synopsis_for_home_hero(self, _mock_delay):
+        anime = Anime.objects.create(
+            title="Hero Shelf Anime",
+            slug="hero-shelf-anime",
+            synopsis="Hero synopsis",
+            anime_type="TV",
+            status="Airing",
+            trending_rank=1,
+            cover_image_external_url="https://img.anilist.co/external-cover-hero.jpg",
+            banner_image_external_url="https://img.anilist.co/external-banner-hero.jpg",
+        )
+
+        response = self.client.get(reverse("anime-trending"))
+        self.assertEqual(response.status_code, 200)
+
+        payload = next(item for item in response.data if item["id"] == anime.id)
+        self.assertEqual(payload["synopsis"], "Hero synopsis")
+        self.assertEqual(
+            payload["banner_image"],
+            "https://img.anilist.co/external-banner-hero.jpg",
+        )
+        self.assertEqual(
+            payload["banner_image_external_url"],
+            "https://img.anilist.co/external-banner-hero.jpg",
+        )

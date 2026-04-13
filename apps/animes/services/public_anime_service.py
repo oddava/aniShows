@@ -158,6 +158,12 @@ class AnimeQueryService:
         "next_airing_date",
         "studio_id",
     )
+    SHELF_FIELDS = (
+        *LIST_FIELDS,
+        "synopsis",
+        "banner_image",
+        "banner_image_external_url",
+    )
     GENRE_FIELDS = ("id", "name", "slug")
     THEME_SONG_FIELDS = (
         "id",
@@ -386,7 +392,7 @@ class AnimeQueryService:
         return (
             Anime.public_queryset()
             .select_related("studio")
-            .only(*AnimeQueryService.LIST_FIELDS, "studio__id", "studio__name")
+            .only(*AnimeQueryService.SHELF_FIELDS, "studio__id", "studio__name")
             .prefetch_related(AnimeQueryService._genre_prefetch())
         )
 

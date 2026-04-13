@@ -16,6 +16,7 @@ from ..serializers import (
     AnimeCharacterSerializer,
     AnimeDetailSerializer,
     AnimeListSerializer,
+    AnimeShelfSerializer,
     AnimeStaffSerializer,
     AnimeWatchEpisodeSerializer,
     EpisodeRatingInputSerializer,
@@ -128,7 +129,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def _get_cached_shelf(self, request, cache_key: str, queryset_fn):
         result = self.payload_service.cache_shelf_payload(
             cache_key,
-            lambda: AnimeListSerializer(
+            lambda: AnimeShelfSerializer(
                 queryset_fn(self.query_service.base_shelf_queryset()),
                 many=True,
                 context={"request": request},
