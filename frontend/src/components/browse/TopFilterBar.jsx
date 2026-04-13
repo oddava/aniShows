@@ -185,7 +185,7 @@ export default function TopFilterBar({
                 <button
                     onClick={onToggleAdultContent}
                     disabled={isUpdatingAdultContent || !canToggleAdultContent}
-                    className={`hidden sm:flex flex-shrink-0 items-center justify-center w-[48px] h-[48px] rounded-xl transition-colors ${
+                    className={`flex flex-shrink-0 items-center justify-center w-[48px] h-[48px] rounded-xl transition-colors ${
                         adultContentEnabled
                             ? 'bg-accent/20 text-accent'
                             : 'bg-dark-200 text-gray-400 hover:text-white'

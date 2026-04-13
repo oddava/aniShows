@@ -21,6 +21,9 @@ vi.mock('../../api/client', () => ({
   animeApi: {
     getSchedule: vi.fn(),
   },
+  authApi: {
+    updateProfile: vi.fn(),
+  },
 }));
 
 // Mock SEO component
@@ -35,6 +38,7 @@ vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
     isAuthenticated: false,
     user: null,
+    refreshProfile: vi.fn(),
   }),
 }));
 

@@ -1,12 +1,14 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
   ChevronRight,
   Bell,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
-import { animeApi } from '../api/client';
+import { animeApi, authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
 import { ScheduleGridSkeleton } from '../components/skeletons';
@@ -126,7 +128,10 @@ const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday }) => {
 // Main Schedule Page Component
 export default function Schedule() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
+  const { isAuthenticated, user, refreshProfile } = useAuth();
+  const adultContentEnabled = Boolean(user?.show_adult_content);
+  const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
 
   // Get initial week from URL or use current week
   const [currentWeek, setCurrentWeek] = useState(() => {
@@ -172,9 +177,38 @@ export default function Schedule() {
     setSearchParams(params, { replace: true });
   }, [currentWeek, selectedDay, setSearchParams]);
 
+  const handleToggleAdultContent = useCallback(async () => {
+    if (!isAuthenticated || isUpdatingAdultContent) return;
+
+    const nextValue = !adultContentEnabled;
+    setIsUpdatingAdultContent(true);
+    try {
+      const response = await authApi.updateProfile({ show_adult_content: nextValue });
+      const updatedProfile = response?.data;
+      if (updatedProfile && typeof updatedProfile === 'object') {
+        await refreshProfile(updatedProfile);
+        queryClient.setQueryData(['ownProfile'], updatedProfile);
+      } else {
+        await refreshProfile();
+      }
+      queryClient.removeQueries({ queryKey: ['schedule'] });
+      queryClient.removeQueries({ queryKey: ['anime'] });
+      queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    } finally {
+      setIsUpdatingAdultContent(false);
+    }
+  }, [
+    adultContentEnabled,
+    isAuthenticated,
+    isUpdatingAdultContent,
+    queryClient,
+    refreshProfile,
+  ]);
+
   // Fetch schedule data
   const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ['schedule', isAuthenticated],
+    queryKey: ['schedule', isAuthenticated, adultContentEnabled],
     queryFn: async () => {
       const response = await animeApi.getSchedule();
       const apiDays = response.data?.days || {};
@@ -288,8 +322,31 @@ export default function Schedule() {
               </span>
             </h2>
 
-            <div className="text-sm text-gray-400">
-              {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-400">
+                {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
+              </div>
+              <button
+                onClick={handleToggleAdultContent}
+                disabled={!isAuthenticated || isUpdatingAdultContent}
+                className={`flex items-center justify-center w-[40px] h-[40px] rounded-xl transition-colors ${
+                  adultContentEnabled
+                    ? 'bg-accent/20 text-accent'
+                    : 'bg-dark-200 text-gray-400 hover:text-white'
+                } ${!isAuthenticated || isUpdatingAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
+                aria-label={
+                  adultContentEnabled ? 'Hide explicit hentai content' : 'Show explicit hentai content'
+                }
+                title={
+                  !isAuthenticated
+                    ? 'Log in to change explicit content visibility'
+                    : adultContentEnabled
+                      ? 'Explicit hentai: visible'
+                      : 'Explicit hentai: hidden'
+                }
+              >
+                {adultContentEnabled ? <Eye className="w-[18px] h-[18px]" /> : <EyeOff className="w-[18px] h-[18px]" />}
+              </button>
             </div>
           </div>
 
