@@ -221,6 +221,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     review_count = IntegerField(read_only=True)
     avg_rating = DecimalField(max_digits=3, decimal_places=1, read_only=True)
     status_distribution = SerializerMethodField()
+    external_links = SerializerMethodField()
     cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
@@ -344,6 +345,34 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             key: int(distribution.get(key, 0) or 0)
             for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
         }
+
+    def get_external_links(self, obj):
+        links = []
+        seen_urls = set()
+
+        for link in getattr(obj, "external_links", None) or []:
+            if not isinstance(link, dict):
+                continue
+
+            site = str(link.get("site") or "").strip()
+            url = str(link.get("url") or "").strip()
+            if not site or not url or url in seen_urls:
+                continue
+
+            seen_urls.add(url)
+            links.append(
+                {
+                    "site": site,
+                    "url": url,
+                    "icon": str(link.get("icon") or "").strip(),
+                }
+            )
+
+        has_banner_ref = bool(getattr(obj, "banner_image", None) or obj.banner_image_external_url)
+        if len(links) == 1 and links[0]["site"].lower() == "myanimelist" and not has_banner_ref:
+            return []
+
+        return links
 
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
     """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""

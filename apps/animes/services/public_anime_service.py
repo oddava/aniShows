@@ -112,6 +112,7 @@ class CachedPayloadResult:
 
 class AnimeQueryService:
     BROWSE_ROW_PAGE_SIZE = 18
+    CURATED_SHELF_MIN_MEMBER_COUNT = 200_000
     SCHEDULE_DAY_NAMES = (
         "Sunday",
         "Monday",
@@ -562,11 +563,15 @@ class AnimeQueryService:
         season: str | None = None,
         year: int | None = None,
         limit: int | None = None,
+        min_member_count: int | None = None,
     ):
         queryset = self.base_shelf_queryset()
 
         if not can_view_adult_content:
             queryset = self._exclude_adult_content(queryset)
+
+        if min_member_count is not None:
+            queryset = queryset.filter(member_count__gt=min_member_count)
 
         has_temporal_filters = bool(season or year)
         if has_temporal_filters:
@@ -635,6 +640,7 @@ class AnimeQueryService:
                 "queryset": self.browse_row_queryset(
                     can_view_adult_content=can_view_adult_content,
                     sort="popular",
+                    min_member_count=self.CURATED_SHELF_MIN_MEMBER_COUNT,
                 ),
             },
             {

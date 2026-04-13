@@ -149,10 +149,15 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @action(detail=False, methods=["get"])
     def top_rated(self, request):
+        can_view_adult_content = self.query_service.can_view_adult_content(request.user)
         return self._get_cached_shelf(
             request,
             f"anime_top_rated:{self.payload_service.PUBLIC_CACHE_VERSION}",
-            lambda qs: qs.filter(rating__isnull=False).order_by("-rating")[:12],
+            lambda _qs: self.query_service.browse_row_queryset(
+                can_view_adult_content=can_view_adult_content,
+                sort="rating",
+                limit=12,
+            ),
         )
 
     @action(detail=False, methods=["get"])
