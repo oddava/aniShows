@@ -111,7 +111,7 @@ class CachedPayloadResult:
 
 
 class AnimeQueryService:
-    BROWSE_ROW_PAGE_SIZE = 18
+    BROWSE_ROW_PAGE_SIZE = 12
     CURATED_SHELF_MIN_MEMBER_COUNT = 200_000
     SCHEDULE_DAY_NAMES = (
         "Sunday",
@@ -541,15 +541,7 @@ class AnimeQueryService:
         if cached_value is not None:
             return cached_value
 
-        profile = getattr(user, "userprofile", None)
-        if profile is not None:
-            resolved = bool(profile.show_adult_content)
-        else:
-            resolved = bool(
-                UserProfile.objects.filter(user_id=user.id, show_adult_content=True)
-                .values_list("show_adult_content", flat=True)
-                .first()
-            )
+        resolved = UserProfile.objects.filter(user_id=user.id, show_adult_content=True).exists()
 
         # Cache the preference on the user object so multi-shelf browse requests only resolve it once.
         user._show_adult_content_cache = resolved
@@ -744,13 +736,12 @@ class AnimeQueryService:
 
     @classmethod
     def _exclude_adult_content(cls, queryset):
-        adult_genre_ids = (
-            Anime.objects.using(queryset.db).filter(genres__slug__in=ADULT_GENRE_SLUGS).values("pk")
+        adult_ids = (
+            Anime.objects.using(queryset.db)
+            .filter(Q(genres__slug__in=ADULT_GENRE_SLUGS) | cls._adult_tags_q(queryset.db))
+            .values("pk")
         )
-        adult_tag_ids = (
-            Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values("pk")
-        )
-        return queryset.exclude(pk__in=adult_genre_ids).exclude(pk__in=adult_tag_ids)
+        return queryset.exclude(pk__in=adult_ids)
 
     @staticmethod
     def _adult_tags_q(database_alias: str) -> Q:
