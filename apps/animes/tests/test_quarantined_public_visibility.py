@@ -69,6 +69,62 @@ class QuarantinedAnimeVisibilityTests(APITestCase):
         self.assertEqual(hidden_response.status_code, status.HTTP_404_NOT_FOUND)
 
 
+class ShadowDuplicateVisibilityTests(APITestCase):
+    def _anime(self, title: str, **overrides) -> Anime:
+        payload = {
+            "title": title,
+            "slug": title.lower().replace(" ", "-").replace("'", "").replace("’", ""),
+            "synopsis": "test synopsis",
+            "anime_type": Anime.AnimeType.tv,
+            "status": Anime.AnimeStatus.finished,
+            "member_count": 250_000,
+        }
+        payload.update(overrides)
+        return Anime.objects.create(**payload)
+
+    def test_public_anime_list_excludes_shadow_duplicate_when_bannered_canonical_exists(self):
+        canonical = self._anime(
+            "Frieren: Beyond Journey’s End",
+            slug="frieren-beyond-journeys-end",
+            anilist_id=154587,
+            mal_id=52991,
+            banner_image_external_url="https://img.anilist.co/banner.jpg",
+            provider_ids={"anilist": 154587, "myanimelist": 52991},
+        )
+        shadow = self._anime(
+            "Frieren: Beyond Journey's End",
+            slug="frieren-beyond-journeys-end-2",
+            anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 52991,
+            provider_ids={"jikan": 52991, "myanimelist": 52991},
+        )
+
+        response = self.client.get(reverse("anime-list"), {"q": "Frieren"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        titles = [row["title"] for row in response.data["results"]]
+        self.assertIn(canonical.title, titles)
+        self.assertNotIn(shadow.title, titles)
+
+    def test_public_anime_detail_returns_404_for_shadow_duplicate_when_canonical_exists(self):
+        self._anime(
+            "Frieren: Beyond Journey’s End",
+            slug="frieren-beyond-journeys-end",
+            anilist_id=154587,
+            mal_id=52991,
+            banner_image_external_url="https://img.anilist.co/banner.jpg",
+            provider_ids={"anilist": 154587, "myanimelist": 52991},
+        )
+        shadow = self._anime(
+            "Frieren: Beyond Journey's End",
+            slug="frieren-beyond-journeys-end-2",
+            anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 52991,
+            provider_ids={"jikan": 52991, "myanimelist": 52991},
+        )
+
+        response = self.client.get(reverse("anime-detail", args=[shadow.slug]))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class QuarantinedRecommendationTests(APITestCase):
     def _anime(self, title: str, **overrides) -> Anime:
         payload = {

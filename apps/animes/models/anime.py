@@ -13,12 +13,16 @@ from django.db.models import (
     JSONField,
     ManyToManyField,
     Model,
+    OuterRef,
+    Exists,
+    Q,
     TextField,
     TimeField,
     URLField,
 )
 from django.db.models.enums import TextChoices
 from django.db.models.indexes import Index
+from django.db.models.functions import Cast, Coalesce
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
 
@@ -28,6 +32,8 @@ from ...shared.models import SlugMixin, TimestampMixin
 
 
 class Anime(TimestampMixin, SlugMixin, Model):
+    JIKAN_ANILIST_ID_OFFSET = 1_500_000_000
+
     class AnimeType(TextChoices):
         tv = "TV"
         movie = "Movie"
@@ -224,7 +230,32 @@ class Anime(TimestampMixin, SlugMixin, Model):
     @classmethod
     def public_queryset(cls):
         """Anime visible on public user-facing surfaces."""
-        return cls.objects.exclude(offline_sync_state__quarantined=True)
+        canonical_shadow_match = (
+            cls.objects.exclude(pk=OuterRef("pk"))
+            .annotate(
+                curated_mal_id=Coalesce(
+                    Cast("mal_id", CharField()),
+                    Cast("provider_ids__myanimelist", CharField()),
+                )
+            )
+            .filter(
+                curated_mal_id=Cast(OuterRef("provider_ids__myanimelist"), CharField()),
+                anilist_id__lt=cls.JIKAN_ANILIST_ID_OFFSET,
+            )
+            .exclude(anilist_id__isnull=True)
+            .filter(Q(banner_image__isnull=False) | ~Q(banner_image_external_url=""))
+        )
+
+        return (
+            cls.objects.exclude(offline_sync_state__quarantined=True)
+            .annotate(has_curated_shadow_match=Exists(canonical_shadow_match))
+            .exclude(
+                anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET,
+                has_curated_shadow_match=True,
+                banner_image__isnull=True,
+                banner_image_external_url="",
+            )
+        )
 
 
 class AnimeCharacter(Model):

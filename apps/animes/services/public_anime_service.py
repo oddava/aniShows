@@ -736,22 +736,25 @@ class AnimeQueryService:
 
     @classmethod
     def _exclude_adult_content(cls, queryset):
-        adult_ids = (
+        adult_genre_ids = (
             Anime.objects.using(queryset.db)
-            .filter(Q(genres__slug__in=ADULT_GENRE_SLUGS) | cls._adult_tags_q(queryset.db))
+            .filter(genres__slug__in=ADULT_GENRE_SLUGS)
             .values("pk")
         )
-        return queryset.exclude(pk__in=adult_ids)
+        adult_tag_ids = Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values(
+            "pk"
+        )
+        return queryset.exclude(pk__in=adult_genre_ids).exclude(pk__in=adult_tag_ids)
 
     @staticmethod
     def _adult_tags_q(database_alias: str) -> Q:
         vendor = connections[database_alias].vendor
+        if vendor == "postgresql":
+            return Q(tags__has_any_keys=sorted(ADULT_TAGS))
+
         condition = Q()
         for tag in ADULT_TAGS:
-            if vendor == "postgresql":
-                condition |= Q(tags__contains=[tag])
-            else:
-                condition |= Q(tags__icontains=json.dumps(tag))
+            condition |= Q(tags__icontains=json.dumps(tag))
         return condition
 
     @staticmethod

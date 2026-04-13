@@ -96,6 +96,16 @@ class TestEnvParsers(TestCase):
 
         assert _parse_sentinel_nodes("") == []
 
+    def test_public_cache_defaults_bias_toward_single_builder(self):
+        """Cold public-cache misses should wait long enough to avoid DB stampedes."""
+        from root.settings.base import (
+            PUBLIC_API_CACHE_LOCK_TTL_SECONDS,
+            PUBLIC_API_CACHE_WAIT_TIMEOUT_MS,
+        )
+
+        assert PUBLIC_API_CACHE_LOCK_TTL_SECONDS >= 120
+        assert PUBLIC_API_CACHE_WAIT_TIMEOUT_MS >= 30000
+
 class TestPrimaryReplicaRouter(TestCase):
     """Test the database router for primary/replica deployments."""
 
