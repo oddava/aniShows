@@ -14,7 +14,6 @@ DB_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 
 INCLUDE_DB="${BACKUP_INCLUDE_DB:-1}"
 INCLUDE_MEDIA="${BACKUP_INCLUDE_MEDIA:-1}"
-INCLUDE_ENV="${BACKUP_INCLUDE_ENV:-1}"
 SKIP_LOCK="${BACKUP_SKIP_LOCK:-0}"
 OUTPUT_PATH_FILE="${BACKUP_OUTPUT_PATH_FILE:-}"
 MEDIA_COMPRESS_LEVEL="${BACKUP_MEDIA_COMPRESS_LEVEL:-1}"
@@ -57,15 +56,6 @@ acquire_lock() {
     LOCK_ACQUIRED=1
 }
 
-assert_numeric_nonnegative() {
-    local value="$1"
-    local name="$2"
-    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
-        echo "Error: $name must be a non-negative integer. Got '$value'." >&2
-        exit 1
-    fi
-}
-
 assert_numeric_positive() {
     local value="$1"
     local name="$2"
@@ -73,18 +63,6 @@ assert_numeric_positive() {
         echo "Error: $name must be a positive integer. Got '$value'." >&2
         exit 1
     fi
-}
-
-prune_backups() {
-    local backup_type="$1"
-    local retention_days="$2"
-
-    if [ "$retention_days" -eq 0 ]; then
-        return
-    fi
-
-    log "Pruning *-${backup_type} backups older than ${retention_days} days..."
-    find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name "*-${backup_type}" -mtime +"$retention_days" -exec rm -rf {} +
 }
 
 backup_db() {
@@ -133,21 +111,13 @@ backup_media() {
     GZIP="-${MEDIA_COMPRESS_LEVEL}" tar -czf "$out_file" -C "$snapshot_dir" .
 }
 
-backup_env_snapshot() {
-    local out_file="$WORK_DIR/runtime_env.snapshot"
-    log "Capturing runtime environment snapshot..."
-    env | sort >"$out_file"
-}
-
 write_manifest() {
-    local created_at db_sha db_size media_sha media_size env_sha env_size
+    local created_at db_sha db_size media_sha media_size
     created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     db_sha="none"
     db_size="0"
     media_sha="none"
     media_size="0"
-    env_sha="none"
-    env_size="0"
 
     if [ "$INCLUDE_DB" = "1" ] && [ -f "$WORK_DIR/postgres.dump" ]; then
         db_sha="$(sha256sum "$WORK_DIR/postgres.dump" | awk '{print $1}')"
@@ -156,10 +126,6 @@ write_manifest() {
     if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/minio_data.tar.gz" ]; then
         media_sha="$(sha256sum "$WORK_DIR/minio_data.tar.gz" | awk '{print $1}')"
         media_size="$(wc -c <"$WORK_DIR/minio_data.tar.gz" | tr -d '[:space:]')"
-    fi
-    if [ "$INCLUDE_ENV" = "1" ] && [ -f "$WORK_DIR/runtime_env.snapshot" ]; then
-        env_sha="$(sha256sum "$WORK_DIR/runtime_env.snapshot" | awk '{print $1}')"
-        env_size="$(wc -c <"$WORK_DIR/runtime_env.snapshot" | tr -d '[:space:]')"
     fi
 
     cat >"$WORK_DIR/backup_manifest.env" <<EOF
@@ -174,9 +140,6 @@ DB_DUMP_SIZE_BYTES=$db_size
 MINIO_ARCHIVE_FILE=minio_data.tar.gz
 MINIO_ARCHIVE_SHA256=$media_sha
 MINIO_ARCHIVE_SIZE_BYTES=$media_size
-ENV_SNAPSHOT_FILE=runtime_env.snapshot
-ENV_SNAPSHOT_SHA256=$env_sha
-ENV_SNAPSHOT_SIZE_BYTES=$env_size
 POSTGRES_HOST=$DB_HOST
 POSTGRES_PORT=$DB_PORT
 POSTGRES_DB=$DB_NAME
@@ -190,9 +153,11 @@ EOF
     if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/minio_data.tar.gz" ]; then
         (cd "$WORK_DIR" && sha256sum "minio_data.tar.gz" >>"checksums.sha256")
     fi
-    if [ "$INCLUDE_ENV" = "1" ] && [ -f "$WORK_DIR/runtime_env.snapshot" ]; then
-        (cd "$WORK_DIR" && sha256sum "runtime_env.snapshot" >>"checksums.sha256")
-    fi
+}
+
+prune_previous_backups() {
+    log "Removing previous backups and keeping only $(basename "$CURRENT_BACKUP_DIR")..."
+    find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d ! -path "$CURRENT_BACKUP_DIR" ! -name ".*" -exec rm -rf {} +
 }
 
 main() {
@@ -228,9 +193,6 @@ main() {
     if [ "$INCLUDE_MEDIA" = "1" ]; then
         backup_media
     fi
-    if [ "$INCLUDE_ENV" = "1" ]; then
-        backup_env_snapshot
-    fi
 
     write_manifest
 
@@ -241,32 +203,7 @@ main() {
     if [ -n "$OUTPUT_PATH_FILE" ]; then
         printf '%s\n' "$CURRENT_BACKUP_DIR" >"$OUTPUT_PATH_FILE"
     fi
-
-    local retention_daily retention_weekly retention_manual retention_pre_restore
-    retention_daily="${BACKUP_RETENTION_DAILY_DAYS:-7}"
-    retention_weekly="${BACKUP_RETENTION_WEEKLY_DAYS:-28}"
-    retention_manual="${BACKUP_RETENTION_MANUAL_DAYS:-0}"
-    retention_pre_restore="${BACKUP_RETENTION_PRE_RESTORE_DAYS:-14}"
-
-    assert_numeric_nonnegative "$retention_daily" "BACKUP_RETENTION_DAILY_DAYS"
-    assert_numeric_nonnegative "$retention_weekly" "BACKUP_RETENTION_WEEKLY_DAYS"
-    assert_numeric_nonnegative "$retention_manual" "BACKUP_RETENTION_MANUAL_DAYS"
-    assert_numeric_nonnegative "$retention_pre_restore" "BACKUP_RETENTION_PRE_RESTORE_DAYS"
-
-    case "$TYPE" in
-    daily)
-        prune_backups "daily" "$retention_daily"
-        ;;
-    weekly)
-        prune_backups "weekly" "$retention_weekly"
-        ;;
-    manual)
-        prune_backups "manual" "$retention_manual"
-        ;;
-    pre-restore)
-        prune_backups "pre-restore" "$retention_pre_restore"
-        ;;
-    esac
+    prune_previous_backups
 }
 
 main "$@"
