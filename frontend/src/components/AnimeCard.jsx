@@ -307,7 +307,7 @@ function AnimeCard({
     // Determine loading strategy based on priority and index
     const loadingStrategy = useMemo(() => {
         if (priority || index < 6) {
-            return { loading: 'eager', decoding: 'sync' };
+            return { loading: 'eager', decoding: 'async' };
         }
         return { loading: 'lazy', decoding: 'async' };
     }, [priority, index]);

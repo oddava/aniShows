@@ -72,13 +72,14 @@ export default function BrowseRowMode() {
 
     return (
         <div className="space-y-2 md:space-y-6 pb-0 sm:pb-8 pt-2">
-            {(rows.length > 0 ? rows : (isLoading ? PLACEHOLDER_ROWS : browseRows)).map((row) => (
+            {(rows.length > 0 ? rows : (isLoading ? PLACEHOLDER_ROWS : browseRows)).map((row, index) => (
                 <CategoryRow
                     key={row.key || row.title}
                     title={row.title}
                     animeList={row.animeList || row.anime_list}
                     isLoading={isLoading}
                     viewAllLink={row.viewAllLink}
+                    eagerCount={index === 0 ? ROW_PAGE_SIZE : 0}
                 />
             ))}
         </div>

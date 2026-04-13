@@ -3,7 +3,14 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
 
-export default function CategoryRow({ title, animeList, isLoading, viewAllLink, skeletonCount = 6 }) {
+export default function CategoryRow({
+    title,
+    animeList,
+    isLoading,
+    viewAllLink,
+    skeletonCount = 6,
+    eagerCount = 0,
+}) {
     const handleViewAllClick = () => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     };
@@ -37,7 +44,11 @@ export default function CategoryRow({ title, animeList, isLoading, viewAllLink, 
                         animeList.map((anime, index) => (
                             <div key={anime.id} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
                                 {/* Browse rows skip per-card color sampling so the landing page stays cheap to render. */}
-                                <AnimeCard anime={anime} priority={index < 6} useBannerAccentTitleHover={false} />
+                                <AnimeCard
+                                    anime={anime}
+                                    priority={index < eagerCount}
+                                    useBannerAccentTitleHover={false}
+                                />
                             </div>
                         ))
                     ) : (
@@ -54,5 +65,6 @@ CategoryRow.propTypes = {
     animeList: PropTypes.array,
     isLoading: PropTypes.bool,
     viewAllLink: PropTypes.string,
-    skeletonCount: PropTypes.number
+    skeletonCount: PropTypes.number,
+    eagerCount: PropTypes.number,
 };

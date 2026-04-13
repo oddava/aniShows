@@ -17,11 +17,12 @@ vi.mock('../../context/AuthContext', () => ({
 }));
 
 vi.mock('./CategoryRow', () => ({
-    default: ({ title, animeList = [], viewAllLink = '' }) => (
+    default: ({ title, animeList = [], viewAllLink = '', eagerCount = 0 }) => (
         <section data-testid={title}>
             <h2>{title}</h2>
             <div>{animeList.map((anime) => anime.title).join('|')}</div>
             <div data-testid={`${title}-link`}>{viewAllLink}</div>
+            <div data-testid={`${title}-eager-count`}>{eagerCount}</div>
         </section>
     ),
 }));
@@ -93,6 +94,8 @@ describe('BrowseRowMode', () => {
         expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('exclude_ids=1%2C2%2C3%2C4%2C5%2C6');
+        expect(screen.getByTestId('Trending Now-eager-count')).toHaveTextContent('6');
+        expect(screen.getByTestId('Popular This Season-eager-count')).toHaveTextContent('0');
     });
 
     it('hides a shelf when every card is already shown in an earlier row', async () => {
