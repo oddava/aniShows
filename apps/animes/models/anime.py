@@ -16,6 +16,7 @@ from django.db.models import (
     OuterRef,
     Exists,
     Q,
+    Subquery,
     TextField,
     TimeField,
     URLField,
@@ -246,15 +247,20 @@ class Anime(TimestampMixin, SlugMixin, Model):
             .filter(Q(banner_image__isnull=False) | ~Q(banner_image_external_url=""))
         )
 
-        return (
-            cls.objects.exclude(offline_sync_state__quarantined=True)
-            .annotate(has_curated_shadow_match=Exists(canonical_shadow_match))
-            .exclude(
+        hidden_shadow_duplicates = (
+            cls.objects.filter(
                 anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET,
-                has_curated_shadow_match=True,
                 banner_image__isnull=True,
                 banner_image_external_url="",
             )
+            .annotate(has_curated_shadow_match=Exists(canonical_shadow_match))
+            .filter(has_curated_shadow_match=True)
+            .values("pk")
+        )
+
+        return (
+            cls.objects.exclude(offline_sync_state__quarantined=True)
+            .exclude(pk__in=Subquery(hidden_shadow_duplicates))
         )
 
 
