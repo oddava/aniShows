@@ -154,6 +154,7 @@ export default function Browse() {
   const currentYearParam = searchParams.get('year') || '';
   const currentYear = currentYearParam || (currentSeason ? new Date().getFullYear().toString() : '');
   const currentExcludeIds = searchParams.get('exclude_ids') || '';
+  const currentShelf = searchParams.get('shelf') || '';
   const currentMinRating = searchParams.get('min_rating') || '';
   const currentMaxRating = searchParams.get('max_rating') || '';
   const currentSource = searchParams.get('source') || '';
@@ -341,6 +342,7 @@ export default function Browse() {
   const handleTabChange = useCallback((key) => {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('exclude_ids');
+    newParams.delete('shelf');
     newParams.delete('sort');
     newParams.delete('status');
     newParams.delete('season');
@@ -438,6 +440,7 @@ export default function Browse() {
       currentSeason,
       currentYear,
       currentExcludeIds,
+      currentShelf,
       currentMinRating,
       currentMaxRating,
       currentSource,
@@ -463,6 +466,7 @@ export default function Browse() {
         season: currentSeason || undefined,
         year: currentYear || undefined,
         exclude_ids: currentExcludeIds || undefined,
+        shelf: currentShelf || undefined,
         min_rating: currentMinRating || undefined,
         max_rating: currentMaxRating || undefined,
         source: currentSource || undefined,
@@ -575,6 +579,7 @@ export default function Browse() {
               season: currentSeason,
               year: currentYear,
               excludeIds: currentExcludeIds,
+              shelf: currentShelf,
               minRating: currentMinRating,
               maxRating: currentMaxRating,
               source: currentSource,
@@ -615,6 +620,7 @@ export default function Browse() {
     currentSeason,
     currentYear,
     currentExcludeIds,
+    currentShelf,
     currentMinRating,
     currentMaxRating,
     currentSource,

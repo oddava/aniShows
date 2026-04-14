@@ -143,3 +143,51 @@ class BrowseRowsPopularShelfTests(APITestCase):
 
         self.assertIn(strong.title, titles)
         self.assertNotIn("Thin Popular Duplicate", titles)
+
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_all_time_browse_deep_link_keeps_curated_thresholds_with_exclusions(
+        self, _mock_enrich_metadata
+    ):
+        excluded = Anime.objects.create(
+            title="Excluded Popular Pick",
+            slug="excluded-popular-pick",
+            synopsis="Already shown on an earlier shelf.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            popularity_rank=1,
+            member_count=950_000,
+        )
+        kept = Anime.objects.create(
+            title="Kept Popular Pick",
+            slug="kept-popular-pick",
+            synopsis="Should remain visible on the deep-linked page.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            popularity_rank=2,
+            member_count=900_000,
+        )
+        Anime.objects.create(
+            title="Thin Popular Duplicate",
+            slug="thin-popular-duplicate-deep-link",
+            synopsis="Should still be filtered out as low-quality noise.",
+            anime_type=Anime.AnimeType.special,
+            status=Anime.AnimeStatus.finished,
+            popularity_rank=3,
+            member_count=0,
+        )
+
+        response = self.client.get(
+            reverse("anime-list"),
+            {
+                "sort": "popular",
+                "shelf": "all-time",
+                "exclude_ids": str(excluded.id),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [row["title"] for row in response.data["results"]]
+
+        self.assertNotIn(excluded.title, titles)
+        self.assertIn(kept.title, titles)
+        self.assertNotIn("Thin Popular Duplicate", titles)

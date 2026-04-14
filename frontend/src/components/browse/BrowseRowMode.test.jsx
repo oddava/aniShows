@@ -61,6 +61,15 @@ describe('BrowseRowMode', () => {
                         { id: 12, title: 'Season 12' },
                     ],
                 },
+                {
+                    key: 'all-time',
+                    title: 'All Time Popular',
+                    browse_params: { sort: 'popular', shelf: 'all-time' },
+                    anime_list: [
+                        { id: 13, title: 'Popular 13' },
+                        { id: 14, title: 'Popular 14' },
+                    ],
+                },
             ],
         });
     });
@@ -94,6 +103,10 @@ describe('BrowseRowMode', () => {
         expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('exclude_ids=1%2C2%2C3%2C4%2C5%2C6');
+        expect(screen.getByTestId('All Time Popular-link')).toHaveTextContent('shelf=all-time');
+        expect(screen.getByTestId('All Time Popular-link')).toHaveTextContent(
+            'exclude_ids=1%2C2%2C3%2C4%2C5%2C6%2C7%2C8%2C9%2C10%2C11%2C12'
+        );
         expect(screen.getByTestId('Trending Now-eager-count')).toHaveTextContent('6');
         expect(screen.getByTestId('Popular This Season-eager-count')).toHaveTextContent('0');
     });

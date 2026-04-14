@@ -484,6 +484,10 @@ class AnimeQueryService:
             # Home shelves may deep-link into browse with already-shown cards removed.
             queryset = queryset.exclude(id__in=exclude_ids)
 
+        shelf_scope = (query_params.get("shelf") or "").strip().lower()
+        if shelf_scope == "all-time":
+            queryset = queryset.filter(member_count__gt=self.CURATED_SHELF_MIN_MEMBER_COUNT)
+
         queryset = self._apply_numeric_range_filter(
             queryset,
             "episode_count",
@@ -639,7 +643,7 @@ class AnimeQueryService:
             {
                 "key": "all-time",
                 "title": "All Time Popular",
-                "browse_params": {"sort": "popular"},
+                "browse_params": {"sort": "popular", "shelf": "all-time"},
                 "queryset": self.browse_row_queryset(
                     can_view_adult_content=can_view_adult_content,
                     sort="popular",
