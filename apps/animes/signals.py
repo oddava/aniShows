@@ -5,7 +5,7 @@ from django.dispatch import receiver
 
 from ..shared.public_cache import invalidate_public_cache_keys
 from ..users.models import UserAnimeList
-from .models import Anime, Review, UserFavorite
+from .models import Anime, Genre, Review, Studio, UserFavorite
 from .services.public_anime_service import AnimePublicPayloadService
 from .services.user_list_side_effects import (
     handle_review_change as handle_review_change_service,
@@ -47,6 +47,7 @@ def _schedule_recommendations_debounced(user_id, countdown=300):
 
 def _invalidate_anime_public_caches(slug: str) -> None:
     current = AnimePublicPayloadService.PUBLIC_CACHE_VERSION
+    AnimePublicPayloadService.bump_collection_cache_namespace()
     invalidate_public_cache_keys(
         f"anime_detail_base:{current}:{slug}",
         f"anime_detail_base:v6:{slug}",
@@ -63,6 +64,11 @@ def _invalidate_anime_public_caches(slug: str) -> None:
         f"anime_recommendations:{current}:{slug}",
         f"anime_related:v2:{slug}",
     )
+
+
+def _invalidate_browse_filter_cache(cache_key: str) -> None:
+    AnimePublicPayloadService.bump_collection_cache_namespace()
+    invalidate_public_cache_keys(cache_key)
 
 
 @receiver(pre_save, sender=Anime)
@@ -123,6 +129,16 @@ def invalidate_anime_detail_cache(sender, instance, **kwargs):
 def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
     _invalidate_anime_public_caches(instance.slug)
     AnimeWatchEpisodeService().invalidate_for_anime(instance)
+
+
+@receiver([post_save, post_delete], sender=Genre)
+def invalidate_genre_cache(sender, instance, **kwargs):
+    _invalidate_browse_filter_cache("anime_genres:v1")
+
+
+@receiver([post_save, post_delete], sender=Studio)
+def invalidate_studio_cache(sender, instance, **kwargs):
+    _invalidate_browse_filter_cache("anime_studios:v1")
 
 
 @receiver(pre_save, sender=UserAnimeList)

@@ -189,6 +189,7 @@ class CatalogSyncService:
         invalidate_public_cache_keys(
             f"anime_trending:{AnimePublicPayloadService.PUBLIC_CACHE_VERSION}"
         )
+        AnimePublicPayloadService.bump_collection_cache_namespace()
         return len(rank_updates)
 
     @staticmethod

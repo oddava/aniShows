@@ -19,6 +19,7 @@ from ...shared.public_cache import invalidate_public_cache_keys
 from ..models import Anime, OfflineCatalogImport, Studio
 from .jikan import JikanService
 from .offline_sync import OfflineSyncService
+from .public_anime_service import AnimePublicPayloadService
 
 DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250
@@ -666,11 +667,12 @@ class OfflineCatalogImportService:
                 updated_ids.extend(anime.id for anime in to_update if anime.id)
 
         if touched_slugs:
+            AnimePublicPayloadService.bump_collection_cache_namespace()
             invalidate_public_cache_keys(
                 *[
                     key
                     for slug in touched_slugs
-                    for key in (f"anime_detail_base:v2:{slug}", f"anime_detail_base:{slug}")
+                    for key in AnimePublicPayloadService.detail_cache_keys(slug)
                 ]
             )
 

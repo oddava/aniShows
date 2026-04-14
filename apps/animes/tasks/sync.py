@@ -14,6 +14,7 @@ from asgiref.sync import sync_to_async
 from ...shared.celery import observed_shared_task
 from ..services.catalog_sync import CatalogSyncService
 from ..services.jikan import JikanService
+from ..services.public_anime_service import AnimeQueryService
 from .base import BaseTask, run_async_in_task
 
 SYNC_CONFIGS = {
@@ -225,32 +226,12 @@ class SyncAnimeCatalogTask(BaseTask):
 
     def _get_season(self, next_season: bool = False) -> tuple[str, int]:
         """Calculate current or next season."""
-        current_date = datetime.now()
-        year = current_date.year
-        month = current_date.month
-
-        if month in [12, 1, 2]:
-            current_season = "WINTER"
-            if month == 12:
-                year += 1
-        elif month in [3, 4, 5]:
-            current_season = "SPRING"
-        elif month in [6, 7, 8]:
-            current_season = "SUMMER"
-        else:
-            current_season = "FALL"
-
+        current_season, current_year, next_season_name, next_year = (
+            AnimeQueryService.season_window_for_date(datetime.now().date())
+        )
         if next_season:
-            seasons = ["WINTER", "SPRING", "SUMMER", "FALL"]
-            idx = seasons.index(current_season)
-            next_season_name = seasons[(idx + 1) % 4]
-
-            if current_season == "FALL":
-                year += 1
-
-            return next_season_name, year
-
-        return current_season, year
+            return next_season_name.upper(), next_year
+        return current_season.upper(), current_year
 
     @staticmethod
     def _minimum_trending_results(limit: int) -> int:

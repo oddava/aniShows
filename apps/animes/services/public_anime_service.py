@@ -1,5 +1,6 @@
 import hashlib
 import json
+import uuid
 from dataclasses import dataclass
 from datetime import date
 from urllib.parse import urlparse
@@ -663,9 +664,12 @@ class AnimeQueryService:
 
     @classmethod
     def _current_and_next_seasons(cls) -> tuple[str, int, str, int]:
-        today = date.today()
-        month = today.month
-        year = today.year
+        return cls.season_window_for_date(date.today())
+
+    @classmethod
+    def season_window_for_date(cls, target_date: date) -> tuple[str, int, str, int]:
+        month = target_date.month
+        year = target_date.year
 
         current_season = "winter"
         if 4 <= month <= 6:
@@ -979,6 +983,7 @@ class AnimeQueryService:
 
 class AnimePublicPayloadService:
     PUBLIC_CACHE_VERSION = "v9"
+    COLLECTION_CACHE_NAMESPACE_KEY = f"anime_collection_ns:{PUBLIC_CACHE_VERSION}"
     INTERNAL_MEDIA_HOSTS = {"localhost", "127.0.0.1", "minio", "web"}
     MEDIA_URL_FIELDS = (
         "cover_image",
@@ -1035,7 +1040,9 @@ class AnimePublicPayloadService:
         params = dict(request.query_params)
         param_string = json.dumps(sorted(params.items()), separators=(",", ":"))
         cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
-        cache_key = f"anime_list:{cls.PUBLIC_CACHE_VERSION}:{cache_key_hash}"
+        cache_key = cls._with_collection_namespace(
+            f"anime_list:{cls.PUBLIC_CACHE_VERSION}:{cache_key_hash}"
+        )
         data, cache_status = get_or_build_public_payload(
             cache_key,
             build_payload,
@@ -1046,6 +1053,7 @@ class AnimePublicPayloadService:
 
     @classmethod
     def cache_shelf_payload(cls, cache_key: str, build_payload):
+        cache_key = cls._with_collection_namespace(cache_key)
         data, cache_status = get_or_build_public_payload(
             cache_key,
             build_payload,
@@ -1225,6 +1233,24 @@ class AnimePublicPayloadService:
             if host in cls.INTERNAL_MEDIA_HOSTS:
                 return True
         return False
+
+    @classmethod
+    def collection_cache_namespace(cls) -> str:
+        namespace = cache.get(cls.COLLECTION_CACHE_NAMESPACE_KEY)
+        if namespace is None:
+            namespace = "0"
+            cache.set(cls.COLLECTION_CACHE_NAMESPACE_KEY, namespace, None)
+        return namespace
+
+    @classmethod
+    def bump_collection_cache_namespace(cls) -> str:
+        namespace = uuid.uuid4().hex
+        cache.set(cls.COLLECTION_CACHE_NAMESPACE_KEY, namespace, None)
+        return namespace
+
+    @classmethod
+    def _with_collection_namespace(cls, cache_key: str) -> str:
+        return f"{cache_key}:ns:{cls.collection_cache_namespace()}"
 
     @classmethod
     def payload_has_internal_media_urls(cls, payload) -> bool:
