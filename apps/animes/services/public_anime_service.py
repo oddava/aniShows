@@ -398,7 +398,6 @@ class AnimeQueryService:
         )
 
     def _apply_list_filters(self, queryset, request):
-        needs_distinct = False
         query_params = request.query_params
 
         if not self.can_view_adult_content(request.user):
@@ -422,9 +421,24 @@ class AnimeQueryService:
 
         genres = self._parse_multi_value_params(query_params.getlist("genre"))
         if genres:
-            for genre in genres:
-                queryset = queryset.filter(genres__slug=genre)
-            needs_distinct = True
+            genre_slugs = list(dict.fromkeys(genres))
+            genre_ids = list(
+                Genre.objects.filter(slug__in=genre_slugs).values_list("id", flat=True)
+            )
+            if len(genre_ids) != len(genre_slugs):
+                return queryset.none()
+
+            queryset = (
+                queryset.filter(genres__in=genre_ids)
+                .annotate(
+                    matched_genre_count=Count(
+                        "genres",
+                        filter=Q(genres__in=genre_ids),
+                        distinct=True,
+                    )
+                )
+                .filter(matched_genre_count=len(genre_ids))
+            )
 
         anime_status = query_params.get("status")
         queryset = self._filter_case_insensitive_values(
@@ -527,10 +541,7 @@ class AnimeQueryService:
             has_temporal_filters=has_temporal_filters,
         )
 
-        queryset = queryset.order_by(*ordering)
-        if needs_distinct:
-            queryset = queryset.distinct()
-        return queryset
+        return queryset.order_by(*ordering)
 
     @staticmethod
     def can_view_adult_content(user) -> bool:

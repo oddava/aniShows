@@ -208,6 +208,58 @@ class AnimeTypeFilterTests(APITestCase):
             titles.index("Hentai Entry Low Members"),
         )
 
+    def test_popular_sort_with_multiple_genres_requires_all_selected_genres(self):
+        adventure = Genre.objects.create(name="Adventure", slug="adventure")
+        comedy = Genre.objects.create(name="Comedy", slug="comedy")
+
+        highest_members = Anime.objects.create(
+            title="Adventure Comedy High Members",
+            slug="adventure-comedy-high-members",
+            synopsis="Matches both genres",
+            anime_type="TV",
+            status="Finished",
+            member_count=7000,
+            popularity_rank=None,
+        )
+        lower_members = Anime.objects.create(
+            title="Adventure Comedy Low Members",
+            slug="adventure-comedy-low-members",
+            synopsis="Also matches both genres",
+            anime_type="TV",
+            status="Finished",
+            member_count=3000,
+            popularity_rank=None,
+        )
+        adventure_only = Anime.objects.create(
+            title="Adventure Only",
+            slug="adventure-only",
+            synopsis="Matches one genre only",
+            anime_type="TV",
+            status="Finished",
+            member_count=9000,
+            popularity_rank=None,
+        )
+
+        highest_members.genres.add(adventure, comedy)
+        lower_members.genres.add(adventure, comedy)
+        adventure_only.genres.add(adventure)
+
+        response = self.client.get(
+            self.list_url,
+            {"sort": "popular", "genre": "adventure,comedy"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [item["title"] for item in response.data.get("results", [])]
+
+        self.assertIn("Adventure Comedy High Members", titles)
+        self.assertIn("Adventure Comedy Low Members", titles)
+        self.assertNotIn("Adventure Only", titles)
+        self.assertLess(
+            titles.index("Adventure Comedy High Members"),
+            titles.index("Adventure Comedy Low Members"),
+        )
+
     def test_adult_themed_anime_is_hidden_from_browse_by_default(self):
         hentai = Genre.objects.create(name="Hentai", slug="hentai")
         hidden = Anime.objects.create(
