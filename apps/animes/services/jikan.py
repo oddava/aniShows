@@ -16,6 +16,7 @@ import httpx
 from asgiref.sync import async_to_sync, sync_to_async
 from django.conf import settings
 from django.core.cache import cache
+from django.core.files.base import ContentFile
 from django.db import IntegrityError
 from django.utils import timezone
 from django.utils.text import slugify
@@ -319,6 +320,20 @@ class JikanService:
     async def close(self):
         with contextlib.suppress(Exception):
             await self.client.aclose()
+
+    @sync_to_async
+    def _save_image(self, anime, field_name, filename, image_data):
+        field = getattr(anime, field_name)
+        field.save(filename, ContentFile(image_data), save=True)
+
+        from ..tasks import generate_image_thumbnails
+
+        generate_image_thumbnails.delay(anime.id)
+
+    @sync_to_async
+    def _save_external_url(self, anime, field_name, url):
+        setattr(anime, field_name, self.normalize_external_image_url(url))
+        anime.save(update_fields=[field_name])
 
     @classmethod
     def _is_trusted_image_domain(cls, domain: str) -> bool:

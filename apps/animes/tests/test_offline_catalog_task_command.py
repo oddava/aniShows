@@ -206,7 +206,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             resume=False,
             enqueue_enrichment=True,
             enforce_full_sync=True,
-            batch_size=50,
+            batch_size=settings.OFFLINE_RECONCILE_BATCH_SIZE,
             enrichment_chunk_size=25,
         )
         mock_task.apply_async.assert_called_once_with(queue="batch")
@@ -363,7 +363,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
         mock_signature.assert_called_once_with(
             anime_ids=[42],
-            batch_size=50,
+            batch_size=settings.OFFLINE_RECONCILE_BATCH_SIZE,
             chunk_size=100,
             require_themes=True,
             strict=False,

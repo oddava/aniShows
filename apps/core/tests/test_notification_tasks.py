@@ -21,9 +21,9 @@ class TestSendPendingNotifications(TestCase):
             password="password123",
         )
 
-    @patch("apps.core.tasks.notifications.send_email_task.delay")
-    @patch("apps.core.tasks.notifications.PushService.has_active_subscriptions")
-    @patch("apps.core.tasks.notifications.PushService.send_to_user")
+    @patch("apps.users.services.email_service.send_email_task.delay")
+    @patch("apps.core.services.celery_tasks.PushService.has_active_subscriptions")
+    @patch("apps.core.services.celery_tasks.PushService.send_to_user")
     def test_push_notifications_are_not_resent_on_subsequent_runs(
         self, mock_send_push, mock_has_active_subscriptions, mock_send_email
     ):
@@ -50,8 +50,8 @@ class TestSendPendingNotifications(TestCase):
         self.assertEqual(mock_send_push.call_count, 1)
         self.assertEqual(mock_send_email.call_count, 0)
 
-    @patch("apps.core.tasks.notifications.send_email_task.delay")
-    @patch("apps.core.tasks.notifications.PushService.send_to_user")
+    @patch("apps.users.services.email_service.send_email_task.delay")
+    @patch("apps.core.services.celery_tasks.PushService.send_to_user")
     def test_push_notifications_without_active_subscriptions_are_finalized(
         self, mock_send_push, mock_send_email
     ):
@@ -76,6 +76,30 @@ class TestSendPendingNotifications(TestCase):
         self.assertTrue(notification.is_push_sent)
         mock_send_push.assert_not_called()
         mock_send_email.assert_not_called()
+
+    @patch("apps.users.services.email_service.send_email_task.delay")
+    def test_new_episode_notifications_dispatch_email_via_email_service_task(self, mock_send_email):
+        profile = self.user.userprofile
+        profile.email_new_episodes = True
+        profile.push_new_episodes = False
+        profile.save(update_fields=["email_new_episodes", "push_new_episodes"])
+
+        notification = Notification.objects.create(
+            user=self.user,
+            notification_type=Notification.NotificationType.NEW_EPISODE,
+            title="Episode 7 aired",
+            message="A new episode is available.",
+            data={"anime_slug": "episode-anime"},
+            is_email_sent=False,
+            is_push_sent=False,
+        )
+
+        send_pending_notifications()
+        notification.refresh_from_db()
+
+        self.assertTrue(notification.is_email_sent)
+        self.assertTrue(notification.is_push_sent)
+        mock_send_email.assert_called_once()
 
 
 class TestCheckNewEpisodes(TestCase):
