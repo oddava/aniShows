@@ -114,6 +114,8 @@ class CachedPayloadResult:
 class AnimeQueryService:
     BROWSE_ROW_PAGE_SIZE = 12
     CURATED_SHELF_MIN_MEMBER_COUNT = 200_000
+    TEMPORAL_POPULAR_MIN_MEMBER_COUNT = 5_000
+    TEMPORAL_POPULAR_MAX_RANK = 15_000
     SCHEDULE_DAY_NAMES = (
         "Sunday",
         "Monday",
@@ -124,6 +126,7 @@ class AnimeQueryService:
         "Saturday",
     )
     SCHEDULE_DAY_LOOKUP = {day.lower(): day for day in SCHEDULE_DAY_NAMES}
+    SEASON_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3}
     DETAIL_DEFER_FIELDS = (
         "offline_db_payload",
         "provider_ids",
@@ -518,6 +521,10 @@ class AnimeQueryService:
                 bool(query_params.get("max_year")),
             ]
         )
+        apply_temporal_popular_quality_filter = self._should_apply_temporal_popular_quality_filter(
+            season=query_params.get("season"),
+            year=query_params.get("year"),
+        )
 
         has_active_filters = any(
             [
@@ -544,6 +551,7 @@ class AnimeQueryService:
             sort_clean=sort_clean,
             has_active_filters=has_active_filters,
             has_temporal_filters=has_temporal_filters,
+            apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
         )
 
         return queryset.order_by(*ordering)
@@ -572,16 +580,24 @@ class AnimeQueryService:
         year: int | None = None,
         limit: int | None = None,
         min_member_count: int | None = None,
+        exclude_ids: list[int] | None = None,
     ):
         queryset = self.base_shelf_queryset()
 
         if not can_view_adult_content:
             queryset = self._exclude_adult_content(queryset)
 
+        if exclude_ids:
+            queryset = queryset.exclude(id__in=exclude_ids)
+
         if min_member_count is not None:
             queryset = queryset.filter(member_count__gt=min_member_count)
 
         has_temporal_filters = bool(season or year)
+        apply_temporal_popular_quality_filter = self._should_apply_temporal_popular_quality_filter(
+            season=season,
+            year=year,
+        )
         if has_temporal_filters:
             queryset = self._apply_year_filters(
                 queryset,
@@ -593,6 +609,7 @@ class AnimeQueryService:
             sort_clean=sort,
             has_active_filters=has_temporal_filters,
             has_temporal_filters=has_temporal_filters,
+            apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
         )
         queryset = queryset.order_by(*ordering)
 
@@ -601,15 +618,12 @@ class AnimeQueryService:
 
     def browse_row_definitions(self, *, can_view_adult_content: bool) -> list[dict]:
         current_season, current_year, next_season, next_year = self._current_and_next_seasons()
-        return [
+        row_specs = [
             {
                 "key": "trending",
                 "title": "Trending Now",
                 "browse_params": {"sort": "trending"},
-                "queryset": self.browse_row_queryset(
-                    can_view_adult_content=can_view_adult_content,
-                    sort="trending",
-                ),
+                "query_kwargs": {"sort": "trending"},
             },
             {
                 "key": "popular-season",
@@ -619,12 +633,11 @@ class AnimeQueryService:
                     "year": str(current_year),
                     "sort": "popular",
                 },
-                "queryset": self.browse_row_queryset(
-                    can_view_adult_content=can_view_adult_content,
-                    season=current_season,
-                    year=current_year,
-                    sort="popular",
-                ),
+                "query_kwargs": {
+                    "season": current_season,
+                    "year": current_year,
+                    "sort": "popular",
+                },
             },
             {
                 "key": "upcoming",
@@ -634,33 +647,50 @@ class AnimeQueryService:
                     "year": str(next_year),
                     "sort": "popular",
                 },
-                "queryset": self.browse_row_queryset(
-                    can_view_adult_content=can_view_adult_content,
-                    season=next_season,
-                    year=next_year,
-                    sort="popular",
-                ),
+                "query_kwargs": {
+                    "season": next_season,
+                    "year": next_year,
+                    "sort": "popular",
+                },
             },
             {
                 "key": "all-time",
                 "title": "All Time Popular",
                 "browse_params": {"sort": "popular", "shelf": "all-time"},
-                "queryset": self.browse_row_queryset(
-                    can_view_adult_content=can_view_adult_content,
-                    sort="popular",
-                    min_member_count=self.CURATED_SHELF_MIN_MEMBER_COUNT,
-                ),
+                "query_kwargs": {
+                    "sort": "popular",
+                    "min_member_count": self.CURATED_SHELF_MIN_MEMBER_COUNT,
+                },
             },
             {
                 "key": "top-rated",
                 "title": "Top Rated",
                 "browse_params": {"sort": "rating"},
-                "queryset": self.browse_row_queryset(
-                    can_view_adult_content=can_view_adult_content,
-                    sort="rating",
-                ),
+                "query_kwargs": {"sort": "rating"},
             },
         ]
+
+        rows = []
+        seen_ids: list[int] = []
+        for row_spec in row_specs:
+            anime_list = list(
+                self.browse_row_queryset(
+                    can_view_adult_content=can_view_adult_content,
+                    exclude_ids=seen_ids,
+                    **row_spec["query_kwargs"],
+                )
+            )
+            seen_ids.extend(anime.id for anime in anime_list)
+            rows.append(
+                {
+                    "key": row_spec["key"],
+                    "title": row_spec["title"],
+                    "browse_params": row_spec["browse_params"],
+                    "queryset": anime_list,
+                }
+            )
+
+        return rows
 
     @classmethod
     def _current_and_next_seasons(cls) -> tuple[str, int, str, int]:
@@ -701,6 +731,7 @@ class AnimeQueryService:
         sort_clean: str,
         has_active_filters: bool,
         has_temporal_filters: bool,
+        apply_temporal_popular_quality_filter: bool = False,
     ):
         sort_field = cls.SORT_MAPPING.get(sort_clean, "popularity_rank")
         ordering = [sort_field, "-id"]
@@ -715,6 +746,8 @@ class AnimeQueryService:
             if not has_active_filters:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             elif has_temporal_filters:
+                if apply_temporal_popular_quality_filter:
+                    queryset = cls._apply_temporal_popular_quality_filter(queryset)
                 queryset = queryset.annotate(
                     popularity_missing=Case(
                         # Future-season rows often arrive before a canonical popularity rank exists.
@@ -752,6 +785,38 @@ class AnimeQueryService:
             queryset = queryset.filter(trending_rank__isnull=False)
 
         return queryset, ordering
+
+    @classmethod
+    def _apply_temporal_popular_quality_filter(cls, queryset):
+        return queryset.filter(
+            Q(member_count__gte=cls.TEMPORAL_POPULAR_MIN_MEMBER_COUNT)
+            | Q(
+                popularity_rank__isnull=False,
+                popularity_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK,
+            )
+            | Q(site_rank__isnull=False, site_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK)
+        )
+
+    @classmethod
+    def _should_apply_temporal_popular_quality_filter(
+        cls,
+        *,
+        season: str | None,
+        year: int | str | None,
+    ) -> bool:
+        season_clean = str(season or "").strip().lower()
+        if season_clean not in VALID_SEASONS:
+            return False
+
+        try:
+            year_int = int(year)
+        except (TypeError, ValueError):
+            return False
+
+        current_season, current_year, _, _ = cls._current_and_next_seasons()
+        requested_key = (year_int, cls.SEASON_ORDER[season_clean])
+        current_key = (current_year, cls.SEASON_ORDER[current_season])
+        return requested_key >= current_key
 
     @classmethod
     def _exclude_adult_content(cls, queryset):
@@ -985,7 +1050,7 @@ class AnimeQueryService:
 
 
 class AnimePublicPayloadService:
-    PUBLIC_CACHE_VERSION = "v9"
+    PUBLIC_CACHE_VERSION = "v10"
     COLLECTION_CACHE_NAMESPACE_KEY = f"anime_collection_ns:{PUBLIC_CACHE_VERSION}"
     INTERNAL_MEDIA_HOSTS = {"localhost", "127.0.0.1", "minio", "web"}
     MEDIA_URL_FIELDS = (

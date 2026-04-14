@@ -185,3 +185,131 @@ def test_sync_task_season_windows_match_browse_logic(
 
     assert task._get_season() == expected_current
     assert task._get_season(next_season=True) == expected_next
+
+
+@pytest.mark.django_db
+def test_future_season_popular_browse_excludes_low_signal_titles(api_client, monkeypatch):
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 4, 14)
+
+    monkeypatch.setattr("apps.animes.services.public_anime_service.date", FrozenDate)
+
+    keep_ranked = create_anime(
+        title="Strong Summer Favorite",
+        slug="strong-summer-favorite",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=0,
+        popularity_rank=1_200,
+        site_rank=900,
+        rating=None,
+    )
+    keep_demand = create_anime(
+        title="High Demand Summer Show",
+        slug="high-demand-summer-show",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=125_000,
+        popularity_rank=None,
+        site_rank=None,
+        rating=None,
+    )
+    create_anime(
+        title="Crayon Placeholder",
+        slug="crayon-placeholder",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=0,
+        popularity_rank=19_408,
+        site_rank=None,
+        rating=None,
+    )
+    create_anime(
+        title="Planosaurus Placeholder",
+        slug="planosaurus-placeholder",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=0,
+        popularity_rank=28_800,
+        site_rank=None,
+        rating=None,
+    )
+
+    response = api_client.get(
+        reverse("anime-list"),
+        {"season": "summer", "year": "2026", "sort": "popular"},
+    )
+
+    assert response.status_code == 200
+    titles = [anime["title"] for anime in response.data["results"]]
+    assert keep_ranked.title in titles
+    assert keep_demand.title in titles
+    assert "Crayon Placeholder" not in titles
+    assert "Planosaurus Placeholder" not in titles
+
+
+@pytest.mark.django_db
+def test_browse_rows_server_side_deduplicate_later_shelves(api_client):
+    trending_titles = []
+    for index in range(12):
+        anime = create_anime(
+            title=f"Trending Shelf {index + 1}",
+            slug=f"trending-shelf-{index + 1}",
+            status=Anime.AnimeStatus.airing,
+            season="SPRING",
+            season_year=2026,
+            trending_rank=index + 1,
+            popularity_rank=index + 1,
+            member_count=900_000 - index,
+            rating=9.0 - (index * 0.1),
+        )
+        trending_titles.append(anime.title)
+
+    all_time_titles = []
+    for index in range(6):
+        anime = create_anime(
+            title=f"All Time Shelf {index + 1}",
+            slug=f"all-time-shelf-{index + 1}",
+            status=Anime.AnimeStatus.finished,
+            popularity_rank=100 + index,
+            member_count=700_000 - index,
+            rating=8.5 - (index * 0.1),
+        )
+        all_time_titles.append(anime.title)
+
+    response = api_client.get(reverse("anime-browse-rows"))
+
+    assert response.status_code == 200
+    row_map = {row["key"]: row for row in response.data}
+    trending_row_titles = [anime["title"] for anime in row_map["trending"]["anime_list"]]
+    all_time_row_titles = [anime["title"] for anime in row_map["all-time"]["anime_list"]]
+
+    assert trending_row_titles == trending_titles
+    assert all_time_row_titles == all_time_titles
+    assert set(trending_row_titles).isdisjoint(all_time_row_titles)
+
+
+@pytest.mark.django_db
+def test_trending_shelf_uses_cover_art_when_banner_is_missing(api_client):
+    anime = create_anime(
+        title="Hero Cover Fallback",
+        slug="hero-cover-fallback",
+        synopsis="Hero should still render artwork.",
+        trending_rank=1,
+        cover_image_external_url="https://cdn.example.com/hero-cover.webp",
+        banner_image_external_url="",
+    )
+
+    response = api_client.get(reverse("anime-trending"))
+
+    assert response.status_code == 200
+    payload = next(item for item in response.data if item["id"] == anime.id)
+
+    assert payload["banner_image"] == anime.cover_image_external_url
+    assert payload["banner_image_large"] == anime.cover_image_external_url

@@ -192,18 +192,39 @@ class AnimeShelfSerializer(AnimeListSerializer):
             "next_airing_date",
         ]
 
+    def _get_shelf_banner_fallback(self, obj, *, size: str):
+        if size == "large":
+            return self.get_image_url_with_thumbnail(
+                obj,
+                "cover_image_large",
+                "cover_image",
+                "cover_image_external_url",
+            )
+        if size == "medium":
+            return self.get_image_url_with_thumbnail(
+                obj,
+                "cover_image_medium",
+                "cover_image",
+                "cover_image_external_url",
+            )
+        return self.get_image_url(obj, "cover_image", "cover_image_external_url")
+
     def get_banner_image(self, obj):
-        return self.get_image_url(obj, "banner_image", "banner_image_external_url")
+        return self.get_image_url(
+            obj,
+            "banner_image",
+            "banner_image_external_url",
+        ) or self._get_shelf_banner_fallback(obj, size="original")
 
     def get_banner_image_medium(self, obj):
         return self.get_image_url_with_thumbnail(
             obj, "banner_image_medium", "banner_image", "banner_image_external_url"
-        )
+        ) or self._get_shelf_banner_fallback(obj, size="medium")
 
     def get_banner_image_large(self, obj):
         return self.get_image_url_with_thumbnail(
             obj, "banner_image_large", "banner_image", "banner_image_external_url"
-        )
+        ) or self._get_shelf_banner_fallback(obj, size="large")
 
 
 class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
