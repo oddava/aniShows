@@ -404,7 +404,6 @@ const ForumCategoryList = () => {
                 {trendingThreads.length > 0 && (
                     <section className="forums-rail-card">
                         <div className="mb-3 flex items-center gap-2">
-                            <Flame size={13} className="text-[var(--forums-accent-text)]" />
                             <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
                                 Trending
                             </h3>
@@ -420,7 +419,6 @@ const ForumCategoryList = () => {
                 {latestActivityThreads.length > 0 && (
                     <section className="forums-rail-card">
                         <div className="mb-3 flex items-center gap-2">
-                            <Clock3 size={13} className="text-[var(--forums-accent-text)]" />
                             <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
                                 Latest Activity
                             </h3>
