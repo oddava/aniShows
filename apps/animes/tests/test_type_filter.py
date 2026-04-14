@@ -6,9 +6,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from ...users.models import UserProfile
 from ..models import Anime, Genre
 from ..services.public_anime_service import ADULT_TAGS, AnimeQueryService
-from ...users.models import UserProfile
 
 User = get_user_model()
 
@@ -261,6 +261,43 @@ class AnimeTypeFilterTests(APITestCase):
             titles.index("Adventure Comedy High Members"),
             titles.index("Adventure Comedy Low Members"),
         )
+
+    def test_rating_sort_with_genre_filter_keeps_low_member_titles_and_orders_by_rating(self):
+        fantasy = Genre.objects.create(name="Fantasy", slug="fantasy")
+
+        higher_rated = Anime.objects.create(
+            title="Fantasy Critic Darling",
+            slug="fantasy-critic-darling",
+            synopsis="Highly rated niche title",
+            anime_type="TV",
+            status="Finished",
+            rating=9.4,
+            member_count=1_500,
+        )
+        lower_rated = Anime.objects.create(
+            title="Fantasy Blockbuster",
+            slug="fantasy-blockbuster",
+            synopsis="Popular but lower rated title",
+            anime_type="TV",
+            status="Finished",
+            rating=8.1,
+            member_count=800_000,
+        )
+
+        higher_rated.genres.add(fantasy)
+        lower_rated.genres.add(fantasy)
+
+        response = self.client.get(
+            self.list_url,
+            {"sort": "rating", "genre": "fantasy"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [item["title"] for item in response.data.get("results", [])]
+
+        self.assertIn(higher_rated.title, titles)
+        self.assertIn(lower_rated.title, titles)
+        self.assertLess(titles.index(higher_rated.title), titles.index(lower_rated.title))
 
     def test_adult_themed_anime_is_hidden_from_browse_by_default(self):
         hentai = Genre.objects.create(name="Hentai", slug="hentai")

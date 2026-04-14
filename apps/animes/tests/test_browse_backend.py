@@ -188,7 +188,9 @@ def test_sync_task_season_windows_match_browse_logic(
 
 
 @pytest.mark.django_db
-def test_future_season_popular_browse_excludes_low_signal_titles(api_client, monkeypatch):
+def test_future_season_popular_browse_lists_all_titles_but_keeps_high_signal_ordering(
+    api_client, monkeypatch
+):
     class FrozenDate(date):
         @classmethod
         def today(cls):
@@ -248,10 +250,64 @@ def test_future_season_popular_browse_excludes_low_signal_titles(api_client, mon
 
     assert response.status_code == 200
     titles = [anime["title"] for anime in response.data["results"]]
+    assert titles[:2] == [keep_ranked.title, keep_demand.title]
     assert keep_ranked.title in titles
     assert keep_demand.title in titles
-    assert "Crayon Placeholder" not in titles
-    assert "Planosaurus Placeholder" not in titles
+    assert "Crayon Placeholder" in titles
+    assert "Planosaurus Placeholder" in titles
+
+
+@pytest.mark.django_db
+def test_future_season_browse_rows_still_exclude_low_signal_titles(api_client, monkeypatch):
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 4, 14)
+
+    monkeypatch.setattr("apps.animes.services.public_anime_service.date", FrozenDate)
+
+    keep_ranked = create_anime(
+        title="Row Strong Summer Favorite",
+        slug="row-strong-summer-favorite",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=0,
+        popularity_rank=1_200,
+        site_rank=900,
+        rating=None,
+    )
+    keep_demand = create_anime(
+        title="Row High Demand Summer Show",
+        slug="row-high-demand-summer-show",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=125_000,
+        popularity_rank=None,
+        site_rank=None,
+        rating=None,
+    )
+    create_anime(
+        title="Row Crayon Placeholder",
+        slug="row-crayon-placeholder",
+        status=Anime.AnimeStatus.upcoming,
+        season="SUMMER",
+        season_year=2026,
+        member_count=0,
+        popularity_rank=19_408,
+        site_rank=None,
+        rating=None,
+    )
+
+    response = api_client.get(reverse("anime-browse-rows"))
+
+    assert response.status_code == 200
+    row_map = {row["key"]: row for row in response.data}
+    upcoming_titles = [anime["title"] for anime in row_map["upcoming"]["anime_list"]]
+    assert keep_ranked.title in upcoming_titles
+    assert keep_demand.title in upcoming_titles
+    assert "Row Crayon Placeholder" not in upcoming_titles
 
 
 @pytest.mark.django_db

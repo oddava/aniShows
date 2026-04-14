@@ -552,6 +552,7 @@ class AnimeQueryService:
             has_active_filters=has_active_filters,
             has_temporal_filters=has_temporal_filters,
             apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
+            curate_for_shelves=False,
         )
 
         return queryset.order_by(*ordering)
@@ -610,6 +611,7 @@ class AnimeQueryService:
             has_active_filters=has_temporal_filters,
             has_temporal_filters=has_temporal_filters,
             apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
+            curate_for_shelves=True,
         )
         queryset = queryset.order_by(*ordering)
 
@@ -732,23 +734,84 @@ class AnimeQueryService:
         has_active_filters: bool,
         has_temporal_filters: bool,
         apply_temporal_popular_quality_filter: bool = False,
+        curate_for_shelves: bool = False,
     ):
         sort_field = cls.SORT_MAPPING.get(sort_clean, "popularity_rank")
         ordering = [sort_field, "-id"]
 
         if sort_clean == "rating":
-            queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
+            if curate_for_shelves:
+                queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
+            else:
+                queryset = queryset.annotate(
+                    rating_missing=Case(
+                        When(rating__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    member_sort=Coalesce(F("member_count"), Value(0)),
+                    popularity_missing=Case(
+                        When(popularity_rank__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                )
+                ordering = [
+                    "rating_missing",
+                    "-rating",
+                    "popularity_missing",
+                    "popularity_rank",
+                    "-member_sort",
+                    "-id",
+                ]
         elif sort_clean == "newest":
-            queryset = queryset.filter(episode_count__gt=0)
+            if curate_for_shelves:
+                queryset = queryset.filter(episode_count__gt=0)
+            else:
+                queryset = queryset.annotate(
+                    release_missing=Case(
+                        When(release_date__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    season_year_missing=Case(
+                        When(season_year__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                )
+                ordering = [
+                    "release_missing",
+                    "-release_date",
+                    "season_year_missing",
+                    "-season_year",
+                    "-id",
+                ]
         elif sort_clean == "upcoming":
             queryset = queryset.filter(status="Upcoming")
         elif sort_clean == "popular":
-            if not has_active_filters:
+            if curate_for_shelves and not has_active_filters:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             elif has_temporal_filters:
-                if apply_temporal_popular_quality_filter:
+                if curate_for_shelves and apply_temporal_popular_quality_filter:
                     queryset = cls._apply_temporal_popular_quality_filter(queryset)
                 queryset = queryset.annotate(
+                    popular_quality_bucket=Case(
+                        When(
+                            Q(member_count__gte=cls.TEMPORAL_POPULAR_MIN_MEMBER_COUNT)
+                            | Q(
+                                popularity_rank__isnull=False,
+                                popularity_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK,
+                            )
+                            | Q(
+                                site_rank__isnull=False,
+                                site_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK,
+                            ),
+                            then=Value(0),
+                        ),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    ),
                     popularity_missing=Case(
                         # Future-season rows often arrive before a canonical popularity rank exists.
                         When(popularity_rank__isnull=True, then=Value(1)),
@@ -769,6 +832,7 @@ class AnimeQueryService:
                     member_sort=Coalesce(F("member_count"), Value(0)),
                 )
                 ordering = [
+                    "popular_quality_bucket",
                     "popularity_missing",
                     "popularity_rank",
                     "site_missing",
@@ -780,9 +844,61 @@ class AnimeQueryService:
                 ]
             else:
                 queryset = queryset.annotate(member_sort=Coalesce(F("member_count"), 0))
-                ordering = ["-member_sort", "-id"]
+                if curate_for_shelves:
+                    ordering = ["-member_sort", "-id"]
+                else:
+                    queryset = queryset.annotate(
+                        popularity_missing=Case(
+                            When(popularity_rank__isnull=True, then=Value(1)),
+                            default=Value(0),
+                            output_field=IntegerField(),
+                        ),
+                        site_missing=Case(
+                            When(site_rank__isnull=True, then=Value(1)),
+                            default=Value(0),
+                            output_field=IntegerField(),
+                        ),
+                        rating_missing=Case(
+                            When(rating__isnull=True, then=Value(1)),
+                            default=Value(0),
+                            output_field=IntegerField(),
+                        ),
+                    )
+                    ordering = [
+                        "popularity_missing",
+                        "popularity_rank",
+                        "site_missing",
+                        "site_rank",
+                        "rating_missing",
+                        "-rating",
+                        "-member_sort",
+                        "-id",
+                    ]
         elif sort_clean == "trending":
-            queryset = queryset.filter(trending_rank__isnull=False)
+            if curate_for_shelves:
+                queryset = queryset.filter(trending_rank__isnull=False)
+            else:
+                queryset = queryset.annotate(
+                    trending_missing=Case(
+                        When(trending_rank__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    popularity_missing=Case(
+                        When(popularity_rank__isnull=True, then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField(),
+                    ),
+                    member_sort=Coalesce(F("member_count"), Value(0)),
+                )
+                ordering = [
+                    "trending_missing",
+                    "trending_rank",
+                    "popularity_missing",
+                    "popularity_rank",
+                    "-member_sort",
+                    "-id",
+                ]
 
         return queryset, ordering
 
