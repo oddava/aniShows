@@ -30,11 +30,8 @@ function takeUniqueAnime(animeList = [], seenIds, limit = ROW_PAGE_SIZE) {
     return uniqueItems;
 }
 
-function buildBrowseLink(baseParams, excludedIds = []) {
+function buildBrowseLink(baseParams) {
     const params = new URLSearchParams(baseParams);
-    if (excludedIds.length > 0) {
-        params.set('exclude_ids', excludedIds.join(','));
-    }
     return `/browse?${params.toString()}`;
 }
 
@@ -67,7 +64,6 @@ export default function BrowseRowMode() {
         const resolvedRows = [];
 
         for (const row of browseRows) {
-            const excludedIds = [...seenIds];
             const uniqueItems = takeUniqueAnime(row.anime_list, seenIds);
             // Hiding shelves with no unique cards avoids duplicated rows that read like a backend bug.
             if (!isLoading && uniqueItems.length === 0) continue;
@@ -75,8 +71,8 @@ export default function BrowseRowMode() {
             resolvedRows.push({
                 ...row,
                 animeList: uniqueItems,
-                // "View all" should land on the same deduplicated slice the shelf represented.
-                viewAllLink: buildBrowseLink(row.browse_params, excludedIds),
+                // "View all" should open the full category, not the deduplicated landing-page slice.
+                viewAllLink: buildBrowseLink(row.browse_params),
             });
         }
 

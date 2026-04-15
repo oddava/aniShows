@@ -53,6 +53,44 @@ class TopRatedEndpointTests(APITestCase):
         self.assertEqual(titles[:2], [strongest.title, runner_up.title])
         self.assertNotIn("Thin Duplicate", titles)
 
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_browse_rating_list_without_filters_uses_curated_thresholds(self, _mock_enrich_metadata):
+        Anime.objects.create(
+            title="Thin Duplicate",
+            slug="thin-duplicate-list",
+            synopsis="High score but not enough traction.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            rating=9.9,
+            member_count=50_000,
+        )
+        strongest = Anime.objects.create(
+            title="Curated Favorite",
+            slug="curated-favorite-list",
+            synopsis="Should top the public browse list.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            rating=9.5,
+            member_count=900_000,
+        )
+        runner_up = Anime.objects.create(
+            title="Runner Up",
+            slug="runner-up-list",
+            synopsis="Still qualifies for the curated browse list.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            rating=9.3,
+            member_count=500_000,
+        )
+
+        response = self.client.get(reverse("anime-list"), {"sort": "rating"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        titles = [row["title"] for row in response.data["results"]]
+
+        self.assertEqual(titles[:2], [strongest.title, runner_up.title])
+        self.assertNotIn("Thin Duplicate", titles)
+
 
 class AnimeDetailExternalLinksTests(APITestCase):
     @patch("apps.animes.signals.enrich_metadata.delay")

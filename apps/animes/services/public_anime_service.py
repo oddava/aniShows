@@ -743,6 +743,11 @@ class AnimeQueryService:
             if curate_for_shelves:
                 queryset = queryset.filter(rating__isnull=False, member_count__gt=200000)
             else:
+                if not has_active_filters:
+                    queryset = queryset.filter(
+                        rating__isnull=False,
+                        member_count__gt=cls.CURATED_SHELF_MIN_MEMBER_COUNT,
+                    )
                 queryset = queryset.annotate(
                     rating_missing=Case(
                         When(rating__isnull=True, then=Value(1)),

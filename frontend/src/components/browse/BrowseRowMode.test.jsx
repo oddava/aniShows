@@ -102,11 +102,7 @@ describe('BrowseRowMode', () => {
         expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 2');
         expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
         expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
-        expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('exclude_ids=1%2C2%2C3%2C4%2C5%2C6');
         expect(screen.getByTestId('All Time Popular-link')).toHaveTextContent('shelf=all-time');
-        expect(screen.getByTestId('All Time Popular-link')).toHaveTextContent(
-            'exclude_ids=1%2C2%2C3%2C4%2C5%2C6%2C7%2C8%2C9%2C10%2C11%2C12'
-        );
         expect(screen.getByTestId('Trending Now-eager-count')).toHaveTextContent('6');
         expect(screen.getByTestId('Popular This Season-eager-count')).toHaveTextContent('0');
     });
