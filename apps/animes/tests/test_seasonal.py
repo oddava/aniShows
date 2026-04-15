@@ -9,6 +9,7 @@ Tests for:
 """
 
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
@@ -16,8 +17,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from ..models import Anime, Studio
+from ..models import Anime, Genre, Studio
 from ..signals import trigger_metadata_fetch
+from ..services.public_anime_service import AnimeQueryService
 
 User = get_user_model()
 
@@ -326,6 +328,115 @@ class SeasonalAnimeTests(APITestCase):
         titles = [anime["title"] for anime in results]
 
         self.assertLess(titles.index("Summer Higher Demand"), titles.index("Summer Lower Demand"))
+
+    @patch.object(
+        AnimeQueryService,
+        "_current_and_next_seasons",
+        return_value=("spring", 2026, "summer", 2026),
+    )
+    def test_seasonal_popular_view_all_uses_shelf_quality_thresholds(self, _mock_season_window):
+        """Plain seasonal browse should match the curated shelf quality bar."""
+        keep_ranked = Anime.objects.create(
+            title="Summer Ranked Favorite",
+            slug="summer-ranked-favorite",
+            synopsis="Well-ranked seasonal show",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=0,
+            popularity_rank=1200,
+            site_rank=900,
+            rating=None,
+        )
+        keep_demand = Anime.objects.create(
+            title="Summer High Demand",
+            slug="summer-high-demand",
+            synopsis="Large audience demand should keep this visible",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=125000,
+            popularity_rank=None,
+            site_rank=None,
+            rating=None,
+        )
+        Anime.objects.create(
+            title="Summer Placeholder",
+            slug="summer-placeholder",
+            synopsis="Low-signal seasonal noise",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=0,
+            popularity_rank=19408,
+            site_rank=None,
+            rating=None,
+        )
+
+        response = self.client.get(
+            self.list_url, {"season": "summer", "year": "2026", "sort": "popular"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
+
+        self.assertIn(keep_ranked.title, titles)
+        self.assertIn(keep_demand.title, titles)
+        self.assertNotIn("Summer Placeholder", titles)
+
+    @patch.object(
+        AnimeQueryService,
+        "_current_and_next_seasons",
+        return_value=("spring", 2026, "summer", 2026),
+    )
+    def test_filtered_seasonal_popular_view_keeps_low_signal_matches(self, _mock_season_window):
+        """Extra filters should still surface niche seasonal matches."""
+        fantasy = Genre.objects.create(name="Fantasy", slug="fantasy")
+
+        strong = Anime.objects.create(
+            title="Summer Fantasy Standout",
+            slug="summer-fantasy-standout",
+            synopsis="Strong seasonal genre match",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=125000,
+            popularity_rank=None,
+            site_rank=None,
+            rating=None,
+        )
+        niche = Anime.objects.create(
+            title="Summer Fantasy Niche",
+            slug="summer-fantasy-niche",
+            synopsis="Low-signal but intentionally filtered match",
+            anime_type="TV",
+            status="Upcoming",
+            season="SUMMER",
+            season_year=2026,
+            member_count=0,
+            popularity_rank=19408,
+            site_rank=None,
+            rating=None,
+        )
+        strong.genres.add(fantasy)
+        niche.genres.add(fantasy)
+
+        response = self.client.get(
+            self.list_url,
+            {"season": "summer", "year": "2026", "sort": "popular", "genre": "fantasy"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        titles = [anime["title"] for anime in results]
+
+        self.assertIn(strong.title, titles)
+        self.assertIn(niche.title, titles)
 
     def test_null_rating_handling(self):
         """Test that anime with null ratings are included."""

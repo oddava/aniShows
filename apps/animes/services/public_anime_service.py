@@ -526,7 +526,7 @@ class AnimeQueryService:
             year=query_params.get("year"),
         )
 
-        has_active_filters = any(
+        has_non_temporal_filters = any(
             [
                 bool(search),
                 bool(genres),
@@ -541,15 +541,16 @@ class AnimeQueryService:
                 bool(query_params.get("max_episodes")),
                 bool(query_params.get("min_duration")),
                 bool(query_params.get("max_duration")),
-                has_temporal_filters,
             ]
         )
+        has_active_filters = has_non_temporal_filters or has_temporal_filters
 
         sort_clean = (query_params.get("sort", "popular") or "popular").strip().lower()
         queryset, ordering = self._apply_sort(
             queryset,
             sort_clean=sort_clean,
             has_active_filters=has_active_filters,
+            has_non_temporal_filters=has_non_temporal_filters,
             has_temporal_filters=has_temporal_filters,
             apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
             curate_for_shelves=False,
@@ -609,6 +610,7 @@ class AnimeQueryService:
             queryset,
             sort_clean=sort,
             has_active_filters=has_temporal_filters,
+            has_non_temporal_filters=False,
             has_temporal_filters=has_temporal_filters,
             apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
             curate_for_shelves=True,
@@ -732,6 +734,7 @@ class AnimeQueryService:
         *,
         sort_clean: str,
         has_active_filters: bool,
+        has_non_temporal_filters: bool = False,
         has_temporal_filters: bool,
         apply_temporal_popular_quality_filter: bool = False,
         curate_for_shelves: bool = False,
@@ -798,7 +801,9 @@ class AnimeQueryService:
             if curate_for_shelves and not has_active_filters:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             elif has_temporal_filters:
-                if curate_for_shelves and apply_temporal_popular_quality_filter:
+                if apply_temporal_popular_quality_filter and (
+                    curate_for_shelves or not has_non_temporal_filters
+                ):
                     queryset = cls._apply_temporal_popular_quality_filter(queryset)
                 queryset = queryset.annotate(
                     popular_quality_bucket=Case(
