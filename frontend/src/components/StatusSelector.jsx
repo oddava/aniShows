@@ -53,6 +53,7 @@ export default function StatusSelector({
     const queryClient = useQueryClient();
     const dropdownRef = useRef(null);
     const dragStartY = useRef(null);
+    const lastHandledEditTrigger = useRef(externalEditTrigger);
 
     const [isOpen, setIsOpen] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
@@ -91,9 +92,10 @@ export default function StatusSelector({
     }, [initialStatus, syncLocalEntry]);
 
     useEffect(() => {
-        if (externalEditTrigger > 0) {
+        if (externalEditTrigger > lastHandledEditTrigger.current) {
             setIsEditModalOpen(true);
         }
+        lastHandledEditTrigger.current = externalEditTrigger;
     }, [externalEditTrigger]);
 
     const closeDropdown = useCallback(() => {
