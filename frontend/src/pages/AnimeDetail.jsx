@@ -347,6 +347,9 @@ export default function AnimeDetail() {
     const queryClient = useQueryClient();
     const [isFavorite, setIsFavorite] = useState(false);
     const [editTriggerKey, setEditTriggerKey] = useState(0);
+    const [isLargeViewport, setIsLargeViewport] = useState(() => (
+        typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
+    ));
     const [isWritingReview, setIsWritingReview] = useState(false);
     const [editingReview, setEditingReview] = useState(null);
     const [reviewSort, setReviewSort] = useState('helpful');
@@ -608,6 +611,26 @@ export default function AnimeDetail() {
         setEditTriggerKey((current) => current + 1);
     }, []);
 
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return undefined;
+        }
+
+        const mediaQuery = window.matchMedia('(min-width: 1024px)');
+        const handleViewportChange = (event) => {
+            setIsLargeViewport(event.matches);
+        };
+
+        setIsLargeViewport(mediaQuery.matches);
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', handleViewportChange);
+            return () => mediaQuery.removeEventListener('change', handleViewportChange);
+        }
+
+        mediaQuery.addListener(handleViewportChange);
+        return () => mediaQuery.removeListener(handleViewportChange);
+    }, []);
+
     const handleListUpdate = useCallback((nextEntry) => {
         queryClient.setQueryData(animeDetailQueryKey, (currentAnime) => {
             if (!currentAnime) return currentAnime;
@@ -775,7 +798,7 @@ export default function AnimeDetail() {
                                                 totalEpisodes={anime.episode_count}
                                                 compactSidebar={true}
                                                 showEditInDropdown={false}
-                                                externalEditTrigger={editTriggerKey}
+                                                externalEditTrigger={isLargeViewport ? editTriggerKey : 0}
                                             />
                                         </div>
                                         <button
@@ -851,7 +874,7 @@ export default function AnimeDetail() {
                                                                 totalEpisodes={anime.episode_count}
                                                                 compactSidebar={true}
                                                                 showEditInDropdown={false}
-                                                                externalEditTrigger={editTriggerKey}
+                                                                externalEditTrigger={isLargeViewport ? 0 : editTriggerKey}
                                                             />
                                                         </div>
                                                         <button
