@@ -46,6 +46,8 @@ export default function StatusSelector({
     totalEpisodes,
     isOwnProfile = true,
     compactSidebar = false,
+    showEditInDropdown = true,
+    externalEditTrigger = 0,
 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
@@ -87,6 +89,12 @@ export default function StatusSelector({
     useEffect(() => {
         syncLocalEntry(initialStatus || null);
     }, [initialStatus, syncLocalEntry]);
+
+    useEffect(() => {
+        if (externalEditTrigger > 0) {
+            setIsEditModalOpen(true);
+        }
+    }, [externalEditTrigger]);
 
     const closeDropdown = useCallback(() => {
         if (isMobileViewport) {
@@ -362,15 +370,17 @@ export default function StatusSelector({
                         </button>
                     ) : null}
 
-                    <button
-                        onClick={handleOpenEditModal}
-                        className="w-full px-4 py-3.5 sm:px-3 sm:py-2.5 text-left text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-4 sm:gap-3 text-base sm:text-sm font-bold rounded-xl sm:rounded-lg transition-colors duration-200 group"
-                    >
-                        <div className={`${isMobileViewport ? 'w-10 h-10' : 'w-8 h-8'} flex items-center justify-center rounded-xl sm:rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors`}>
-                            <Pencil className="w-5 h-5 sm:w-4 sm:h-4" />
-                        </div>
-                        Edit
-                    </button>
+                    {showEditInDropdown ? (
+                        <button
+                            onClick={handleOpenEditModal}
+                            className="w-full px-4 py-3.5 sm:px-3 sm:py-2.5 text-left text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-4 sm:gap-3 text-base sm:text-sm font-bold rounded-xl sm:rounded-lg transition-colors duration-200 group"
+                        >
+                            <div className={`${isMobileViewport ? 'w-10 h-10' : 'w-8 h-8'} flex items-center justify-center rounded-xl sm:rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors`}>
+                                <Pencil className="w-5 h-5 sm:w-4 sm:h-4" />
+                            </div>
+                            Edit
+                        </button>
+                    ) : null}
                 </div>
             </>
         );

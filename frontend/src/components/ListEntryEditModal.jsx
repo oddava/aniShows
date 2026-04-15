@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, RotateCcw, Star, Tv, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import CustomSelect from './common/CustomSelect';
 
@@ -187,13 +187,9 @@ export default function ListEntryEditModal({
             >
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-accent/80">Add To List</p>
                         <h2 id="list-entry-modal-title" className="mt-2 text-xl font-black text-white sm:text-2xl">
                             Edit List Entry
                         </h2>
-                        <p className="mt-1 text-sm text-gray-400">
-                            Track progress, dates, rating, and notes without leaving the anime page.
-                        </p>
                     </div>
                     <button
                         type="button"
@@ -220,7 +216,7 @@ export default function ListEntryEditModal({
                         </Field>
 
                         <Field label="Score" htmlFor="list-entry-score" hint="0-10">
-                            <InputShell icon={Star}>
+                            <InputShell>
                                 <input
                                     id="list-entry-score"
                                     type="number"
@@ -229,7 +225,7 @@ export default function ListEntryEditModal({
                                     step="1"
                                     value={form.score}
                                     onChange={(event) => updateField('score', event.target.value)}
-                                    placeholder="Leave blank for unrated"
+                                    placeholder=""
                                     className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-gray-500"
                                 />
                             </InputShell>
@@ -240,7 +236,7 @@ export default function ListEntryEditModal({
                             htmlFor="list-entry-progress"
                             hint={episodeCap != null ? `Max ${episodeCap}` : 'No cap'}
                         >
-                            <InputShell icon={Tv}>
+                            <InputShell>
                                 <input
                                     id="list-entry-progress"
                                     type="number"
@@ -249,14 +245,14 @@ export default function ListEntryEditModal({
                                     step="1"
                                     value={form.episodes_watched}
                                     onChange={(event) => updateField('episodes_watched', event.target.value)}
-                                    placeholder="Episodes watched"
+                                    placeholder=""
                                     className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-gray-500"
                                 />
                             </InputShell>
                         </Field>
 
                         <Field label="Total Rewatches" htmlFor="list-entry-rewatches">
-                            <InputShell icon={RotateCcw}>
+                            <InputShell>
                                 <input
                                     id="list-entry-rewatches"
                                     type="number"
@@ -264,14 +260,14 @@ export default function ListEntryEditModal({
                                     step="1"
                                     value={form.total_rewatches}
                                     onChange={(event) => updateField('total_rewatches', event.target.value)}
-                                    placeholder="0"
+                                    placeholder=""
                                     className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-gray-500"
                                 />
                             </InputShell>
                         </Field>
 
                         <Field label="Start Date" htmlFor="list-entry-start-date">
-                            <InputShell icon={Calendar}>
+                            <InputShell>
                                 <input
                                     id="list-entry-start-date"
                                     type="date"
@@ -283,7 +279,7 @@ export default function ListEntryEditModal({
                         </Field>
 
                         <Field label="Finish Date" htmlFor="list-entry-finish-date">
-                            <InputShell icon={Calendar}>
+                            <InputShell>
                                 <input
                                     id="list-entry-finish-date"
                                     type="date"
@@ -302,7 +298,7 @@ export default function ListEntryEditModal({
                                 rows="5"
                                 value={form.notes}
                                 onChange={(event) => updateField('notes', event.target.value)}
-                                placeholder="Optional notes about this entry"
+                                placeholder=""
                                 className="w-full resize-y rounded-2xl border border-white/10 bg-dark-200 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-accent/60"
                             />
                         </Field>
@@ -351,10 +347,9 @@ function Field({ label, htmlFor, hint, children }) {
     );
 }
 
-function InputShell({ icon: Icon, children }) {
+function InputShell({ children }) {
     return (
         <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-dark-200 px-4 py-3 transition-colors focus-within:border-accent/60">
-            <Icon className="h-4 w-4 shrink-0 text-gray-500" />
             {children}
         </div>
     );

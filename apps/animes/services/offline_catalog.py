@@ -18,6 +18,7 @@ from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
 from ..models import Anime, OfflineCatalogImport, Studio
 from .jikan import JikanService
+from .metadata_health import PLACEHOLDER_SYNOPSIS
 from .offline_sync import OfflineSyncService
 from .public_anime_service import AnimePublicPayloadService
 
@@ -25,7 +26,6 @@ DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250
 DEFAULT_ENRICHMENT_CHUNK_SIZE = 100
 DEFAULT_THEME_BASE_DELAY_SECONDS = 1.0
-PLACEHOLDER_SYNOPSIS = "Imported from Anime Offline Database. Metadata enrichment pending."
 ANIME_TITLE_MAX_LENGTH = Anime._meta.get_field("title").max_length
 ANIME_TITLE_JP_MAX_LENGTH = Anime._meta.get_field("title_jp").max_length
 ANIME_SLUG_MAX_LENGTH = Anime._meta.get_field("slug").max_length

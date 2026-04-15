@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from ..models import Anime, OfflineAnimeSyncState
 from ..services.jikan import JikanService
+from ..services.offline_catalog import PLACEHOLDER_SYNOPSIS
 from ..services.offline_sync import (
     STATE_BULK_CREATE_BATCH_SIZE,
     OfflineSyncService,
@@ -43,7 +44,7 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertIsNone(anime.anilist_id)
         self.assertIsNone(anime.mal_id)
 
-    @patch.object(JikanService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
     @patch.object(JikanService, "search_anime", new_callable=AsyncMock)
     def test_title_only_lookup_can_enrich_via_exact_match(self, mock_search, mock_update):
         anime = self._anime("Title Only")
@@ -61,7 +62,7 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
         mock_update.assert_awaited_once()
 
-    @patch.object(JikanService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
     @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
     def test_identity_conflict_never_updates_identity_fields(self, mock_get_by_id, mock_update):
         anime = self._anime("Conflict", anilist_id=111, mal_id=222)
@@ -76,7 +77,7 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(anime.mal_id, 222)
         mock_update.assert_not_called()
 
-    @patch.object(JikanService, "update_anime_manual", new_callable=AsyncMock)
+    @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
     @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
     @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
     def test_metadata_stage_falls_back_to_mal_when_anilist_lookup_misses(
@@ -100,6 +101,32 @@ class OfflineSyncStatePipelineTests(TestCase):
         mock_get_by_id.assert_awaited_once_with(111)
         mock_search_by_mal_id.assert_awaited_once_with(222)
         mock_update.assert_awaited_once()
+
+    def test_ensure_states_resets_synced_placeholder_rows_back_to_pending(self):
+        anime = self._anime(
+            "Placeholder Repair",
+            synopsis=PLACEHOLDER_SYNOPSIS,
+            anilist_id=4040,
+        )
+        state = self._state(
+            anime,
+            metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            metadata_attempt_count=3,
+            next_attempt_at=timezone.now() + timedelta(days=30),
+        )
+
+        summary = OfflineSyncService().ensure_states_for_anime_ids([anime.id])
+        state.refresh_from_db()
+
+        self.assertEqual(summary["created"], 0)
+        self.assertEqual(summary["updated"], 1)
+        self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.PENDING)
+        self.assertEqual(state.metadata_attempt_count, 0)
+        self.assertEqual(state.franchise_status, OfflineAnimeSyncState.StageStatus.SYNCED)
+        self.assertEqual(state.themes_status, OfflineAnimeSyncState.StageStatus.SYNCED)
+        self.assertLessEqual(state.next_attempt_at, timezone.now() + timedelta(seconds=5))
 
     @patch.object(OfflineSyncService, "sync_metadata_stage")
     def test_transient_failure_schedules_fast_retry_backoff(self, mock_stage):

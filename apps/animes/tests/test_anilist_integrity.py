@@ -259,7 +259,7 @@ class AniListIntegrityTests(TestCase):
 
         service = SimpleNamespace(
             call_cache=None,
-            update_anime_manual=AsyncMock(return_value=True),
+            refresh_anime_metadata=AsyncMock(return_value=True),
         )
         task = MetadataEnrichmentTask()
 
@@ -282,7 +282,7 @@ class AniListIntegrityTests(TestCase):
         self.assertEqual(result["updated"], 1)
         self.assertTrue(result["missing_tags_only"])
         task._resolve_media_for_anime.assert_awaited_once_with(service, missing_tags)
-        service.update_anime_manual.assert_awaited_once()
+        service.refresh_anime_metadata.assert_awaited_once()
 
     @patch("apps.animes.services.anilist.logger.warning")
     @patch("apps.animes.services.anilist.logger.info")

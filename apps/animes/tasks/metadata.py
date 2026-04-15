@@ -15,12 +15,11 @@ With support for:
 """
 
 from asgiref.sync import sync_to_async
-from django.db.models import Q
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
 from ..services.jikan import JikanService
-from ..services.offline_catalog import PLACEHOLDER_SYNOPSIS
+from ..services.metadata_health import build_missing_metadata_query
 from .base import BaseTask, run_async_in_task
 
 
@@ -98,7 +97,7 @@ class MetadataEnrichmentTask(BaseTask):
 
                 media = await self._resolve_media_for_anime(service, anime)
                 if media:
-                    updated = await service.update_anime_manual(anime, media)
+                    updated = await service.refresh_anime_metadata(anime, media)
                     if not updated:
                         logger.warning(
                             f"Skipped metadata enrichment for {anime.title} due to identity mismatch"
@@ -153,16 +152,8 @@ class MetadataEnrichmentTask(BaseTask):
     ) -> dict:
         """Batch enrich metadata for multiple anime."""
         async with self.service_context() as service:
-            # Build queryset
-            missing_metadata_query = (
-                Q(tags=[])
-                if missing_tags_only
-                else (
-                    Q(characters__isnull=True)
-                    | Q(staff__isnull=True)
-                    | Q(synopsis=PLACEHOLDER_SYNOPSIS)
-                    | Q(tags=[])
-                )
+            missing_metadata_query = build_missing_metadata_query(
+                missing_tags_only=missing_tags_only
             )
 
             if anime_ids:
@@ -213,7 +204,7 @@ class MetadataEnrichmentTask(BaseTask):
                     # Search and update
                     media = await self._resolve_media_for_anime(service, anime)
                     if media:
-                        updated = await service.update_anime_manual(anime, media)
+                        updated = await service.refresh_anime_metadata(anime, media)
                         if updated:
                             updated_count += 1
 

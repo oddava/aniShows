@@ -18,6 +18,7 @@ from .jikan import (
     JikanService,
     fetch_themes_from_jikan_with_reason,
 )
+from .metadata_health import build_stalled_offline_metadata_query
 from .metrics import (
     OFFLINE_SYNC_QUARANTINE_TOTAL,
     OFFLINE_SYNC_RETRY_AGE_SECONDS,
@@ -129,6 +130,8 @@ class OfflineSyncService:
                 quarantine_reason="",
                 quarantine_context={},
             )
+        else:
+            updated += self._repair_incomplete_metadata_states(ids)
 
         return {"created": len(to_create), "updated": updated}
 
@@ -367,7 +370,7 @@ class OfflineSyncService:
                     message=service.last_error_message or "Jikan media not found.",
                 )
 
-            updated = await service.update_anime_manual(anime, media)
+            updated = await service.refresh_anime_metadata(anime, media)
             if not updated:
                 return StageResult(
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
@@ -386,6 +389,29 @@ class OfflineSyncService:
         finally:
             if owned_service:
                 await service.close()
+
+    def _repair_incomplete_metadata_states(self, anime_ids: list[int]) -> int:
+        incomplete_ids = list(
+            Anime.objects.filter(id__in=anime_ids)
+            .filter(build_stalled_offline_metadata_query())
+            .values_list("id", flat=True)
+            .distinct()
+        )
+        if not incomplete_ids:
+            return 0
+
+        now = timezone.now()
+        return OfflineAnimeSyncState.objects.filter(
+            anime_id__in=incomplete_ids,
+            quarantined=False,
+            metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+        ).update(
+            metadata_status=OfflineAnimeSyncState.StageStatus.PENDING,
+            metadata_attempt_count=0,
+            last_error_code="",
+            last_error_message="",
+            next_attempt_at=now,
+        )
 
     def sync_franchise_stage(
         self,

@@ -780,6 +780,22 @@ class JikanService:
         await self._update_anime(anime, anime_data_dict)
         return True
 
+    async def refresh_anime_metadata(self, anime: Anime, item: dict | None = None) -> bool:
+        """Hydrate full anime metadata, relationships, and media from Jikan."""
+        media = item or await self.resolve_media_for_anime(anime)
+        if not media:
+            logger.info("Skipped metadata refresh for Anime ID %s: no matching media", anime.id)
+            return False
+
+        title_payload = media.get("title") or {}
+        title_romaji = title_payload.get("romaji", "")
+        title_english = title_payload.get("english", "")
+        title_native = title_payload.get("native", "")
+        title = title_english or title_romaji or anime.title
+
+        await self._update_anime_async(anime, media, title, title_native, anime.slug)
+        return True
+
     async def resolve_airing_media_for_anime(self, anime: Anime) -> dict | None:
         if anime.anilist_id:
             item = await self.get_airing_anime_by_id(anime.anilist_id)

@@ -6,6 +6,7 @@ from django.db.models import Q
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime, OfflineAnimeSyncState
+from ..services.metadata_health import build_stalled_offline_metadata_query
 from ..services.offline_catalog import (
     DEFAULT_ASSET_NAME,
     OfflineCatalogImportService,
@@ -263,13 +264,17 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
                 Q(offline_sync_state__isnull=True)
                 | (
                     Q(offline_sync_state__quarantined=False)
-                    & ~Q(
-                        offline_sync_state__metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-                        offline_sync_state__franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-                        offline_sync_state__themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                    & (
+                        ~Q(
+                            offline_sync_state__metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                            offline_sync_state__franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                            offline_sync_state__themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                        )
+                        | build_stalled_offline_metadata_query()
                     )
                 )
             )
+            .distinct()
             .values_list("id", flat=True)
         )
 

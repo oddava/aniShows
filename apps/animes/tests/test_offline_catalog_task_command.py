@@ -16,6 +16,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from ..models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
+from ..services.offline_catalog import PLACEHOLDER_SYNOPSIS
 from ..tasks.offline_catalog import (
     OfflineCatalogImportTask,
     OfflineCatalogReconcileSyncTask,
@@ -249,7 +250,15 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         complete = Anime.objects.create(
             title="Complete Row",
             slug="complete-row",
-            synopsis="offline",
+            synopsis="fully synced",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=timezone.now(),
+        )
+        stalled_complete = Anime.objects.create(
+            title="Stalled Complete Row",
+            slug="stalled-complete-row",
+            synopsis=PLACEHOLDER_SYNOPSIS,
             anime_type=Anime.AnimeType.tv,
             status=Anime.AnimeStatus.finished,
             offline_db_last_seen_at=timezone.now(),
@@ -280,6 +289,13 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             next_attempt_at=timezone.now(),
         )
         OfflineAnimeSyncState.objects.create(
+            anime=stalled_complete,
+            metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            next_attempt_at=timezone.now(),
+        )
+        OfflineAnimeSyncState.objects.create(
             anime=quarantined,
             metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
             franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
@@ -293,6 +309,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
         self.assertIn(pending.id, scoped_ids)
         self.assertIn(unstaged.id, scoped_ids)
+        self.assertIn(stalled_complete.id, scoped_ids)
         self.assertNotIn(complete.id, scoped_ids)
         self.assertNotIn(quarantined.id, scoped_ids)
 

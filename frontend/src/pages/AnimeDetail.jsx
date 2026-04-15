@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown, Tv, Disc } from 'lucide-react';
+import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown, Tv, Disc, Pencil } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -346,6 +346,7 @@ export default function AnimeDetail() {
     const isRetro = theme && theme.startsWith('retro-');
     const queryClient = useQueryClient();
     const [isFavorite, setIsFavorite] = useState(false);
+    const [editTriggerKey, setEditTriggerKey] = useState(0);
     const [isWritingReview, setIsWritingReview] = useState(false);
     const [editingReview, setEditingReview] = useState(null);
     const [reviewSort, setReviewSort] = useState('helpful');
@@ -603,6 +604,10 @@ export default function AnimeDetail() {
         }
     }, [isAuthenticated, anime?.id, user, queryClient]);
 
+    const handleOpenListEdit = useCallback(() => {
+        setEditTriggerKey((current) => current + 1);
+    }, []);
+
     const handleListUpdate = useCallback((nextEntry) => {
         queryClient.setQueryData(animeDetailQueryKey, (currentAnime) => {
             if (!currentAnime) return currentAnime;
@@ -769,8 +774,17 @@ export default function AnimeDetail() {
                                                 onUpdate={handleListUpdate}
                                                 totalEpisodes={anime.episode_count}
                                                 compactSidebar={true}
+                                                showEditInDropdown={false}
+                                                externalEditTrigger={editTriggerKey}
                                             />
                                         </div>
+                                        <button
+                                            onClick={handleOpenListEdit}
+                                            title="Edit List Entry"
+                                            className="w-9 h-9 self-start flex justify-center items-center rounded-lg transition-all duration-300 bg-dark-100 text-gray-400 hover:text-white"
+                                        >
+                                            <Pencil className="w-4.5 h-4.5" />
+                                        </button>
                                         <button
                                             onClick={handleFavorite}
                                             title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
@@ -836,8 +850,17 @@ export default function AnimeDetail() {
                                                                 onUpdate={handleListUpdate}
                                                                 totalEpisodes={anime.episode_count}
                                                                 compactSidebar={true}
+                                                                showEditInDropdown={false}
+                                                                externalEditTrigger={editTriggerKey}
                                                             />
                                                         </div>
+                                                        <button
+                                                            onClick={handleOpenListEdit}
+                                                            title="Edit List Entry"
+                                                            className="w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300 bg-dark-100 text-gray-400 hover:text-white"
+                                                        >
+                                                            <Pencil className="w-4.5 h-4.5" />
+                                                        </button>
                                                         <button
                                                             onClick={handleFavorite}
                                                             title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
