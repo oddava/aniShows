@@ -131,6 +131,18 @@ class AnimeDetailRecommendationsTests(APITestCase):
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
         new_callable=AsyncMock,
     )
+    def test_public_recommendations_include_cache_control_header(self, mock_get_recommendations):
+        mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("public, max-age=300", response["Cache-Control"])
+
+    @patch(
+        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
+        new_callable=AsyncMock,
+    )
     def test_authenticated_recommendations_include_user_context(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]
         UserFavorite.objects.create(user=self.user, anime=self.anilist_recommendation)

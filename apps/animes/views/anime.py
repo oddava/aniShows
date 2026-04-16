@@ -8,8 +8,10 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from ...core.api_errors import error_response
 from ...core.utils import get_client_ip
 from ...shared.logger import logger
+from ...shared.pagination import NoCountPagination
 from ...shared.public_cache import get_or_build_public_payload
 from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
 from ..serializers import (
@@ -35,7 +37,6 @@ from ..services.public_anime_service import (
     AnimeQueryService,
 )
 from ..services.watch_episodes import AnimeWatchEpisodeService
-from ...shared.pagination import NoCountPagination
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -89,12 +90,17 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         try:
             result = self.payload_service.get_detail_payload(slug, request, self.query_service)
         except Anime.DoesNotExist:
-            return Response({"error": "Anime not found"}, status=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                "Anime not found",
+                code="anime_not_found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
         except Exception as exc:
             logger.error("Error retrieving anime %s: %s", slug, exc)
-            return Response(
-                {"error": "Internal server error"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return error_response(
+                "Internal server error",
+                code="internal_server_error",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         response = self._with_cache_status_header(Response(result.data), result.cache_status)
         return self._with_public_cache_control(response, request)
@@ -164,7 +170,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def schedule(self, request):
         requested_day = self.query_service.normalize_schedule_day(request.query_params.get("day"))
         if request.query_params.get("day") and requested_day is None:
-            return Response({"detail": "Invalid schedule day."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "Invalid schedule day.",
+                code="invalid_schedule_day",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         anime_list = list(self.query_service.schedule_queryset(request.user, include_user_context=True))
         serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
@@ -250,7 +260,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             ).data,
         )
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
-        return self._with_cache_status_header(Response(data), result.cache_status)
+        response = self._with_cache_status_header(Response(data), result.cache_status)
+        return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"])
     def recommendations(self, request, slug=None):
@@ -267,7 +278,8 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             ).data,
         )
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
-        return self._with_cache_status_header(Response(data), result.cache_status)
+        response = self._with_cache_status_header(Response(data), result.cache_status)
+        return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"])
     def characters(self, request, slug=None):
@@ -357,9 +369,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                     rating=serializer.validated_data["rating"],
                 )
         except ValueError as exc:
-            return Response(
-                {"episode_number": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                str(exc),
+                code="invalid_episode_number",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                errors={"episode_number": [str(exc)]},
             )
 
         response_serializer = EpisodeRatingSummarySerializer(summary)
@@ -375,17 +389,19 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def franchise_fetch(self, request):
         anilist_id = request.data.get("anilist_id")
         if not anilist_id:
-            return Response(
-                {"error": "anilist_id is required"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "anilist_id is required",
+                code="missing_anilist_id",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             anilist_id = int(anilist_id)
         except (ValueError, TypeError):
-            return Response(
-                {"error": "anilist_id must be a valid integer"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "anilist_id must be a valid integer",
+                code="invalid_anilist_id",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -404,7 +420,11 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 }
             )
         except FranchiseImportError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return error_response(
+                exc.message,
+                code="franchise_import_failed",
+                status_code=exc.status_code,
+            )
 
 
 class GenreViewSet(ReadOnlyModelViewSet):

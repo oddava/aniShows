@@ -1,9 +1,6 @@
-"""
-Test settings for aniShows project.
-"""
+# ruff: noqa: F403,F405
 
 import os
-import sys
 
 os.environ.pop("PROMETHEUS_MULTIPROC_DIR", None)
 
@@ -15,13 +12,21 @@ from .base import *
 
 DEBUG = True
 
-# Use in-memory SQLite for faster tests
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("TEST_DB_NAME", os.getenv("DB_NAME", "anishows_db")),
+        "USER": os.getenv("TEST_DB_USER", os.getenv("DB_USER", "postgres")),
+        "PASSWORD": os.getenv("TEST_DB_PASSWORD", os.getenv("DB_PASSWORD", "1")),
+        "HOST": os.getenv("TEST_DB_HOST", "db"),
+        "PORT": os.getenv("TEST_DB_PORT", "5432"),
+        "CONN_MAX_AGE": 0,
     }
 }
+DATABASES["default"]["TEST"] = {
+    "NAME": os.getenv("TEST_DB_DATABASE"),
+}
+ALLOWED_HOSTS = [*ALLOWED_HOSTS, "testserver"]
 
 # Use very high throttle rates during tests (effectively disabled)
 REST_FRAMEWORK = {

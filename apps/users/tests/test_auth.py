@@ -61,7 +61,8 @@ class RegistrationTests(APITestCase):
         }
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("password", response.data)
+        self.assertEqual(response.data["code"], "validation_error")
+        self.assertIn("password", response.data["errors"])
 
     def test_register_duplicate_username(self):
         """Test registration fails with existing username."""
@@ -91,8 +92,8 @@ class RegistrationTests(APITestCase):
         response = self.client.post(self.register_url, data)
         # Security fix: Returns generic error to prevent user enumeration
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        # Error is in email field (from serializer validation)
-        self.assertIn("email", response.data)
+        self.assertEqual(response.data["code"], "validation_error")
+        self.assertIn("email", response.data["errors"])
 
     def test_register_invalid_email(self):
         """Test registration fails with invalid email format."""

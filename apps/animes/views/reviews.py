@@ -3,9 +3,9 @@ from http import HTTPStatus
 from django.contrib.auth import get_user_model
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
-from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from ...core.api_errors import api_response, error_response
 from ...users.permissions import EmailVerificationMixin
 from ..serializers import (
     ReviewReactionActionSerializer,
@@ -38,11 +38,12 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     def stats(self, request):
         anime_slug = request.query_params.get("anime")
         if not anime_slug:
-            return Response(
-                {"error": "anime parameter required"},
-                status=HTTPStatus.BAD_REQUEST,
+            return error_response(
+                "anime parameter required",
+                code="missing_anime",
+                status_code=HTTPStatus.BAD_REQUEST,
             )
-        return Response(get_review_stats(anime_slug))
+        return api_response(get_review_stats(anime_slug), status_code=HTTPStatus.OK)
 
     def perform_create(self, serializer):
         create_review(serializer, self.request.user)
@@ -64,7 +65,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         serializer = ReviewVoteActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = vote_on_review(review, request.user, serializer.validated_data["vote_type"])
-        return Response(result.payload, status=result.status_code)
+        return api_response(result.payload, status_code=result.status_code, default_code="review_vote_failed")
 
     @action(
         detail=True,
@@ -81,7 +82,11 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
             request.user,
             serializer.validated_data["reaction_type"],
         )
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="review_reaction_failed",
+        )
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def report(self, request, pk=None):
@@ -89,4 +94,8 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
         serializer = ReviewReportCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = report_review(review, request.user, serializer.validated_data)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="review_report_failed",
+        )

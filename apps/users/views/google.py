@@ -46,7 +46,11 @@ class GoogleLogin(SocialLoginView):
         return allowed_urls
 
     def _resolve_callback_url(self, request):
-        requested_callback = request.data.get("callback_url")
+        request_data = getattr(request, "data", None)
+        if request_data is None:
+            request_data = request.POST if request.method != "GET" else request.GET
+
+        requested_callback = request_data.get("callback_url")
         default_callback = self._default_callback_url()
 
         if not requested_callback:

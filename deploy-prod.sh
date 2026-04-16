@@ -304,6 +304,7 @@ done
 
 # Run migrations using compose run with --no-deps to avoid recreating other services
 $COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --noinput
+$COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --check --noinput
 echo -e "${GREEN}Migrations complete!${NC}"
 echo ""
 

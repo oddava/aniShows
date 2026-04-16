@@ -520,6 +520,7 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
+    "EXCEPTION_HANDLER": "apps.core.api_errors.api_exception_handler",
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/minute",
         "user": "150/minute",

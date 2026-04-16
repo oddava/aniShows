@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import IntegerField, Serializer
 from rest_framework.viewsets import ViewSet
 
+from ...core.api_errors import error_response
 from ...shared.logger import logger
 from ...users.serializers.users import UserRecommendationSerializer
 
@@ -78,9 +79,10 @@ class RecommendationsViewSet(ViewSet):
 
         except Exception:
             logger.exception("Error fetching recommendations")
-            return Response(
-                {"error": "Failed to fetch recommendations"},
-                status=500,
+            return error_response(
+                "Failed to fetch recommendations",
+                code="recommendations_fetch_failed",
+                status_code=500,
             )
 
     @action(detail=False, methods=["post"])
@@ -103,9 +105,10 @@ class RecommendationsViewSet(ViewSet):
 
         except Exception:
             logger.exception("Error refreshing recommendations")
-            return Response(
-                {"error": "Failed to refresh recommendations"},
-                status=500,
+            return error_response(
+                "Failed to refresh recommendations",
+                code="recommendations_refresh_failed",
+                status_code=500,
             )
 
     @action(detail=True, methods=["post"])
@@ -123,10 +126,15 @@ class RecommendationsViewSet(ViewSet):
 
                 return Response({"message": "Recommendation dismissed"})
             else:
-                return Response(
-                    {"error": "Recommendation not found"},
-                    status=404,
+                return error_response(
+                    "Recommendation not found",
+                    code="recommendation_not_found",
+                    status_code=404,
                 )
 
         except (ValueError, TypeError):
-            return Response({"error": "Invalid anime ID"}, status=400)
+            return error_response(
+                "Invalid anime ID",
+                code="invalid_anime_id",
+                status_code=400,
+            )

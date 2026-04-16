@@ -327,6 +327,14 @@ class TestRuntimePolicyControls(APITestCase):
         payload = response.json()
         self.assertIn("database", payload["checks"])
         self.assertIn("cache", payload["checks"])
+        self.assertIn("migrations", payload["checks"])
+
+    @patch("apps.core.views.health.has_pending_migrations", return_value=True)
+    def test_readiness_endpoint_fails_when_migrations_are_pending(self, _mock_pending):
+        response = self.client.get("/api/v1/health/ready/")
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        payload = response.json()
+        self.assertFalse(payload["checks"]["migrations"])
 
     def test_registration_can_be_disabled(self):
         self._set_settings({"general": {"allowRegistration": False}})
@@ -392,3 +400,45 @@ class TestRuntimePolicyControls(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class TestAdminBooleanQueryParsing(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin-boolean",
+            email="admin-boolean@example.com",
+            password="password123",
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=self.admin)
+        self.genre = Genre.objects.create(name="Mystery", slug="mystery")
+
+    @patch("apps.admin_api.views.anime.delete_genre")
+    def test_genre_force_false_stays_false(self, mock_delete_genre):
+        mock_delete_genre.return_value.payload = {"message": "ok"}
+        mock_delete_genre.return_value.status_code = status.HTTP_200_OK
+
+        response = self.client.delete(f"/api/v1/admin/genres/{self.genre.id}/?force=false")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_delete_genre.assert_called_once_with(self.genre, False)
+
+    @patch("apps.admin_api.views.anime.delete_studio")
+    def test_studio_force_true_parses_true(self, mock_delete_studio):
+        from ...animes.models import Studio
+
+        studio = Studio.objects.create(name="Trigger")
+        mock_delete_studio.return_value.payload = {"message": "ok"}
+        mock_delete_studio.return_value.status_code = status.HTTP_200_OK
+
+        response = self.client.delete(f"/api/v1/admin/studios/{studio.id}/?force=true")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_delete_studio.assert_called_once_with(studio, True)
+
+    def test_invalid_force_value_returns_validation_error(self):
+        response = self.client.delete(f"/api/v1/admin/genres/{self.genre.id}/?force=notabool")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "validation_error")
+        self.assertIn("force", response.data["errors"])

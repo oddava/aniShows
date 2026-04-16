@@ -2,9 +2,9 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from ...core.api_errors import api_response
 from ...shared.logger import logger
 from .. import throttling
 from ..serializers.users import ChangePasswordSerializer
@@ -41,10 +41,13 @@ class AccountManagementViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def change_password(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
-        if serializer.is_valid():
-            result = change_password(request.user, serializer.validated_data["new_password"])
-            return Response(result.payload, status=result.status_code)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        result = change_password(request.user, serializer.validated_data["new_password"])
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="change_password_failed",
+        )
 
     @action(detail=False, methods=["delete"])
     def delete_account(self, request):
@@ -55,7 +58,11 @@ class AccountManagementViewSet(ViewSet):
         logger.info("Account deletion attempt initiated")
 
         result = delete_account(user, password)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="delete_account_failed",
+        )
 
     @action(detail=False, methods=["post"])
     def change_email(self, request):
@@ -66,7 +73,11 @@ class AccountManagementViewSet(ViewSet):
 
         email_service = EmailService()
         result = request_email_change(user, new_email, password, email_service)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="change_email_failed",
+        )
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def confirm_email_change(self, request):
@@ -76,4 +87,8 @@ class AccountManagementViewSet(ViewSet):
         new_email_encoded = request.data.get("new_email")
 
         result = confirm_email_change(uidb64, token, new_email_encoded)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="confirm_email_change_failed",
+        )

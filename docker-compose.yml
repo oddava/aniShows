@@ -16,7 +16,7 @@ services:
         condition: service_healthy
       createbuckets:
         condition: service_completed_successfully
-    command: gunicorn root.asgi:application -c gunicorn.conf.py
+    command: [ "bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py" ]
     environment:
       DEBUG: "${DEBUG:-False}"
       DJANGO_ENV: "${DJANGO_ENV:-production}"
@@ -56,7 +56,7 @@ services:
   # Daphne ASGI Server - WebSocket connections
   daphne:
     image: anishows_web:latest
-    command: [ "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
+    command: [ "bash", "/app/scripts/run_with_migration_check.sh", "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
     expose:
       - "8001"
     env_file:

@@ -4,7 +4,7 @@ services:
   web:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: gunicorn root.asgi:application -c gunicorn.conf.py
+    command: [ "bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py" ]
     volumes:
       - prometheus_multiproc:/tmp/prometheus
     env_file:
@@ -296,7 +296,7 @@ services:
   daphne:
     image: ghcr.io/oddava/anishows-backend:latest
     restart: always
-    command: [ "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
+    command: [ "bash", "/app/scripts/run_with_migration_check.sh", "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
     expose:
       - "8001"
     env_file:

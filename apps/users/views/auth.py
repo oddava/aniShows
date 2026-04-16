@@ -11,6 +11,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, Toke
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
+from ...core.api_errors import error_response
 from ...core.services.admin_settings_service import is_registration_enabled
 from ...shared.logger import logger
 from .. import throttling
@@ -94,9 +95,10 @@ class RegisterView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         if not is_registration_enabled():
-            return Response(
-                {"detail": "Registration is currently disabled by the administrator."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            return error_response(
+                "Registration is currently disabled by the administrator.",
+                code="registration_disabled",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         serializer = self.get_serializer(data=request.data)
@@ -146,7 +148,11 @@ class AuthViewSet(ViewSet):
         try:
             result = verify_email_flow(uidb64, token, request, self.auth_service)
         except AuthFlowError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return error_response(
+                exc.message,
+                code="email_verification_failed",
+                status_code=exc.status_code,
+            )
 
         return Response(result.payload, status=result.status_code)
 
@@ -156,7 +162,11 @@ class AuthViewSet(ViewSet):
         try:
             result = resend_verification_flow(request.data.get("email"), self.email_service)
         except AuthFlowError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return error_response(
+                exc.message,
+                code="resend_verification_failed",
+                status_code=exc.status_code,
+            )
 
         return Response(result.payload, status=result.status_code)
 
@@ -166,7 +176,11 @@ class AuthViewSet(ViewSet):
         try:
             result = password_reset_flow(request.data.get("email"), self.email_service)
         except AuthFlowError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return error_response(
+                exc.message,
+                code="password_reset_failed",
+                status_code=exc.status_code,
+            )
 
         return Response(result.payload, status=result.status_code)
 
@@ -180,7 +194,11 @@ class AuthViewSet(ViewSet):
                 request.data.get("password"),
             )
         except AuthFlowError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return error_response(
+                exc.message,
+                code="password_reset_confirm_failed",
+                status_code=exc.status_code,
+            )
 
         return Response(result.payload, status=result.status_code)
 

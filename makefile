@@ -85,7 +85,7 @@ superuser:                      ## Create superuser
 	$(EXEC) createsuperuser
 
 test:                           ## Run tests
-	docker compose run --rm --no-deps -e DJANGO_SETTINGS_MODULE=root.settings.test web /opt/venv/bin/python -m pytest
+	docker compose run --rm -e DJANGO_SETTINGS_MODULE=root.settings.test -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 web /opt/venv/bin/python -m pytest
 
 lint:                           ## Run linter (ruff)
 	docker compose run --rm --no-deps web /opt/venv/bin/python -m ruff check .

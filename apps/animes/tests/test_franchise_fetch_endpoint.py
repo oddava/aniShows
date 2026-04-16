@@ -45,6 +45,9 @@ class FranchiseFetchEndpointTests(APITestCase):
 
     @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
     def test_invalid_anilist_id_returns_400(self, mock_import):
+        user = get_user_model().objects.create_user(username="invalid-anilist-user", password="pass12345")
+        self.client.force_authenticate(user=user)
+
         response = self.client.post(
             reverse(self.endpoint_name),
             {"anilist_id": "invalid"},
@@ -52,5 +55,6 @@ class FranchiseFetchEndpointTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"], "anilist_id must be a valid integer")
+        self.assertEqual(response.data["detail"], "anilist_id must be a valid integer")
+        self.assertEqual(response.data["code"], "invalid_anilist_id")
         mock_import.assert_not_called()

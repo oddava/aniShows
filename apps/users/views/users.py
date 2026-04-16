@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+from ...core.api_errors import error_response
 from ...shared.logger import logger
 from .. import throttling
 from ..serializers.users import (
@@ -46,7 +47,7 @@ class UserProfileView(APIView):
         try:
             result = get_current_user_profile(user_id=user_id, is_full=is_full)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=404)
+            return error_response("User not found", code="user_not_found", status_code=404)
 
         duration = (time.time() - start_time) * 1000
         if result.cache_hit:
@@ -69,8 +70,7 @@ class UserProfileView(APIView):
         serializer = UserProfileUpdateSerializer(
             data=request.data, context={"request": request}
         )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=400)
+        serializer.is_valid(raise_exception=True)
 
         logger.info(
             "Profile patch validated for user %s",
@@ -105,8 +105,8 @@ class UserProfileView(APIView):
                 },
                 status=503,
             )
-        except ValidationError as exc:
-            return Response(exc.detail, status=400)
+        except ValidationError:
+            raise
 
         return self.get(request)
 
@@ -147,7 +147,11 @@ class PublicUserProfileViewSet(ReadOnlyModelViewSet):
         try:
             result = get_public_profile(username, request.user, request=request)
         except PublicProfileError as exc:
-            return Response({"error": exc.message}, status=exc.status_code)
+            return error_response(
+                exc.message,
+                code="public_profile_unavailable",
+                status_code=exc.status_code,
+            )
 
         duration = (time.time() - start_time) * 1000
         if result.cache_hit:

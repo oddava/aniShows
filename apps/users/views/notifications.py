@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer, Serializer
 from rest_framework.viewsets import GenericViewSet
 
+from ...core.api_errors import error_response
 from ...core.models import Notification, PushSubscription
 from ...core.services.notification_service import NotificationService
 from ...core.services.push_service import PushService
@@ -96,7 +97,11 @@ class NotificationViewSet(GenericViewSet):
                     "unread_count": NotificationService.get_unread_count(request.user),
                 }
             )
-        return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
+        return error_response(
+            "Notification not found",
+            code="notification_not_found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
 
     @action(detail=False, methods=["post"])
     def mark_all_read(self, request):
@@ -111,7 +116,11 @@ class NotificationViewSet(GenericViewSet):
             notification.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Notification.DoesNotExist:
-            return Response({"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                "Notification not found",
+                code="notification_not_found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
 
 
 class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
@@ -139,17 +148,17 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
             return Response(serializer.data)
         except Exception as e:
             logger.exception(f"Error getting preferences: {e}")
-            return Response(
-                {"error": "Failed to get preferences"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return error_response(
+                "Failed to get preferences",
+                code="notification_preferences_unavailable",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     def update(self, request, *args, **kwargs):
         """Update notification preferences."""
         profile = self.get_object()
         serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         try:
             data = serializer.validated_data
@@ -166,9 +175,10 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
             return Response(serializer.data)
         except Exception as e:
             logger.exception(f"Error updating preferences: {e}")
-            return Response(
-                {"error": "Failed to update preferences"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return error_response(
+                "Failed to update preferences",
+                code="notification_preferences_update_failed",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -184,8 +194,7 @@ class PushSubscriptionViewSet(GenericViewSet):
     def create(self, request, *args, **kwargs):
         """Register a new push subscription."""
         serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         try:
             data = serializer.validated_data
@@ -203,9 +212,10 @@ class PushSubscriptionViewSet(GenericViewSet):
             )
         except Exception as e:
             logger.exception(f"Error subscribing to push: {e}")
-            return Response(
-                {"error": "Failed to subscribe"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return error_response(
+                "Failed to subscribe",
+                code="push_subscription_failed",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False, methods=["delete"])
@@ -213,12 +223,20 @@ class PushSubscriptionViewSet(GenericViewSet):
         """Unsubscribe from push notifications."""
         endpoint = request.data.get("endpoint")
         if not endpoint:
-            return Response({"error": "endpoint is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "endpoint is required",
+                code="missing_endpoint",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         success = PushService.unsubscribe_user(request.user, endpoint)
         if success:
             return Response({"status": "unsubscribed"})
-        return Response({"error": "Subscription not found"}, status=status.HTTP_404_NOT_FOUND)
+        return error_response(
+            "Subscription not found",
+            code="push_subscription_not_found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
 
     def list(self, request, *args, **kwargs):
         """Get user's active push subscriptions."""

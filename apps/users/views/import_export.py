@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 
 from ...animes.serializers.imports import UserImportJobSerializer
+from ...core.api_errors import api_response, error_response
 from ...shared.logger import logger
 from ..models import UserImportJob
 from ..services.export_service import ExportService
@@ -37,50 +38,64 @@ class ImportExportViewSet(ViewSet):
         username = request.data.get("username")
 
         if not username:
-            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "Username is required",
+                code="missing_username",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not is_valid_import_username(username):
-            return Response(
-                {
-                    "error": "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "Invalid username format. Use alphanumeric characters, underscores, or hyphens only.",
+                code="invalid_username",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
         result = create_mal_import_job(request.user, username)
-        return Response(result.payload, status=result.status_code)
+        return api_response(result.payload, status_code=result.status_code, default_code="mal_import_failed")
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_mal_xml(self, request):
         """Upload and import MAL XML file"""
         if "file" not in request.FILES:
-            return Response({"error": "XML file is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "XML file is required",
+                code="missing_xml_file",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         file = request.FILES["file"]
 
         # Validate file type
         if not file.name.endswith(".xml"):
-            return Response(
-                {"error": "File must be an XML file"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "File must be an XML file",
+                code="invalid_xml_file",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         # Validate file size (max 10MB) - prevent DoS via large files
         if file.size > MAX_XML_SIZE:
-            return Response(
-                {"error": "File size must be less than 10MB"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "File size must be less than 10MB",
+                code="xml_file_too_large",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             xml_content = file.read().decode("utf-8")
         except UnicodeDecodeError:
-            return Response(
-                {"error": "File must be valid UTF-8 encoded XML"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "File must be valid UTF-8 encoded XML",
+                code="invalid_xml_encoding",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         result = create_mal_xml_import_job(request.user, file.name, xml_content)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="mal_xml_import_failed",
+        )
 
     @action(detail=False, methods=["post"])
     def import_anilist(self, request):
@@ -89,25 +104,33 @@ class ImportExportViewSet(ViewSet):
         access_token = request.data.get("access_token")  # Optional
 
         if not username:
-            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                "Username is required",
+                code="missing_username",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if not is_valid_import_username(username):
-            return Response(
-                {
-                    "error": "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "Invalid username format. Use alphanumeric characters, underscores, or hyphens only.",
+                code="invalid_username",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         # Sanitize access_token if provided (basic length check)
         if access_token and len(str(access_token)) > 1000:
-            return Response(
-                {"error": "Access token is too long"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                "Access token is too long",
+                code="access_token_too_long",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         result = create_anilist_import_job(request.user, username, access_token)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="anilist_import_failed",
+        )
 
     @action(detail=False, methods=["get"])
     def export_user_data(self, request):
@@ -116,9 +139,10 @@ class ImportExportViewSet(ViewSet):
         download = request.query_params.get("download", "true").lower() == "true"
 
         if export_format not in ["json", "xml"]:
-            return Response(
-                {"error": 'Type must be "json" or "xml"'},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                'Type must be "json" or "xml"',
+                code="invalid_export_type",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -141,9 +165,10 @@ class ImportExportViewSet(ViewSet):
 
         except Exception as e:
             logger.error(f"Export error: {e}")
-            return Response(
-                {"error": "Failed to generate export"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            return error_response(
+                "Failed to generate export",
+                code="export_failed",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -165,10 +190,15 @@ class UserImportJobViewSet(ReadOnlyModelViewSet):
         try:
             job = self.get_object()
         except UserImportJob.DoesNotExist:
-            return Response(
-                {"error": "Job not found or access denied"},
-                status=status.HTTP_404_NOT_FOUND,
+            return error_response(
+                "Job not found or access denied",
+                code="import_job_not_found",
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
         result = cancel_import_job(job)
-        return Response(result.payload, status=result.status_code)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="cancel_import_job_failed",
+        )

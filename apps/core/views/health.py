@@ -5,6 +5,7 @@ from django.http import JsonResponse
 
 from ...shared.logger import logger
 from ..services.admin_settings_service import is_maintenance_mode_enabled
+from ..services.migration_health import has_pending_migrations
 
 
 def _safe_maintenance_mode() -> bool:
@@ -54,6 +55,7 @@ def readiness_check(request):
     checks = {
         "database": False,
         "cache": False,
+        "migrations": False,
     }
 
     try:
@@ -70,6 +72,12 @@ def readiness_check(request):
             checks["cache"] = True
     except Exception as exc:
         logger.error("Readiness check - Cache failed: %s", exc)
+
+    if checks["database"]:
+        try:
+            checks["migrations"] = not has_pending_migrations()
+        except Exception as exc:
+            logger.error("Readiness check - Migration status failed: %s", exc)
 
     maintenance_mode = _safe_maintenance_mode()
     status_code = 200 if all(checks.values()) else 503

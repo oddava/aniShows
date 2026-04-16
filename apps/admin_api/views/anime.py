@@ -4,6 +4,7 @@ from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
+from rest_framework.serializers import BooleanField, Serializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from ...animes.admin_serializers import (
@@ -39,6 +40,10 @@ class AnimeFilter(FilterSet):
     class Meta:
         model = Anime
         fields = ["status", "anime_type"]
+
+
+class ForceQuerySerializer(Serializer):
+    force = BooleanField(required=False, default=False)
 
 
 class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, GenericViewSet):
@@ -87,8 +92,10 @@ class AdminGenreViewSet(ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Delete a genre. Checks for existing anime references."""
         genre = self.get_object()
+        query_serializer = ForceQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
 
-        result = delete_genre(genre, bool(request.query_params.get("force")))
+        result = delete_genre(genre, query_serializer.validated_data["force"])
         return Response(result.payload, status=result.status_code)
 
 
@@ -106,8 +113,10 @@ class AdminStudioViewSet(ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Delete a studio. Prevents deletion if > 0 anime assigned."""
         studio = self.get_object()
+        query_serializer = ForceQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
 
-        result = delete_studio(studio, bool(request.query_params.get("force")))
+        result = delete_studio(studio, query_serializer.validated_data["force"])
         return Response(result.payload, status=result.status_code)
 
 
