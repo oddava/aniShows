@@ -7,7 +7,6 @@ import {
     ChevronDown,
     Home,
     Clapperboard,
-    MessageSquare,
     Compass,
     CalendarDays,
     Search,
@@ -657,7 +656,6 @@ export default function Navbar() {
                         <div className="hidden md:flex items-center gap-1.5 flex-1 ml-6 lg:ml-8">
                             <NavItem to="/browse" label="Browse" />
                             <NavItem to="/schedule" label="Schedule" />
-                            <NavItem to="/forums" label="Forums" />
                             {(isAuthenticated || authLoading) && (
                                 <NavItem to={currentUserProfilePath} label="My List" />
                             )}
@@ -975,13 +973,6 @@ export default function Navbar() {
                                     </div>
                                 )}
                             </div>
-                            <Link
-                                to="/forums"
-                                className={mobileTabClasses(isPathActive('/forums'))}
-                            >
-                                <MessageSquare className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
-                                <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Forums</span>
-                            </Link>
                             <Link
                                 to="/notifications"
                                 className={mobileTabClasses(isPathActive('/notifications'))}

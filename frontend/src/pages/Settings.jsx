@@ -876,16 +876,6 @@ export default function Settings() {
                                                         </div>
                                                     );
                                                 })}
-
-                                                {/* Help text */}
-                                                <div className="p-4 bg-dark-100 rounded-xl">
-                                                    <h4 className="text-xs font-medium text-gray-400 mb-2">Tips:</h4>
-                                                    <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
-                                                        <li>Enter @username for social platforms or paste a full URL</li>
-                                                        <li>Links are automatically normalized (e.g., @user → https://x.com/user)</li>
-                                                        <li>You can add up to 5 links to your profile</li>
-                                                    </ul>
-                                                </div>
                                             </>
                                         )}
 

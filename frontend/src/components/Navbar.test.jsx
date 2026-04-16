@@ -17,7 +17,7 @@ vi.mock('../api/client', () => ({
         getAll: vi.fn(() => new Promise(() => {})),
     },
     notificationApi: {
-        getUnreadCount: vi.fn().mockResolvedValue({ data: { count: 0 } }),
+        getUnreadCount: vi.fn(() => new Promise(() => {})),
     },
 }));
 
@@ -69,5 +69,19 @@ describe('Navbar keyboard shortcuts', () => {
         });
 
         expect(input).toHaveFocus();
+    });
+
+    it('does not render a forums link in the header', async () => {
+        await act(async () => {
+            render(
+                <MemoryRouter>
+                    <Navbar />
+                </MemoryRouter>
+            );
+
+            await Promise.resolve();
+        });
+
+        expect(screen.queryByRole('link', { name: /forums/i })).not.toBeInTheDocument();
     });
 });
