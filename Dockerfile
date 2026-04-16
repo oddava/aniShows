@@ -51,6 +51,8 @@ COPY --from=builder /opt/venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH"
 
+RUN python -c "import PIL"
+
 COPY . .
 
 RUN DJANGO_SETTINGS_MODULE=root.settings.production \

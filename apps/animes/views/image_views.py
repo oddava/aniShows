@@ -2,12 +2,12 @@ import os
 from io import BytesIO
 
 from django.core.files.storage import default_storage
-from django.http import HttpResponse, HttpResponseNotFound
+from django.http import HttpResponse, HttpResponseNotFound, HttpResponseServerError
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.http import require_http_methods
-from PIL import Image
 
+from ...shared.image_lib import get_pillow_image_module
 from ...shared.logger import logger
 
 IMAGE_FORMATS = {
@@ -82,6 +82,14 @@ class ImageResizeView(View):
                 logger.warning(f"Image not found: {filepath}")
                 return HttpResponseNotFound("Image not found")
 
+            Image = get_pillow_image_module()
+            if Image is None:
+                logger.warning(
+                    "Pillow unavailable during resize request; serving original image instead",
+                    extra={"filepath": filepath},
+                )
+                return self._serve_original(filepath)
+
             with default_storage.open(filepath, "rb") as f:
                 image = Image.open(f)
 
@@ -146,6 +154,9 @@ class ImageResizeView(View):
             response["Cache-Control"] = "public, max-age=86400"
             return response
 
+        except ImportError as e:
+            logger.error(f"Image serving dependency unavailable for {filepath}: {e!s}")
+            return HttpResponseServerError("Image processing is temporarily unavailable")
         except Exception as e:
             logger.error(f"Error serving original image {filepath}: {e!s}")
             return HttpResponseNotFound("Image not found")

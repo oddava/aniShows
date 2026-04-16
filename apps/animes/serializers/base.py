@@ -2,6 +2,7 @@ from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import ModelSerializer, SerializerMethodField
 
+from ...shared.image_lib import get_pillow_image_module
 from ..models import (
     Anime,
     AnimeCharacter,
@@ -27,7 +28,6 @@ def validate_image_content(file, max_size, field_name):
     Checks file size, magic bytes, and image integrity.
     """
     import magic
-    from PIL import Image
 
     if file.size > max_size:
         raise ValidationError(
@@ -47,6 +47,12 @@ def validate_image_content(file, max_size, field_name):
     except Exception as e:
         from ...shared.logger import logger
         logger.warning(f"Image magic validation failed for {field_name}: {e}")
+
+    Image = get_pillow_image_module()
+    if Image is None:
+        raise ValidationError(
+            f"Image validation is temporarily unavailable for {field_name}. Please try again later."
+        )
 
     try:
         img = Image.open(file)

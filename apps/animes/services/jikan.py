@@ -321,6 +321,30 @@ class JikanService:
         with contextlib.suppress(Exception):
             await self.client.aclose()
 
+    async def download_image(self, url: str) -> bytes | None:
+        """Download image bytes from a trusted HTTPS URL."""
+        if not url:
+            return None
+
+        resolved_url = self.resolve_fetchable_image_url(url)
+        if not resolved_url:
+            return None
+
+        try:
+            await asyncio.sleep(0.2)
+            response = await self.client.get(resolved_url, timeout=10)
+            response.raise_for_status()
+
+            content_type = (response.headers.get("content-type") or "").lower()
+            if not content_type.startswith("image/"):
+                logger.warning(f"Non-image content type blocked: {content_type}")
+                return None
+
+            return response.content
+        except httpx.HTTPError as exc:
+            logger.error(f"Error downloading image {resolved_url}: {exc}")
+            return None
+
     @sync_to_async
     def _save_image(self, anime, field_name, filename, image_data):
         field = getattr(anime, field_name)

@@ -1,13 +1,10 @@
 import { useEffect, useCallback } from 'react';
+import { isKeyboardEditableTarget } from '../utils/dom';
 
 export function useKeyboardShortcuts(shortcuts) {
   const handleKeyDown = useCallback((event) => {
     // Don't trigger shortcuts when typing in input fields
-    if (
-      event.target.tagName === 'INPUT' ||
-      event.target.tagName === 'TEXTAREA' ||
-      event.target.isContentEditable
-    ) {
+    if (isKeyboardEditableTarget(event.target)) {
       // Allow escape key even in inputs
       if (event.key === 'Escape' && shortcuts.onEscape) {
         shortcuts.onEscape();

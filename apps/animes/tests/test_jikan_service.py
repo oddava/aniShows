@@ -72,6 +72,46 @@ class JikanThemeFetchRetryTests(SimpleTestCase):
         self.assertEqual(sleep_calls, 2)
 
 
+class JikanServiceDownloadImageTests(SimpleTestCase):
+    def _build_service(self, handler) -> JikanService:
+        service = JikanService(enable_caching=False, enable_rate_limiting=False)
+        asyncio.run(service.client.aclose())
+        service.base_url = "http://test/v4"
+        service.client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=15.0)
+        self.addCleanup(lambda: asyncio.run(service.close()))
+        return service
+
+    def test_download_image_returns_bytes_for_trusted_image_url(self):
+        image_url = "https://cdn.myanimelist.net/images/anime/1/77777.jpg"
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(str(request.url), image_url)
+            return httpx.Response(
+                200,
+                request=request,
+                content=b"image-bytes",
+                headers={"content-type": "image/jpeg"},
+            )
+
+        service = self._build_service(handler)
+
+        with patch("apps.animes.services.jikan.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+            result = asyncio.run(service.download_image(image_url))
+
+        self.assertEqual(result, b"image-bytes")
+        sleep_mock.assert_awaited_once_with(0.2)
+
+    def test_download_image_rejects_untrusted_urls_without_request(self):
+        async def handler(request: httpx.Request) -> httpx.Response:
+            self.fail(f"Unexpected outbound request to {request.url}")
+
+        service = self._build_service(handler)
+
+        result = asyncio.run(service.download_image("https://cdn.example.com/cover.jpg"))
+
+        self.assertIsNone(result)
+
+
 class JikanServiceNormalizationTests(TestCase):
     def setUp(self):
         self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")

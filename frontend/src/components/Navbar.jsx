@@ -22,6 +22,7 @@ import {
     getImageFallbackUrl,
     getOptimizedImageUrl,
 } from '../utils/imageUtils';
+import { isActiveElementEditable } from '../utils/dom';
 
 import Fuse from 'fuse.js';
 import Logo from './Logo';
@@ -393,7 +394,7 @@ export default function Navbar() {
             // "/" to focus search
             if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
                 // Don't trigger if user is typing in an input
-                if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+                if (isActiveElementEditable()) {
                     return;
                 }
                 e.preventDefault();

@@ -43,7 +43,7 @@ class ImageTaskSelfHealTests(TestCase):
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)
     @patch("apps.animes.tasks.images.fetch_anime_images.apply_async")
-    @patch("apps.animes.tasks.images.JikanService")
+    @patch("apps.animes.tasks.images.JikanService", autospec=True)
     def test_fetch_task_defers_when_storage_is_unreachable(
         self,
         mock_service_cls,
@@ -85,7 +85,7 @@ class ImageTaskSelfHealTests(TestCase):
         service.close.assert_awaited_once()
 
     @patch("apps.animes.models.Anime.objects.get")
-    @patch("apps.animes.tasks.images.JikanService")
+    @patch("apps.animes.tasks.images.JikanService", autospec=True)
     def test_fetch_task_force_replace_redownloads_existing_images(
         self, mock_service_cls, mock_anime_get
     ):
