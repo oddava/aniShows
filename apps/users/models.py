@@ -49,6 +49,12 @@ class UserProfile(Model):
         default="#8b5cf6",
         help_text="Hex color for profile accent (e.g., #8b5cf6)",
     )
+    preferred_timezone = CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="IANA timezone name for localizing timestamps (blank uses auto-detected browser timezone).",
+    )
     last_activity = DateTimeField(null=True, blank=True)
     email_new_episodes = BooleanField(default=True)
     push_new_episodes = BooleanField(default=True)

@@ -46,6 +46,15 @@ class ProfileUpdateServiceTests(TestCase):
         mock_invalidate.assert_called_once_with(self.user.id, self.user.username)
 
     @patch("apps.users.services.profile_update_service.invalidate_user_caches")
+    def test_updates_preferred_timezone(self, mock_invalidate):
+        with self.captureOnCommitCallbacks(execute=True):
+            update_user_profile(self.user, {"preferred_timezone": "America/New_York"})
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.preferred_timezone, "America/New_York")
+        mock_invalidate.assert_called_once_with(self.user.id, self.user.username)
+
+    @patch("apps.users.services.profile_update_service.invalidate_user_caches")
     def test_username_change_updates_user_and_profile_in_single_transaction(self, mock_invalidate):
         with self.captureOnCommitCallbacks(execute=True):
             update_user_profile(self.user, {"username": "renamed-user"})

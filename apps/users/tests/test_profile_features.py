@@ -382,6 +382,39 @@ class ProfileFeaturesTest(APITestCase):
         self.assertTrue(self.profile.show_adult_content)
         self.assertTrue(res.data["show_adult_content"])
 
+    def test_profile_update_preferred_timezone(self):
+        res = self.client.patch(
+            self.profile_url,
+            {"preferred_timezone": "America/New_York"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.preferred_timezone, "America/New_York")
+        self.assertEqual(res.data["preferred_timezone"], "America/New_York")
+
+    def test_profile_update_preferred_timezone_auto(self):
+        self.profile.preferred_timezone = "Asia/Tokyo"
+        self.profile.save(update_fields=["preferred_timezone"])
+
+        res = self.client.patch(self.profile_url, {"preferred_timezone": "auto"}, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.preferred_timezone, "")
+        self.assertEqual(res.data["preferred_timezone"], "auto")
+
+    def test_profile_update_preferred_timezone_validation(self):
+        res = self.client.patch(
+            self.profile_url,
+            {"preferred_timezone": "Mars/Olympus"},
+            format="json",
+        )
+
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("preferred_timezone", res.data)
+
     def test_profile_update_bio_preserves_allowed_html(self):
         """Test that safe formatting tags remain intact after save."""
         data = {

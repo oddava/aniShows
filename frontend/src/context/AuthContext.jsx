@@ -1,6 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { authApi, refreshAccessToken } from '../api/client';
+import {
+    clearStoredTimeZonePreference,
+    syncStoredTimeZonePreference,
+} from '../utils/dateUtils';
 import logger, { isRequestAbortError } from '../utils/logger';
 
 const AuthContext = createContext(null);
@@ -21,6 +25,7 @@ const decodeToken = (token) => {
                 bio: '',
                 is_private: false,
                 email_verified: true,
+                preferred_timezone: 'auto',
                 is_staff: Boolean(decoded.is_staff),
                 is_superuser: Boolean(decoded.is_superuser),
                 _needsApiFetch: true, // Flag to indicate we need API data
@@ -35,6 +40,7 @@ const decodeToken = (token) => {
             bio: '',
             is_private: false,
             email_verified: true,
+            preferred_timezone: 'auto',
             is_staff: Boolean(decoded.is_staff),
             is_superuser: Boolean(decoded.is_superuser),
             _needsApiFetch: false,
@@ -147,6 +153,15 @@ export function AuthProvider({ children }) {
         checkAuth();
     }, [checkAuth]);
 
+    useEffect(() => {
+        if (user) {
+            syncStoredTimeZonePreference(user.preferred_timezone);
+            return;
+        }
+
+        clearStoredTimeZonePreference();
+    }, [user]);
+
     const login = useCallback(async (username, password) => {
         const response = await authApi.login({ username, password });
         const { access, refresh } = response.data;
@@ -183,6 +198,7 @@ export function AuthProvider({ children }) {
     const logout = useCallback(() => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
+        clearStoredTimeZonePreference();
         setUser(null);
     }, []);
 
@@ -207,11 +223,13 @@ export function AuthProvider({ children }) {
         localStorage.setItem('refresh_token', refresh);
 
         if (userData) {
+            syncStoredTimeZonePreference(userData.preferred_timezone);
             setUser(userData);
         } else {
             // If no user data provided, decode it from token
             const decodedUser = decodeToken(access);
             if (decodedUser) {
+                syncStoredTimeZonePreference(decodedUser.preferred_timezone);
                 setUser(decodedUser);
             }
         }

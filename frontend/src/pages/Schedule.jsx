@@ -15,6 +15,11 @@ import { ScheduleGridSkeleton } from '../components/skeletons';
 import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
+import {
+  formatDate,
+  getCurrentWeekdayIndex,
+  groupScheduleDaysByTimezone,
+} from '../utils/dateUtils';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -31,16 +36,8 @@ const getWeekStart = (date) => {
   return d;
 };
 
-// Helper to format date
-const formatDate = (date) => {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric'
-  }).format(date);
-};
-
 // Day Selector Component
-const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
+const DaySelector = ({ days, selectedDay, onSelect, animeCounts, todayDay }) => {
   const scrollRef = useRef(null);
 
   return (
@@ -52,7 +49,7 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
         {days.map((day, index) => {
           const isSelected = selectedDay === index;
           const count = animeCounts[index] || 0;
-          const isToday = new Date().getDay() === index;
+          const isToday = todayDay === index;
 
           return (
             <button
@@ -85,7 +82,7 @@ const DaySelector = ({ days, selectedDay, onSelect, animeCounts }) => {
 };
 
 // Week Navigator Component
-const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday }) => {
+const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday, preferredTimezone }) => {
   const weekEnd = new Date(currentWeek);
   weekEnd.setDate(weekEnd.getDate() + 6);
 
@@ -102,7 +99,9 @@ const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday }) => {
         <div className="text-center">
           <div className="text-white font-semibold">
             <span>
-              {formatDate(currentWeek)} - {formatDate(weekEnd)}
+              {formatDate(currentWeek, { month: 'short', day: 'numeric' }, preferredTimezone)}
+              {' - '}
+              {formatDate(weekEnd, { month: 'short', day: 'numeric' }, preferredTimezone)}
             </span>
           </div>
         </div>
@@ -132,6 +131,11 @@ export default function Schedule() {
   const { isAuthenticated, user, refreshProfile } = useAuth();
   const adultContentEnabled = Boolean(user?.show_adult_content);
   const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
+  const preferredTimezone = user?.preferred_timezone;
+  const todayDayIndex = useMemo(
+    () => getCurrentWeekdayIndex(preferredTimezone),
+    [preferredTimezone]
+  );
 
   // Get initial week from URL or use current week
   const [currentWeek, setCurrentWeek] = useState(() => {
@@ -153,9 +157,9 @@ export default function Schedule() {
     const dayParam = searchParams.get('day');
     if (dayParam) {
       const dayIndex = DAY_NAMES.findIndex(d => d.toLowerCase() === dayParam.toLowerCase());
-      return dayIndex !== -1 ? dayIndex : new Date().getDay();
+      return dayIndex !== -1 ? dayIndex : getCurrentWeekdayIndex(preferredTimezone);
     }
-    return new Date().getDay();
+    return getCurrentWeekdayIndex(preferredTimezone);
   });
 
 
@@ -207,47 +211,29 @@ export default function Schedule() {
   ]);
 
   // Fetch schedule data
-  const { data, isLoading, isFetching, error } = useQuery({
+  const { data: rawScheduleDays, isLoading, isFetching, error } = useQuery({
     queryKey: ['schedule', isAuthenticated, adultContentEnabled],
     queryFn: async () => {
       const response = await animeApi.getSchedule();
-      const apiDays = response.data?.days || {};
-
-      const days = DAY_NAMES.map((dayName) => {
-        const items = Array.isArray(apiDays[dayName.toLowerCase()]) ? [...apiDays[dayName.toLowerCase()]] : [];
-        items.sort((a, b) => {
-          const dateA = a.next_airing_date ? new Date(a.next_airing_date) : null;
-          const dateB = b.next_airing_date ? new Date(b.next_airing_date) : null;
-
-          if (dateA && !isNaN(dateA.getTime()) && dateB && !isNaN(dateB.getTime())) {
-            return dateA - dateB;
-          }
-
-          if (a.broadcast_time && b.broadcast_time) {
-            return String(a.broadcast_time).localeCompare(String(b.broadcast_time));
-          }
-
-          return a.title.localeCompare(b.title);
-        });
-        return items;
-      });
-
-      return { days };
+      return response.data?.days || {};
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  const groupedScheduleDays = useMemo(
+    () => groupScheduleDaysByTimezone(rawScheduleDays, preferredTimezone),
+    [rawScheduleDays, preferredTimezone]
+  );
+
   // Calculate anime counts per day
   const animeCounts = useMemo(() => {
-    if (!data) return Array(7).fill(0);
-    return data.days.map(day => day.length);
-  }, [data]);
+    return DAY_NAMES.map((day) => groupedScheduleDays[day.toLowerCase()]?.length || 0);
+  }, [groupedScheduleDays]);
 
   // Get anime for selected day
   const selectedDayAnime = useMemo(() => {
-    if (!data) return [];
-    return data.days[selectedDay] || [];
-  }, [data, selectedDay]);
+    return groupedScheduleDays[DAY_NAMES[selectedDay].toLowerCase()] || [];
+  }, [groupedScheduleDays, selectedDay]);
 
   // Week navigation handlers
   const handlePrevWeek = () => {
@@ -265,7 +251,7 @@ export default function Schedule() {
   const handleToday = () => {
     const today = new Date();
     setCurrentWeek(getWeekStart(today));
-    setSelectedDay(today.getDay());
+    setSelectedDay(getCurrentWeekdayIndex(preferredTimezone));
   };
 
   if (error) {
@@ -300,6 +286,7 @@ export default function Schedule() {
             onPrevWeek={handlePrevWeek}
             onNextWeek={handleNextWeek}
             onToday={handleToday}
+            preferredTimezone={preferredTimezone}
           />
 
           {/* Day Selector */}
@@ -309,6 +296,7 @@ export default function Schedule() {
               selectedDay={selectedDay}
               onSelect={setSelectedDay}
               animeCounts={animeCounts}
+              todayDay={todayDayIndex}
             />
           </div>
 
@@ -318,7 +306,11 @@ export default function Schedule() {
               {DAY_NAMES[selectedDay]}
               <span className="text-gray-500 font-normal ml-2">
                 {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}
-                {formatDate(new Date(currentWeek.getTime() + ((selectedDay + 6) % 7) * 24 * 60 * 60 * 1000))}
+                {formatDate(
+                  new Date(currentWeek.getTime() + ((selectedDay + 6) % 7) * 24 * 60 * 60 * 1000),
+                  { month: 'short', day: 'numeric' },
+                  preferredTimezone
+                )}
               </span>
             </h2>
 

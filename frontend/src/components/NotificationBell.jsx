@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { notificationApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
 import logger from '../utils/logger';
 import { getHighlightEntityData } from '../utils/notificationUtils';
 
@@ -202,11 +203,12 @@ export const NotificationBell = () => {
                                             );
                                         })()}
                                         <p className="text-[10px] text-gray-500 mt-1">
-                                            {new Date(notification.created_at).toLocaleDateString(undefined, {
+                                            {formatDateTimeInUserTimezone(notification.created_at, {
                                                 month: 'short',
                                                 day: 'numeric',
                                                 hour: '2-digit',
-                                                minute: '2-digit'
+                                                minute: '2-digit',
+                                                timeZoneName: 'short',
                                             })}
                                         </p>
                                     </div>

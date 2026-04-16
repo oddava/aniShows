@@ -169,6 +169,7 @@ def _build_profile_data(user, stats_data):
         "profile_primary_color": _normalize_profile_primary_color(
             profile.profile_primary_color if profile else None
         ),
+        "preferred_timezone": profile.preferred_timezone if profile and profile.preferred_timezone else "auto",
         "points": profile.points if profile else 0,
         "has_password": user.has_usable_password(),
         "is_staff": user.is_staff,
@@ -197,6 +198,9 @@ def _normalize_profile_payload(data):
         normalized.get("profile_primary_color")
     )
     normalized["show_adult_content"] = bool(normalized.get("show_adult_content", False))
+    normalized["preferred_timezone"] = _normalize_preferred_timezone(
+        normalized.get("preferred_timezone")
+    )
     return normalized
 
 
@@ -206,3 +210,11 @@ def _normalize_profile_primary_color(value):
         if HEX_COLOR_PATTERN.match(candidate):
             return candidate
     return DEFAULT_PROFILE_PRIMARY_COLOR
+
+
+def _normalize_preferred_timezone(value):
+    if isinstance(value, str):
+        candidate = value.strip()
+        if candidate:
+            return candidate
+    return "auto"

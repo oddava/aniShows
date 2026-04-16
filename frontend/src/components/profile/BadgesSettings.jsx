@@ -4,6 +4,7 @@ import { badgeApi } from '../../api/client';
 import { Award, Shield, Star, Zap, Crown, Check } from 'lucide-react';
 import ErrorBoundary from '../ErrorBoundary';
 import { useAuth } from '../../context/AuthContext';
+import { formatDateInUserTimezone } from '../../utils/dateUtils';
 
 const ICON_MAP = {
     'award': Award,
@@ -165,7 +166,7 @@ export default function BadgesSettings() {
                                     </div>
                                     
                                     <div className="text-[10px] text-gray-500 mt-auto font-medium uppercase tracking-wider pt-2 w-full border-t border-dark-300">
-                                        Earned {new Date(userBadge.granted_at).toLocaleDateString()}
+                                        Earned {formatDateInUserTimezone(userBadge.granted_at)}
                                     </div>
                                 </div>
                             );

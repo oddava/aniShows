@@ -1,4 +1,5 @@
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import bleach
 from django.conf import settings
@@ -162,6 +163,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
     points = SerializerMethodField()
     profile_primary_color = SerializerMethodField()
     show_adult_content = SerializerMethodField()
+    preferred_timezone = SerializerMethodField()
     followers_count = IntegerField(read_only=True, source="_followers_count")
     following_count = IntegerField(read_only=True, source="_following_count")
 
@@ -193,6 +195,7 @@ class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
             "points",
             "profile_primary_color",
             "show_adult_content",
+            "preferred_timezone",
             "followers_count",
             "following_count",
             "badges",
@@ -218,6 +221,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
     social_links = SerializerMethodField()
     profile_primary_color = SerializerMethodField()
     show_adult_content = SerializerMethodField()
+    preferred_timezone = SerializerMethodField()
 
     anime_count = IntegerField(default=0)
     episodes_watched = IntegerField(default=0)
@@ -237,6 +241,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
             "social_links",
             "profile_primary_color",
             "show_adult_content",
+            "preferred_timezone",
             "anime_count",
             "episodes_watched",
             "days_watched",
@@ -338,6 +343,7 @@ class UserProfileUpdateSerializer(Serializer):
     is_private = BooleanField(required=False, default=False)
     show_adult_content = BooleanField(required=False)
     profile_primary_color = CharField(required=False, max_length=7)
+    preferred_timezone = CharField(required=False, allow_blank=True, max_length=64)
 
     def validate_is_private(self, value):
         if isinstance(value, str):
@@ -372,6 +378,20 @@ class UserProfileUpdateSerializer(Serializer):
             raise ValidationError(
                 "Profile primary color must be a valid hex color (e.g., #8b5cf6)."
             )
+        return normalized
+
+    def validate_preferred_timezone(self, value):
+        normalized = (value or "").strip()
+        if not normalized or normalized.lower() == "auto":
+            return ""
+
+        try:
+            ZoneInfo(normalized)
+        except ZoneInfoNotFoundError as exc:
+            raise ValidationError(
+                "Preferred timezone must be a valid IANA timezone like 'America/New_York'."
+            ) from exc
+
         return normalized
 
     social_links = JSONField(required=False)

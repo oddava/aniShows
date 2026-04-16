@@ -14,6 +14,7 @@ import {
     Workflow,
 } from 'lucide-react';
 import AnimeMediaImage from '../common/AnimeMediaImage';
+import { formatDateInUserTimezone } from '../../utils/dateUtils';
 
 const STATUS_FILTERS = [
     { value: 'watching', label: 'Watching', color: '#16a34a' },
@@ -121,7 +122,7 @@ function timeAgo(dateStr) {
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
 
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return formatDateInUserTimezone(date, { month: 'short', day: 'numeric' });
 }
 
 function formatDateGroupLabel(dateValue) {
@@ -129,15 +130,16 @@ function formatDateGroupLabel(dateValue) {
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
 
-    const sameDay = (a, b) =>
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate();
+    const toDateKey = (value) => formatDateInUserTimezone(value, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    });
 
-    if (sameDay(dateValue, today)) return 'Today';
-    if (sameDay(dateValue, yesterday)) return 'Yesterday';
+    if (toDateKey(dateValue) === toDateKey(today)) return 'Today';
+    if (toDateKey(dateValue) === toDateKey(yesterday)) return 'Yesterday';
 
-    return dateValue.toLocaleDateString('en-US', {
+    return formatDateInUserTimezone(dateValue, {
         month: 'long',
         day: 'numeric',
         year: dateValue.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
@@ -150,7 +152,11 @@ function groupActivitiesByDate(activities) {
 
     activities.forEach(activity => {
         const activityDate = new Date(activity.created_at);
-        const dateKey = `${activityDate.getFullYear()}-${String(activityDate.getMonth() + 1).padStart(2, '0')}-${String(activityDate.getDate()).padStart(2, '0')}`;
+        const dateKey = formatDateInUserTimezone(activityDate, {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        });
 
         if (!groupsMap.has(dateKey)) {
             const dateGroup = {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
@@ -11,6 +11,15 @@ import SmartLinkInput, { normalizeUrl } from '../components/SmartLinkInput';
 import RichTextEditor from '../components/forums/RichTextEditor';
 import ImageCropModal from '../components/ImageCropModal';
 import BadgesSettings from '../components/profile/BadgesSettings';
+import CustomSelect from '../components/common/CustomSelect';
+import {
+    AUTO_TIMEZONE_VALUE,
+    formatDateTime,
+    formatTimeZoneLabel,
+    getBrowserTimeZone,
+    getSupportedTimeZones,
+    normalizeTimeZonePreference,
+} from '../utils/dateUtils';
 
 function getResponsiveBannerAspect(width) {
     const safeWidth = Math.max(320, Number(width) || 320);
@@ -97,6 +106,7 @@ export default function Settings() {
     const [socialLinks, setSocialLinks] = useState([]);
     const [isPrivate, setIsPrivate] = useState(false);
     const [profilePrimaryColor, setProfilePrimaryColor] = useState(DEFAULT_PROFILE_PRIMARY_COLOR);
+    const [preferredTimezone, setPreferredTimezone] = useState(AUTO_TIMEZONE_VALUE);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileSuccess, setProfileSuccess] = useState('');
@@ -145,6 +155,38 @@ export default function Settings() {
     const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
     const [isSavingPreferences, setIsSavingPreferences] = useState(false);
     const [preferencesMessage, setPreferencesMessage] = useState('');
+    const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
+    const supportedTimezones = useMemo(() => getSupportedTimeZones(), []);
+    const timezoneOptions = useMemo(
+        () => [
+            {
+                value: AUTO_TIMEZONE_VALUE,
+                label: `Use device timezone (${browserTimezone})`,
+            },
+            ...supportedTimezones.map((timezone) => ({
+                value: timezone,
+                label: formatTimeZoneLabel(timezone),
+            })),
+        ],
+        [browserTimezone, supportedTimezones]
+    );
+    const resolvedTimezone = preferredTimezone === AUTO_TIMEZONE_VALUE ? browserTimezone : preferredTimezone;
+    const timezonePreview = useMemo(
+        () =>
+            formatDateTime(
+                new Date(),
+                {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    timeZoneName: 'short',
+                },
+                preferredTimezone
+            ),
+        [preferredTimezone]
+    );
 
     // Initialize state from user data
     useEffect(() => {
@@ -159,6 +201,7 @@ export default function Settings() {
             setSocialLinks(normalizedLinks);
             setIsPrivate(user.is_private || false);
             setProfilePrimaryColor(normalizeProfilePrimaryColor(user.profile_primary_color));
+            setPreferredTimezone(normalizeTimeZonePreference(user.preferred_timezone));
         }
     }, [user]);
 
@@ -240,12 +283,15 @@ export default function Settings() {
         const normalizedUserBio = decodeHtmlEntities(user.bio || '');
         const normalizedCurrentProfileColor = normalizeProfilePrimaryColor(user.profile_primary_color);
         const normalizedSelectedProfileColor = normalizeProfilePrimaryColor(profilePrimaryColor);
+        const normalizedCurrentTimezone = normalizeTimeZonePreference(user.preferred_timezone);
+        const normalizedSelectedTimezone = normalizeTimeZonePreference(preferredTimezone);
         const hasChanges = (
             bio !== normalizedUserBio ||
             username.trim() !== user.username ||
             JSON.stringify(nonEmptyLinks) !== JSON.stringify(user.social_links || []) ||
             isPrivate !== user.is_private ||
             normalizedSelectedProfileColor !== normalizedCurrentProfileColor ||
+            normalizedSelectedTimezone !== normalizedCurrentTimezone ||
             avatarFile !== null ||
             bannerFile !== null ||
             removeBanner
@@ -277,6 +323,9 @@ export default function Settings() {
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
             // Always send the selected profile color so stale client state cannot drop the field.
             formData.append('profile_primary_color', normalizedSelectedProfileColor);
+            if (normalizedSelectedTimezone !== normalizedCurrentTimezone) {
+                formData.append('preferred_timezone', normalizedSelectedTimezone);
+            }
             if (avatarFile) formData.append('avatar', avatarFile);
             if (bannerFile) formData.append('banner', bannerFile);
             if (removeBanner) formData.append('remove_banner', 'true');
@@ -288,6 +337,11 @@ export default function Settings() {
             );
             setProfileSuccess('Profile updated successfully!');
             setProfilePrimaryColor(savedProfileColor);
+            setPreferredTimezone(
+                normalizeTimeZonePreference(
+                    updatedProfile?.preferred_timezone || normalizedSelectedTimezone
+                )
+            );
 
             // Clear file inputs immediately for better UX
             setAvatarFile(null);
@@ -598,6 +652,28 @@ export default function Settings() {
                                         placeholder="Enter your username"
                                     />
                                     <p className="text-xs text-gray-500 mt-2">You can change your username once every 14 days.</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Timezone</label>
+                                    <CustomSelect
+                                        value={preferredTimezone}
+                                        onChange={(value) => setPreferredTimezone(normalizeTimeZonePreference(value))}
+                                        options={timezoneOptions}
+                                        className="max-w-md"
+                                        triggerClassName="w-full"
+                                        menuClassName="max-h-72"
+                                        placeholder="Select timezone"
+                                        ariaLabel="Select preferred timezone"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        {preferredTimezone === AUTO_TIMEZONE_VALUE
+                                            ? `Auto-detected from this browser. Times currently display in ${browserTimezone}.`
+                                            : `Times currently display in ${resolvedTimezone}.`}
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        Preview: {timezonePreview || 'Unavailable'}
+                                    </p>
                                 </div>
 
                                 {/* Avatar */}

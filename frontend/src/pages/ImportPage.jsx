@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
 import logger from '../utils/logger';
 import {
     Upload, 
@@ -454,7 +455,14 @@ const ImportPage = () => {
                                         <div className="min-w-0">
                                             <p className="font-medium text-white text-sm sm:text-base">{job.source_display}</p>
                                             <p className="text-xs sm:text-sm text-gray-500">
-                                                {new Date(job.created_at).toLocaleString()}
+                                                {formatDateTimeInUserTimezone(job.created_at, {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric',
+                                                    hour: 'numeric',
+                                                    minute: '2-digit',
+                                                    timeZoneName: 'short',
+                                                })}
                                             </p>
                                         </div>
                                     </div>

@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Tv, Hash, Clock, Calendar, BookOpen, Building2, Users, Bell, ExternalLink } from 'lucide-react';
-import { formatRelativeTime, formatAiringTime, isWithin24Hours } from '../utils/dateUtils';
+import {
+    formatAiringTime,
+    formatDate,
+    formatRelativeTime,
+    isWithin24Hours,
+} from '../utils/dateUtils';
 import {
     formatCompactCount,
     getStatusDistributionTotal,
@@ -40,7 +45,7 @@ export default function InformationBox({ anime, className, accentColor }) {
     const formatDateRange = () => {
         if (!anime.release_date) return 'Unknown';
         const options = { month: 'short', day: 'numeric', year: 'numeric' };
-        const startStr = new Date(anime.release_date).toLocaleDateString('en-US', options);
+        const startStr = formatDate(anime.release_date, options);
 
         if (anime.status === 'Airing' && !anime.end_date) {
             return (
@@ -53,7 +58,7 @@ export default function InformationBox({ anime, className, accentColor }) {
         }
 
         if (anime.end_date) {
-            const endStr = new Date(anime.end_date).toLocaleDateString('en-US', options);
+            const endStr = formatDate(anime.end_date, options);
             if (startStr === endStr) return startStr;
             return (
                 <div className="flex flex-col items-end leading-tight">

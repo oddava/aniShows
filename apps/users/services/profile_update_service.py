@@ -49,6 +49,9 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         if "profile_primary_color" in validated_data:
             profile.profile_primary_color = validated_data["profile_primary_color"]
             update_fields.append("profile_primary_color")
+        if "preferred_timezone" in validated_data:
+            profile.preferred_timezone = validated_data["preferred_timezone"]
+            update_fields.append("preferred_timezone")
         if "social_links" in validated_data:
             if _apply_social_links(profile, user, validated_data["social_links"], ip_address):
                 update_fields.append("social_links")

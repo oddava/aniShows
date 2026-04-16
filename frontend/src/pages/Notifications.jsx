@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { applyImageFallback, getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
+import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
 import { 
     getActorUsernameData,
     getHighlightEntityData,
@@ -441,7 +442,14 @@ export default function Notifications() {
                         const followerNotification = isFollowerNotification(notification);
                         const followerName = getFollowerDisplayName(notification);
                         const brokenFollowerThumb = followerNotification && brokenThumbIds.has(notification.id);
-                        const exactTimestamp = new Date(notification.created_at).toLocaleString();
+                        const exactTimestamp = formatDateTimeInUserTimezone(notification.created_at, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            timeZoneName: 'short',
+                        });
                         const thumbnailAlt = highlightEntity
                             ? `${highlightEntity} notification image`
                             : 'Notification image';

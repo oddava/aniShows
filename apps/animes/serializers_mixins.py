@@ -200,6 +200,10 @@ class UserProfileMixin:
         profile = getattr(obj, "userprofile", None)
         return profile.show_adult_content if profile else False
 
+    def get_preferred_timezone(self, obj):
+        profile = getattr(obj, "userprofile", None)
+        return profile.preferred_timezone if profile and profile.preferred_timezone else "auto"
+
 class BadgesMixin:
     """Mixin for serializers that display user badges.
     Used by UserSerializer and PublicUserSerializer.
