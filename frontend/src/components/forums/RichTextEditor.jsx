@@ -297,7 +297,6 @@ const RichTextEditor = ({
                         <MarkdownRenderer content={value} className="text-[15px]" />
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-500 italic text-sm py-12">
-                            <Eye className="w-8 h-8 mb-3 opacity-20" />
                             Live preview...
                         </div>
                     )}
