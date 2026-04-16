@@ -106,6 +106,83 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(anime.provider_ids["anilist"], 1535)
         self.assertEqual(anime.provider_ids["myanimelist"], 1535)
 
+    def test_run_import_matches_existing_by_alternate_titles_when_ids_are_missing(self):
+        anime = Anime.objects.create(
+            title="Hikikomari Kyuuketsuki no Monmon",
+            title_jp="ひきこまり吸血姫の悶々",
+            slug="hikikomari-kyuuketsuki-no-monmon",
+            synopsis="Existing synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            season_year=2023,
+            synonyms=[
+                "Hikikomari Kyūketsuki no Monmon",
+                "The Vexations of a Shut-In Vampire Princess",
+            ],
+            provider_ids={
+                "anilist": 159808,
+                "myanimelist": 54103,
+                "anime_planet": "the-vexations-of-a-shut-in-vampire-princess",
+            },
+        )
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="The Vexations of a Shut-In Vampire Princess",
+                sources=["https://animenewsnetwork.com/encyclopedia/anime.php?id=26817"],
+                synonyms=[
+                    "Hikikomari Kyūketsuki no Monmon",
+                    "ひきこまり吸血姫の悶々",
+                ],
+                animeSeason={"season": "FALL", "year": 2023},
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        anime.refresh_from_db()
+        self.assertEqual(result["records_created"], 0)
+        self.assertEqual(result["records_updated"], 1)
+        self.assertEqual(Anime.objects.count(), 1)
+        self.assertEqual(anime.provider_ids["animenewsnetwork"], 26817)
+        self.assertIn(
+            "https://animenewsnetwork.com/encyclopedia/anime.php?id=26817",
+            anime.source_urls,
+        )
+
+    def test_run_import_matches_existing_by_secondary_provider_id_when_ids_are_missing(self):
+        anime = Anime.objects.create(
+            title="Romaji Primary Title",
+            slug="romaji-primary-title",
+            synopsis="Existing synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            season_year=2024,
+            provider_ids={"anime_planet": "shared-provider-slug"},
+        )
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Completely Different Localized Title",
+                sources=["https://anime-planet.com/anime/shared-provider-slug"],
+                synonyms=["Unrelated Alias"],
+                animeSeason={"season": "SPRING", "year": 2024},
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        anime.refresh_from_db()
+        self.assertEqual(result["records_created"], 0)
+        self.assertEqual(result["records_updated"], 1)
+        self.assertEqual(Anime.objects.count(), 1)
+        self.assertEqual(anime.provider_ids["anime_planet"], "shared-provider-slug")
+        self.assertIn("Unrelated Alias", anime.synonyms)
+
     def test_run_import_updates_existing_row_without_overwriting_anilist_owned_fields(self):
         anime = Anime.objects.create(
             title="Death Note",
