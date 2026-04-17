@@ -535,9 +535,9 @@ services:
   minio:
     image: minio/minio:latest
     restart: always
-    ports:
-      - "9000:9000" # API
-      - "9001:9001" # Console
+    expose:
+      - "9000" # API
+      - "9001" # Console
     env_file:
       - .env
     environment:
