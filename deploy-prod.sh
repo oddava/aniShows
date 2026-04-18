@@ -98,6 +98,61 @@ cleanup_stale_service_containers() {
     done < <(service_container_ids "$service_name" all)
 }
 
+trim_service_replicas() {
+    local service_name="$1"
+    local target_count="$2"
+    local container_id
+    local running_ids=()
+    local excess_count
+    local removed_any=false
+
+    mapfile -t running_ids < <(service_container_ids "$service_name")
+    excess_count=$((${#running_ids[@]} - target_count))
+    if [ "$excess_count" -le 0 ]; then
+        return 0
+    fi
+
+    echo -e "${BLUE}  Removing ${excess_count} excess ${service_name} replica(s) before rollout...${NC}"
+    for container_id in "${running_ids[@]}"; do
+        if [ "$excess_count" -le 0 ]; then
+            break
+        fi
+        if [ "$removed_any" = false ]; then
+            removed_any=true
+        fi
+        echo -e "${YELLOW}    Removing excess ${service_name} container ${container_id:0:12}${NC}"
+        docker rm -f "$container_id" >/dev/null 2>&1 || true
+        excess_count=$((excess_count - 1))
+    done
+}
+
+normalize_service_for_rollout() {
+    local service_name="$1"
+    local target_count="$2"
+    local container_id
+    local status
+    local removed_any=false
+
+    while IFS= read -r container_id; do
+        [ -z "$container_id" ] && continue
+        status="$(container_readiness "$container_id")"
+        case "$status" in
+            healthy|running)
+                ;;
+            *)
+                if [ "$removed_any" = false ]; then
+                    echo -e "${BLUE}  Removing non-ready ${service_name} containers before rollout...${NC}"
+                    removed_any=true
+                fi
+                echo -e "${YELLOW}    Removing ${container_id:0:12} (${status})${NC}"
+                docker rm -f "$container_id" >/dev/null 2>&1 || true
+                ;;
+        esac
+    done < <(service_container_ids "$service_name" all)
+
+    trim_service_replicas "$service_name" "$target_count"
+}
+
 print_container_debug_info() {
     local container_id="$1"
     local service_name="$2"
@@ -231,6 +286,7 @@ rolling_refresh_service() {
     local surge_target
 
     cleanup_stale_service_containers "$service_name"
+    normalize_service_for_rollout "$service_name" "$desired_count"
     mapfile -t original_ids < <(service_container_ids "$service_name")
 
     if [ "${#original_ids[@]}" -eq 0 ]; then
