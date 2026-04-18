@@ -59,6 +59,17 @@ container_readiness() {
     docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}{{else}}stopped{{end}}' "$1" 2>/dev/null || echo "missing"
 }
 
+print_container_debug_info() {
+    local container_id="$1"
+    local service_name="$2"
+
+    echo -e "${YELLOW}  Debug info for ${service_name} container ${container_id}:${NC}"
+    docker inspect --format 'state={{.State.Status}} exit_code={{.State.ExitCode}} started_at={{.State.StartedAt}} finished_at={{.State.FinishedAt}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} error={{json .State.Error}}' "$container_id" 2>/dev/null || true
+    docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{println .Start .ExitCode .Output}}{{end}}{{end}}' "$container_id" 2>/dev/null || true
+    docker logs --tail=100 "$container_id" 2>&1 || true
+    $COMPOSE_CMD ps "$service_name" || true
+}
+
 wait_for_container_ready() {
     local container_id="$1"
     local service_name="$2"
@@ -79,6 +90,7 @@ wait_for_container_ready() {
     done
 
     echo -e "${RED}  ${service_name} container ${container_id} did not become ready.${NC}"
+    print_container_debug_info "$container_id" "$service_name"
     return 1
 }
 
