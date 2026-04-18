@@ -273,10 +273,14 @@ services:
     volumes:
       - jikan_mongodb_data:/data/db
     healthcheck:
-      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
+      test:
+        [
+          "CMD-SHELL",
+          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/27017; exec 3<&-; exec 3>&-'",
+        ]
       interval: 10s
-      timeout: 15s
-      retries: 10
+      timeout: 5s
+      retries: 12
       start_period: 40s
     deploy:
       resources:
