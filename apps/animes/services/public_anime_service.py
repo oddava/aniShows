@@ -114,6 +114,10 @@ class CachedPayloadResult:
 class AnimeQueryService:
     BROWSE_ROW_PAGE_SIZE = 12
     CURATED_SHELF_MIN_MEMBER_COUNT = 200_000
+    FILTERED_POPULAR_MIN_MEMBER_COUNT = 25_000
+    FILTERED_POPULAR_MAX_RANK = 5_000
+    FILTERED_POPULAR_MIN_RATING = 7.0
+    FILTERED_POPULAR_RATED_MIN_MEMBER_COUNT = 5_000
     TEMPORAL_POPULAR_MIN_MEMBER_COUNT = 5_000
     TEMPORAL_POPULAR_MAX_RANK = 15_000
     SCHEDULE_DAY_NAMES = (
@@ -858,6 +862,29 @@ class AnimeQueryService:
                     ordering = ["-member_sort", "-id"]
                 else:
                     queryset = queryset.annotate(
+                        filtered_popular_quality_bucket=Case(
+                            When(
+                                Q(member_count__gte=cls.FILTERED_POPULAR_MIN_MEMBER_COUNT)
+                                | Q(
+                                    popularity_rank__isnull=False,
+                                    popularity_rank__lte=cls.FILTERED_POPULAR_MAX_RANK,
+                                )
+                                | Q(
+                                    site_rank__isnull=False,
+                                    site_rank__lte=cls.FILTERED_POPULAR_MAX_RANK,
+                                )
+                                | (
+                                    Q(rating__isnull=False)
+                                    & Q(rating__gte=cls.FILTERED_POPULAR_MIN_RATING)
+                                    & Q(
+                                        member_count__gte=cls.FILTERED_POPULAR_RATED_MIN_MEMBER_COUNT
+                                    )
+                                ),
+                                then=Value(0),
+                            ),
+                            default=Value(1),
+                            output_field=IntegerField(),
+                        ),
                         popularity_missing=Case(
                             When(popularity_rank__isnull=True, then=Value(1)),
                             default=Value(0),
@@ -875,6 +902,7 @@ class AnimeQueryService:
                         ),
                     )
                     ordering = [
+                        "filtered_popular_quality_bucket",
                         "popularity_missing",
                         "popularity_rank",
                         "site_missing",

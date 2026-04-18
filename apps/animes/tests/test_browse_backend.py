@@ -258,6 +258,49 @@ def test_future_season_popular_browse_lists_all_titles_but_keeps_high_signal_ord
 
 
 @pytest.mark.django_db
+def test_filtered_popular_browse_demotes_low_signal_matches(api_client):
+    action = create_genre(name="Action", slug="action")
+
+    standout = create_anime(
+        title="Standout Action Hit",
+        slug="standout-action-hit",
+        member_count=500_000,
+        popularity_rank=120,
+        site_rank=90,
+        rating=9.1,
+    )
+    crowd_pick = create_anime(
+        title="Crowd Favorite Action",
+        slug="crowd-favorite-action",
+        member_count=250_000,
+        popularity_rank=None,
+        site_rank=340,
+        rating=8.4,
+    )
+    low_signal = create_anime(
+        title="Action Commercial Pack",
+        slug="action-commercial-pack",
+        member_count=120,
+        popularity_rank=19_400,
+        site_rank=None,
+        rating=6.1,
+        episode_count=4,
+        duration_minutes=1,
+    )
+
+    standout.genres.add(action)
+    crowd_pick.genres.add(action)
+    low_signal.genres.add(action)
+
+    response = api_client.get(reverse("anime-list"), {"genre": "action", "sort": "popular"})
+
+    assert response.status_code == 200
+    titles = [anime["title"] for anime in response.data["results"]]
+    assert titles.index(standout.title) < titles.index(low_signal.title)
+    assert titles.index(crowd_pick.title) < titles.index(low_signal.title)
+
+
+@pytest.mark.django_db
 def test_future_season_browse_rows_still_exclude_low_signal_titles(api_client, monkeypatch):
     class FrozenDate(date):
         @classmethod
