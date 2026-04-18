@@ -27,6 +27,7 @@ SCALE_CELERY="${SCALE_CELERY:-1}"
 SCALE_CELERY_PRIORITY="${SCALE_CELERY_PRIORITY:-1}"
 SCALE_CELERY_IMAGES="${SCALE_CELERY_IMAGES:-1}"
 SCALE_CELERY_ANALYTICS="${SCALE_CELERY_ANALYTICS:-1}"
+COMPOSE_PROJECT_LABEL="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
 DOMAIN_NAME_RAW="${DOMAIN_NAME:-localhost}"
 FRONTEND_HOST="${DOMAIN_NAME_RAW#http://}"
 FRONTEND_HOST="${FRONTEND_HOST#https://}"
@@ -57,6 +58,44 @@ array_contains() {
 
 container_readiness() {
     docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}{{else}}stopped{{end}}' "$1" 2>/dev/null || echo "missing"
+}
+
+service_container_ids() {
+    local service_name="$1"
+    local scope="${2:-running}"
+
+    if [ "$scope" = "all" ]; then
+        docker ps -aq \
+            --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_LABEL}" \
+            --filter "label=com.docker.compose.service=${service_name}"
+        return
+    fi
+
+    docker ps -q \
+        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_LABEL}" \
+        --filter "label=com.docker.compose.service=${service_name}"
+}
+
+cleanup_stale_service_containers() {
+    local service_name="$1"
+    local container_id
+    local status
+    local removed_any=false
+
+    while IFS= read -r container_id; do
+        [ -z "$container_id" ] && continue
+        status="$(container_readiness "$container_id")"
+        case "$status" in
+            stopped|missing|dead|exited)
+                if [ "$removed_any" = false ]; then
+                    echo -e "${BLUE}  Removing stale ${service_name} containers left by earlier deploy attempts...${NC}"
+                    removed_any=true
+                fi
+                echo -e "${YELLOW}    Removing ${container_id:0:12} (${status})${NC}"
+                docker rm -f "$container_id" >/dev/null 2>&1 || true
+                ;;
+        esac
+    done < <(service_container_ids "$service_name" all)
 }
 
 print_container_debug_info() {
@@ -109,7 +148,7 @@ wait_for_service_replicas_ready() {
     local status_summary
 
     for attempt in $(seq 1 "$timeout_seconds"); do
-        mapfile -t ids < <($COMPOSE_CMD ps -q "$service_name")
+        mapfile -t ids < <(service_container_ids "$service_name")
         if [ "${#ids[@]}" -ne "$expected_count" ]; then
             if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
                 echo -e "${BLUE}  Waiting for ${service_name} replica count: ${#ids[@]}/${expected_count}${NC}"
@@ -191,7 +230,8 @@ rolling_refresh_service() {
     local candidate_id=""
     local surge_target
 
-    mapfile -t original_ids < <($COMPOSE_CMD ps -q "$service_name")
+    cleanup_stale_service_containers "$service_name"
+    mapfile -t original_ids < <(service_container_ids "$service_name")
 
     if [ "${#original_ids[@]}" -eq 0 ]; then
         echo -e "${BLUE}  Bootstrapping ${service_name} to ${desired_count} replicas...${NC}"
@@ -205,7 +245,7 @@ rolling_refresh_service() {
             continue
         fi
 
-        mapfile -t pre_ids < <($COMPOSE_CMD ps -q "$service_name")
+        mapfile -t pre_ids < <(service_container_ids "$service_name")
         surge_target=$((${#pre_ids[@]} + 1))
         candidate_id=""
 
@@ -213,7 +253,7 @@ rolling_refresh_service() {
         $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${surge_target}" "$service_name"
 
         for _ in $(seq 1 "$timeout_seconds"); do
-            mapfile -t current_ids < <($COMPOSE_CMD ps -q "$service_name")
+            mapfile -t current_ids < <(service_container_ids "$service_name" all)
             for container_id in "${current_ids[@]}"; do
                 if ! array_contains "$container_id" "${pre_ids[@]}"; then
                     candidate_id="$container_id"
@@ -233,13 +273,18 @@ rolling_refresh_service() {
             return 1
         fi
 
-        wait_for_container_ready "$candidate_id" "$service_name" "$timeout_seconds"
+        if ! wait_for_container_ready "$candidate_id" "$service_name" "$timeout_seconds"; then
+            echo -e "${YELLOW}  Removing failed replacement ${service_name} container ${candidate_id:0:12}.${NC}"
+            docker rm -f "$candidate_id" >/dev/null 2>&1 || true
+            return 1
+        fi
 
         echo -e "${BLUE}  Removing old ${service_name} container ${old_id:0:12}...${NC}"
         docker rm -f "$old_id" >/dev/null
         wait_for_service_replicas_ready "$service_name" "${#pre_ids[@]}" "$timeout_seconds"
     done
 
+    cleanup_stale_service_containers "$service_name"
     $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${desired_count}" "$service_name"
     wait_for_service_replicas_ready "$service_name" "$desired_count" "$timeout_seconds"
 }
