@@ -31,7 +31,7 @@ def _obj_exists(model, pk):
 def update_thread_on_post_create(sender, instance, created, **kwargs):
     """Update thread reply count and invalidate caches when a post is created"""
     if created:
-        instance.thread.update_reply_count()
+        instance.thread.adjust_reply_count(1)
         # Invalidate caches AFTER transaction commits to prevent race conditions
         invalidate_after_commit(
             lambda: invalidate_thread_caches(instance.thread.id, instance.thread.category.slug)
@@ -45,7 +45,7 @@ def update_thread_on_post_delete(sender, instance, **kwargs):
     if not _obj_exists(Thread, instance.thread_id):
         return
 
-    instance.thread.update_reply_count()
+    instance.thread.adjust_reply_count(-1)
     # Invalidate caches AFTER transaction commits
     invalidate_after_commit(
         lambda: invalidate_thread_caches(instance.thread.id, instance.thread.category.slug)
@@ -56,7 +56,7 @@ def update_thread_on_post_delete(sender, instance, **kwargs):
 def update_thread_like_count_on_create(sender, instance, created, **kwargs):
     """Update thread like count when a like is created"""
     if created:
-        instance.thread.update_like_count()
+        instance.thread.adjust_like_count(1)
         # Invalidate thread detail cache AFTER transaction commits (likes changed)
         invalidate_after_commit(lambda: invalidate_thread_detail_cache(instance.thread.id))
 
@@ -67,7 +67,7 @@ def update_thread_like_count_on_delete(sender, instance, **kwargs):
     if not _obj_exists(Thread, instance.thread_id):
         return
 
-    instance.thread.update_like_count()
+    instance.thread.adjust_like_count(-1)
     # Invalidate thread detail cache AFTER transaction commits (likes changed)
     invalidate_after_commit(lambda: invalidate_thread_detail_cache(instance.thread.id))
 
@@ -75,7 +75,7 @@ def update_thread_like_count_on_delete(sender, instance, **kwargs):
 def update_post_like_count_on_create(sender, instance, created, **kwargs):
     """Update post like count when a like is created"""
     if created:
-        instance.post.update_like_count()
+        instance.post.adjust_like_count(1)
         # Invalidate post list cache AFTER transaction commits
         invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
 
@@ -86,7 +86,7 @@ def update_post_like_count_on_delete(sender, instance, **kwargs):
     if not _obj_exists(Post, instance.post_id):
         return
 
-    instance.post.update_like_count()
+    instance.post.adjust_like_count(-1)
     # Invalidate post list cache AFTER transaction commits
     invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
 
@@ -106,7 +106,7 @@ def invalidate_cache_on_category_delete(sender, instance, **kwargs):
 def update_category_on_thread_create(sender, instance, created, **kwargs):
     """Update category thread count and invalidate caches when a thread is created"""
     if created:
-        instance.category.update_thread_count()
+        instance.category.adjust_thread_count(1)
         # Invalidate caches AFTER transaction commits
         invalidate_after_commit(invalidate_category_list_cache)
         invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))
@@ -119,7 +119,7 @@ def update_category_on_thread_delete(sender, instance, **kwargs):
     if not _obj_exists(Category, instance.category_id):
         return
 
-    instance.category.update_thread_count()
+    instance.category.adjust_thread_count(-1)
     # Invalidate caches AFTER transaction commits
     invalidate_after_commit(invalidate_category_list_cache)
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))

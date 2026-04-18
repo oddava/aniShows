@@ -146,9 +146,9 @@ def _get_stats_snapshot(user):
         stats_data["followers_count"] = 0
         stats_data["following_count"] = 0
 
-        from ..tasks import update_user_stats
+        from ..tasks import schedule_user_stats_refresh
 
-        update_user_stats.delay(user.id)
+        schedule_user_stats_refresh(user_id=user.id)
         return stats_data
 
 

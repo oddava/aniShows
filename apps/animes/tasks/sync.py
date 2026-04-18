@@ -58,6 +58,8 @@ class SyncAnimeCatalogTask(BaseTask):
     service_class = CatalogSyncService
     service_kwargs = {}
     MIN_TRENDING_RESULTS = 6
+    enable_locking = True
+    lock_timeout = 60 * 60 * 2
 
     def execute(self, sync_type: str = "trending", limit: int = 50, **kwargs):
         """Run sync based on sync_type."""

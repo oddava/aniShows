@@ -126,6 +126,14 @@ class CoreTaskService:
         return result
 
     @staticmethod
+    def collect_queue_metrics() -> dict:
+        from .celery_monitoring import collect_queue_metrics
+
+        result = collect_queue_metrics()
+        logger.info("Collected Celery queue metrics", extra={"queues": result})
+        return {"queues": result, "queue_count": len(result)}
+
+    @staticmethod
     def fetch_link_metadata(url: str, user_id: int, link_index: int | None = None) -> dict:
         cache_key = f"link_metadata:{url}"
         from django.core.cache import cache

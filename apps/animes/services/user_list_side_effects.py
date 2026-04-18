@@ -26,14 +26,13 @@ def update_user_stats_and_cache(user):
         return
 
     try:
-        invalidate_user_caches(user.id, user.username)
+        invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
 
-        from ...users.tasks import update_user_stats
+        from ...users.tasks import schedule_user_stats_refresh
 
-        update_user_stats.apply_async(
-            kwargs={"user_id": user.id},
+        schedule_user_stats_refresh(
+            user_id=user.id,
             countdown=2,
-            queue="default",
         )
         logger.debug("Invalidated cache and queued stats update for user %s", user.username)
     except Exception as exc:

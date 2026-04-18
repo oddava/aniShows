@@ -85,9 +85,9 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                         "falling through to live query",
                         username,
                     )
-                    from ..tasks import update_user_stats
+                    from ..tasks import schedule_user_stats_refresh
 
-                    update_user_stats.delay(user.id)
+                    schedule_user_stats_refresh(user_id=user.id)
                     raise ValueError("Stale UserStats detected")
 
             data = {
@@ -147,9 +147,9 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     data = _normalize_public_profile_payload(serializer.data)
     cache.set(cache_key, data, timeout=300)
 
-    from ..tasks import update_user_stats
+    from ..tasks import schedule_user_stats_refresh
 
-    update_user_stats.delay(user.id)
+    schedule_user_stats_refresh(user_id=user.id)
 
     return PublicProfileResult(data=data, cache_hit=False, source="fallback")
 

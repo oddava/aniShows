@@ -3,6 +3,7 @@
 Tests cover:
 - PrimaryReplicaRouter (read/write routing)
 - Environment parsing helpers (_env_bool, _env_int, _env_float, _parse_csv, _parse_sentinel_nodes)
+- Gunicorn container-aware worker sizing
 - CDN URL construction
 - Celery queue routing consistency
 - PgBouncer compatibility settings
@@ -105,6 +106,31 @@ class TestEnvParsers(TestCase):
 
         assert PUBLIC_API_CACHE_LOCK_TTL_SECONDS >= 120
         assert PUBLIC_API_CACHE_WAIT_TIMEOUT_MS >= 30000
+
+
+class TestGunicornSizing(TestCase):
+    """Test container-aware Gunicorn worker sizing helpers."""
+
+    def test_cgroup_v2_cpu_limit_is_respected(self):
+        from root import gunicorn_tuning
+
+        with patch.object(
+            gunicorn_tuning,
+            "_read_text",
+            side_effect=lambda path: "150000 100000" if path == "/sys/fs/cgroup/cpu.max" else None,
+        ):
+            assert gunicorn_tuning.detect_available_cpu_count() == 2
+            assert gunicorn_tuning.default_gunicorn_workers() == 2
+
+    def test_falls_back_to_host_cpu_count_without_cgroup_limits(self):
+        from root import gunicorn_tuning
+
+        with patch.object(gunicorn_tuning, "_read_text", return_value=None), patch(
+            "root.gunicorn_tuning.os.cpu_count",
+            return_value=12,
+        ):
+            assert gunicorn_tuning.detect_available_cpu_count() == 12
+            assert gunicorn_tuning.default_gunicorn_workers() == 4
 
 class TestPrimaryReplicaRouter(TestCase):
     """Test the database router for primary/replica deployments."""

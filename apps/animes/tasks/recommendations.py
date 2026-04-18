@@ -40,6 +40,9 @@ class RecommendationTask(BaseTask):
         generate_recommendations.delay(user_id=123, limit=20)
     """
 
+    enable_locking = True
+    lock_timeout = 60 * 60 * 2
+
     def execute(
         self,
         user_id: int | None = None,

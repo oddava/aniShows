@@ -3,6 +3,7 @@
 from .cleanup_tasks import (
     cleanup_celery_backend,
     cleanup_old_task_results,
+    collect_queue_metrics,
     flush_forum_view_counts,
     health_check_workers,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "cleanup_celery_backend",
     "cleanup_old_notifications_task",
     "cleanup_old_task_results",
+    "collect_queue_metrics",
     "fetch_link_metadata_async",
     "fetch_multiple_link_metadata",
     "flush_forum_view_counts",

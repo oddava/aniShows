@@ -12,7 +12,9 @@ from django.db.models import (
     PositiveSmallIntegerField,
     SlugField,
     TextField,
+    Value,
 )
+from django.db.models.functions import Greatest
 
 from ..shared.models import CreatedAtMixin, TimestampMixin
 
@@ -34,9 +36,10 @@ class Category(Model):
     def __str__(self):
         return self.name
 
-    def update_thread_count(self):
-        self.thread_count = self.threads.count()
-        self.save(update_fields=["thread_count"])
+    def adjust_thread_count(self, delta: int):
+        self.__class__.objects.filter(pk=self.pk).update(
+            thread_count=Greatest(F("thread_count") + delta, Value(0))
+        )
 
 class Tag(Model):
     name = CharField(max_length=50)
@@ -74,19 +77,15 @@ class Thread(TimestampMixin, Model):
     def __str__(self):
         return self.title
 
-    def update_reply_count(self):
-        self.reply_count = self.posts.count()
-        self.save(update_fields=["reply_count"])
+    def adjust_reply_count(self, delta: int):
+        self.__class__.objects.filter(pk=self.pk).update(
+            reply_count=Greatest(F("reply_count") + delta, Value(0))
+        )
 
-    def update_like_count(self):
-        from django.db import transaction
-
-        def _update():
-            self.refresh_from_db()
-            self.like_count = self.likes.count()
-            self.save(update_fields=["like_count"])
-
-        transaction.on_commit(_update)
+    def adjust_like_count(self, delta: int):
+        self.__class__.objects.filter(pk=self.pk).update(
+            like_count=Greatest(F("like_count") + delta, Value(0))
+        )
 
     def increment_view_count(self):
         queryset = self.__class__.objects.filter(pk=self.pk)
@@ -117,15 +116,10 @@ class Post(TimestampMixin, Model):
     def __str__(self):
         return f"Post by {self.author.username} in {self.thread.title}"
 
-    def update_like_count(self):
-        from django.db import transaction
-
-        def _update():
-            self.refresh_from_db()
-            self.like_count = self.likes.count()
-            self.save(update_fields=["like_count"])
-
-        transaction.on_commit(_update)
+    def adjust_like_count(self, delta: int):
+        self.__class__.objects.filter(pk=self.pk).update(
+            like_count=Greatest(F("like_count") + delta, Value(0))
+        )
 
 class ThreadLike(CreatedAtMixin, Model):
     thread = ForeignKey(Thread, CASCADE, related_name="likes")

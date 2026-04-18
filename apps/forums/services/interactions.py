@@ -116,7 +116,7 @@ def toggle_thread_like(thread, user) -> ForumActionResult:
             user=locked_user,
         ).first()
         if existing_like:
-            like_count = locked_thread.likes.count()
+            like_count = locked_thread.like_count
             return ForumActionResult(
                 payload={
                     "status": "already_liked",
@@ -127,7 +127,7 @@ def toggle_thread_like(thread, user) -> ForumActionResult:
             )
 
         ThreadLike.objects.create(thread=locked_thread, user=locked_user)
-        like_count = locked_thread.likes.count()
+        like_count = locked_thread.like_count + 1
 
         if locked_thread.author_id != locked_user.id:
             _run_after_commit(
@@ -170,7 +170,7 @@ def unlike_thread(thread, user) -> ForumActionResult:
             locked_user = User.objects.select_for_update().get(pk=user.pk)
             like = ThreadLike.objects.select_for_update().get(thread=locked_thread, user=locked_user)
             like.delete()
-            like_count = locked_thread.likes.count()
+            like_count = max(locked_thread.like_count - 1, 0)
 
             _run_after_commit(
                 lambda: _broadcast_to_thread(
@@ -196,7 +196,7 @@ def unlike_thread(thread, user) -> ForumActionResult:
         return ForumActionResult(
             payload={
                 "status": "not_liked",
-                "like_count": thread.likes.count(),
+                "like_count": thread.like_count,
                 "is_liked": False,
             },
             status_code=200,
@@ -345,7 +345,7 @@ def toggle_post_like(post, user) -> ForumActionResult:
             user=locked_user,
         ).first()
         if existing_like:
-            like_count = locked_post.likes.count()
+            like_count = locked_post.like_count
             return ForumActionResult(
                 payload={
                     "status": "already_liked",
@@ -356,7 +356,7 @@ def toggle_post_like(post, user) -> ForumActionResult:
             )
 
         PostLike.objects.create(post=locked_post, user=locked_user)
-        like_count = locked_post.likes.count()
+        like_count = locked_post.like_count + 1
 
         if locked_post.author_id != locked_user.id:
             _run_after_commit(
@@ -399,7 +399,7 @@ def unlike_post(post, user) -> ForumActionResult:
             locked_user = User.objects.select_for_update().get(pk=user.pk)
             like = PostLike.objects.select_for_update().get(post=locked_post, user=locked_user)
             like.delete()
-            like_count = locked_post.likes.count()
+            like_count = max(locked_post.like_count - 1, 0)
 
             _run_after_commit(
                 lambda: _broadcast_to_thread(
@@ -425,7 +425,7 @@ def unlike_post(post, user) -> ForumActionResult:
         return ForumActionResult(
             payload={
                 "status": "not_liked",
-                "like_count": post.likes.count(),
+                "like_count": post.like_count,
                 "is_liked": False,
             },
             status_code=200,

@@ -98,6 +98,16 @@ PUBLIC_API_CACHE_TTL_JITTER_SECONDS = _env_int("PUBLIC_API_CACHE_TTL_JITTER_SECO
 IMAGEKIT_GENERATE_DURING_REQUESTS = _env_bool("IMAGEKIT_GENERATE_DURING_REQUESTS", False)
 FORUM_VIEW_BUFFER_TTL_SECONDS = _env_int("FORUM_VIEW_BUFFER_TTL_SECONDS", 7200)
 FORUM_VIEW_FLUSH_BATCH_SIZE = _env_int("FORUM_VIEW_FLUSH_BATCH_SIZE", 500)
+USER_STATS_REFRESH_DEDUPE_TTL_SECONDS = max(
+    _env_int("USER_STATS_REFRESH_DEDUPE_TTL_SECONDS", 30),
+    5,
+)
+USER_STATS_BACKSTOP_STALE_MINUTES = max(_env_int("USER_STATS_BACKSTOP_STALE_MINUTES", 180), 15)
+USER_STATS_BACKSTOP_BATCH_SIZE = max(_env_int("USER_STATS_BACKSTOP_BATCH_SIZE", 250), 1)
+USER_STATS_BACKSTOP_LOCK_SECONDS = max(_env_int("USER_STATS_BACKSTOP_LOCK_SECONDS", 1800), 60)
+MEDIA_SELF_HEAL_BATCH_SIZE = max(_env_int("MEDIA_SELF_HEAL_BATCH_SIZE", 25), 1)
+MEDIA_SELF_HEAL_MAX_QUEUE_DEPTH = max(_env_int("MEDIA_SELF_HEAL_MAX_QUEUE_DEPTH", 100), 1)
+MEDIA_SELF_HEAL_LOCK_SECONDS = max(_env_int("MEDIA_SELF_HEAL_LOCK_SECONDS", 1800), 60)
 OFFLINE_RECONCILE_BATCH_SIZE = max(_env_int("OFFLINE_RECONCILE_BATCH_SIZE", 25), 1)
 OFFLINE_RECONCILE_CHUNK_SIZE = max(_env_int("OFFLINE_RECONCILE_CHUNK_SIZE", 100), 1)
 OFFLINE_RECONCILE_MAX_ROUNDS = max(_env_int("OFFLINE_RECONCILE_MAX_ROUNDS", 4), 1)
@@ -794,10 +804,10 @@ CELERY_BEAT_SCHEDULE = {
         },
         "options": {"queue": "low_priority"},
     },
-    # Profile Stats Tasks (Every 5 minutes for fast profile loading)
-    "update-user-stats-5min": {
+    # Profile/cache maintenance
+    "update-user-stats-hourly": {
         "task": "apps.users.tasks.update_all_user_stats",
-        "schedule": 300.0,  # Every 5 minutes (300 seconds)
+        "schedule": crontab(minute=10),  # Hourly backstop for missed incremental refreshes
         "options": {"queue": "low_priority"},
     },
     "warm-profile-cache-hourly": {
@@ -808,7 +818,12 @@ CELERY_BEAT_SCHEDULE = {
     "heal-missing-media-30min": {
         "task": "apps.animes.tasks.images.heal_missing_anime_media",
         "schedule": crontab(minute="*/30"),
-        "kwargs": {"batch_size": 100},
+        "kwargs": {"batch_size": MEDIA_SELF_HEAL_BATCH_SIZE},
+        "options": {"queue": "low_priority"},
+    },
+    "collect-queue-metrics-minute": {
+        "task": "apps.core.tasks.cleanup_tasks.collect_queue_metrics",
+        "schedule": crontab(minute="*"),
         "options": {"queue": "low_priority"},
     },
     # Weekly Tasks

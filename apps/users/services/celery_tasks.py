@@ -368,6 +368,52 @@ class UserTaskService:
         }
 
     @staticmethod
+    def queue_stale_user_stats_refreshes(
+        *,
+        stale_after_minutes: int,
+        batch_size: int,
+    ) -> dict:
+        from ..models import UserStats
+        from ..tasks import schedule_user_stats_refresh
+
+        now = timezone.now()
+        active_cutoff = now - timedelta(days=30)
+        refresh_cutoff = now - timedelta(minutes=max(int(stale_after_minutes), 1))
+        active_user_ids = list(
+            User.objects.filter(last_login__gte=active_cutoff).values_list("id", flat=True)
+        )
+        if not active_user_ids:
+            return {"status": "noop", "queued": 0, "candidates": 0, "task_ids": []}
+
+        fresh_user_ids = set(
+            UserStats.objects.filter(
+                user_id__in=active_user_ids,
+                last_updated__gte=refresh_cutoff,
+            ).values_list("user_id", flat=True)
+        )
+        stale_user_ids = [user_id for user_id in active_user_ids if user_id not in fresh_user_ids][
+            : max(int(batch_size), 1)
+        ]
+
+        task_ids: list[str] = []
+        for user_id in stale_user_ids:
+            task_result = schedule_user_stats_refresh(
+                user_id=user_id,
+                dedupe_ttl_seconds=max(int(stale_after_minutes) * 60, 60),
+            )
+            if task_result is not None:
+                task_ids.append(task_result.id)
+
+        return {
+            "status": "queued" if task_ids else "noop",
+            "queued": len(task_ids),
+            "candidates": len(stale_user_ids),
+            "task_ids": task_ids,
+            "stale_after_minutes": stale_after_minutes,
+            "batch_size": batch_size,
+        }
+
+    @staticmethod
     def warm_profile_cache(usernames: list[str] | None = None) -> dict:
         from django.core.cache import cache
         from django.db.models import Count

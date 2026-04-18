@@ -51,10 +51,11 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
     # Trigger async stats update for immediate data consistency
     if trigger_stats_update:
         try:
-            from ..tasks import update_user_stats
+            from ..tasks import schedule_user_stats_refresh
 
-            update_user_stats.delay(user_id)
-            logger.debug(f"Triggered stats update for user {user_id}")
+            task_result = schedule_user_stats_refresh(user_id=user_id)
+            if task_result is not None:
+                logger.debug(f"Triggered stats update for user {user_id}")
         except Exception as e:
             logger.warning(f"Failed to trigger stats update for user {user_id}: {e}")
 

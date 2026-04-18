@@ -5,16 +5,57 @@ from __future__ import annotations
 import logging
 
 import httpx
+from django.conf import settings
+from django.core.cache import cache
 from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
 from ..shared.celery import observed_shared_task
+from ..shared.task_lock import cache_lock
 from .services.celery_tasks import UserTaskService
 
 logger = logging.getLogger(__name__)
 
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
 RETRYABLE_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+def _stats_refresh_cache_key(user_id: int) -> str:
+    return f"user:stats:refresh:queued:{user_id}"
+
+
+def schedule_user_stats_refresh(
+    *,
+    user_id: int | None,
+    countdown: int = 0,
+    queue: str | None = None,
+    dedupe_ttl_seconds: int | None = None,
+    force: bool = False,
+):
+    """Queue a per-user stats refresh with short-term deduplication."""
+    if not user_id:
+        return None
+
+    resolved_countdown = max(int(countdown), 0)
+    resolved_ttl = max(
+        int(dedupe_ttl_seconds or settings.USER_STATS_REFRESH_DEDUPE_TTL_SECONDS),
+        resolved_countdown + 15,
+    )
+    cache_key = _stats_refresh_cache_key(user_id)
+    if not force and not cache.add(cache_key, True, timeout=resolved_ttl):
+        return None
+
+    try:
+        kwargs = {"user_id": user_id}
+        options = {"kwargs": kwargs}
+        if resolved_countdown:
+            options["countdown"] = resolved_countdown
+        if queue:
+            options["queue"] = queue
+        return update_user_stats.apply_async(**options)
+    except Exception:
+        cache.delete(cache_key)
+        raise
 
 
 def _iter_exception_chain(exc: Exception):
@@ -140,10 +181,21 @@ def update_user_stats(self, user_id: int | None = None):
 
 @observed_shared_task(retry_policy="standard")
 def update_all_user_stats(self):
-    queued_task = update_user_stats.apply_async()
-    result = {"status": "queued", "task_id": queued_task.id}
-    logger.info("Queued full user stats refresh", extra=result)
-    return result
+    with cache_lock(
+        "user:stats:backstop:lock",
+        timeout=settings.USER_STATS_BACKSTOP_LOCK_SECONDS,
+    ) as acquired:
+        if not acquired:
+            result = {"status": "skipped", "reason": "already_running"}
+            logger.info("Skipped overlapping user stats backstop", extra=result)
+            return result
+
+        result = UserTaskService.queue_stale_user_stats_refreshes(
+            stale_after_minutes=settings.USER_STATS_BACKSTOP_STALE_MINUTES,
+            batch_size=settings.USER_STATS_BACKSTOP_BATCH_SIZE,
+        )
+        logger.info("Queued stale user stats refreshes", extra=result)
+        return result
 
 
 @observed_shared_task(retry_policy="standard")

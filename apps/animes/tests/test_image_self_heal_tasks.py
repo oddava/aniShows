@@ -200,6 +200,22 @@ class ImageTaskSelfHealTests(TestCase):
         self.assertEqual(result["reason"], "storage_unavailable")
         mock_fetch_delay.assert_not_called()
 
+    @patch("apps.animes.tasks.images.fetch_anime_images.delay")
+    @patch("apps.animes.tasks.images.get_queue_size", return_value=150)
+    @patch("apps.animes.tasks.images._is_storage_available", return_value=True)
+    def test_periodic_self_heal_skips_when_image_queue_backlog_is_high(
+        self,
+        _mock_storage_available,
+        _mock_get_queue_size,
+        mock_fetch_delay,
+    ):
+        result = heal_missing_anime_media.run(batch_size=10)
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "image_queue_backlog")
+        self.assertEqual(result["image_queue_depth"], 150)
+        mock_fetch_delay.assert_not_called()
+
 
 class ImageTaskQueueNormalizationTests(TestCase):
     @patch("apps.animes.tasks.images.cache.add", return_value=True)

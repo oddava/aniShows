@@ -74,6 +74,8 @@ class TestForumsAPI:
         response = authenticated_client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
         assert Thread.objects.count() == 1  # assuming thread fixture isn't loaded for this test
+        category.refresh_from_db()
+        assert category.thread_count == 1
 
     def test_create_post_authenticated(self, authenticated_client, thread):
         url = reverse("forums:post-list")
@@ -81,6 +83,8 @@ class TestForumsAPI:
         response = authenticated_client.post(url, data)
         assert response.status_code == status.HTTP_201_CREATED
         assert Post.objects.filter(thread=thread).count() == 1
+        thread.refresh_from_db()
+        assert thread.reply_count == 1
 
     def test_list_posts(self, api_client, thread, user):
         Post.objects.create(thread=thread, author=user, content="A reply")
@@ -109,12 +113,16 @@ class TestForumsAPI:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["like_count"] == 1
         assert ThreadLike.objects.filter(thread=thread).count() == 1
+        thread.refresh_from_db()
+        assert thread.like_count == 1
         # Unlike (using separate unlike endpoint)
         unlike_url = reverse("forums:thread-unlike", args=[thread.id])
         response = authenticated_client.post(unlike_url)
         assert response.status_code == status.HTTP_200_OK
         assert response.data["like_count"] == 0
         assert ThreadLike.objects.filter(thread=thread).count() == 0
+        thread.refresh_from_db()
+        assert thread.like_count == 0
 
     def test_like_thread_is_idempotent(self, authenticated_client, thread):
         like_url = reverse("forums:thread-like", args=[thread.id])

@@ -14,7 +14,9 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
 
+from ...core.services.celery_monitoring import get_queue_size
 from ...shared.celery import observed_shared_task
+from ...shared.task_lock import cache_lock
 from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 try:
@@ -41,6 +43,7 @@ _FETCH_DEDUP_TTL_SECONDS = 300
 _STORAGE_RETRY_BASE_DELAY_SECONDS = 300
 _STORAGE_RETRY_MAX_DELAY_SECONDS = 3600
 _STORAGE_RETRY_ATTEMPT_LIMIT = 24
+_MEDIA_SELF_HEAL_LOCK_KEY = "anime:media-self-heal:lock"
 
 
 def _iter_exception_chain(exc: Exception):
@@ -361,49 +364,85 @@ def fetch_anime_images(
 
 
 @observed_shared_task(retry_policy="none", time_limit_preset="quick")
-def heal_missing_anime_media(self, batch_size: int = 100):
+def heal_missing_anime_media(self, batch_size: int | None = None):
     """Periodic self-heal task for anime missing local media files."""
     from ..models import Anime
 
-    if not _is_storage_available():
-        logger.warning("Skipping media self-heal run because storage is unavailable")
-        return {"status": "skipped", "reason": "storage_unavailable"}
+    with cache_lock(
+        _MEDIA_SELF_HEAL_LOCK_KEY,
+        timeout=settings.MEDIA_SELF_HEAL_LOCK_SECONDS,
+    ) as acquired:
+        if not acquired:
+            logger.info("Skipping media self-heal run because another run is active")
+            return {"status": "skipped", "reason": "already_running"}
 
-    missing_cover = (Q(cover_image__isnull=True) | Q(cover_image="")) & Q(
-        cover_image_external_url__isnull=False
-    ) & ~Q(cover_image_external_url="")
-    missing_banner = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
-        banner_image_external_url__isnull=False
-    ) & ~Q(banner_image_external_url="")
-    missing_banner_with_mal = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
-        mal_id__isnull=False
-    )
+        if not _is_storage_available():
+            logger.warning("Skipping media self-heal run because storage is unavailable")
+            return {"status": "skipped", "reason": "storage_unavailable"}
 
-    queryset = Anime.objects.filter(
-        missing_cover | missing_banner | missing_banner_with_mal
-    ).order_by("-member_count", "id")[:batch_size]
+        image_queue_depth = get_queue_size("images")
+        max_queue_depth = settings.MEDIA_SELF_HEAL_MAX_QUEUE_DEPTH
+        if image_queue_depth is not None and image_queue_depth >= max_queue_depth:
+            logger.info(
+                "Skipping media self-heal run because images queue backlog is already high",
+                extra={"image_queue_depth": image_queue_depth, "max_queue_depth": max_queue_depth},
+            )
+            return {
+                "status": "skipped",
+                "reason": "image_queue_backlog",
+                "image_queue_depth": image_queue_depth,
+            }
 
-    inspected = 0
-    queued = 0
-    for anime in queryset:
-        inspected += 1
-        cover_url = "" if anime.cover_image else (anime.cover_image_external_url or "")
-        banner_url = "" if anime.banner_image else (anime.banner_image_external_url or "")
+        resolved_batch_size = max(int(batch_size or settings.MEDIA_SELF_HEAL_BATCH_SIZE), 1)
+        missing_cover = (Q(cover_image__isnull=True) | Q(cover_image="")) & Q(
+            cover_image_external_url__isnull=False
+        ) & ~Q(cover_image_external_url="")
+        missing_banner = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
+            banner_image_external_url__isnull=False
+        ) & ~Q(banner_image_external_url="")
+        missing_banner_with_mal = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
+            mal_id__isnull=False
+        )
 
-        if not cover_url and not banner_url and not anime.mal_id:
-            continue
+        queryset = Anime.objects.filter(
+            missing_cover | missing_banner | missing_banner_with_mal
+        ).order_by("-member_count", "id")[:resolved_batch_size]
 
-        if _queue_image_fetch(
-            anime_id=anime.id,
-            cover_url=cover_url,
-            banner_url=banner_url,
-            mal_id=anime.mal_id,
-            force=False,
-        ):
-            queued += 1
+        inspected = 0
+        queued = 0
+        for anime in queryset:
+            inspected += 1
+            cover_url = "" if anime.cover_image else (anime.cover_image_external_url or "")
+            banner_url = "" if anime.banner_image else (anime.banner_image_external_url or "")
 
-    logger.info(f"Media self-heal run complete: inspected={inspected}, queued={queued}")
-    return {"status": "success", "inspected": inspected, "queued": queued}
+            if not cover_url and not banner_url and not anime.mal_id:
+                continue
+
+            if _queue_image_fetch(
+                anime_id=anime.id,
+                cover_url=cover_url,
+                banner_url=banner_url,
+                mal_id=anime.mal_id,
+                force=False,
+            ):
+                queued += 1
+
+        logger.info(
+            "Media self-heal run complete",
+            extra={
+                "inspected": inspected,
+                "queued": queued,
+                "batch_size": resolved_batch_size,
+                "image_queue_depth": image_queue_depth,
+            },
+        )
+        return {
+            "status": "success",
+            "inspected": inspected,
+            "queued": queued,
+            "batch_size": resolved_batch_size,
+            "image_queue_depth": image_queue_depth,
+        }
 
 
 @observed_shared_task(retry_policy="standard", time_limit_preset="quick")

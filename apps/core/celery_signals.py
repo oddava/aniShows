@@ -233,46 +233,8 @@ def on_task_revoked(request, terminated, signum, expired, **kwargs):
 
 
 @worker_ready.connect
-def start_queue_monitor(sender, **kwargs):
-    """Start periodic queue size monitoring when worker is ready."""
-    import threading
-
-    def monitor_queue_sizes():
-        import time
-
-        from django.core.cache import cache
-
-        from ..animes.services.metrics import update_queue_size
-
-        queue_names = [
-            "critical",
-            "high_priority",
-            "default",
-            "batch",
-            "images",
-            "notifications",
-            "analytics",
-            "low_priority",
-        ]
-
-        while True:
-            try:
-                for queue_name in queue_names:
-                    try:
-                        redis_client = cache.client.get_client()
-                        size = redis_client.llen(queue_name)
-                        update_queue_size(queue_name, size)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            time.sleep(15)  # Update every 15 seconds to keep queue gauges fresh.
-
-    thread = threading.Thread(target=monitor_queue_sizes, daemon=True)
-    thread.start()
-    logger.info("Started queue size monitor thread")
-
-    # Start the worker metrics server if the multiprocess dir is set.
+def start_worker_metrics_server(sender, **kwargs):
+    """Start the worker metrics server when a worker becomes ready."""
     path = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
     if path:
         try:

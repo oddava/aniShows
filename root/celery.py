@@ -105,6 +105,7 @@ app.conf.task_routes = {
     # Cleanup tasks
     "apps.core.tasks.notifications.cleanup_old_notifications_task": {"queue": "low_priority"},
     "apps.core.tasks.cleanup_tasks.cleanup_old_task_results": {"queue": "low_priority"},
+    "apps.core.tasks.cleanup_tasks.collect_queue_metrics": {"queue": "low_priority"},
     "apps.core.tasks.cleanup_tasks.flush_forum_view_counts": {"queue": "low_priority"},
     "apps.animes.tasks.themes.backfill_theme_youtube_urls": {"queue": "low_priority"},
     "apps.animes.tasks.images.heal_missing_anime_media": {"queue": "low_priority"},

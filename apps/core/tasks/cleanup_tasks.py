@@ -43,3 +43,12 @@ def flush_forum_view_counts(self, max_threads: int | None = None):
     except Exception as exc:
         logger.exception("Forum view flush failed", extra={"max_threads": max_threads})
         raise self.retry(exc=exc, countdown=30)
+
+
+@observed_shared_task(retry_policy="quick", time_limit_preset="quick")
+def collect_queue_metrics(self):
+    try:
+        return CoreTaskService.collect_queue_metrics()
+    except Exception as exc:
+        logger.exception("Queue metric collection failed")
+        raise self.retry(exc=exc, countdown=30)

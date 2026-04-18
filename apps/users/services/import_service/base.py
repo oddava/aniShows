@@ -245,9 +245,9 @@ class BaseImporter:
         """Trigger expensive derived-data refresh once per import job."""
         try:
             from ....animes.tasks.recommendations import generate_recommendations
-            from ...tasks import update_user_stats
+            from ...tasks import schedule_user_stats_refresh
 
-            update_user_stats.delay(user_id=self.user.id)
+            schedule_user_stats_refresh(user_id=self.user.id)
             generate_recommendations.apply_async(kwargs={"user_id": self.user.id}, countdown=30)
         except Exception as e:
             logger.warning(
