@@ -75,8 +75,9 @@ wait_for_container_ready() {
     local service_name="$2"
     local timeout_seconds="${3:-180}"
     local status
+    local attempt
 
-    for _ in $(seq 1 "$timeout_seconds"); do
+    for attempt in $(seq 1 "$timeout_seconds"); do
         status="$(container_readiness "$container_id")"
         case "$status" in
             healthy|running)
@@ -86,6 +87,9 @@ wait_for_container_ready() {
                 break
                 ;;
         esac
+        if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
+            echo -e "${BLUE}  Waiting for ${service_name} container ${container_id:0:12} to become ready... current status=${status}${NC}"
+        fi
         sleep 1
     done
 
@@ -101,17 +105,24 @@ wait_for_service_replicas_ready() {
     local ids=()
     local ready_count
     local status
+    local attempt
+    local status_summary
 
-    for _ in $(seq 1 "$timeout_seconds"); do
+    for attempt in $(seq 1 "$timeout_seconds"); do
         mapfile -t ids < <($COMPOSE_CMD ps -q "$service_name")
         if [ "${#ids[@]}" -ne "$expected_count" ]; then
+            if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
+                echo -e "${BLUE}  Waiting for ${service_name} replica count: ${#ids[@]}/${expected_count}${NC}"
+            fi
             sleep 2
             continue
         fi
 
         ready_count=0
+        status_summary=""
         for container_id in "${ids[@]}"; do
             status="$(container_readiness "$container_id")"
+            status_summary+="${container_id:0:12}:${status} "
             case "$status" in
                 healthy|running)
                     ready_count=$((ready_count + 1))
@@ -123,6 +134,9 @@ wait_for_service_replicas_ready() {
             return 0
         fi
 
+        if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
+            echo -e "${BLUE}  Waiting for ${service_name} readiness: ${ready_count}/${expected_count} ready :: ${status_summary}${NC}"
+        fi
         sleep 2
     done
 
