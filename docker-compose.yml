@@ -186,6 +186,8 @@ services:
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
     restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
     ports:
       - "3000:3000"
     env_file:
@@ -203,9 +205,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M
         reservations:
-          memory: 128M
+          memory: 256M
 
   # PgBouncer - PostgreSQL connection pooling
   pgbouncer:

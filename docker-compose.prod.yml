@@ -365,6 +365,8 @@ services:
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest
     restart: always
+    mem_limit: 512m
+    mem_reservation: 256m
     env_file:
       - .env
     environment:
@@ -380,9 +382,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M
         reservations:
-          memory: 128M
+          memory: 256M
 
   caddy:
     volumes:
