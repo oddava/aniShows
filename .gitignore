@@ -5,6 +5,9 @@
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+!scripts/
+scripts/*
+!scripts/run_with_migration_check.sh
 pyvenv.cfg
 .venv
 pip-selfcheck.json
