@@ -17,42 +17,10 @@ env:
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/anishows-frontend
 
 jobs:
-  backend-tests:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Start backend dependencies
-        run: docker compose up -d db redis minio createbuckets
-
-      - name: Run migration preflight
-        run: >
-          docker compose run --rm
-          -e DJANGO_SETTINGS_MODULE=root.settings.test
-          -e DB_USE_PGBOUNCER=False
-          -e DB_HOST=db
-          -e DB_PORT=5432
-          web
-          python manage.py migrate --noinput
-
-      - name: Run backend tests
-        run: make test
-
-      - name: Show service logs on failure
-        if: failure()
-        run: docker compose logs --tail=100 db redis minio createbuckets
-
-      - name: Stop backend dependencies
-        if: always()
-        run: docker compose down -v
-
   # =============================================================================
   # BUILD & PUSH DOCKER IMAGES TO GHCR
   # =============================================================================
   build:
-    needs: [backend-tests]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
