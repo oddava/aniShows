@@ -930,7 +930,7 @@ export default function Navbar() {
                         className="rounded-[1.45rem] border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)] backdrop-blur-2xl backdrop-saturate-150"
                         style={{ background: mobileIslandBackground }}
                     >
-                        <div className="grid grid-cols-5 gap-0.5">
+                        <div className="grid grid-cols-4 gap-0.5">
                             <Link
                                 to="/"
                                 className={mobileTabClasses(location.pathname === '/')}
