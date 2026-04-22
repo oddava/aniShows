@@ -216,7 +216,7 @@ function EmptyState({ filterType }) {
     );
 }
 
-function ActivityCard({ activity }) {
+function ActivityCard({ activity, compact = false }) {
     const config = ACTIVITY_CONFIG[activity.activity_type] || ACTIVITY_CONFIG.added;
     const anime = activity.anime;
     const metadata = activityMetadata(activity);
@@ -227,7 +227,7 @@ function ActivityCard({ activity }) {
             <div className="flex items-stretch gap-3">
                 <div className="flex min-w-0 flex-1 flex-col px-1 py-1">
                     <div className="mb-1">
-                        <p className="text-sm leading-tight text-gray-100">
+                        <p className={`${compact ? 'text-[13px] leading-relaxed text-gray-300' : 'text-sm leading-tight text-gray-100'}`}>
                             {renderActivityDescription(activity)}
                         </p>
                     </div>
@@ -416,12 +416,12 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                     <div className={`space-y-5 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
                         {visibleDateGroups.map((group) => (
                             <div key={group.key}>
-                                <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-500">
+                                <h4 className={`mb-2 uppercase tracking-[0.14em] ${compact ? 'text-[10px] font-semibold text-gray-600' : 'text-[11px] font-bold text-gray-500'}`}>
                                     {group.label}
                                 </h4>
                                 <div className="space-y-2">
                                     {group.activities.map((activity) => (
-                                        <ActivityCard key={activity.id} activity={activity} />
+                                        <ActivityCard key={activity.id} activity={activity} compact={compact} />
                                     ))}
                                 </div>
                             </div>

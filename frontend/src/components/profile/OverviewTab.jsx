@@ -256,12 +256,12 @@ function GenreOverviewSidebar({ username, isPrivate }) {
 
     return (
         <div className="mb-8">
-            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Top Genres</h3>
+            <h3 className="mb-4 ml-4 text-[11px] font-semibold text-gray-500 uppercase tracking-[0.16em]">Top Genres</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="mb-4 pb-4 border-b border-gray-800/30">
                     <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-lg font-bold text-white">{sortedGenres[0].name}</span>
-                        <span className="text-sm font-semibold text-accent">{sortedGenres[0].count}</span>
+                        <span className="text-sm font-semibold text-gray-300">{sortedGenres[0].name}</span>
+                        <span className="text-xs font-medium text-gray-400">{sortedGenres[0].count}</span>
                     </div>
                     <div className="h-2 bg-dark-400/50 rounded-full overflow-hidden">
                         <div
@@ -280,10 +280,10 @@ function GenreOverviewSidebar({ username, isPrivate }) {
                             key={genre.name}
                             className="flex items-center gap-3 rounded-lg p-1.5 -mx-1.5"
                         >
-                            <span className="text-xs text-gray-400 w-6 font-medium">{index + 2}</span>
+                            <span className="text-[11px] text-gray-500 w-6 font-medium">{index + 2}</span>
                             <div className="flex-1">
                                 <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs text-gray-300 font-medium">{genre.name}</span>
+                                    <span className="text-[11px] text-gray-400 font-medium">{genre.name}</span>
                                     <span className="text-[10px] text-gray-500">{genre.count}</span>
                                 </div>
                                 <div className="h-1 bg-dark-400/30 rounded-full overflow-hidden">
@@ -372,8 +372,8 @@ export default function OverviewTab({
                         <div className="mb-8">
                             <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">About</h3>
                             <div className="ui-surface-subtle p-6">
-                                <div className="text-sm text-gray-300 leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar pr-3">
-                                    <MarkdownRenderer content={displayUser.bio} />
+                                <div className="overview-about-scroll overflow-y-auto custom-scrollbar pr-3">
+                                    <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
                                 </div>
                             </div>
                         </div>
@@ -412,11 +412,11 @@ export default function OverviewTab({
 
                     <div className="mb-8">
                         <div className="mb-4 ml-4 flex items-center justify-between gap-4">
-                            <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Activity</h3>
+                            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Activity</h3>
                             <button
                                 type="button"
                                 onClick={() => onTabChange && onTabChange('activity')}
-                                className="rounded-lg bg-dark-100 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-dark-50 hover:text-white"
+                                className="rounded-lg bg-dark-100/80 px-3 py-1.5 text-[11px] font-medium text-gray-400 transition-colors hover:bg-dark-50 hover:text-gray-200"
                             >
                                 View Full Feed
                             </button>

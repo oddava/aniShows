@@ -65,3 +65,30 @@ nav a:focus-visible {
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--color-focus-ring) !important;
 }
+
+.overview-about-scroll {
+  max-height: 560px;
+}
+
+.overview-about-markdown {
+  color: #9ca7b8;
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.overview-about-markdown p,
+.overview-about-markdown li,
+.overview-about-markdown blockquote,
+.overview-about-markdown em,
+.overview-about-markdown del {
+  color: #9ca7b8 !important;
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.overview-about-markdown strong,
+.overview-about-markdown h1,
+.overview-about-markdown h2,
+.overview-about-markdown h3 {
+  color: #c4cfdd !important;
+}
