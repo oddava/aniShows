@@ -175,6 +175,14 @@
 }
 
 @layer utilities {
+  .anime-detail-page {
+    /* Match profile bio readability with slightly softer neutral text tones */
+    --color-gray-200: #b7c0cf;
+    --color-gray-300: #9ca7b8;
+    --color-gray-400: #8792a4;
+    --color-gray-500: #727e92;
+  }
+
   :where(div, section, article, aside, main, header, footer, a, li):not([class*="border-t"]):not([class*="border-b"]):not([class*="border-l"]):not([class*="border-r"])[class*="rounded"][class*="bg-dark"][class*="border-gray-7"],
   :where(div, section, article, aside, main, header, footer, a, li):not([class*="border-t"]):not([class*="border-b"]):not([class*="border-l"]):not([class*="border-r"])[class*="rounded"][class*="bg-dark"][class*="border-gray-8"],
   :where(div, section, article, aside, main, header, footer, a, li):not([class*="border-t"]):not([class*="border-b"]):not([class*="border-l"]):not([class*="border-r"])[class*="rounded"][class*="bg-dark"][class*="border-white/5"],
