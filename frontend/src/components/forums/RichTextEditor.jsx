@@ -97,12 +97,19 @@ const RichTextEditor = ({
     placeholder = "Write something...",
     className = "",
     hideDesktopPreview = false,
+    stackDesktopPreview = false,
+    showPreviewWhenEditing = false,
+    showPreviewWhenDirty = false,
+    isDirty = false,
     editorMinRows = 10,
     editorMaxRows,
+    editorTextClassName = "",
+    previewClassName = "",
 }) => {
     const [modalConfig, setModalConfig] = useState({ isOpen: false, type: 'link' });
     const [activeTab, setActiveTab] = useState('write');
     const [syncedPreviewMaxHeight, setSyncedPreviewMaxHeight] = useState(null);
+    const [isEditingFocused, setIsEditingFocused] = useState(false);
     const editorId = useId();
     const textareaRef = useRef(null);
 
@@ -221,7 +228,15 @@ const RichTextEditor = ({
     }, [editorMaxRows, value]);
 
     return (
-        <div className={`flex flex-col rounded-2xl overflow-hidden bg-dark-200 transition-all ${className}`}>
+        <div
+            className={`flex flex-col rounded-2xl overflow-hidden bg-dark-200 transition-all ${className}`}
+            onFocusCapture={() => setIsEditingFocused(true)}
+            onBlurCapture={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setIsEditingFocused(false);
+                }
+            }}
+        >
             <UrlModal
                 isOpen={modalConfig.isOpen}
                 type={modalConfig.type}
@@ -268,10 +283,10 @@ const RichTextEditor = ({
             </div>
 
             {/* Split Editor/Preview area */}
-            <div className={`flex flex-col min-h-[300px] ${hideDesktopPreview ? 'md:flex-col' : 'md:flex-row'}`}>
+            <div className={`flex flex-col min-h-[300px] ${hideDesktopPreview || stackDesktopPreview ? 'md:flex-col' : 'md:flex-row'}`}>
 
                 {/* Editor (Left): Visible if desktop OR (mobile AND write tab is active) */}
-                <div className={`w-full p-4 relative group md:block ${activeTab === 'write' ? 'block' : 'hidden'} ${hideDesktopPreview ? 'md:w-full' : 'md:w-1/2'}`}>
+                <div className={`w-full p-4 relative group md:block ${activeTab === 'write' ? 'block' : 'hidden'} ${hideDesktopPreview || stackDesktopPreview ? 'md:w-full' : 'md:w-1/2'}`}>
                     <TextareaAutosize
                         ref={textareaRef}
                         id={`richtext-editor-${editorId}`}
@@ -281,7 +296,7 @@ const RichTextEditor = ({
                         placeholder={placeholder}
                         minRows={editorMinRows}
                         maxRows={editorMaxRows}
-                        className="richtext-editor-textarea w-full bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none resize-none font-sans text-[15px] leading-relaxed"
+                        className={`richtext-editor-textarea w-full bg-transparent text-gray-200 placeholder-gray-500 focus:outline-none resize-none font-sans text-[15px] leading-relaxed ${editorTextClassName}`}
                     />
                     {!value && (
                         <div className="absolute inset-0 pointer-events-none p-4 text-gray-500 italic lg:hidden group-focus-within:hidden"></div>
@@ -290,11 +305,11 @@ const RichTextEditor = ({
 
                 {/* Preview (Right): Visible if desktop (unless hidden) OR (mobile AND preview tab is active) */}
                 <div
-                    className={`w-full p-4 bg-dark-100/20 overflow-y-auto border-l border-white/[0.03] ${activeTab === 'preview' ? 'block' : 'hidden'} ${hideDesktopPreview ? 'md:hidden' : 'md:w-1/2 md:block'}`}
+                    className={`w-full p-4 bg-dark-100/20 overflow-y-auto ${stackDesktopPreview ? 'border-t border-white/[0.03]' : 'border-l border-white/[0.03]'} ${activeTab === 'preview' ? 'block' : 'hidden'} ${hideDesktopPreview || (showPreviewWhenEditing && !isEditingFocused) || (showPreviewWhenDirty && !isDirty) ? 'md:hidden' : stackDesktopPreview ? 'md:w-full md:block' : 'md:w-1/2 md:block'}`}
                     style={{ maxHeight: syncedPreviewMaxHeight ? `${syncedPreviewMaxHeight}px` : '600px' }}
                 >
                     {value ? (
-                        <MarkdownRenderer content={value} className="text-[15px]" />
+                        <MarkdownRenderer content={value} className={`text-[15px] ${previewClassName}`} />
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-500 italic text-sm py-12">
                             Live preview...

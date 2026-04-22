@@ -371,8 +371,8 @@ export default function OverviewTab({
                     {displayUser?.bio ? (
                         <div className="mb-8">
                             <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">About</h3>
-                            <div className="ui-surface-subtle p-6">
-                                <div className="overview-about-scroll overflow-y-auto custom-scrollbar pr-3">
+                            <div className="ui-surface-subtle p-5">
+                                <div className="overview-about-scroll overflow-y-auto custom-scrollbar pr-1">
                                     <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
                                 </div>
                             </div>

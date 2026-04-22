@@ -92,3 +92,8 @@ nav a:focus-visible {
 .overview-about-markdown h3 {
   color: #c4cfdd !important;
 }
+
+.overview-about-markdown img {
+  margin-top: 10px !important;
+  margin-bottom: 10px !important;
+}

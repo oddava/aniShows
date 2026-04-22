@@ -259,6 +259,9 @@ export default function Settings() {
         return <Navigate to="/login" replace />;
     }
 
+    const savedBio = decodeHtmlEntities(user?.bio || '');
+    const isBioEdited = bio !== savedBio;
+
     const handleSaveProfile = async () => {
         setIsSavingProfile(true);
         setProfileError('');
@@ -814,8 +817,13 @@ export default function Settings() {
                                                 }
                                             }}
                                             placeholder="Tell us about yourself..."
-                                            editorMinRows={8}
-                                            editorMaxRows={14}
+                                            editorMinRows={12}
+                                            editorMaxRows={24}
+                                            stackDesktopPreview
+                                            showPreviewWhenDirty
+                                            isDirty={isBioEdited}
+                                            editorTextClassName="text-[13px] leading-[1.72] text-[#9ca7b8] placeholder:text-gray-500"
+                                            previewClassName="overview-about-markdown"
                                         />
                                     </div>
                                     {bio.length > 4900 && (
