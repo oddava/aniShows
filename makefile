@@ -3,6 +3,7 @@
 # ============================================================================
 
 EXEC = docker compose exec web python manage.py
+RUN_MANAGE = docker compose run --rm web python manage.py
 
 .PHONY: help up down restart build ps logs web-logs celery-logs celery-priority-logs \
         celery-images-logs celery-analytics-logs beat-logs \
@@ -72,17 +73,18 @@ db-logs:                        ## Follow database logs
 # ============================================================================
 
 mig:                            ## Run makemigrations + migrate
-	$(EXEC) makemigrations
-	$(EXEC) migrate
+	$(RUN_MANAGE) makemigrations
+	$(RUN_MANAGE) migrate
 
 migrate:                        ## Run migrate only (safe for runtime/startup)
-	$(EXEC) migrate
+	$(RUN_MANAGE) migrate
 
 shell:                          ## Open Django shell
-	$(EXEC) shell
+	docker compose run --rm web python manage.py shell
 
 superuser:                      ## Create superuser
-	$(EXEC) createsuperuser
+	$(RUN_MANAGE) migrate
+	docker compose run --rm web python manage.py createsuperuser
 
 test:                           ## Run tests
 	docker compose run --rm -e DJANGO_SETTINGS_MODULE=root.settings.test -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 web /opt/venv/bin/python -m pytest

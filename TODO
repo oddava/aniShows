@@ -93,3 +93,9 @@ class UserFavorite(Model):
 - fix reviews pagination, instead of manual use built-in +
 
 - don't write a serializer for reviews, use built-in
+
+
+------------
+
+- use django built-in cache system
+- 

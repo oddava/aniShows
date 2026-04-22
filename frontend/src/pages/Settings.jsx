@@ -92,6 +92,13 @@ function normalizeProfilePrimaryColor(value) {
     return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
 }
 
+function isGifFile(file) {
+    if (!file) return false;
+    const mimeType = String(file.type || '').toLowerCase();
+    if (mimeType === 'image/gif') return true;
+    return /\.gif$/i.test(String(file.name || ''));
+}
+
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
     const queryClient = useQueryClient();
@@ -698,12 +705,22 @@ export default function Settings() {
                                                 if (e.target.files && e.target.files.length > 0) {
                                                     const file = e.target.files[0];
                                                     const url = URL.createObjectURL(file);
-                                                    setCropModal({
-                                                        isOpen: true,
-                                                        imageSrc: url,
-                                                        sourceMimeType: file.type || '',
-                                                        type: 'avatar'
-                                                    });
+
+                                                    // Keep GIF avatars animated by uploading the original file directly.
+                                                    if (isGifFile(file)) {
+                                                        setAvatarFile(file);
+                                                        setAvatarPreviewUrl((currentUrl) => {
+                                                            if (currentUrl) URL.revokeObjectURL(currentUrl);
+                                                            return url;
+                                                        });
+                                                    } else {
+                                                        setCropModal({
+                                                            isOpen: true,
+                                                            imageSrc: url,
+                                                            sourceMimeType: file.type || '',
+                                                            type: 'avatar'
+                                                        });
+                                                    }
                                                 }
                                                 // Reset the input so selecting the same file triggers onChange
                                                 e.target.value = null;
