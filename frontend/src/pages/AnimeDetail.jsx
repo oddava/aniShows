@@ -246,10 +246,10 @@ const RelatedAnimeCard = memo(({ anime }) => {
                 />
             </div>
             <div className="flex-1 py-1 min-w-0">
-                <h3 className="text-gray-300 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
+                <h3 className="text-gray-200 font-bold text-sm line-clamp-2 transition-colors leading-tight mb-1 group-hover:text-white">
                     {anime.title}
                 </h3>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex items-center gap-2 text-xs text-gray-400">
                     <span>{anime.anime_type}</span>
                     <span>•</span>
                     <div className="flex items-center gap-1 bg-yellow-500/10 px-1.5 py-0.5 rounded text-yellow-500 font-bold">
@@ -294,10 +294,10 @@ const MobileRelatedCard = memo(({ anime }) => {
                     onLoad={() => setIsLoaded(true)}
                 />
             </div>
-            <h3 className="text-gray-300 font-bold text-xs line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
+            <h3 className="text-gray-200 font-bold text-sm line-clamp-2 leading-tight mb-1 group-hover:text-white transition-colors">
                 {anime.title}
             </h3>
-            <div className="flex items-center gap-1 text-[10px] text-gray-500">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
                 <span>{anime.anime_type}</span>
                 <span>•</span>
                 <div className="flex items-center gap-0.5 bg-yellow-500/10 px-1 py-0.5 rounded text-yellow-500 font-bold">
@@ -908,7 +908,7 @@ export default function AnimeDetail() {
                                 </div>
 
                                 <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2 min-w-0">
-                                    <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-300 tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
+                                    <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-[rgb(209,213,219)] tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
                                         {anime.title}
                                     </h1>
                                 </div>
@@ -916,7 +916,7 @@ export default function AnimeDetail() {
                                     <div className="text-left mb-8">
                                         <div className={`relative transition-all duration-500 ease-in-out ${!synopsisExpanded ? 'max-h-[140px] overflow-hidden' : 'max-h-[none]'}`}>
                                             {anime.synopsis.split('\n').filter(p => p.trim()).map((para, i) => (
-                                                <p key={i} className="text-gray-200 font-medium leading-relaxed text-sm lg:text-base max-w-4xl mb-4 last:mb-0">
+                                                <p key={i} className="text-gray-200 font-medium leading-7 lg:leading-8 text-sm lg:text-base max-w-4xl mb-4 last:mb-0">
                                                     {para}
                                                 </p>
                                             ))}
@@ -1165,7 +1165,7 @@ export default function AnimeDetail() {
                         <div className="space-y-6 lg:space-y-8 lg:pt-40">
                             {recommendations && recommendations.length > 0 && (
                                 <div>
-                                    <h2 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
                                         Recommendations
                                     </h2>
                                     <div className="hidden lg:grid grid-cols-1 gap-4">
