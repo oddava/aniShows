@@ -13,7 +13,8 @@ WORKDIR /app
 COPY shell/ /app/shell/
 COPY entrypoint.sh /app/
 
-RUN chmod +x /app/shell/*.sh /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh /app/shell/*.sh \
+    && chmod +x /app/shell/*.sh /app/entrypoint.sh
 
 # Create backups directory
 RUN mkdir -p /backups
