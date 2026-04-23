@@ -19,7 +19,7 @@ services:
     command: [ "bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py" ]
     environment:
       DEBUG: "${DEBUG:-False}"
-      DJANGO_ENV: "${DJANGO_ENV:-production}"
+      DJANGO_ENV: "${DJANGO_ENV:-development}"
       USE_S3: "${USE_S3:-True}"
       AWS_S3_ENDPOINT_URL: "${AWS_S3_ENDPOINT_URL:-http://minio:9000}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-minioadmin}"
@@ -63,7 +63,7 @@ services:
       - .env
     environment:
       DEBUG: "${DEBUG:-False}"
-      DJANGO_ENV: "${DJANGO_ENV:-production}"
+      DJANGO_ENV: "${DJANGO_ENV:-development}"
       USE_S3: "${USE_S3:-True}"
       AWS_S3_ENDPOINT_URL: "${AWS_S3_ENDPOINT_URL:-http://minio:9000}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-minioadmin}"

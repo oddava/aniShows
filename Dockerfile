@@ -55,6 +55,8 @@ RUN python -c "import PIL"
 
 COPY . .
 
+RUN find /app -type f -name "*.sh" -exec sed -i 's/\r$//' {} +
+
 RUN DJANGO_SETTINGS_MODULE=root.settings.production \
     DJANGO_SECRET_KEY=collectstatic-placeholder \
     CORS_ALLOWED_ORIGINS=https://placeholder.com \

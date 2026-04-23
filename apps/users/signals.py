@@ -38,7 +38,10 @@ def invalidate_profile_cache(username):
 def create_user_profile(sender, instance, created, **kwargs):
     """Automatically create UserProfile for every new user."""
     if created:
-        UserProfile.objects.get_or_create(user=instance)
+        profile, _created = UserProfile.objects.get_or_create(user=instance)
+        if instance.is_superuser and not profile.email_verified:
+            profile.email_verified = True
+            profile.save(update_fields=["email_verified"])
         logger.debug(f"Created UserProfile for user: {instance.username}")
 
 
