@@ -731,6 +731,17 @@ class AnimeQueryService:
 
         return current_season, year, next_season, next_year
 
+    @staticmethod
+    def _positive_rank_q(field_name: str, *, max_rank: int | None = None) -> Q:
+        condition = Q(**{f"{field_name}__isnull": False, f"{field_name}__gt": 0})
+        if max_rank is not None:
+            condition &= Q(**{f"{field_name}__lte": max_rank})
+        return condition
+
+    @staticmethod
+    def _missing_rank_q(field_name: str) -> Q:
+        return Q(**{f"{field_name}__isnull": True}) | Q(**{f"{field_name}__lte": 0})
+
     @classmethod
     def _apply_sort(
         cls,
@@ -763,7 +774,7 @@ class AnimeQueryService:
                     ),
                     member_sort=Coalesce(F("member_count"), Value(0)),
                     popularity_missing=Case(
-                        When(popularity_rank__isnull=True, then=Value(1)),
+                        When(cls._missing_rank_q("popularity_rank"), then=Value(1)),
                         default=Value(0),
                         output_field=IntegerField(),
                     ),
@@ -803,7 +814,7 @@ class AnimeQueryService:
             queryset = queryset.filter(status="Upcoming")
         elif sort_clean == "popular":
             if curate_for_shelves and not has_active_filters:
-                queryset = queryset.filter(popularity_rank__isnull=False)
+                queryset = queryset.filter(cls._positive_rank_q("popularity_rank"))
             elif has_temporal_filters:
                 if apply_temporal_popular_quality_filter and (
                     curate_for_shelves or not has_non_temporal_filters
@@ -813,13 +824,13 @@ class AnimeQueryService:
                     popular_quality_bucket=Case(
                         When(
                             Q(member_count__gte=cls.TEMPORAL_POPULAR_MIN_MEMBER_COUNT)
-                            | Q(
-                                popularity_rank__isnull=False,
-                                popularity_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK,
+                            | cls._positive_rank_q(
+                                "popularity_rank",
+                                max_rank=cls.TEMPORAL_POPULAR_MAX_RANK,
                             )
-                            | Q(
-                                site_rank__isnull=False,
-                                site_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK,
+                            | cls._positive_rank_q(
+                                "site_rank",
+                                max_rank=cls.TEMPORAL_POPULAR_MAX_RANK,
                             ),
                             then=Value(0),
                         ),
@@ -828,13 +839,13 @@ class AnimeQueryService:
                     ),
                     popularity_missing=Case(
                         # Future-season rows often arrive before a canonical popularity rank exists.
-                        When(popularity_rank__isnull=True, then=Value(1)),
+                        When(cls._missing_rank_q("popularity_rank"), then=Value(1)),
                         default=Value(0),
                         output_field=IntegerField(),
                     ),
                     site_missing=Case(
                         # Keep site_rank as a secondary signal before falling back to raw member counts.
-                        When(site_rank__isnull=True, then=Value(1)),
+                        When(cls._missing_rank_q("site_rank"), then=Value(1)),
                         default=Value(0),
                         output_field=IntegerField(),
                     ),
@@ -865,13 +876,13 @@ class AnimeQueryService:
                         filtered_popular_quality_bucket=Case(
                             When(
                                 Q(member_count__gte=cls.FILTERED_POPULAR_MIN_MEMBER_COUNT)
-                                | Q(
-                                    popularity_rank__isnull=False,
-                                    popularity_rank__lte=cls.FILTERED_POPULAR_MAX_RANK,
+                                | cls._positive_rank_q(
+                                    "popularity_rank",
+                                    max_rank=cls.FILTERED_POPULAR_MAX_RANK,
                                 )
-                                | Q(
-                                    site_rank__isnull=False,
-                                    site_rank__lte=cls.FILTERED_POPULAR_MAX_RANK,
+                                | cls._positive_rank_q(
+                                    "site_rank",
+                                    max_rank=cls.FILTERED_POPULAR_MAX_RANK,
                                 )
                                 | (
                                     Q(rating__isnull=False)
@@ -886,12 +897,12 @@ class AnimeQueryService:
                             output_field=IntegerField(),
                         ),
                         popularity_missing=Case(
-                            When(popularity_rank__isnull=True, then=Value(1)),
+                            When(cls._missing_rank_q("popularity_rank"), then=Value(1)),
                             default=Value(0),
                             output_field=IntegerField(),
                         ),
                         site_missing=Case(
-                            When(site_rank__isnull=True, then=Value(1)),
+                            When(cls._missing_rank_q("site_rank"), then=Value(1)),
                             default=Value(0),
                             output_field=IntegerField(),
                         ),
@@ -914,16 +925,16 @@ class AnimeQueryService:
                     ]
         elif sort_clean == "trending":
             if curate_for_shelves:
-                queryset = queryset.filter(trending_rank__isnull=False)
+                queryset = queryset.filter(cls._positive_rank_q("trending_rank"))
             else:
                 queryset = queryset.annotate(
                     trending_missing=Case(
-                        When(trending_rank__isnull=True, then=Value(1)),
+                        When(cls._missing_rank_q("trending_rank"), then=Value(1)),
                         default=Value(0),
                         output_field=IntegerField(),
                     ),
                     popularity_missing=Case(
-                        When(popularity_rank__isnull=True, then=Value(1)),
+                        When(cls._missing_rank_q("popularity_rank"), then=Value(1)),
                         default=Value(0),
                         output_field=IntegerField(),
                     ),
@@ -944,11 +955,14 @@ class AnimeQueryService:
     def _apply_temporal_popular_quality_filter(cls, queryset):
         return queryset.filter(
             Q(member_count__gte=cls.TEMPORAL_POPULAR_MIN_MEMBER_COUNT)
-            | Q(
-                popularity_rank__isnull=False,
-                popularity_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK,
+            | cls._positive_rank_q(
+                "popularity_rank",
+                max_rank=cls.TEMPORAL_POPULAR_MAX_RANK,
             )
-            | Q(site_rank__isnull=False, site_rank__lte=cls.TEMPORAL_POPULAR_MAX_RANK)
+            | cls._positive_rank_q(
+                "site_rank",
+                max_rank=cls.TEMPORAL_POPULAR_MAX_RANK,
+            )
         )
 
     @classmethod

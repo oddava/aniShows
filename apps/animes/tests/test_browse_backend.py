@@ -301,6 +301,40 @@ def test_filtered_popular_browse_demotes_low_signal_matches(api_client):
 
 
 @pytest.mark.django_db
+def test_filtered_popular_browse_treats_zero_ranks_as_missing(api_client):
+    fantasy = create_genre(name="Fantasy", slug="fantasy")
+
+    cornerstone = create_anime(
+        title="Cornerstone Fantasy Epic",
+        slug="cornerstone-fantasy-epic",
+        member_count=3_500_000,
+        popularity_rank=3,
+        site_rank=4,
+        rating=9.1,
+    )
+    zero_rank_special = create_anime(
+        title="Fantasy Promo Short",
+        slug="fantasy-promo-short",
+        anime_type=Anime.AnimeType.special,
+        member_count=0,
+        popularity_rank=0,
+        site_rank=0,
+        rating=None,
+        episode_count=1,
+        duration_minutes=1,
+    )
+
+    cornerstone.genres.add(fantasy)
+    zero_rank_special.genres.add(fantasy)
+
+    response = api_client.get(reverse("anime-list"), {"genre": "fantasy", "sort": "popular"})
+
+    assert response.status_code == 200
+    titles = [anime["title"] for anime in response.data["results"]]
+    assert titles.index(cornerstone.title) < titles.index(zero_rank_special.title)
+
+
+@pytest.mark.django_db
 def test_future_season_browse_rows_still_exclude_low_signal_titles(api_client, monkeypatch):
     class FrozenDate(date):
         @classmethod
