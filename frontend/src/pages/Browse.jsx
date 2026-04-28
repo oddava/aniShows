@@ -26,6 +26,7 @@ import SakuraAnimation from '../components/SakuraAnimation';
 import { useTheme } from '../context/ThemeContext';
 import TopFilterBar from '../components/browse/TopFilterBar';
 import BrowseRowMode from '../components/browse/BrowseRowMode';
+import { filterBrowseGenres } from '../utils/realGenres';
 
 const SORT_OPTIONS = [
   { value: 'popular', label: 'Most Popular' },
@@ -408,6 +409,7 @@ export default function Browse() {
     queryFn: () => genreApi.getAll().then(res => res.data),
     staleTime: 1000 * 60 * 30,
   });
+  const browseGenres = useMemo(() => filterBrowseGenres(genres), [genres]);
 
   // Fetch studios
   const { data: studios, isError: isStudiosError } = useQuery({
@@ -786,7 +788,7 @@ export default function Browse() {
 
   // Filter sidebar props
   const filterSidebarProps = {
-    genres,
+    genres: browseGenres,
     studios,
     isGenresError,
     isStudiosError,
@@ -823,7 +825,7 @@ export default function Browse() {
               
               <div className="max-w-7xl mx-auto w-full">
                 <TopFilterBar
-                  genres={genres}
+                  genres={browseGenres}
                   isGenresError={isGenresError}
                   typeOptions={TYPE_OPTIONS}
                   statusOptions={STATUS_OPTIONS}
