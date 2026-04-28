@@ -1218,7 +1218,7 @@ class AnimeQueryService:
 
 
 class AnimePublicPayloadService:
-    PUBLIC_CACHE_VERSION = "v10"
+    PUBLIC_CACHE_VERSION = "v11"
     COLLECTION_CACHE_NAMESPACE_KEY = f"anime_collection_ns:{PUBLIC_CACHE_VERSION}"
     INTERNAL_MEDIA_HOSTS = {"localhost", "127.0.0.1", "minio", "web"}
     MEDIA_URL_FIELDS = (

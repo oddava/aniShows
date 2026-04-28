@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from django.db.models import Q
+
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -13,6 +15,7 @@ from rest_framework.serializers import (
 
 from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
+from ..services.jikan import JikanService
 from .base import (
     GenreSerializer,
     StudioSerializer,
@@ -243,6 +246,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     avg_rating = DecimalField(max_digits=3, decimal_places=1, read_only=True)
     status_distribution = SerializerMethodField()
     external_links = SerializerMethodField()
+    relations = SerializerMethodField()
     cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
@@ -394,6 +398,68 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             return []
 
         return links
+
+    def get_relations(self, obj):
+        raw_relations = obj.relations or []
+        if not isinstance(raw_relations, list):
+            return []
+
+        linked_slugs = []
+        linked_ids = []
+        relations = []
+        for relation in raw_relations:
+            if not isinstance(relation, dict):
+                continue
+
+            relation_data = relation.copy()
+            relation_slug = relation_data.get("slug")
+            relation_id = relation_data.get("id")
+            if relation_slug:
+                linked_slugs.append(relation_slug)
+            if relation_id:
+                linked_ids.append(relation_id)
+            relations.append(relation_data)
+
+        linked_anime_by_slug = {}
+        linked_anime_by_id = {}
+        if linked_slugs or linked_ids:
+            linked_anime = Anime.objects.filter(
+                Q(slug__in=linked_slugs) | Q(anilist_id__in=linked_ids)
+            ).only(
+                "slug",
+                "anilist_id",
+                "cover_image",
+                "cover_image_external_url",
+            )
+            linked_anime_by_slug = {anime.slug: anime for anime in linked_anime if anime.slug}
+            linked_anime_by_id = {
+                anime.anilist_id: anime for anime in linked_anime if anime.anilist_id
+            }
+
+        for relation in relations:
+            linked = None
+            relation_slug = relation.get("slug")
+            relation_id = relation.get("id")
+            if relation_slug:
+                linked = linked_anime_by_slug.get(relation_slug)
+            if linked is None and relation_id:
+                linked = linked_anime_by_id.get(relation_id)
+            if linked is not None and not relation.get("slug"):
+                relation["slug"] = linked.slug
+
+            normalized_cover = JikanService.normalize_external_image_url(relation.get("cover"))
+            if normalized_cover:
+                relation["cover"] = normalized_cover
+            elif linked is not None:
+                relation["cover"] = self.get_image_url(
+                    linked,
+                    "cover_image",
+                    "cover_image_external_url",
+                )
+            else:
+                relation["cover"] = ""
+
+        return relations
 
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
     """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""
