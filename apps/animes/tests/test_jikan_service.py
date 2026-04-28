@@ -126,6 +126,11 @@ class JikanServiceNormalizationTests(TestCase):
         self.addCleanup(lambda: asyncio.run(service.close()))
         return service
 
+    def _build_db_service(self) -> JikanService:
+        service = JikanService(enable_caching=False, enable_rate_limiting=False)
+        self.addCleanup(lambda: asyncio.run(service.close()))
+        return service
+
     def test_get_anime_by_id_normalizes_full_detail_payload(self):
         async def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
@@ -341,6 +346,69 @@ class JikanServiceNormalizationTests(TestCase):
         assert payload is not None
         self.assertEqual(payload["id"], 111)
         self.assertEqual(payload["idMal"], 1)
+
+    def test_save_anime_to_db_reuses_provider_matched_row(self):
+        from ..models import Anime
+
+        existing = Anime.objects.create(
+            title="One Punch Man",
+            slug="one-punch-man",
+            synopsis="Existing synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            provider_ids={"myanimelist": 30276, "anilist": 21087},
+        )
+        service = self._build_db_service()
+        item = {
+            "id": Anime.JIKAN_ANILIST_ID_OFFSET + 30276,
+            "idMal": 30276,
+            "title": {
+                "english": "One Punch Man",
+                "romaji": "One Punch Man",
+                "native": "ワンパンマン",
+            },
+            "format": "TV",
+            "status": "FINISHED",
+            "episodes": 12,
+            "averageScore": 850,
+            "popularity": 100000,
+            "duration": 24,
+            "startDate": {"year": 2015, "month": 10, "day": 5},
+            "endDate": {"year": 2015, "month": 12, "day": 21},
+            "source": "MANGA",
+            "description": "Updated synopsis",
+            "coverImage": {"large": "https://cdn.myanimelist.net/images/anime/12/76049.jpg"},
+            "bannerImage": "",
+            "rankings": [],
+            "stats": {"statusDistribution": {}},
+            "externalLinks": [],
+            "tags": [],
+            "relations": {"edges": []},
+            "nextAiringEpisode": None,
+            "broadcast": {},
+            "season": "FALL",
+            "seasonYear": 2015,
+            "synonyms": [],
+            "producers": [],
+            "providerIds": {"myanimelist": 30276, "jikan": 30276},
+            "sourceUrls": ["https://myanimelist.net/anime/30276/One_Punch_Man"],
+            "characterPreview": {"edges": []},
+            "staffPreview": {"edges": []},
+            "openings": [],
+            "endings": [],
+        }
+
+        with (
+            patch.object(service, "_handle_relationships_async", new=AsyncMock()),
+            patch.object(service, "_download_and_save_images", new=AsyncMock()),
+        ):
+            saved = asyncio.run(service._save_anime_to_db_async(item))
+
+        existing.refresh_from_db()
+        self.assertEqual(saved.id, existing.id)
+        self.assertEqual(Anime.objects.count(), 1)
+        self.assertEqual(existing.mal_id, 30276)
+        self.assertEqual(existing.anilist_id, Anime.JIKAN_ANILIST_ID_OFFSET + 30276)
 
     def test_get_recent_updates_prefers_current_season_and_falls_back_to_top_airing(self):
         async def handler(request: httpx.Request) -> httpx.Response:

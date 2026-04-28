@@ -13,9 +13,6 @@ from django.db.models import (
     JSONField,
     ManyToManyField,
     Model,
-    OuterRef,
-    Exists,
-    Q,
     Subquery,
     TextField,
     TimeField,
@@ -231,30 +228,27 @@ class Anime(TimestampMixin, SlugMixin, Model):
     @classmethod
     def public_queryset(cls):
         """Anime visible on public user-facing surfaces."""
-        canonical_shadow_match = (
-            cls.objects.exclude(pk=OuterRef("pk"))
+        canonical_mal_ids = (
+            cls.objects.exclude(anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET)
             .annotate(
                 curated_mal_id=Coalesce(
                     Cast("mal_id", CharField()),
                     Cast("provider_ids__myanimelist", CharField()),
                 )
             )
-            .filter(
-                curated_mal_id=Cast(OuterRef("provider_ids__myanimelist"), CharField()),
-                anilist_id__lt=cls.JIKAN_ANILIST_ID_OFFSET,
-            )
-            .exclude(anilist_id__isnull=True)
-            .filter(Q(banner_image__isnull=False) | ~Q(banner_image_external_url=""))
+            .exclude(curated_mal_id__isnull=True)
+            .exclude(curated_mal_id="")
+            .values("curated_mal_id")
         )
 
         hidden_shadow_duplicates = (
-            cls.objects.filter(
-                anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET,
-                banner_image__isnull=True,
-                banner_image_external_url="",
+            cls.objects.annotate(
+                shadow_mal_id=Cast("provider_ids__myanimelist", CharField()),
             )
-            .annotate(has_curated_shadow_match=Exists(canonical_shadow_match))
-            .filter(has_curated_shadow_match=True)
+            .filter(
+                anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET,
+                shadow_mal_id__in=Subquery(canonical_mal_ids),
+            )
             .values("pk")
         )
 

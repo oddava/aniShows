@@ -183,6 +183,39 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(anime.provider_ids["anime_planet"], "shared-provider-slug")
         self.assertIn("Unrelated Alias", anime.synonyms)
 
+    def test_run_import_matches_existing_by_provider_ids_even_when_incoming_ids_exist(self):
+        anime = Anime.objects.create(
+            title="One Punch Man",
+            slug="one-punch-man",
+            synopsis="Existing synopsis",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            season_year=2015,
+            provider_ids={"myanimelist": 30276},
+        )
+        fixture_path = self._write_jsonl_fixture(
+            self._entry(
+                title="One Punch Man",
+                sources=[
+                    "https://anilist.co/anime/21087",
+                    "https://myanimelist.net/anime/30276/One_Punch_Man",
+                ],
+                animeSeason={"season": "FALL", "year": 2015},
+            )
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=fixture_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+
+        anime.refresh_from_db()
+        self.assertEqual(result["records_created"], 0)
+        self.assertEqual(result["records_updated"], 1)
+        self.assertEqual(Anime.objects.count(), 1)
+        self.assertEqual(anime.anilist_id, 21087)
+        self.assertEqual(anime.mal_id, 30276)
+
     def test_run_import_updates_existing_row_without_overwriting_anilist_owned_fields(self):
         anime = Anime.objects.create(
             title="Death Note",

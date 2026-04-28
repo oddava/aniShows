@@ -124,6 +124,30 @@ class ShadowDuplicateVisibilityTests(APITestCase):
         response = self.client.get(reverse("anime-detail", args=[shadow.slug]))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_public_anime_list_excludes_shadow_duplicate_even_without_banner_on_canonical(self):
+        canonical = self._anime(
+            "One Punch Man",
+            slug="one-punch-man",
+            anilist_id=21087,
+            mal_id=30276,
+            provider_ids={"anilist": 21087, "myanimelist": 30276},
+        )
+        shadow = self._anime(
+            "One Punch Man",
+            slug="one-punch-man-jikan",
+            anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 30276,
+            provider_ids={"jikan": 30276, "myanimelist": 30276},
+        )
+
+        response = self.client.get(reverse("anime-list"), {"q": "One Punch Man"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        titles = [row["title"] for row in response.data["results"]]
+        slugs = [row["slug"] for row in response.data["results"]]
+        self.assertIn(canonical.title, titles)
+        self.assertIn(canonical.slug, slugs)
+        self.assertNotIn(shadow.slug, slugs)
+
 
 class QuarantinedRecommendationTests(APITestCase):
     def _anime(self, title: str, **overrides) -> Anime:
