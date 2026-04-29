@@ -343,7 +343,7 @@ services:
           memory: 128M
 
   umami_db:
-    image: postgres:18-alpine
+    image: postgres:${UMAMI_POSTGRES_VERSION:-17}-alpine
     restart: always
     env_file:
       - .env

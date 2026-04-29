@@ -98,6 +98,35 @@ cleanup_stale_service_containers() {
     done < <(service_container_ids "$service_name" all)
 }
 
+detect_umami_postgres_version() {
+    if [ -n "${UMAMI_POSTGRES_VERSION:-}" ]; then
+        echo -e "${BLUE}  Using configured Umami PostgreSQL major: ${UMAMI_POSTGRES_VERSION}${NC}"
+        return
+    fi
+
+    local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
+    local detected_major=""
+
+    if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
+        echo -e "${YELLOW}  Umami database volume ${volume_name} does not exist yet; defaulting PostgreSQL major to 17.${NC}"
+        return
+    fi
+
+    detected_major="$(
+        docker run --rm -v "${volume_name}:/pgdata:ro" alpine:latest sh -c \
+            'if [ -s /pgdata/PG_VERSION ]; then cut -d. -f1 /pgdata/PG_VERSION; elif [ -s /pgdata/data/PG_VERSION ]; then cut -d. -f1 /pgdata/data/PG_VERSION; fi' \
+            2>/dev/null || true
+    )"
+    detected_major="$(printf '%s' "$detected_major" | tail -n 1 | tr -dc '0-9')"
+
+    if [ -n "$detected_major" ]; then
+        export UMAMI_POSTGRES_VERSION="$detected_major"
+        echo -e "${BLUE}  Detected existing Umami PostgreSQL major ${UMAMI_POSTGRES_VERSION} from ${volume_name}; using matching image.${NC}"
+    else
+        echo -e "${YELLOW}  Could not detect Umami PostgreSQL major from ${volume_name}; defaulting PostgreSQL major to 17.${NC}"
+    fi
+}
+
 trim_service_replicas() {
     local service_name="$1"
     local target_count="$2"
@@ -397,7 +426,8 @@ echo ""
 # PULL THIRD-PARTY SERVICE IMAGES
 # =========================================================================
 echo -e "${BLUE}Step 2a: Pulling third-party service images...${NC}"
-$COMPOSE_CMD pull umami jikan jikan_mongodb jikan_typesense || true
+detect_umami_postgres_version
+$COMPOSE_CMD pull umami_db umami jikan jikan_mongodb jikan_typesense || true
 echo -e "${GREEN}Third-party service images pulled!${NC}"
 echo ""
 
