@@ -351,6 +351,7 @@ services:
       POSTGRES_USER: "${UMAMI_DB_USER:-umami}"
       POSTGRES_PASSWORD: "${UMAMI_DB_PASSWORD:-umami}"
       POSTGRES_DB: "${UMAMI_DB_NAME:-umami}"
+      PGDATA: "/var/lib/postgresql/data/pgdata"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}" ]
       interval: 30s
