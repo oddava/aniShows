@@ -1,78 +1,98 @@
 <p align="center">
-  <h1 align="center">AniShows</h1>
-  <p align="center">
-    <strong>Your personal anime journey.</strong>
-  </p>
-  <p align="center">
-    Track watches, share reviews, and discover new favorites.
-  </p>
+  <img src="frontend/public/logo.png" alt="AniShows" width="96">
+</p>
+
+<h1 align="center">AniShows</h1>
+
+<p align="center">
+  <strong>An open-source anime tracking, discovery, and community platform.</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/Django-5.2-green?style=flat-square&logo=django" alt="Django">
-  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react" alt="React">
+  <img src="https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/Django-5.2-0C4B33?style=flat-square&logo=django" alt="Django 5.2">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react" alt="React 19">
+  <img src="https://img.shields.io/badge/License-MIT-black?style=flat-square" alt="MIT License">
 </p>
 
 ---
 
-## Welcome to AniShows!
+## Overview
 
-Keeping track of what you're watching shouldn't feel like a chore. AniShows is a modern, full-stack platform built to make tracking, reviewing, and discovering anime a beautiful and seamless experience. 
+AniShows is a full-stack platform for anime fans and communities. It brings together anime discovery, personal watch tracking, reviews, social profiles, forums, notifications, and admin tooling in one open-source codebase.
 
-### What you can do:
-- **Organize Your Watchlist:** Easily move shows between "Watching", "Completed", "Plan to Watch", and more.
-- **Express Yourself:** Write in-depth reviews, rate different aspects (like story, animation, and music), and hide spoilers.
-- **Build Your Profile:** Customize your space with avatars, banners, and a hand-picked favorites list.
-- **Discover New Shows:** Explore seasonal charts, trending anime, and smart recommendations. Auto-synced with AniList!
-- **Easy on the Eyes:** Built with a beautiful glassmorphism aesthetic and dark mode by default.
+Built with Django, React, PostgreSQL, Redis, and Celery, AniShows is designed to be both a polished user product and a maintainable platform for real operations.
 
-## Getting Started
+<!-- Add product screenshots or GIFs here. Suggested: home, anime detail, profile, forums, admin dashboard. -->
 
-Want to run AniShows on your own machine? We've bundled everything up with Docker so you can get started quickly.
+## Features
 
-**Prerequisites:** You'll need [Docker](https://docs.docker.com/get-docker/), [Docker Compose](https://docs.docker.com/compose/install/), and optionally `make`.
+- Browse seasonal, trending, top-rated, and scheduled anime.
+- Track watch status, episode progress, rewatches, favorites, and personal history.
+- Write spoiler-aware reviews with ratings, comments, reactions, and moderation tools.
+- Build social profiles with follows, badges, activity, avatars, banners, and privacy controls.
+- Discuss shows through forums with threads, nested posts, likes, and cached counters.
+- Sync and enrich catalog data through AniList, Jikan, offline catalog imports, and background jobs.
+- Manage the platform with admin dashboards, reports, logs, import jobs, backups, metrics, and load-test tooling.
+
+## Stack
+
+- **Backend**: Django, Django REST Framework, Channels, Celery.
+- **Frontend**: React, Vite, React Router, TanStack Query, Tailwind CSS.
+- **Data**: PostgreSQL, Redis, S3-compatible media storage.
+- **Ops**: Docker Compose, Caddy, Gunicorn, Daphne, Sentry, Prometheus, k6.
+
+## Architecture
+
+```text
+React + Vite
+    |
+Django REST Framework + Channels
+    |
+PostgreSQL + Redis + Celery workers
+```
+
+## Repository
+
+```text
+apps/                    Django apps and service layers
+frontend/                React application
+docs/                    Operations and scaling notes
+monitoring/load-tests/   k6 benchmark scenarios
+backups/                 Backup, restore, export, and import scripts
+root/                    Django project settings and runtime entrypoints
+```
+
+## Local Development
 
 ```bash
-# 1. Grab the code
-git clone https://github.com/oddava/aniShows.git
-cd aniShows
-
-# 2. Set up your environment variables
 cp .env.example .env
-
-# 3. Build and spin up the containers
 make build
 make up
-
-# 4. Set up the database
 make mig
 make superuser
 ```
 
-That's it! Your local instance should now be running:
-- **Frontend App:** http://localhost:5173
-- **Backend API:** http://localhost:8000
+- Frontend: <http://localhost:5173>
+- Backend API: <http://localhost:8000>
+- Django admin: <http://localhost:8000/admin>
 
-## Backups and Disaster Recovery
+## Documentation
 
-Automated backup/restore, portable export/import commands, and safety checks are documented in [`docs/backups.md`](docs/backups.md).
-Use `make verify-backup TIMESTAMP=...` before any restore.
+- [Backups](docs/backups.md)
+- [Celery](docs/celery.md)
+- [API benchmarking](docs/api-benchmarking.md)
+- [Production scaling plan](docs/scaling/100k-production-plan.md)
 
 ## Contributing
 
-We love contributions! Whether you're fixing a bug, adding a feature, or just improving some documentation, we'd be thrilled to review your Pull Request. 
+Contributions are welcome.
 
-1. Fork the repo
-2. Create your feature branch (`git checkout -b feature/cool-new-thing`)
-3. Commit your changes (`git commit -m 'Add cool new thing'`)
-4. Push to the branch (`git push origin feature/cool-new-thing`)
-5. Open a Pull Request!
+```bash
+make test
+make lint
+```
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
-
-<p align="center">
-  Made with ❤️ for anime fans by <a href="https://github.com/oddava">oddava</a>
-</p>
+AniShows is released under the [MIT License](LICENSE).
