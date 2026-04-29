@@ -186,6 +186,28 @@ fi
 SH
 }
 
+initialize_clean_umami_pgdata_target() {
+    local volume_name="$1"
+    local backup_volume="$2"
+
+    docker run --rm \
+        -v "${volume_name}:/pgdata" \
+        -v "${backup_volume}:/backup" \
+        alpine:latest sh -s <<'SH'
+set -eu
+
+target="/pgdata/pgdata"
+
+cp -a /pgdata/. /backup/
+
+if [ -e "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ] && [ ! -s "$target/PG_VERSION" ]; then
+    mv "$target" "${target}.pre-initdb.$(date +%s)"
+fi
+
+mkdir -p "$target"
+SH
+}
+
 prepare_umami_postgres_volume() {
     local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
     local configured_major="${UMAMI_POSTGRES_VERSION:-}"
@@ -217,10 +239,17 @@ prepare_umami_postgres_volume() {
         echo -e "${BLUE}  Umami PostgreSQL volume is empty; it will initialize in pgdata/.${NC}"
         return
     else
-        echo -e "${RED}  Umami PostgreSQL volume is non-empty but no PG_VERSION file was found.${NC}"
-        echo -e "${YELLOW}  Refusing to run initdb over ambiguous data. Volume inventory:${NC}"
+        echo -e "${YELLOW}  Umami PostgreSQL volume is non-empty but no PG_VERSION file was found.${NC}"
+        echo -e "${YELLOW}  Existing contents will be backed up; Postgres will initialize in the explicit pgdata/ target. Volume inventory:${NC}"
         printf '%s\n' "$inspection" | sed -n '/^inventory_start$/,/^inventory_end$/p' | sed '/^inventory_/d'
-        exit 1
+        $COMPOSE_CMD stop umami umami_db >/dev/null 2>&1 || true
+        cleanup_stale_service_containers umami_db
+        backup_volume="${volume_name}_backup_$(date +%Y%m%d%H%M%S)"
+        docker volume create "$backup_volume" >/dev/null
+        echo -e "${BLUE}  Backing up ${volume_name} to ${backup_volume} before clean initialization.${NC}"
+        initialize_clean_umami_pgdata_target "$volume_name" "$backup_volume"
+        echo -e "${GREEN}  Umami PostgreSQL volume is prepared for clean initialization at /pgdata/pgdata.${NC}"
+        return
     fi
 
     if [ "$cluster_path" = "/pgdata/pgdata" ]; then
