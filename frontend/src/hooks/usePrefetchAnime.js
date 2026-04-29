@@ -45,7 +45,7 @@ export function usePrefetchAnime() {
         // Prefetch with shorter stale time since it's the next page
         queryClient.prefetchInfiniteQuery({
             queryKey,
-            queryFn: ({ pageParam = nextPage }) =>
+            queryFn: ({ pageParam = nextPage, signal }) =>
                 animeApi.getAll({
                     page: pageParam,
                     page_size: currentParams.pageSize || 12,
@@ -69,7 +69,7 @@ export function usePrefetchAnime() {
                     max_duration: currentParams.maxDuration || undefined,
                     min_year: currentParams.minYear || undefined,
                     max_year: currentParams.maxYear || undefined,
-                }).then(res => res.data),
+                }, signal).then(res => res.data),
             staleTime: 1000 * 60 * 2, // 2 minutes for prefetched data
         });
     }, [queryClient]);

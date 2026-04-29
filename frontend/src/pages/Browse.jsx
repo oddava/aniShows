@@ -57,6 +57,17 @@ const SEASON_OPTIONS = [
 const YEAR_OPTIONS = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 const MIN_YEAR_BOUND = 1980;
 const MAX_YEAR_BOUND = new Date().getFullYear() + 1;
+const FILTER_UPDATE_DEBOUNCE_MS = 250;
+const DEBOUNCED_FILTER_KEYS = new Set([
+  'minRating',
+  'maxRating',
+  'minEpisodes',
+  'maxEpisodes',
+  'minDuration',
+  'maxDuration',
+  'minYear',
+  'maxYear',
+]);
 
 const SOURCE_OPTIONS = [
   { value: 'Original', label: 'Original' },
@@ -122,6 +133,8 @@ const ADVANCED_TAG_GROUPS = [
 export default function Browse() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
+  const searchParamsRef = useRef(searchParams);
+  const filterUpdateTimersRef = useRef({});
 
   // State
   const [showFilters, setShowFilters] = useState(false);
@@ -168,6 +181,15 @@ export default function Browse() {
     searchParams.get('tags')?.split(',').filter(Boolean) || [],
     [searchParams]
   );
+
+  useEffect(() => {
+    searchParamsRef.current = searchParams;
+  }, [searchParams]);
+
+  useEffect(() => () => {
+    Object.values(filterUpdateTimersRef.current).forEach(clearTimeout);
+    filterUpdateTimersRef.current = {};
+  }, []);
 
   // Backward compatibility: seasonal filter requires year in API.
   // Auto-fill current year for legacy URLs like ?season=winter.
@@ -424,6 +446,7 @@ export default function Browse() {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isFetching,
     isError,
     refetch,
   } = useInfiniteQuery({
@@ -452,7 +475,7 @@ export default function Browse() {
       currentMaxYear,
       adultContentEnabled,
     ],
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       animeApi.getAll({
         page: pageParam,
         page_size: 12,
@@ -476,7 +499,7 @@ export default function Browse() {
         max_duration: currentMaxDuration || undefined,
         min_year: currentMinYear || undefined,
         max_year: currentMaxYear || undefined,
-      }).then(res => res.data),
+      }, signal).then(res => res.data),
     initialPageParam: 1,
     placeholderData: (previousData) => previousData,
     getNextPageParam: (lastPage) => {
@@ -709,24 +732,41 @@ export default function Browse() {
     const paramKey = keyMap[key];
     if (!paramKey) return;
 
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('exclude_ids');
-    if (value) {
-      newParams.set(paramKey, value);
-    } else {
-      newParams.delete(paramKey);
+    const applyFilterParam = () => {
+      const newParams = new URLSearchParams(searchParamsRef.current);
+      newParams.delete('exclude_ids');
+      if (value) {
+        newParams.set(paramKey, value);
+      } else {
+        newParams.delete(paramKey);
+      }
+
+      if (key === 'year') {
+        newParams.delete('min_year');
+        newParams.delete('max_year');
+      }
+      if (key === 'minYear' || key === 'maxYear') {
+        newParams.delete('year');
+        newParams.delete('season');
+      }
+      if (DEBOUNCED_FILTER_KEYS.has(key)) {
+        setSearchParams(newParams, { replace: true });
+      } else {
+        setSearchParams(newParams);
+      }
+    };
+
+    if (DEBOUNCED_FILTER_KEYS.has(key)) {
+      clearTimeout(filterUpdateTimersRef.current[key]);
+      filterUpdateTimersRef.current[key] = setTimeout(() => {
+        delete filterUpdateTimersRef.current[key];
+        applyFilterParam();
+      }, FILTER_UPDATE_DEBOUNCE_MS);
+      return;
     }
 
-    if (key === 'year') {
-      newParams.delete('min_year');
-      newParams.delete('max_year');
-    }
-    if (key === 'minYear' || key === 'maxYear') {
-      newParams.delete('year');
-      newParams.delete('season');
-    }
-    setSearchParams(newParams);
-  }, [searchParams, setSearchParams]);
+    applyFilterParam();
+  }, [setSearchParams]);
 
   const toggleLocalGenre = useCallback((genreSlug) => {
     const current = searchParams.get('genre')?.split(',').filter(Boolean) || [];
@@ -809,7 +849,7 @@ export default function Browse() {
   return (
     <>
       <SEO page="browse" />
-      <LoadingBar isLoading={isLoading || isTabSwitching} />
+      <LoadingBar isLoading={isLoading || isFetching || isTabSwitching} />
       {theme === 'retro-anime' && <SakuraAnimation />}
 
       <div className="pt-4 pb-0 sm:py-8 px-3 sm:px-4 lg:px-6">

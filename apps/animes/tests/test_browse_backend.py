@@ -301,6 +301,35 @@ def test_filtered_popular_browse_demotes_low_signal_matches(api_client):
 
 
 @pytest.mark.django_db
+def test_browse_search_uses_short_query_guardrails(api_client):
+    title_match = create_anime(
+        title="ZZ Match",
+        slug="zz-match",
+        synopsis="Plain title match.",
+        popularity_rank=1,
+    )
+    synopsis_match = create_anime(
+        title="Plain Synopsis",
+        slug="plain-synopsis",
+        synopsis="Hidden zz clue.",
+        popularity_rank=2,
+    )
+
+    short_response = api_client.get(reverse("anime-list"), {"q": "zz", "sort": "popular"})
+    short_titles = [anime["title"] for anime in short_response.data["results"]]
+
+    assert short_response.status_code == 200
+    assert title_match.title in short_titles
+    assert synopsis_match.title not in short_titles
+
+    longer_response = api_client.get(reverse("anime-list"), {"q": "hidden", "sort": "popular"})
+    longer_titles = [anime["title"] for anime in longer_response.data["results"]]
+
+    assert longer_response.status_code == 200
+    assert synopsis_match.title in longer_titles
+
+
+@pytest.mark.django_db
 def test_future_season_browse_rows_still_exclude_low_signal_titles(api_client, monkeypatch):
     class FrozenDate(date):
         @classmethod

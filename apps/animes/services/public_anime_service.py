@@ -41,6 +41,8 @@ VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
 VALID_SEASONS = {"winter", "spring", "summer", "fall"}
 MAX_RATING = 10.0
 MIN_RATING = 0.0
+MIN_SEARCH_LENGTH = 2
+MIN_SYNOPSIS_SEARCH_LENGTH = 3
 ADULT_GENRE_SLUGS = {"erotica", "hentai"}
 ADULT_TAGS = {
     "ahegao",
@@ -411,15 +413,18 @@ class AnimeQueryService:
         if not self.can_view_adult_content(request.user):
             queryset = self._exclude_adult_content(queryset)
 
-        search = query_params.get("q")
-        if search:
-            search_words = search.strip().split()
+        search = (query_params.get("q") or "").strip()
+        search_is_active = len(search) >= MIN_SEARCH_LENGTH
+        if search_is_active:
+            search_words = search.split()
             if len(search_words) == 1:
-                queryset = queryset.filter(
+                search_filter = (
                     Q(title__icontains=search)
                     | Q(title_jp__icontains=search)
-                    | Q(synopsis__icontains=search)
                 )
+                if len(search) >= MIN_SYNOPSIS_SEARCH_LENGTH:
+                    search_filter |= Q(synopsis__icontains=search)
+                queryset = queryset.filter(search_filter)
             else:
                 for word in search_words:
                     if len(word) >= 2:
@@ -532,7 +537,7 @@ class AnimeQueryService:
 
         has_non_temporal_filters = any(
             [
-                bool(search),
+                search_is_active,
                 bool(genres),
                 bool(anime_status),
                 bool(anime_type),
@@ -805,9 +810,7 @@ class AnimeQueryService:
             if curate_for_shelves and not has_active_filters:
                 queryset = queryset.filter(popularity_rank__isnull=False)
             elif has_temporal_filters:
-                if apply_temporal_popular_quality_filter and (
-                    curate_for_shelves or not has_non_temporal_filters
-                ):
+                if apply_temporal_popular_quality_filter and curate_for_shelves:
                     queryset = cls._apply_temporal_popular_quality_filter(queryset)
                 queryset = queryset.annotate(
                     popular_quality_bucket=Case(

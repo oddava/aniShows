@@ -3,6 +3,9 @@ import PropTypes from 'prop-types';
 import { Search, X, Filter, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
+const SEARCH_DEBOUNCE_MS = 450;
+const MIN_SEARCH_LENGTH = 2;
+
 const Pill = ({ active, label, onClick }) => (
     <button
         onClick={onClick}
@@ -58,17 +61,19 @@ export default function TopFilterBar({
 
     useEffect(() => {
         const timeout = setTimeout(() => {
-            if (searchInput !== currentQuery) {
+            const normalizedInput = searchInput.trim();
+            const nextQuery = normalizedInput.length >= MIN_SEARCH_LENGTH ? normalizedInput : '';
+            if (nextQuery !== currentQuery) {
                 const newParams = new URLSearchParams(searchParams);
                 newParams.delete('exclude_ids');
-                if (searchInput) {
-                    newParams.set('q', searchInput);
+                if (nextQuery) {
+                    newParams.set('q', nextQuery);
                 } else {
                     newParams.delete('q');
                 }
-                setSearchParams(newParams);
+                setSearchParams(newParams, { replace: true });
             }
-        }, 300);
+        }, SEARCH_DEBOUNCE_MS);
         return () => clearTimeout(timeout);
     }, [searchInput, currentQuery, searchParams, setSearchParams]);
 
