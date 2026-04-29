@@ -99,16 +99,16 @@ cleanup_stale_service_containers() {
 }
 
 detect_umami_postgres_version() {
-    if [ -n "${UMAMI_POSTGRES_VERSION:-}" ]; then
-        echo -e "${BLUE}  Using configured Umami PostgreSQL major: ${UMAMI_POSTGRES_VERSION}${NC}"
-        return
-    fi
-
     local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
+    local configured_major="${UMAMI_POSTGRES_VERSION:-}"
     local detected_major=""
 
     if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
-        echo -e "${YELLOW}  Umami database volume ${volume_name} does not exist yet; defaulting PostgreSQL major to 17.${NC}"
+        if [ -n "$configured_major" ]; then
+            echo -e "${BLUE}  Umami database volume ${volume_name} does not exist yet; using configured PostgreSQL major ${configured_major}.${NC}"
+        else
+            echo -e "${YELLOW}  Umami database volume ${volume_name} does not exist yet; defaulting PostgreSQL major to 17.${NC}"
+        fi
         return
     fi
 
@@ -121,10 +121,72 @@ detect_umami_postgres_version() {
 
     if [ -n "$detected_major" ]; then
         export UMAMI_POSTGRES_VERSION="$detected_major"
+        if [ -n "$configured_major" ] && [ "$configured_major" != "$detected_major" ]; then
+            echo -e "${YELLOW}  Umami PostgreSQL major ${configured_major} was configured, but existing data is ${detected_major}; using existing data version.${NC}"
+        fi
         echo -e "${BLUE}  Detected existing Umami PostgreSQL major ${UMAMI_POSTGRES_VERSION} from ${volume_name}; using matching image.${NC}"
+    elif [ -n "$configured_major" ]; then
+        echo -e "${BLUE}  Could not detect Umami PostgreSQL major from ${volume_name}; using configured major ${configured_major}.${NC}"
     else
         echo -e "${YELLOW}  Could not detect Umami PostgreSQL major from ${volume_name}; defaulting PostgreSQL major to 17.${NC}"
     fi
+}
+
+normalize_umami_postgres_volume() {
+    local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
+    local result=""
+
+    if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
+        return
+    fi
+
+    result="$(
+        docker run --rm -v "${volume_name}:/pgdata" alpine:latest sh -ec '
+            if [ -s /pgdata/PG_VERSION ]; then
+                echo ready
+                exit 0
+            fi
+
+            if [ -s /pgdata/data/PG_VERSION ]; then
+                staging="/pgdata/.anishows-nested-pgdata"
+                rm -rf "$staging"
+                mv /pgdata/data "$staging"
+
+                for path in "$staging"/* "$staging"/.[!.]* "$staging"/..?*; do
+                    [ -e "$path" ] || continue
+                    mv "$path" /pgdata/
+                done
+
+                rmdir "$staging"
+                echo repaired
+                exit 0
+            fi
+
+            if [ -z "$(ls -A /pgdata 2>/dev/null)" ]; then
+                echo empty
+                exit 0
+            fi
+
+            echo unknown
+            exit 2
+        ' 2>/dev/null || true
+    )"
+    result="$(printf '%s' "$result" | tail -n 1)"
+
+    case "$result" in
+        ready)
+            echo -e "${BLUE}  Umami PostgreSQL volume layout is ready.${NC}"
+            ;;
+        repaired)
+            echo -e "${GREEN}  Repaired nested Umami PostgreSQL volume layout.${NC}"
+            ;;
+        empty)
+            echo -e "${BLUE}  Umami PostgreSQL volume is empty; it will initialize normally.${NC}"
+            ;;
+        *)
+            echo -e "${YELLOW}  Umami PostgreSQL volume layout is not recognized; continuing so container logs show the exact issue.${NC}"
+            ;;
+    esac
 }
 
 trim_service_replicas() {
@@ -427,6 +489,7 @@ echo ""
 # =========================================================================
 echo -e "${BLUE}Step 2a: Pulling third-party service images...${NC}"
 detect_umami_postgres_version
+normalize_umami_postgres_volume
 $COMPOSE_CMD pull umami_db umami jikan jikan_mongodb jikan_typesense || true
 echo -e "${GREEN}Third-party service images pulled!${NC}"
 echo ""
