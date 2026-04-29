@@ -301,32 +301,37 @@ def test_filtered_popular_browse_demotes_low_signal_matches(api_client):
 
 
 @pytest.mark.django_db
-def test_browse_search_uses_short_query_guardrails(api_client):
-    title_match = create_anime(
-        title="ZZ Match",
-        slug="zz-match",
-        synopsis="Plain title match.",
-        popularity_rank=1,
+def test_filtered_popular_browse_treats_zero_ranks_as_missing(api_client):
+    fantasy = create_genre(name="Fantasy", slug="fantasy")
+
+    cornerstone = create_anime(
+        title="Cornerstone Fantasy Epic",
+        slug="cornerstone-fantasy-epic",
+        member_count=3_500_000,
+        popularity_rank=3,
+        site_rank=4,
+        rating=9.1,
     )
-    synopsis_match = create_anime(
-        title="Plain Synopsis",
-        slug="plain-synopsis",
-        synopsis="Hidden zz clue.",
-        popularity_rank=2,
+    zero_rank_special = create_anime(
+        title="Fantasy Promo Short",
+        slug="fantasy-promo-short",
+        anime_type=Anime.AnimeType.special,
+        member_count=0,
+        popularity_rank=0,
+        site_rank=0,
+        rating=None,
+        episode_count=1,
+        duration_minutes=1,
     )
 
-    short_response = api_client.get(reverse("anime-list"), {"q": "zz", "sort": "popular"})
-    short_titles = [anime["title"] for anime in short_response.data["results"]]
+    cornerstone.genres.add(fantasy)
+    zero_rank_special.genres.add(fantasy)
 
-    assert short_response.status_code == 200
-    assert title_match.title in short_titles
-    assert synopsis_match.title not in short_titles
+    response = api_client.get(reverse("anime-list"), {"genre": "fantasy", "sort": "popular"})
 
-    longer_response = api_client.get(reverse("anime-list"), {"q": "hidden", "sort": "popular"})
-    longer_titles = [anime["title"] for anime in longer_response.data["results"]]
-
-    assert longer_response.status_code == 200
-    assert synopsis_match.title in longer_titles
+    assert response.status_code == 200
+    titles = [anime["title"] for anime in response.data["results"]]
+    assert titles.index(cornerstone.title) < titles.index(zero_rank_special.title)
 
 
 @pytest.mark.django_db

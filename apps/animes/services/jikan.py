@@ -1319,14 +1319,42 @@ class JikanService:
         mal_id: int | None = None,
         slug: str | None = None,
         title: str | None = None,
+        provider_ids: dict[str, Any] | None = None,
     ) -> Anime | None:
-        if anilist_id:
+        resolved_anilist_id = self._coerce_positive_int(anilist_id)
+        resolved_mal_id = self._coerce_positive_int(mal_id)
+
+        if resolved_anilist_id and resolved_anilist_id < Anime.JIKAN_ANILIST_ID_OFFSET:
             anime = Anime.objects.filter(anilist_id=anilist_id).first()
             if anime:
                 return anime
 
-        if mal_id:
+        if resolved_mal_id:
             anime = Anime.objects.filter(mal_id=mal_id).first()
+            if anime:
+                return anime
+
+            anime = Anime.objects.filter(provider_ids__myanimelist=resolved_mal_id).first()
+            if anime:
+                return anime
+
+            anime = Anime.objects.filter(provider_ids__jikan=resolved_mal_id).first()
+            if anime:
+                return anime
+
+        if resolved_anilist_id:
+            anime = Anime.objects.filter(provider_ids__anilist=resolved_anilist_id).first()
+            if anime:
+                return anime
+
+            anime = Anime.objects.filter(anilist_id=resolved_anilist_id).first()
+            if anime:
+                return anime
+
+        for provider, value in (provider_ids or {}).items():
+            if value in (None, ""):
+                continue
+            anime = Anime.objects.filter(**{f"provider_ids__{provider}": value}).first()
             if anime:
                 return anime
 
@@ -2030,41 +2058,28 @@ class JikanService:
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
         title_native = item.get("title", {}).get("native")
+        provider_ids = item.get("providerIds") or {}
 
         if not title:
             raise ValueError("Anime must have a title")
 
         base_slug = slugify(title)
-
-        if sync_id:
-            try:
-                anime = await sync_to_async(Anime.objects.get)(anilist_id=sync_id)
-                logger.debug(f"Found anime by sync ID {sync_id}: {anime.title}")
-                await self._update_anime_async(anime, item, title, title_native, anime.slug)
-                return anime
-            except Anime.DoesNotExist:
-                pass
-
-        if mal_id:
-            try:
-                anime = await sync_to_async(Anime.objects.get)(mal_id=mal_id)
-                logger.debug(f"Found anime by MAL ID {mal_id}: {anime.title}")
-                await self._update_anime_async(anime, item, title, title_native, anime.slug)
-                return anime
-            except Anime.DoesNotExist:
-                pass
-
-        for lookup_field, lookup_value in (("slug", base_slug), ("title", title)):
-            try:
-                anime = await sync_to_async(Anime.objects.get)(**{lookup_field: lookup_value})
-                logger.info(
-                    f"Found anime by {lookup_field} '{lookup_value}': {anime.title}. "
-                    f"Adding sync ID {sync_id} and MAL ID {mal_id}"
-                )
-                await self._update_anime_async(anime, item, title, title_native, anime.slug)
-                return anime
-            except Anime.DoesNotExist:
-                pass
+        existing = await sync_to_async(self._lookup_existing_anime)(
+            anilist_id=sync_id,
+            mal_id=mal_id,
+            slug=base_slug,
+            title=title,
+            provider_ids=provider_ids,
+        )
+        if existing:
+            logger.info(
+                "Found existing anime for Jikan sync_id=%s mal_id=%s: %s",
+                sync_id,
+                mal_id,
+                existing.title,
+            )
+            await self._update_anime_async(existing, item, title, title_native, existing.slug)
+            return existing
 
         final_slug = base_slug
         counter = 0
@@ -2103,6 +2118,7 @@ class JikanService:
                 mal_id=mal_id,
                 slug=final_slug,
                 title=title,
+                provider_ids=provider_ids,
             )
             if recovered:
                 logger.warning(

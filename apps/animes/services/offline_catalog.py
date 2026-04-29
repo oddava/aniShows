@@ -933,9 +933,6 @@ class OfflineCatalogImportService:
         return None
 
     def _find_fallback_existing(self, entry: OfflineCatalogEntry) -> Anime | None:
-        if entry.anilist_id or entry.mal_id:
-            return None
-
         self._ensure_fallback_indexes_loaded()
 
         provider_candidates: list[int] = []
@@ -954,6 +951,9 @@ class OfflineCatalogImportService:
             anime = self._get_fallback_anime(anime_id)
             if anime is not None and self._has_shared_provider_id(anime, entry):
                 return anime
+
+        if entry.anilist_id or entry.mal_id:
+            return None
 
         title_candidates: list[int] = []
         seen_title_ids: set[int] = set()

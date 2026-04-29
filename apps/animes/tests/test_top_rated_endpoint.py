@@ -143,6 +143,46 @@ class AnimeDetailExternalLinksTests(APITestCase):
         self.assertEqual(len(response.data["external_links"]), 1)
         self.assertEqual(response.data["external_links"][0]["site"], "MyAnimeList")
 
+    @patch("apps.animes.signals.enrich_metadata.delay")
+    def test_detail_backfills_relation_cover_from_linked_anime(self, _mock_enrich_metadata):
+        related = Anime.objects.create(
+            title="Steins;Gate 0",
+            slug="steins-gate-0",
+            synopsis="Linked franchise entry with stored cover art.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            anilist_id=222,
+            cover_image_external_url="https://img.anilist.co/steins-gate-0-cover.jpg",
+        )
+        anime = Anime.objects.create(
+            title="Steins;Gate",
+            slug="steins-gate",
+            synopsis="Source anime.",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            anilist_id=111,
+            relations=[
+                {
+                    "id": related.anilist_id,
+                    "type": "SEQUEL",
+                    "title": related.title,
+                    "format": "TV",
+                    "status": "FINISHED",
+                    "cover": "",
+                    "slug": related.slug,
+                }
+            ],
+        )
+
+        response = self.client.get(reverse("anime-detail", args=[anime.slug]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["relations"]), 1)
+        self.assertEqual(
+            response.data["relations"][0]["cover"],
+            related.cover_image_external_url,
+        )
+
 
 class BrowseRowsPopularShelfTests(APITestCase):
     @patch("apps.animes.signals.enrich_metadata.delay")
