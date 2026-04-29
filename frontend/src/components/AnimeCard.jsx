@@ -210,8 +210,8 @@ function AnimeCard({
         if (!useBannerAccentTitleHover) return null;
 
         const candidates = [
-            anime.banner_image_medium,
-            anime.banner_image,
+            getOptimizedImageUrl(anime, 'banner', 'medium'),
+            getOptimizedImageUrl(anime, 'banner', 'original'),
             imageUrl,
             anime.banner_image_external_url,
         ].filter(Boolean);
@@ -223,6 +223,8 @@ function AnimeCard({
         anime.banner_image_medium,
         anime.banner_image,
         anime.banner_image_external_url,
+        anime.banner_image_large,
+        anime.banner_image_small,
         imageUrl
     ]);
     const { colors: bannerColors } = useColorExtraction(bannerAccentImageUrl);

@@ -1002,8 +1002,6 @@ export default function Browse() {
                       rank={currentSort === 'rating' ? (index + 1) : null}
                       priority={index < 6}
                       index={index}
-                      // Browse grids render many cards at once, so skip banner color extraction here.
-                      useBannerAccentTitleHover={false}
                     />
                   ))}
               </div>
