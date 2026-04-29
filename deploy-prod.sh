@@ -98,10 +98,101 @@ cleanup_stale_service_containers() {
     done < <(service_container_ids "$service_name" all)
 }
 
-detect_umami_postgres_version() {
+inspect_umami_postgres_volume() {
+    local volume_name="$1"
+
+    docker run --rm -v "${volume_name}:/pgdata:ro" alpine:latest sh -s <<'SH'
+set -eu
+
+target="/pgdata/pgdata"
+
+for candidate in "$target" /pgdata /pgdata/data /pgdata/17/docker /pgdata/18/docker; do
+    if [ -s "$candidate/PG_VERSION" ]; then
+        echo "cluster=$candidate"
+        echo "major=$(cut -d. -f1 "$candidate/PG_VERSION" | tr -dc '0-9')"
+        exit 0
+    fi
+done
+
+found_pg_version="$(find /pgdata -maxdepth 6 -type f -name PG_VERSION 2>/dev/null | sort | head -n 1 || true)"
+if [ -n "$found_pg_version" ]; then
+    cluster="${found_pg_version%/PG_VERSION}"
+    echo "cluster=$cluster"
+    echo "major=$(cut -d. -f1 "$found_pg_version" | tr -dc '0-9')"
+    exit 0
+fi
+
+if [ -z "$(ls -A /pgdata 2>/dev/null)" ]; then
+    echo "empty=1"
+    exit 0
+fi
+
+echo "unknown=1"
+echo "inventory_start"
+find /pgdata -maxdepth 4 -mindepth 1 2>/dev/null | sort | head -n 200
+echo "inventory_end"
+SH
+}
+
+repair_umami_postgres_volume() {
+    local volume_name="$1"
+    local source_cluster="$2"
+    local backup_volume="$3"
+
+    docker run --rm \
+        -v "${volume_name}:/pgdata" \
+        -v "${backup_volume}:/backup" \
+        -e SOURCE_CLUSTER="$source_cluster" \
+        -e TARGET_CLUSTER="/pgdata/pgdata" \
+        alpine:latest sh -s <<'SH'
+set -eu
+
+source="$SOURCE_CLUSTER"
+target="$TARGET_CLUSTER"
+
+if [ ! -s "$source/PG_VERSION" ]; then
+    echo "Source PostgreSQL cluster marker not found at $source/PG_VERSION" >&2
+    exit 1
+fi
+
+cp -a /pgdata/. /backup/
+
+if [ "$source" = "$target" ]; then
+    exit 0
+fi
+
+if [ -e "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ]; then
+    if [ -s "$target/PG_VERSION" ]; then
+        exit 0
+    fi
+    mv "$target" "${target}.pre-repair.$(date +%s)"
+fi
+
+mkdir -p "$target"
+for path in "$source"/* "$source"/.[!.]* "$source"/..?*; do
+    [ -e "$path" ] || continue
+    [ "$path" = "$target" ] && continue
+    mv "$path" "$target/"
+done
+
+if [ "$source" != "/pgdata" ]; then
+    rmdir "$source" 2>/dev/null || true
+fi
+
+if [ ! -s "$target/PG_VERSION" ]; then
+    echo "PostgreSQL cluster repair did not produce $target/PG_VERSION" >&2
+    exit 1
+fi
+SH
+}
+
+prepare_umami_postgres_volume() {
     local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
     local configured_major="${UMAMI_POSTGRES_VERSION:-}"
+    local inspection=""
+    local cluster_path=""
     local detected_major=""
+    local backup_volume=""
 
     if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
         if [ -n "$configured_major" ]; then
@@ -112,81 +203,51 @@ detect_umami_postgres_version() {
         return
     fi
 
-    detected_major="$(
-        docker run --rm -v "${volume_name}:/pgdata:ro" alpine:latest sh -c \
-            'if [ -s /pgdata/PG_VERSION ]; then cut -d. -f1 /pgdata/PG_VERSION; elif [ -s /pgdata/data/PG_VERSION ]; then cut -d. -f1 /pgdata/data/PG_VERSION; fi' \
-            2>/dev/null || true
-    )"
-    detected_major="$(printf '%s' "$detected_major" | tail -n 1 | tr -dc '0-9')"
+    inspection="$(inspect_umami_postgres_volume "$volume_name")"
+    cluster_path="$(printf '%s\n' "$inspection" | sed -n 's/^cluster=//p' | head -n 1)"
+    detected_major="$(printf '%s\n' "$inspection" | sed -n 's/^major=//p' | head -n 1 | tr -dc '0-9')"
 
     if [ -n "$detected_major" ]; then
         export UMAMI_POSTGRES_VERSION="$detected_major"
         if [ -n "$configured_major" ] && [ "$configured_major" != "$detected_major" ]; then
             echo -e "${YELLOW}  Umami PostgreSQL major ${configured_major} was configured, but existing data is ${detected_major}; using existing data version.${NC}"
         fi
-        echo -e "${BLUE}  Detected existing Umami PostgreSQL major ${UMAMI_POSTGRES_VERSION} from ${volume_name}; using matching image.${NC}"
-    elif [ -n "$configured_major" ]; then
-        echo -e "${BLUE}  Could not detect Umami PostgreSQL major from ${volume_name}; using configured major ${configured_major}.${NC}"
+        echo -e "${BLUE}  Detected Umami PostgreSQL major ${UMAMI_POSTGRES_VERSION} at ${cluster_path}.${NC}"
+    elif printf '%s\n' "$inspection" | grep -q '^empty=1$'; then
+        echo -e "${BLUE}  Umami PostgreSQL volume is empty; it will initialize in pgdata/.${NC}"
+        return
     else
-        echo -e "${YELLOW}  Could not detect Umami PostgreSQL major from ${volume_name}; defaulting PostgreSQL major to 17.${NC}"
+        echo -e "${RED}  Umami PostgreSQL volume is non-empty but no PG_VERSION file was found.${NC}"
+        echo -e "${YELLOW}  Refusing to run initdb over ambiguous data. Volume inventory:${NC}"
+        printf '%s\n' "$inspection" | sed -n '/^inventory_start$/,/^inventory_end$/p' | sed '/^inventory_/d'
+        exit 1
     fi
-}
 
-normalize_umami_postgres_volume() {
-    local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
-    local result=""
-
-    if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
+    if [ "$cluster_path" = "/pgdata/pgdata" ]; then
+        echo -e "${BLUE}  Umami PostgreSQL volume layout is already standard.${NC}"
         return
     fi
 
-    result="$(
-        docker run --rm -v "${volume_name}:/pgdata" alpine:latest sh -ec '
-            if [ -s /pgdata/PG_VERSION ]; then
-                echo ready
-                exit 0
-            fi
+    echo -e "${YELLOW}  Moving Umami PostgreSQL cluster from ${cluster_path} to /pgdata/pgdata.${NC}"
+    $COMPOSE_CMD stop umami umami_db >/dev/null 2>&1 || true
+    cleanup_stale_service_containers umami_db
 
-            if [ -s /pgdata/data/PG_VERSION ]; then
-                staging="/pgdata/.anishows-nested-pgdata"
-                rm -rf "$staging"
-                mv /pgdata/data "$staging"
+    backup_volume="${volume_name}_backup_$(date +%Y%m%d%H%M%S)"
+    docker volume create "$backup_volume" >/dev/null
+    echo -e "${BLUE}  Backing up ${volume_name} to ${backup_volume} before repair.${NC}"
+    repair_umami_postgres_volume "$volume_name" "$cluster_path" "$backup_volume"
 
-                for path in "$staging"/* "$staging"/.[!.]* "$staging"/..?*; do
-                    [ -e "$path" ] || continue
-                    mv "$path" /pgdata/
-                done
+    inspection="$(inspect_umami_postgres_volume "$volume_name")"
+    cluster_path="$(printf '%s\n' "$inspection" | sed -n 's/^cluster=//p' | head -n 1)"
+    detected_major="$(printf '%s\n' "$inspection" | sed -n 's/^major=//p' | head -n 1 | tr -dc '0-9')"
+    if [ "$cluster_path" != "/pgdata/pgdata" ] || [ -z "$detected_major" ]; then
+        echo -e "${RED}  Umami PostgreSQL volume repair failed verification.${NC}"
+        printf '%s\n' "$inspection"
+        exit 1
+    fi
 
-                rmdir "$staging"
-                echo repaired
-                exit 0
-            fi
-
-            if [ -z "$(ls -A /pgdata 2>/dev/null)" ]; then
-                echo empty
-                exit 0
-            fi
-
-            echo unknown
-            exit 2
-        ' 2>/dev/null || true
-    )"
-    result="$(printf '%s' "$result" | tail -n 1)"
-
-    case "$result" in
-        ready)
-            echo -e "${BLUE}  Umami PostgreSQL volume layout is ready.${NC}"
-            ;;
-        repaired)
-            echo -e "${GREEN}  Repaired nested Umami PostgreSQL volume layout.${NC}"
-            ;;
-        empty)
-            echo -e "${BLUE}  Umami PostgreSQL volume is empty; it will initialize normally.${NC}"
-            ;;
-        *)
-            echo -e "${YELLOW}  Umami PostgreSQL volume layout is not recognized; continuing so container logs show the exact issue.${NC}"
-            ;;
-    esac
+    export UMAMI_POSTGRES_VERSION="$detected_major"
+    echo -e "${GREEN}  Umami PostgreSQL volume repaired and verified at /pgdata/pgdata.${NC}"
 }
 
 trim_service_replicas() {
@@ -488,8 +549,7 @@ echo ""
 # PULL THIRD-PARTY SERVICE IMAGES
 # =========================================================================
 echo -e "${BLUE}Step 2a: Pulling third-party service images...${NC}"
-detect_umami_postgres_version
-normalize_umami_postgres_volume
+prepare_umami_postgres_volume
 $COMPOSE_CMD pull umami_db umami jikan jikan_mongodb jikan_typesense || true
 echo -e "${GREEN}Third-party service images pulled!${NC}"
 echo ""
