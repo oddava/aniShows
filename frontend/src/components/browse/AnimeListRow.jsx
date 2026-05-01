@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
+import useAnimeAccentColor from '../../hooks/useAnimeAccentColor';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 
 function AnimeListRow({ anime, titleLanguage = 'en' }) {
@@ -9,6 +10,13 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
         : anime.title;
     const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
     const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
+    const accentColor = useAnimeAccentColor(
+        imageUrl,
+        getOptimizedImageUrl(anime, 'cover', 'large'),
+        anime.cover_image,
+        anime.cover_image_external_url,
+        getOptimizedImageUrl(anime, 'banner', 'medium')
+    );
 
     const getStatusStyle = (status) => {
         if (status === 'Airing') {
@@ -24,6 +32,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
         <Link
             to={`/anime/${anime.slug}`}
             className="relative flex gap-3 sm:gap-5 p-2.5 sm:p-4 bg-dark-100 hover:bg-dark-100/80 rounded-2xl border border-gray-800/60 hover:border-accent/40   transition-all duration-300 group overflow-hidden"
+            style={{ '--anime-title-hover-color': accentColor || 'var(--color-accent)' }}
         >
             {/* Hover Glow Effect */}
             <div className="absolute -inset-1 bg-dark-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -50,7 +59,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
             {/* Middle: Content Area */}
             <div className="flex-1 min-w-0 flex flex-col justify-center py-1 z-10">
                 <div className="flex items-start justify-between gap-3 mb-1.5">
-                    <h3 className="text-base sm:text-xl font-black text-white group-hover:text-accent transition-colors line-clamp-1 sm:line-clamp-2 leading-tight tracking-tight">
+                    <h3 className="text-base sm:text-xl font-black text-white group-hover:text-[var(--anime-title-hover-color)] transition-colors line-clamp-1 sm:line-clamp-2 leading-tight tracking-tight">
                         {displayTitle}
                     </h3>
                 </div>
@@ -118,6 +127,10 @@ AnimeListRow.propTypes = {
         cover_image: PropTypes.string,
         cover_image_small: PropTypes.string,
         cover_image_medium: PropTypes.string,
+        cover_image_large: PropTypes.string,
+        cover_image_external_url: PropTypes.string,
+        banner_image_medium: PropTypes.string,
+        banner_image_external_url: PropTypes.string,
         status: PropTypes.string,
         anime_type: PropTypes.string,
         episode_count: PropTypes.number,

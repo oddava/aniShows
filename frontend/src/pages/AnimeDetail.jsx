@@ -25,8 +25,8 @@ import {
     getImageUrl,
     getImageSrcSet,
     getOptimizedImageUrl,
-    isSameOriginImageUrl,
 } from '../utils/imageUtils';
+import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
 
 // Memoized tab configuration to prevent re-renders
@@ -92,115 +92,6 @@ const getUniqueStaffCount = (staff) => {
 };
 
 const getCoverPlaceholder = (title = 'Anime') => getImageUrl(null, title);
-
-// Extract and memoize color from image
-const useAccentColor = (coverImage, bannerImage) => {
-    const [accentColor, setAccentColor] = useState(null);
-
-    useEffect(() => {
-        const safeCoverImage = isSameOriginImageUrl(coverImage) ? coverImage : null;
-        const safeBannerImage = isSameOriginImageUrl(bannerImage) ? bannerImage : null;
-
-        if (!safeCoverImage && !safeBannerImage) {
-            setAccentColor(null);
-            return;
-        }
-
-        const extractColor = (imageUrl) => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-
-                img.onload = () => {
-                    try {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = 1;
-                        canvas.height = 1;
-                        ctx.drawImage(img, 0, 0, 1, 1);
-                        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-                        resolve({ r, g, b });
-                    } catch (e) {
-                        reject(e);
-                    }
-                };
-
-                img.onerror = () => reject(new Error('Failed to load image'));
-                img.src = imageUrl;
-            });
-        };
-
-        const processColor = ({ r, g, b }) => {
-            // Convert RGB to HSL
-            const rNorm = r / 255;
-            const gNorm = g / 255;
-            const bNorm = b / 255;
-            
-            const max = Math.max(rNorm, gNorm, bNorm);
-            const min = Math.min(rNorm, gNorm, bNorm);
-            let h, s, l = (max + min) / 2;
-
-            if (max === min) {
-                h = s = 0; // achromatic
-            } else {
-                const d = max - min;
-                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-                switch (max) {
-                    case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
-                    case gNorm: h = (bNorm - rNorm) / d + 2; break;
-                    case bNorm: h = (rNorm - gNorm) / d + 4; break;
-                }
-                h /= 6;
-            }
-
-            // Clamp lightness and saturation for a better dark theme experience
-            const minLightness = 0.45;
-            const maxLightness = 0.65;
-            const minSaturation = 0.3;
-
-            l = Math.max(minLightness, Math.min(maxLightness, l));
-            if (s > 0) {
-                s = Math.max(minSaturation, s);
-            }
-
-            // Convert back to RGB
-            let finalR, finalG, finalB;
-            if (s === 0) {
-                finalR = finalG = finalB = l; // achromatic
-            } else {
-                const hue2rgb = (p, q, t) => {
-                    if (t < 0) t += 1;
-                    if (t > 1) t -= 1;
-                    if (t < 1/6) return p + (q - p) * 6 * t;
-                    if (t < 1/2) return q;
-                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                    return p;
-                };
-                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-                const p = 2 * l - q;
-                finalR = hue2rgb(p, q, h + 1/3);
-                finalG = hue2rgb(p, q, h);
-                finalB = hue2rgb(p, q, h - 1/3);
-            }
-
-            const toHex = (c) => Math.round(c * 255).toString(16).padStart(2, '0');
-            setAccentColor(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
-        };
-
-        extractColor(safeCoverImage || safeBannerImage)
-            .then(processColor)
-            .catch(() => {
-                if (safeBannerImage) {
-                    extractColor(safeBannerImage)
-                        .then(processColor)
-                        .catch(() => setAccentColor(null));
-                } else {
-                    setAccentColor(null);
-                }
-            });
-    }, [coverImage, bannerImage]);
-
-    return accentColor;
-};
 
 // Memoized share button handler
 const useShare = () => {
@@ -475,7 +366,7 @@ export default function AnimeDetail() {
     });
 
     // Derived state
-    const accentColor = useAccentColor(anime?.cover_image, anime?.banner_image);
+    const accentColor = useAnimeAccentColor(anime?.cover_image, anime?.banner_image);
     const handleShare = useShare();
 
     const allReviews = useMemo(() =>

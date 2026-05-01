@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import { animeApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import CategoryRow from './CategoryRow';
@@ -35,7 +36,7 @@ function buildBrowseLink(baseParams) {
     return `/browse?${params.toString()}`;
 }
 
-export default function BrowseRowMode() {
+export default function BrowseRowMode({ titleLanguage = 'en' }) {
     const { user } = useAuth();
     const adultContentEnabled = Boolean(user?.show_adult_content);
 
@@ -117,8 +118,13 @@ export default function BrowseRowMode() {
                     isLoading={isLoading}
                     viewAllLink={row.viewAllLink}
                     eagerCount={index === 0 ? ROW_PAGE_SIZE : 0}
+                    titleLanguage={titleLanguage}
                 />
             ))}
         </div>
     );
 }
+
+BrowseRowMode.propTypes = {
+    titleLanguage: PropTypes.oneOf(['en', 'jp']),
+};

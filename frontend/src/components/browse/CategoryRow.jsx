@@ -10,6 +10,7 @@ export default function CategoryRow({
     viewAllLink,
     skeletonCount = 6,
     eagerCount = 0,
+    titleLanguage = 'en',
 }) {
     const handleViewAllClick = () => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -45,6 +46,7 @@ export default function CategoryRow({
                             <div key={anime.id} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
                                 <AnimeCard
                                     anime={anime}
+                                    titleLanguage={titleLanguage}
                                     priority={index < eagerCount}
                                 />
                             </div>
@@ -65,4 +67,5 @@ CategoryRow.propTypes = {
     viewAllLink: PropTypes.string,
     skeletonCount: PropTypes.number,
     eagerCount: PropTypes.number,
+    titleLanguage: PropTypes.oneOf(['en', 'jp']),
 };

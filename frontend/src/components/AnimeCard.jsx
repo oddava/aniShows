@@ -4,7 +4,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { listApi } from '../api/client';
-import useColorExtraction from '../hooks/useColorExtraction';
+import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -19,143 +19,6 @@ const STATUS_OPTIONS = [
     { value: 'Completed', label: 'Completed', icon: Check, color: 'text-blue-400', dotColor: 'bg-blue-400' },
     { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-slate-300', dotColor: 'bg-slate-400' },
 ];
-
-function normalizeHexColor(value) {
-    if (!value || typeof value !== 'string') return null;
-    const hex = value.trim();
-    const shortMatch = /^#([a-f\d]{3})$/i.exec(hex);
-    if (shortMatch) {
-        const expanded = shortMatch[1].split('').map((ch) => ch + ch).join('');
-        return `#${expanded.toLowerCase()}`;
-    }
-    return /^#([a-f\d]{6})$/i.test(hex) ? hex.toLowerCase() : null;
-}
-
-function hexToRgb(hex) {
-    const normalized = normalizeHexColor(hex);
-    if (!normalized) return null;
-    const raw = normalized.slice(1);
-    return {
-        r: parseInt(raw.slice(0, 2), 16),
-        g: parseInt(raw.slice(2, 4), 16),
-        b: parseInt(raw.slice(4, 6), 16),
-    };
-}
-
-function rgbToHex(r, g, b) {
-    const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
-    return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function srgbToLinear(channel) {
-    const c = channel / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-}
-
-function relativeLuminance({ r, g, b }) {
-    return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
-}
-
-function contrastRatio(hexA, hexB) {
-    const rgbA = hexToRgb(hexA);
-    const rgbB = hexToRgb(hexB);
-    if (!rgbA || !rgbB) return 1;
-    const l1 = relativeLuminance(rgbA);
-    const l2 = relativeLuminance(rgbB);
-    const lighter = Math.max(l1, l2);
-    const darker = Math.min(l1, l2);
-    return (lighter + 0.05) / (darker + 0.05);
-}
-
-function rgbToHsl({ r, g, b }) {
-    const rn = r / 255;
-    const gn = g / 255;
-    const bn = b / 255;
-    const max = Math.max(rn, gn, bn);
-    const min = Math.min(rn, gn, bn);
-    let h = 0;
-    let s = 0;
-    const l = (max + min) / 2;
-
-    if (max !== min) {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-            case rn:
-                h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
-                break;
-            case gn:
-                h = ((bn - rn) / d + 2) / 6;
-                break;
-            case bn:
-                h = ((rn - gn) / d + 4) / 6;
-                break;
-            default:
-                break;
-        }
-    }
-
-    return { h: h * 360, s: s * 100, l: l * 100 };
-}
-
-function mixTowardWhite(hex, amount) {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return null;
-    const t = Math.max(0, Math.min(1, amount));
-    const r = rgb.r + (255 - rgb.r) * t;
-    const g = rgb.g + (255 - rgb.g) * t;
-    const b = rgb.b + (255 - rgb.b) * t;
-    return rgbToHex(r, g, b);
-}
-
-function ensureReadableAccent(hex, backgroundHex = '#0b0f14', minContrast = 4.5) {
-    const normalized = normalizeHexColor(hex);
-    if (!normalized) return null;
-
-    if (contrastRatio(normalized, backgroundHex) >= minContrast) {
-        return normalized;
-    }
-
-    let best = normalized;
-    for (let i = 1; i <= 10; i += 1) {
-        const candidate = mixTowardWhite(normalized, i * 0.1);
-        if (!candidate) continue;
-        best = candidate;
-        if (contrastRatio(candidate, backgroundHex) >= minContrast) {
-            return candidate;
-        }
-    }
-    return best;
-}
-
-function selectReadableBannerAccent(colors, backgroundHex = '#0b0f14') {
-    const rawCandidates = [
-        colors?.primary,
-        colors?.accent,
-        colors?.secondary,
-        ...(colors?.palette || []),
-    ];
-
-    const candidates = [...new Set(rawCandidates.map(normalizeHexColor).filter(Boolean))];
-    if (!candidates.length) return null;
-
-    candidates.sort((a, b) => {
-        const aRgb = hexToRgb(a);
-        const bRgb = hexToRgb(b);
-        const aHsl = aRgb ? rgbToHsl(aRgb) : { s: 0 };
-        const bHsl = bRgb ? rgbToHsl(bRgb) : { s: 0 };
-        const aContrast = contrastRatio(a, backgroundHex);
-        const bContrast = contrastRatio(b, backgroundHex);
-        const aReadable = aContrast >= 3.2 ? 1 : 0;
-        const bReadable = bContrast >= 3.2 ? 1 : 0;
-
-        if (aReadable !== bReadable) return bReadable - aReadable;
-        if (Math.abs(aHsl.s - bHsl.s) > 1) return bHsl.s - aHsl.s;
-        return bContrast - aContrast;
-    });
-
-    return ensureReadableAccent(candidates[0], backgroundHex, 4.5);
-}
 
 function getTimeRemainingLabel(dateString) {
     if (!dateString) return null;
@@ -212,7 +75,6 @@ function AnimeCard({
         const candidates = [
             getOptimizedImageUrl(anime, 'banner', 'medium'),
             getOptimizedImageUrl(anime, 'banner', 'original'),
-            imageUrl,
             anime.banner_image_external_url,
         ].filter(Boolean);
 
@@ -227,13 +89,17 @@ function AnimeCard({
         anime.banner_image_small,
         imageUrl
     ]);
-    const { colors: bannerColors } = useColorExtraction(bannerAccentImageUrl);
+    const coverAccentImageUrl = useBannerAccentTitleHover ? imageUrl : null;
+    const titleHoverAccentColor = useAnimeAccentColor(
+        coverAccentImageUrl,
+        useBannerAccentTitleHover ? getOptimizedImageUrl(anime, 'cover', 'large') : null,
+        useBannerAccentTitleHover ? anime.cover_image : null,
+        useBannerAccentTitleHover ? anime.cover_image_external_url : null,
+        bannerAccentImageUrl
+    );
     const titleHoverColor = useMemo(
-        () => {
-            if (!useBannerAccentTitleHover) return 'var(--color-accent)';
-            return selectReadableBannerAccent(bannerColors) || 'var(--color-accent)';
-        },
-        [useBannerAccentTitleHover, bannerColors]
+        () => titleHoverAccentColor || 'var(--color-accent)',
+        [titleHoverAccentColor]
     );
     const displayTitle = useMemo(() =>
         titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
