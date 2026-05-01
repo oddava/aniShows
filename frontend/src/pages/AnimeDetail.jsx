@@ -28,6 +28,7 @@ import {
 } from '../utils/imageUtils';
 import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
+import { getUniqueCharacterRoleCount } from '../utils/characterRoles';
 
 // Memoized tab configuration to prevent re-renders
 const TABS = [
@@ -59,21 +60,6 @@ const getTabHref = (slug, tabId) => {
     }
 
     return `/anime/${slug}/${tab.path}`;
-};
-
-const getUniqueCharacterCount = (characters) => {
-    if (!Array.isArray(characters)) return 0;
-
-    const seen = new Set();
-    for (const role of characters) {
-        const characterName = role?.character?.name;
-        if (!characterName) continue;
-
-        const voiceActorName = role?.voice_actor?.name || 'none';
-        seen.add(`${characterName}:${role?.role || 'unknown'}:${voiceActorName}`);
-    }
-
-    return seen.size;
 };
 
 const getUniqueStaffCount = (staff) => {
@@ -592,12 +578,19 @@ export default function AnimeDetail() {
     const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');
     const coverFallbackUrl = getImageFallbackUrl(anime, 'cover');
 
+    const characterTabCount = Array.isArray(characters)
+        ? getUniqueCharacterRoleCount(characters)
+        : (anime.character_count || 0);
+    const staffTabCount = Array.isArray(staff)
+        ? getUniqueStaffCount(staff)
+        : (anime.staff_count || 0);
+
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
         count: tab.id === 'watch' ? watchEpisodesTotal :
             tab.id === 'themes' ? (anime.theme_songs?.length || 0) :
-            tab.id === 'characters' ? (anime.character_count || 0) :
-            tab.id === 'staff' ? (anime.staff_count || 0) : 0
+            tab.id === 'characters' ? characterTabCount :
+            tab.id === 'staff' ? staffTabCount : 0
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');

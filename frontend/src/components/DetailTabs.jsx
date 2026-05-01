@@ -6,6 +6,7 @@ import MusicSection from './MusicSection';
 import LazyYouTube from './LazyYouTube';
 
 import StatusDistribution from './StatusDistribution';
+import { getUniqueCharacterRoles } from '../utils/characterRoles';
 
 export function OverviewTab({ anime, accentColor, characters, staff, episodes }) {
     // Extract YouTube video ID
@@ -38,16 +39,7 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes })
 
     // Deduplicate and filter characters
     const topCharacters = useMemo(() => {
-        if (!Array.isArray(characters)) return [];
-        const seen = new Set();
-        return characters
-            .filter((c) => {
-                const name = c?.character?.name;
-                if (!name || seen.has(name)) return false;
-                seen.add(name);
-                return true;
-            })
-            .slice(0, 4);
+        return getUniqueCharacterRoles(characters, { includeVoiceActor: false }).slice(0, 4);
     }, [characters]);
 
     const topEpisodes = useMemo(() => {
@@ -296,20 +288,7 @@ export function ThemesTab({ anime, accentColor }) {
 
 export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick }) {
     const uniqueCharacters = useMemo(() => {
-        if (!Array.isArray(anime.characters)) return [];
-
-        const seen = new Set();
-        return anime.characters.filter((role) => {
-            const characterName = role?.character?.name;
-            if (!characterName) return false;
-
-            const voiceActorName = role?.voice_actor?.name || 'none';
-            const dedupeKey = `${characterName}:${role?.role || 'unknown'}:${voiceActorName}`;
-            if (seen.has(dedupeKey)) return false;
-
-            seen.add(dedupeKey);
-            return true;
-        });
+        return getUniqueCharacterRoles(anime.characters);
     }, [anime.characters]);
 
     if (isLoading) {
