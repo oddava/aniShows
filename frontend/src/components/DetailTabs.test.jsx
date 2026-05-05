@@ -49,4 +49,34 @@ describe('CharactersTab', () => {
         expect(screen.getAllByText('Anya Forger')).toHaveLength(1);
         expect(screen.getAllByText('Atsumi Tanezaki')).toHaveLength(1);
     });
+
+    it('renders one card for comma-ordered duplicate imports', () => {
+        const anime = {
+            characters: [
+                makeRole({
+                    id: 1,
+                    characterName: 'Subaru Natsuki',
+                    role: 'MAIN',
+                    voiceActorName: 'Yuusuke Kobayashi',
+                }),
+                makeRole({
+                    id: 2,
+                    characterName: 'Natsuki, Subaru',
+                    role: 'MAIN',
+                    voiceActorName: 'Kobayashi, Yuusuke',
+                }),
+            ],
+        };
+
+        render(
+            <MemoryRouter>
+                <CharactersTab anime={anime} isLoading={false} />
+            </MemoryRouter>
+        );
+
+        expect(screen.getAllByText('Subaru Natsuki')).toHaveLength(1);
+        expect(screen.getAllByText('Yuusuke Kobayashi')).toHaveLength(1);
+        expect(screen.queryByText('Natsuki, Subaru')).not.toBeInTheDocument();
+        expect(screen.queryByText('Kobayashi, Yuusuke')).not.toBeInTheDocument();
+    });
 });

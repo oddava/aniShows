@@ -63,6 +63,44 @@ describe('character role dedupe', () => {
         expect(getUniqueCharacterRoles(roles)).toHaveLength(2);
     });
 
+    it('collapses comma-ordered character and voice actor names', () => {
+        const roles = [
+            makeRole({
+                id: 1,
+                characterName: 'Subaru Natsuki',
+                role: 'MAIN',
+                voiceActorName: 'Yuusuke Kobayashi',
+            }),
+            makeRole({
+                id: 2,
+                characterName: 'Natsuki, Subaru',
+                role: 'MAIN',
+                voiceActorName: 'Kobayashi, Yuusuke',
+            }),
+            makeRole({
+                id: 3,
+                characterName: 'Beatrice',
+                role: 'MAIN',
+                voiceActorName: 'Satomi Arai',
+            }),
+            makeRole({
+                id: 4,
+                characterName: 'Beatrice',
+                role: 'SUPPORTING',
+                voiceActorName: 'Arai, Satomi',
+            }),
+        ];
+
+        const uniqueRoles = getUniqueCharacterRoles(roles);
+
+        expect(uniqueRoles).toHaveLength(2);
+        expect(uniqueRoles[0].character.name).toBe('Subaru Natsuki');
+        expect(uniqueRoles[0].voice_actor.name).toBe('Yuusuke Kobayashi');
+        expect(uniqueRoles[1].character.name).toBe('Beatrice');
+        expect(uniqueRoles[1].voice_actor.name).toBe('Satomi Arai');
+        expect(getUniqueCharacterRoleCount(roles)).toBe(2);
+    });
+
     it('can collapse preview rows by character only', () => {
         const roles = [
             makeRole({

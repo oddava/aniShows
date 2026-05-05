@@ -4,15 +4,33 @@ const ROLE_PRIORITY = {
     BACKGROUND: 1,
 };
 
-export const normalizeCharacterRoleName = (value) => (
+const normalizeDisplayName = (value) => (
     String(value || '')
         .normalize('NFKC')
         .trim()
         .replace(/\s+/g, ' ')
-        .toLowerCase()
+);
+
+const normalizeCommaOrderedName = (value) => {
+    const normalized = normalizeDisplayName(value);
+    const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
+
+    if (parts.length === 2) {
+        return `${parts[1]} ${parts[0]}`;
+    }
+
+    return normalized;
+};
+
+export const normalizeCharacterRoleName = (value) => (
+    normalizeCommaOrderedName(value).toLowerCase()
 );
 
 const getRolePriority = (role) => ROLE_PRIORITY[String(role || '').toUpperCase()] || 0;
+
+const hasCommaOrderedName = (value) => (
+    normalizeDisplayName(value).split(',').filter(Boolean).length === 2
+);
 
 const getCharacterRoleKey = (role, { includeVoiceActor }) => {
     const characterName = normalizeCharacterRoleName(role?.character?.name);
@@ -28,7 +46,9 @@ const getCharacterRoleCompleteness = (role) => (
     (getRolePriority(role?.role) * 10) +
     (role?.voice_actor ? 4 : 0) +
     (role?.character?.image ? 2 : 0) +
-    (role?.voice_actor?.image ? 1 : 0)
+    (role?.voice_actor?.image ? 1 : 0) +
+    (hasCommaOrderedName(role?.character?.name) ? 0 : 2) +
+    (!role?.voice_actor || !hasCommaOrderedName(role?.voice_actor?.name) ? 1 : 0)
 );
 
 export function getUniqueCharacterRoles(characters, { includeVoiceActor = true } = {}) {
