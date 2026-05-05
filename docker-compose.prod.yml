@@ -368,7 +368,7 @@ services:
           memory: 128M
 
   umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
     restart: always
     mem_limit: 512m
     mem_reservation: 256m
