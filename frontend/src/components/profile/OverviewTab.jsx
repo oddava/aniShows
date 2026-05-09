@@ -12,6 +12,10 @@ import {
     staffFavoriteApi,
 } from '../../api/client';
 
+const OVERVIEW_GRID_MAX_ROWS = 6;
+const OVERVIEW_GRID_COLUMNS = 6;
+const OVERVIEW_GRID_MAX_ITEMS = OVERVIEW_GRID_MAX_ROWS * OVERVIEW_GRID_COLUMNS;
+
 function TopStatsRow({ user }) {
     if (!user) return null;
 
@@ -42,11 +46,13 @@ function TopStatsRow({ user }) {
 }
 
 function CurrentlyWatchingGrid({ watchingItems }) {
-    if (!watchingItems || watchingItems.length === 0) {
+    const visibleWatchingItems = (watchingItems || []).slice(0, OVERVIEW_GRID_MAX_ITEMS);
+
+    if (visibleWatchingItems.length === 0) {
         return (
-        <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
-            <div className="ui-surface-subtle p-5">
+            <div className="mb-10">
+                <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
+                <div className="ui-surface-subtle p-5">
                     <div className="text-center py-6 text-gray-500">
                         <p className="text-sm">Not watching anything right now</p>
                     </div>
@@ -60,7 +66,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
             <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
-                    {watchingItems.map((item) => {
+                    {visibleWatchingItems.map((item) => {
                         const eps = item.episodes_watched || 0;
                         const total = item.anime?.episode_count || 0;
                         const progress = total > 0 ? (eps / total) * 100 : 0;
@@ -111,7 +117,7 @@ function getFavoritesItems(favoritesData) {
 }
 
 function AnimeFavoritesGrid({ favoritesData }) {
-    const favorites = getFavoritesItems(favoritesData);
+    const favorites = getFavoritesItems(favoritesData).slice(0, OVERVIEW_GRID_MAX_ITEMS);
 
     if (!favorites || favorites.length === 0) {
         return (
@@ -164,7 +170,9 @@ function AnimeFavoritesGrid({ favoritesData }) {
 }
 
 function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, nameKey }) {
-    if (!items || items.length === 0) {
+    const visibleItems = (items || []).slice(0, OVERVIEW_GRID_MAX_ITEMS);
+
+    if (visibleItems.length === 0) {
         return (
             <div className="mb-10">
                 <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
@@ -182,7 +190,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
             <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
-                    {items.map((entry) => {
+                    {visibleItems.map((entry) => {
                         const item = entry[itemKey];
                         return (
                             <div key={entry.id} className="group relative">
@@ -326,8 +334,13 @@ export default function OverviewTab({
     onTabChange
 }) {
     const { data: watchingItemsData } = useQuery({
-        queryKey: ['lists', targetUsername, 'Watching'],
-        queryFn: () => listApi.getAll({ status: 'Watching', username: targetUsername }).then(res => res.data.results || res.data || []),
+        queryKey: ['lists', targetUsername, 'Watching', 'overview'],
+        queryFn: () => listApi.getAll({
+            status: 'Watching',
+            username: targetUsername,
+            page: 1,
+            page_size: OVERVIEW_GRID_MAX_ITEMS,
+        }).then(res => res.data.results || res.data || []),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000, // 1 minute
         refetchOnMount: true,
@@ -335,7 +348,11 @@ export default function OverviewTab({
 
     const { data: favsData } = useQuery({
         queryKey: ['favorites-overview', targetUsername],
-        queryFn: () => favoriteApi.getAll({ username: targetUsername, page: 1, page_size: 100 }).then(res => res.data),
+        queryFn: () => favoriteApi.getAll({
+            username: targetUsername,
+            page: 1,
+            page_size: OVERVIEW_GRID_MAX_ITEMS,
+        }).then(res => res.data),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000, // 1 minute
         refetchOnMount: true,
@@ -343,7 +360,11 @@ export default function OverviewTab({
 
     const { data: characterFavsData } = useQuery({
         queryKey: ['character-favorites', targetUsername, 'overview'],
-        queryFn: () => characterFavoriteApi.getAll({ username: targetUsername, page: 1, page_size: 10 }).then((res) => res.data),
+        queryFn: () => characterFavoriteApi.getAll({
+            username: targetUsername,
+            page: 1,
+            page_size: OVERVIEW_GRID_MAX_ITEMS,
+        }).then((res) => res.data),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000,
         refetchOnMount: true,
@@ -351,7 +372,11 @@ export default function OverviewTab({
 
     const { data: staffFavsData } = useQuery({
         queryKey: ['staff-favorites', targetUsername, 'overview'],
-        queryFn: () => staffFavoriteApi.getAll({ username: targetUsername, page: 1, page_size: 10 }).then((res) => res.data),
+        queryFn: () => staffFavoriteApi.getAll({
+            username: targetUsername,
+            page: 1,
+            page_size: OVERVIEW_GRID_MAX_ITEMS,
+        }).then((res) => res.data),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000,
         refetchOnMount: true,
