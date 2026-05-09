@@ -224,7 +224,7 @@ jobs:
             docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'ls -la /srv/frontend/ && echo --- && ls /srv/frontend/assets/ | head -10 && echo --- && md5sum /srv/frontend/index.html'
             
             echo '🐳 Running deployment script for remaining services...'
-            ./deploy-prod.sh
+            bash ./deploy-prod.sh
             
             echo 'Verifying deployment health...'
             sleep 5
