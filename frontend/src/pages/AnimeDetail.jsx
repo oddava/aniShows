@@ -255,14 +255,14 @@ export default function AnimeDetail() {
     const { data: characters, isLoading: charactersLoading } = useQuery({
         queryKey: ['anime', slug, 'characters'],
         queryFn: () => animeApi.getCharacters(slug).then(res => res.data),
-        enabled: !!anime && (activeTab === 'characters' || activeTab === 'overview'),
+        enabled: !!anime && activeTab === 'characters',
         staleTime: Infinity, // Character lists rarely change
     });
 
     const { data: staff, isLoading: staffLoading } = useQuery({
         queryKey: ['anime', slug, 'staff'],
         queryFn: () => animeApi.getStaff(slug).then(res => res.data),
-        enabled: !!anime && (activeTab === 'staff' || activeTab === 'overview'),
+        enabled: !!anime && activeTab === 'staff',
         staleTime: Infinity, // Staff lists rarely change
     });
 
@@ -852,8 +852,8 @@ export default function AnimeDetail() {
                                     <OverviewTab
                                         anime={anime}
                                         accentColor={accentColor}
-                                        characters={characters}
-                                        staff={staff}
+                                        characters={anime.characters_preview}
+                                        staff={anime.staff_preview}
                                         episodes={displayEpisodes}
                                     />
                                 )}
@@ -894,15 +894,15 @@ export default function AnimeDetail() {
                                 )}
                                 {activeTab === 'characters' && (
                                     <CharactersTab
-                                        anime={{ ...anime, characters }}
+                                        anime={anime}
+                                        characters={characters}
                                         isLoading={charactersLoading}
-                                        accentColor={accentColor}
-                                        onCharacterClick={(role) => navigate(`/character/${role.character?.id}`)}
                                     />
                                 )}
                                 {activeTab === 'staff' && (
                                     <StaffTab
-                                        anime={{ ...anime, staff }}
+                                        anime={anime}
+                                        staff={staff}
                                         isLoading={staffLoading}
                                     />
                                 )}

@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { Users, Mic, Loader, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FranchiseSection from './FranchiseSection';
@@ -7,6 +8,218 @@ import LazyYouTube from './LazyYouTube';
 
 import StatusDistribution from './StatusDistribution';
 import { getUniqueCharacterRoles } from '../utils/characterRoles';
+
+const PROFILE_PLACEHOLDER = '/placeholder-avatar.png';
+const CHARACTER_VIRTUALIZE_THRESHOLD = 80;
+const CHARACTER_GRID_ROW_ESTIMATE = 84;
+const CHARACTER_GRID_OVERSCAN = 6;
+const CHARACTER_GRID_BREAKPOINTS = [
+    { query: '(min-width: 1024px)', columns: 2 },
+];
+
+const getPortraitUrl = (entity) => (
+    entity?.image_small || entity?.image_medium || entity?.image || PROFILE_PLACEHOLDER
+);
+
+const getPortraitSrcSet = (entity) => {
+    const candidates = [
+        entity?.image_small ? `${entity.image_small} 60w` : null,
+        entity?.image_medium ? `${entity.image_medium} 150w` : null,
+    ].filter(Boolean);
+
+    return candidates.length > 0 ? candidates.join(', ') : undefined;
+};
+
+const getResponsiveColumns = (defaultColumns, breakpoints) => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+        return defaultColumns;
+    }
+
+    for (const breakpoint of breakpoints) {
+        if (window.matchMedia(breakpoint.query).matches) {
+            return breakpoint.columns;
+        }
+    }
+
+    return defaultColumns;
+};
+
+function useResponsiveColumns(defaultColumns, breakpoints) {
+    const [columns, setColumns] = useState(() => getResponsiveColumns(defaultColumns, breakpoints));
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return undefined;
+        }
+
+        const mediaQueries = breakpoints.map((breakpoint) => window.matchMedia(breakpoint.query));
+        const handleChange = () => setColumns(getResponsiveColumns(defaultColumns, breakpoints));
+
+        handleChange();
+        mediaQueries.forEach((query) => {
+            if (typeof query.addEventListener === 'function') {
+                query.addEventListener('change', handleChange);
+            } else {
+                query.addListener(handleChange);
+            }
+        });
+
+        return () => {
+            mediaQueries.forEach((query) => {
+                if (typeof query.removeEventListener === 'function') {
+                    query.removeEventListener('change', handleChange);
+                } else {
+                    query.removeListener(handleChange);
+                }
+            });
+        };
+    }, [breakpoints, defaultColumns]);
+
+    return columns;
+}
+
+function useElementOffsetTop(ref, itemCount, columns) {
+    const [offsetTop, setOffsetTop] = useState(0);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return undefined;
+        }
+
+        const updateOffset = () => {
+            setOffsetTop(ref.current?.offsetTop || 0);
+        };
+
+        updateOffset();
+        window.addEventListener('resize', updateOffset);
+        window.addEventListener('load', updateOffset);
+
+        return () => {
+            window.removeEventListener('resize', updateOffset);
+            window.removeEventListener('load', updateOffset);
+        };
+    }, [ref, itemCount, columns]);
+
+    return offsetTop;
+}
+
+const PortraitImage = memo(function PortraitImage({ entity, alt, className }) {
+    return (
+        <img
+            src={getPortraitUrl(entity)}
+            srcSet={getPortraitSrcSet(entity)}
+            sizes="64px"
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            className={className}
+        />
+    );
+});
+
+const CharacterRoleCard = memo(function CharacterRoleCard({ role }) {
+    return (
+        <div className="flex h-16 sm:h-[72px] bg-dark-200/40 rounded-xl overflow-hidden border border-white/5">
+            <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
+                <PortraitImage
+                    entity={role.character}
+                    alt={role.character.name}
+                    className="w-full h-full object-cover saturate-[0.85]"
+                />
+            </Link>
+
+            <div className="flex-1 grid grid-cols-2 gap-2 p-2 sm:px-3 sm:py-2 min-w-0">
+                <div className="flex flex-col justify-center min-w-0">
+                    <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
+                        {role.character.name}
+                    </Link>
+                    <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
+                        {role.role}
+                    </span>
+                </div>
+
+                <div className="flex flex-col justify-center text-right min-w-0">
+                    {role.voice_actor ? (
+                        <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
+                            {role.voice_actor.name}
+                        </Link>
+                    ) : (
+                        <span className="text-[13px] font-medium text-gray-600">N/A</span>
+                    )}
+                    <span className="text-[11px] text-gray-500 mt-0.5">
+                        Japanese
+                    </span>
+                </div>
+            </div>
+
+            {role.voice_actor && (
+                <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
+                    <PortraitImage
+                        entity={role.voice_actor}
+                        alt={role.voice_actor.name}
+                        className="w-full h-full object-cover saturate-[0.85]"
+                    />
+                </Link>
+            )}
+        </div>
+    );
+});
+
+function CharacterGrid({ characters }) {
+    if (characters.length < CHARACTER_VIRTUALIZE_THRESHOLD) {
+        return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 animate-tab-content">
+                {characters.map((role) => (
+                    <CharacterRoleCard key={role.id} role={role} />
+                ))}
+            </div>
+        );
+    }
+
+    return <VirtualizedCharacterGrid characters={characters} />;
+}
+
+function VirtualizedCharacterGrid({ characters }) {
+    const containerRef = useRef(null);
+    const columns = useResponsiveColumns(1, CHARACTER_GRID_BREAKPOINTS);
+    const rowCount = Math.ceil(characters.length / columns);
+    const scrollMargin = useElementOffsetTop(containerRef, characters.length, columns);
+    const rowVirtualizer = useWindowVirtualizer({
+        count: rowCount,
+        estimateSize: () => CHARACTER_GRID_ROW_ESTIMATE,
+        overscan: CHARACTER_GRID_OVERSCAN,
+        scrollMargin,
+    });
+
+    return (
+        <div
+            ref={containerRef}
+            className="relative animate-tab-content"
+            style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+        >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const startIndex = virtualRow.index * columns;
+                const rowItems = characters.slice(startIndex, startIndex + columns);
+
+                return (
+                    <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        className={`absolute left-0 top-0 grid w-full gap-3 ${columns === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+                        style={{
+                            height: `${CHARACTER_GRID_ROW_ESTIMATE - 12}px`,
+                            transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                        }}
+                    >
+                        {rowItems.map((role) => (
+                            <CharacterRoleCard key={role.id} role={role} />
+                        ))}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
 
 export function OverviewTab({ anime, accentColor, characters, staff, episodes }) {
     // Extract YouTube video ID
@@ -64,8 +277,12 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes })
                             >
                                 <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
                                     <img
-                                        src={role.character.image || '/placeholder-avatar.png'}
+                                        src={getPortraitUrl(role.character)}
+                                        srcSet={getPortraitSrcSet(role.character)}
+                                        sizes="64px"
                                         alt={role.character.name}
+                                        loading="lazy"
+                                        decoding="async"
                                         className="w-full h-full object-cover saturate-[0.85]"
                                     />
                                 </Link>
@@ -97,8 +314,12 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes })
                                 {role.voice_actor && (
                                     <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
                                         <img
-                                            src={role.voice_actor.image || '/placeholder-avatar.png'}
+                                            src={getPortraitUrl(role.voice_actor)}
+                                            srcSet={getPortraitSrcSet(role.voice_actor)}
+                                            sizes="64px"
                                             alt={role.voice_actor.name}
+                                            loading="lazy"
+                                            decoding="async"
                                             className="w-full h-full object-cover saturate-[0.85]"
                                         />
                                     </Link>
@@ -123,8 +344,12 @@ export function OverviewTab({ anime, accentColor, characters, staff, episodes })
                             >
                                 <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
                                     <img
-                                        src={staffRole.staff.image || '/placeholder-avatar.png'}
+                                        src={getPortraitUrl(staffRole.staff)}
+                                        srcSet={getPortraitSrcSet(staffRole.staff)}
+                                        sizes="80px"
                                         alt={staffRole.staff.name}
+                                        loading="lazy"
+                                        decoding="async"
                                         className="w-full h-full object-cover saturate-[0.85]"
                                     />
                                 </div>
@@ -286,10 +511,11 @@ export function ThemesTab({ anime, accentColor }) {
     );
 }
 
-export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick }) {
+export function CharactersTab({ anime, characters: charactersProp, isLoading }) {
+    const sourceCharacters = charactersProp || anime?.characters;
     const uniqueCharacters = useMemo(() => {
-        return getUniqueCharacterRoles(anime.characters);
-    }, [anime.characters]);
+        return getUniqueCharacterRoles(sourceCharacters);
+    }, [sourceCharacters]);
 
     if (isLoading) {
         return (
@@ -308,65 +534,15 @@ export function CharactersTab({ anime, isLoading, accentColor, onCharacterClick 
         );
     }
 
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 animate-tab-content">
-            {uniqueCharacters.map((role) => (
-                <div 
-                    key={role.id}
-                    className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 min-h-[64px]"
-                >
-                    <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
-                        <img
-                            src={role.character.image || '/placeholder-avatar.png'}
-                            alt={role.character.name}
-                            className="w-full h-full object-cover saturate-[0.85]"
-                        />
-                    </Link>
-
-                    <div className="flex-1 grid grid-cols-2 gap-2 p-2 sm:px-3 sm:py-2 min-w-0">
-                        <div className="flex flex-col justify-center min-w-0">
-                            <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
-                                {role.character.name}
-                            </Link>
-                            <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
-                                {role.role}
-                            </span>
-                        </div>
-
-                        <div className="flex flex-col justify-center text-right min-w-0">
-                            {role.voice_actor ? (
-                                <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
-                                    {role.voice_actor.name}
-                                </Link>
-                            ) : (
-                                <span className="text-[13px] font-medium text-gray-600">N/A</span>
-                            )}
-                            <span className="text-[11px] text-gray-500 mt-0.5">
-                                Japanese
-                            </span>
-                        </div>
-                    </div>
-
-                    {role.voice_actor && (
-                        <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
-                            <img
-                                src={role.voice_actor.image || '/placeholder-avatar.png'}
-                                alt={role.voice_actor.name}
-                                className="w-full h-full object-cover saturate-[0.85]"
-                            />
-                        </Link>
-                    )}
-                </div>
-            ))}
-        </div>
-    );
+    return <CharacterGrid characters={uniqueCharacters} />;
 }
 
-export function StaffTab({ anime, isLoading }) {
+export function StaffTab({ anime, staff: staffProp, isLoading }) {
+    const sourceStaff = staffProp || anime?.staff;
     const uniqueStaff = useMemo(() => {
-        if (!Array.isArray(anime.staff)) return [];
+        if (!Array.isArray(sourceStaff)) return [];
         const seen = new Set();
-        return anime.staff.filter((staffRole) => {
+        return sourceStaff.filter((staffRole) => {
             const staffName = staffRole?.staff?.name;
             if (!staffName) return false;
             const roleName = staffRole?.role || 'unknown';
@@ -375,7 +551,7 @@ export function StaffTab({ anime, isLoading }) {
             seen.add(dedupeKey);
             return true;
         });
-    }, [anime.staff]);
+    }, [sourceStaff]);
 
     if (isLoading) {
         return (
@@ -404,8 +580,12 @@ export function StaffTab({ anime, isLoading }) {
                 >
                     <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
                         <img
-                            src={staffRole.staff.image || '/placeholder-avatar.png'}
+                            src={getPortraitUrl(staffRole.staff)}
+                            srcSet={getPortraitSrcSet(staffRole.staff)}
+                            sizes="96px"
                             alt={staffRole.staff.name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover saturate-[0.85]"
                         />
                     </div>

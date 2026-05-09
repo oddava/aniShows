@@ -105,13 +105,21 @@ class CharacterSerializer(ImageUrlMixin, ModelSerializer):
 
 class CharacterCompactSerializer(ImageUrlMixin, ModelSerializer):
     image = SerializerMethodField()
+    image_small = SerializerMethodField()
+    image_medium = SerializerMethodField()
 
     class Meta:
         model = Character
-        fields = ["id", "name", "name_native", "image"]
+        fields = ["id", "name", "name_native", "image", "image_small", "image_medium"]
 
     def get_image(self, obj):
         return self.get_image_url(obj, "image", "image_url")
+
+    def get_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(obj, "image_small", "image", "image_url")
+
+    def get_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
 
 
 class StaffSerializer(ImageUrlMixin, ModelSerializer):
@@ -143,18 +151,26 @@ class StaffSerializer(ImageUrlMixin, ModelSerializer):
 
 class StaffCompactSerializer(ImageUrlMixin, ModelSerializer):
     image = SerializerMethodField()
+    image_small = SerializerMethodField()
+    image_medium = SerializerMethodField()
 
     class Meta:
         model = Staff
-        fields = ["id", "name", "name_native", "image"]
+        fields = ["id", "name", "name_native", "image", "image_small", "image_medium"]
 
     def get_image(self, obj):
         return self.get_image_url(obj, "image", "image_url")
 
+    def get_image_small(self, obj):
+        return self.get_image_url_with_thumbnail(obj, "image_small", "image", "image_url")
+
+    def get_image_medium(self, obj):
+        return self.get_image_url_with_thumbnail(obj, "image_medium", "image", "image_url")
+
 
 class AnimeCharacterSerializer(ModelSerializer):
-    character = CharacterSerializer(read_only=True)
-    voice_actor = StaffSerializer(read_only=True)
+    character = CharacterCompactSerializer(read_only=True)
+    voice_actor = StaffCompactSerializer(read_only=True)
 
     class Meta:
         model = AnimeCharacter
@@ -162,7 +178,7 @@ class AnimeCharacterSerializer(ModelSerializer):
 
 
 class AnimeStaffSerializer(ModelSerializer):
-    staff = StaffSerializer(read_only=True)
+    staff = StaffCompactSerializer(read_only=True)
 
     class Meta:
         model = AnimeStaff

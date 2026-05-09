@@ -17,6 +17,8 @@ from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
 from ..services.jikan import JikanService
 from .base import (
+    AnimeCharacterSerializer,
+    AnimeStaffSerializer,
     GenreSerializer,
     StudioSerializer,
     ThemeSongSerializer,
@@ -233,6 +235,9 @@ class AnimeShelfSerializer(AnimeListSerializer):
 class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Full serializer for detail page"""
 
+    CHARACTER_PREVIEW_LIMIT = 12
+    STAFF_PREVIEW_LIMIT = 3
+
     genres = GenreSerializer(many=True, read_only=True)
     studio = StudioSerializer(read_only=True)
     character_count = IntegerField(read_only=True)
@@ -247,6 +252,8 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     status_distribution = SerializerMethodField()
     external_links = SerializerMethodField()
     relations = SerializerMethodField()
+    characters_preview = SerializerMethodField()
+    staff_preview = SerializerMethodField()
     cover_image = SerializerMethodField()
     cover_image_small = SerializerMethodField()
     cover_image_medium = SerializerMethodField()
@@ -286,6 +293,8 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "studio",
             "character_count",
             "staff_count",
+            "characters_preview",
+            "staff_preview",
             "external_links",
             "relations",
             "tags",
@@ -370,6 +379,54 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             key: int(distribution.get(key, 0) or 0)
             for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
         }
+
+    def get_characters_preview(self, obj):
+        from ..models import AnimeCharacter
+
+        queryset = (
+            AnimeCharacter.objects.filter(anime=obj)
+            .select_related("character", "voice_actor")
+            .only(
+                "id",
+                "anime_id",
+                "role",
+                "character_id",
+                "voice_actor_id",
+                "character__id",
+                "character__name",
+                "character__name_native",
+                "character__image",
+                "character__image_url",
+                "voice_actor__id",
+                "voice_actor__name",
+                "voice_actor__name_native",
+                "voice_actor__image",
+                "voice_actor__image_url",
+            )
+            .order_by("role", "character__name")[: self.CHARACTER_PREVIEW_LIMIT]
+        )
+        return AnimeCharacterSerializer(queryset, many=True).data
+
+    def get_staff_preview(self, obj):
+        from ..models import AnimeStaff
+
+        queryset = (
+            AnimeStaff.objects.filter(anime=obj)
+            .select_related("staff")
+            .only(
+                "id",
+                "anime_id",
+                "role",
+                "staff_id",
+                "staff__id",
+                "staff__name",
+                "staff__name_native",
+                "staff__image",
+                "staff__image_url",
+            )
+            .order_by("id")[: self.STAFF_PREVIEW_LIMIT]
+        )
+        return AnimeStaffSerializer(queryset, many=True).data
 
     def get_external_links(self, obj):
         links = []

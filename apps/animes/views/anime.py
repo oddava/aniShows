@@ -284,19 +284,52 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     @action(detail=True, methods=["get"])
     def characters(self, request, slug=None):
         instance = self._get_action_anime(slug)
-        characters = AnimeCharacter.objects.filter(anime=instance).select_related(
-            "character",
-            "voice_actor",
+        characters = (
+            AnimeCharacter.objects.filter(anime=instance)
+            .select_related("character", "voice_actor")
+            .only(
+                "id",
+                "anime_id",
+                "role",
+                "character_id",
+                "voice_actor_id",
+                "character__id",
+                "character__name",
+                "character__name_native",
+                "character__image",
+                "character__image_url",
+                "voice_actor__id",
+                "voice_actor__name",
+                "voice_actor__name_native",
+                "voice_actor__image",
+                "voice_actor__image_url",
+            )
         )
         serializer = AnimeCharacterSerializer(characters, many=True)
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"])
     def staff(self, request, slug=None):
         instance = self._get_action_anime(slug)
-        staff = AnimeStaff.objects.filter(anime=instance).select_related("staff")
+        staff = (
+            AnimeStaff.objects.filter(anime=instance)
+            .select_related("staff")
+            .only(
+                "id",
+                "anime_id",
+                "role",
+                "staff_id",
+                "staff__id",
+                "staff__name",
+                "staff__name_native",
+                "staff__image",
+                "staff__image_url",
+            )
+        )
         serializer = AnimeStaffSerializer(staff, many=True)
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"], url_path="watch-episodes")
     def watch_episodes(self, request, slug=None):
