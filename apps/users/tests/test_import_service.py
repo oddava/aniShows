@@ -3,12 +3,16 @@ from unittest.mock import Mock, patch
 from celery.exceptions import Retry
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.utils import OperationalError
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient, APITestCase
 
 from ...animes.models import Anime
-from ..models import UserActivity, UserImportJob
-from ..services.import_job_service import create_mal_import_job
+from ..models import UserActivity, UserImportJob, UserProfile
+from ..services.import_job_service import create_mal_import_job, create_mal_xml_import_job
 from ..services.import_service.anilist import AniListImporter
 from ..services.import_service.mal_api import MyAnimeListAPIImporter
 from ..services.import_service.mal_xml import MyAnimeListXMLImporter
@@ -221,6 +225,44 @@ class ImportJobServiceTests(TestCase):
         self.assertEqual(result.status_code, 202)
         self.assertEqual(mock_delay.call_count, 1)
 
+    def test_create_mal_import_job_rejects_active_import(self):
+        UserImportJob.objects.create(
+            user=self.user,
+            source=UserImportJob.ImportSource.myanimelist_api,
+            source_identifier="existing-user",
+            status=UserImportJob.ImportStatus.pending,
+        )
+
+        result = create_mal_import_job(self.user, "sample-user")
+
+        self.assertEqual(result.status_code, 429)
+        self.assertEqual(result.payload["code"], "import_already_running")
+
+    @override_settings(MAX_IMPORT_JOBS_PER_DAY=1)
+    def test_create_mal_import_job_rejects_daily_quota(self):
+        UserImportJob.objects.create(
+            user=self.user,
+            source=UserImportJob.ImportSource.myanimelist_api,
+            source_identifier="completed-user",
+            status=UserImportJob.ImportStatus.completed,
+        )
+
+        result = create_mal_import_job(self.user, "sample-user")
+
+        self.assertEqual(result.status_code, 429)
+        self.assertEqual(result.payload["code"], "daily_import_limit_reached")
+
+    @override_settings(MAX_IMPORT_TASK_PAYLOAD_BYTES=64)
+    def test_create_mal_xml_import_job_rejects_oversized_task_payload(self):
+        result = create_mal_xml_import_job(
+            self.user,
+            "large.xml",
+            "<myanimelist>" + ("x" * 200),
+        )
+
+        self.assertEqual(result.status_code, 400)
+        self.assertEqual(result.payload["code"], "import_payload_too_large")
+
     @patch("apps.users.services.import_job_service.process_import_job.delay", side_effect=RuntimeError("broker down"))
     def test_create_mal_import_job_marks_job_failed_when_enqueue_fails(self, _mock_delay):
         with self.captureOnCommitCallbacks(execute=True):
@@ -261,3 +303,66 @@ class ImportTaskWrapperTests(TestCase):
             process_import_job.run(job_id=123)
 
         mock_mark_failed.assert_called_once()
+
+
+class ImportExportApiSecurityTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="api-import-user",
+            email="api-import@example.com",
+            password="password123",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def _set_email_verified(self, verified=True):
+        UserProfile.objects.update_or_create(
+            user=self.user,
+            defaults={"email_verified": verified},
+        )
+
+    def test_mal_import_requires_verified_email(self):
+        self._set_email_verified(False)
+
+        response = self.client.post(
+            reverse("import_mal"),
+            {"username": "sample-user"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "email_verification_required")
+
+    @patch("apps.users.services.import_job_service.transaction.on_commit")
+    def test_verified_user_can_start_mal_import(self, mock_on_commit):
+        self._set_email_verified(True)
+
+        response = self.client.post(
+            reverse("import_mal"),
+            {"username": "sample-user"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(response.data["status"], "pending")
+        self.assertEqual(mock_on_commit.call_count, 1)
+
+    @override_settings(MAX_IMPORT_XML_ENTRIES=1)
+    @patch("apps.users.services.import_job_service.transaction.on_commit")
+    def test_mal_xml_import_rejects_too_many_entries(self, mock_on_commit):
+        self._set_email_verified(True)
+        upload = SimpleUploadedFile(
+            "list.xml",
+            b"<myanimelist><anime /><anime /></myanimelist>",
+            content_type="application/xml",
+        )
+
+        response = self.client.post(
+            reverse("import_mal_xml"),
+            {"file": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "xml_entry_limit_exceeded")
+        mock_on_commit.assert_not_called()

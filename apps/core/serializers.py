@@ -10,6 +10,11 @@ from rest_framework.fields import (
 from rest_framework.serializers import ModelSerializer, Serializer
 
 from .models import CeleryTaskResult, CeleryTaskSchedule
+from .services.celery_admin_service import (
+    AVAILABLE_TASKS,
+    CeleryTaskValidationError,
+    validate_task_invocation,
+)
 
 
 class TriggeredBySerializer(Serializer):
@@ -116,10 +121,8 @@ class CeleryTaskScheduleWriteSerializer(ModelSerializer):
         ]
 
     def validate_task_name(self, value):
-        if not isinstance(value, str) or not value.startswith("apps.") or value not in current_app.tasks:
-            raise ValidationError(
-                "Task name must reference a registered application task."
-            )
+        if not isinstance(value, str) or value not in AVAILABLE_TASKS:
+            raise ValidationError("Task name must reference an allowlisted admin task.")
         return value
 
     def validate_queue(self, value):
@@ -170,6 +173,19 @@ class CeleryTaskScheduleWriteSerializer(ModelSerializer):
         attrs["queue"] = attrs.get("queue") or getattr(instance, "queue", "default") or "default"
         attrs.setdefault("task_args", getattr(instance, "task_args", []) if instance else [])
         attrs.setdefault("task_kwargs", getattr(instance, "task_kwargs", {}) if instance else {})
+
+        task_name = attrs.get("task_name", getattr(instance, "task_name", None))
+        if task_name:
+            try:
+                task_args, task_kwargs = validate_task_invocation(
+                    task_path=task_name,
+                    args=attrs["task_args"],
+                    kwargs=attrs["task_kwargs"],
+                )
+            except CeleryTaskValidationError as exc:
+                raise ValidationError({"task_kwargs": str(exc)}) from exc
+            attrs["task_args"] = task_args
+            attrs["task_kwargs"] = task_kwargs
 
         if schedule_type == CeleryTaskSchedule.ScheduleType.CRONTAB:
             attrs["interval_every"] = None

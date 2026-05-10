@@ -349,8 +349,8 @@ class ReviewInteractionTests(APITestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.voter)
 
-    def test_vote_toggle_is_scoped_per_vote_type(self):
-        """Helpful and dislike votes toggle independently per user."""
+    def test_vote_switch_replaces_existing_vote_and_repeating_toggles_off(self):
+        """A user can have one active vote per review."""
         votes_url = reverse("reviews-votes", args=[self.review.id])
 
         helpful_response = self.client.post(
@@ -368,14 +368,19 @@ class ReviewInteractionTests(APITestCase):
         )
         self.assertEqual(dislike_response.status_code, status.HTTP_200_OK)
         self.assertTrue(dislike_response.data["active"])
+        self.assertEqual(dislike_response.data["vote_type"], ReviewVote.VoteType.DISLIKE)
         self.assertEqual(
             ReviewVote.objects.filter(user=self.voter, review=self.review).count(),
-            2,
+            1,
+        )
+        self.assertEqual(
+            ReviewVote.objects.get(user=self.voter, review=self.review).vote_type,
+            ReviewVote.VoteType.DISLIKE,
         )
 
         toggle_off_response = self.client.post(
             votes_url,
-            {"vote_type": ReviewVote.VoteType.HELPFUL},
+            {"vote_type": ReviewVote.VoteType.DISLIKE},
             format="json",
         )
         self.assertEqual(toggle_off_response.status_code, status.HTTP_200_OK)
@@ -384,7 +389,6 @@ class ReviewInteractionTests(APITestCase):
             ReviewVote.objects.filter(
                 user=self.voter,
                 review=self.review,
-                vote_type=ReviewVote.VoteType.HELPFUL,
             ).exists()
         )
 
@@ -395,8 +399,13 @@ class ReviewInteractionTests(APITestCase):
             review=self.review,
             vote_type=ReviewVote.VoteType.HELPFUL,
         )
+        other_voter = User.objects.create_user(
+            username="other-voter",
+            email="other-voter@example.com",
+            password="password123",
+        )
         ReviewVote.objects.create(
-            user=self.voter,
+            user=other_voter,
             review=self.review,
             vote_type=ReviewVote.VoteType.DISLIKE,
         )
@@ -417,7 +426,7 @@ class ReviewInteractionTests(APITestCase):
 
         self.assertEqual(payload["helpful_count"], 1)
         self.assertEqual(payload["dislike_count"], 1)
-        self.assertEqual(payload["user_votes"], {"helpful": True, "dislike": True})
+        self.assertEqual(payload["user_votes"], {"helpful": True, "dislike": False})
 
         reactions = {item["type"]: item for item in payload["reactions"]}
         self.assertEqual(reactions["heart"]["count"], 2)

@@ -17,7 +17,7 @@ from ...animes.admin_serializers import (
 )
 from ...animes.models import Anime
 from ...animes.services.offline_sync import OfflineSyncService
-from ...core.permissions import IsAdminUser
+from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 from ..services.anime_admin_service import (
     apply_default_genre_slug,
     delete_genre,
@@ -46,10 +46,17 @@ class ForceQuerySerializer(Serializer):
     force = BooleanField(required=False, default=False)
 
 
-class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, GenericViewSet):
+class AdminAnimeViewSet(
+    SuperUserRequiredForActionsMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    DestroyModelMixin,
+    GenericViewSet,
+):
     """Anime management for admins utilizing DRF GenericViewSet."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"destroy"})
     serializer_class = AdminAnimeSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AnimeFilter
@@ -74,10 +81,11 @@ class AdminAnimeViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, G
         return Response({"message": f"Anime '{title}' deleted successfully."})
 
 
-class AdminGenreViewSet(ModelViewSet):
+class AdminGenreViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     """Genre management for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminGenreSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
@@ -99,10 +107,11 @@ class AdminGenreViewSet(ModelViewSet):
         return Response(result.payload, status=result.status_code)
 
 
-class AdminStudioViewSet(ModelViewSet):
+class AdminStudioViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     """Studio management for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminStudioSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
@@ -120,10 +129,11 @@ class AdminStudioViewSet(ModelViewSet):
         return Response(result.payload, status=result.status_code)
 
 
-class AdminCharacterViewSet(ModelViewSet):
+class AdminCharacterViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     """Character management for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminCharacterSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_native", "description"]
@@ -134,10 +144,11 @@ class AdminCharacterViewSet(ModelViewSet):
         return get_admin_character_queryset()
 
 
-class AdminStaffViewSet(ModelViewSet):
+class AdminStaffViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     """Staff management for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminStaffSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_native", "description"]
@@ -148,8 +159,14 @@ class AdminStaffViewSet(ModelViewSet):
         return get_admin_staff_queryset()
 
 
-class AdminOfflineAnimeSyncStateViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
+class AdminOfflineAnimeSyncStateViewSet(
+    SuperUserRequiredForActionsMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    GenericViewSet,
+):
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"retry", "mark_skipped", "set_ids_and_retry", "merge_target"})
     serializer_class = AdminOfflineAnimeSyncStateSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["anime__title", "anime__slug", "quarantine_reason", "last_error_code"]

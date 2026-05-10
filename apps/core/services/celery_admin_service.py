@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import timedelta
+import json
 
 from celery import current_app
 from django.db.models import Avg, Count, Q
@@ -17,7 +18,7 @@ AVAILABLE_TASKS = {
                 "enum": ["trending", "seasonal", "next_season", "airing", "full_catalog"],
                 "required": True,
             },
-            "limit": {"type": "integer", "default": 50},
+            "limit": {"type": "integer", "default": 50, "min": 1, "max": 500},
         },
         "default_queue": "high_priority",
     },
@@ -30,7 +31,7 @@ AVAILABLE_TASKS = {
                 "enum": ["single", "backfill"],
                 "default": "backfill",
             },
-            "batch_size": {"type": "integer", "default": 100},
+            "batch_size": {"type": "integer", "default": 100, "min": 1, "max": 500},
         },
         "default_queue": "batch",
     },
@@ -38,7 +39,7 @@ AVAILABLE_TASKS = {
         "name": "Sync Theme Songs",
         "description": "Synchronize anime theme songs",
         "args_schema": {
-            "limit": {"type": "integer", "default": 500},
+            "limit": {"type": "integer", "default": 500, "min": 1, "max": 1000},
             "retry_failed": {"type": "boolean", "default": False},
         },
         "default_queue": "default",
@@ -47,7 +48,7 @@ AVAILABLE_TASKS = {
         "name": "Generate Recommendations",
         "description": "Generate anime recommendations for users",
         "args_schema": {
-            "limit": {"type": "integer", "default": 10},
+            "limit": {"type": "integer", "default": 10, "min": 1, "max": 100},
         },
         "default_queue": "low_priority",
     },
@@ -55,13 +56,13 @@ AVAILABLE_TASKS = {
         "name": "Sync Franchises",
         "description": "Synchronize anime franchise data",
         "args_schema": {
-            "anime_id": {"type": "integer", "required": False},
+            "anime_id": {"type": "integer", "required": False, "min": 1},
             "mode": {
                 "type": "string",
                 "enum": ["single", "backfill"],
                 "default": "backfill",
             },
-            "batch_size": {"type": "integer", "default": 50},
+            "batch_size": {"type": "integer", "default": 50, "min": 1, "max": 250},
         },
         "default_queue": "default",
     },
@@ -69,7 +70,7 @@ AVAILABLE_TASKS = {
         "name": "Update Relation Slugs",
         "description": "Update broken relation slugs",
         "args_schema": {
-            "batch_size": {"type": "integer", "default": 100},
+            "batch_size": {"type": "integer", "default": 100, "min": 1, "max": 500},
         },
         "default_queue": "low_priority",
     },
@@ -77,7 +78,7 @@ AVAILABLE_TASKS = {
         "name": "Generate Image Thumbnails",
         "description": "Generate WebP thumbnails for anime images",
         "args_schema": {
-            "anime_id": {"type": "integer", "required": True},
+            "anime_id": {"type": "integer", "required": True, "min": 1},
         },
         "default_queue": "low_priority",
     },
@@ -85,7 +86,7 @@ AVAILABLE_TASKS = {
         "name": "Cleanup Unverified Accounts",
         "description": "Delete unverified user accounts",
         "args_schema": {
-            "days": {"type": "integer", "default": 7},
+            "days": {"type": "integer", "default": 7, "min": 7, "max": 90},
         },
         "default_queue": "low_priority",
     },
@@ -95,18 +96,103 @@ AVAILABLE_TASKS = {
         "args_schema": {
             "cleanup_unverified": {"type": "boolean", "default": True},
             "cleanup_imports": {"type": "boolean", "default": True},
-            "unverified_days": {"type": "integer", "default": 7},
-            "import_days": {"type": "integer", "default": 30},
+            "unverified_days": {"type": "integer", "default": 7, "min": 7, "max": 90},
+            "import_days": {"type": "integer", "default": 30, "min": 7, "max": 365},
         },
         "default_queue": "low_priority",
     },
 }
+
+MAX_ADMIN_TASK_PAYLOAD_BYTES = 4096
+
+
+class CeleryTaskValidationError(ValueError):
+    pass
 
 
 @dataclass(slots=True)
 class CeleryAdminActionResult:
     payload: dict
     status_code: int
+
+
+def _payload_size_bytes(args=None, kwargs=None) -> int:
+    try:
+        payload = json.dumps(
+            {
+                "args": [] if args is None else args,
+                "kwargs": {} if kwargs is None else kwargs,
+            }
+        )
+    except TypeError as exc:
+        raise CeleryTaskValidationError("Task arguments must be JSON serializable.") from exc
+    return len(payload.encode("utf-8"))
+
+
+def _coerce_schema_value(name: str, value, spec: dict):
+    value_type = spec.get("type")
+
+    if value_type == "integer":
+        if isinstance(value, bool):
+            raise CeleryTaskValidationError(f"{name} must be an integer.")
+        try:
+            coerced = int(value)
+        except (TypeError, ValueError) as exc:
+            raise CeleryTaskValidationError(f"{name} must be an integer.") from exc
+        if "min" in spec and coerced < spec["min"]:
+            raise CeleryTaskValidationError(f"{name} must be at least {spec['min']}.")
+        if "max" in spec and coerced > spec["max"]:
+            raise CeleryTaskValidationError(f"{name} must be at most {spec['max']}.")
+        return coerced
+
+    if value_type == "boolean":
+        if isinstance(value, bool):
+            return value
+        raise CeleryTaskValidationError(f"{name} must be a boolean.")
+
+    if value_type == "string":
+        if not isinstance(value, str):
+            raise CeleryTaskValidationError(f"{name} must be a string.")
+        coerced = value.strip()
+        if spec.get("enum") and coerced not in spec["enum"]:
+            allowed = ", ".join(spec["enum"])
+            raise CeleryTaskValidationError(f"{name} must be one of: {allowed}.")
+        return coerced
+
+    raise CeleryTaskValidationError(f"{name} has an unsupported schema type.")
+
+
+def validate_task_invocation(*, task_path: str, args=None, kwargs=None) -> tuple[list, dict]:
+    if task_path not in AVAILABLE_TASKS:
+        raise CeleryTaskValidationError(f"Task {task_path} is not allowed or does not exist.")
+
+    resolved_args = [] if args is None else args
+    resolved_kwargs = {} if kwargs is None else kwargs
+    if not isinstance(resolved_args, list):
+        raise CeleryTaskValidationError("Task args must be a JSON list.")
+    if resolved_args:
+        raise CeleryTaskValidationError("Use keyword arguments for admin-triggered tasks.")
+    if not isinstance(resolved_kwargs, dict):
+        raise CeleryTaskValidationError("Task kwargs must be a JSON object.")
+    if _payload_size_bytes(resolved_args, resolved_kwargs) > MAX_ADMIN_TASK_PAYLOAD_BYTES:
+        raise CeleryTaskValidationError("Task argument payload is too large.")
+
+    schema = AVAILABLE_TASKS[task_path].get("args_schema", {})
+    unknown_keys = set(resolved_kwargs) - set(schema)
+    if unknown_keys:
+        unknown = ", ".join(sorted(unknown_keys))
+        raise CeleryTaskValidationError(f"Unknown task argument(s): {unknown}.")
+
+    validated_kwargs = {}
+    for name, spec in schema.items():
+        if name in resolved_kwargs:
+            validated_kwargs[name] = _coerce_schema_value(name, resolved_kwargs[name], spec)
+        elif spec.get("required"):
+            raise CeleryTaskValidationError(f"{name} is required.")
+        elif "default" in spec:
+            validated_kwargs[name] = spec["default"]
+
+    return [], validated_kwargs
 
 
 def bulk_delete_task_results(*, ids=None, days=None) -> CeleryAdminActionResult:
@@ -205,6 +291,7 @@ def create_task_result_record(*, task_path: str, task_id: str, args=None, kwargs
 
 
 def trigger_task(*, task_path: str, args=None, kwargs=None, queue: str | None, user):
+    args, kwargs = validate_task_invocation(task_path=task_path, args=args, kwargs=kwargs)
     task_info = AVAILABLE_TASKS[task_path]
     resolved_queue = queue or task_info.get("default_queue", "default")
     result = current_app.send_task(task_path, args=args or [], kwargs=kwargs or {}, queue=resolved_queue)
@@ -231,17 +318,22 @@ def run_schedule_now(*, schedule, user) -> CeleryAdminActionResult:
             status_code=400,
         )
 
-    result = current_app.send_task(
-        schedule.task_name,
+    args, kwargs = validate_task_invocation(
+        task_path=schedule.task_name,
         args=schedule.task_args or [],
         kwargs=schedule.task_kwargs or {},
+    )
+    result = current_app.send_task(
+        schedule.task_name,
+        args=args,
+        kwargs=kwargs,
         queue=schedule.queue or "default",
     )
     task_result = create_task_result_record(
         task_path=schedule.task_name,
         task_id=result.id,
-        args=schedule.task_args,
-        kwargs=schedule.task_kwargs,
+        args=args,
+        kwargs=kwargs,
         queue=schedule.queue,
         user=user,
     )

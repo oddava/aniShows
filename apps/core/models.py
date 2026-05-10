@@ -318,14 +318,17 @@ class CeleryTaskSchedule(TimestampMixin, Model):
 
     def clean(self):
         from celery import current_app
+        from .services.celery_admin_service import (
+            AVAILABLE_TASKS,
+            CeleryTaskValidationError,
+            validate_task_invocation,
+        )
 
         errors = {}
         available_queues = {queue.name for queue in (current_app.conf.task_queues or [])}
 
-        if self.task_name and (
-            not self.task_name.startswith("apps.") or self.task_name not in current_app.tasks
-        ):
-            errors["task_name"] = "Task name must reference a registered application task."
+        if self.task_name and self.task_name not in AVAILABLE_TASKS:
+            errors["task_name"] = "Task name must reference an allowlisted admin task."
 
         if self.queue and self.queue not in available_queues:
             errors["queue"] = "Queue must be one of the configured Celery queues."
@@ -335,6 +338,21 @@ class CeleryTaskSchedule(TimestampMixin, Model):
 
         if not isinstance(self.task_kwargs, dict):
             errors["task_kwargs"] = "Task kwargs must be a JSON object."
+
+        if (
+            self.task_name
+            and "task_name" not in errors
+            and not errors.get("task_args")
+            and not errors.get("task_kwargs")
+        ):
+            try:
+                validate_task_invocation(
+                    task_path=self.task_name,
+                    args=self.task_args or [],
+                    kwargs=self.task_kwargs or {},
+                )
+            except CeleryTaskValidationError as exc:
+                errors["task_kwargs"] = str(exc)
 
         if self.schedule_type == self.ScheduleType.INTERVAL and (
             self.interval_every is None or self.interval_every < 1

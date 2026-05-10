@@ -16,7 +16,7 @@ from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveMod
 from rest_framework.response import Response
 
 from ..models import CeleryTaskResult, CeleryTaskSchedule
-from ..permissions import IsAdminUser
+from ..permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 from ..serializers import (
     CeleryTaskResultDetailSerializer,
     CeleryTaskResultListSerializer,
@@ -26,6 +26,7 @@ from ..serializers import (
 )
 from ..services.celery_admin_service import (
     AVAILABLE_TASKS,
+    CeleryTaskValidationError,
     build_dashboard_payload,
     build_task_result_stats,
     bulk_delete_task_results,
@@ -51,12 +52,14 @@ class CeleryTaskResultFilter(FilterSet):
 
 
 class CeleryTaskResultViewSet(
+    SuperUserRequiredForActionsMixin,
     ListModelMixin,
     RetrieveModelMixin,
     DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"destroy", "bulk_delete"})
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = CeleryTaskResultFilter
     search_fields = ["task_id", "task_name", "error_message", "result_summary"]
@@ -109,8 +112,19 @@ class CeleryTaskScheduleFilter(FilterSet):
         fields = ["status", "schedule_type"]
 
 
-class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
+class CeleryTaskScheduleViewSet(SuperUserRequiredForActionsMixin, viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset(
+        {
+            "create",
+            "update",
+            "partial_update",
+            "destroy",
+            "enable",
+            "disable",
+            "run_now",
+        }
+    )
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_class = CeleryTaskScheduleFilter
     ordering_fields = ["name", "created_at", "last_run_at"]
@@ -194,6 +208,8 @@ class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
         schedule = self.get_object()
         try:
             result = run_schedule_now(schedule=schedule, user=request.user)
+        except CeleryTaskValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
             return Response(
                 {"detail": f"Failed to trigger task: {exc}"},
@@ -202,8 +218,9 @@ class CeleryTaskScheduleViewSet(viewsets.ModelViewSet):
         return Response(result.payload, status=result.status_code)
 
 
-class CeleryAdminControlViewSet(viewsets.ViewSet):
+class CeleryAdminControlViewSet(SuperUserRequiredForActionsMixin, viewsets.ViewSet):
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"trigger_task", "control_task", "worker_control"})
 
     @action(detail=False, methods=["get"])
     def tasks(self, request):
@@ -245,6 +262,8 @@ class CeleryAdminControlViewSet(viewsets.ViewSet):
                 queue=queue,
                 user=request.user,
             )
+        except CeleryTaskValidationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
             return Response(
                 {"detail": f"Failed to trigger task: {exc}"},

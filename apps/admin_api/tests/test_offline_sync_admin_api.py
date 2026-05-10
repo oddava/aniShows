@@ -20,6 +20,13 @@ class OfflineSyncAdminAPITests(TestCase):
             password="password123",
             is_staff=True,
         )
+        self.superuser = User.objects.create_user(
+            username="offline-root",
+            email="offline-root@example.com",
+            password="password123",
+            is_staff=True,
+            is_superuser=True,
+        )
         self.client.force_authenticate(self.admin)
 
     def _anime(self, title: str, **overrides):
@@ -62,6 +69,7 @@ class OfflineSyncAdminAPITests(TestCase):
         self.assertEqual(response.data["results"][0]["id"], quarantined.id)
 
     def test_retry_action_resets_quarantine(self):
+        self.client.force_authenticate(self.superuser)
         state = self._state(self._anime("Retry Me"))
 
         response = self.client.post(f"/api/v1/admin/offline-sync-states/{state.id}/retry/")
@@ -73,6 +81,7 @@ class OfflineSyncAdminAPITests(TestCase):
         self.assertEqual(state.last_error_code, "")
 
     def test_mark_skipped_action_sets_manual_reason(self):
+        self.client.force_authenticate(self.superuser)
         state = self._state(self._anime("Skip Me"))
 
         response = self.client.post(
@@ -87,6 +96,7 @@ class OfflineSyncAdminAPITests(TestCase):
         self.assertEqual(state.quarantine_reason, "operator_skipped")
 
     def test_set_ids_and_retry_updates_identity_then_resets(self):
+        self.client.force_authenticate(self.superuser)
         state = self._state(self._anime("Set IDs"))
 
         response = self.client.post(
@@ -104,6 +114,7 @@ class OfflineSyncAdminAPITests(TestCase):
         self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.PENDING)
 
     def test_merge_target_marks_record_as_skipped_merge(self):
+        self.client.force_authenticate(self.superuser)
         source_state = self._state(self._anime("Merge Source"))
         target = self._anime("Merge Target")
 
@@ -117,3 +128,10 @@ class OfflineSyncAdminAPITests(TestCase):
         source_state.refresh_from_db()
         self.assertTrue(source_state.quarantined)
         self.assertEqual(source_state.quarantine_reason, f"merged_into:{target.id}")
+
+    def test_staff_cannot_mutate_offline_sync_state(self):
+        state = self._state(self._anime("Staff Denied"))
+
+        response = self.client.post(f"/api/v1/admin/offline-sync-states/{state.id}/retry/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -23,8 +23,15 @@ User = get_user_model()
 class UserTaskService:
     """Service methods used by Celery task wrappers in ``apps.users.tasks``."""
 
+    MIN_UNVERIFIED_CLEANUP_DAYS = 7
+
     @staticmethod
     def cleanup_unverified_accounts(days: int = 7) -> dict:
+        days = int(days)
+        if days < UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS:
+            raise ValueError(
+                f"days must be at least {UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS}"
+            )
         threshold_date = timezone.now() - timedelta(days=days)
         stale_users = list(
             User.objects.filter(
@@ -203,6 +210,11 @@ class UserTaskService:
         import_days: int = 30,
     ) -> dict:
         from ..tasks import cleanup_old_import_jobs, cleanup_unverified_accounts
+
+        if int(unverified_days) < UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS:
+            raise ValueError(
+                f"unverified_days must be at least {UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS}"
+            )
 
         task_ids: dict[str, str] = {}
 
