@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from ...core.models import AuditLog
-from ...core.permissions import IsAdminUser
+from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 from ...core.services.notification_service import NotificationService
 from ...shared.logger import logger
 from ..models import Badge, UserBadge
@@ -17,10 +17,13 @@ from ..services.avatar_service import get_user_avatar_url
 User = get_user_model()
 
 
-class AdminBadgeViewSet(ModelViewSet):
+class AdminBadgeViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     """Admin CRUD operations for Badges."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset(
+        {"create", "update", "partial_update", "destroy", "grant", "revoke"}
+    )
     serializer_class = BadgeSerializer
     queryset = Badge.objects.annotate(holders_count=Count("user_badges")).order_by(
         "-priority", "name"

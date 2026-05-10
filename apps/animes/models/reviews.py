@@ -60,12 +60,12 @@ class ReviewVote(CreatedAtMixin, Model):
     vote_type = CharField(max_length=20, choices=VoteType.choices)
 
     class Meta:
-        unique_together = ("user", "review", "vote_type")
+        unique_together = ("user", "review")
         indexes = [
             Index(fields=["review", "vote_type"], name="anime_revie_review__5b332b_idx"),
             Index(
-                fields=["user", "review", "vote_type"],
-                name="anime_revie_user_id_86991f_idx",
+                fields=["user", "review"],
+                name="anime_revie_user_review_idx",
             ),
         ]
 

@@ -9,6 +9,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from ...core.api_errors import error_response
+from ...core.permissions import IsSuperUser
 from ...core.utils import get_client_ip
 from ...shared.logger import logger
 from ...shared.pagination import NoCountPagination
@@ -416,7 +417,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         detail=False,
         methods=["post"],
         url_path="franchise/fetch",
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsSuperUser],
         authentication_classes=[JWTAuthentication, CsrfExemptSessionAuthentication],
     )
     def franchise_fetch(self, request):

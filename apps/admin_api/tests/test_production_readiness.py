@@ -24,6 +24,13 @@ class TestAdminSettingsAPI(APITestCase):
             password="password123",
             is_staff=True,
         )
+        self.superuser = User.objects.create_user(
+            username="settings_superuser",
+            email="settings-superuser@example.com",
+            password="password123",
+            is_staff=True,
+            is_superuser=True,
+        )
         self.client.force_authenticate(user=self.admin)
         self.url = "/api/v1/admin/settings/"
 
@@ -34,6 +41,7 @@ class TestAdminSettingsAPI(APITestCase):
         self.assertEqual(AdminPanelSettings.objects.count(), 1)
 
     def test_put_settings_persists_to_database(self):
+        self.client.force_authenticate(user=self.superuser)
         payload = {
             "general": {"siteName": "aniShows Pro", "timezone": "America/New_York"},
             "security": {"sessionTimeout": 12, "apiRateLimit": 5000},
@@ -49,11 +57,17 @@ class TestAdminSettingsAPI(APITestCase):
         self.assertEqual(get_response.data["security"]["sessionTimeout"], 12)
 
     def test_put_settings_rejects_invalid_types(self):
+        self.client.force_authenticate(user=self.superuser)
         payload = {"security": {"sessionTimeout": "abc"}}
         response = self.client.put(self.url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("errors", response.data)
         self.assertIn("security.sessionTimeout", response.data["errors"])
+
+    def test_staff_cannot_put_settings(self):
+        payload = {"general": {"siteName": "Blocked"}}
+        response = self.client.put(self.url, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
 class TestReviewReportFlow(APITestCase):
@@ -159,7 +173,7 @@ class TestBulkOperationSafety(APITestCase):
         self.bulk_url = "/api/v1/admin/bulk/"
 
     def test_bulk_genre_delete_requires_force_when_referenced(self):
-        self.client.force_authenticate(user=self.staff_admin)
+        self.client.force_authenticate(user=self.superuser)
         response = self.client.post(
             self.bulk_url,
             {"operation": "delete", "entity_type": "genre", "entity_ids": [self.genre.id]},
@@ -169,7 +183,7 @@ class TestBulkOperationSafety(APITestCase):
         self.assertTrue(Genre.objects.filter(id=self.genre.id).exists())
 
     def test_bulk_genre_delete_succeeds_with_force(self):
-        self.client.force_authenticate(user=self.staff_admin)
+        self.client.force_authenticate(user=self.superuser)
         response = self.client.post(
             self.bulk_url,
             {
@@ -182,6 +196,16 @@ class TestBulkOperationSafety(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Genre.objects.filter(id=self.genre.id).exists())
+
+    def test_staff_cannot_use_bulk_operations(self):
+        self.client.force_authenticate(user=self.staff_admin)
+        response = self.client.post(
+            self.bulk_url,
+            {"operation": "delete", "entity_type": "genre", "entity_ids": [self.genre.id]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Genre.objects.filter(id=self.genre.id).exists())
 
     def test_bulk_anime_delete_requires_superuser(self):
         self.client.force_authenticate(user=self.staff_admin)
@@ -201,6 +225,52 @@ class TestBulkOperationSafety(APITestCase):
         )
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
         self.assertFalse(Anime.objects.filter(id=self.anime.id).exists())
+
+
+class TestAdminUserDestructivePermissions(APITestCase):
+    def setUp(self):
+        self.staff_admin = User.objects.create_user(
+            username="user_staff_admin",
+            email="user-staff-admin@example.com",
+            password="password123",
+            is_staff=True,
+        )
+        self.superuser = User.objects.create_user(
+            username="user_root_admin",
+            email="user-root-admin@example.com",
+            password="password123",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.target_user = User.objects.create_user(
+            username="managed_user",
+            email="managed-user@example.com",
+            password="password123",
+        )
+
+    def test_staff_can_view_users_but_cannot_toggle_or_delete(self):
+        self.client.force_authenticate(user=self.staff_admin)
+
+        list_response = self.client.get("/api/v1/admin/users/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        toggle_response = self.client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/toggle_active/"
+        )
+        self.assertEqual(toggle_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        delete_response = self.client.delete(f"/api/v1/admin/users/{self.target_user.id}/")
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(User.objects.filter(id=self.target_user.id).exists())
+
+    def test_superuser_can_toggle_user_active(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.post(f"/api/v1/admin/users/{self.target_user.id}/toggle_active/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.target_user.refresh_from_db()
+        self.assertFalse(self.target_user.is_active)
 
 
 class TestAuditMiddlewareExtraction(TestCase):
@@ -409,6 +479,7 @@ class TestAdminBooleanQueryParsing(APITestCase):
             email="admin-boolean@example.com",
             password="password123",
             is_staff=True,
+            is_superuser=True,
         )
         self.client.force_authenticate(user=self.admin)
         self.genre = Genre.objects.create(name="Mystery", slug="mystery")

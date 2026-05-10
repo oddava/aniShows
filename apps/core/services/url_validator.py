@@ -116,8 +116,14 @@ class URLValidator:
     # Cache validation results for 1 hour
     VALIDATION_CACHE_TTL = 3600
 
-    def __init__(self, google_safe_browsing_api_key: str | None = None):
+    def __init__(
+        self,
+        google_safe_browsing_api_key: str | None = None,
+        *,
+        safe_browsing_fail_open: bool = False,
+    ):
         self.google_safe_browsing_api_key = google_safe_browsing_api_key
+        self.safe_browsing_fail_open = safe_browsing_fail_open
         self._safe_browsing_client = None
 
     def _get_cache_key(self, url: str) -> str:
@@ -480,8 +486,10 @@ class URLValidator:
 
         except Exception as e:
             logger.error(f"Safe Browsing API error: {e}")
-            # Fail open - if API fails, assume safe but log it
-            return {"safe": True, "threat": None}
+            return {
+                "safe": self.safe_browsing_fail_open,
+                "threat": None if self.safe_browsing_fail_open else "validation unavailable",
+            }
 
     def _detect_platform(self, netloc: str) -> str | None:
         """Detect social platform from domain"""
@@ -491,7 +499,7 @@ class URLValidator:
 
         for platform, domains in self.PLATFORM_PATTERNS.items():
             for pattern in domains:
-                if pattern in domain:
+                if domain == pattern or domain.endswith(f".{pattern}"):
                     return platform
 
         return None

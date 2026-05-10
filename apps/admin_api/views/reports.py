@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ...core.permissions import IsAdminUser
+from ...core.permissions import IsAdminUser, IsSuperUser
 from ..services.bulk_operations_service import (
     BulkOperationError,
     perform_bulk_operation,
@@ -33,7 +33,7 @@ class AdminReportsView(APIView):
 class AdminBulkOperationsView(APIView):
     """Execute bulk operations on resources."""
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSuperUser]
 
     def post(self, request):
         entity_type = request.data.get("entity_type") or request.data.get("entity")

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from allauth.socialaccount.models import SocialAccount
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ...core.services.admin_settings_service import are_reviews_enabled
 from ...users.models import UserAnimeList
@@ -253,9 +253,15 @@ def vote_on_review(review, user, vote_type):
         existing_vote = ReviewVote.objects.select_for_update().filter(
             user=locked_user,
             review=locked_review,
-            vote_type=vote_type,
         ).first()
         if existing_vote:
+            if existing_vote.vote_type != vote_type:
+                existing_vote.vote_type = vote_type
+                existing_vote.save(update_fields=["vote_type"])
+                return ReviewActionResult(
+                    payload={"active": True, "vote_type": vote_type},
+                    status_code=200,
+                )
             existing_vote.delete()
             return ReviewActionResult(
                 payload={"active": False, "vote_type": vote_type},
