@@ -51,6 +51,12 @@ class WatchEpisodesPagination(PageNumberPagination):
     max_page_size = 100
 
 
+class AnimeDetailRelationPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class AnimeViewSet(ReadOnlyModelViewSet):
     serializer_class = AnimeListSerializer
     lookup_field = "slug"
@@ -107,7 +113,10 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         return self._with_public_cache_control(response, request)
 
     def _get_action_anime(self, slug: str) -> Anime:
-        return get_object_or_404(Anime.public_queryset(), slug=slug)
+        return get_object_or_404(
+            Anime.public_queryset().only(*self.query_service.ACTION_ANIME_ONLY_FIELDS),
+            slug=slug,
+        )
 
     def list(self, request, *args, **kwargs):
         if request.user.is_authenticated:
@@ -305,9 +314,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 "voice_actor__image",
                 "voice_actor__image_url",
             )
+            .order_by("role", "character__name", "id")
         )
-        serializer = AnimeCharacterSerializer(characters, many=True)
-        response = Response(serializer.data)
+        paginator = AnimeDetailRelationPagination()
+        page = paginator.paginate_queryset(characters, request, view=self)
+        serializer = AnimeCharacterSerializer(page, many=True)
+        response = paginator.get_paginated_response(serializer.data)
         return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"])
@@ -327,9 +339,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 "staff__image",
                 "staff__image_url",
             )
+            .order_by("id")
         )
-        serializer = AnimeStaffSerializer(staff, many=True)
-        response = Response(serializer.data)
+        paginator = AnimeDetailRelationPagination()
+        page = paginator.paginate_queryset(staff, request, view=self)
+        serializer = AnimeStaffSerializer(page, many=True)
+        response = paginator.get_paginated_response(serializer.data)
         return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"], url_path="watch-episodes")
