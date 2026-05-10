@@ -89,8 +89,27 @@ vi.mock('../../components/SEOHelmet', () => ({
 
 vi.mock('../../components/DetailTabs', () => ({
     OverviewTab: () => <div data-testid="overview-tab" />,
-    CharactersTab: () => <div data-testid="characters-tab" />,
-    StaffTab: () => <div data-testid="staff-tab" />,
+    CharactersTab: ({ characters = [], hasNextPage, onLoadMore }) => (
+        <div data-testid="characters-tab">
+            <span data-testid="characters-loaded-count">{characters.length}</span>
+            {hasNextPage && (
+                <button type="button" onClick={onLoadMore}>
+                    Load More Characters
+                </button>
+            )}
+        </div>
+    ),
+    StaffTab: ({ staff = [], hasNextPage, onLoadMore }) => (
+        <div data-testid="staff-tab">
+            <span data-testid="staff-loaded-count">{staff.length}</span>
+            {hasNextPage && (
+                <button type="button" onClick={onLoadMore}>
+                    Load More Staff
+                </button>
+            )}
+        </div>
+    ),
+    ThemesTab: () => <div data-testid="themes-tab" />,
 }));
 
 vi.mock('../../components/EpisodesTab', () => ({
@@ -158,8 +177,22 @@ describe('AnimeDetail list update invalidation', () => {
         vi.clearAllMocks();
 
         animeApi.getBySlug.mockResolvedValue({ data: mockAnime });
-        animeApi.getCharacters.mockResolvedValue({ data: [] });
-        animeApi.getStaff.mockResolvedValue({ data: [] });
+        animeApi.getCharacters.mockResolvedValue({
+            data: {
+                count: 0,
+                next: null,
+                previous: null,
+                results: [],
+            },
+        });
+        animeApi.getStaff.mockResolvedValue({
+            data: {
+                count: 0,
+                next: null,
+                previous: null,
+                results: [],
+            },
+        });
         animeApi.getWatchEpisodes.mockResolvedValue({
             data: {
                 count: 1,
@@ -252,7 +285,64 @@ describe('AnimeDetail list update invalidation', () => {
             expect(screen.getByTestId('characters-tab')).toBeInTheDocument();
         });
 
-        expect(animeApi.getCharacters).toHaveBeenCalledWith('frieren');
+        expect(animeApi.getCharacters).toHaveBeenCalledWith('frieren', {
+            page: 1,
+            page_size: 50,
+        });
+    });
+
+    it('loads more character pages without fetching the full cast upfront', async () => {
+        animeApi.getBySlug.mockResolvedValue({
+            data: {
+                ...mockAnime,
+                character_count: 2,
+            },
+        });
+        animeApi.getCharacters
+            .mockResolvedValueOnce({
+                data: {
+                    count: 2,
+                    next: 'http://testserver/api/anime/frieren/characters/?page=2&page_size=50',
+                    previous: null,
+                    results: [
+                        { id: 1, character: { id: 1, name: 'Frieren' }, role: 'MAIN', voice_actor: null },
+                    ],
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    count: 2,
+                    next: null,
+                    previous: 'http://testserver/api/anime/frieren/characters/?page=1&page_size=50',
+                    results: [
+                        { id: 2, character: { id: 2, name: 'Fern' }, role: 'MAIN', voice_actor: null },
+                    ],
+                },
+            });
+        const { wrapper } = createHarness('/anime/frieren/characters');
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(screen.getByTestId('characters-loaded-count')).toHaveTextContent('1');
+        });
+
+        expect(screen.getByRole('link', { name: /characters/i }).textContent?.replace(/\s+/g, '').trim()).toBe('Characters2');
+
+        fireEvent.click(screen.getByRole('button', { name: /load more characters/i }));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('characters-loaded-count')).toHaveTextContent('2');
+        });
+
+        expect(animeApi.getCharacters).toHaveBeenNthCalledWith(1, 'frieren', {
+            page: 1,
+            page_size: 50,
+        });
+        expect(animeApi.getCharacters).toHaveBeenNthCalledWith(2, 'frieren', {
+            page: 2,
+            page_size: 50,
+        });
     });
 
     it('renders the watch tab for a direct watch route without extra tab fetches', async () => {

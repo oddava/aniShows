@@ -1,11 +1,10 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Star, Heart, Plus, Loader, MessageSquare, Film, BarChart3, Users, Mic, ChevronDown, Tv, Disc, Pencil } from 'lucide-react';
+import { Star, Heart, Plus, Loader, Film, BarChart3, Users, Mic, ChevronDown, Tv, Disc, Pencil } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import AnimeCard from '../components/AnimeCard';
 import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
@@ -28,7 +27,6 @@ import {
 } from '../utils/imageUtils';
 import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
-import { getUniqueCharacterRoleCount } from '../utils/characterRoles';
 
 // Memoized tab configuration to prevent re-renders
 const TABS = [
@@ -43,6 +41,21 @@ const TABS = [
 const DEFAULT_TAB_ID = 'overview';
 const WATCH_PREVIEW_PAGE_SIZE = 4;
 const WATCH_TAB_PAGE_SIZE = 50;
+const DETAIL_RELATION_PAGE_SIZE = 50;
+
+const getNextPageParamFromUrl = (lastPage) => {
+    if (!lastPage?.next) {
+        return undefined;
+    }
+
+    try {
+        const url = new URL(lastPage.next);
+        const nextPage = Number.parseInt(url.searchParams.get('page'), 10);
+        return Number.isFinite(nextPage) && nextPage > 0 ? nextPage : undefined;
+    } catch {
+        return undefined;
+    }
+};
 
 const getTabByPath = (tabPath) => {
     const normalizedPath = tabPath?.replace(/^\/+|\/+$/g, '') || '';
@@ -61,23 +74,6 @@ const getTabHref = (slug, tabId) => {
 
     return `/anime/${slug}/${tab.path}`;
 };
-
-const getUniqueStaffCount = (staff) => {
-    if (!Array.isArray(staff)) return 0;
-
-    const seen = new Set();
-    for (const staffRole of staff) {
-        const staffName = staffRole?.staff?.name;
-        if (!staffName) continue;
-
-        const roleName = staffRole?.role || 'unknown';
-        seen.add(`${staffName}:${roleName}`);
-    }
-
-    return seen.size;
-};
-
-const getCoverPlaceholder = (title = 'Anime') => getImageUrl(null, title);
 
 // Memoized share button handler
 const useShare = () => {
@@ -241,6 +237,8 @@ export default function AnimeDetail() {
     const animeDetailQueryKey = useMemo(() => ['anime', slug, user?.id || 'anonymous'], [slug, user?.id]);
     const watchPreviewQueryKey = useMemo(() => ['anime', slug, 'watch-episodes-preview'], [slug]);
     const watchEpisodesQueryKey = useMemo(() => ['anime', slug, 'watch-episodes', WATCH_TAB_PAGE_SIZE], [slug]);
+    const charactersQueryKey = useMemo(() => ['anime', slug, 'characters', DETAIL_RELATION_PAGE_SIZE], [slug]);
+    const staffQueryKey = useMemo(() => ['anime', slug, 'staff', DETAIL_RELATION_PAGE_SIZE], [slug]);
     const shouldLoadWatchPreview = activeTab === 'overview';
     const shouldLoadWatchTab = activeTab === 'watch';
 
@@ -252,16 +250,38 @@ export default function AnimeDetail() {
         gcTime: 600000, // 10 minutes
     });
 
-    const { data: characters, isLoading: charactersLoading } = useQuery({
-        queryKey: ['anime', slug, 'characters'],
-        queryFn: () => animeApi.getCharacters(slug).then(res => res.data),
+    const {
+        data: charactersData,
+        fetchNextPage: fetchNextCharactersPage,
+        hasNextPage: hasNextCharactersPage,
+        isFetchingNextPage: isFetchingNextCharactersPage,
+        isLoading: charactersLoading,
+    } = useInfiniteQuery({
+        queryKey: charactersQueryKey,
+        queryFn: ({ pageParam }) => animeApi.getCharacters(slug, {
+            page: pageParam,
+            page_size: DETAIL_RELATION_PAGE_SIZE,
+        }).then(res => res.data),
+        initialPageParam: 1,
+        getNextPageParam: getNextPageParamFromUrl,
         enabled: !!anime && activeTab === 'characters',
         staleTime: Infinity, // Character lists rarely change
     });
 
-    const { data: staff, isLoading: staffLoading } = useQuery({
-        queryKey: ['anime', slug, 'staff'],
-        queryFn: () => animeApi.getStaff(slug).then(res => res.data),
+    const {
+        data: staffData,
+        fetchNextPage: fetchNextStaffPage,
+        hasNextPage: hasNextStaffPage,
+        isFetchingNextPage: isFetchingNextStaffPage,
+        isLoading: staffLoading,
+    } = useInfiniteQuery({
+        queryKey: staffQueryKey,
+        queryFn: ({ pageParam }) => animeApi.getStaff(slug, {
+            page: pageParam,
+            page_size: DETAIL_RELATION_PAGE_SIZE,
+        }).then(res => res.data),
+        initialPageParam: 1,
+        getNextPageParam: getNextPageParamFromUrl,
         enabled: !!anime && activeTab === 'staff',
         staleTime: Infinity, // Staff lists rarely change
     });
@@ -293,17 +313,7 @@ export default function AnimeDetail() {
             page_size: WATCH_TAB_PAGE_SIZE,
         }).then(res => res.data),
         initialPageParam: 1,
-        getNextPageParam: (lastPage) => {
-            if (lastPage?.next) {
-                try {
-                    const url = new URL(lastPage.next);
-                    return url.searchParams.get('page');
-                } catch {
-                    return undefined;
-                }
-            }
-            return undefined;
-        },
+        getNextPageParam: getNextPageParamFromUrl,
         enabled: !!anime && shouldLoadWatchTab,
         staleTime: 300000,
     });
@@ -364,6 +374,14 @@ export default function AnimeDetail() {
         watchEpisodesData?.pages.flatMap((page) => page?.results || []) || [],
         [watchEpisodesData]
     );
+    const characters = useMemo(() =>
+        charactersData?.pages.flatMap((page) => page?.results || []) || [],
+        [charactersData]
+    );
+    const staff = useMemo(() =>
+        staffData?.pages.flatMap((page) => page?.results || []) || [],
+        [staffData]
+    );
     const previewEpisodes = useMemo(
         () => watchPreviewData?.results || [],
         [watchPreviewData]
@@ -374,6 +392,16 @@ export default function AnimeDetail() {
     const watchEpisodesTotal = Number.isFinite(parsedWatchEpisodesCount) && parsedWatchEpisodesCount >= 0
         ? parsedWatchEpisodesCount
         : (anime?.episode_count || 0);
+    const rawCharacterCount = charactersData?.pages?.[0]?.count;
+    const parsedCharacterCount = Number(rawCharacterCount);
+    const charactersTotal = Number.isFinite(parsedCharacterCount) && parsedCharacterCount >= 0
+        ? parsedCharacterCount
+        : (anime?.character_count || 0);
+    const rawStaffCount = staffData?.pages?.[0]?.count;
+    const parsedStaffCount = Number(rawStaffCount);
+    const staffTotal = Number.isFinite(parsedStaffCount) && parsedStaffCount >= 0
+        ? parsedStaffCount
+        : (anime?.staff_count || 0);
 
     const { textReviews, ratingOnlyReviews, reviewCount } = useMemo(() => ({
         textReviews: allReviews.filter(r => r.text?.trim().length > 0),
@@ -578,19 +606,12 @@ export default function AnimeDetail() {
     const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');
     const coverFallbackUrl = getImageFallbackUrl(anime, 'cover');
 
-    const characterTabCount = Array.isArray(characters)
-        ? getUniqueCharacterRoleCount(characters)
-        : (anime.character_count || 0);
-    const staffTabCount = Array.isArray(staff)
-        ? getUniqueStaffCount(staff)
-        : (anime.staff_count || 0);
-
     const tabsWithCounts = TABS.map(tab => ({
         ...tab,
         count: tab.id === 'watch' ? watchEpisodesTotal :
             tab.id === 'themes' ? (anime.theme_songs?.length || 0) :
-            tab.id === 'characters' ? characterTabCount :
-            tab.id === 'staff' ? staffTabCount : 0
+            tab.id === 'characters' ? charactersTotal :
+            tab.id === 'staff' ? staffTotal : 0
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
@@ -897,6 +918,10 @@ export default function AnimeDetail() {
                                         anime={anime}
                                         characters={characters}
                                         isLoading={charactersLoading}
+                                        totalCount={charactersTotal}
+                                        hasNextPage={hasNextCharactersPage}
+                                        isFetchingNextPage={isFetchingNextCharactersPage}
+                                        onLoadMore={fetchNextCharactersPage}
                                     />
                                 )}
                                 {activeTab === 'staff' && (
@@ -904,6 +929,10 @@ export default function AnimeDetail() {
                                         anime={anime}
                                         staff={staff}
                                         isLoading={staffLoading}
+                                        totalCount={staffTotal}
+                                        hasNextPage={hasNextStaffPage}
+                                        isFetchingNextPage={isFetchingNextStaffPage}
+                                        onLoadMore={fetchNextStaffPage}
                                     />
                                 )}
                             </div>
