@@ -301,14 +301,6 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         staleTime: 2 * 60 * 1000,
     });
 
-    if (isPrivate) {
-        return (
-            <div className="ui-empty-state py-12">
-                <p className="text-sm text-gray-400">Activity is not available for private profiles.</p>
-            </div>
-        );
-    }
-
     const activities = useMemo(
         () => data?.pages?.flatMap(page => page?.results || []) || [],
         [data]
@@ -350,6 +342,14 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         (total, group) => total + group.activities.length,
         0
     );
+
+    if (isPrivate) {
+        return (
+            <div className="ui-empty-state py-12">
+                <p className="text-sm text-gray-400">Activity is not available for private profiles.</p>
+            </div>
+        );
+    }
 
     return (
         <section className="space-y-4">

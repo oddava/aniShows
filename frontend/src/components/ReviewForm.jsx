@@ -96,12 +96,10 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
     const hasLoaded = useRef(false);
 
     useEffect(() => {
-    // Initialize form data from initialData - intentional setState in effect for form initialization
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+        // Initialize form data from initialData - intentional setState in effect for form initialization
         if (hasLoaded.current) return;
 
         if (initialData) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             setRating(initialData.rating || 0);
 
             const loadedSubRatings = {

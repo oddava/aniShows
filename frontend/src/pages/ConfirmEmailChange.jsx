@@ -20,7 +20,7 @@ export default function ConfirmEmailChange() {
                     try {
                         await refreshProfile();
                     } catch {
-                        pass
+                        // The email change succeeded; a stale local profile refresh should not fail the page.
                     }
                 }
 

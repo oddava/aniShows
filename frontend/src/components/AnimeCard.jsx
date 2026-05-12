@@ -80,15 +80,7 @@ function AnimeCard({
 
         const sameOriginCandidate = candidates.find(isSameOriginImageUrl);
         return sameOriginCandidate || null;
-    }, [
-        useBannerAccentTitleHover,
-        anime.banner_image_medium,
-        anime.banner_image,
-        anime.banner_image_external_url,
-        anime.banner_image_large,
-        anime.banner_image_small,
-        imageUrl
-    ]);
+    }, [useBannerAccentTitleHover, anime]);
     const coverAccentImageUrl = useBannerAccentTitleHover ? imageUrl : null;
     const titleHoverAccentColor = useAnimeAccentColor(
         coverAccentImageUrl,

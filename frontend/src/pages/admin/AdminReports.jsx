@@ -348,11 +348,8 @@ const OverviewTab = ({ stats }) => {
 // ─── Tab: Users ──────────────────────────────────────────────────────────────
 
 const UsersTab = ({ data, loading }) => {
-  if (loading) return <LoadingSpinner text="Loading user analytics..." />;
-  if (!data) return <EmptyState onRetry={() => { }} />;
-
   const registrationData = useMemo(() => {
-    if (!data.registration_trend || !Array.isArray(data.registration_trend)) return [];
+    if (!data?.registration_trend || !Array.isArray(data.registration_trend)) return [];
     return data.registration_trend.map(item => ({
       name: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       registrations: item.count,
@@ -360,7 +357,7 @@ const UsersTab = ({ data, loading }) => {
   }, [data]);
 
   const userBreakdownData = useMemo(() => {
-    if (!data.user_breakdown) return [];
+    if (!data?.user_breakdown) return [];
     return [
       { name: 'Active', value: data.user_breakdown.active || 0, color: '#10b981' },
       { name: 'Inactive', value: data.user_breakdown.inactive || 0, color: '#ef4444' },
@@ -368,12 +365,15 @@ const UsersTab = ({ data, loading }) => {
   }, [data]);
 
   const verificationData = useMemo(() => {
-    if (!data.user_breakdown) return [];
+    if (!data?.user_breakdown) return [];
     return [
       { name: 'Verified', value: data.user_breakdown.verified || 0, color: '#75698d' },
       { name: 'Unverified', value: data.user_breakdown.unverified || 0, color: '#6b7280' },
     ].filter(d => d.value > 0);
   }, [data]);
+
+  if (loading) return <LoadingSpinner text="Loading user analytics..." />;
+  if (!data) return <EmptyState onRetry={() => { }} />;
 
   return (
     <div className="space-y-8">
@@ -474,11 +474,8 @@ const UsersTab = ({ data, loading }) => {
 // ─── Tab: Content ────────────────────────────────────────────────────────────
 
 const ContentTab = ({ data, loading }) => {
-  if (loading) return <LoadingSpinner text="Loading content analytics..." />;
-  if (!data) return <EmptyState onRetry={() => { }} />;
-
   const statusData = useMemo(() => {
-    const raw = data.by_status;
+    const raw = data?.by_status;
     if (!raw) return [];
     // Handle both array [{status, count}] and object {status: count} formats
     if (Array.isArray(raw)) {
@@ -496,7 +493,7 @@ const ContentTab = ({ data, loading }) => {
   }, [data]);
 
   const typeData = useMemo(() => {
-    const raw = data.by_type;
+    const raw = data?.by_type;
     if (!raw) return [];
     if (Array.isArray(raw)) {
       return raw.map((item, i) => ({
@@ -513,7 +510,7 @@ const ContentTab = ({ data, loading }) => {
   }, [data]);
 
   const genreData = useMemo(() => {
-    if (!data.top_genres || !Array.isArray(data.top_genres)) return [];
+    if (!data?.top_genres || !Array.isArray(data.top_genres)) return [];
     return data.top_genres.map(item => ({
       name: item.name,
       anime: item.anime_count,
@@ -521,7 +518,7 @@ const ContentTab = ({ data, loading }) => {
   }, [data]);
 
   const studioData = useMemo(() => {
-    if (!data.top_studios || !Array.isArray(data.top_studios)) return [];
+    if (!data?.top_studios || !Array.isArray(data.top_studios)) return [];
     return data.top_studios.map(item => ({
       name: item.name,
       anime: item.anime_count,
@@ -529,14 +526,17 @@ const ContentTab = ({ data, loading }) => {
   }, [data]);
 
   const contentTrendData = useMemo(() => {
-    if (!data.content_trend || !Array.isArray(data.content_trend)) return [];
+    if (!data?.content_trend || !Array.isArray(data.content_trend)) return [];
     return data.content_trend.map(item => ({
       name: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       added: item.count,
     }));
   }, [data]);
 
-  const metadataHealth = data.missing_metadata;
+  const metadataHealth = data?.missing_metadata;
+
+  if (loading) return <LoadingSpinner text="Loading content analytics..." />;
+  if (!data) return <EmptyState onRetry={() => { }} />;
 
   return (
     <div className="space-y-8">
@@ -689,11 +689,8 @@ const ContentTab = ({ data, loading }) => {
 // ─── Tab: Engagement ─────────────────────────────────────────────────────────
 
 const EngagementTab = ({ data, loading }) => {
-  if (loading) return <LoadingSpinner text="Loading engagement analytics..." />;
-  if (!data) return <EmptyState onRetry={() => { }} />;
-
   const ratingData = useMemo(() => {
-    const raw = data.reviews_by_rating;
+    const raw = data?.reviews_by_rating;
     if (!raw) return [];
     // Handle both array [{rating, count}] and object {rating: count} formats
     if (Array.isArray(raw)) {
@@ -711,7 +708,7 @@ const EngagementTab = ({ data, loading }) => {
   }, [data]);
 
   const listStatusData = useMemo(() => {
-    const raw = data.list_by_status;
+    const raw = data?.list_by_status;
     if (!raw) return [];
     if (Array.isArray(raw)) {
       return raw.map(item => ({
@@ -728,14 +725,14 @@ const EngagementTab = ({ data, loading }) => {
   }, [data]);
 
   const reviewsTrendData = useMemo(() => {
-    if (!data.reviews_trend || !Array.isArray(data.reviews_trend)) return [];
+    if (!data?.reviews_trend || !Array.isArray(data.reviews_trend)) return [];
     const dateMap = {};
     data.reviews_trend.forEach(item => {
       const dateKey = item.date;
       if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey, reviews: 0, favorites: 0 };
       dateMap[dateKey].reviews = item.count;
     });
-    if (data.favorites_trend && Array.isArray(data.favorites_trend)) {
+    if (data?.favorites_trend && Array.isArray(data.favorites_trend)) {
       data.favorites_trend.forEach(item => {
         const dateKey = item.date;
         if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey, reviews: 0, favorites: 0 };
@@ -751,12 +748,8 @@ const EngagementTab = ({ data, loading }) => {
       }));
   }, [data]);
 
-  const getRatingColor = (rating) => {
-    if (rating >= 8) return '#10b981';
-    if (rating >= 6) return '#75698d';
-    if (rating >= 4) return '#f59e0b';
-    return '#ef4444';
-  };
+  if (loading) return <LoadingSpinner text="Loading engagement analytics..." />;
+  if (!data) return <EmptyState onRetry={() => { }} />;
 
   return (
     <div className="space-y-8">

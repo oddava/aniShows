@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from django.apps import AppConfig
 
 
@@ -7,4 +9,5 @@ class UsersConfig(AppConfig):
     label = "users"
 
     def ready(self):
-        from . import signals  # noqa: F401
+        import_module("apps.users.services.email_service")
+        import_module("apps.users.signals")

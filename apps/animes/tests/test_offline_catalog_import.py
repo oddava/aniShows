@@ -23,13 +23,12 @@ class OfflineCatalogImportServiceTests(TestCase):
             "$schema": "https://example.com/schema.json",
             "lastUpdate": last_update,
         }
-        handle = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
-        self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
-        with handle:
+        with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as handle:
+            self.addCleanup(lambda: Path(handle.name).unlink(missing_ok=True))
             handle.write(json.dumps(metadata) + "\n")
             for entry in entries:
                 handle.write(json.dumps(entry) + "\n")
-        return handle.name
+            return handle.name
 
     def _entry(self, **overrides):
         payload = {
@@ -335,6 +334,59 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertTrue(Anime.objects.filter(id=stale_anime.id).exists())
         self.assertLess(stale_anime.offline_db_last_seen_at, timezone.now())
         self.assertEqual(OfflineCatalogImport.objects.count(), 1)
+
+    def test_resume_import_uses_original_run_window_for_stale_count(self):
+        first_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Resume Window One",
+                sources=["https://anilist.co/anime/91001", "https://myanimelist.net/anime/91001"],
+            )
+        )
+
+        OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=first_path,
+            asset_name="anime-offline-database.jsonl",
+        )
+        import_run = OfflineCatalogImport.objects.get()
+        original_started_at = import_run.started_at
+        import_run.status = OfflineCatalogImport.Status.FAILED
+        import_run.error_message = "partial remote read"
+        import_run.completed_at = timezone.now()
+        import_run.save(update_fields=["status", "error_message", "completed_at"])
+
+        Anime.objects.create(
+            title="Pre Import Stale",
+            slug="pre-import-stale",
+            synopsis="Stale before resume",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.finished,
+            offline_db_last_seen_at=original_started_at - timedelta(days=1),
+        )
+        second_path = self._write_jsonl_fixture(
+            self._entry(
+                title="Resume Window One",
+                sources=["https://anilist.co/anime/91001", "https://myanimelist.net/anime/91001"],
+            ),
+            self._entry(
+                title="Resume Window Two",
+                sources=["https://anilist.co/anime/91002", "https://myanimelist.net/anime/91002"],
+            ),
+        )
+
+        result = OfflineCatalogImportService(batch_size=1).run_import(
+            source_path=second_path,
+            asset_name="anime-offline-database.jsonl",
+            resume=True,
+        )
+
+        first = Anime.objects.get(title="Resume Window One")
+        second = Anime.objects.get(title="Resume Window Two")
+        import_run.refresh_from_db()
+        self.assertEqual(import_run.status, OfflineCatalogImport.Status.COMPLETED)
+        self.assertEqual(result["records_marked_stale"], 1)
+        self.assertEqual(first.offline_db_last_seen_at, original_started_at)
+        self.assertEqual(second.offline_db_last_seen_at, original_started_at)
+        self.assertEqual(set(result["changed_anime_ids"]), {first.id, second.id})
 
     def test_run_import_avoids_generated_title_variant_collision(self):
         Anime.objects.create(
@@ -658,9 +710,11 @@ class OfflineCatalogImportServiceTests(TestCase):
         mock_client_cls.return_value = FakeClient()
 
         service = OfflineCatalogImportService()
-        with patch.object(service, "_get_zstandard", side_effect=ModuleNotFoundError("zstandard")):
-            with service._open_remote_stream("https://example.com/offline.jsonl.zst") as text_stream:
-                line = next(text_stream).strip()
+        with (
+            patch.object(service, "_get_zstandard", side_effect=ModuleNotFoundError("zstandard")),
+            service._open_remote_stream("https://example.com/offline.jsonl.zst") as text_stream,
+        ):
+            line = next(text_stream).strip()
 
         self.assertEqual(line, '{"hello":"world"}')
         self.assertEqual(calls["url"], "https://example.com/offline.jsonl")

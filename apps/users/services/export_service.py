@@ -1,7 +1,4 @@
-
-"""
-Export service for user data
-"""
+"""Export service for user data."""
 
 import json
 from datetime import datetime

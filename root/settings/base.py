@@ -424,11 +424,8 @@ if USE_S3:
 
     # Static files are always served by whitenoise locally in app containers.
     # A CDN can still be configured to pull from /static and /media.
-    if STATIC_CDN_URL:
-        STATIC_URL = f"{STATIC_CDN_URL}/static/"
-    else:
-        STATIC_URL = "/static/"
-    STATIC_ROOT = os.path.join(BASE_DIR, "static")
+    STATIC_URL = f"{STATIC_CDN_URL}/static/" if STATIC_CDN_URL else "/static/"
+    STATIC_ROOT = BASE_DIR / "static"
 
     PUBLIC_MEDIA_LOCATION = "media"
     if MEDIA_CDN_URL:
@@ -437,17 +434,11 @@ if USE_S3:
         MEDIA_URL = f"{AWS_S3_URL_PROTOCOL}//{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/"
     DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
 else:
-    if STATIC_CDN_URL:
-        STATIC_URL = f"{STATIC_CDN_URL}/static/"
-    else:
-        STATIC_URL = "/static/"
-    STATIC_ROOT = os.path.join(BASE_DIR, "static")
+    STATIC_URL = f"{STATIC_CDN_URL}/static/" if STATIC_CDN_URL else "/static/"
+    STATIC_ROOT = BASE_DIR / "static"
 
-    if MEDIA_CDN_URL:
-        MEDIA_URL = f"{MEDIA_CDN_URL}/media/"
-    else:
-        MEDIA_URL = "/media/"
-    MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+    MEDIA_URL = f"{MEDIA_CDN_URL}/media/" if MEDIA_CDN_URL else "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
     DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
     # ImageKit configuration for local development

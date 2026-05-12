@@ -18,8 +18,8 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from ..models import Anime, Genre, Studio
-from ..signals import trigger_metadata_fetch
 from ..services.public_anime_service import AnimeQueryService
+from ..signals import trigger_metadata_fetch
 
 User = get_user_model()
 
@@ -203,7 +203,7 @@ class SeasonalAnimeTests(APITestCase):
             member_count=350000,
             popularity_rank=1,
         )
-        kept = Anime.objects.create(
+        Anime.objects.create(
             title="Kept Seasonal Favorite",
             slug="kept-seasonal-favorite",
             synopsis="Should remain visible",

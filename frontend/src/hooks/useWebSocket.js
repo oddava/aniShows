@@ -70,6 +70,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
     const retryCountRef = useRef(0);
     const retryTimerRef = useRef(null);
     const heartbeatTimerRef = useRef(null);
+    const connectRef = useRef(null);
     const unmountedRef = useRef(false);
 
     // Keep handlers in a ref so we don't need them in dependency arrays
@@ -132,7 +133,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
         retryTimerRef.current = setTimeout(() => {
             if (!unmountedRef.current) {
                 retryCountRef.current += 1;
-                connect(); // eslint-disable-line no-use-before-define
+                connectRef.current?.();
             }
         }, delay);
     }, [config.maxRetries, getReconnectDelay, path]);
@@ -207,6 +208,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
             scheduleReconnect();
         }
     }, [path, startHeartbeat, stopHeartbeat, scheduleReconnect]);
+    connectRef.current = connect;
 
     /**
      * Manually disconnect the WebSocket. Does not trigger reconnect.
@@ -266,7 +268,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
             if (connectTimer) clearTimeout(connectTimer);
             disconnect();
         };
-    }, [path]); // Reconnect if path changes; connect/disconnect are stable via useCallback
+    }, [config.autoConnect, connect, disconnect, path]);
 
     return { state, send, connect, disconnect };
 }

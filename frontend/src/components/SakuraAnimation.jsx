@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react';
-import { useTheme } from '../context/ThemeContext';
 import './SakuraAnimation.css';
 
 const SakuraPetal = ({ style, id }) => (

@@ -26,7 +26,7 @@ const AVAILABLE_COLORS = [
 export default function AdminBadges() {
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
-    const [page, setPage] = useState(1);
+    const [page] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
     const [editingBadge, setEditingBadge] = useState(null);

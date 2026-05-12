@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +13,25 @@ export default function GoogleCallback() {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const processedRef = useRef(false);
+
+    const handleGoogleCallback = useCallback(async (code) => {
+        try {
+            const callbackUrl = `${window.location.origin}/auth/google/callback`;
+            const response = await authApi.googleLogin(code, callbackUrl);
+            const { access, refresh } = response.data;
+
+            await setTokens(access, refresh);
+            navigate('/browse');
+        } catch (err) {
+            logger.error('Google login failed:', err);
+            const msg = err.response?.data?.non_field_errors?.[0]
+                || err.response?.data?.detail
+                || 'Failed to log in with Google. Please try again.';
+            setIsLoading(false);
+            setError(msg);
+            setTimeout(() => navigate('/login'), 3000);
+        }
+    }, [navigate, setTokens]);
 
     useEffect(() => {
         if (processedRef.current) return;
@@ -39,26 +58,7 @@ export default function GoogleCallback() {
             setError('No authorization code found');
             setTimeout(() => navigate('/login'), 3000);
         }
-    }, [searchParams, navigate]);
-
-    const handleGoogleCallback = async (code) => {
-        try {
-            const callbackUrl = `${window.location.origin}/auth/google/callback`;
-            const response = await authApi.googleLogin(code, callbackUrl);
-            const { access, refresh } = response.data;
-
-            await setTokens(access, refresh);
-            navigate('/browse');
-        } catch (err) {
-            logger.error('Google login failed:', err);
-            const msg = err.response?.data?.non_field_errors?.[0]
-                || err.response?.data?.detail
-                || 'Failed to log in with Google. Please try again.';
-            setIsLoading(false);
-            setError(msg);
-            setTimeout(() => navigate('/login'), 3000);
-        }
-    };
+    }, [searchParams, navigate, handleGoogleCallback]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-dark-200">

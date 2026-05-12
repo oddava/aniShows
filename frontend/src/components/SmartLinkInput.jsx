@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Globe, Loader2, Link2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, Globe, Link2 } from 'lucide-react';
 
 // Platform icons as simple SVG components
 const PlatformIcons = {
@@ -172,7 +172,6 @@ const SmartLinkInput = ({
 }) => {
     const [localValue, setLocalValue] = useState(value || '');
     const [localPlatform, setLocalPlatform] = useState(platform || '');
-    const [isValidating, setIsValidating] = useState(false);
     const [error, setError] = useState(null);
 
     // Update local values when props change
@@ -274,9 +273,7 @@ const SmartLinkInput = ({
 
                         {/* Validation icon */}
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            {isValidating ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-                            ) : error ? (
+                            {error ? (
                                 <AlertCircle className="w-4 h-4 text-red-400" />
                             ) : showPreview ? (
                                 <Link2 className="w-4 h-4 text-green-400" />

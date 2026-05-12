@@ -40,11 +40,11 @@ export default function StaffModal({ staffRole, onClose, accentColor }) {
         return url;
     };
 
-    // eslint-disable-next-line react-hooks/preserve-manual-memoization
+
     const parsedDescription = useMemo(() => {
         if (!staff) return null;
         return parseMarkdownLinks(staff.description);
-    }, [staff?.description]);
+    }, [staff]);
 
     useEffect(() => {
         const handleEscape = (e) => {

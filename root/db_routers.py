@@ -4,6 +4,7 @@ import random
 
 from django.conf import settings
 
+
 class PrimaryReplicaRouter:
     """Route reads to replicas and writes to primary."""
 

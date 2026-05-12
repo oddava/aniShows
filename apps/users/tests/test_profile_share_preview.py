@@ -65,7 +65,7 @@ class ProfileSharePreviewViewTests(TestCase):
         self.assertNotIn("window.location.replace", content)
 
     def test_regular_browser_preview_keeps_redirect(self):
-        user = User.objects.create_user(username="browseruser", password="pw")
+        User.objects.create_user(username="browseruser", password="pw")
 
         response = self.client.get(
             "/u/browseruser",

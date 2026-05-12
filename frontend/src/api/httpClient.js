@@ -85,7 +85,7 @@ export const refreshAccessToken = async (retryCount = 0) => {
     }
 
     isRefreshing = true;
-    refreshPromise = new Promise(async (resolve, reject) => {
+    refreshPromise = (async () => {
         let caughtError = null;
         try {
             const refreshToken = localStorage.getItem('refresh_token');
@@ -118,7 +118,7 @@ export const refreshAccessToken = async (retryCount = 0) => {
             }
 
             logger.debug('Token refresh successful');
-            resolve(access);
+            return access;
         } catch (error) {
             caughtError = error;
             const isNetworkError = !error.response && error.request;
@@ -135,14 +135,7 @@ export const refreshAccessToken = async (retryCount = 0) => {
 
                 await delay(retryDelayMs * (retryCount + 1));
 
-                try {
-                    const result = await refreshAccessToken(retryCount + 1);
-                    resolve(result);
-                    return;
-                } catch (retryError) {
-                    reject(retryError);
-                    return;
-                }
+                return await refreshAccessToken(retryCount + 1);
             }
 
             logger.error('Token refresh failed:', error.message, {
@@ -151,14 +144,14 @@ export const refreshAccessToken = async (retryCount = 0) => {
                 isNetworkError,
                 isServerError,
             });
-            reject(error);
+            throw error;
         } finally {
             if (retryCount === 0 || caughtError?.response?.status === 401) {
                 isRefreshing = false;
                 refreshPromise = null;
             }
         }
-    });
+    })();
 
     return refreshPromise;
 };

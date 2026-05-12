@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 
 // Platform detection patterns
 const PLATFORM_PATTERNS = {
@@ -50,6 +50,14 @@ const TRUST_LEVELS = {
     SUSPICIOUS: 'suspicious',
 };
 
+const debounce = (func, wait) => {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+    };
+};
+
 /**
  * Hook for validating social links in real-time
  */
@@ -63,15 +71,6 @@ export const useLinkValidation = () => {
         normalizedUrl: null,
         metadata: null,
     });
-
-    // Debounce function
-    const debounce = useCallback((func, wait) => {
-        let timeout;
-        return (...args) => {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func(...args), wait);
-        };
-    }, []);
 
     // Detect platform from domain
     const detectPlatform = useCallback((url) => {
@@ -255,8 +254,8 @@ export const useLinkValidation = () => {
     }, []);
 
     // Main validation function
-    const validate = useCallback(
-        debounce((platform, value) => {
+    const validate = useMemo(
+        () => debounce((platform, value) => {
             if (!value) {
                 setValidationResult({
                     isValid: false,
@@ -330,7 +329,7 @@ export const useLinkValidation = () => {
                 });
             }
         }, 300),
-        [debounce, normalizeUrl, validateUrl, detectPlatform, determineTrustLevel]
+        [normalizeUrl, validateUrl, detectPlatform, determineTrustLevel]
     );
 
     return {

@@ -141,7 +141,6 @@ const ForumThreadDetail = () => {
         data: postsData,
         isLoading: isPostsLoading,
         isPlaceholderData: isPostsPlaceholder,
-        isFetching: isPostsFetching,
         error: postsError
     } = useQuery({
         queryKey: ['forumPosts', id, page],
@@ -267,7 +266,6 @@ const ForumThreadDetail = () => {
 
     // Cooldown refs to prevent rapid-fire like clicks
     const threadLikeCooldownRef = useRef(false);
-    const postLikeCooldowns = useRef(new Set());
 
     // Idempotent like mutation - only creates likes, never removes
     const likeThreadMutation = useMutation({
@@ -291,8 +289,6 @@ const ForumThreadDetail = () => {
                     like_count: newCount,
                 };
             });
-
-            const afterOptimistic = queryClient.getQueryData(['forumThread', id]);
 
             return { previous };
         },

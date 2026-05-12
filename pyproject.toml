@@ -153,6 +153,10 @@ convention = "google"
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "root"]
 
+[tool.ruff.lint.per-file-ignores]
+"root/settings/*.py" = ["F403", "F405"]
+"root/settings/__init__.py" = ["F403"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -180,7 +184,7 @@ django_settings_module = "root.settings.development"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "root.settings.test"
 python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
+python_classes = ["Test*", "*Tests"]
 python_functions = ["test_*"]
 testpaths = ["apps"]
 addopts = [

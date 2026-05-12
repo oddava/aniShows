@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django_filters import CharFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status
@@ -9,6 +10,7 @@ from rest_framework.viewsets import GenericViewSet
 from ..models import CeleryTaskResult
 from ..permissions import IsAdminUser
 from ..services.admin_import_jobs_service import (
+    BUSINESS_FAILURE_STATUSES,
     IMPORT_TASKS,
     OFFLINE_RECONCILE_TASK,
     cancel_import_job,
@@ -34,11 +36,18 @@ class AdminImportJobFilter(FilterSet):
         celery_status_map = {
             "pending": ["PENDING"],
             "processing": ["STARTED", "RETRY"],
-            "completed": ["SUCCESS"],
             "failed": ["FAILURE"],
             "cancelled": ["REVOKED"],
         }
         status_filter = value.lower()
+        if status_filter == "completed":
+            return queryset.filter(status="SUCCESS").exclude(
+                result_data__status__in=BUSINESS_FAILURE_STATUSES
+            )
+        if status_filter == "failed":
+            return queryset.filter(
+                Q(status="FAILURE") | Q(result_data__status__in=BUSINESS_FAILURE_STATUSES)
+            )
         if status_filter in celery_status_map:
             return queryset.filter(status__in=celery_status_map[status_filter])
         return queryset
@@ -87,7 +96,7 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     @action(detail=False, methods=["post"])
     def trigger(self, request):
         """Trigger a new import job."""
-        source = request.data.get("source", "jikan_trending")
+        source = request.data.get("source") or "offline_catalog"
         sync_type = request.data.get("sync_type", "trending")
 
         try:

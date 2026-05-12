@@ -29,7 +29,7 @@ const RatingBar = ({ stars, count, total, onFilter, isActive, accentColor }) => 
 };
 
 // Average sub-score display
-const AvgSubScore = ({ icon: Icon, label, value }) => {  // eslint-disable-line no-unused-vars
+const AvgSubScore = ({ icon: Icon, label, value }) => {
     if (!value && value !== 0) return null;
     const displayValue = value.toFixed(1);
 

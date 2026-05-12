@@ -77,21 +77,6 @@ const getUniqueStaffCount = (staff) => {
     return seen.size;
 };
 
-const getCoverPlaceholder = (title = 'Anime') => getImageUrl(null, title);
-
-// Memoized share button handler
-const useShare = () => {
-    return useMemo(() => () => {
-        navigator.clipboard.writeText(window.location.href);
-        // Could use a toast notification here instead of alert
-        const toast = document.createElement('div');
-        toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg  z-50 animate-fade-in';
-        toast.textContent = 'Link copied!';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 2000);
-    }, []);
-};
-
 // Memoized related anime card component
 const RelatedAnimeCard = memo(({ anime }) => {
     const [isLoaded, setIsLoaded] = useState(false);
@@ -353,7 +338,6 @@ export default function AnimeDetail() {
 
     // Derived state
     const accentColor = useAnimeAccentColor(anime?.cover_image, anime?.banner_image);
-    const handleShare = useShare();
 
     const allReviews = useMemo(() =>
         reviewsData?.pages.flatMap(page => Array.isArray(page) ? page : (page.results || [])) || [],
@@ -594,20 +578,6 @@ export default function AnimeDetail() {
     }));
 
     const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
-
-    const toSafeInt = (value, fallback = 0) => {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-    };
-
-    const watchedEpisodes = toSafeInt(anime?.user_list_status?.episodes_watched);
-    const episodeDuration = toSafeInt(anime?.duration_minutes, 24) || 24;
-    const totalEpisodes = toSafeInt(anime?.episode_count);
-    const hasTrackedProgress = anime?.user_list_status != null;
-    const minutesToDisplay = (hasTrackedProgress ? watchedEpisodes : totalEpisodes) * episodeDuration;
-    const watchTimeLabel = minutesToDisplay > 0
-        ? `${Math.floor(minutesToDisplay / 60)}h ${minutesToDisplay % 60}m`
-        : 'Unknown';
 
     return (
         <div

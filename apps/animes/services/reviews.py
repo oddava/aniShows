@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from allauth.socialaccount.models import SocialAccount
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ...core.services.admin_settings_service import are_reviews_enabled
 from ...users.models import UserAnimeList

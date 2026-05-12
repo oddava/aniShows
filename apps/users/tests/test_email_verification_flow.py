@@ -21,9 +21,7 @@ class EmailVerificationFlowTests(APITestCase):
         UserProfile.objects.get_or_create(user=self.user)
 
     def test_verify_email_returns_tokens(self):
-        """
-        Ensure the VerifyEmailView returns access and refresh tokens upon success.
-        """
+        """Ensure the VerifyEmailView returns access and refresh tokens upon success."""
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
 
@@ -49,9 +47,7 @@ class EmailVerificationFlowTests(APITestCase):
         self.assertEqual(profile_response.data['email'], self.user.email)
 
     def test_already_verified_returns_tokens(self):
-        """
-        Ensure re-verifying an already verified email also returns tokens.
-        """
+        """Ensure re-verifying an already verified email also returns tokens."""
         # Mark as verified
         profile = getattr(self.user, 'userprofile', None)
         if not profile:

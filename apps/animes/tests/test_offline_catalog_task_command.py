@@ -92,6 +92,46 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             OfflineCatalogImport.objects.first().status,
             OfflineCatalogImport.Status.COMPLETED,
         )
+        anime = Anime.objects.get(title="Task Import Alpha")
+        self.assertEqual(anime.trending_rank, 1)
+        self.assertEqual(result["trending_ranks_refreshed"], 1)
+
+    @patch("apps.animes.tasks.offline_catalog.OfflineCatalogImportService.run_import")
+    def test_task_retries_remote_full_import_once_with_resume(self, mock_run_import):
+        mock_run_import.side_effect = [
+            RuntimeError("peer closed connection without sending complete message body"),
+            {
+                "records_seen": 10,
+                "changed_anime_ids": [],
+            },
+        ]
+
+        result = OfflineCatalogImportTask().execute()
+
+        self.assertEqual(result["records_seen"], 10)
+        self.assertEqual(mock_run_import.call_count, 2)
+        self.assertFalse(mock_run_import.call_args_list[0].kwargs["resume"])
+        self.assertTrue(mock_run_import.call_args_list[1].kwargs["resume"])
+
+    @patch("apps.animes.tasks.offline_catalog.sync_watch_episodes_batch.apply_async")
+    @patch("apps.animes.tasks.offline_catalog.OfflineCatalogImportService.run_import")
+    @override_settings(ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED=True)
+    def test_task_trims_large_changed_id_payloads(self, mock_run_import, mock_watch_apply_async):
+        changed_ids = list(range(1, 151))
+        mock_run_import.return_value = {
+            "records_seen": 150,
+            "changed_anime_ids": changed_ids,
+        }
+        mock_watch_apply_async.return_value = SimpleNamespace(id="watch-large")
+
+        result = OfflineCatalogImportTask().execute()
+
+        self.assertEqual(result["changed_anime_count"], 150)
+        self.assertEqual(result["changed_anime_ids"], changed_ids[:100])
+        self.assertEqual(result["changed_anime_ids_sample"], changed_ids[:100])
+        mock_watch_apply_async.assert_called_once_with(
+            kwargs={"anime_ids": changed_ids, "force": True}
+        )
 
     @skipUnless(zstandard is not None, "zstandard not available in runtime")
     def test_task_execute_imports_from_zst_source(self):

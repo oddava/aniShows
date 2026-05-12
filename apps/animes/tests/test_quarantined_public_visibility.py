@@ -73,7 +73,7 @@ class ShadowDuplicateVisibilityTests(APITestCase):
     def _anime(self, title: str, **overrides) -> Anime:
         payload = {
             "title": title,
-            "slug": title.lower().replace(" ", "-").replace("'", "").replace("’", ""),
+            "slug": title.lower().replace(" ", "-").replace("'", "").replace("\u2019", ""),
             "synopsis": "test synopsis",
             "anime_type": Anime.AnimeType.tv,
             "status": Anime.AnimeStatus.finished,
@@ -84,7 +84,7 @@ class ShadowDuplicateVisibilityTests(APITestCase):
 
     def test_public_anime_list_excludes_shadow_duplicate_when_bannered_canonical_exists(self):
         canonical = self._anime(
-            "Frieren: Beyond Journey’s End",
+            "Frieren: Beyond Journey\u2019s End",
             slug="frieren-beyond-journeys-end",
             anilist_id=154587,
             mal_id=52991,
@@ -107,7 +107,7 @@ class ShadowDuplicateVisibilityTests(APITestCase):
 
     def test_public_anime_detail_returns_404_for_shadow_duplicate_when_canonical_exists(self):
         self._anime(
-            "Frieren: Beyond Journey’s End",
+            "Frieren: Beyond Journey\u2019s End",
             slug="frieren-beyond-journeys-end",
             anilist_id=154587,
             mal_id=52991,

@@ -16,3 +16,31 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
         })),
     });
 }
+
+if (typeof window !== 'undefined' && typeof window.IntersectionObserver !== 'function') {
+    class MockIntersectionObserver {
+        constructor(callback) {
+            this.callback = callback;
+        }
+
+        observe = (element) => {
+            this.callback([{ isIntersecting: true, target: element }], this);
+        };
+
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+        takeRecords = () => [];
+    }
+
+    Object.defineProperty(window, 'IntersectionObserver', {
+        writable: true,
+        configurable: true,
+        value: MockIntersectionObserver,
+    });
+
+    Object.defineProperty(globalThis, 'IntersectionObserver', {
+        writable: true,
+        configurable: true,
+        value: MockIntersectionObserver,
+    });
+}

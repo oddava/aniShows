@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from django.apps import AppConfig
 
 
@@ -7,4 +9,5 @@ class CoreConfig(AppConfig):
     label = "core"
 
     def ready(self):
-        from . import celery_signals  # noqa: F401
+        import_module("apps.core.celery_signals")
+        import_module("apps.core.tasks.logging_tasks")

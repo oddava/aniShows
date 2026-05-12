@@ -61,18 +61,6 @@ const isTokenExpired = (token) => {
     }
 };
 
-// Check if token will expire soon (within 5 minutes)
-const willExpireSoon = (token) => {
-    try {
-        const decoded = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
-        const timeUntilExpiry = decoded.exp - currentTime;
-        return timeUntilExpiry > 0 && timeUntilExpiry < 300; // 5 minutes = 300 seconds
-    } catch {
-        return true;
-    }
-};
-
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -106,7 +94,7 @@ export function AuthProvider({ children }) {
         if (refreshToken) {
             try {
                 logger.info('Access token expired or missing, attempting refresh...');
-                const newAccessToken = await refreshAccessToken();
+                await refreshAccessToken();
                 logger.info('Token refresh successful on app load');
 
                 // Fetch full profile after refresh

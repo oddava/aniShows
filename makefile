@@ -4,6 +4,8 @@
 
 EXEC = docker compose exec web python manage.py
 RUN_MANAGE = docker compose run --rm web python manage.py
+ENV_FILE = .env
+ENV_EXAMPLE = .env.example
 
 .PHONY: help up down restart build ps logs web-logs celery-logs celery-priority-logs \
         celery-images-logs celery-analytics-logs beat-logs \
@@ -22,7 +24,13 @@ RUN_MANAGE = docker compose run --rm web python manage.py
 # Service Management
 # ============================================================================
 
-up:                             ## Start all services (detached)
+$(ENV_FILE): $(ENV_EXAMPLE)
+	@if [ ! -f "$(ENV_FILE)" ]; then \
+		cp "$(ENV_EXAMPLE)" "$(ENV_FILE)"; \
+		printf 'Created %s from %s. Review local values if needed.\n' "$(ENV_FILE)" "$(ENV_EXAMPLE)"; \
+	fi
+
+up: $(ENV_FILE)                 ## Start all services (detached)
 	docker compose up -d
 
 down:                           ## Stop all services
@@ -31,7 +39,7 @@ down:                           ## Stop all services
 restart:                        ## Restart all services
 	docker compose restart
 
-build:                          ## Rebuild all Docker images
+build: $(ENV_FILE)              ## Rebuild all Docker images
 	docker compose build
 
 ps:                             ## List running services

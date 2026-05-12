@@ -142,11 +142,11 @@ export default function CharacterModal({ role, onClose, accentColor }) {
         return url;
     };
 
-    // eslint-disable-next-line react-hooks/preserve-manual-memoization
+
     const parsedDescription = useMemo(() => {
         if (!character) return null;
         return parseMarkdownText(character.description);
-    }, [character?.description]);
+    }, [character]);
 
     if (!role) return null;
 

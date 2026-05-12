@@ -181,6 +181,7 @@ class OfflineCatalogImportService:
         )
         import_run.status = OfflineCatalogImport.Status.RUNNING
         import_run.started_at = import_run.started_at or started_at
+        run_started_at = import_run.started_at
         import_run.error_message = ""
         import_run.save(
             update_fields=["status", "started_at", "error_message", "source_url", "release_tag"]
@@ -222,11 +223,20 @@ class OfflineCatalogImportService:
             ) as text_stream:
                 for line_number, raw_line in enumerate(text_stream, start=1):
                     last_line_number = line_number
-                    if line_number <= skipped_lines:
-                        continue
 
                     raw_line = raw_line.strip()
                     if not raw_line:
+                        continue
+
+                    if line_number <= skipped_lines:
+                        if line_number == 1 and metadata_line is None:
+                            try:
+                                skipped_payload = json.loads(raw_line)
+                            except json.JSONDecodeError:
+                                skipped_payload = None
+                            if isinstance(skipped_payload, dict) and skipped_payload.get("$schema"):
+                                metadata_line = skipped_payload
+                                summary["last_update"] = skipped_payload.get("lastUpdate")
                         continue
 
                     try:
@@ -266,7 +276,7 @@ class OfflineCatalogImportService:
                         flush_result = self._flush_batch(
                             line_buffer,
                             last_update=self._parse_date(summary["last_update"]),
-                            seen_at=started_at,
+                            seen_at=run_started_at,
                         )
                         created_ids.extend(flush_result["created_ids"])
                         updated_ids.extend(flush_result["updated_ids"])
@@ -294,7 +304,7 @@ class OfflineCatalogImportService:
                     flush_result = self._flush_batch(
                         line_buffer,
                         last_update=self._parse_date(summary["last_update"]),
-                        seen_at=started_at,
+                        seen_at=run_started_at,
                     )
                     created_ids.extend(flush_result["created_ids"])
                     updated_ids.extend(flush_result["updated_ids"])
@@ -307,14 +317,23 @@ class OfflineCatalogImportService:
 
             stale_count = Anime.objects.filter(
                 offline_db_last_seen_at__isnull=False,
-                offline_db_last_seen_at__lt=started_at,
+                offline_db_last_seen_at__lt=run_started_at,
             ).count()
             import_run.records_marked_stale = stale_count
 
+            followup_ids = created_ids + updated_ids
+            if resume:
+                followup_ids = list(
+                    Anime.objects.filter(offline_db_last_seen_at=run_started_at).values_list(
+                        "id",
+                        flat=True,
+                    )
+                )
+
             if enqueue_enrichment:
-                sync_state_summary = self._initialize_sync_states(created_ids, updated_ids)
+                sync_state_summary = self._initialize_sync_states(followup_ids, [])
                 summary.update(sync_state_summary)
-                queued = self._enqueue_enrichment(created_ids, updated_ids)
+                queued = self._enqueue_enrichment(followup_ids, [])
                 summary.update(queued)
 
             import_run.status = OfflineCatalogImport.Status.COMPLETED
@@ -360,7 +379,7 @@ class OfflineCatalogImportService:
                 "records_updated": import_run.records_updated,
                 "records_failed": import_run.records_failed,
                 "records_marked_stale": import_run.records_marked_stale,
-                "changed_anime_ids": list(dict.fromkeys([*created_ids, *updated_ids])),
+                "changed_anime_ids": list(dict.fromkeys(followup_ids)),
             }
         )
         return summary

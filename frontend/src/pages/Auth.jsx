@@ -176,7 +176,7 @@ export function Register() {
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
-    const { register, login, isAuthenticated } = useAuth();
+    const { register, isAuthenticated } = useAuth();
     const navigate = useNavigate();
 
     // Redirect if already authenticated

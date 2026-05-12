@@ -18,7 +18,7 @@ const AdminImportJobs = () => {
 
   // Trigger modal state
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
-  const [triggerSource, setTriggerSource] = useState('jikan_trending');
+  const [triggerSource, setTriggerSource] = useState('offline_catalog');
   const [triggerSyncType, setTriggerSyncType] = useState('trending');
   const [triggerLimit, setTriggerLimit] = useState(50);
   const [triggerBatchSize, setTriggerBatchSize] = useState(100);
@@ -111,7 +111,10 @@ const AdminImportJobs = () => {
         };
       } else {
         payload = {
-          source: 'jikan_trending',
+          source: 'offline_catalog',
+          release_tag: triggerReleaseTag || 'latest',
+          import_limit: triggerImportLimit === '' ? null : Number(triggerImportLimit),
+          enqueue_enrichment: triggerEnrichment,
         };
       }
 
@@ -517,10 +520,9 @@ const AdminImportJobs = () => {
               onChange={handleTriggerSourceChange}
               disabled={isTriggering}
               options={[
-                { value: 'jikan_trending', label: 'Jikan (self-hosted) Trending' },
+                { value: 'offline_catalog', label: 'Anime Offline Database' },
                 { value: 'anime_catalog', label: 'Anime Model Fields' },
                 { value: 'jikan_enrichment', label: 'Jikan (self-hosted) Metadata' },
-                { value: 'offline_catalog', label: 'Anime Offline Database' },
               ]}
               triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
               ariaLabel="Import source"

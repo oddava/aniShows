@@ -83,7 +83,7 @@ def _filter_sentry_transaction(event, hint):
 DEBUG = False
 
 # HTTPS/SSL Settings
-SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False") == "True"
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True") == "True"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Cookie Security

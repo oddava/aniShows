@@ -5,7 +5,9 @@ from django.core.cache import cache
 from django.db.models import Q
 
 from ...shared.celery import observed_shared_task
+from ...shared.logger import logger
 from ..models import Anime, OfflineAnimeSyncState
+from ..services.catalog_sync import CatalogSyncService
 from ..services.metadata_health import build_stalled_offline_metadata_query
 from ..services.offline_catalog import (
     DEFAULT_ASSET_NAME,
@@ -38,15 +40,36 @@ class OfflineCatalogImportTask(BaseTask):
             batch_size=batch_size,
             enrichment_chunk_size=enrichment_chunk_size,
         )
-        result = service.run_import(
-            release_tag=release_tag,
-            asset_name=asset_name,
-            source_url=source_url,
-            source_path=source_path,
-            limit=limit,
-            resume=resume,
-            enqueue_enrichment=enqueue_enrichment,
+        try:
+            result = service.run_import(
+                release_tag=release_tag,
+                asset_name=asset_name,
+                source_url=source_url,
+                source_path=source_path,
+                limit=limit,
+                resume=resume,
+                enqueue_enrichment=enqueue_enrichment,
+            )
+        except Exception:
+            if source_path or limit or resume:
+                raise
+            logger.warning("Offline catalog import interrupted; retrying once with resume")
+            result = service.run_import(
+                release_tag=release_tag,
+                asset_name=asset_name,
+                source_url=source_url,
+                source_path=source_path,
+                limit=limit,
+                resume=True,
+                enqueue_enrichment=enqueue_enrichment,
+            )
+        rank_limit = max(int(getattr(settings, "OFFLINE_IMPORT_TRENDING_RANK_LIMIT", 50)), 1)
+        catalog_sync = CatalogSyncService()
+        ranked_ids = catalog_sync.get_trending_anime_ids(limit=rank_limit)
+        result["trending_ranks_refreshed"] = (
+            catalog_sync.refresh_trending_ranks(ranked_ids) if ranked_ids else 0
         )
+
         watch_episode_task_id = None
         changed_ids = result.get("changed_anime_ids") or []
         if changed_ids and getattr(settings, "ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED", True):
@@ -68,6 +91,10 @@ class OfflineCatalogImportTask(BaseTask):
             )
         result["watch_episode_sync_queued"] = bool(watch_episode_task_id)
         result["watch_episode_sync_task_id"] = watch_episode_task_id
+        result["changed_anime_count"] = len(changed_ids)
+        if len(changed_ids) > 100:
+            result["changed_anime_ids_sample"] = changed_ids[:100]
+            result["changed_anime_ids"] = changed_ids[:100]
         self.metrics.record_records(result.get("records_seen", 0))
         return result
 

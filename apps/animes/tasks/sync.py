@@ -95,10 +95,10 @@ class SyncAnimeCatalogTask(BaseTask):
                         if job.result_data is None or not isinstance(job.result_data, dict):
                             job.result_data = {}
                         job.result_data["records_processed"] = processed
-                        job.task_kwargs["limit"] = total
+                        job.result_data["records_total"] = total
                         if job.status == CeleryTaskResult.TaskStatus.PENDING:
                             job.status = CeleryTaskResult.TaskStatus.STARTED
-                        job.save(update_fields=["result_data", "task_kwargs", "status"])
+                        job.save(update_fields=["result_data", "status"])
                     except Exception:
                         pass
 
@@ -179,10 +179,10 @@ class SyncAnimeCatalogTask(BaseTask):
                         if job.result_data is None or not isinstance(job.result_data, dict):
                             job.result_data = {}
                         job.result_data["records_processed"] = processed
-                        job.task_kwargs["limit"] = total
+                        job.result_data["records_total"] = total
                         if job.status == CeleryTaskResult.TaskStatus.PENDING:
                             job.status = CeleryTaskResult.TaskStatus.STARTED
-                        job.save(update_fields=["result_data", "task_kwargs", "status"])
+                        job.save(update_fields=["result_data", "status"])
                     except Exception:
                         pass
 

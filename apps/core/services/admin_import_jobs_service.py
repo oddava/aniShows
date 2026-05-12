@@ -20,6 +20,7 @@ IMPORT_TASKS = [
     OFFLINE_RECONCILE_TASK,
 ]
 FULL_CATALOG_LIMIT = 5000
+BUSINESS_FAILURE_STATUSES = ("no_data", "source_unhealthy")
 
 # Backward-compatible alias retained for older tests/callers.
 ANILIST_SYNC_TASK = CATALOG_SYNC_TASK
@@ -42,6 +43,12 @@ def map_import_job_status(celery_status: str) -> str:
         "REVOKED": "cancelled",
     }
     return status_map.get(celery_status, "pending")
+
+
+def is_business_failure(result_data) -> bool:
+    if not isinstance(result_data, dict):
+        return False
+    return result_data.get("status") in BUSINESS_FAILURE_STATUSES
 
 
 def coerce_int_or_none(value):
@@ -262,13 +269,25 @@ def format_task_result(result):
     error_message = result.error_message
     extra_metadata = {}
 
+    business_failure = is_business_failure(result.result_data)
     if result.task_name == CATALOG_SYNC_TASK:
         sync_type = task_kwargs.get("sync_type", "unknown")
         source, source_type = describe_catalog_sync(sync_type)
         if isinstance(result.result_data, dict):
             processed_items = result.result_data.get("records_processed", 0)
         total_items = task_kwargs.get("limit", processed_items) if task_kwargs else processed_items
+        if not total_items and not business_failure and isinstance(result.result_data, dict):
+            total_items = result.result_data.get("records_total", processed_items)
         error_count = 1 if result.status == "FAILURE" else 0
+        if business_failure:
+            error_count = max(error_count, 1)
+            if not error_message:
+                reason = result.result_data.get("reason") or result.result_data.get("status")
+                fetched = result.result_data.get("fetched")
+                if fetched is not None:
+                    error_message = f"Catalog sync returned no usable data ({reason}; fetched {fetched})."
+                else:
+                    error_message = f"Catalog sync returned no usable data ({reason})."
 
     elif result.task_name == METADATA_ENRICHMENT_TASK:
         mode = task_kwargs.get("mode", "backfill")
@@ -344,7 +363,7 @@ def format_task_result(result):
         "task_id": result.task_id,
         "source": source,
         "source_type": source_type,
-        "status": map_import_job_status(result.status),
+        "status": "failed" if business_failure else map_import_job_status(result.status),
         "processed_items": processed_items,
         "total_items": total_items,
         "error_count": error_count,
@@ -366,15 +385,29 @@ def format_task_result(result):
 
 def create_pending_job(*, user, task_path: str, task_module: str, kwargs, queue: str):
     result = current_app.send_task(task_path, kwargs=kwargs, queue=queue)
-    return CeleryTaskResult.objects.create(
+    job, created = CeleryTaskResult.objects.get_or_create(
         task_id=result.id,
-        task_name=task_path,
-        task_module=task_module,
-        status="PENDING",
-        task_kwargs=kwargs,
-        queue=queue,
-        triggered_by=user if user and user.is_authenticated else None,
+        defaults={
+            "task_name": task_path,
+            "task_module": task_module,
+            "status": "PENDING",
+            "task_kwargs": kwargs,
+            "queue": queue,
+            "triggered_by": user if user and user.is_authenticated else None,
+        },
     )
+    if not created:
+        update_fields = ["task_name", "task_module", "task_kwargs", "queue"]
+        job.task_name = job.task_name or task_path
+        job.task_module = job.task_module or task_module
+        if not job.task_kwargs:
+            job.task_kwargs = kwargs
+        job.queue = job.queue or queue
+        if user and user.is_authenticated and not job.triggered_by_id:
+            job.triggered_by = user
+            update_fields.append("triggered_by")
+        job.save(update_fields=update_fields)
+    return job
 
 
 def trigger_trending_refresh(payload, user) -> AdminImportJobActionResult:
@@ -496,7 +529,7 @@ def trigger_offline_import(payload, user) -> AdminImportJobActionResult:
         "source_url": payload.get("source_url") or None,
         "source_path": payload.get("source_path") or None,
         "limit": coerce_int_or_none(payload.get("import_limit", payload.get("limit"))),
-        "resume": coerce_bool(payload.get("resume"), default=False),
+        "resume": coerce_bool(payload.get("resume"), default=True),
         "enqueue_enrichment": coerce_bool(payload.get("enqueue_enrichment"), default=True),
         "enforce_full_sync": True,
         "batch_size": coerce_int_or_none(payload.get("batch_size")) or 250,

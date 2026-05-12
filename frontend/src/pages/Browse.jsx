@@ -185,7 +185,25 @@ export default function Browse() {
 
   useEffect(() => {
     searchParamsRef.current = searchParams;
-  }, [searchParams]);
+  }, [
+    searchParams,
+    currentGenres,
+    currentMaxDuration,
+    currentMaxEpisodes,
+    currentMaxRating,
+    currentMaxYear,
+    currentMinDuration,
+    currentMinEpisodes,
+    currentMinRating,
+    currentMinYear,
+    currentSeason,
+    currentSource,
+    currentStatuses,
+    currentStudio,
+    currentTags,
+    currentTypes,
+    currentYear,
+  ]);
 
   useEffect(() => () => {
     Object.values(filterUpdateTimersRef.current).forEach(clearTimeout);
@@ -334,7 +352,25 @@ export default function Browse() {
       maxYear: currentMaxYear,
       tags: currentTags,
     });
-  }, [searchParams]);
+  }, [
+    searchParams,
+    currentGenres,
+    currentMaxDuration,
+    currentMaxEpisodes,
+    currentMaxRating,
+    currentMaxYear,
+    currentMinDuration,
+    currentMinEpisodes,
+    currentMinRating,
+    currentMinYear,
+    currentSeason,
+    currentSource,
+    currentStatuses,
+    currentStudio,
+    currentTags,
+    currentTypes,
+    currentYear,
+  ]);
 
   // Update active tab based on params
   useEffect(() => {
@@ -361,67 +397,6 @@ export default function Browse() {
     else if (currentSort === 'popular') setActiveTab('popular');
     else setActiveTab(null);
   }, [currentSort, currentSeason, currentYear, currentSearch, searchParams]);
-
-  const handleTabChange = useCallback((key) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('exclude_ids');
-    newParams.delete('shelf');
-    newParams.delete('sort');
-    newParams.delete('status');
-    newParams.delete('season');
-    newParams.delete('year');
-
-    const d = new Date();
-    const month = d.getMonth();
-    const year = d.getFullYear();
-
-    switch (key) {
-      case 'trending':
-        newParams.set('sort', 'trending');
-        break;
-      case 'current': {
-        let season = 'winter';
-        if (month >= 3 && month <= 5) season = 'spring';
-        else if (month >= 6 && month <= 8) season = 'summer';
-        else if (month >= 9 && month <= 11) season = 'fall';
-
-        newParams.set('season', season);
-        newParams.set('year', year.toString());
-        newParams.set('sort', 'popular');
-        break;
-      }
-      case 'upcoming': {
-        let nextSeason = 'winter';
-        let nextYear = year;
-
-        if (month >= 0 && month <= 2) { nextSeason = 'spring'; }
-        else if (month >= 3 && month <= 5) { nextSeason = 'summer'; }
-        else if (month >= 6 && month <= 8) { nextSeason = 'fall'; }
-        else { nextSeason = 'winter'; nextYear = year + 1; }
-
-        newParams.set('season', nextSeason);
-        newParams.set('year', nextYear.toString());
-        newParams.set('sort', 'popular');
-        break;
-      }
-      case 'top':
-        newParams.set('sort', 'rating');
-        break;
-      case 'popular':
-        newParams.set('sort', 'popular');
-        break;
-      case 'newest':
-        newParams.set('sort', 'newest');
-        break;
-      case 'title':
-        newParams.set('sort', 'title');
-        break;
-    }
-
-    setActiveTab(key);
-    setIsTabSwitching(true);
-    setSearchParams(newParams);
-  }, [searchParams, setSearchParams]);
 
   const shouldLoadStudios = showFilters || Boolean(currentStudio);
 
@@ -655,6 +630,7 @@ export default function Browse() {
     currentMaxDuration,
     currentMinYear,
     currentMaxYear,
+    adultContentEnabled,
   ]);
 
   useEffect(() => {

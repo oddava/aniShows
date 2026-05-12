@@ -117,7 +117,6 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
         data: listsData,
         isLoading: listsLoading,
         isError: listsError,
-        error: listsErrorDetails,
         refetch: refetchLists
     } = useQuery({
         queryKey: ['profile-insights-lists', username],

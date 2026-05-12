@@ -106,6 +106,10 @@ describe('Schedule Component', () => {
 
   it('renders schedule with anime successfully', async () => {
     const todayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][new Date().getDay()];
+    const firstAiringDate = new Date();
+    firstAiringDate.setHours(12, 0, 0, 0);
+    const secondAiringDate = new Date(firstAiringDate);
+    secondAiringDate.setHours(13, 0, 0, 0);
 
     const mockAnime = [
       {
@@ -113,7 +117,7 @@ describe('Schedule Component', () => {
         title: 'Attack on Titan',
         slug: 'attack-on-titan',
         cover_image: 'https://example.com/aot.jpg',
-        next_airing_date: new Date().toISOString(),
+        next_airing_date: firstAiringDate.toISOString(),
         next_airing_episode: 5,
         anime_type: 'TV',
         episode_count: 24,
@@ -124,7 +128,7 @@ describe('Schedule Component', () => {
         title: 'Demon Slayer',
         slug: 'demon-slayer',
         cover_image: 'https://example.com/ds.jpg',
-        next_airing_date: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        next_airing_date: secondAiringDate.toISOString(),
         next_airing_episode: 12,
         anime_type: 'TV',
         episode_count: 26,

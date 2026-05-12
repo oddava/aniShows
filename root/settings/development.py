@@ -42,8 +42,8 @@ CSRF_TRUSTED_ORIGINS = [
 # DEBUG TOOLBAR
 # =============================================================================
 
-INSTALLED_APPS = INSTALLED_APPS + ["debug_toolbar", "drf_spectacular"]
-MIDDLEWARE = MIDDLEWARE + ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+INSTALLED_APPS = [*INSTALLED_APPS, "debug_toolbar", "drf_spectacular"]
+MIDDLEWARE = [*MIDDLEWARE, "debug_toolbar.middleware.DebugToolbarMiddleware"]
 
 # Set DRF schema class for API docs (only available in development)
 REST_FRAMEWORK["DEFAULT_SCHEMA_CLASS"] = "drf_spectacular.openapi.AutoSchema"

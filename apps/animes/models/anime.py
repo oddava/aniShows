@@ -19,8 +19,8 @@ from django.db.models import (
     URLField,
 )
 from django.db.models.enums import TextChoices
-from django.db.models.indexes import Index
 from django.db.models.functions import Cast, Coalesce
+from django.db.models.indexes import Index
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
 

@@ -42,7 +42,9 @@ describe('Navbar keyboard shortcuts', () => {
     });
 
     afterEach(() => {
-        vi.runOnlyPendingTimers();
+        act(() => {
+            vi.runOnlyPendingTimers();
+        });
         vi.useRealTimers();
         vi.restoreAllMocks();
     });

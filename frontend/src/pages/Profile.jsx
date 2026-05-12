@@ -171,7 +171,7 @@ export default function Profile({ forcedUsername }) {
     });
 
     // For own profile, use the centralized hook
-    const { data: ownProfile, isLoading: ownProfileLoading } = useUserProfile();
+    const { data: ownProfile } = useUserProfile();
 
     const displayUser = isPublicView ? publicProfile : (ownProfile || currentUser);
     const isPrivate = isPublicView && displayUser?.is_private;

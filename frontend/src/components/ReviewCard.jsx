@@ -84,7 +84,7 @@ const renderText = (text) => {
 };
 
 // Scorecard sub-rating row for the dedicated box
-const ScoreRow = ({ icon: Icon, label, value, accentColor }) => {  // eslint-disable-line no-unused-vars
+const ScoreRow = ({ icon: Icon, label, value, accentColor }) => {
     if (!value) return null;
     const displayValue = (value / 2).toFixed(1);
     const percentage = (value / 2 / 5) * 100;
