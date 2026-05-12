@@ -20,6 +20,7 @@ from django.db.models import (
     OuterRef,
     Prefetch,
     Q,
+    Subquery,
     Value,
     When,
 )
@@ -33,7 +34,7 @@ from ...shared.public_cache import (
     public_cache_stale_key,
 )
 from ...users.models import UserAnimeList, UserProfile
-from ..models import Anime, Genre, ThemeSong, UserFavorite
+from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, ThemeSong, UserFavorite
 from .jikan import JikanService
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
@@ -234,6 +235,17 @@ class AnimeQueryService:
             to_attr="_user_list_entries",
         )
 
+    @staticmethod
+    def _count_subquery(model, anime_field: str = "anime_id") -> Subquery:
+        queryset = (
+            model.objects.filter(**{anime_field: OuterRef("pk")})
+            .order_by()
+            .values(anime_field)
+            .annotate(total=Count("id"))
+            .values("total")[:1]
+        )
+        return Subquery(queryset, output_field=IntegerField())
+
     def build_queryset(self, request, *, action: str, include_user_context: bool = True):
         is_list = action == "list"
         queryset = Anime.public_queryset().select_related("studio")
@@ -246,8 +258,14 @@ class AnimeQueryService:
                 queryset.prefetch_related(self._genre_prefetch(), self._theme_song_prefetch())
                 .defer(*self.DETAIL_DEFER_FIELDS)
                 .annotate(
-                    character_count=Count("cast", distinct=True),
-                    staff_count=Count("production_staff", distinct=True),
+                    character_count=Coalesce(
+                        self._count_subquery(AnimeCharacter),
+                        Value(0),
+                    ),
+                    staff_count=Coalesce(
+                        self._count_subquery(AnimeStaff),
+                        Value(0),
+                    ),
                 )
             )
 

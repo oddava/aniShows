@@ -1,4 +1,5 @@
-
+from defusedxml import ElementTree
+from django.conf import settings
 from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.decorators import action
@@ -22,6 +23,7 @@ from ..services.import_job_service import (
 
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024
+DEFAULT_MAX_XML_ENTRIES = 5000
 
 
 class ImportExportViewSet(ViewSet):
@@ -32,9 +34,47 @@ class ImportExportViewSet(ViewSet):
 
     permission_classes = [IsAuthenticated]
 
+    def _require_verified_email(self, request):
+        profile = getattr(request.user, "userprofile", None)
+        if not profile or not profile.email_verified:
+            return error_response(
+                "Please verify your email before importing anime lists.",
+                code="email_verification_required",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    def _validate_xml_entry_count(self, xml_content: str):
+        try:
+            root = ElementTree.fromstring(xml_content)
+        except ElementTree.ParseError:
+            return error_response(
+                "Invalid XML file format",
+                code="invalid_xml_file",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        max_xml_entries = getattr(
+            settings,
+            "MAX_IMPORT_XML_ENTRIES",
+            DEFAULT_MAX_XML_ENTRIES,
+        )
+        entry_count = len(root.findall("anime"))
+        if entry_count > max_xml_entries:
+            return error_response(
+                f"XML import contains too many entries. Maximum allowed: {max_xml_entries}.",
+                code="xml_entry_limit_exceeded",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
     @action(detail=False, methods=["post"])
     def import_mal(self, request):
         """Start MAL import from username"""
+        verification_error = self._require_verified_email(request)
+        if verification_error:
+            return verification_error
+
         username = request.data.get("username")
 
         if not username:
@@ -56,6 +96,10 @@ class ImportExportViewSet(ViewSet):
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_mal_xml(self, request):
         """Upload and import MAL XML file"""
+        verification_error = self._require_verified_email(request)
+        if verification_error:
+            return verification_error
+
         if "file" not in request.FILES:
             return error_response(
                 "XML file is required",
@@ -90,6 +134,10 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        xml_entry_error = self._validate_xml_entry_count(xml_content)
+        if xml_entry_error:
+            return xml_entry_error
+
         result = create_mal_xml_import_job(request.user, file.name, xml_content)
         return api_response(
             result.payload,
@@ -100,6 +148,10 @@ class ImportExportViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def import_anilist(self, request):
         """Start AniList import from username"""
+        verification_error = self._require_verified_email(request)
+        if verification_error:
+            return verification_error
+
         username = request.data.get("username")
         access_token = request.data.get("access_token")  # Optional
 

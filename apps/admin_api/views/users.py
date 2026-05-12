@@ -10,7 +10,7 @@ from rest_framework.settings import api_settings
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
 from ...animes.models import UserFavorite
-from ...core.permissions import IsAdminUser
+from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 from ...users.admin_serializers import AdminUserSerializer
 from ...users.models import UserAnimeList
 from ..services.user_admin_service import (
@@ -40,10 +40,17 @@ class UserFilter(FilterSet):
         fields = ['is_staff', 'is_active']
 
 
-class AdminUserViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, GenericViewSet):
+class AdminUserViewSet(
+    SuperUserRequiredForActionsMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    DestroyModelMixin,
+    GenericViewSet,
+):
     """User management for admins using robust DRF ViewSets."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"toggle_active", "toggle_staff", "destroy"})
     serializer_class = AdminUserSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = UserFilter
@@ -98,10 +105,11 @@ class AdminUserViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, Ge
         return Response(result.payload, status=result.status_code)
 
 
-class AdminUserListViewSet(ViewSet):
+class AdminUserListViewSet(SuperUserRequiredForActionsMixin, ViewSet):
     """User list entries management for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"destroy", "bulk_delete"})
     def list(self, request):
         queryset = build_user_list_queryset(request.query_params)
 
@@ -150,10 +158,11 @@ class AdminUserListViewSet(ViewSet):
         return Response({"message": f"Deleted {deleted_count} list entries."})
 
 
-class AdminFavoritesViewSet(ViewSet):
+class AdminFavoritesViewSet(SuperUserRequiredForActionsMixin, ViewSet):
     """User favorites management for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"destroy"})
     def list(self, request):
         queryset = build_user_favorites_queryset(request.query_params)
 

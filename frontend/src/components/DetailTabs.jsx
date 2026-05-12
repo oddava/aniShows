@@ -179,6 +179,26 @@ function CharacterGrid({ characters }) {
     return <VirtualizedCharacterGrid characters={characters} />;
 }
 
+function RelationLoadMoreButton({ hasNextPage, isFetchingNextPage, onLoadMore, label }) {
+    if (!hasNextPage) {
+        return null;
+    }
+
+    return (
+        <div className="flex justify-center pt-2">
+            <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={isFetchingNextPage}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-dark-100 px-5 py-2.5 text-sm font-bold text-gray-200 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+                {isFetchingNextPage && <Loader className="h-4 w-4 animate-spin" />}
+                {isFetchingNextPage ? 'Loading...' : label}
+            </button>
+        </div>
+    );
+}
+
 function VirtualizedCharacterGrid({ characters }) {
     const containerRef = useRef(null);
     const columns = useResponsiveColumns(1, CHARACTER_GRID_BREAKPOINTS);
@@ -511,11 +531,22 @@ export function ThemesTab({ anime, accentColor }) {
     );
 }
 
-export function CharactersTab({ anime, characters: charactersProp, isLoading }) {
+export function CharactersTab({
+    anime,
+    characters: charactersProp,
+    isLoading,
+    totalCount,
+    hasNextPage,
+    isFetchingNextPage,
+    onLoadMore,
+}) {
     const sourceCharacters = charactersProp || anime?.characters;
     const uniqueCharacters = useMemo(() => {
         return getUniqueCharacterRoles(sourceCharacters);
     }, [sourceCharacters]);
+    const resolvedCount = Number.isFinite(totalCount) && totalCount >= 0
+        ? totalCount
+        : uniqueCharacters.length;
 
     if (isLoading) {
         return (
@@ -534,10 +565,35 @@ export function CharactersTab({ anime, characters: charactersProp, isLoading }) 
         );
     }
 
-    return <CharacterGrid characters={uniqueCharacters} />;
+    return (
+        <div className="animate-tab-content min-w-0 space-y-3 sm:space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs text-gray-400">
+                <div>
+                    Loaded <span className="font-bold text-gray-300">{uniqueCharacters.length}</span> of <span className="font-bold text-gray-300">{resolvedCount}</span> characters
+                </div>
+            </div>
+
+            <CharacterGrid characters={uniqueCharacters} />
+
+            <RelationLoadMoreButton
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={onLoadMore}
+                label="Load More Characters"
+            />
+        </div>
+    );
 }
 
-export function StaffTab({ anime, staff: staffProp, isLoading }) {
+export function StaffTab({
+    anime,
+    staff: staffProp,
+    isLoading,
+    totalCount,
+    hasNextPage,
+    isFetchingNextPage,
+    onLoadMore,
+}) {
     const sourceStaff = staffProp || anime?.staff;
     const uniqueStaff = useMemo(() => {
         if (!Array.isArray(sourceStaff)) return [];
@@ -552,6 +608,9 @@ export function StaffTab({ anime, staff: staffProp, isLoading }) {
             return true;
         });
     }, [sourceStaff]);
+    const resolvedCount = Number.isFinite(totalCount) && totalCount >= 0
+        ? totalCount
+        : uniqueStaff.length;
 
     if (isLoading) {
         return (
@@ -571,32 +630,47 @@ export function StaffTab({ anime, staff: staffProp, isLoading }) {
     }
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-tab-content">
-            {uniqueStaff.map((staffRole) => (
-                <Link
-                    key={staffRole.id}
-                    to={staffRole.staff?.id ? `/staff/${staffRole.staff.id}` : '#'}
-                    className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
-                >
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
-                        <img
-                            src={getPortraitUrl(staffRole.staff)}
-                            srcSet={getPortraitSrcSet(staffRole.staff)}
-                            sizes="96px"
-                            alt={staffRole.staff.name}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-cover saturate-[0.85]"
-                        />
-                    </div>
-                    <div className="flex flex-col min-w-0 pr-4">
-                        <h4 className="font-medium text-gray-300 text-[13px] truncate">
-                            <span className="transition-colors hover:text-accent">{staffRole.staff.name}</span>
-                        </h4>
-                        <p className="text-[11px] text-gray-500 mt-1 truncate">{staffRole.role}</p>
-                    </div>
-                </Link>
-            ))}
+        <div className="animate-tab-content min-w-0 space-y-3 sm:space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs text-gray-400">
+                <div>
+                    Loaded <span className="font-bold text-gray-300">{uniqueStaff.length}</span> of <span className="font-bold text-gray-300">{resolvedCount}</span> staff credits
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {uniqueStaff.map((staffRole) => (
+                    <Link
+                        key={staffRole.id}
+                        to={staffRole.staff?.id ? `/staff/${staffRole.staff.id}` : '#'}
+                        className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
+                    >
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
+                            <img
+                                src={getPortraitUrl(staffRole.staff)}
+                                srcSet={getPortraitSrcSet(staffRole.staff)}
+                                sizes="96px"
+                                alt={staffRole.staff.name}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover saturate-[0.85]"
+                            />
+                        </div>
+                        <div className="flex flex-col min-w-0 pr-4">
+                            <h4 className="font-medium text-gray-300 text-[13px] truncate">
+                                <span className="transition-colors hover:text-accent">{staffRole.staff.name}</span>
+                            </h4>
+                            <p className="text-[11px] text-gray-500 mt-1 truncate">{staffRole.role}</p>
+                        </div>
+                    </Link>
+                ))}
+            </div>
+
+            <RelationLoadMoreButton
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={onLoadMore}
+                label="Load More Staff"
+            />
         </div>
     );
 }

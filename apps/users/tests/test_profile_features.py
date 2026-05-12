@@ -183,6 +183,22 @@ class ProfileFeaturesTest(APITestCase):
         self.profile.refresh_from_db()
         self.assertEqual(len(self.profile.social_links), 0)
 
+    def test_social_link_updates_use_stricter_throttle(self):
+        """New accounts should hit the social-link edit limit before normal profile limits."""
+        response = None
+        for index in range(6):
+            response = self.client.patch(
+                self.profile_url,
+                {
+                    "social_links": [
+                        {"platform": "GitHub", "value": f"testuser{index}"}
+                    ]
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
     def test_current_profile_falls_back_to_google_avatar_for_email_signup(self):
         """Email-first users should still expose linked Google avatars."""
         google_avatar = "https://lh3.googleusercontent.com/a/notjony-avatar=s96-c"

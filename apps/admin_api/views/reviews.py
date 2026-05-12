@@ -10,7 +10,7 @@ from rest_framework.viewsets import GenericViewSet
 
 from ...animes.admin_serializers import AdminReviewSerializer
 from ...animes.models import Review, ReviewReport, ReviewVote
-from ...core.permissions import IsAdminUser
+from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 
 
 class ReviewFilter(FilterSet):
@@ -24,10 +24,17 @@ class ReviewFilter(FilterSet):
         fields = ['has_spoilers', 'rating']
 
 
-class AdminReviewViewSet(ListModelMixin, RetrieveModelMixin, DestroyModelMixin, GenericViewSet):
+class AdminReviewViewSet(
+    SuperUserRequiredForActionsMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    DestroyModelMixin,
+    GenericViewSet,
+):
     """Review moderation for admins."""
 
     permission_classes = [IsAdminUser]
+    superuser_actions = frozenset({"destroy"})
     serializer_class = AdminReviewSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ReviewFilter

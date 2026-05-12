@@ -39,6 +39,12 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.request.method == "PATCH" and "social_links" in self.request.data:
+            throttles.append(throttling.SocialLinksRateThrottle())
+        return throttles
+
     def get(self, request):
         start_time = time.time()
         user_id = request.user.id
