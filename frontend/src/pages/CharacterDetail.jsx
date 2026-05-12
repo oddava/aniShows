@@ -194,16 +194,6 @@ export default function CharacterDetail() {
                                     className="h-full w-full object-cover"
                                 />
                             </div>
-                            {character.anilist_id && (
-                                <a
-                                    href={`https://anilist.co/character/${character.anilist_id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="mt-3 block text-center text-xs font-medium text-gray-500 transition-colors hover:text-gray-300"
-                                >
-                                    AniList
-                                </a>
-                            )}
                         </div>
 
                         <div className="col-start-2 row-start-1 flex flex-row items-start justify-between gap-3 sm:gap-4 pt-1">
