@@ -18,6 +18,7 @@ const GENERIC_TITLES = new Set([
     'Badge Awarded', 
     'New Episode', 
     'Review Reply', 
+    'Review Like',
     'New Follower', 
     'Forum Reply', 
     'Mentioned', 
@@ -137,6 +138,7 @@ export const getActorUsernameData = (notification) => {
         data.replier_username,
         data.mentioner_username,
         data.liker_username,
+        data.actor_username,
     ].find((value) => typeof value === 'string' && value.trim());
 
     if (!usernameCandidate) {

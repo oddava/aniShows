@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
 import logger from '../utils/logger';
-import { getHighlightEntityData } from '../utils/notificationUtils';
+import { getHighlightEntityData, getNotificationTarget } from '../utils/notificationUtils';
 
 export const NotificationBell = () => {
     const { user } = useAuth();
@@ -29,7 +29,33 @@ export const NotificationBell = () => {
                     setUnreadCount(data.unread_count);
                 }
                 if (isOpenRef.current && data.notification) {
-                    setNotifications(prev => [data.notification, ...prev]);
+                    setNotifications(prev => {
+                        if (prev.some(n => n.id === data.notification.id)) return prev;
+                        return [data.notification, ...prev];
+                    });
+                }
+                break;
+
+            case 'notification_updated':
+                if (data.notification) {
+                    setNotifications(prev => {
+                        const exists = prev.some(n => n.id === data.notification.id);
+                        const next = exists
+                            ? prev.map(n => (n.id === data.notification.id ? data.notification : n))
+                            : [data.notification, ...prev];
+                        return [...next].sort(
+                            (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                        );
+                    });
+                }
+                break;
+
+            case 'notification_deleted':
+                if (data.notification_id) {
+                    setNotifications(prev => prev.filter(n => n.id !== data.notification_id));
+                }
+                if (data.unread_count != null) {
+                    setUnreadCount(data.unread_count);
                 }
                 break;
 
@@ -121,11 +147,9 @@ export const NotificationBell = () => {
             setUnreadCount(prev => Math.max(0, prev - 1));
             setIsOpen(false);
 
-            // Navigate to relevant page based on notification type
-            if (notification.data?.anime_slug) {
-                window.location.href = `/anime/${notification.data.anime_slug}`;
-            } else if (notification.notification_type === 'new_follower' && notification.data?.follower_username) {
-                window.location.href = `/u/${notification.data.follower_username}`;
+            const target = getNotificationTarget(notification);
+            if (target) {
+                window.location.href = target;
             }
         } catch (error) {
             logger.error('Failed to handle notification click:', error);

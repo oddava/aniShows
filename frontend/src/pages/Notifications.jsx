@@ -19,6 +19,7 @@ const NOTIFICATION_FILTERS = [
     { value: 'all', label: 'All' },
     { value: 'new_episode', label: 'Episodes' },
     { value: 'review_reply', label: 'Review Replies' },
+    { value: 'review_like', label: 'Review Likes' },
     { value: 'new_follower', label: 'Followers' },
     { value: 'forum', label: 'Forum' },
     { value: 'badge_awarded', label: 'Badges' },
@@ -59,11 +60,12 @@ const getNotificationThumbnail = (notification, coverBySlug, followerAvatarByUse
     const followerUsername = data.follower_username;
     const fetchedFollowerAvatar = followerUsername ? followerAvatarByUsername[followerUsername] : null;
     const rawUrl =
-        (animeSlug ? coverBySlug[animeSlug] : null) ||
         data.anime_cover_image_small ||
+        data.anime_cover_image_medium ||
         data.anime_cover_image ||
         data.anime_cover ||
         data.cover_image ||
+        (animeSlug ? coverBySlug[animeSlug] : null) ||
         data.follower_avatar_url ||
         data.follower_avatar ||
         data.avatar ||
@@ -78,6 +80,7 @@ const hasEmbeddedImage = (notification) => {
     const data = notification?.data || {};
     return Boolean(
         data.anime_cover_image_small ||
+        data.anime_cover_image_medium ||
         data.anime_cover_image ||
         data.anime_cover ||
         data.cover_image ||
@@ -185,18 +188,20 @@ export default function Notifications() {
         let cancelled = false;
 
         const fetchCovers = async () => {
-            const entries = [];
             // Keep request fan-out bounded to avoid network spikes on large notification lists.
             const maxToFetch = slugsToFetch.slice(0, 12);
-            for (const slug of maxToFetch) {
+            const entries = await Promise.all(maxToFetch.map(async (slug) => {
                 try {
                     const response = await animeApi.getBySlug(slug);
                     const anime = response.data || {};
-                    entries.push([slug, anime.cover_image_small || anime.cover_image_medium || anime.cover_image || null]);
+                    return [
+                        slug,
+                        anime.cover_image_small || anime.cover_image_medium || anime.cover_image || null,
+                    ];
                 } catch {
-                    entries.push([slug, null]);
+                    return [slug, null];
                 }
-            }
+            }));
 
             if (cancelled) return;
 
@@ -286,6 +291,11 @@ export default function Notifications() {
             setNotifications((prev) => prev.map((item) => (
                 item.id === data.notification_id ? { ...item, is_read: true } : item
             )));
+            return;
+        }
+
+        if (data.type === 'notification_deleted' && data.notification_id) {
+            setNotifications((prev) => prev.filter((item) => item.id !== data.notification_id));
         }
     }, []);
 
@@ -433,7 +443,7 @@ export default function Notifications() {
             ) : (
                 <>
                 <div className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5">
-                    {filteredNotifications.map((notification) => {
+                    {filteredNotifications.map((notification, index) => {
                         const thumbnail = getNotificationThumbnail(notification, coverBySlug, followerAvatarByUsername);
                         const { displayText, entity: highlightEntity, startIndex: highlightStart } = getHighlightEntityData(notification);
                         const { username: actorUsername, startIndex: actorStart } = getActorUsernameData(notification);
@@ -505,7 +515,8 @@ export default function Notifications() {
                                                             });
                                                         }}
                                                         className="w-full h-full object-cover"
-                                                        loading="lazy"
+                                                        loading={index < 8 ? 'eager' : 'lazy'}
+                                                        decoding="async"
                                                     />
                                                 )
                                             ) : (
@@ -514,7 +525,8 @@ export default function Notifications() {
                                                     alt={thumbnailAlt}
                                                     onError={(event) => applyImageFallback(event, thumbnailFallback)}
                                                     className="w-14 h-20 sm:w-16 sm:h-24 object-cover"
-                                                    loading="lazy"
+                                                    loading={index < 8 ? 'eager' : 'lazy'}
+                                                    decoding="async"
                                                 />
                                             )}
                                         </div>
