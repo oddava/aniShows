@@ -6,6 +6,7 @@ from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ...core.services.admin_settings_service import are_reviews_enabled
+from ...core.services.notification_service import NotificationService
 from ...users.models import UserAnimeList
 from ...users.services.cache import invalidate_user_caches
 from ..models import Review, ReviewReaction, ReviewReport, ReviewVote
@@ -15,6 +16,12 @@ from ..models import Review, ReviewReaction, ReviewReport, ReviewVote
 class ReviewActionResult:
     payload: dict
     status_code: int
+
+
+POSITIVE_REVIEW_REACTIONS = {
+    ReviewReaction.ReactionType.THUMBS_UP,
+    ReviewReaction.ReactionType.HEART,
+}
 
 
 def ensure_reviews_enabled():
@@ -239,6 +246,40 @@ def delete_review(instance, user):
         transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
 
 
+def _has_active_review_like_signal(review, user):
+    return (
+        ReviewVote.objects.filter(
+            user=user,
+            review=review,
+            vote_type=ReviewVote.VoteType.HELPFUL,
+        ).exists()
+        or ReviewReaction.objects.filter(
+            user=user,
+            review=review,
+            reaction_type__in=POSITIVE_REVIEW_REACTIONS,
+        ).exists()
+    )
+
+
+def _sync_review_like_notification(review, actor):
+    if review.user_id == actor.id:
+        return
+
+    if _has_active_review_like_signal(review, actor):
+        NotificationService.create_review_like_notification(
+            user=review.user,
+            author=actor,
+            review=review,
+        )
+        return
+
+    NotificationService.remove_review_like_from_notification(
+        user=review.user,
+        author=actor,
+        review=review,
+    )
+
+
 def vote_on_review(review, user, vote_type):
     ensure_reviews_enabled()
     if review.user == user:
@@ -248,7 +289,9 @@ def vote_on_review(review, user, vote_type):
         )
 
     with transaction.atomic():
-        locked_review = Review.objects.select_for_update().get(pk=review.pk)
+        locked_review = Review.objects.select_for_update().select_related("user", "anime").get(
+            pk=review.pk
+        )
         locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
         existing_vote = ReviewVote.objects.select_for_update().filter(
             user=locked_user,
@@ -258,17 +301,20 @@ def vote_on_review(review, user, vote_type):
             if existing_vote.vote_type != vote_type:
                 existing_vote.vote_type = vote_type
                 existing_vote.save(update_fields=["vote_type"])
+                _sync_review_like_notification(locked_review, locked_user)
                 return ReviewActionResult(
                     payload={"active": True, "vote_type": vote_type},
                     status_code=200,
                 )
             existing_vote.delete()
+            _sync_review_like_notification(locked_review, locked_user)
             return ReviewActionResult(
                 payload={"active": False, "vote_type": vote_type},
                 status_code=200,
             )
 
         ReviewVote.objects.create(user=locked_user, review=locked_review, vote_type=vote_type)
+        _sync_review_like_notification(locked_review, locked_user)
     return ReviewActionResult(
         payload={"active": True, "vote_type": vote_type},
         status_code=200,
@@ -278,7 +324,9 @@ def vote_on_review(review, user, vote_type):
 def toggle_review_reaction(review, user, reaction_type):
     ensure_reviews_enabled()
     with transaction.atomic():
-        locked_review = Review.objects.select_for_update().get(pk=review.pk)
+        locked_review = Review.objects.select_for_update().select_related("user", "anime").get(
+            pk=review.pk
+        )
         locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
         existing_reaction = ReviewReaction.objects.select_for_update().filter(
             user=locked_user,
@@ -287,6 +335,8 @@ def toggle_review_reaction(review, user, reaction_type):
         ).first()
         if existing_reaction:
             existing_reaction.delete()
+            if reaction_type in POSITIVE_REVIEW_REACTIONS:
+                _sync_review_like_notification(locked_review, locked_user)
             return ReviewActionResult(
                 payload={"active": False, "reaction_type": reaction_type},
                 status_code=200,
@@ -297,6 +347,8 @@ def toggle_review_reaction(review, user, reaction_type):
             review=locked_review,
             reaction_type=reaction_type,
         )
+        if reaction_type in POSITIVE_REVIEW_REACTIONS:
+            _sync_review_like_notification(locked_review, locked_user)
     return ReviewActionResult(
         payload={"active": True, "reaction_type": reaction_type},
         status_code=200,

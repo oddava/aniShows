@@ -8,12 +8,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from ...shared.logger import logger
+from ...shared.media_urls import normalize_media_url
 from ...users.models import UserProfile
 from ...users.services.avatar_service import get_user_avatar_url
 from ..models import Notification
 
 UNREAD_COUNT_CACHE_TTL_SECONDS = 24 * 60 * 60
-
 
 class NotificationService:
     """Service for creating and managing user notifications."""
@@ -30,6 +30,98 @@ class NotificationService:
             "priority": notification.priority,
             "created_at": notification.created_at.isoformat(),
             "is_read": notification.is_read,
+        }
+
+    @staticmethod
+    def _field_url(field) -> str | None:
+        try:
+            url = field.url
+        except Exception:
+            return None
+        return normalize_media_url(url)
+
+    @classmethod
+    def get_anime_cover_payload(cls, anime) -> Dict[str, str | None]:
+        """Return lightweight cover URLs safe to embed in notification payloads."""
+        if anime is None:
+            return {}
+
+        external_cover = getattr(anime, "cover_image_external_url", None) or None
+        cover = cls._field_url(getattr(anime, "cover_image", None)) or external_cover
+        small = cls._field_url(getattr(anime, "cover_image_small", None)) or cover
+        medium = cls._field_url(getattr(anime, "cover_image_medium", None)) or cover
+
+        return {
+            "anime_cover_image_small": small,
+            "anime_cover_image_medium": medium,
+            "anime_cover_image": cover,
+        }
+
+    @staticmethod
+    def _actor_summary(primary_username: str, actor_count: int) -> str:
+        if actor_count <= 1:
+            return primary_username
+        if actor_count == 2:
+            return f"{primary_username} and 1 other"
+        return f"{primary_username} and {actor_count - 1} others"
+
+    @staticmethod
+    def _coerce_actor_id(value) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _merge_actor_payload(
+        cls,
+        *,
+        existing_data: Dict[str, Any],
+        base_data: Dict[str, Any],
+        actor,
+        username_key: str,
+        usernames_key: str,
+        user_ids_key: str,
+        count_key: str,
+    ) -> Dict[str, Any]:
+        actor_id = cls._coerce_actor_id(getattr(actor, "id", None))
+        actor_username = getattr(actor, "username", "")
+
+        existing_usernames = [
+            username
+            for username in existing_data.get(usernames_key, [])
+            if isinstance(username, str) and username
+        ]
+        if (
+            not existing_usernames
+            and isinstance(existing_data.get(username_key), str)
+            and existing_data.get(username_key)
+        ):
+            existing_usernames = [existing_data[username_key]]
+
+        existing_user_ids = [
+            user_id
+            for value in existing_data.get(user_ids_key, [])
+            if (user_id := cls._coerce_actor_id(value)) is not None
+        ]
+
+        merged_usernames = [actor_username] + [
+            username for username in existing_usernames if username != actor_username
+        ]
+        merged_user_ids = []
+        if actor_id is not None:
+            merged_user_ids.append(actor_id)
+        merged_user_ids.extend(user_id for user_id in existing_user_ids if user_id != actor_id)
+
+        actor_count = len(merged_user_ids) if merged_user_ids else len(merged_usernames)
+
+        return {
+            **existing_data,
+            **base_data,
+            username_key: merged_usernames[0],
+            usernames_key: merged_usernames,
+            user_ids_key: merged_user_ids,
+            count_key: actor_count,
         }
 
     @classmethod
@@ -72,10 +164,11 @@ class NotificationService:
                 )
                 logger.info(f"Created {notification_type} notification for user {user.id}")
 
-                unread_count = cls._increment_unread_count(user.id)
+                def notify_after_commit():
+                    unread_count = cls._increment_unread_count(user.id)
+                    cls._broadcast_notification(notification, unread_count=unread_count)
 
-                # Broadcast via WebSocket channel layer
-                cls._broadcast_notification(notification, unread_count=unread_count)
+                transaction.on_commit(notify_after_commit)
 
                 return notification
         except Exception as e:
@@ -141,6 +234,31 @@ class NotificationService:
             )
         except Exception:
             logger.exception("Failed to broadcast notification update via WebSocket")
+
+    @classmethod
+    def _broadcast_notification_deleted(
+        cls,
+        user_id: int,
+        notification_id: int,
+        unread_count: int | None = None,
+    ):
+        """Push a deletion/retraction event to active websocket clients."""
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer is None:
+                return
+
+            group_name = f"notifications_user_{user_id}"
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    "type": "notification.deleted",
+                    "notification_id": notification_id,
+                    "unread_count": unread_count,
+                },
+            )
+        except Exception:
+            logger.exception("Failed to broadcast notification deletion via WebSocket")
 
     @classmethod
     def _broadcast_unread_count(cls, user_id: int, count: int):
@@ -263,6 +381,31 @@ class NotificationService:
         return count
 
     @classmethod
+    def delete_notification(cls, notification_id: int, user) -> bool:
+        """Delete a notification and keep unread counters in sync."""
+        try:
+            with transaction.atomic():
+                notification = (
+                    Notification.objects.select_for_update()
+                    .only("id", "user_id", "is_read")
+                    .get(id=notification_id, user_id=user.id)
+                )
+                was_unread = not notification.is_read
+                notification.delete()
+
+                def notify_after_commit():
+                    unread_count = None
+                    if was_unread:
+                        unread_count = cls._decrement_unread_count(user.id)
+                        cls._broadcast_unread_count(user.id, unread_count)
+                    cls._broadcast_notification_deleted(user.id, notification_id, unread_count)
+
+                transaction.on_commit(notify_after_commit)
+                return True
+        except Notification.DoesNotExist:
+            return False
+
+    @classmethod
     def get_unread_count(cls, user) -> int:
         """Get count of unread notifications for a user."""
         return cls.get_unread_count_for_user_id(user.id)
@@ -286,6 +429,7 @@ class NotificationService:
             "anime_slug": anime.slug,
             "anime_title": anime.title,
             "episode_number": episode_number,
+            **cls.get_anime_cover_payload(anime),
         }
         if aired_at is not None:
             data["aired_at"] = aired_at.isoformat()
@@ -313,6 +457,7 @@ class NotificationService:
                 "anime_id": review.anime.id,
                 "anime_slug": review.anime.slug,
                 "anime_title": review.anime.title,
+                **cls.get_anime_cover_payload(review.anime),
                 "replier_username": comment.user.username,
                 "replier_id": comment.user.id,
             },
@@ -402,12 +547,7 @@ class NotificationService:
         def _build_message(primary_username: str, liker_count: int) -> str:
             target_label = "thread" if is_thread else "post"
             suffix = f": {title}" if is_thread else f" in {title}"
-            if liker_count <= 1:
-                return f"{primary_username} liked your {target_label}{suffix}"
-            return (
-                f"{primary_username} and {liker_count - 1} others "
-                f"liked your {target_label}{suffix}"
-            )
+            return f"{cls._actor_summary(primary_username, liker_count)} liked your {target_label}{suffix}"
 
         base_data = {
             "thread_id": thread_id,
@@ -444,50 +584,26 @@ class NotificationService:
                 )
 
                 if existing:
-                    existing_data = existing.data or {}
-                    existing_usernames = [
-                        username
-                        for username in existing_data.get("liker_usernames", [])
-                        if isinstance(username, str) and username
-                    ]
-                    if (
-                        not existing_usernames
-                        and isinstance(existing_data.get("liker_username"), str)
-                        and existing_data.get("liker_username")
-                    ):
-                        existing_usernames = [existing_data["liker_username"]]
-
-                    existing_user_ids = [
-                        user_id
-                        for user_id in existing_data.get("liker_user_ids", [])
-                        if isinstance(user_id, int)
-                    ]
-
-                    merged_usernames = [author.username] + [
-                        username for username in existing_usernames if username != author.username
-                    ]
-                    merged_user_ids = [author.id] + [
-                        user_id for user_id in existing_user_ids if user_id != author.id
-                    ]
-
-                    merged_data = {
-                        **existing_data,
-                        **base_data,
-                        "liker_username": merged_usernames[0],
-                        "liker_usernames": merged_usernames,
-                        "liker_user_ids": merged_user_ids,
-                        "liker_count": len(merged_user_ids),
-                        "thread_title": title,
-                    }
+                    merged_data = cls._merge_actor_payload(
+                        existing_data=existing.data or {},
+                        base_data=base_data,
+                        actor=author,
+                        username_key="liker_username",
+                        usernames_key="liker_usernames",
+                        user_ids_key="liker_user_ids",
+                        count_key="liker_count",
+                    )
                     if post_id is None:
                         merged_data.pop("post_id", None)
 
-                    existing.message = _build_message(merged_usernames[0], len(merged_user_ids))
+                    existing.message = _build_message(
+                        merged_data["liker_username"], merged_data["liker_count"]
+                    )
                     existing.data = merged_data
                     existing.created_at = timezone.now()
                     existing.save(update_fields=["message", "data", "created_at"])
 
-                    cls._broadcast_notification_update(existing)
+                    transaction.on_commit(lambda: cls._broadcast_notification_update(existing))
                     logger.info(
                         "Updated aggregated forum_like notification %s for user %s",
                         existing.id,
@@ -506,6 +622,140 @@ class NotificationService:
             data=base_data,
             priority="low",
         )
+
+    @classmethod
+    def create_review_like_notification(cls, user, author, review):
+        """Create or update an aggregated notification for review likes."""
+        if user.id == author.id:
+            return None
+
+        def _build_message(primary_username: str, liker_count: int) -> str:
+            actor_summary = cls._actor_summary(primary_username, liker_count)
+            return f"{actor_summary} liked your review of {review.anime.title}"
+
+        base_data = {
+            "review_id": review.id,
+            "anime_id": review.anime.id,
+            "anime_slug": review.anime.slug,
+            "anime_title": review.anime.title,
+            **cls.get_anime_cover_payload(review.anime),
+            "liker_username": author.username,
+            "liker_usernames": [author.username],
+            "liker_user_ids": [author.id],
+            "liker_count": 1,
+        }
+
+        try:
+            with transaction.atomic():
+                existing = (
+                    Notification.objects.select_for_update()
+                    .filter(
+                        user=user,
+                        notification_type=Notification.NotificationType.REVIEW_LIKE,
+                        is_read=False,
+                        data__review_id=review.id,
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+
+                if existing:
+                    merged_data = cls._merge_actor_payload(
+                        existing_data=existing.data or {},
+                        base_data=base_data,
+                        actor=author,
+                        username_key="liker_username",
+                        usernames_key="liker_usernames",
+                        user_ids_key="liker_user_ids",
+                        count_key="liker_count",
+                    )
+                    existing.message = _build_message(
+                        merged_data["liker_username"], merged_data["liker_count"]
+                    )
+                    existing.data = merged_data
+                    existing.created_at = timezone.now()
+                    existing.save(update_fields=["message", "data", "created_at"])
+                    transaction.on_commit(lambda: cls._broadcast_notification_update(existing))
+                    return existing
+        except Exception as e:
+            logger.exception(f"Failed to update aggregated review_like notification: {e}")
+
+        return cls.create_notification(
+            user=user,
+            notification_type=Notification.NotificationType.REVIEW_LIKE,
+            title="Review Like",
+            message=_build_message(author.username, 1),
+            data=base_data,
+            priority="low",
+        )
+
+    @classmethod
+    def remove_review_like_from_notification(cls, user, author, review):
+        """Remove a user from an unread review-like aggregate after an unlike."""
+        try:
+            with transaction.atomic():
+                existing = (
+                    Notification.objects.select_for_update()
+                    .filter(
+                        user=user,
+                        notification_type=Notification.NotificationType.REVIEW_LIKE,
+                        is_read=False,
+                        data__review_id=review.id,
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+                if not existing:
+                    return None
+
+                existing_data = existing.data or {}
+                actor_id = cls._coerce_actor_id(author.id)
+                actor_username = author.username
+                usernames = [
+                    username
+                    for username in existing_data.get("liker_usernames", [])
+                    if isinstance(username, str) and username and username != actor_username
+                ]
+                user_ids = [
+                    user_id
+                    for value in existing_data.get("liker_user_ids", [])
+                    if (user_id := cls._coerce_actor_id(value)) is not None and user_id != actor_id
+                ]
+
+                liker_count = len(user_ids) if user_ids else len(usernames)
+                if liker_count <= 0:
+                    notification_id = existing.id
+                    user_id = existing.user_id
+                    existing.delete()
+
+                    def notify_after_commit():
+                        unread_count = cls._decrement_unread_count(user_id)
+                        cls._broadcast_unread_count(user_id, unread_count)
+                        cls._broadcast_notification_deleted(user_id, notification_id, unread_count)
+
+                    transaction.on_commit(notify_after_commit)
+                    return None
+
+                primary_username = usernames[0]
+                existing_data.update(
+                    {
+                        "liker_username": primary_username,
+                        "liker_usernames": usernames,
+                        "liker_user_ids": user_ids,
+                        "liker_count": liker_count,
+                    }
+                )
+                existing.message = (
+                    f"{cls._actor_summary(primary_username, liker_count)} "
+                    f"liked your review of {review.anime.title}"
+                )
+                existing.data = existing_data
+                existing.save(update_fields=["message", "data"])
+                transaction.on_commit(lambda: cls._broadcast_notification_update(existing))
+                return existing
+        except Exception as e:
+            logger.exception(f"Failed to remove actor from review_like notification: {e}")
+            return None
 
     @classmethod
     def create_badge_awarded_notification(cls, user, badge, granted_by):

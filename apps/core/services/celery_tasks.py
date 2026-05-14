@@ -397,7 +397,10 @@ def _should_send_email(notification, profile):
 def _should_send_push(notification, profile):
     if notification.notification_type == Notification.NotificationType.NEW_EPISODE:
         return profile.push_new_episodes
-    if notification.notification_type == Notification.NotificationType.REVIEW_REPLY:
+    if notification.notification_type in (
+        Notification.NotificationType.REVIEW_REPLY,
+        Notification.NotificationType.REVIEW_LIKE,
+    ):
         return profile.push_review_replies
     if notification.notification_type == Notification.NotificationType.NEW_FOLLOWER:
         return profile.push_new_follower

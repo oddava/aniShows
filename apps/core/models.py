@@ -318,6 +318,7 @@ class CeleryTaskSchedule(TimestampMixin, Model):
 
     def clean(self):
         from celery import current_app
+
         from .services.celery_admin_service import (
             AVAILABLE_TASKS,
             CeleryTaskValidationError,
@@ -402,6 +403,7 @@ class Notification(CreatedAtMixin, Model):
     class NotificationType(TextChoices):
         NEW_EPISODE = "new_episode", "New Episode"
         REVIEW_REPLY = "review_reply", "Review Reply"
+        REVIEW_LIKE = "review_like", "Review Like"
         NEW_FOLLOWER = "new_follower", "New Follower"
         FORUM_REPLY = "forum_reply", "Forum Reply"
         FORUM_MENTION = "forum_mention", "Forum Mention"
@@ -437,6 +439,10 @@ class Notification(CreatedAtMixin, Model):
         indexes = [
             Index(fields=["user", "-created_at"]),
             Index(fields=["user", "is_read", "-created_at"]),
+            Index(
+                fields=["user", "notification_type", "is_read", "-created_at"],
+                name="core_notif_user_type_read_idx",
+            ),
             Index(fields=["notification_type", "-created_at"]),
             Index(fields=["is_email_sent", "created_at"]),
             Index(fields=["is_push_sent", "created_at"]),

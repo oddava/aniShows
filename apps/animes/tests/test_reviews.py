@@ -15,6 +15,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from ...core.models import Notification
 from ...users.models import UserAnimeList, UserProfile
 from ..models import Anime, Review, ReviewReaction, ReviewVote
 
@@ -391,6 +392,63 @@ class ReviewInteractionTests(APITestCase):
                 review=self.review,
             ).exists()
         )
+
+    def test_helpful_votes_create_aggregated_review_like_notifications(self):
+        votes_url = reverse("reviews-votes", args=[self.review.id])
+        other_voter = User.objects.create_user(
+            username="other-voter",
+            email="other-voter-like@example.com",
+            password="password123",
+        )
+        UserProfile.objects.update_or_create(user=other_voter, defaults={"email_verified": True})
+
+        response = self.client.post(
+            votes_url,
+            {"vote_type": ReviewVote.VoteType.HELPFUL},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=other_voter)
+        response = self.client.post(
+            votes_url,
+            {"vote_type": ReviewVote.VoteType.HELPFUL},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        notification = Notification.objects.get(
+            user=self.author,
+            notification_type=Notification.NotificationType.REVIEW_LIKE,
+            data__review_id=self.review.id,
+        )
+        self.assertEqual(notification.data["liker_count"], 2)
+        self.assertEqual(notification.data["liker_username"], "other-voter")
+        self.assertEqual(
+            notification.message,
+            "other-voter and 1 other liked your review of Review Interaction Anime",
+        )
+
+    def test_review_like_notification_keeps_actor_when_one_positive_signal_remains(self):
+        votes_url = reverse("reviews-votes", args=[self.review.id])
+        reactions_url = reverse("reviews-reactions", args=[self.review.id])
+
+        self.client.post(votes_url, {"vote_type": ReviewVote.VoteType.HELPFUL}, format="json")
+        self.client.post(
+            reactions_url,
+            {"reaction_type": ReviewReaction.ReactionType.HEART},
+            format="json",
+        )
+
+        self.client.post(votes_url, {"vote_type": ReviewVote.VoteType.HELPFUL}, format="json")
+
+        notification = Notification.objects.get(
+            user=self.author,
+            notification_type=Notification.NotificationType.REVIEW_LIKE,
+            data__review_id=self.review.id,
+        )
+        self.assertEqual(notification.data["liker_count"], 1)
+        self.assertEqual(notification.data["liker_username"], "voter")
 
     def test_review_list_includes_vote_and_reaction_state(self):
         """Serialized reviews expose counts and active states for the current user."""

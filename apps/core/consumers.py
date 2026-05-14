@@ -130,6 +130,16 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             }
         )
 
+    async def notification_deleted(self, event):
+        """Push a deleted/retracted notification payload to the client."""
+        await self.send_json(
+            {
+                "type": "notification_deleted",
+                "notification_id": event["notification_id"],
+                "unread_count": event.get("unread_count"),
+            }
+        )
+
     async def notification_count_update(self, event):
         """Push an updated unread count to the client."""
         await self.send_json(

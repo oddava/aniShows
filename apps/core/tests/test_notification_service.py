@@ -5,8 +5,10 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 
+from ...animes.models import Anime, Review
 from ...forums.models import Category, Post, Thread
 from ...users.models import UserProfile
+from ...users.views.notifications import NotificationViewSet
 from ..models import Notification
 from ..services.notification_service import NotificationService
 
@@ -157,18 +159,20 @@ class TestForumLikeNotificationAggregation(TestCase):
     def test_forum_like_notifications_aggregate_for_same_thread(
         self, mock_broadcast_new, mock_broadcast_update
     ):
-        first = NotificationService.create_forum_like_notification(
-            user=self.recipient,
-            author=self.alice,
-            instance=self.thread,
-            is_thread=True,
-        )
-        second = NotificationService.create_forum_like_notification(
-            user=self.recipient,
-            author=self.bob,
-            instance=self.thread,
-            is_thread=True,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            first = NotificationService.create_forum_like_notification(
+                user=self.recipient,
+                author=self.alice,
+                instance=self.thread,
+                is_thread=True,
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            second = NotificationService.create_forum_like_notification(
+                user=self.recipient,
+                author=self.bob,
+                instance=self.thread,
+                is_thread=True,
+            )
 
         self.assertIsNotNone(first)
         self.assertIsNotNone(second)
@@ -188,7 +192,7 @@ class TestForumLikeNotificationAggregation(TestCase):
         self.assertEqual(merged.data["liker_usernames"], ["bob_user", "alice_user"])
         self.assertEqual(
             merged.message,
-            "bob_user and 1 others liked your thread: Welcome to AniShows!",
+            "bob_user and 1 other liked your thread: Welcome to AniShows!",
         )
         mock_broadcast_new.assert_called_once()
         mock_broadcast_update.assert_called_once()
@@ -219,4 +223,109 @@ class TestForumLikeNotificationAggregation(TestCase):
                 is_read=False,
             ).count(),
             2,
+        )
+
+
+class TestReviewLikeNotificationAggregation(TestCase):
+    def setUp(self):
+        self.recipient = User.objects.create_user(
+            username="review_owner",
+            email="review-owner@example.com",
+            password="password123",
+        )
+        self.alice = User.objects.create_user(
+            username="alice_user",
+            email="alice-review@example.com",
+            password="password123",
+        )
+        self.bob = User.objects.create_user(
+            username="bob_user",
+            email="bob-review@example.com",
+            password="password123",
+        )
+        self.anime = Anime.objects.create(
+            title="Notification Cover Anime",
+            slug="notification-cover-anime",
+            synopsis="Anime for notification tests",
+            anime_type="TV",
+            status="Airing",
+            cover_image_external_url="https://img.example.com/cover.jpg",
+        )
+        self.review = Review.objects.create(
+            user=self.recipient,
+            anime=self.anime,
+            rating=9,
+            text="A review worth liking.",
+        )
+
+    @patch.object(NotificationService, "_broadcast_notification_update")
+    @patch.object(NotificationService, "_broadcast_notification")
+    def test_review_like_notifications_aggregate_for_same_review(
+        self, mock_broadcast_new, mock_broadcast_update
+    ):
+        with self.captureOnCommitCallbacks(execute=True):
+            first = NotificationService.create_review_like_notification(
+                user=self.recipient,
+                author=self.alice,
+                review=self.review,
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            second = NotificationService.create_review_like_notification(
+                user=self.recipient,
+                author=self.bob,
+                review=self.review,
+            )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first.id, second.id)
+
+        merged = Notification.objects.get(pk=first.id)
+        self.assertEqual(merged.notification_type, Notification.NotificationType.REVIEW_LIKE)
+        self.assertEqual(merged.data["liker_count"], 2)
+        self.assertEqual(merged.data["liker_username"], "bob_user")
+        self.assertEqual(merged.data["liker_usernames"], ["bob_user", "alice_user"])
+        self.assertEqual(merged.data["anime_cover_image_small"], "https://img.example.com/cover.jpg")
+        self.assertEqual(
+            merged.message,
+            "bob_user and 1 other liked your review of Notification Cover Anime",
+        )
+        mock_broadcast_new.assert_called_once()
+        mock_broadcast_update.assert_called_once()
+
+    def test_review_like_notification_is_retracted_when_last_liker_unlikes(self):
+        notification = NotificationService.create_review_like_notification(
+            user=self.recipient,
+            author=self.alice,
+            review=self.review,
+        )
+
+        self.assertIsNotNone(notification)
+        NotificationService.remove_review_like_from_notification(
+            user=self.recipient,
+            author=self.alice,
+            review=self.review,
+        )
+
+        self.assertFalse(Notification.objects.filter(pk=notification.id).exists())
+
+    def test_notification_list_cover_enrichment_uses_existing_anime_payload(self):
+        notification = Notification.objects.create(
+            user=self.recipient,
+            notification_type=Notification.NotificationType.NEW_EPISODE,
+            title="New Episode",
+            message="Episode 1 aired.",
+            data={
+                "anime_id": self.anime.id,
+                "anime_slug": self.anime.slug,
+                "anime_title": self.anime.title,
+                "episode_number": 1,
+            },
+        )
+
+        enriched = NotificationViewSet._attach_anime_cover_payloads([notification])[0]
+
+        self.assertEqual(
+            enriched._notification_cover_payload["anime_cover_image_small"],
+            "https://img.example.com/cover.jpg",
         )
