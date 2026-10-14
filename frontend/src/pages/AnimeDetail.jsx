@@ -75,21 +75,6 @@ const getTabHref = (slug, tabId) => {
     return `/anime/${slug}/${tab.path}`;
 };
 
-const getUniqueStaffCount = (staff) => {
-    if (!Array.isArray(staff)) return 0;
-
-    const seen = new Set();
-    for (const staffRole of staff) {
-        const staffName = staffRole?.staff?.name;
-        if (!staffName) continue;
-
-        const roleName = staffRole?.role || 'unknown';
-        seen.add(`${staffName}:${roleName}`);
-    }
-
-    return seen.size;
-};
-
 // Memoized related anime card component
 const RelatedAnimeCard = memo(({ anime }) => {
     const [isLoaded, setIsLoaded] = useState(false);

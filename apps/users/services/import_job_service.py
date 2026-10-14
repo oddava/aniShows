@@ -1,6 +1,6 @@
+import json
 import re
 from dataclasses import dataclass
-import json
 
 from django.conf import settings
 from django.db import transaction

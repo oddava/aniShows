@@ -326,10 +326,11 @@ class TestRedisConfig(TestCase):
 
     def test_channel_layer_configured(self):
         """Channel layers must be configured for WebSocket support."""
-        from django.conf import settings
+        # Checked on base settings: the test settings swap in an in-memory layer.
+        from root.settings import base
 
-        assert "default" in settings.CHANNEL_LAYERS
-        assert settings.CHANNEL_LAYERS["default"]["BACKEND"] == "channels_redis.core.RedisChannelLayer"
+        assert "default" in base.CHANNEL_LAYERS
+        assert base.CHANNEL_LAYERS["default"]["BACKEND"] == "channels_redis.core.RedisChannelLayer"
 
 class TestRuntimeScalingToggles(TestCase):
     """Verify high-throughput runtime toggles are available and bounded."""

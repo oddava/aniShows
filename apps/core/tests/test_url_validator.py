@@ -17,7 +17,7 @@ class URLValidatorSecurityTests(SimpleTestCase):
 
     def test_safe_browsing_failure_is_fail_closed_by_default(self):
         class FailingSafeBrowsingClient:
-            def threatMatches(self):
+            def threatMatches(self):  # noqa: N802 - mirrors the Google API client
                 raise RuntimeError("api unavailable")
 
         validator = URLValidator(google_safe_browsing_api_key="key")
@@ -30,7 +30,7 @@ class URLValidatorSecurityTests(SimpleTestCase):
 
     def test_safe_browsing_failure_can_be_configured_fail_open(self):
         class FailingSafeBrowsingClient:
-            def threatMatches(self):
+            def threatMatches(self):  # noqa: N802 - mirrors the Google API client
                 raise RuntimeError("api unavailable")
 
         validator = URLValidator(

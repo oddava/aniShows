@@ -160,7 +160,7 @@ class EpisodeRatingApiTests(APITestCase):
         response = self.client.put(self.detail_url(1), {"rating": "4.3"})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("rating", response.data)
+        self.assertIn("rating", response.data["errors"])
 
     def test_episode_rating_rejects_episode_numbers_beyond_known_count(self):
         self.client.force_authenticate(user=self.user)
@@ -169,8 +169,8 @@ class EpisodeRatingApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
-            response.data["episode_number"],
-            "Episode number cannot exceed the known episode count (3).",
+            response.data["errors"]["episode_number"],
+            ["Episode number cannot exceed the known episode count (3)."],
         )
 
     def test_episode_rating_requires_authentication(self):

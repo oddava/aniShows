@@ -184,7 +184,7 @@ class ImportSaveEntryTests(TransactionTestCase):
         )
 
     @patch("apps.animes.signals._schedule_recommendations_debounced")
-    @patch("apps.animes.signals.update_user_stats_and_cache")
+    @patch("apps.animes.services.user_list_side_effects.update_user_stats_and_cache")
     def test_save_entry_does_not_create_activity_records(
         self, mock_update_stats, mock_schedule_recommendations
     ):
@@ -320,6 +320,8 @@ class ImportExportApiSecurityTests(APITestCase):
             user=self.user,
             defaults={"email_verified": verified},
         )
+        # Drop the profile cached on the authenticated user by the creation signal.
+        self.user.refresh_from_db()
 
     def test_mal_import_requires_verified_email(self):
         self._set_email_verified(False)

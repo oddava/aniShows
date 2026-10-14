@@ -334,8 +334,12 @@ class SeasonalAnimeTests(APITestCase):
         "_current_and_next_seasons",
         return_value=("spring", 2026, "summer", 2026),
     )
-    def test_seasonal_popular_view_all_uses_shelf_quality_thresholds(self, _mock_season_window):
-        """Plain seasonal browse should match the curated shelf quality bar."""
+    def test_seasonal_popular_view_all_ranks_high_signal_titles_first(self, _mock_season_window):
+        """Plain seasonal browse lists every title, with high-signal ones first.
+
+        Only the curated shelves apply the quality bar (see 2d9d956 and
+        test_browse_backend's future-season browse test).
+        """
         keep_ranked = Anime.objects.create(
             title="Summer Ranked Favorite",
             slug="summer-ranked-favorite",
@@ -384,9 +388,8 @@ class SeasonalAnimeTests(APITestCase):
         results = response.data.get("results", response.data)
         titles = [anime["title"] for anime in results]
 
-        self.assertIn(keep_ranked.title, titles)
-        self.assertIn(keep_demand.title, titles)
-        self.assertNotIn("Summer Placeholder", titles)
+        self.assertEqual(titles[:2], [keep_ranked.title, keep_demand.title])
+        self.assertIn("Summer Placeholder", titles)
 
     @patch.object(
         AnimeQueryService,

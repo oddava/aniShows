@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import OperationalError
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -377,7 +378,12 @@ class TestRuntimePolicyControls(APITestCase):
         self.assertIn("detail", payload)
         self.assertEqual(payload["retry_after"], 300)
 
-    @patch("apps.core.views.health.connection.cursor")
+    # connection is the global DB connection, so this also breaks the maintenance-mode
+    # lookup. It must raise: a bare MagicMock cursor makes fetchmany() loop forever.
+    @patch(
+        "apps.core.views.health.connection.cursor",
+        side_effect=OperationalError("database offline"),
+    )
     @patch("apps.core.views.health.cache.get", side_effect=RuntimeError("cache offline"))
     @patch("apps.core.views.health.cache.set", side_effect=RuntimeError("cache offline"))
     def test_liveness_endpoint_stays_up_when_dependencies_fail(
@@ -425,7 +431,7 @@ class TestRuntimePolicyControls(APITestCase):
             format="json",
         )
         self.assertEqual(too_short.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("username", too_short.data)
+        self.assertIn("username", too_short.data["errors"])
 
         too_long = self.client.post(
             "/api/v1/auth/register/",
@@ -437,7 +443,7 @@ class TestRuntimePolicyControls(APITestCase):
             format="json",
         )
         self.assertEqual(too_long.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("username", too_long.data)
+        self.assertIn("username", too_long.data["errors"])
 
     def test_registration_can_skip_email_verification_when_disabled(self):
         self._set_settings({"users": {"emailVerification": False}})

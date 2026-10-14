@@ -144,8 +144,8 @@ class ImageTaskSelfHealTests(TestCase):
         anime = self._create_anime(
             title="Missing Media Anime",
             slug="missing-media-anime",
-            cover_image_external_url="https://img.anilist.co/cover2.jpg",
-            banner_image_external_url="https://img.anilist.co/banner2.jpg",
+            cover_image_external_url="https://cdn.myanimelist.net/images/anime/1/cover2.jpg",
+            banner_image_external_url="https://cdn.myanimelist.net/images/anime/1/banner2.jpg",
             mal_id=1234,
         )
 
@@ -156,8 +156,8 @@ class ImageTaskSelfHealTests(TestCase):
         mock_fetch_delay.assert_called_once()
         kwargs = mock_fetch_delay.call_args.kwargs
         self.assertEqual(kwargs["anime_id"], anime.id)
-        self.assertEqual(kwargs["cover_url"], "https://img.anilist.co/cover2.jpg")
-        self.assertEqual(kwargs["banner_url"], "https://img.anilist.co/banner2.jpg")
+        self.assertEqual(kwargs["cover_url"], "https://cdn.myanimelist.net/images/anime/1/cover2.jpg")
+        self.assertEqual(kwargs["banner_url"], "https://cdn.myanimelist.net/images/anime/1/banner2.jpg")
         self.assertEqual(kwargs["mal_id"], 1234)
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)

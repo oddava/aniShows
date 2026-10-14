@@ -94,8 +94,9 @@ superuser:                      ## Create superuser
 	$(RUN_MANAGE) migrate
 	docker compose run --rm web python manage.py createsuperuser
 
-test:                           ## Run tests
-	docker compose run --rm -e DJANGO_SETTINGS_MODULE=root.settings.test -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 web /opt/venv/bin/python -m pytest
+test:                           ## Run backend tests in the isolated test service (ARGS="apps/users -x")
+	docker compose --profile test run --rm test python -m pytest $(ARGS); \
+	status=$$?; docker compose --profile test rm -sf test_db >/dev/null 2>&1; exit $$status
 
 lint:                           ## Run linter (ruff)
 	docker compose run --rm --no-deps web /opt/venv/bin/python -m ruff check .

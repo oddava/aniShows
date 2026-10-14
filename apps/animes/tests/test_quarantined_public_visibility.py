@@ -132,14 +132,15 @@ class ShadowDuplicateVisibilityTests(APITestCase):
             mal_id=30276,
             provider_ids={"anilist": 21087, "myanimelist": 30276},
         )
+        # Titles are unique, so a shadow duplicate always differs slightly in title.
         shadow = self._anime(
-            "One Punch Man",
+            "One-Punch Man",
             slug="one-punch-man-jikan",
             anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 30276,
             provider_ids={"jikan": 30276, "myanimelist": 30276},
         )
 
-        response = self.client.get(reverse("anime-list"), {"q": "One Punch Man"})
+        response = self.client.get(reverse("anime-list"), {"q": "Punch"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         titles = [row["title"] for row in response.data["results"]]

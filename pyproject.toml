@@ -73,6 +73,7 @@ dev = [
     "pytest-django>=4.9.0",
     "pytest-cov>=5.0.0",
     "pytest-xdist>=3.6.1",
+    "pytest-timeout>=2.3.1",
     "factory-boy>=3.3.0",
     "freezegun>=1.5.0",
 ]
@@ -187,6 +188,7 @@ python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*", "*Tests"]
 python_functions = ["test_*"]
 testpaths = ["apps"]
+timeout = 120
 addopts = [
     "--strict-markers",
     "--strict-config",

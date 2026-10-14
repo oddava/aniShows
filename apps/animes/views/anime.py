@@ -12,7 +12,7 @@ from ...core.api_errors import error_response
 from ...core.permissions import IsSuperUser
 from ...core.utils import get_client_ip
 from ...shared.logger import logger
-from ...shared.pagination import NoCountPagination
+from ...shared.pagination import NoCountPagination, StandardPagination
 from ...shared.public_cache import get_or_build_public_payload
 from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
 from ..serializers import (
@@ -247,7 +247,12 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         response = self._with_cache_status_header(Response(data), result.cache_status)
         return self._with_public_cache_control(response, request)
 
-    @action(detail=True, methods=["get"], serializer_class=ReviewSerializer)
+    @action(
+        detail=True,
+        methods=["get"],
+        serializer_class=ReviewSerializer,
+        pagination_class=StandardPagination,
+    )
     def reviews(self, request, slug=None):
         from ..services.reviews import get_review_queryset
 

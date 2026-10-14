@@ -34,6 +34,9 @@ class NotificationService:
 
     @staticmethod
     def _field_url(field) -> str | None:
+        # An empty ImageKit spec file is falsy but its .url is the bare MEDIA_URL.
+        if not field:
+            return None
         try:
             url = field.url
         except Exception:

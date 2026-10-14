@@ -402,7 +402,7 @@ class JikanServiceNormalizationTests(TestCase):
             patch.object(service, "_handle_relationships_async", new=AsyncMock()),
             patch.object(service, "_download_and_save_images", new=AsyncMock()),
         ):
-            saved = asyncio.run(service._save_anime_to_db_async(item))
+            saved = service.save_anime_to_db(item)
 
         existing.refresh_from_db()
         self.assertEqual(saved.id, existing.id)

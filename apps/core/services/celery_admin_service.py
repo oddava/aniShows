@@ -1,6 +1,6 @@
+import json
 from dataclasses import dataclass
 from datetime import timedelta
-import json
 
 from celery import current_app
 from django.db.models import Avg, Count, Q

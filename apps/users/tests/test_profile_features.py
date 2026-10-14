@@ -144,7 +144,7 @@ class ProfileFeaturesTest(APITestCase):
             response = self.client.get(self.profile_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertLessEqual(len(queries), 4)
+        self.assertLessEqual(len(queries), 4, "\n".join(q["sql"][:160] for q in queries.captured_queries))
 
     def test_profile_update_social_links(self):
         """Test adding and removing social links."""
@@ -388,7 +388,7 @@ class ProfileFeaturesTest(APITestCase):
         """Invalid profile primary color should be rejected."""
         res = self.client.patch(self.profile_url, {"profile_primary_color": "red"})
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("profile_primary_color", res.data)
+        self.assertIn("profile_primary_color", res.data["errors"])
 
     def test_profile_update_show_adult_content(self):
         res = self.client.patch(self.profile_url, {"show_adult_content": True}, format="json")
@@ -429,7 +429,7 @@ class ProfileFeaturesTest(APITestCase):
         )
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("preferred_timezone", res.data)
+        self.assertIn("preferred_timezone", res.data["errors"])
 
     def test_profile_update_bio_preserves_allowed_html(self):
         """Test that safe formatting tags remain intact after save."""
@@ -465,7 +465,7 @@ class ProfileFeaturesTest(APITestCase):
         data = {"username": "anothername"}
         res = self.client.patch(self.profile_url, data)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("days", str(res.data["username"]))
+        self.assertIn("days", str(res.data["errors"]["username"]))
 
         # 3. Simulate 15 days later
         self.profile.refresh_from_db()
