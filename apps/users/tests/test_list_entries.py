@@ -42,3 +42,35 @@ class ListEntryIntegrityTests(APITestCase):
         self.assertIn(response.status_code, (403, 404))
         entry.refresh_from_db()
         self.assertEqual(entry.score, 0)
+
+
+class FriendsWatchingPrivacyTests(APITestCase):
+    def test_private_mutual_is_not_listed(self):
+        from ..models import UserFollow, UserProfile
+
+        me = User.objects.create_user(username="me1", email="me@example.com", password="x")
+        friend = User.objects.create_user(username="friend", email="f@example.com", password="x")
+        UserFollow.objects.create(follower=me, following=friend)
+        UserFollow.objects.create(follower=friend, following=me)
+        anime = Anime.objects.create(title="Shared", slug="shared", episode_count=12)
+        UserAnimeList.objects.create(user=friend, anime=anime, status="Watching")
+        self.client.force_authenticate(user=me)
+        url = "/api/v1/follows/friends/watching/"
+
+        self.assertEqual(len(self.client.get(url, {"anime_id": anime.id}).data), 1)
+
+        UserProfile.objects.filter(user=friend).update(is_private=True)
+        self.assertEqual(len(self.client.get(url, {"anime_id": anime.id}).data), 0)
+
+
+class DottedUsernameRouteTests(APITestCase):
+    def test_follow_routes_accept_dots_in_usernames(self):
+        """The username validator allows '.', so the routes must too."""
+        User.objects.create_user(username="john.doe", email="j@example.com", password="x")
+        viewer = User.objects.create_user(username="viewer", email="v@example.com", password="x")
+        self.client.force_authenticate(user=viewer)
+
+        for route in ("followers", "following", "mutuals", "check"):
+            with self.subTest(route=route):
+                response = self.client.get(f"/api/v1/follows/{route}/john.doe/")
+                self.assertEqual(response.status_code, 200)

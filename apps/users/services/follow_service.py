@@ -188,6 +188,8 @@ def get_friends_watching_queryset(request_user, anime_id):
             user__followers__follower=request_user,
             user__following__following=request_user,
         )
+        # Private lists are hidden from everyone else, mutual followers included.
+        .exclude(user__userprofile__is_private=True)
         .select_related("user__userprofile", "anime")
         .prefetch_related(google_accounts_prefetch("user"))
         .order_by("-updated_at")[:50]

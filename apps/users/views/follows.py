@@ -33,7 +33,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="followers/(?P<username>[^/.]+)",
+        url_path="followers/(?P<username>[^/]+)",
         permission_classes=[AllowAny],
     )
     def followers(self, request, username=None):
@@ -58,7 +58,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="following/(?P<username>[^/.]+)",
+        url_path="following/(?P<username>[^/]+)",
         permission_classes=[AllowAny],
     )
     def following(self, request, username=None):
@@ -81,7 +81,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="mutuals/(?P<username>[^/.]+)",
+        url_path="mutuals/(?P<username>[^/]+)",
         permission_classes=[AllowAny],
     )
     def mutuals(self, request, username=None):
@@ -104,7 +104,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="check/(?P<username>[^/.]+)",
+        url_path="check/(?P<username>[^/]+)",
         permission_classes=[IsAuthenticated],
     )
     def check(self, request, username=None):
