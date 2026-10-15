@@ -360,25 +360,6 @@ def increment_counter(metric_name: str, labels: dict | None = None, value: int =
     if metric and labels:
         metric.labels(**labels).inc(value)
 
-def observe_histogram(metric_name: str, value: float, labels: dict | None = None):
-    """Observe a value in a histogram metric.
-
-    Args:
-        metric_name: Name of the metric
-        value: Value to observe
-        labels: Dictionary of label values
-    """
-    if not PROMETHEUS_AVAILABLE:
-        return
-
-    metric_map = {
-        "task_duration": TASK_EXECUTION_TIME,
-        "api_duration": API_CALL_DURATION,
-    }
-
-    metric = metric_map.get(metric_name)
-    if metric and labels:
-        metric.labels(**labels).observe(value)
 
 @contextmanager
 def api_timer(service: str, endpoint: str = "unknown"):
@@ -418,14 +399,6 @@ def update_queue_size(queue_name: str, size: int):
     if PROMETHEUS_AVAILABLE:
         QUEUE_SIZE.labels(queue_name=queue_name).set(size)
 
-def record_task_retry(task_name: str):
-    """Record a task retry.
-
-    Args:
-        task_name: Name of the task
-    """
-    if PROMETHEUS_AVAILABLE:
-        TASK_RETRY_COUNT.labels(task_name=task_name).inc()
 
 def get_metrics_registry():
     """Get the metrics registry for exposing metrics.

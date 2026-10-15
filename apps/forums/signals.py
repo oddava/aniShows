@@ -6,11 +6,12 @@ from .cache_utils import (
     invalidate_category_detail_cache,
     invalidate_category_list_cache,
     invalidate_post_list_cache,
+    invalidate_tag_list_cache,
     invalidate_thread_caches,
     invalidate_thread_detail_cache,
     invalidate_thread_list_cache,
 )
-from .models import Category, Post, PostLike, Thread, ThreadLike
+from .models import Category, Post, PostLike, Tag, Thread, ThreadLike
 
 
 def invalidate_after_commit(cache_invalidation_func):
@@ -101,6 +102,12 @@ def invalidate_cache_on_category_delete(sender, instance, **kwargs):
     """Invalidate category caches when a category is deleted."""
     invalidate_after_commit(invalidate_category_list_cache)
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.slug))
+
+@receiver(post_save, sender=Tag)
+@receiver(post_delete, sender=Tag)
+def invalidate_cache_on_tag_change(sender, instance, **kwargs):
+    """The tag list is cached for an hour; admin edits must show at once."""
+    invalidate_after_commit(invalidate_tag_list_cache)
 
 @receiver(post_save, sender=Thread)
 def update_category_on_thread_create(sender, instance, created, **kwargs):

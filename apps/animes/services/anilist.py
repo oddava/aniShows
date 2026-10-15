@@ -41,20 +41,6 @@ class MediaSort(StrEnum):
     TRENDING = "TRENDING_DESC"
     START_DATE = "START_DATE_DESC"
 
-class MediaStatus(StrEnum):
-    FINISHED = "FINISHED"
-    RELEASING = "RELEASING"
-    NOT_YET_RELEASED = "NOT_YET_RELEASED"
-    CANCELLED = "CANCELLED"
-
-class MediaFormat(StrEnum):
-    TV = "TV"
-    TV_SHORT = "TV_SHORT"
-    MOVIE = "MOVIE"
-    SPECIAL = "SPECIAL"
-    OVA = "OVA"
-    ONA = "ONA"
-    MUSIC = "MUSIC"
 
 class AniListService:
     RUNTIME_ACCESS_DISABLED_MESSAGE = (
