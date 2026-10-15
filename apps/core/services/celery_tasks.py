@@ -266,6 +266,10 @@ class CoreTaskService:
                     _send_notification_email(notification)
                     email_sends += 1
                     email_sent = True
+                    # Record a send at once: a crash or retry before the next
+                    # batch write would otherwise deliver it again.
+                    Notification.objects.filter(pk=notification.pk).update(is_email_sent=True)
+                    notification.is_email_sent = True
 
                 if should_push and not push_sent:
                     if not PushService.has_active_subscriptions(notification.user):
@@ -280,6 +284,10 @@ class CoreTaskService:
                         if sent > 0:
                             push_sends += sent
                             push_sent = True
+                            Notification.objects.filter(pk=notification.pk).update(
+                                is_push_sent=True
+                            )
+                            notification.is_push_sent = True
 
                 if email_sent != notification.is_email_sent or push_sent != notification.is_push_sent:
                     notification.is_email_sent = email_sent
