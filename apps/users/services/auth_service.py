@@ -3,7 +3,7 @@ from typing import Dict
 from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
@@ -70,11 +70,18 @@ class AuthService:
 
     def register_user(self, data: Dict) -> User:
         """Create a new user with profile."""
-        user = User.objects.create_user(
-            username=data["username"],
-            email=data["email"],
-            password=data["password"],
-        )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=data["username"],
+                    email=data["email"],
+                    password=data["password"],
+                )
+        except IntegrityError as exc:
+            # Lost a race with a concurrent sign-up for the same name or email.
+            raise ValidationError(
+                "Unable to create account. The email or username may already be in use."
+            ) from exc
         verification_required = is_email_verification_required()
         # Profile is auto-created via signal; sync verification state with panel settings.
         profile = getattr(user, "userprofile", None)

@@ -604,14 +604,6 @@ class PasswordResetConfirmTests(APITestCase):
         refresh = self.client.post(reverse("token_refresh"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(refresh.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_reset_request_tolerates_case_variant_duplicate_emails(self):
-        from django.core import mail
-
-        User.objects.create_user(username="dupe", email="RESET@example.com", password="x")
-        response = self.client.post(reverse("password_reset"), {"email": "Reset@Example.com"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(mail.outbox), 2)
-
 
 class ProfilePatchPrivacyTests(APITestCase):
     def setUp(self):

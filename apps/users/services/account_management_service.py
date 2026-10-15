@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
@@ -121,14 +121,21 @@ def confirm_email_change(uidb64, token, new_email_encoded):
             status_code=400,
         )
 
-    with transaction.atomic():
-        user.email = new_email
-        user.save(update_fields=["email"])
+    try:
+        with transaction.atomic():
+            user.email = new_email
+            user.save(update_fields=["email"])
 
-        profile = getattr(user, "userprofile", None)
-        if profile:
-            profile.email_verified = True
-            profile.save(update_fields=["email_verified"])
+            profile = getattr(user, "userprofile", None)
+            if profile:
+                profile.email_verified = True
+                profile.save(update_fields=["email_verified"])
+    except IntegrityError:
+        # Another account claimed the address after the check above.
+        return AccountManagementResult(
+            payload={"error": "This email is already in use"},
+            status_code=400,
+        )
 
     return AccountManagementResult(
         payload={"message": "Email changed successfully!"},
