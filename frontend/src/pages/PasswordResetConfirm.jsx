@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
@@ -29,7 +30,7 @@ export default function PasswordResetConfirm() {
             });
         } catch (err) {
             setStatus('error');
-            setError(err.response?.data?.error || 'Failed to reset password');
+            setError(getApiErrorMessage(err, 'Failed to reset password'));
         } finally {
             if (status !== 'success') setStatus('idle');
         }

@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 from typing import Dict
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -11,6 +12,14 @@ from ...shared.logger import logger
 from .url_validator import URLValidationError, URLValidator
 
 
+def _http_url_or_none(value) -> str | None:
+    """Keep scraped URLs only when they are plain http(s) links."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if urlparse(value).scheme in ("http", "https") else None
+
+
 class MetadataService:
     """Service for fetching and caching link metadata."""
 
@@ -18,6 +27,8 @@ class MetadataService:
     CACHE_TTL = timedelta(hours=24)
     REQUEST_TIMEOUT = 5  # seconds
     MAX_REDIRECTS = 5
+    MAX_BODY_BYTES = 512 * 1024
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
     # Favicon services as fallbacks
     FAVICON_SERVICES = [
@@ -28,11 +39,6 @@ class MetadataService:
 
     def __init__(self):
         self.url_validator = URLValidator()
-        self.client = httpx.Client(
-            timeout=self.REQUEST_TIMEOUT,
-            follow_redirects=False,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-        )
 
     def fetch_metadata(self, url: str) -> Dict:
         """
@@ -56,16 +62,15 @@ class MetadataService:
     def _scrape_metadata(self, url: str) -> Dict:
         """Scrape Open Graph and other metadata from a URL."""
         try:
-            response = self._get_safe_response(url)
-            response.raise_for_status()
+            final_url, html = self._fetch_html(url)
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            soup = BeautifulSoup(html, "html.parser")
             return {
-                "title": self._extract_title(soup, str(response.url)),
+                "title": self._extract_title(soup, final_url),
                 "description": self._extract_description(soup),
-                "favicon": self._extract_favicon(soup, str(response.url)),
-                "image": self._extract_og_image(soup),
-                "site_name": self._extract_site_name(soup, str(response.url)),
+                "favicon": self._extract_favicon(soup, final_url),
+                "image": _http_url_or_none(self._extract_og_image(soup)),
+                "site_name": self._extract_site_name(soup, final_url),
             }
         except URLValidationError as e:
             logger.warning(f"Blocked unsafe metadata fetch for {url}: {e}")
@@ -80,22 +85,36 @@ class MetadataService:
             logger.error(f"Error scraping metadata for {url}: {e}")
             return self._fallback_metadata(url)
 
-    def _get_safe_response(self, url: str) -> httpx.Response:
-        """Fetch a URL while validating every redirect target."""
+    def _fetch_html(self, url: str) -> tuple[str, str]:
+        """Fetch a page, validating every redirect target and capping the body size.
+
+        Returns ``(final_url, html)``. Only HTTPS targets are allowed, so the
+        certificate check also defeats DNS rebinding to internal addresses.
+        """
         current_url = self.url_validator.validate_public_target(url)
 
-        for _ in range(self.MAX_REDIRECTS + 1):
-            response = self.client.get(current_url)
-            if not response.is_redirect:
-                return response
+        with httpx.Client(
+            timeout=self.REQUEST_TIMEOUT,
+            follow_redirects=False,
+            headers={"User-Agent": self.USER_AGENT},
+        ) as client:
+            for _ in range(self.MAX_REDIRECTS + 1):
+                with client.stream("GET", current_url) as response:
+                    location = response.headers.get("location")
+                    if response.is_redirect and location:
+                        current_url = self.url_validator.validate_public_target(
+                            str(response.url.join(location))
+                        )
+                        continue
 
-            location = response.headers.get("location")
-            if not location:
-                return response
-
-            current_url = self.url_validator.validate_public_target(
-                str(response.url.join(location))
-            )
+                    response.raise_for_status()
+                    body = bytearray()
+                    for chunk in response.iter_bytes():
+                        body.extend(chunk)
+                        if len(body) >= self.MAX_BODY_BYTES:
+                            break  # <head> metadata lives at the top of the page
+                    encoding = response.encoding or "utf-8"
+                    return str(response.url), bytes(body).decode(encoding, errors="replace")
 
         raise httpx.TooManyRedirects(
             f"Exceeded {self.MAX_REDIRECTS} redirects while fetching metadata"
@@ -113,8 +132,6 @@ class MetadataService:
 
         if soup.title and soup.title.string:
             return soup.title.string[:200]
-
-        from urllib.parse import urlparse
 
         return urlparse(url).netloc
 
@@ -136,13 +153,13 @@ class MetadataService:
 
     def _extract_favicon(self, soup: BeautifulSoup, url: str) -> str | None:
         """Extract favicon URL, with fallback services."""
-        from urllib.parse import urljoin, urlparse
-
         icon_rel_values = {"icon", "shortcut icon", "apple-touch-icon"}
         for rel_value in icon_rel_values:
             icon_link = soup.find("link", rel=rel_value)
             if icon_link and icon_link.get("href"):
-                return urljoin(url, icon_link["href"])
+                icon_url = _http_url_or_none(urljoin(url, icon_link["href"]))
+                if icon_url:
+                    return icon_url
 
         domain = urlparse(url).netloc
         return self.FAVICON_SERVICES[0].format(domain=domain) if domain else None
@@ -165,15 +182,11 @@ class MetadataService:
         if og_site_name and og_site_name.get("content"):
             return og_site_name["content"][:100]
 
-        from urllib.parse import urlparse
-
         domain = urlparse(url).netloc
         return domain.replace("www.", "").split(".")[0].title()
 
     def _fallback_metadata(self, url: str) -> Dict:
         """Build fallback metadata when scraping fails."""
-        from urllib.parse import urlparse
-
         domain = urlparse(url).netloc
         site_name = domain.replace("www.", "").split(".")[0].title() if domain else "Unknown"
 

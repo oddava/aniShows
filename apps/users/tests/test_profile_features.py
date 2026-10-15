@@ -1,3 +1,4 @@
+import ipaddress
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -146,7 +147,11 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertLessEqual(len(queries), 4, "\n".join(q["sql"][:160] for q in queries.captured_queries))
 
-    def test_profile_update_social_links(self):
+    @patch(
+        "apps.core.services.url_validator.URLValidator._resolve_public_ips",
+        return_value=[ipaddress.ip_address("93.184.216.34")],
+    )
+    def test_profile_update_social_links(self, _resolve):
         """Test adding and removing social links."""
         # 1. Add links (mixture of usernames and full URLs)
         # Note: Domains must be from the allowed whitelist

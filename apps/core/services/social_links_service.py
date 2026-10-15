@@ -3,6 +3,7 @@
 from typing import Any, Dict, List
 
 from django.conf import settings
+from django.db import transaction
 
 from ...shared.logger import logger
 from ...users.models import SocialLinkChangeLog
@@ -31,17 +32,15 @@ class SocialLinksService:
         )
         self.metadata_service = MetadataService()
 
-    def validate_and_process(
-        self, links: List[Dict], user: Any, skip_metadata: bool = True
-    ) -> List[Dict]:
+    def validate_and_process(self, links: List[Dict]) -> List[Dict]:
         """
-        Validate and process a list of social links.
-        Optimized: skips metadata fetching by default (done async).
+        Validate and normalize a list of social links (no side effects).
+
+        Metadata is fetched later, once the links are saved
+        (see ``schedule_metadata_fetch``).
 
         Args:
             links: List of dicts with 'platform' and 'value' keys
-            user: User instance for audit logging
-            skip_metadata: If True, skip metadata fetching (faster)
 
         Returns:
             List of processed link dictionaries
@@ -53,36 +52,26 @@ class SocialLinksService:
             raise SocialLinkValidationError(f"Maximum {self.MAX_LINKS} social links allowed")
 
         processed_links = []
-        urls_needing_metadata = []
-
         for idx, link in enumerate(links):
             if not isinstance(link, dict):
                 raise SocialLinkValidationError(f"Link at index {idx} must be a dictionary")
 
-            platform = link.get("platform", "").strip()
-            value = link.get("value", "").strip() or link.get("url", "").strip()
+            platform = (link.get("platform") or "").strip()
+            value = (link.get("value") or "").strip() or (link.get("url") or "").strip()
 
             if not platform or not value:
                 continue
 
             try:
-                processed_link = self._process_single_link(
-                    platform, value, skip_metadata=skip_metadata
-                )
-                processed_link["value"] = processed_link["url"]
-                processed_links.append(processed_link)
-
-                if skip_metadata:
-                    urls_needing_metadata.append(processed_link["url"])
+                processed_link = self._process_single_link(platform, value)
             except SocialLinkValidationError as e:
                 raise SocialLinkValidationError(f"Invalid link for {platform}: {str(e)}")
-
-        if skip_metadata and urls_needing_metadata and user:
-            self._trigger_async_metadata_fetch(urls_needing_metadata, user.id)
+            processed_link["value"] = processed_link["url"]
+            processed_links.append(processed_link)
 
         return processed_links
 
-    def _process_single_link(self, platform: str, value: str, skip_metadata: bool = True) -> Dict:
+    def _process_single_link(self, platform: str, value: str) -> Dict:
         """Process and validate a single social link."""
         dangerous_schemes = ["javascript:", "data:", "vbscript:", "file:"]
         value_lower = value.lower()
@@ -116,15 +105,21 @@ class SocialLinksService:
             },
         }
 
-    def _trigger_async_metadata_fetch(self, urls: List[str], user_id: int):
-        """Trigger async metadata fetching for URLs."""
-        try:
-            from ..tasks import fetch_multiple_link_metadata
+    @staticmethod
+    def schedule_metadata_fetch(urls: List[str], user_id: int) -> None:
+        """Queue a metadata fetch for ``urls`` once the current transaction commits."""
+        if not urls:
+            return
 
-            fetch_multiple_link_metadata.delay(urls, user_id)
-            logger.info(f"Triggered async metadata fetch for {len(urls)} URLs")
-        except Exception as e:
-            logger.warning(f"Failed to trigger async metadata fetch: {e}")
+        def enqueue():
+            try:
+                from ..tasks import fetch_multiple_link_metadata
+
+                fetch_multiple_link_metadata.delay(urls, user_id)
+            except Exception as e:
+                logger.warning(f"Failed to trigger async metadata fetch: {e}")
+
+        transaction.on_commit(enqueue)
 
     def _determine_trust_level(self, platform: str | None, validation_metadata: Dict) -> str:
         """Determine trust level based on platform and validation data."""

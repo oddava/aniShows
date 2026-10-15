@@ -543,3 +543,97 @@ class ChangePasswordTests(APITestCase):
         data = {"old_password": "oldpassword123", "new_password": "short"}
         response = self.client.post(self.change_password_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_change_password_rejects_common_password(self):
+        data = {"old_password": "oldpassword123", "new_password": "password123"}
+        response = self.client.post(self.change_password_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("new_password", response.data["errors"])
+
+    def test_change_password_revokes_other_sessions_but_keeps_this_one(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        other_device = RefreshToken.for_user(self.user)
+        data = {"old_password": "oldpassword123", "new_password": "N3w-Passphrase!"}
+        response = self.client.post(self.change_password_url, data)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        new_cookie = response.cookies[REFRESH_COOKIE_NAME].value
+
+        refresh_url = reverse("token_refresh")
+        headers = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+        anon = APIClient()
+        anon.cookies[REFRESH_COOKIE_NAME] = str(other_device)
+        self.assertEqual(anon.post(refresh_url, **headers).status_code, 401)
+        anon.cookies[REFRESH_COOKIE_NAME] = new_cookie
+        self.assertEqual(anon.post(refresh_url, **headers).status_code, 200)
+
+
+class PasswordResetConfirmTests(APITestCase):
+    def setUp(self):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        self.user = User.objects.create_user(
+            username="resetuser", email="reset@example.com", password="oldpassword123"
+        )
+        self.url = reverse("password_reset_confirm")
+        self.payload = {
+            "uid": urlsafe_base64_encode(force_bytes(self.user.pk)),
+            "token": default_token_generator.make_token(self.user),
+        }
+
+    def test_rejects_weak_password(self):
+        for weak in ("a", "12345678", "password"):
+            with self.subTest(password=weak):
+                response = self.client.post(self.url, {**self.payload, "password": weak})
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("oldpassword123"))
+
+    def test_reset_revokes_existing_sessions(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        stolen = RefreshToken.for_user(self.user)
+        response = self.client.post(self.url, {**self.payload, "password": "N3w-Passphrase!"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.client.cookies[REFRESH_COOKIE_NAME] = str(stolen)
+        refresh = self.client.post(reverse("token_refresh"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        self.assertEqual(refresh.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_reset_request_tolerates_case_variant_duplicate_emails(self):
+        from django.core import mail
+
+        User.objects.create_user(username="dupe", email="RESET@example.com", password="x")
+        response = self.client.post(reverse("password_reset"), {"email": "Reset@Example.com"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 2)
+
+
+class ProfilePatchPrivacyTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="privateuser", email="p@example.com", password="pw-123456"
+        )
+        UserProfile.objects.update_or_create(user=self.user, defaults={"is_private": True})
+        self.client.force_authenticate(user=self.user)
+
+    def test_patch_without_is_private_keeps_profile_private(self):
+        """Toggling an unrelated setting used to make private profiles public."""
+        for data in ({"show_adult_content": True}, {"bio": "hi"}):
+            with self.subTest(data=data):
+                response = self.client.patch(reverse("user_profile"), data, format="json")
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.user.userprofile.refresh_from_db()
+                self.assertTrue(self.user.userprofile.is_private)
+
+    def test_non_string_social_link_fields_are_rejected_not_500(self):
+        response = self.client.patch(
+            reverse("user_profile"),
+            {"social_links": [{"platform": 1, "value": "x"}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

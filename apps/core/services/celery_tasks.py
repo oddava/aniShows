@@ -7,6 +7,7 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -134,33 +135,47 @@ class CoreTaskService:
         return {"queues": result, "queue_count": len(result)}
 
     @staticmethod
+    def _store_link_metadata(user_id: int, metadata_by_url: dict, link_index: int | None = None):
+        """Attach fetched metadata to the user's *current* social links.
+
+        Fetching takes seconds, so the links are re-read under a row lock
+        afterwards; writing back a copy read before the fetch would undo any
+        edit the user saved in the meantime. Returns ``None`` when the profile
+        is gone, else whether anything changed.
+        """
+        with transaction.atomic():
+            profile = UserProfile.objects.select_for_update().filter(user_id=user_id).first()
+            if profile is None:
+                return None
+
+            social_links = profile.social_links or []
+            updated = False
+            for index, link in enumerate(social_links):
+                if link_index is not None and index != link_index:
+                    continue
+                url = next(
+                    (u for u in (link.get("url"), link.get("value")) if u in metadata_by_url),
+                    None,
+                )
+                if url is not None:
+                    link["metadata"] = metadata_by_url[url]
+                    link["metadata_pending"] = False
+                    updated = True
+
+            if updated:
+                profile.social_links = social_links
+                profile.save(update_fields=["social_links"])
+            return updated
+
+    @staticmethod
     def fetch_link_metadata(url: str, user_id: int, link_index: int | None = None) -> dict:
-        cache_key = f"link_metadata:{url}"
-        from django.core.cache import cache
+        metadata = MetadataService().fetch_metadata(url)
 
-        metadata = cache.get(cache_key)
-        if metadata is None:
-            metadata = MetadataService().fetch_metadata(url)
-
-        try:
-            profile = UserProfile.objects.get(user_id=user_id)
-        except UserProfile.DoesNotExist:
+        updated = CoreTaskService._store_link_metadata(user_id, {url: metadata}, link_index)
+        if updated is None:
             logger.warning("UserProfile not found for metadata fetch", extra={"user_id": user_id})
             return {"status": "missing_profile", "user_id": user_id, "url": url}
-
-        social_links = profile.social_links or []
-        updated = False
-        for index, link in enumerate(social_links):
-            if link_index is not None and index != link_index:
-                continue
-            if link.get("url") == url or link.get("value") == url:
-                link["metadata"] = metadata
-                updated = True
-                break
-
         if updated:
-            profile.social_links = social_links
-            profile.save(update_fields=["social_links"])
             logger.info("Fetched and stored link metadata", extra={"user_id": user_id, "url": url})
             return {"status": "updated", "user_id": user_id, "url": url}
 
@@ -172,39 +187,26 @@ class CoreTaskService:
 
     @staticmethod
     def fetch_multiple_link_metadata(urls: list[str], user_id: int) -> dict:
-        try:
-            profile = UserProfile.objects.get(user_id=user_id)
-        except UserProfile.DoesNotExist:
-            logger.warning("UserProfile not found for batch metadata fetch", extra={"user_id": user_id})
-            return {"status": "missing_profile", "user_id": user_id, "urls": urls}
-
         service = MetadataService()
-        social_links = profile.social_links or []
-        updated = False
-        processed = 0
+        metadata_by_url = {}
         failed = 0
 
         for url in urls:
             try:
-                metadata = service.fetch_metadata(url)
-                processed += 1
-                for link in social_links:
-                    if link.get("url") == url or link.get("value") == url:
-                        link["metadata"] = metadata
-                        updated = True
-                        break
+                metadata_by_url[url] = service.fetch_metadata(url)
             except Exception:
                 failed += 1
                 logger.warning("Failed to fetch social link metadata", extra={"url": url}, exc_info=True)
 
-        if updated:
-            profile.social_links = social_links
-            profile.save(update_fields=["social_links"])
+        updated = CoreTaskService._store_link_metadata(user_id, metadata_by_url)
+        if updated is None:
+            logger.warning("UserProfile not found for batch metadata fetch", extra={"user_id": user_id})
+            return {"status": "missing_profile", "user_id": user_id, "urls": urls}
 
         result = {
             "status": "updated" if updated else "noop",
             "user_id": user_id,
-            "processed": processed,
+            "processed": len(metadata_by_url),
             "failed": failed,
         }
         logger.info("Completed batch social link metadata fetch", extra=result)

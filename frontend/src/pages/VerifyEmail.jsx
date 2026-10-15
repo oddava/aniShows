@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -11,8 +12,15 @@ export default function VerifyEmail() {
     const { startSession } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('');
+    // The link is single-use: re-running the effect (StrictMode, or a new
+    // startSession identity after login) must not submit it a second time.
+    const submittedLink = useRef(null);
 
     useEffect(() => {
+        const linkKey = `${uid}/${token}`;
+        if (submittedLink.current === linkKey) return;
+        submittedLink.current = linkKey;
+
         const verify = async () => {
             try {
                 const response = await authApi.verifyEmail(uid, token);
@@ -36,7 +44,7 @@ export default function VerifyEmail() {
                 setStatus('success');
             } catch (err) {
                 setStatus('error');
-                setMessage(err.response?.data?.error || 'Verification failed');
+                setMessage(getApiErrorMessage(err, 'Verification failed'));
             }
         };
 

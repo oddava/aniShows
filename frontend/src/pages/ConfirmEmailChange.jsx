@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { useParams, Link } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -9,8 +10,14 @@ export default function ConfirmEmailChange() {
     const { isAuthenticated, refreshProfile } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('Confirming your new email address...');
+    // The link is single-use; never submit it twice (StrictMode, auth changes).
+    const submittedLink = useRef(null);
 
     useEffect(() => {
+        const linkKey = `${uid}/${token}/${new_email}`;
+        if (submittedLink.current === linkKey) return;
+        submittedLink.current = linkKey;
+
         const confirmChange = async () => {
             try {
                 // Decode base64 email for display if needed (but API handles token validation)
@@ -28,7 +35,7 @@ export default function ConfirmEmailChange() {
                 setMessage('Your email has been successfully updated!');
             } catch (err) {
                 setStatus('error');
-                setMessage(err.response?.data?.error || 'Invalid or expired confirmation link.');
+                setMessage(getApiErrorMessage(err, 'Invalid or expired confirmation link.'));
             }
         };
 

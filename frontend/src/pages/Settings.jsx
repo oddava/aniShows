@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
@@ -418,19 +419,7 @@ export default function Settings() {
             setConfirmPassword('');
         } catch (err) {
             logger.error('Failed to change password:', err);
-            let msg = 'Failed to change password';
-            if (err.response?.data) {
-                const data = err.response.data;
-                if (typeof data === 'object') {
-                    // Flatten all field errors into one string
-                    msg = Object.entries(data)
-                        .map(([key, val]) => `${key}: ${Array.isArray(val) ? val[0] : val}`)
-                        .join(' | ');
-                } else if (typeof data === 'string') {
-                    msg = data.substring(0, 100);
-                }
-            }
-            setAccountError(msg);
+            setAccountError(getApiErrorMessage(err, 'Failed to change password'));
         } finally {
             setIsSavingAccount(false);
         }
@@ -480,7 +469,7 @@ export default function Settings() {
             setChangeEmail('');
             setChangeEmailPassword('');
         } catch (err) {
-            setAccountError(err.response?.data?.error || 'Failed to change email');
+            setAccountError(getApiErrorMessage(err, 'Failed to change email'));
         } finally {
             setIsChangingEmail(false);
         }
@@ -502,7 +491,7 @@ export default function Settings() {
             window.location.href = '/';
         } catch (err) {
             logger.error("Delete failed:", err);
-            setAccountError(err.response?.data?.error || 'Failed to delete account');
+            setAccountError(getApiErrorMessage(err, 'Failed to delete account'));
         } finally {
             setIsDeleting(false);
         }

@@ -1,3 +1,5 @@
+import socket
+
 import httpx
 import pytest
 import requests
@@ -16,7 +18,7 @@ def _clear_cache():
 
 @pytest.fixture(autouse=True)
 def _no_network(monkeypatch):
-    """Fail real outbound HTTP immediately, as if offline.
+    """Fail real outbound HTTP and DNS immediately, as if offline.
 
     Signals and eager Celery tasks call AniList/Jikan; without this, tests hang
     on network timeouts or depend on live APIs. Tests that need HTTP should mock
@@ -32,6 +34,16 @@ def _no_network(monkeypatch):
     def blocked_requests(self, request, *args, **kwargs):
         raise requests.ConnectionError("Network access is disabled in tests", request=request)
 
+    real_getaddrinfo = socket.getaddrinfo
+
+    def local_only_getaddrinfo(host, *args, **kwargs):
+        # Code under test resolves user-supplied hosts (URL validation); that
+        # must not depend on the runner's DNS. Patch the resolver in tests.
+        if host in ("localhost", "127.0.0.1", "::1", None):
+            return real_getaddrinfo(host, *args, **kwargs)
+        raise socket.gaierror(socket.EAI_NONAME, "DNS is disabled in tests")
+
+    monkeypatch.setattr(socket, "getaddrinfo", local_only_getaddrinfo)
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", blocked)
     monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", blocked_async)
     monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", blocked_requests)

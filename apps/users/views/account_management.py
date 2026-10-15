@@ -3,10 +3,12 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.viewsets import ViewSet
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.api_errors import api_response
 from ...shared.logger import logger
 from .. import throttling
+from ..auth_cookies import set_refresh_cookie
 from ..serializers.users import ChangePasswordSerializer
 from ..services.account_management_service import (
     change_password,
@@ -43,11 +45,14 @@ class AccountManagementViewSet(ViewSet):
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         result = change_password(request.user, serializer.validated_data["new_password"])
-        return api_response(
-            result.payload,
+        # Every refresh token was revoked; keep this device signed in.
+        refresh = RefreshToken.for_user(request.user)
+        response = api_response(
+            {**result.payload, "access": str(refresh.access_token)},
             status_code=result.status_code,
             default_code="change_password_failed",
         )
+        return set_refresh_cookie(response, str(refresh))
 
     @action(detail=False, methods=["delete"])
     def delete_account(self, request):
