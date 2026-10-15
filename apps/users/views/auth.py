@@ -150,16 +150,15 @@ class AuthViewSet(ViewSet):
             return [throttling.StrictUserRateThrottle()]
         return super().get_throttles()
 
-    @action(detail=False, methods=["get", "post"])
+    @action(detail=False, methods=["post"])
     def verify_email(self, request, **kwargs):
-        """Verify email using URL parameters or POST data."""
-        if request.method == "GET":
-            # Support both query params and URL kwargs
-            uidb64 = kwargs.get("uid") or request.query_params.get("uid")
-            token = kwargs.get("token") or request.query_params.get("token")
-        else:
-            uidb64 = request.data.get("uid")
-            token = request.data.get("token")
+        """Verify email from the link's URL kwargs (or POST data).
+
+        POST-only so mail scanners and link prefetchers that GET the URL
+        can't consume the single-use token.
+        """
+        uidb64 = kwargs.get("uid") or request.data.get("uid")
+        token = kwargs.get("token") or request.data.get("token")
 
         try:
             result = verify_email_flow(uidb64, token, request, self.auth_service)

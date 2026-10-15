@@ -22,7 +22,7 @@ export const authApi = {
     requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),
     resetPassword: (uid, token, password) =>
         api.post('/auth/password-reset-confirm/', { uid, token, password }),
-    verifyEmail: (uid, token) => api.get(`/verify-email/${uid}/${token}/`),
+    verifyEmail: (uid, token) => api.post(`/verify-email/${uid}/${token}/`),
     resendVerification: (email) => api.post('/auth/resend-verification/', { email }),
     changeEmail: (data) => api.post('/auth/change-email/', data),
     confirmEmailChange: (uid, token, newEmail) =>

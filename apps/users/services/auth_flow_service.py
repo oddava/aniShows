@@ -8,6 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
 from ..serializers.users import UserSerializer
+from .auth_service import VERIFY_ALREADY_VERIFIED, VERIFY_SUCCESS
 from .cache import invalidate_user_caches
 
 User = get_user_model()
@@ -41,14 +42,18 @@ def verify_email_flow(uidb64: str | None, token: str | None, request, auth_servi
     if not uidb64 or not token:
         raise AuthFlowError("Missing UID or Token", 400)
 
-    is_valid, user = auth_service.verify_email(uidb64, token)
+    outcome, user = auth_service.verify_email(uidb64, token)
 
-    if is_valid and user:
+    if outcome == VERIFY_SUCCESS:
         invalidate_user_caches(user.id, user.username)
         return build_auth_response(user, request, "Email verified successfully!")
 
-    if user and getattr(user, "userprofile", None) and user.userprofile.email_verified:
-        return build_auth_response(user, request, "Email already verified")
+    if outcome == VERIFY_ALREADY_VERIFIED:
+        # A replayed link must not mint a new session; the user logs in normally.
+        return AuthFlowResult(
+            payload={"message": "Email already verified", "already_verified": True},
+            status_code=200,
+        )
 
     raise AuthFlowError("Invalid or expired token", 400)
 

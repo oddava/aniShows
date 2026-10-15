@@ -2,16 +2,21 @@ from typing import Dict
 
 from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
 from django.db import IntegrityError
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
 from ...core.services.admin_settings_service import is_email_verification_required
+from ..models import UserProfile
+from ..tokens import email_verification_token_generator
 from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
+
+VERIFY_SUCCESS = "verified"
+VERIFY_ALREADY_VERIFIED = "already_verified"
+VERIFY_INVALID = "invalid"
 
 class AuthService:
     """Handles authentication business logic."""
@@ -81,8 +86,12 @@ class AuthService:
 
         return login.account.user
 
-    def verify_email(self, uidb64: str, token: str) -> tuple[bool, User | None]:
-        """Verify email with token. Returns (success, user)."""
+    def verify_email(self, uidb64: str, token: str) -> tuple[str, User | None]:
+        """Verify email with a single-use token.
+
+        Returns ``(outcome, user)`` where outcome is one of the ``VERIFY_*``
+        constants; ``user`` is None for ``VERIFY_INVALID``.
+        """
         try:
             from django.utils.encoding import force_str
             from django.utils.http import urlsafe_base64_decode
@@ -91,13 +100,24 @@ class AuthService:
             # Get user with annotations for proper serializer output
             user = get_annotated_user_queryset().get(pk=uid)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return False, None
+            return VERIFY_INVALID, None
 
-        is_valid = default_token_generator.check_token(user, token)
-        if is_valid:
-            profile = getattr(user, "userprofile", None)
-            if profile:
-                profile.email_verified = True
-                profile.save()
+        profile = getattr(user, "userprofile", None)
+        if profile is None:
+            return VERIFY_INVALID, None
 
-        return is_valid, user if is_valid else None
+        if email_verification_token_generator.check_token(user, token):
+            # Conditional update so concurrent requests with the same link
+            # can't both count as the first verification.
+            claimed = UserProfile.objects.filter(pk=profile.pk, email_verified=False).update(
+                email_verified=True
+            )
+            profile.email_verified = True
+            return (VERIFY_SUCCESS if claimed else VERIFY_ALREADY_VERIFIED), user
+
+        if profile.email_verified and email_verification_token_generator.was_valid_before_verification(
+            user, token
+        ):
+            return VERIFY_ALREADY_VERIFIED, user
+
+        return VERIFY_INVALID, None

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -9,10 +9,16 @@ export default function VerifyEmail() {
     const { uid, token } = useParams();
     const navigate = useNavigate();
     const { startSession } = useAuth();
-    const [status, setStatus] = useState('loading'); // loading, success, error
+    const [status, setStatus] = useState('loading'); // loading, success, already_verified, error
     const [message, setMessage] = useState('');
+    // The token is single-use: StrictMode's double effect must not send it twice.
+    const requestedLink = useRef(null);
 
     useEffect(() => {
+        const link = `${uid}/${token}`;
+        if (!uid || !token || requestedLink.current === link) return;
+        requestedLink.current = link;
+
         const verify = async () => {
             try {
                 const response = await authApi.verifyEmail(uid, token);
@@ -29,6 +35,9 @@ export default function VerifyEmail() {
                         logger.log("VerifyEmail: Redirecting to /browse");
                         navigate('/browse');
                     }, 2000);
+                } else if (response.data.already_verified) {
+                    setStatus('already_verified');
+                    return;
                 } else {
                     logger.warn("VerifyEmail: No tokens in response", response.data);
                 }
@@ -40,9 +49,7 @@ export default function VerifyEmail() {
             }
         };
 
-        if (uid && token) {
-            verify();
-        }
+        verify();
     }, [uid, token, startSession, navigate]);
 
     return (
@@ -65,6 +72,19 @@ export default function VerifyEmail() {
                         <p className="text-gray-400 mb-8">Your account has been successfully verified. Redirecting you...</p>
                         <Link to="/browse" className="btn-primary w-full block">
                             Start Browsing
+                        </Link>
+                    </>
+                )}
+
+                {status === 'already_verified' && (
+                    <>
+                        <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <CheckCircle className="w-8 h-8 text-green-500" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-2">Already Verified</h2>
+                        <p className="text-gray-400 mb-8">Your email is already verified. Log in to continue.</p>
+                        <Link to="/login" className="btn-primary w-full block">
+                            Log In
                         </Link>
                     </>
                 )}
