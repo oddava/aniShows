@@ -8,7 +8,7 @@ import logger from '../utils/logger';
 export default function VerifyEmail() {
     const { uid, token } = useParams();
     const navigate = useNavigate();
-    const { setTokens } = useAuth();
+    const { startSession } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('');
 
@@ -19,10 +19,10 @@ export default function VerifyEmail() {
                 logger.log("VerifyEmail: API success", response.data);
 
                 // If backend returns tokens, auto-login
-                if (response.data.access && response.data.refresh) {
-                    logger.log("VerifyEmail: Tokens received, calling setTokens");
+                if (response.data.access) {
+                    logger.log("VerifyEmail: Tokens received, calling startSession");
                     // Pass tokens and user data to update email_verified status
-                    await setTokens(response.data.access, response.data.refresh, response.data.user);
+                    await startSession(response.data.access, response.data.user);
 
                     // Redirect after a short delay so they can see the success message
                     setTimeout(() => {
@@ -43,7 +43,7 @@ export default function VerifyEmail() {
         if (uid && token) {
             verify();
         }
-    }, [uid, token, setTokens, navigate]);
+    }, [uid, token, startSession, navigate]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">

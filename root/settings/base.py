@@ -221,9 +221,15 @@ SOCIALACCOUNT_PROVIDERS = {
 REST_AUTH = {
     "USE_JWT": True,
     "JWT_AUTH_COOKIE": None,
+    # Social login views set our own refresh cookie (apps.users.auth_cookies).
     "JWT_AUTH_REFRESH_COOKIE": None,
+    "JWT_AUTH_HTTPONLY": True,
+    "JWT_TOKEN_CLAIMS_SERIALIZER": "apps.users.views.auth.CustomTokenObtainPairSerializer",
     "SESSION_LOGIN": False,
 }
+
+# Refresh JWT cookie (see apps/users/auth_cookies.py). Plain HTTP in dev only.
+JWT_REFRESH_COOKIE_SECURE = True
 
 # =============================================================================
 # MIDDLEWARE

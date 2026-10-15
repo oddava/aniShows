@@ -9,7 +9,7 @@ const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
 export default function GoogleCallback() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { setTokens } = useAuth();
+    const { startSession } = useAuth();
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const processedRef = useRef(false);
@@ -18,9 +18,9 @@ export default function GoogleCallback() {
         try {
             const callbackUrl = `${window.location.origin}/auth/google/callback`;
             const response = await authApi.googleLogin(code, callbackUrl);
-            const { access, refresh } = response.data;
+            const { access } = response.data;
 
-            await setTokens(access, refresh);
+            await startSession(access);
             navigate('/browse');
         } catch (err) {
             logger.error('Google login failed:', err);
@@ -31,7 +31,7 @@ export default function GoogleCallback() {
             setError(msg);
             setTimeout(() => navigate('/login'), 3000);
         }
-    }, [navigate, setTokens]);
+    }, [navigate, startSession]);
 
     useEffect(() => {
         if (processedRef.current) return;

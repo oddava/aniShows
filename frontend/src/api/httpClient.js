@@ -5,20 +5,87 @@ import logger from '../utils/logger';
 
 const API_BASE_URL = '/api/v1';
 const TOKEN_REFRESH_THRESHOLD = 5 * 60;
-const TOKEN_EXPIRY_LEEWAY_SECONDS = 30;
+const MAX_REFRESH_RETRIES = 3;
+const REFRESH_RETRY_DELAY_MS = 1000;
 export const MAINTENANCE_MODE_EVENT = 'app:maintenance-mode';
+export const AUTH_EXPIRED_EVENT = 'app:auth-expired';
+
+// Not a secret: only remembers that a refresh cookie was issued, so anonymous
+// visitors don't fire a refresh request on every page load. The refresh token
+// itself lives in an httpOnly cookie that JavaScript cannot read.
+export const SESSION_HINT_KEY = 'auth_session';
+
+// The backend requires this header on cookie-authenticated auth endpoints.
+// Cross-origin pages cannot send it without passing a CORS preflight.
+const CSRF_HEADERS = { 'X-Requested-With': 'XMLHttpRequest' };
 
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
+        ...CSRF_HEADERS,
     },
     withCredentials: true,
 });
 
-let isRefreshing = false;
+// The access token is kept in memory only and never persisted.
+let accessToken = null;
 let refreshPromise = null;
-let failedRequestQueue = [];
+
+const readSessionHint = () => {
+    try {
+        return localStorage.getItem(SESSION_HINT_KEY) === '1';
+    } catch {
+        return false;
+    }
+};
+
+const writeSessionHint = (active) => {
+    try {
+        if (active) {
+            localStorage.setItem(SESSION_HINT_KEY, '1');
+        } else {
+            localStorage.removeItem(SESSION_HINT_KEY);
+        }
+    } catch {
+        // Storage can be unavailable (private mode); the hint is only an optimisation.
+    }
+};
+
+// Tokens persisted by earlier builds must not linger in storage.
+try {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+} catch {
+    // ignore
+}
+
+export const getAccessToken = () => accessToken;
+
+export const hasSession = () => Boolean(accessToken) || readSessionHint();
+
+export const setAccessToken = (token) => {
+    accessToken = token;
+    writeSessionHint(true);
+};
+
+export const clearSession = () => {
+    accessToken = null;
+    writeSessionHint(false);
+};
+
+class NoSessionError extends Error {
+    constructor() {
+        super('No session');
+        this.name = 'NoSessionError';
+    }
+}
+
+/** True when the error means the session is gone (not a transient failure). */
+export const isAuthFailureError = (error) =>
+    error instanceof NoSessionError ||
+    error?.response?.status === 401 ||
+    error?.response?.status === 403;
 
 const emitMaintenanceMode = (enabled, payload = {}) => {
     if (typeof window === 'undefined') return;
@@ -37,17 +104,6 @@ const emitMaintenanceMode = (enabled, payload = {}) => {
             },
         }),
     );
-};
-
-const processQueue = (error, token = null) => {
-    failedRequestQueue.forEach((pendingRequest) => {
-        if (error) {
-            pendingRequest.reject(error);
-            return;
-        }
-        pendingRequest.resolve(token);
-    });
-    failedRequestQueue = [];
 };
 
 const shouldRefreshToken = (token) => {
@@ -75,103 +131,85 @@ const isMaintenanceResponse = (error) => {
     return maintenanceModeFlag || (hasMaintenanceText && Boolean(retryAfter));
 };
 
-export const refreshAccessToken = async (retryCount = 0) => {
-    const maxRetries = 3;
-    const retryDelayMs = 1000;
-
-    if (isRefreshing) {
-        logger.debug('Token refresh already in progress, waiting...');
-        return refreshPromise;
-    }
-
-    isRefreshing = true;
-    refreshPromise = (async () => {
-        let caughtError = null;
+const requestNewAccessToken = async () => {
+    for (let attempt = 0; ; attempt += 1) {
         try {
-            const refreshToken = localStorage.getItem('refresh_token');
-            if (!refreshToken) {
-                throw new Error('No refresh token available');
-            }
-
-            let decodedRefreshToken;
-            try {
-                decodedRefreshToken = jwtDecode(refreshToken);
-            } catch {
-                throw new Error('Invalid refresh token');
-            }
-
-            const currentTime = Date.now() / 1000;
-            if (decodedRefreshToken.exp <= currentTime + TOKEN_EXPIRY_LEEWAY_SECONDS) {
-                throw new Error('Refresh token expired');
-            }
-
-            const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, {
-                refresh: refreshToken,
+            const response = await axios.post(`${API_BASE_URL}/auth/refresh/`, null, {
+                withCredentials: true,
+                headers: CSRF_HEADERS,
             });
-
-            const { access, refresh } = response.data;
-            localStorage.setItem('access_token', access);
-
-            if (refresh) {
-                localStorage.setItem('refresh_token', refresh);
-                logger.debug('Refresh token rotated and updated');
-            }
-
-            logger.debug('Token refresh successful');
-            return access;
+            return response.data.access;
         } catch (error) {
-            caughtError = error;
-            const isNetworkError = !error.response && error.request;
-            const isServerError = error.response && error.response.status >= 500 && error.response.status < 600;
+            const retryable = !error.response || error.response.status >= 500;
+            if (!retryable || attempt >= MAX_REFRESH_RETRIES) throw error;
 
-            if ((isNetworkError || isServerError) && retryCount < maxRetries) {
-                logger.warn(
-                    `Token refresh failed (attempt ${retryCount + 1}/${maxRetries + 1}), retrying in ${retryDelayMs}ms:`,
-                    error.message,
-                );
-
-                isRefreshing = false;
-                refreshPromise = null;
-
-                await delay(retryDelayMs * (retryCount + 1));
-
-                return await refreshAccessToken(retryCount + 1);
-            }
-
-            logger.error('Token refresh failed:', error.message, {
-                retryCount,
-                status: error.response?.status,
-                isNetworkError,
-                isServerError,
-            });
-            throw error;
-        } finally {
-            if (retryCount === 0 || caughtError?.response?.status === 401) {
-                isRefreshing = false;
-                refreshPromise = null;
-            }
+            logger.warn(
+                `Token refresh failed (attempt ${attempt + 1}/${MAX_REFRESH_RETRIES + 1}), retrying:`,
+                error.message,
+            );
+            await delay(REFRESH_RETRY_DELAY_MS * (attempt + 1));
         }
-    })();
+    }
+};
+
+// Refresh rotates the cookie and blacklists the old token, so two tabs must
+// not refresh at the same moment. Web Locks serialise them across tabs.
+const withCrossTabLock = (fn) => {
+    const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+    return locks?.request ? locks.request('anishows-token-refresh', fn) : fn();
+};
+
+/**
+ * Get a new access token using the httpOnly refresh cookie.
+ *
+ * Concurrent callers share one in-flight request. On an auth failure the
+ * session is cleared and AUTH_EXPIRED_EVENT is dispatched.
+ */
+export const refreshAccessToken = () => {
+    if (refreshPromise) return refreshPromise;
+
+    refreshPromise = (async () => {
+        if (!readSessionHint()) throw new NoSessionError();
+
+        try {
+            const token = await withCrossTabLock(requestNewAccessToken);
+            setAccessToken(token);
+            logger.debug('Token refresh successful');
+            return token;
+        } catch (error) {
+            if (isAuthFailureError(error)) {
+                logger.info('Session expired, signing out');
+                clearSession();
+                window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+            } else {
+                logger.error('Token refresh failed:', error.message);
+            }
+            throw error;
+        }
+    })().finally(() => {
+        refreshPromise = null;
+    });
 
     return refreshPromise;
 };
 
+const NO_REFRESH_ON_401 = ['/auth/refresh/', '/auth/login/', '/auth/google/'];
+
 api.interceptors.request.use(
     async (config) => {
-        const token = localStorage.getItem('access_token');
+        let token = accessToken;
+
+        if (token && shouldRefreshToken(token) && !config._skipProactiveRefresh) {
+            try {
+                token = await refreshAccessToken();
+            } catch (error) {
+                logger.warn('Proactive refresh failed:', error.message);
+                token = accessToken;
+            }
+        }
 
         if (token) {
-            if (shouldRefreshToken(token) && !config._skipProactiveRefresh) {
-                try {
-                    const newToken = await refreshAccessToken();
-                    config.headers.Authorization = `Bearer ${newToken}`;
-                } catch (error) {
-                    logger.warn('Proactive refresh failed, using existing token:', error.message);
-                    config.headers.Authorization = `Bearer ${token}`;
-                }
-            } else {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
+            config.headers.Authorization = `Bearer ${token}`;
         }
 
         return config;
@@ -186,52 +224,21 @@ api.interceptors.response.use(
 
         if (
             error.response?.status === 401 &&
+            originalRequest &&
             !originalRequest._retry &&
-            !originalRequest.url?.includes('/auth/refresh/') &&
-            !originalRequest.url?.includes('/auth/login/')
+            !NO_REFRESH_ON_401.some((path) => originalRequest.url?.includes(path)) &&
+            hasSession()
         ) {
             originalRequest._retry = true;
 
-            if (isRefreshing) {
-                logger.debug('Queuing request while token refresh is in progress');
-                return new Promise((resolve, reject) => {
-                    failedRequestQueue.push({
-                        resolve: (token) => {
-                            originalRequest.headers.Authorization = `Bearer ${token}`;
-                            resolve(api(originalRequest));
-                        },
-                        reject,
-                    });
-                });
-            }
-
             try {
-                const newToken = await refreshAccessToken();
-                processQueue(null, newToken);
-                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                const token = await refreshAccessToken();
+                originalRequest.headers.Authorization = `Bearer ${token}`;
                 return api(originalRequest);
             } catch (refreshError) {
-                processQueue(refreshError, null);
-
-                if (
-                    refreshError.response?.status === 401 ||
-                    refreshError.message?.includes('expired') ||
-                    refreshError.message?.includes('No refresh token')
-                ) {
-                    logger.error('Authentication failed, clearing tokens');
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('refresh_token');
-
-                    if (!window.location.pathname.includes('/login')) {
-                        setTimeout(() => {
-                            if (!localStorage.getItem('access_token')) {
-                                window.location.href = '/login';
-                            }
-                        }, 100);
-                    }
-                }
-
-                return Promise.reject(refreshError);
+                // On an auth failure the caller sees the original 401; the
+                // AUTH_EXPIRED_EVENT listener signs the user out.
+                return Promise.reject(isAuthFailureError(refreshError) ? error : refreshError);
             }
         }
 

@@ -1,4 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { authApi } from '../api/modules/auth';
+import { hasSession, isAuthFailureError } from '../api/httpClient';
 import logger from '../utils/logger';
 
 /**
@@ -28,26 +30,29 @@ const DEFAULT_OPTIONS = {
 };
 
 /**
- * Build the full WebSocket URL with JWT token as a query parameter.
+ * Build the full WebSocket URL with a fresh single-use ticket.
+ *
+ * The JWT never goes in the URL (it would end up in proxy access logs);
+ * instead the access token buys a short-lived ticket over HTTP.
  *
  * @param {string} path - The WebSocket path (e.g., "/ws/notifications/").
- * @returns {string|null} Full WebSocket URL or null if no token.
+ * @returns {Promise<string|null>} Full WebSocket URL or null if signed out.
  */
-function buildWsUrl(path) {
-    const token = localStorage.getItem('access_token');
-    if (!token) return null;
+async function buildWsUrl(path) {
+    if (!hasSession()) return null;
 
+    const { data } = await authApi.getWsTicket();
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    return `${protocol}//${host}${path}?token=${token}`;
+    return `${protocol}//${host}${path}?ticket=${encodeURIComponent(data.ticket)}`;
 }
 
 /**
- * Custom React hook for a reconnecting WebSocket connection with JWT auth.
+ * Custom React hook for a reconnecting, authenticated WebSocket connection.
  *
  * Features:
  * - Automatic reconnection with exponential backoff + jitter
- * - JWT token passed as query param for auth
+ * - Single-use ticket (fetched per attempt) passed as query param for auth
  * - Heartbeat pings to detect dead connections
  * - Graceful cleanup on unmount
  * - Manual send/connect/disconnect controls
@@ -72,6 +77,8 @@ export function useWebSocket(path, handlers = {}, options = {}) {
     const heartbeatTimerRef = useRef(null);
     const connectRef = useRef(null);
     const unmountedRef = useRef(false);
+    // Bumped by every connect/disconnect so a stale ticket fetch is dropped.
+    const attemptRef = useRef(0);
 
     // Keep handlers in a ref so we don't need them in dependency arrays
     const handlersRef = useRef(handlers);
@@ -141,7 +148,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
     /**
      * Open a new WebSocket connection.
      */
-    const connect = useCallback(() => {
+    const connect = useCallback(async () => {
         // Close existing connection if any
         if (wsRef.current) {
             wsRef.current.onclose = null; // prevent reconnect loop
@@ -149,13 +156,32 @@ export function useWebSocket(path, handlers = {}, options = {}) {
             wsRef.current = null;
         }
 
-        const url = buildWsUrl(path);
-        if (!url) {
-            logger.debug('WebSocket: no access token, skipping connection');
+        const attempt = ++attemptRef.current;
+        setState(WS_STATE.CONNECTING);
+
+        let url;
+        try {
+            url = await buildWsUrl(path);
+        } catch (err) {
+            if (unmountedRef.current || attempt !== attemptRef.current) return;
+            setState(WS_STATE.CLOSED);
+            if (isAuthFailureError(err)) {
+                logger.debug('WebSocket: signed out, not connecting');
+                return;
+            }
+            logger.warn('WebSocket: could not get a ticket', err.message);
+            scheduleReconnect();
             return;
         }
 
-        setState(WS_STATE.CONNECTING);
+        // Unmounted, disconnected or superseded while fetching the ticket.
+        if (unmountedRef.current || attempt !== attemptRef.current) return;
+
+        if (!url) {
+            logger.debug('WebSocket: signed out, skipping connection');
+            setState(WS_STATE.CLOSED);
+            return;
+        }
 
         try {
             const ws = new WebSocket(url);
@@ -214,6 +240,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
      * Manually disconnect the WebSocket. Does not trigger reconnect.
      */
     const disconnect = useCallback(() => {
+        attemptRef.current += 1;
         if (retryTimerRef.current) {
             clearTimeout(retryTimerRef.current);
             retryTimerRef.current = null;

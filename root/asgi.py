@@ -2,8 +2,7 @@
 ASGI config for aniShows project.
 
 Configures both HTTP (Django) and WebSocket (Channels) protocol routing.
-Daphne serves this application for WebSocket connections on port 8001,
-while Gunicorn continues to serve HTTP on port 8000.
+Uvicorn serves both protocols from this one application.
 
 For more information on this file, see
 https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
@@ -25,13 +24,13 @@ django_asgi_app = get_asgi_application()
 # Import after Django setup to avoid AppRegistryNotReady
 from apps.core.routing import websocket_urlpatterns as core_ws_urls
 from apps.forums.routing import websocket_urlpatterns as forum_ws_urls
-from root.ws_auth import JWTAuthMiddleware
+from root.ws_auth import WSTicketAuthMiddleware
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
         "websocket": AllowedHostsOriginValidator(
-            JWTAuthMiddleware(
+            WSTicketAuthMiddleware(
                 URLRouter(core_ws_urls + forum_ws_urls),
             ),
         ),

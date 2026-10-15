@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from ...shared.logger import logger
+from ..auth_cookies import set_refresh_cookie
 from .social_auth import SocialLoginView
 
 
@@ -80,8 +81,14 @@ class GoogleLogin(SocialLoginView):
             )
 
         try:
-            return super().post(request, *args, **kwargs)
+            response = super().post(request, *args, **kwargs)
         except Exception:
             # Log error securely without exposing sensitive data
             logger.exception("GoogleLogin failed")
             raise
+
+        # The refresh token goes out only as the httpOnly cookie.
+        response.data.pop("refresh", None)
+        if getattr(self, "refresh_token", None):
+            set_refresh_cookie(response, str(self.refresh_token))
+        return response

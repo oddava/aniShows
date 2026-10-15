@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { authApi, notificationApi } from '../api/client';
+import { authApi, clearSession, notificationApi } from '../api/client';
 import { Link } from 'react-router-dom';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
@@ -496,9 +496,8 @@ export default function Settings() {
             await authApi.deleteAccount({
                 password: user.has_password ? deleteAccountPassword : null
             });
-            // Manually clear storage to prevent AuthContext from attempting to restore session
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
+            // Forget the session so the reload doesn't try to restore it
+            clearSession();
             // Force hard reload to reset application state
             window.location.href = '/';
         } catch (err) {

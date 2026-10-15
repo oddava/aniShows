@@ -1,13 +1,17 @@
+import contextlib
+
 from django.contrib.auth import get_user_model
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.fields import CharField, EmailField
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 
@@ -15,6 +19,12 @@ from ...core.api_errors import error_response
 from ...core.services.admin_settings_service import is_registration_enabled
 from ...shared.logger import logger
 from .. import throttling
+from ..auth_cookies import (
+    clear_refresh_cookie,
+    cookie_csrf_failure,
+    get_refresh_cookie,
+    move_refresh_to_cookie,
+)
 from ..serializers.users import RegisterSerializer
 from ..services.auth_flow_service import (
     AuthFlowError,
@@ -26,6 +36,7 @@ from ..services.auth_flow_service import (
 )
 from ..services.auth_service import AuthService
 from ..services.email_service import EmailService
+from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 
 User = get_user_model()
 
@@ -37,13 +48,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     @classmethod
     def get_token(cls, user):
+        # Keep claims minimal: email and role flags come from /users/me/,
+        # never from a decoded token.
         token = super().get_token(user)
-        # Add custom claims to the token for instant client-side decoding
         token["user_id"] = user.id
         token["username"] = user.username
-        token["email"] = user.email
-        token["is_staff"] = user.is_staff
-        token["is_superuser"] = user.is_superuser
         return token
 
     def validate(self, attrs):
@@ -61,10 +70,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """Handle login with username/email support."""
+    """Handle login with username/email support.
+
+    Returns the access token in the body; the refresh token is set as an
+    httpOnly cookie.
+    """
 
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [throttling.LoginRateThrottle]
+
+    def post(self, request, *args, **kwargs):
+        return move_refresh_to_cookie(super().post(request, *args, **kwargs))
 
 
 class RegisterView(generics.CreateAPIView):
@@ -154,7 +170,7 @@ class AuthViewSet(ViewSet):
                 status_code=exc.status_code,
             )
 
-        return Response(result.payload, status=result.status_code)
+        return move_refresh_to_cookie(Response(result.payload, status=result.status_code))
 
     @action(detail=False, methods=["post"])
     def resend_verification(self, request):
@@ -253,6 +269,78 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
             raise
 
 
+def _cookie_auth_rejected(request):
+    reason = cookie_csrf_failure(request)
+    if reason is None:
+        return None
+    logger.warning("Rejected cookie-authenticated auth request", extra={"reason": reason})
+    return error_response(reason, code="csrf_failed", status_code=status.HTTP_403_FORBIDDEN)
+
+
 class LoggingTokenRefreshView(BaseTokenRefreshView):
-    """Token refresh view with custom logging serializer."""
+    """Rotate the refresh cookie and return a fresh access token.
+
+    The refresh token is read only from the httpOnly cookie, never the body.
+    """
+
     serializer_class = LoggingTokenRefreshSerializer
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        rejected = _cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
+
+        refresh_token = get_refresh_cookie(request)
+        if not refresh_token:
+            return error_response(
+                "No refresh token.",
+                code="refresh_token_missing",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        serializer = self.get_serializer(data={"refresh": refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except (AuthenticationFailed, TokenError):
+            response = error_response(
+                "Refresh token is invalid or expired.",
+                code="token_not_valid",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+            return clear_refresh_cookie(response)
+
+        return move_refresh_to_cookie(Response(dict(serializer.validated_data), status=status.HTTP_200_OK))
+
+
+class LogoutView(APIView):
+    """Blacklist the refresh cookie's token and clear the cookie.
+
+    Lives under the refresh cookie's path so the browser sends the cookie.
+    Needs no access token, so an expired session can still log out.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        rejected = _cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
+
+        refresh_token = get_refresh_cookie(request)
+        if refresh_token:
+            # An invalid, expired or already-blacklisted token needs no revoking.
+            with contextlib.suppress(TokenError):
+                RefreshToken(refresh_token).blacklist()
+
+        return clear_refresh_cookie(Response(status=status.HTTP_204_NO_CONTENT))
+
+
+class WebSocketTicketView(APIView):
+    """Trade the caller's access token for a single-use WebSocket ticket."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        return Response({"ticket": issue_ws_ticket(request.user), "expires_in": TICKET_TTL_SECONDS})
