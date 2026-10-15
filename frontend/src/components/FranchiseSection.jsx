@@ -6,8 +6,8 @@ import { animeApi } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import AnimeMediaImage from './common/AnimeMediaImage';
 
-// Relations carry the AniList ID in uid=1000(oddava) gid=1000(oddava) groups=1000(oddava),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),100(users),989(docker) (null for Jikan-sourced entries) and the MAL ID in .
-const relationKey = (rel) => (rel.id ?  : );
+// Relations carry the AniList ID in `id` (null for Jikan-sourced entries) and the MAL ID in `mal_id`.
+const relationKey = (rel) => (rel.id ? `anilist-${rel.id}` : `mal-${rel.mal_id}`);
 
 export default function FranchiseSection({ relations, accentColor, sourceSlug }) {
     const navigate = useNavigate();
