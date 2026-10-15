@@ -25,7 +25,7 @@ from ...shared.logger import logger
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
 from .rate_limiting import APICallCache, CircuitBreaker
 
-DEFAULT_JIKAN_BASE_URL = "http://jikan:8080/v4"
+DEFAULT_JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
 
 
@@ -53,8 +53,9 @@ class JikanRateLimiter:
 
     def __init__(
         self,
-        base_delay: float = 0.8,
-        min_delay: float = 0.25,
+        # Public api.jikan.moe allows ~60 requests/minute.
+        base_delay: float = 1.0,
+        min_delay: float = 1.0,
         max_delay: float = 5.0,
         success_streak_threshold: int = 10,
     ):

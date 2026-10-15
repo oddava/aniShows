@@ -71,3 +71,13 @@ htmlcov
 # Logs
 *.log
 logs
+
+# Not needed in the backend image
+frontend
+backups
+backups-data
+monitoring
+CACHE
+.idea
+changes.patch
+patch.js

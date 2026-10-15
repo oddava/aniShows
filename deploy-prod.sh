@@ -1,13 +1,19 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Production deployment script for anishows using GHCR
-# Deploys both frontend (from GHCR image -> Docker volume) and backend services
-# Also handles Caddy reload, migrations, static files, and cleanup
+# Production deploy (run on the server from the repo root; CI calls it over SSH).
+#   1. copy the new frontend build into the frontend_dist volume
+#   2. pull backend images, run migrations
+#   3. restart workers, roll web replicas one at a time (no downtime)
+#   4. reload Caddy and smoke-test API + frontend
+#
+# Env (from .env or the shell): SCALE_WEB (default 2), BACKEND_TAG (default latest),
+# FRONTEND_TAG (default latest).
 
-set -e
+set -euo pipefail
 
 if [ -f .env ]; then
     set -a
+    # shellcheck disable=SC1091
     source .env
     set +a
 fi
@@ -18,859 +24,172 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
-FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:latest"
-FRONTEND_VOLUME="anishows_frontend_dist"
+COMPOSE=(docker compose -f docker-compose.prod.yml)
+PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
+FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:${FRONTEND_TAG:-latest}"
+FRONTEND_VOLUME="${PROJECT}_frontend_dist"
 SCALE_WEB="${SCALE_WEB:-2}"
-SCALE_DAPHNE="${SCALE_DAPHNE:-2}"
-SCALE_CELERY="${SCALE_CELERY:-1}"
-SCALE_CELERY_PRIORITY="${SCALE_CELERY_PRIORITY:-1}"
-SCALE_CELERY_IMAGES="${SCALE_CELERY_IMAGES:-1}"
-SCALE_CELERY_ANALYTICS="${SCALE_CELERY_ANALYTICS:-1}"
-COMPOSE_PROJECT_LABEL="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
-DOMAIN_NAME_RAW="${DOMAIN_NAME:-localhost}"
-FRONTEND_HOST="${DOMAIN_NAME_RAW#http://}"
-FRONTEND_HOST="${FRONTEND_HOST#https://}"
-FRONTEND_HOST="${FRONTEND_HOST%%,*}"
-FRONTEND_HOST="${FRONTEND_HOST%% *}"
-FRONTEND_HOST="${FRONTEND_HOST%%/*}"
-FRONTEND_HOST="${FRONTEND_HOST%%:*}"
-[ -z "$FRONTEND_HOST" ] && FRONTEND_HOST="localhost"
 
-FRONTEND_BASE_URL="http://localhost:80"
-FRONTEND_CURL=(curl -fsS --retry 3 --retry-delay 2)
-if [ "$FRONTEND_HOST" != "localhost" ] && [ "$FRONTEND_HOST" != "127.0.0.1" ]; then
-    FRONTEND_BASE_URL="http://${FRONTEND_HOST}"
-    FRONTEND_CURL+=(-L --resolve "${FRONTEND_HOST}:80:127.0.0.1" --resolve "${FRONTEND_HOST}:443:127.0.0.1")
+DOMAIN="${DOMAIN_NAME:-localhost}"
+DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN#https://}"
+DOMAIN="${DOMAIN%%,*}"; DOMAIN="${DOMAIN%% *}"; DOMAIN="${DOMAIN%%/*}"; DOMAIN="${DOMAIN%%:*}"
+[ -z "$DOMAIN" ] && DOMAIN=localhost
+BASE_URL="http://localhost:80"
+CURL=(curl -fsS --retry 3 --retry-delay 2)
+if [ "$DOMAIN" != localhost ] && [ "$DOMAIN" != 127.0.0.1 ]; then
+    BASE_URL="http://${DOMAIN}"
+    CURL+=(-L --resolve "${DOMAIN}:80:127.0.0.1" --resolve "${DOMAIN}:443:127.0.0.1")
 fi
 
-array_contains() {
-    local needle="$1"
-    shift
-    local item
-    for item in "$@"; do
-        if [ "$item" = "$needle" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
+step() { echo -e "\n${BLUE}==> $*${NC}"; }
+ok()   { echo -e "${GREEN}    $*${NC}"; }
+warn() { echo -e "${YELLOW}    $*${NC}"; }
+die()  { echo -e "${RED}    $*${NC}"; exit 1; }
 
-container_readiness() {
-    docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}{{else}}stopped{{end}}' "$1" 2>/dev/null || echo "missing"
-}
-
-service_container_ids() {
-    local service_name="$1"
-    local scope="${2:-running}"
-
-    if [ "$scope" = "all" ]; then
-        docker ps -aq \
-            --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_LABEL}" \
-            --filter "label=com.docker.compose.service=${service_name}"
-        return
-    fi
-
+service_ids() {
     docker ps -q \
-        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_LABEL}" \
-        --filter "label=com.docker.compose.service=${service_name}"
+        --filter "label=com.docker.compose.project=${PROJECT}" \
+        --filter "label=com.docker.compose.service=$1"
 }
 
-cleanup_stale_service_containers() {
-    local service_name="$1"
-    local container_id
-    local status
-    local removed_any=false
+container_status() {
+    docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}running{{end}}{{else}}stopped{{end}}' "$1" 2>/dev/null || echo missing
+}
 
-    while IFS= read -r container_id; do
-        [ -z "$container_id" ] && continue
-        status="$(container_readiness "$container_id")"
+wait_ready() {
+    local id="$1" name="$2" status
+    for _ in $(seq 1 90); do
+        status="$(container_status "$id")"
         case "$status" in
-            stopped|missing|dead|exited)
-                if [ "$removed_any" = false ]; then
-                    echo -e "${BLUE}  Removing stale ${service_name} containers left by earlier deploy attempts...${NC}"
-                    removed_any=true
-                fi
-                echo -e "${YELLOW}    Removing ${container_id:0:12} (${status})${NC}"
-                docker rm -f "$container_id" >/dev/null 2>&1 || true
-                ;;
+            healthy|running) return 0 ;;
+            unhealthy|stopped|missing) break ;;
         esac
-    done < <(service_container_ids "$service_name" all)
-}
-
-inspect_umami_postgres_volume() {
-    local volume_name="$1"
-
-    docker run --rm -v "${volume_name}:/pgdata:ro" alpine:latest sh -s <<'SH'
-set -eu
-
-target="/pgdata/pgdata"
-
-for candidate in "$target" /pgdata /pgdata/data /pgdata/17/docker /pgdata/18/docker; do
-    if [ -s "$candidate/PG_VERSION" ]; then
-        echo "cluster=$candidate"
-        echo "major=$(cut -d. -f1 "$candidate/PG_VERSION" | tr -dc '0-9')"
-        exit 0
-    fi
-done
-
-found_pg_version="$(find /pgdata -maxdepth 6 -type f -name PG_VERSION 2>/dev/null | sort | head -n 1 || true)"
-if [ -n "$found_pg_version" ]; then
-    cluster="${found_pg_version%/PG_VERSION}"
-    echo "cluster=$cluster"
-    echo "major=$(cut -d. -f1 "$found_pg_version" | tr -dc '0-9')"
-    exit 0
-fi
-
-if [ -z "$(ls -A /pgdata 2>/dev/null)" ]; then
-    echo "empty=1"
-    exit 0
-fi
-
-echo "unknown=1"
-echo "inventory_start"
-find /pgdata -maxdepth 4 -mindepth 1 2>/dev/null | sort | head -n 200
-echo "inventory_end"
-SH
-}
-
-repair_umami_postgres_volume() {
-    local volume_name="$1"
-    local source_cluster="$2"
-    local backup_volume="$3"
-
-    docker run --rm \
-        -v "${volume_name}:/pgdata" \
-        -v "${backup_volume}:/backup" \
-        -e SOURCE_CLUSTER="$source_cluster" \
-        -e TARGET_CLUSTER="/pgdata/pgdata" \
-        alpine:latest sh -s <<'SH'
-set -eu
-
-source="$SOURCE_CLUSTER"
-target="$TARGET_CLUSTER"
-
-if [ ! -s "$source/PG_VERSION" ]; then
-    echo "Source PostgreSQL cluster marker not found at $source/PG_VERSION" >&2
-    exit 1
-fi
-
-cp -a /pgdata/. /backup/
-
-if [ "$source" = "$target" ]; then
-    exit 0
-fi
-
-if [ -e "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ]; then
-    if [ -s "$target/PG_VERSION" ]; then
-        exit 0
-    fi
-    mv "$target" "${target}.pre-repair.$(date +%s)"
-fi
-
-mkdir -p "$target"
-for path in "$source"/* "$source"/.[!.]* "$source"/..?*; do
-    [ -e "$path" ] || continue
-    [ "$path" = "$target" ] && continue
-    mv "$path" "$target/"
-done
-
-if [ "$source" != "/pgdata" ]; then
-    rmdir "$source" 2>/dev/null || true
-fi
-
-if [ ! -s "$target/PG_VERSION" ]; then
-    echo "PostgreSQL cluster repair did not produce $target/PG_VERSION" >&2
-    exit 1
-fi
-SH
-}
-
-initialize_clean_umami_pgdata_target() {
-    local volume_name="$1"
-    local backup_volume="$2"
-
-    docker run --rm \
-        -v "${volume_name}:/pgdata" \
-        -v "${backup_volume}:/backup" \
-        alpine:latest sh -s <<'SH'
-set -eu
-
-target="/pgdata/pgdata"
-
-cp -a /pgdata/. /backup/
-
-if [ -e "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ] && [ ! -s "$target/PG_VERSION" ]; then
-    mv "$target" "${target}.pre-initdb.$(date +%s)"
-fi
-
-mkdir -p "$target"
-SH
-}
-
-prepare_umami_postgres_volume() {
-    local volume_name="${COMPOSE_PROJECT_LABEL}_umami_db_data"
-    local configured_major="${UMAMI_POSTGRES_VERSION:-}"
-    local inspection=""
-    local cluster_path=""
-    local detected_major=""
-    local backup_volume=""
-
-    if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
-        if [ -n "$configured_major" ]; then
-            echo -e "${BLUE}  Umami database volume ${volume_name} does not exist yet; using configured PostgreSQL major ${configured_major}.${NC}"
-        else
-            echo -e "${YELLOW}  Umami database volume ${volume_name} does not exist yet; defaulting PostgreSQL major to 17.${NC}"
-        fi
-        return
-    fi
-
-    inspection="$(inspect_umami_postgres_volume "$volume_name")"
-    cluster_path="$(printf '%s\n' "$inspection" | sed -n 's/^cluster=//p' | head -n 1)"
-    detected_major="$(printf '%s\n' "$inspection" | sed -n 's/^major=//p' | head -n 1 | tr -dc '0-9')"
-
-    if [ -n "$detected_major" ]; then
-        export UMAMI_POSTGRES_VERSION="$detected_major"
-        if [ -n "$configured_major" ] && [ "$configured_major" != "$detected_major" ]; then
-            echo -e "${YELLOW}  Umami PostgreSQL major ${configured_major} was configured, but existing data is ${detected_major}; using existing data version.${NC}"
-        fi
-        echo -e "${BLUE}  Detected Umami PostgreSQL major ${UMAMI_POSTGRES_VERSION} at ${cluster_path}.${NC}"
-    elif printf '%s\n' "$inspection" | grep -q '^empty=1$'; then
-        echo -e "${BLUE}  Umami PostgreSQL volume is empty; it will initialize in pgdata/.${NC}"
-        return
-    else
-        echo -e "${YELLOW}  Umami PostgreSQL volume is non-empty but no PG_VERSION file was found.${NC}"
-        echo -e "${YELLOW}  Existing contents will be backed up; Postgres will initialize in the explicit pgdata/ target. Volume inventory:${NC}"
-        printf '%s\n' "$inspection" | sed -n '/^inventory_start$/,/^inventory_end$/p' | sed '/^inventory_/d'
-        $COMPOSE_CMD stop umami umami_db >/dev/null 2>&1 || true
-        cleanup_stale_service_containers umami_db
-        backup_volume="${volume_name}_backup_$(date +%Y%m%d%H%M%S)"
-        docker volume create "$backup_volume" >/dev/null
-        echo -e "${BLUE}  Backing up ${volume_name} to ${backup_volume} before clean initialization.${NC}"
-        initialize_clean_umami_pgdata_target "$volume_name" "$backup_volume"
-        echo -e "${GREEN}  Umami PostgreSQL volume is prepared for clean initialization at /pgdata/pgdata.${NC}"
-        return
-    fi
-
-    if [ "$cluster_path" = "/pgdata/pgdata" ]; then
-        echo -e "${BLUE}  Umami PostgreSQL volume layout is already standard.${NC}"
-        return
-    fi
-
-    echo -e "${YELLOW}  Moving Umami PostgreSQL cluster from ${cluster_path} to /pgdata/pgdata.${NC}"
-    $COMPOSE_CMD stop umami umami_db >/dev/null 2>&1 || true
-    cleanup_stale_service_containers umami_db
-
-    backup_volume="${volume_name}_backup_$(date +%Y%m%d%H%M%S)"
-    docker volume create "$backup_volume" >/dev/null
-    echo -e "${BLUE}  Backing up ${volume_name} to ${backup_volume} before repair.${NC}"
-    repair_umami_postgres_volume "$volume_name" "$cluster_path" "$backup_volume"
-
-    inspection="$(inspect_umami_postgres_volume "$volume_name")"
-    cluster_path="$(printf '%s\n' "$inspection" | sed -n 's/^cluster=//p' | head -n 1)"
-    detected_major="$(printf '%s\n' "$inspection" | sed -n 's/^major=//p' | head -n 1 | tr -dc '0-9')"
-    if [ "$cluster_path" != "/pgdata/pgdata" ] || [ -z "$detected_major" ]; then
-        echo -e "${RED}  Umami PostgreSQL volume repair failed verification.${NC}"
-        printf '%s\n' "$inspection"
-        exit 1
-    fi
-
-    export UMAMI_POSTGRES_VERSION="$detected_major"
-    echo -e "${GREEN}  Umami PostgreSQL volume repaired and verified at /pgdata/pgdata.${NC}"
-}
-
-trim_service_replicas() {
-    local service_name="$1"
-    local target_count="$2"
-    local container_id
-    local running_ids=()
-    local excess_count
-    local removed_any=false
-
-    mapfile -t running_ids < <(service_container_ids "$service_name")
-    excess_count=$((${#running_ids[@]} - target_count))
-    if [ "$excess_count" -le 0 ]; then
-        return 0
-    fi
-
-    echo -e "${BLUE}  Removing ${excess_count} excess ${service_name} replica(s) before rollout...${NC}"
-    for container_id in "${running_ids[@]}"; do
-        if [ "$excess_count" -le 0 ]; then
-            break
-        fi
-        if [ "$removed_any" = false ]; then
-            removed_any=true
-        fi
-        echo -e "${YELLOW}    Removing excess ${service_name} container ${container_id:0:12}${NC}"
-        docker rm -f "$container_id" >/dev/null 2>&1 || true
-        excess_count=$((excess_count - 1))
-    done
-}
-
-normalize_service_for_rollout() {
-    local service_name="$1"
-    local target_count="$2"
-    local container_id
-    local status
-    local removed_any=false
-
-    while IFS= read -r container_id; do
-        [ -z "$container_id" ] && continue
-        status="$(container_readiness "$container_id")"
-        case "$status" in
-            healthy|running)
-                ;;
-            *)
-                if [ "$removed_any" = false ]; then
-                    echo -e "${BLUE}  Removing non-ready ${service_name} containers before rollout...${NC}"
-                    removed_any=true
-                fi
-                echo -e "${YELLOW}    Removing ${container_id:0:12} (${status})${NC}"
-                docker rm -f "$container_id" >/dev/null 2>&1 || true
-                ;;
-        esac
-    done < <(service_container_ids "$service_name" all)
-
-    trim_service_replicas "$service_name" "$target_count"
-}
-
-print_container_debug_info() {
-    local container_id="$1"
-    local service_name="$2"
-
-    echo -e "${YELLOW}  Debug info for ${service_name} container ${container_id}:${NC}"
-    docker inspect --format 'state={{.State.Status}} exit_code={{.State.ExitCode}} started_at={{.State.StartedAt}} finished_at={{.State.FinishedAt}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} error={{json .State.Error}}' "$container_id" 2>/dev/null || true
-    docker inspect --format '{{if .State.Health}}{{range .State.Health.Log}}{{println .Start .ExitCode .Output}}{{end}}{{end}}' "$container_id" 2>/dev/null || true
-    docker logs --tail=100 "$container_id" 2>&1 || true
-    $COMPOSE_CMD ps "$service_name" || true
-}
-
-wait_for_container_ready() {
-    local container_id="$1"
-    local service_name="$2"
-    local timeout_seconds="${3:-180}"
-    local status
-    local attempt
-
-    for attempt in $(seq 1 "$timeout_seconds"); do
-        status="$(container_readiness "$container_id")"
-        case "$status" in
-            healthy|running)
-                return 0
-                ;;
-            unhealthy|stopped|missing|dead|exited)
-                break
-                ;;
-        esac
-        if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
-            echo -e "${BLUE}  Waiting for ${service_name} container ${container_id:0:12} to become ready... current status=${status}${NC}"
-        fi
-        sleep 1
-    done
-
-    echo -e "${RED}  ${service_name} container ${container_id} did not become ready.${NC}"
-    print_container_debug_info "$container_id" "$service_name"
-    return 1
-}
-
-wait_for_service_replicas_ready() {
-    local service_name="$1"
-    local expected_count="$2"
-    local timeout_seconds="${3:-180}"
-    local ids=()
-    local ready_count
-    local status
-    local attempt
-    local status_summary
-
-    for attempt in $(seq 1 "$timeout_seconds"); do
-        mapfile -t ids < <(service_container_ids "$service_name")
-        if [ "${#ids[@]}" -ne "$expected_count" ]; then
-            if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
-                echo -e "${BLUE}  Waiting for ${service_name} replica count: ${#ids[@]}/${expected_count}${NC}"
-            fi
-            sleep 2
-            continue
-        fi
-
-        ready_count=0
-        status_summary=""
-        for container_id in "${ids[@]}"; do
-            status="$(container_readiness "$container_id")"
-            status_summary+="${container_id:0:12}:${status} "
-            case "$status" in
-                healthy|running)
-                    ready_count=$((ready_count + 1))
-                    ;;
-            esac
-        done
-
-        if [ "$ready_count" -eq "$expected_count" ]; then
-            return 0
-        fi
-
-        if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
-            echo -e "${BLUE}  Waiting for ${service_name} readiness: ${ready_count}/${expected_count} ready :: ${status_summary}${NC}"
-        fi
         sleep 2
     done
-
-    echo -e "${RED}  ${service_name} did not reach ${expected_count} ready replicas in time.${NC}"
-    $COMPOSE_CMD ps "$service_name" || true
-    $COMPOSE_CMD logs --tail=50 "$service_name" || true
+    echo -e "${RED}    ${name} ${id:0:12} not ready (status=${status})${NC}"
+    docker logs --tail=80 "$id" 2>&1 || true
     return 1
 }
 
-validate_jikan_catalog() {
-    echo -e "${BLUE}  Validating Jikan catalog readiness...${NC}"
+# Replace web containers one by one: start a new one, wait for healthy, remove an old one.
+roll_web() {
+    local old_ids new_id before after
+    mapfile -t old_ids < <(service_ids web)
 
-    local validation_output
-    if ! validation_output="$($COMPOSE_CMD exec -T jikan sh -lc '
-season_now_count="$(wget -qO- "http://127.0.0.1:8080/v4/seasons/now?page=1&limit=25" | grep -o "\"mal_id\":" | wc -l | tr -d " ")"
-top_airing_count="$(wget -qO- "http://127.0.0.1:8080/v4/top/anime?filter=airing&page=1&limit=25" | grep -o "\"mal_id\":" | wc -l | tr -d " ")"
-
-echo "seasons_now_count=${season_now_count}"
-echo "top_airing_count=${top_airing_count}"
-
-if [ "${season_now_count}" -lt 6 ] && [ "${top_airing_count}" -lt 6 ]; then
-    exit 1
-fi
-' 2>&1)"; then
-        echo -e "${RED}  Jikan catalog validation failed.${NC}"
-        if [ -n "$validation_output" ]; then
-            echo "$validation_output"
-        fi
-        return 1
-    fi
-
-    echo "$validation_output"
-    echo -e "${GREEN}  Jikan catalog readiness looks valid.${NC}"
-}
-
-hydrate_jikan_catalog() {
-    echo -e "${YELLOW}  Jikan catalog is under-populated. Running bootstrap indexers...${NC}"
-    $COMPOSE_CMD exec -T jikan php artisan indexer:genres
-    $COMPOSE_CMD exec -T jikan php artisan indexer:common
-    $COMPOSE_CMD exec -T jikan php artisan indexer:anime-current-season
-    $COMPOSE_CMD exec -T jikan php artisan indexer:anime-schedule
-}
-
-rolling_refresh_service() {
-    local service_name="$1"
-    local desired_count="$2"
-    local timeout_seconds="${3:-180}"
-    local original_ids=()
-    local current_ids=()
-    local pre_ids=()
-    local old_id
-    local candidate_id=""
-    local surge_target
-
-    cleanup_stale_service_containers "$service_name"
-    normalize_service_for_rollout "$service_name" "$desired_count"
-    mapfile -t original_ids < <(service_container_ids "$service_name")
-
-    if [ "${#original_ids[@]}" -eq 0 ]; then
-        echo -e "${BLUE}  Bootstrapping ${service_name} to ${desired_count} replicas...${NC}"
-        $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${desired_count}" "$service_name"
-        wait_for_service_replicas_ready "$service_name" "$desired_count" "$timeout_seconds"
-        return 0
-    fi
-
-    for old_id in "${original_ids[@]}"; do
-        if ! docker inspect "$old_id" >/dev/null 2>&1; then
-            continue
-        fi
-
-        mapfile -t pre_ids < <(service_container_ids "$service_name")
-        surge_target=$((${#pre_ids[@]} + 1))
-        candidate_id=""
-
-        echo -e "${BLUE}  Launching replacement for ${service_name} container ${old_id:0:12}...${NC}"
-        $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${surge_target}" "$service_name"
-
-        for _ in $(seq 1 "$timeout_seconds"); do
-            mapfile -t current_ids < <(service_container_ids "$service_name" all)
-            for container_id in "${current_ids[@]}"; do
-                if ! array_contains "$container_id" "${pre_ids[@]}"; then
-                    candidate_id="$container_id"
-                    break
-                fi
-            done
-
-            if [ -n "$candidate_id" ]; then
-                break
-            fi
-            sleep 1
-        done
-
-        if [ -z "$candidate_id" ]; then
-            echo -e "${RED}  Failed to identify new ${service_name} container during rollout.${NC}"
-            $COMPOSE_CMD logs --tail=50 "$service_name" || true
-            return 1
-        fi
-
-        if ! wait_for_container_ready "$candidate_id" "$service_name" "$timeout_seconds"; then
-            echo -e "${YELLOW}  Removing failed replacement ${service_name} container ${candidate_id:0:12}.${NC}"
-            docker rm -f "$candidate_id" >/dev/null 2>&1 || true
-            return 1
-        fi
-
-        echo -e "${BLUE}  Removing old ${service_name} container ${old_id:0:12}...${NC}"
-        docker rm -f "$old_id" >/dev/null
-        wait_for_service_replicas_ready "$service_name" "${#pre_ids[@]}" "$timeout_seconds"
-    done
-
-    cleanup_stale_service_containers "$service_name"
-    $COMPOSE_CMD up -d --no-deps --no-recreate --scale "${service_name}=${desired_count}" "$service_name"
-    wait_for_service_replicas_ready "$service_name" "$desired_count" "$timeout_seconds"
-}
-
-echo -e "${BLUE}Starting full deployment (frontend + backend)...${NC}"
-echo ""
-
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}Docker is not installed${NC}"
-    exit 1
-fi
-
-# =========================================================================
-# FRONTEND DEPLOYMENT
-# =========================================================================
-echo -e "${BLUE}Step 1: Deploying frontend...${NC}"
-
-echo -e "${BLUE}  Pulling latest frontend image from GHCR...${NC}"
-if docker pull $FRONTEND_IMAGE; then
-    echo -e "${GREEN}  Frontend image pulled!${NC}"
-else
-    echo -e "${YELLOW}  Failed to pull frontend image (may need: docker login ghcr.io)${NC}"
-    echo -e "${YELLOW}  Skipping frontend deployment, continuing with backend...${NC}"
-    SKIP_FRONTEND=true
-fi
-
-if [ "$SKIP_FRONTEND" != "true" ]; then
-    echo -e "${BLUE}  Deploying new frontend files...${NC}"
-    # Clean out old files and copy new ones
-    docker run --rm -v ${FRONTEND_VOLUME}:/srv/frontend $FRONTEND_IMAGE sh -c '
-        rm -rf /srv/frontend/* &&
-        cp -r /app/dist/* /srv/frontend/ &&
-        echo DONE
-    '
-
-    echo -e "${BLUE}  Verifying frontend assets...${NC}"
-    if docker run --rm -v ${FRONTEND_VOLUME}:/srv/frontend alpine:latest test -f /srv/frontend/index.html; then
-        echo -e "${GREEN}  Frontend deployed successfully!${NC}"
+    if [ "${#old_ids[@]}" -eq 0 ]; then
+        "${COMPOSE[@]}" up -d --no-deps --scale "web=${SCALE_WEB}" web
     else
-        echo -e "${RED}  Frontend deployment failed - index.html not found!${NC}"
+        for old in "${old_ids[@]}"; do
+            mapfile -t before < <(service_ids web)
+            "${COMPOSE[@]}" up -d --no-deps --no-recreate --scale "web=$(( ${#before[@]} + 1 ))" web
+            mapfile -t after < <(service_ids web)
+            new_id=""
+            for id in "${after[@]}"; do
+                [[ " ${before[*]} " == *" ${id} "* ]] || new_id="$id"
+            done
+            [ -n "$new_id" ] || die "could not find the new web container"
+            wait_ready "$new_id" web || { docker rm -f "$new_id" >/dev/null; die "new web container failed; old ones still serving"; }
+            docker rm -f "$old" >/dev/null
+            ok "replaced web ${old:0:12} -> ${new_id:0:12}"
+        done
+        "${COMPOSE[@]}" up -d --no-deps --no-recreate --scale "web=${SCALE_WEB}" web
     fi
+
+    for id in $(service_ids web); do wait_ready "$id" web || die "web replica unhealthy"; done
+}
+
+command -v docker >/dev/null || die "docker is not installed"
+
+# docker-compose.prod.yml keeps the old insecure fallbacks so existing servers
+# keep working; nag until real values are set in .env.
+insecure=()
+[ "${DB_PASSWORD:-1}" = 1 ] && insecure+=(DB_PASSWORD)
+[ "${REDIS_PASSWORD:-redispassword123}" = redispassword123 ] && insecure+=(REDIS_PASSWORD)
+[ "${AWS_SECRET_ACCESS_KEY:-minioadmin}" = minioadmin ] && insecure+=(AWS_SECRET_ACCESS_KEY)
+[ "${UMAMI_DB_PASSWORD:-umami}" = umami ] && insecure+=(UMAMI_DB_PASSWORD)
+[ "${UMAMI_APP_SECRET:-change-me}" = change-me ] && insecure+=(UMAMI_APP_SECRET)
+if [ "${#insecure[@]}" -gt 0 ]; then
+    warn "Using default/insecure values for: ${insecure[*]} (set them in .env)"
 fi
-echo ""
 
-# =========================================================================
-# BACKEND DEPLOYMENT
-# =========================================================================
-echo -e "${BLUE}Step 2: Pulling latest backend images from GHCR...${NC}"
-$COMPOSE_CMD pull web celery celery_priority celery_images celery_analytics beat daphne
-echo -e "${GREEN}Backend images pulled!${NC}"
-echo ""
+step "Frontend: ${FRONTEND_IMAGE}"
+docker pull "$FRONTEND_IMAGE"
+docker volume create "$FRONTEND_VOLUME" >/dev/null
+docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" "$FRONTEND_IMAGE" \
+    sh -c 'rm -rf /srv/frontend/* && cp -r /app/dist/* /srv/frontend/'
+docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" alpine:3 test -f /srv/frontend/index.html \
+    || die "frontend volume has no index.html"
+ok "frontend files deployed"
 
-# =========================================================================
-# PULL THIRD-PARTY SERVICE IMAGES
-# =========================================================================
-echo -e "${BLUE}Step 2a: Pulling third-party service images...${NC}"
-prepare_umami_postgres_volume
-$COMPOSE_CMD pull umami_db umami jikan jikan_mongodb jikan_typesense || true
-echo -e "${GREEN}Third-party service images pulled!${NC}"
-echo ""
+step "Pulling images"
+"${COMPOSE[@]}" pull web celery beat db pgbouncer redis minio createbuckets caddy umami_db umami \
+    jikan jikan_mongodb jikan_typesense
+"${COMPOSE[@]}" build backup
 
-# =========================================================================
-# BUILD LOCAL-ONLY SERVICES
-# =========================================================================
-echo -e "${BLUE}Step 2b: Building local infrastructure images...${NC}"
-$COMPOSE_CMD build backup
-echo -e "${GREEN}Local infrastructure images built!${NC}"
-echo ""
+step "Core services (also removes old daphne / extra celery worker containers)"
+"${COMPOSE[@]}" up -d --no-deps --remove-orphans db redis minio
+"${COMPOSE[@]}" up -d --wait db pgbouncer redis minio
+"${COMPOSE[@]}" up --no-deps --exit-code-from createbuckets createbuckets >/dev/null \
+    || die "bucket setup failed"
 
-# =========================================================================
-# RUN MIGRATIONS BEFORE RESTARTING (new code must handle old+new schema)
-# =========================================================================
-echo -e "${BLUE}Step 3: Running database migrations (before restart)...${NC}"
-# Ensure core infra is up before running migrations and backups
-$COMPOSE_CMD up -d --no-deps db redis minio
-echo -e "${BLUE}  Waiting for database to be ready...${NC}"
-for i in $(seq 1 30); do
-    if $COMPOSE_CMD exec -T db pg_isready -U "${DB_USER:-postgres}" -d "${DB_NAME:-anishows_db}" >/dev/null 2>&1; then
-        echo -e "${GREEN}  Database is ready!${NC}"
-        break
-    fi
-    if [ "$i" -eq 30 ]; then
-        echo -e "${RED}  Database failed to become ready after 30 attempts!${NC}"
-        $COMPOSE_CMD logs --tail=20 db
-        exit 1
-    fi
+step "Migrations"
+"${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
+    web python manage.py migrate --noinput
+ok "migrations applied"
+
+step "Self-hosted Jikan"
+"${COMPOSE[@]}" up -d --wait jikan_mongodb
+"${COMPOSE[@]}" up -d jikan_typesense jikan
+jikan_ready() {
+    "${COMPOSE[@]}" exec -T jikan sh -c '
+        n1=$(wget -qO- "http://127.0.0.1:8080/v4/seasons/now?page=1&limit=25" | grep -o "\"mal_id\":" | wc -l)
+        n2=$(wget -qO- "http://127.0.0.1:8080/v4/top/anime?filter=airing&page=1&limit=25" | grep -o "\"mal_id\":" | wc -l)
+        echo "    seasons/now=${n1} top/airing=${n2}"
+        [ "$n1" -ge 6 ] || [ "$n2" -ge 6 ]'
+}
+for _ in $(seq 1 30); do
+    "${COMPOSE[@]}" exec -T jikan true 2>/dev/null && break
     sleep 2
 done
-
-# Run migrations using compose run with --no-deps to avoid recreating other services
-$COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --noinput
-$COMPOSE_CMD run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST="${PGBOUNCER_DB_HOST:-db}" -e DB_PORT="5432" web python manage.py migrate --check --noinput
-echo -e "${GREEN}Migrations complete!${NC}"
-echo ""
-
-# Start self-hosted Jikan infrastructure before rolling app services that depend on it.
-echo -e "${BLUE}Step 3a: Starting self-hosted Jikan services...${NC}"
-$COMPOSE_CMD up -d jikan_mongodb jikan_typesense jikan
-echo -e "${BLUE}  Waiting for Jikan API to start...${NC}"
-for i in $(seq 1 30); do
-    if $COMPOSE_CMD ps --status running jikan | grep -q "jikan"; then
-        echo -e "${GREEN}  Jikan API is running!${NC}"
-        break
-    fi
-    if [ "$i" -eq 30 ]; then
-        echo -e "${RED}  Jikan failed to start after 30 attempts!${NC}"
-        $COMPOSE_CMD logs --tail=50 jikan_mongodb jikan_typesense jikan || true
-        exit 1
-    fi
-    sleep 2
-done
-if ! validate_jikan_catalog; then
-    hydrate_jikan_catalog
-    if ! validate_jikan_catalog; then
-        $COMPOSE_CMD logs --tail=50 jikan_mongodb jikan_typesense jikan || true
-        exit 1
-    fi
+if ! jikan_ready; then
+    warn "Jikan catalog under-populated, running indexers"
+    for indexer in indexer:genres indexer:common indexer:anime-current-season indexer:anime-schedule; do
+        "${COMPOSE[@]}" exec -T jikan php artisan "$indexer"
+    done
+    jikan_ready || { "${COMPOSE[@]}" logs --tail=50 jikan; die "Jikan not ready"; }
 fi
-echo ""
+ok "Jikan ready"
 
-# Start PgBouncer now that DB is ready (web and workers connect through it)
-$COMPOSE_CMD up -d --no-deps pgbouncer
-echo -e "${BLUE}  Waiting for PgBouncer to be healthy...${NC}"
-for i in $(seq 1 15); do
-    if $COMPOSE_CMD exec -T pgbouncer pg_isready -h localhost -p "${DB_PGBOUNCER_PORT:-6432}" -U "${DB_USER:-postgres}" >/dev/null 2>&1; then
-        echo -e "${GREEN}  PgBouncer is ready!${NC}"
-        break
-    fi
-    if [ "$i" -eq 15 ]; then
-        echo -e "${RED}  PgBouncer failed to become ready after 15 attempts!${NC}"
-        $COMPOSE_CMD logs --tail=20 pgbouncer
-        exit 1
-    fi
-    sleep 2
-done
-echo ""
+step "Workers, backups, analytics"
+"${COMPOSE[@]}" up -d --no-deps celery beat backup
+"${COMPOSE[@]}" up -d --wait umami_db
+"${COMPOSE[@]}" up -d --no-deps umami
 
-# =========================================================================
-# RESTART SERVICES (rolling restart for zero-downtime)
-# =========================================================================
-echo -e "${BLUE}Step 4: Restarting services...${NC}"
-$COMPOSE_CMD up -d --no-deps backup
-$COMPOSE_CMD up -d umami_db
-echo -e "${BLUE}  Waiting for Umami database to be healthy...${NC}"
-for i in $(seq 1 20); do
-    if $COMPOSE_CMD exec -T umami_db pg_isready -U "${UMAMI_DB_USER:-umami}" -d "${UMAMI_DB_NAME:-umami}" >/dev/null 2>&1; then
-        echo -e "${GREEN}  Umami database is ready!${NC}"
-        break
-    fi
-    if [ "$i" -eq 20 ]; then
-        echo -e "${RED}  Umami database failed to become ready after 20 attempts!${NC}"
-        $COMPOSE_CMD logs --tail=50 umami_db || true
-        exit 1
-    fi
-    sleep 2
-done
+step "Web (rolling, ${SCALE_WEB} replicas)"
+roll_web
 
-$COMPOSE_CMD up -d umami
-echo -e "${BLUE}  Waiting for Umami to start...${NC}"
-for i in $(seq 1 20); do
-    if $COMPOSE_CMD ps --status running umami | grep -q "umami"; then
-        echo -e "${GREEN}  Umami is running!${NC}"
-        break
-    fi
-    if [ "$i" -eq 20 ]; then
-        echo -e "${RED}  Umami failed to start after 20 attempts!${NC}"
-        $COMPOSE_CMD logs --tail=50 umami || true
-        exit 1
-    fi
-    sleep 2
-done
+step "Clearing application cache"
+"${COMPOSE[@]}" exec -T web python -c "from django.core.cache import cache; cache.clear()" \
+    && ok "cache cleared" || warn "cache clear failed (continuing)"
 
-# Restart workers first, then web (reverse proxy keeps serving old containers until healthy)
-$COMPOSE_CMD up -d --no-deps \
-  --scale celery=$SCALE_CELERY \
-  --scale celery_priority=$SCALE_CELERY_PRIORITY \
-  --scale celery_images=$SCALE_CELERY_IMAGES \
-  --scale celery_analytics=$SCALE_CELERY_ANALYTICS \
-  celery celery_priority celery_images celery_analytics beat
-sleep 2
-rolling_refresh_service web "$SCALE_WEB"
-rolling_refresh_service daphne "$SCALE_DAPHNE"
-echo -e "${GREEN}Web and Daphne replicas refreshed with rolling replacement!${NC}"
-echo -e "${BLUE}  Scale profile: web=$SCALE_WEB daphne=$SCALE_DAPHNE celery=$SCALE_CELERY celery_priority=$SCALE_CELERY_PRIORITY celery_images=$SCALE_CELERY_IMAGES celery_analytics=$SCALE_CELERY_ANALYTICS${NC}"
-echo ""
+step "Caddy"
+"${COMPOSE[@]}" up -d --no-deps caddy
+"${COMPOSE[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force \
+    || { "${COMPOSE[@]}" logs --tail=50 caddy; die "caddy reload failed"; }
 
-# =========================================================================
-# CLEAR APPLICATION CACHE (not broker data)
-# =========================================================================
-echo -e "${BLUE}Step 5: Clearing application cache...${NC}"
-# Use Django's cache.clear() via management shell instead of FLUSHALL
-# This only clears the cache, preserving Celery broker state and pending tasks
-if $COMPOSE_CMD exec -T web python -c "
-from django.core.cache import cache
-cache.clear()
-print('Cache cleared successfully')
-" 2>/dev/null; then
-    echo -e "${GREEN}Application cache cleared!${NC}"
-else
-    echo -e "${YELLOW}Cache clear warning (service may still be starting)${NC}"
+step "Smoke tests (${BASE_URL})"
+"${CURL[@]}" "${BASE_URL}/api/v1/health/" >/dev/null || die "API health check failed"
+ok "API healthy"
+html="$("${CURL[@]}" "${BASE_URL}/" || true)"
+echo "$html" | grep -q 'id="root"' || die "homepage did not return the SPA"
+asset="$(echo "$html" | grep -oE '/assets/[^" ]+\.js' | head -n1 || true)"
+if [ -n "$asset" ]; then
+    "${CURL[@]}" "${BASE_URL}${asset}" >/dev/null || die "frontend asset ${asset} not reachable"
 fi
-echo ""
+ok "frontend served"
 
-echo -e "${BLUE}Step 6: Ensuring Caddy is running...${NC}"
-echo -e "${BLUE}  Verifying web and websocket upstream readiness...${NC}"
-wait_for_service_replicas_ready web "$SCALE_WEB"
-wait_for_service_replicas_ready daphne "$SCALE_DAPHNE"
+step "Pruning old images"
+docker image prune -f --filter "until=24h" >/dev/null
 
-$COMPOSE_CMD up -d --no-deps caddy
-
-CADDY_RUNNING=false
-for i in $(seq 1 10); do
-    if $COMPOSE_CMD ps --status running caddy | grep -q "caddy"; then
-        CADDY_RUNNING=true
-        break
-    fi
-    sleep 2
-done
-
-if [ "$CADDY_RUNNING" != "true" ]; then
-    echo -e "${RED}Caddy failed to start.${NC}"
-    $COMPOSE_CMD logs --tail=50 caddy || true
-    exit 1
-fi
-
-echo -e "${BLUE}  Reloading Caddy config...${NC}"
-if $COMPOSE_CMD exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force; then
-    echo -e "${GREEN}Caddy reloaded successfully!${NC}"
-else
-    echo -e "${RED}Caddy reload failed.${NC}"
-    $COMPOSE_CMD logs --tail=50 caddy || true
-    exit 1
-fi
-
-echo -e "${BLUE}  Verifying Caddy HTTP endpoint...${NC}"
-if ! "${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}/api/v1/health/" >/dev/null; then
-    echo -e "${RED}Caddy endpoint health check failed.${NC}"
-    echo -e "${YELLOW}  Probe URL: ${FRONTEND_BASE_URL}/api/v1/health/ (host=${FRONTEND_HOST})${NC}"
-    $COMPOSE_CMD logs --tail=50 caddy || true
-    exit 1
-fi
-echo -e "${BLUE}  Verifying Daphne websocket upstream health...${NC}"
-DAPHNE_UPSTREAM_OK=false
-for i in $(seq 1 12); do
-if $COMPOSE_CMD exec -T daphne python -c "
-import urllib.request
-request = urllib.request.Request(
-    'http://localhost:8001/api/v1/health/',
-    headers={'Host': '${FRONTEND_HOST}'},
-)
-response = urllib.request.urlopen(request, timeout=5)
-print(response.read().decode())
-" 2>/dev/null; then
-    DAPHNE_UPSTREAM_OK=true
-    break
-fi
-echo -e "${YELLOW}  Daphne upstream check attempt $i failed, retrying in 3s...${NC}"
-sleep 3
-done
-
-if [ "$DAPHNE_UPSTREAM_OK" != "true" ]; then
-    echo -e "${RED}Daphne websocket upstream health check failed.${NC}"
-    $COMPOSE_CMD ps daphne || true
-    $COMPOSE_CMD logs --tail=80 daphne || true
-    exit 1
-fi
-echo -e "${GREEN}Caddy is running and serving traffic.${NC}"
-echo ""
-
-# =========================================================================
-# HEALTH CHECK
-# =========================================================================
-echo -e "${BLUE}Step 7: Verifying deployment health...${NC}"
-sleep 5
-HEALTH_OK=false
-for i in 1 2 3; do
-    if $COMPOSE_CMD exec -T web python -c "
-import urllib.request
-response = urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)
-print(response.read().decode())
-" 2>/dev/null; then
-        HEALTH_OK=true
-        break
-    fi
-    echo -e "${YELLOW}  Health check attempt $i failed, retrying in 5s...${NC}"
-    sleep 5
-done
-
-if [ "$HEALTH_OK" = true ]; then
-    echo -e "${GREEN}Health check passed!${NC}"
-else
-    echo -e "${RED}Health check failed after 3 attempts!${NC}"
-    echo -e "${YELLOW}Checking container logs...${NC}"
-    $COMPOSE_CMD logs --tail=20 web
-    exit 1
-fi
-echo ""
-
-# =========================================================================
-# FRONTEND SMOKE CHECK
-# =========================================================================
-echo -e "${BLUE}Step 8: Verifying frontend is servable...${NC}"
-echo -e "${BLUE}  Frontend probe URL: ${FRONTEND_BASE_URL}/ (host=${FRONTEND_HOST})${NC}"
-FRONTEND_HTML="$("${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}/" || true)"
-
-if [ -z "$FRONTEND_HTML" ]; then
-    echo -e "${RED}Frontend health check failed: could not fetch homepage HTML.${NC}"
-    FRONTEND_DEBUG_CURL=(curl -sS -o /tmp/frontend-health-body.$$ -w "%{http_code}" --retry 1)
-    if [ "$FRONTEND_HOST" != "localhost" ] && [ "$FRONTEND_HOST" != "127.0.0.1" ]; then
-        FRONTEND_DEBUG_CURL+=(-L --resolve "${FRONTEND_HOST}:80:127.0.0.1" --resolve "${FRONTEND_HOST}:443:127.0.0.1")
-    fi
-    FRONTEND_STATUS="$("${FRONTEND_DEBUG_CURL[@]}" "${FRONTEND_BASE_URL}/" || true)"
-    echo -e "${YELLOW}  HTTP status: ${FRONTEND_STATUS:-unknown}${NC}"
-    if [ -f /tmp/frontend-health-body.$$ ]; then
-        echo -e "${YELLOW}  Response preview:${NC}"
-        sed -n '1,8p' /tmp/frontend-health-body.$$ || true
-        rm -f /tmp/frontend-health-body.$$
-    fi
-    exit 1
-fi
-
-if ! echo "$FRONTEND_HTML" | grep -q 'id="root"'; then
-    echo -e "${RED}Frontend health check failed: root element not found in homepage HTML.${NC}"
-    exit 1
-fi
-
-FRONTEND_ASSET_PATH="$(echo "$FRONTEND_HTML" | grep -oE '/assets/[^" ]+\.js' | head -n1)"
-if [ -n "$FRONTEND_ASSET_PATH" ]; then
-    if ! "${FRONTEND_CURL[@]}" "${FRONTEND_BASE_URL}${FRONTEND_ASSET_PATH}" >/dev/null; then
-        echo -e "${RED}Frontend health check failed: asset ${FRONTEND_ASSET_PATH} is not reachable.${NC}"
-        exit 1
-    fi
-else
-    echo -e "${YELLOW}Frontend health warning: no /assets/*.js script found in index HTML.${NC}"
-fi
-echo -e "${GREEN}Frontend health check passed!${NC}"
-echo ""
-
-echo -e "${BLUE}Step 9: Pruning old images...${NC}"
-docker image prune -f --filter "until=24h" --filter "label=org.opencontainers.image.source=https://github.com/oddava/anishows"
-echo -e "${GREEN}Old images pruned!${NC}"
-echo ""
-
-echo -e "${GREEN}Deployment completed successfully!${NC}"
-echo ""
-echo -e "${BLUE}Services status:${NC}"
-$COMPOSE_CMD ps
-
-echo ""
-echo -e "${BLUE}Useful commands:${NC}"
-echo -e "   ${BLUE}View logs:${NC} $COMPOSE_CMD logs -f web"
-echo -e "   ${BLUE}View all logs:${NC} $COMPOSE_CMD logs -f"
+echo -e "\n${GREEN}Deployment complete.${NC}"
+"${COMPOSE[@]}" ps

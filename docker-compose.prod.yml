@@ -1,38 +1,48 @@
-# Production Docker Compose Configuration
+# Production stack. Standalone: run with `docker compose -f docker-compose.prod.yml ...`
+# (deploy-prod.sh does this). Service and volume names match the previous
+# layout so existing data volumes and the compose network are reused.
+#
+# Gunicorn runs uvicorn workers, which serve both HTTP and WebSockets.
+# BACKEND_TAG pins the backend image (defaults to latest, CI also pushes sha-<commit>).
+
+x-backend: &backend
+  image: ghcr.io/oddava/anishows-backend:${BACKEND_TAG:-latest}
+  restart: always
+  env_file: .env
+  environment:
+    DJANGO_ENV: production
+    DB_HOST: pgbouncer
+    DB_PORT: "6432"
+    DB_USE_PGBOUNCER: "True"
+    DB_PGBOUNCER_HOST: pgbouncer
+    DB_PGBOUNCER_PORT: "6432"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    JIKAN_BASE_URL: http://jikan:8080/v4
+    PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    SENTRY_ENVIRONMENT: production
+  user: "1000:1000"
+  depends_on: &backend-deps
+    pgbouncer:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    createbuckets:
+      condition: service_completed_successfully
 
 services:
   web:
-    image: ghcr.io/oddava/anishows-backend:latest
-    restart: always
-    command: [ "bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py" ]
+    <<: *backend
+    command: ["bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py"]
+    expose:
+      - "8000"
     volumes:
       - prometheus_multiproc:/tmp/prometheus
-    env_file:
-      - .env
-    environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "production"
-    depends_on:
-      db:
-        condition: service_healthy
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      createbuckets:
-        condition: service_completed_successfully
-      jikan:
-        condition: service_started
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/', timeout=5)" ]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -41,72 +51,189 @@ services:
       resources:
         limits:
           memory: 768M
-        reservations:
-          memory: 384M
+
+  celery:
+    <<: *backend
+    command: >
+      celery -A root worker -l WARNING -O fair --pool=prefork
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      --max-tasks-per-child=200 --max-memory-per-child=384000
+      -Q critical,high_priority,default,notifications,batch,images,analytics,low_priority
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "root", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  db:
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1}
+      POSTGRES_DB: ${DB_NAME:-anishows_db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-anishows_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - db_data:/var/lib/postgresql
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest@sha256:85d1e38593617af1b5f7f285e97d407e56c29939683cc7cfe4c8f6dc19f1268b
+    restart: always
+    environment:
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-1}
+      DB_HOST: db
+      DB_NAME: ${DB_NAME:-anishows_db}
+      LISTEN_PORT: "6432"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-500}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-20}
+      AUTH_TYPE: scram-sha-256
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "6432", "-U", "${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
+    image: redis:7-alpine
+    restart: always
     command: >
-      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123} --maxmemory ${REDIS_MAXMEMORY:-2gb} --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru} --appendonly yes --appendfsync everysec --save 900 1 --save 300 10 --save 60 10000 --tcp-backlog 511 --hz 10
+      redis-server --requirepass ${REDIS_PASSWORD:-redispassword123}
+      --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy allkeys-lru
+      --appendonly yes --appendfsync everysec
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "--no-auth-warning", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
-
-  # MongoDB backing store for the self-hosted Jikan API
-  jikan_mongodb:
-    image: mongo:7
-    restart: always
-    command: [ "--bind_ip_all" ]
     volumes:
-      - jikan_mongodb_data:/data/db
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/27017; exec 3<&-; exec 3>&-'",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
+      - redis_data:/data
 
-  # Typesense index used by the self-hosted Jikan API
-  jikan_typesense:
-    image: typesense/typesense:0.25.2
+  minio:
+    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: always
-    command:
-      [
-        "--data-dir",
-        "/data",
-        "--api-key=${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}",
-        "--enable-cors",
-      ]
-    volumes:
-      - jikan_typesense_data:/data
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 128M
-
-  # Self-hosted Jikan REST API
-  jikan:
-    image: jikanme/jikan-rest:latest
-    restart: always
+    command: server /data --console-address ":9001"
     expose:
-      - "8080"
+      - "9000"
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - minio_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  createbuckets:
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
+      MINIO_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-anishows-media}
+    entrypoint: >
+      /bin/sh -c "set -e;
+      mc alias set local http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD};
+      mc mb --ignore-existing local/$${BUCKET_NAME};
+      mc anonymous set download local/$${BUCKET_NAME}/media"
+
+  caddy:
+    image: caddy:alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file: .env
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - frontend_dist:/srv/frontend
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  umami_db:
+    image: postgres:${UMAMI_POSTGRES_VERSION:-17}-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${UMAMI_DB_USER:-umami}
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD:-umami}
+      POSTGRES_DB: ${UMAMI_DB_NAME:-umami}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - umami_db_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}
+      DATABASE_TYPE: postgresql
+      APP_SECRET: ${UMAMI_APP_SECRET:-change-me}
+    depends_on:
+      umami_db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # Self-hosted Jikan (scrapes MAL directly). Kept until catalog sync moves to AniList only.
+  jikan:
+    image: jikanme/jikan-rest:latest@sha256:505f06101617c337db5b301701258de63a55f6593b0181cf2d84c92ff49cee9d
+    restart: always
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
-      APP_URL: "http://jikan:8080"
+      APP_URL: http://jikan:8080
       DB_CACHING: "true"
       DB_CONNECTION: mongodb
       DB_HOST: jikan_mongodb
@@ -115,17 +242,19 @@ services:
       DB_ADMIN: jikan
       CACHING: "true"
       CACHE_DRIVER: redis
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD:-redispassword123}"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
       QUEUE_CONNECTION: sync
       SCOUT_DRIVER: typesense
       SCOUT_QUEUE: "false"
       TYPESENSE_HOST: jikan_typesense
       TYPESENSE_PORT: "8108"
-      TYPESENSE_API_KEY: "${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}"
+      TYPESENSE_API_KEY: ${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}
       SOURCE: local
       MAX_RESULTS_PER_PAGE: "25"
+    expose:
+      - "8080"
     depends_on:
       jikan_mongodb:
         condition: service_healthy
@@ -137,359 +266,64 @@ services:
       resources:
         limits:
           memory: 768M
-        reservations:
-          memory: 256M
 
-  celery:
-    image: ghcr.io/oddava/anishows-backend:latest
+  jikan_mongodb:
+    image: mongo:7
     restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "default,batch,low_priority", "--concurrency=${CELERY_DEFAULT_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
-    env_file:
-      - .env
-    environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      DB_NAME: "${DB_NAME}"
-      DB_USER: "${DB_USER}"
-      DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
-      REDIS_DB: "${REDIS_DB:-0}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "production"
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-        reservations:
-          memory: 192M
-
-  celery_priority:
-    image: ghcr.io/oddava/anishows-backend:latest
-    restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "critical,high_priority,notifications", "--concurrency=${CELERY_PRIORITY_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
-    env_file:
-      - .env
-    environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      DB_NAME: "${DB_NAME}"
-      DB_USER: "${DB_USER}"
-      DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
-      REDIS_DB: "${REDIS_DB:-0}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "production"
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-        reservations:
-          memory: 192M
-
-  celery_images:
-    image: ghcr.io/oddava/anishows-backend:latest
-    restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "images", "--concurrency=${CELERY_IMAGES_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_IMAGES_MAX_TASKS_PER_CHILD:-100}", "--max-memory-per-child=${CELERY_IMAGES_MAX_MEMORY_PER_CHILD_KB:-512000}", "-O", "fair" ]
-    env_file:
-      - .env
-    environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      DB_NAME: "${DB_NAME}"
-      DB_USER: "${DB_USER}"
-      DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
-      REDIS_DB: "${REDIS_DB:-0}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "production"
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-        reservations:
-          memory: 192M
-
-  celery_analytics:
-    image: ghcr.io/oddava/anishows-backend:latest
-    restart: always
-    command: [ "celery", "-A", "root", "worker", "-l", "WARNING", "-Q", "analytics", "--concurrency=${CELERY_ANALYTICS_CONCURRENCY:-1}", "--pool=prefork", "--max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-200}", "--max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-384000}", "-O", "fair" ]
-    env_file:
-      - .env
-    environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      DB_NAME: "${DB_NAME}"
-      DB_USER: "${DB_USER}"
-      DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
-      REDIS_DB: "${REDIS_DB:-0}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "production"
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 384M
-        reservations:
-          memory: 192M
-
-  # Daphne ASGI Server - WebSocket connections (production)
-  daphne:
-    image: ghcr.io/oddava/anishows-backend:latest
-    restart: always
-    command: [ "bash", "/app/scripts/run_with_migration_check.sh", "daphne", "-b", "0.0.0.0", "-p", "8001", "root.asgi:application" ]
-    expose:
-      - "8001"
-    env_file:
-      - .env
-    environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-localhost,127.0.0.1,web},daphne"
-      DB_NAME: "${DB_NAME}"
-      DB_USER: "${DB_USER}"
-      DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
-      REDIS_DB: "${REDIS_DB:-0}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
-      SENTRY_DSN: "${SENTRY_DSN:-}"
-      SENTRY_ENVIRONMENT: "production"
+    command: ["--bind_ip_all"]
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/v1/health/', timeout=5)" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/27017'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
       start_period: 40s
-    depends_on:
-      web:
-        condition: service_healthy
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
-
-  umami_db:
-    image: postgres:${UMAMI_POSTGRES_VERSION:-17}-alpine
-    restart: always
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: "${UMAMI_DB_USER:-umami}"
-      POSTGRES_PASSWORD: "${UMAMI_DB_PASSWORD:-umami}"
-      POSTGRES_DB: "${UMAMI_DB_NAME:-umami}"
-      PGDATA: "/var/lib/postgresql/data/pgdata"
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
     volumes:
-      - umami_db_data:/var/lib/postgresql/data
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 128M
-
-  umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
-    restart: always
-    mem_limit: 512m
-    mem_reservation: 256m
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: "postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}"
-      DATABASE_TYPE: "postgresql"
-      REDIS_URL: "redis://:${REDIS_PASSWORD:-redispassword123}@redis:6379/0"
-      APP_SECRET: "${UMAMI_APP_SECRET:-change-me}"
-    depends_on:
-      umami_db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - jikan_mongodb_data:/data/db
     deploy:
       resources:
         limits:
           memory: 512M
-        reservations:
-          memory: 256M
 
-  caddy:
-    volumes:
-      - ./Caddyfile.prod:/etc/caddy/Caddyfile
-      - frontend_dist:/srv/frontend
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      web:
-        condition: service_healthy
-      daphne:
-        condition: service_healthy
-      umami:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-        reservations:
-          memory: 64M
-
-  minio:
-    image: minio/minio:latest
+  jikan_typesense:
+    image: typesense/typesense:0.25.2
     restart: always
-    expose:
-      - "9000"
-    env_file:
-      - .env
-    environment:
-      MINIO_ROOT_USER: "${AWS_ACCESS_KEY_ID:-minioadmin}"
-      MINIO_ROOT_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
-    command: server /data --console-address ":9001"
+    command: ["--data-dir", "/data", "--api-key=${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}"]
     volumes:
-      - minio_data:/data
+      - jikan_typesense_data:/data
     deploy:
       resources:
         limits:
-          memory: 256M
-        reservations:
-          memory: 128M
-    healthcheck:
-      test: [ "CMD", "mc", "ready", "local" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+          memory: 512M
 
-  createbuckets:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_USER: "${AWS_ACCESS_KEY_ID:-minioadmin}"
-      MINIO_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-minioadmin}"
-      BUCKET_NAME: "${AWS_STORAGE_BUCKET_NAME:-anishows-media}"
-    entrypoint: >
-      /bin/sh -c " mc alias set myminio http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD}; mc mb myminio/$${BUCKET_NAME} --ignore-existing; mc anonymous set download myminio/$${BUCKET_NAME}/media; exit 0; "
-
-  beat:
-    image: ghcr.io/oddava/anishows-backend:latest
+  backup:
+    build: ./backups
+    container_name: anishows-backup
     restart: always
-    command: [ "celery", "-A", "root", "beat", "--loglevel=info" ]
-    env_file:
-      - .env
+    env_file: .env
     environment:
-      DB_NAME: "${DB_NAME}"
-      DB_USER: "${DB_USER}"
-      DB_PASSWORD: "${DB_PASSWORD}"
-      DB_HOST: "${DB_HOST:-pgbouncer}"
-      DB_PORT: "${DB_PORT:-6432}"
-      DB_USE_PGBOUNCER: "${DB_USE_PGBOUNCER:-True}"
-      DB_PGBOUNCER_HOST: "${DB_PGBOUNCER_HOST:-pgbouncer}"
-      DB_PGBOUNCER_PORT: "${DB_PGBOUNCER_PORT:-6432}"
-      REDIS_HOST: "${REDIS_HOST:-redis}"
-      REDIS_PORT: "${REDIS_PORT:-6379}"
-      REDIS_PASSWORD: "${REDIS_PASSWORD}"
-      REDIS_DB: "${REDIS_DB:-0}"
-      JIKAN_BASE_URL: "${JIKAN_BASE_URL:-http://jikan:8080/v4}"
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${DB_NAME:-anishows_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-1}
     depends_on:
-      web:
-        condition: service_healthy
-      pgbouncer:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan:
-        condition: service_started
+      - db
+      - minio
+    volumes:
+      - ./backups-data:/backups
+      - minio_data:/minio_data
     deploy:
       resources:
         limits:
           memory: 256M
-        reservations:
-          memory: 64M
 
 volumes:
+  db_data:
+  redis_data:
+  minio_data:
   frontend_dist:
   prometheus_multiproc:
   caddy_data:
   caddy_config:
-  minio_data:
   umami_db_data:
   jikan_mongodb_data:
   jikan_typesense_data:

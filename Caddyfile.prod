@@ -47,9 +47,9 @@
 		}
 	}
 
-	# WebSocket connections - proxy to Daphne ASGI server
+	# WebSockets are served by the same ASGI (uvicorn) workers as the API
 	handle /ws/* {
-		reverse_proxy {$WS_UPSTREAMS:daphne:8001} {
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
 			lb_policy random_choose 2
 			lb_try_duration 10s
 			lb_try_interval 500ms
@@ -216,7 +216,7 @@
 		# Debug header to identify deployment
 		header X-Deployment-Time "{http.request.time}"
 		# Content Security Policy for the React Frontend
-		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' {$UMAMI_PUBLIC_ORIGIN}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' {$UMAMI_PUBLIC_ORIGIN}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
 	}
 
 	log {

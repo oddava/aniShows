@@ -7,8 +7,7 @@ RUN_MANAGE = docker compose run --rm web python manage.py
 ENV_FILE = .env
 ENV_EXAMPLE = .env.example
 
-.PHONY: help up down restart build ps logs web-logs celery-logs celery-priority-logs \
-        celery-images-logs celery-analytics-logs beat-logs \
+.PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
         front-logs db-logs mig migrate shell superuser test lint collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
         sync-themes sync-full sync-franchises sync-recs import-offline \
@@ -55,17 +54,11 @@ logs:                           ## Follow all logs
 web-logs:                       ## Follow web server logs
 	docker compose logs -f web
 
-celery-logs:                    ## Follow Celery worker logs
+celery-logs:                    ## Follow Celery worker logs (all queues)
 	docker compose logs -f celery
 
-celery-priority-logs:           ## Follow Celery priority worker logs
-	docker compose logs -f celery_priority
 
-celery-images-logs:             ## Follow Celery images worker logs
-	docker compose logs -f celery_images
 
-celery-analytics-logs:          ## Follow Celery analytics worker logs
-	docker compose logs -f celery_analytics
 
 beat-logs:                      ## Follow Celery beat logs
 	docker compose logs -f beat
@@ -315,7 +308,7 @@ restore:                        ## Safe full restore (Usage: make restore TIMEST
 		echo "Tip: make verify-backup TIMESTAMP=$(TIMESTAMP)"; \
 		exit 1; \
 	fi
-	@services="pgbouncer web daphne celery celery_priority celery_images celery_analytics beat minio"; \
+	@services="web celery beat minio"; \
 	set -e; \
 	echo "Stopping app services for restore: $$services"; \
 	docker compose stop $$services; \
@@ -338,7 +331,7 @@ restore-db-only:                ## Restore DB only (Usage: make restore-db-only 
 		echo "Error: Restore is destructive. Re-run with FORCE=1."; \
 		exit 1; \
 	fi
-	@services="pgbouncer web daphne celery celery_priority celery_images celery_analytics beat"; \
+	@services="web celery beat"; \
 	set -e; \
 	docker compose stop $$services; \
 	restore_status=0; \

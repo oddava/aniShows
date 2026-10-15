@@ -1,7 +1,14 @@
+import mimetypes
+
 from django.conf import settings
 from storages.backends.s3boto3 import S3Boto3Storage
 
 from apps.shared.logger import logger
+
+# python:3.12-slim has no /etc/mime.types, so WebP/AVIF uploads would get no
+# Content-Type and be served as application/octet-stream.
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("image/avif", ".avif")
 
 try:
     from botocore.exceptions import ClientError

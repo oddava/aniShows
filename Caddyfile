@@ -10,9 +10,9 @@
         reverse_proxy web:8000
     }
 
-    # WebSocket connections - proxy to Daphne ASGI server
+    # WebSockets are served by the same ASGI app as the API
     handle /ws/* {
-        reverse_proxy daphne:8001
+        reverse_proxy web:8000
     }
 
     # Django Admin (backend)

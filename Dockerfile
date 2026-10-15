@@ -83,6 +83,9 @@ CMD ["bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:
 FROM runtime AS development
 
 USER root
-COPY --from=dev-builder /opt/venv /opt/venv
-RUN chown -R aniuser:aniuser /opt/venv
+COPY --from=dev-builder --chown=aniuser:aniuser /opt/venv /opt/venv
 USER aniuser
+
+
+# Keep production last so a build without --target never ships dev dependencies.
+FROM runtime AS production
