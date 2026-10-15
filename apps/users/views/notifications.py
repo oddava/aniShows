@@ -1,6 +1,7 @@
 from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.fields import BooleanField, CharField, JSONField
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,6 +13,7 @@ from ...core.api_errors import error_response
 from ...core.models import Notification, PushSubscription
 from ...core.services.notification_service import NotificationService
 from ...core.services.push_service import PushService
+from ...core.services.url_validator import URLValidationError, URLValidator
 from ...shared.logger import logger
 
 
@@ -42,7 +44,7 @@ class NotificationSerializer(ModelSerializer):
         read_only_fields = ["id", "created_at", "read_at"]
 
 class PushSubscriptionSerializer(ModelSerializer):
-    endpoint = CharField(required=True)
+    endpoint = CharField(required=True, max_length=2048)
     p256dh = CharField(required=True)
     auth = CharField(required=True)
     device_type = CharField(default="browser")
@@ -51,6 +53,15 @@ class PushSubscriptionSerializer(ModelSerializer):
     class Meta:
         model = PushSubscription
         fields = ["id", "endpoint", "p256dh", "auth", "device_type", "device_info", "created_at"]
+
+    def validate_endpoint(self, value):
+        # The worker POSTs to this URL; only public HTTPS push services qualify.
+        try:
+            URLValidator().validate_public_target(value)
+        except URLValidationError as exc:
+            raise ValidationError(f"Invalid push endpoint: {exc}") from exc
+        # Stored verbatim: unsubscribe matches the browser's endpoint exactly.
+        return value
 
 
 class NotificationPreferencesSerializer(Serializer):
