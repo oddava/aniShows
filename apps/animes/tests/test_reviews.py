@@ -525,7 +525,8 @@ class ReviewInteractionTests(APITestCase):
             response = self.client.get(reverse("reviews-list"), {"anime": self.anime.slug})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertLessEqual(len(queries), 5, "\n".join(q["sql"][:160] for q in queries.captured_queries))
+        # settings, count, reviews, then genre / studio / social-account prefetches.
+        self.assertLessEqual(len(queries), 6, "\n".join(q["sql"][:160] for q in queries.captured_queries))
 
     def test_reactions_toggle_per_emoji(self):
         """Each reaction type toggles independently for a review."""

@@ -17,7 +17,7 @@ from django.utils.text import slugify
 
 from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
-from ..models import Anime, OfflineCatalogImport, Studio
+from ..models import Anime, AnimeStudio, OfflineCatalogImport, Studio
 from .jikan import JikanService
 from .metadata_health import PLACEHOLDER_SYNOPSIS
 from .offline_sync import OfflineSyncService
@@ -47,7 +47,6 @@ OFFLINE_UPDATE_FIELDS = [
     "season_year",
     "mal_id",
     "anilist_id",
-    "studio",
     "provider_ids",
     "synonyms",
     "producers",
@@ -560,31 +559,19 @@ class OfflineCatalogImportService:
         mal_ids = {entry.mal_id for entry in entries if entry.mal_id}
         titles = {entry.title for entry in entries}
         slugs = {entry.base_slug for entry in entries if entry.base_slug}
-        title_candidates = {
-            candidate
-            for entry in entries
-            for candidate in self._title_candidates(entry)
-            if candidate
-        }
-        slug_candidates = {slug for candidate in title_candidates if (slug := slugify(candidate))}
         studio_names = {entry.primary_studio for entry in entries if entry.primary_studio}
 
         anilist_map = (
             Anime.objects.in_bulk(anilist_ids, field_name="anilist_id") if anilist_ids else {}
         )
         mal_map = Anime.objects.in_bulk(mal_ids, field_name="mal_id") if mal_ids else {}
-        title_map = {anime.title: anime for anime in Anime.objects.filter(title__in=titles)}
+        title_map: dict[str, list[Anime]] = defaultdict(list)
+        for anime in Anime.objects.filter(title__in=titles):
+            title_map[anime.title].append(anime)
         slug_map = {anime.slug: anime for anime in Anime.objects.filter(slug__in=slugs)}
         studio_map = self._resolve_studios(studio_names)
 
-        reserved_titles = set(
-            Anime.objects.filter(title__in=(title_candidates or titles)).values_list(
-                "title", flat=True
-            )
-        )
-        reserved_slugs = set(
-            Anime.objects.filter(slug__in=(slug_candidates or slugs)).values_list("slug", flat=True)
-        )
+        reserved_slugs = set(Anime.objects.filter(slug__in=slugs).values_list("slug", flat=True))
 
         to_create: list[tuple[Anime, OfflineCatalogEntry, Studio | None]] = []
         to_update: list[Anime] = []
@@ -596,15 +583,20 @@ class OfflineCatalogImportService:
         touched_slugs: list[str] = []
         pending_create_index: dict[int, int] = {}
         queued_update_ids: set[int] = set()
+        studio_pairs: list[tuple[Anime, Studio]] = []
 
         with transaction.atomic():
             for entry in entries:
                 try:
                     anime = self._match_existing(entry, anilist_map, mal_map, title_map, slug_map)
                     studio = studio_map.get(entry.primary_studio) if entry.primary_studio else None
+                    if anime is not None and studio is not None:
+                        studio_pairs.append((anime, studio))
                     if anime is None:
-                        title = self._ensure_unique_title(entry, reserved_titles)
-                        slug = self._ensure_unique_slug(slugify(title), reserved_slugs)
+                        title = entry.title
+                        slug = self._ensure_unique_slug(
+                            slugify(title), reserved_slugs, year=entry.season_year
+                        )
                         anime = Anime(
                             title=title,
                             title_jp="",
@@ -622,7 +614,6 @@ class OfflineCatalogImportService:
                             season_year=entry.season_year,
                             mal_id=entry.mal_id,
                             anilist_id=entry.anilist_id,
-                            studio=studio,
                             provider_ids=entry.provider_ids,
                             synonyms=self._merged_list([], entry.synonyms),
                             producers=self._merged_list([], entry.producers),
@@ -634,18 +625,19 @@ class OfflineCatalogImportService:
                             slug=slug,
                         )
                         to_create.append((anime, entry, studio))
+                        if studio is not None:
+                            studio_pairs.append((anime, studio))
                         pending_create_index[id(anime)] = len(to_create) - 1
-                        reserved_titles.add(title)
                         reserved_slugs.add(slug)
                         if anime.anilist_id:
                             anilist_map[anime.anilist_id] = anime
                         if anime.mal_id:
                             mal_map[anime.mal_id] = anime
-                        title_map[anime.title] = anime
+                        title_map[anime.title].append(anime)
                         if anime.slug:
                             slug_map[anime.slug] = anime
                     else:
-                        self._apply_offline_updates(anime, entry, studio, last_update, seen_at)
+                        self._apply_offline_updates(anime, entry, last_update, seen_at)
                         if anime.pk is None:
                             row_idx = pending_create_index.get(id(anime))
                             if row_idx is not None:
@@ -660,7 +652,7 @@ class OfflineCatalogImportService:
                             anilist_map[anime.anilist_id] = anime
                         if anime.mal_id:
                             mal_map[anime.mal_id] = anime
-                        title_map[anime.title] = anime
+                        title_map[anime.title].append(anime)
                         if anime.slug:
                             slug_map[anime.slug] = anime
                 except Exception:
@@ -672,7 +664,6 @@ class OfflineCatalogImportService:
                     to_create,
                     last_update=last_update,
                     seen_at=seen_at,
-                    reserved_titles=reserved_titles,
                     reserved_slugs=reserved_slugs,
                 )
                 created_count += persist_result["created"]
@@ -691,6 +682,8 @@ class OfflineCatalogImportService:
                 for anime in to_update:
                     self._index_fallback_anime(anime)
                 updated_ids.extend(anime.id for anime in to_update if anime.id)
+
+            self._attach_primary_studios(studio_pairs)
 
         if touched_slugs:
             AnimePublicPayloadService.bump_collection_cache_namespace()
@@ -716,7 +709,6 @@ class OfflineCatalogImportService:
         *,
         last_update: date | None,
         seen_at,
-        reserved_titles: set[str],
         reserved_slugs: set[str],
     ) -> dict[str, Any]:
         anime_rows = [anime for anime, _, _ in rows]
@@ -753,7 +745,6 @@ class OfflineCatalogImportService:
                 studio=studio,
                 last_update=last_update,
                 seen_at=seen_at,
-                reserved_titles=reserved_titles,
                 reserved_slugs=reserved_slugs,
             )
             for key in ("created", "updated", "failed"):
@@ -772,7 +763,6 @@ class OfflineCatalogImportService:
         studio: Studio | None,
         last_update: date | None,
         seen_at,
-        reserved_titles: set[str],
         reserved_slugs: set[str],
     ) -> dict[str, Any]:
         attempts_remaining = 3
@@ -802,8 +792,9 @@ class OfflineCatalogImportService:
             except IntegrityError:
                 existing = self._find_conflicting_existing(entry, anime)
                 if existing is not None:
-                    self._apply_offline_updates(existing, entry, studio, last_update, seen_at)
+                    self._apply_offline_updates(existing, entry, last_update, seen_at)
                     existing.save(update_fields=OFFLINE_UPDATE_FIELDS)
+                    self._attach_primary_studios([(existing, studio)] if studio else [])
                     self._index_fallback_anime(existing)
                     return {
                         "created": 0,
@@ -814,11 +805,11 @@ class OfflineCatalogImportService:
                         "touched_slugs": [existing.slug],
                     }
 
-                reserved_titles.add(anime.title)
+                # Only the slug is unique; the title is stored as-is.
                 reserved_slugs.add(anime.slug)
-                anime.title = self._ensure_unique_title(entry, reserved_titles)
-                anime.slug = self._ensure_unique_slug(slugify(anime.title), reserved_slugs)
-                reserved_titles.add(anime.title)
+                anime.slug = self._ensure_unique_slug(
+                    slugify(anime.title), reserved_slugs, year=entry.season_year
+                )
                 reserved_slugs.add(anime.slug)
 
         logger.error(
@@ -845,9 +836,9 @@ class OfflineCatalogImportService:
             if existing:
                 return existing
 
-        by_title = Anime.objects.filter(title=anime.title).first()
-        if by_title and self._is_conflict_match(by_title, entry):
-            return by_title
+        for by_title in Anime.objects.filter(title=anime.title):
+            if self._is_conflict_match(by_title, entry):
+                return by_title
 
         by_slug = Anime.objects.filter(slug=anime.slug).first()
         if by_slug and self._is_conflict_match(by_slug, entry):
@@ -863,7 +854,6 @@ class OfflineCatalogImportService:
         self,
         anime: Anime,
         entry: OfflineCatalogEntry,
-        studio: Studio | None,
         last_update: date | None,
         seen_at,
     ) -> None:
@@ -906,9 +896,24 @@ class OfflineCatalogImportService:
             anime.synopsis = PLACEHOLDER_SYNOPSIS
         if anime.meta_description == "" and anime.title:
             anime.meta_description = anime.title[:160]
-        if anime.studio_id is None and studio is not None:
-            anime.studio = studio
         anime.updated_at = timezone.now()
+
+    def _attach_primary_studios(self, pairs: list[tuple[Anime, Studio]]) -> None:
+        """Give anime that have no studios yet the offline DB's primary studio."""
+        pairs = [(anime, studio) for anime, studio in pairs if anime.pk and studio is not None]
+        if not pairs:
+            return
+        with_studios = set(
+            AnimeStudio.objects.filter(anime_id__in={anime.pk for anime, _ in pairs})
+            .values_list("anime_id", flat=True)
+            .distinct()
+        )
+        links: dict[int, AnimeStudio] = {}
+        for anime, studio in pairs:
+            if anime.pk not in with_studios and anime.pk not in links:
+                links[anime.pk] = AnimeStudio(anime_id=anime.pk, studio=studio, position=0)
+        if links:
+            AnimeStudio.objects.bulk_create(links.values(), ignore_conflicts=True)
 
     def _resolve_studios(self, studio_names: set[str | None]) -> dict[str, Studio]:
         clean_names = {name for name in studio_names if name}
@@ -929,7 +934,7 @@ class OfflineCatalogImportService:
         entry: OfflineCatalogEntry,
         anilist_map: dict[int, Anime],
         mal_map: dict[int, Anime],
-        title_map: dict[str, Anime],
+        title_map: dict[str, list[Anime]],
         slug_map: dict[str, Anime],
     ) -> Anime | None:
         if entry.anilist_id and entry.anilist_id in anilist_map:
@@ -937,9 +942,9 @@ class OfflineCatalogImportService:
         if entry.mal_id and entry.mal_id in mal_map:
             return mal_map[entry.mal_id]
 
-        title_candidate = title_map.get(entry.title)
-        if title_candidate and self._is_reasonable_fallback_match(title_candidate, entry):
-            return title_candidate
+        for title_candidate in title_map.get(entry.title, []):
+            if self._is_reasonable_fallback_match(title_candidate, entry):
+                return title_candidate
 
         slug_candidate = slug_map.get(entry.base_slug)
         if slug_candidate and self._is_reasonable_fallback_match(slug_candidate, entry):
@@ -1120,30 +1125,19 @@ class OfflineCatalogImportService:
             return False
         return anime.title.casefold() == entry.title.casefold()
 
-    def _ensure_unique_title(self, entry: OfflineCatalogEntry, reserved_titles: set[str]) -> str:
-        base_title = self._truncate_text(entry.title, ANIME_TITLE_MAX_LENGTH)
-        if not self._is_title_taken(base_title, reserved_titles):
-            return base_title
-
-        variants = self._title_candidates(entry)[1:]
-
-        for variant in variants:
-            if not self._is_title_taken(variant, reserved_titles):
-                return variant
-
-        counter = 2
-        while True:
-            variant = self._compose_title_variant(base_title, f" ({counter})")
-            if not self._is_title_taken(variant, reserved_titles):
-                return variant
-            counter += 1
-
-    def _ensure_unique_slug(self, base_slug: str, reserved_slugs: set[str]) -> str:
+    def _ensure_unique_slug(
+        self, base_slug: str, reserved_slugs: set[str], *, year: int | None = None
+    ) -> str:
         slug = self._truncate_text(base_slug or "anime", ANIME_SLUG_MAX_LENGTH).strip("-")
         if not slug:
             slug = "anime"
         if not self._is_slug_taken(slug, reserved_slugs):
             return slug
+        if year:
+            suffix = f"-{year}"
+            candidate = f"{slug[: max(1, ANIME_SLUG_MAX_LENGTH - len(suffix))].rstrip('-')}{suffix}"
+            if not self._is_slug_taken(candidate, reserved_slugs):
+                return candidate
 
         counter = 2
         while True:
@@ -1156,19 +1150,6 @@ class OfflineCatalogImportService:
             if not self._is_slug_taken(candidate, reserved_slugs):
                 return candidate
             counter += 1
-
-    def _title_candidates(self, entry: OfflineCatalogEntry) -> list[str]:
-        base_title = self._truncate_text(entry.title, ANIME_TITLE_MAX_LENGTH)
-        candidates = [base_title]
-        if entry.season_year:
-            candidates.append(self._compose_title_variant(base_title, f" ({entry.season_year})"))
-        if entry.anilist_id:
-            candidates.append(
-                self._compose_title_variant(base_title, f" [anilist-{entry.anilist_id}]")
-            )
-        if entry.mal_id:
-            candidates.append(self._compose_title_variant(base_title, f" [mal-{entry.mal_id}]"))
-        return candidates
 
     def _enqueue_enrichment(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, Any]:
         changed_ids = list(dict.fromkeys([*created_ids, *updated_ids]))
@@ -1278,14 +1259,6 @@ class OfflineCatalogImportService:
             if part.isdigit():
                 return int(part)
         return None
-
-    def _is_title_taken(self, candidate: str, reserved_titles: set[str]) -> bool:
-        if candidate in reserved_titles:
-            return True
-        exists = Anime.objects.filter(title=candidate).exists()
-        if exists:
-            reserved_titles.add(candidate)
-        return exists
 
     def _is_slug_taken(self, candidate: str, reserved_slugs: set[str]) -> bool:
         if candidate in reserved_slugs:
@@ -1423,11 +1396,6 @@ class OfflineCatalogImportService:
         anime.banner_image_external_url = self._truncate_text(
             anime.banner_image_external_url, ANIME_URL_MAX_LENGTH
         )
-
-    def _compose_title_variant(self, base_title: str, suffix: str) -> str:
-        max_base_length = max(1, ANIME_TITLE_MAX_LENGTH - len(suffix))
-        base = self._truncate_text(base_title, max_base_length)
-        return f"{base}{suffix}"
 
     def _get_zstandard(self):
         return import_module("zstandard")

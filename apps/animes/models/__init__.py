@@ -1,4 +1,4 @@
-from .anime import Anime, AnimeCharacter, AnimeStaff, ThemeSong
+from .anime import Anime, AnimeCharacter, AnimeStaff, AnimeStudio, ThemeSong
 from .catalog import Character, Genre, Staff, Studio
 from .reviews import Review, ReviewReaction, ReviewReport, ReviewVote
 from .sync import OfflineAnimeSyncState, OfflineCatalogImport
@@ -15,6 +15,7 @@ __all__ = [
     "Anime",
     "AnimeCharacter",
     "AnimeStaff",
+    "AnimeStudio",
     "Character",
     "EpisodeRating",
     "Genre",

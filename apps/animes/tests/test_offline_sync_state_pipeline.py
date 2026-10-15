@@ -63,10 +63,10 @@ class OfflineSyncStatePipelineTests(TestCase):
         mock_update.assert_awaited_once()
 
     @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
-    @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
-    def test_identity_conflict_never_updates_identity_fields(self, mock_get_by_id, mock_update):
+    @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
+    def test_identity_conflict_never_updates_identity_fields(self, mock_search_by_mal_id, mock_update):
         anime = self._anime("Conflict", anilist_id=111, mal_id=222)
-        mock_get_by_id.return_value = {"id": 999, "idMal": 333}
+        mock_search_by_mal_id.return_value = {"id": 999, "idMal": 333}
 
         result = OfflineSyncService().sync_metadata_stage(anime)
         anime.refresh_from_db()
@@ -80,14 +80,13 @@ class OfflineSyncStatePipelineTests(TestCase):
     @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
     @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
     @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
-    def test_metadata_stage_falls_back_to_mal_when_anilist_lookup_misses(
+    def test_metadata_stage_looks_up_by_mal_id_and_keeps_anilist_id(
         self,
         mock_get_by_id,
         mock_search_by_mal_id,
         mock_update,
     ):
         anime = self._anime("Fallback", anilist_id=111, mal_id=222)
-        mock_get_by_id.return_value = None
         mock_search_by_mal_id.return_value = {
             "id": 111,
             "idMal": 222,
@@ -98,8 +97,9 @@ class OfflineSyncStatePipelineTests(TestCase):
         result = OfflineSyncService().sync_metadata_stage(anime)
 
         self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
-        mock_get_by_id.assert_awaited_once_with(111)
-        mock_search_by_mal_id.assert_awaited_once_with(222)
+        # Jikan is keyed by MAL ID; the AniList ID only rides along.
+        mock_get_by_id.assert_not_awaited()
+        mock_search_by_mal_id.assert_awaited_once_with(222, anilist_id=111)
         mock_update.assert_awaited_once()
 
     def test_ensure_states_resets_synced_placeholder_rows_back_to_pending(self):

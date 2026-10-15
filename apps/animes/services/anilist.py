@@ -663,6 +663,9 @@ class AniListService:
             if anime:
                 return anime
 
+        if anilist_id or mal_id:
+            return None
+
         if slug:
             anime = Anime.objects.filter(slug=slug).first()
             if anime:
@@ -695,12 +698,10 @@ class AniListService:
             except Anime.DoesNotExist:
                 pass
 
-        if title:
-            try:
-                anime = Anime.objects.get(title=title)
+        if title and not (anilist_id or mal_id):
+            anime = Anime.objects.filter(title=title).first()
+            if anime:
                 return anime, False
-            except Anime.DoesNotExist:
-                pass
 
         try:
             return Anime.objects.get_or_create(slug=slug, defaults=anime_data_dict)
@@ -725,7 +726,7 @@ class AniListService:
         original_values = {field: getattr(anime, field, None) for field in anime_data}
 
         # Preemptively avoid unique-constraint collisions.
-        for unique_field in ("title", "anilist_id", "mal_id", "slug"):
+        for unique_field in ("anilist_id", "mal_id", "slug"):
             if unique_field not in anime_data:
                 continue
             value = anime_data.get(unique_field)
@@ -748,7 +749,7 @@ class AniListService:
             anime.save()
         except IntegrityError as exc:
             # Last-resort safety: keep identity fields stable and persist remaining updates.
-            for unique_field in ("title", "anilist_id", "mal_id", "slug"):
+            for unique_field in ("anilist_id", "mal_id", "slug"):
                 if unique_field in original_values:
                     setattr(anime, unique_field, original_values[unique_field])
             anime.save()
@@ -942,13 +943,14 @@ class AniListService:
             )
             anime.genres.add(genre)
 
-        studios = (item.get("studios") or {}).get("nodes") or []
-        if studios and len(studios) > 0:
-            studio_name = studios[0].get("name")
-            if studio_name:
-                studio, _ = Studio.objects.get_or_create(name=studio_name)
-                anime.studio = studio
-                anime.save()
+        studio_names = [
+            node.get("name") for node in (item.get("studios") or {}).get("nodes") or []
+        ]
+        studio_names = [name for name in studio_names if name]
+        if studio_names:
+            anime.set_studios(
+                Studio.objects.get_or_create(name=name)[0] for name in studio_names
+            )
 
     @sync_to_async
     def _handle_extended_info_async(self, anime, item):
@@ -1532,46 +1534,16 @@ class AniListService:
             except Anime.DoesNotExist:
                 pass
 
-        # Try to find by slug - anime might exist without these IDs
-        try:
-            anime = await sync_to_async(Anime.objects.get)(slug=base_slug)
-            logger.info(
-                f"Found anime by slug '{base_slug}': {anime.title}. Adding AniList ID {anilist_id} and MAL ID {mal_id}"
-            )
-            await self._update_anime_async(anime, item, title, title_native, anime.slug)
-            return anime
-        except Anime.DoesNotExist:
-            pass
+        # Titles are not unique: only fall back to slug matching for payloads without IDs.
+        if not (anilist_id or mal_id):
+            existing = await sync_to_async(Anime.objects.filter(slug=base_slug).first)()
+            if existing:
+                await self._update_anime_async(existing, item, title, title_native, existing.slug)
+                return existing
 
-        # Try to find by title to avoid duplicate-key failures on unique title constraint.
-        try:
-            anime = await sync_to_async(Anime.objects.get)(title=title)
-            logger.info(
-                f"Found anime by title '{title}': {anime.title}. Adding AniList ID {anilist_id} and MAL ID {mal_id}"
-            )
-            await self._update_anime_async(anime, item, title, title_native, anime.slug)
-            return anime
-        except Anime.DoesNotExist:
-            pass
-
-        # Check if slug is taken by a DIFFERENT anime (different title)
-        # If so, generate a unique slug
-        final_slug = base_slug
-        counter = 0
-        while True:
-            try:
-                await sync_to_async(Anime.objects.get)(slug=final_slug)
-                # Found anime with this slug - if it's the same title, we would have found it above
-                # So this must be a different anime with same slug
-                counter += 1
-                final_slug = f"{base_slug}-{counter}"
-                if counter > 100:  # Safety limit
-                    raise ValueError(
-                        f"Could not generate unique slug for '{title}' after 100 attempts"
-                    )
-            except Anime.DoesNotExist:
-                # This slug is available
-                break
+        final_slug = await sync_to_async(Anime.available_slug)(
+            base_slug, year=item.get("seasonYear")
+        )
 
         # Create new anime with unique slug
         anime_data = self._prepare_anime_data(item, title, title_native, final_slug)

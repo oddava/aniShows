@@ -168,7 +168,6 @@ class AnimeQueryService:
         "broadcast_timezone",
         "next_airing_episode",
         "next_airing_date",
-        "studio_id",
     )
     SHELF_FIELDS = (
         *LIST_FIELDS,
@@ -248,10 +247,10 @@ class AnimeQueryService:
 
     def build_queryset(self, request, *, action: str, include_user_context: bool = True):
         is_list = action == "list"
-        queryset = Anime.public_queryset().select_related("studio")
+        queryset = Anime.public_queryset().prefetch_related(Anime.studios_prefetch())
 
         if is_list:
-            queryset = queryset.only(*self.LIST_FIELDS, "studio__id", "studio__name")
+            queryset = queryset.only(*self.LIST_FIELDS)
             queryset = queryset.prefetch_related(self._genre_prefetch())
         else:
             queryset = (
@@ -296,9 +295,8 @@ class AnimeQueryService:
             .filter(
                 Q(broadcast_day__in=self.SCHEDULE_DAY_NAMES) | Q(next_airing_date__isnull=False)
             )
-            .select_related("studio")
-            .only(*self.LIST_FIELDS, "studio__id", "studio__name")
-            .prefetch_related(self._genre_prefetch())
+            .only(*self.LIST_FIELDS)
+            .prefetch_related(self._genre_prefetch(), Anime.studios_prefetch())
             .order_by("broadcast_day", "broadcast_time", "next_airing_date", "title", "id")
         )
 
@@ -363,50 +361,50 @@ class AnimeQueryService:
         )
 
     def recommendations_queryset(self, anime):
-        relation_anilist_ids = set(self._relation_anilist_ids(anime))
-        if anime.anilist_id:
+        relation_mal_ids = set(self._relation_mal_ids(anime))
+        if anime.mal_id:
             service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
                 recommendations = async_to_sync(service.get_recommendations_for_anime)(
-                    anime.anilist_id,
+                    anime.mal_id,
                     limit=12,
                     request_budget=service.REQUEST_BUDGET_INTERACTIVE,
                 )
             except Exception as exc:
                 logger.warning(
-                    "Failed to fetch Jikan recommendations for %s (%s): %s",
+                    "Failed to fetch Jikan recommendations for %s (MAL %s): %s",
                     anime.slug,
-                    anime.anilist_id,
+                    anime.mal_id,
                     exc,
                 )
                 recommendations = []
             finally:
                 async_to_sync(service.close)()
 
-            ordered_anilist_ids = []
+            ordered_mal_ids = []
             for recommendation in recommendations:
-                recommendation_id = recommendation.get("id")
+                recommendation_mal_id = recommendation.get("mal_id")
                 if (
-                    not recommendation_id
-                    or recommendation_id == anime.anilist_id
-                    or recommendation_id in relation_anilist_ids
+                    not recommendation_mal_id
+                    or recommendation_mal_id == anime.mal_id
+                    or recommendation_mal_id in relation_mal_ids
                 ):
                     continue
-                ordered_anilist_ids.append(recommendation_id)
+                ordered_mal_ids.append(recommendation_mal_id)
 
-            ordered_anilist_ids = list(dict.fromkeys(ordered_anilist_ids))
-            if ordered_anilist_ids:
+            ordered_mal_ids = list(dict.fromkeys(ordered_mal_ids))
+            if ordered_mal_ids:
                 ordering = Case(
                     *[
-                        When(anilist_id=anilist_id, then=Value(index))
-                        for index, anilist_id in enumerate(ordered_anilist_ids)
+                        When(mal_id=mal_id, then=Value(index))
+                        for index, mal_id in enumerate(ordered_mal_ids)
                     ],
-                    default=Value(len(ordered_anilist_ids)),
+                    default=Value(len(ordered_mal_ids)),
                     output_field=IntegerField(),
                 )
                 queryset = (
                     self.base_shelf_queryset()
-                    .filter(anilist_id__in=ordered_anilist_ids)
+                    .filter(mal_id__in=ordered_mal_ids)
                     .exclude(id=anime.id)
                     .annotate(recommendation_order=ordering)
                     .order_by("recommendation_order", "-id")
@@ -420,9 +418,8 @@ class AnimeQueryService:
     def base_shelf_queryset():
         return (
             Anime.public_queryset()
-            .select_related("studio")
-            .only(*AnimeQueryService.SHELF_FIELDS, "studio__id", "studio__name")
-            .prefetch_related(AnimeQueryService._genre_prefetch())
+            .only(*AnimeQueryService.SHELF_FIELDS)
+            .prefetch_related(AnimeQueryService._genre_prefetch(), Anime.studios_prefetch())
         )
 
     def _apply_list_filters(self, queryset, request):
@@ -488,7 +485,7 @@ class AnimeQueryService:
             except (TypeError, ValueError):
                 studio_id = None
             if studio_id and studio_id > 0:
-                queryset = queryset.filter(studio__id=studio_id)
+                queryset = queryset.filter(studios__id=studio_id)
 
         queryset = self._apply_numeric_range_filter(
             queryset,
@@ -1191,14 +1188,14 @@ class AnimeQueryService:
         return queryset
 
     @staticmethod
-    def _relation_anilist_ids(anime) -> list[int]:
+    def _relation_mal_ids(anime) -> list[int]:
         relation_ids = []
         for relation in anime.relations or []:
             if not isinstance(relation, dict):
                 continue
-            relation_id = relation.get("id")
-            if relation_id and relation_id != anime.anilist_id:
-                relation_ids.append(relation_id)
+            relation_mal_id = relation.get("mal_id")
+            if relation_mal_id and relation_mal_id != anime.mal_id:
+                relation_ids.append(relation_mal_id)
         return list(dict.fromkeys(relation_ids))
 
     @staticmethod
@@ -1221,13 +1218,13 @@ class AnimeQueryService:
         return list(anime.genres.values_list("id", flat=True))
 
     def _fallback_recommendations_queryset(self, anime):
-        relation_anilist_ids = self._relation_anilist_ids(anime)
+        relation_mal_ids = self._relation_mal_ids(anime)
         relation_slugs = self._relation_slugs(anime)
         genre_ids = self._genre_ids(anime)
 
         queryset = self.base_shelf_queryset().exclude(id=anime.id)
-        if relation_anilist_ids:
-            queryset = queryset.exclude(anilist_id__in=relation_anilist_ids)
+        if relation_mal_ids:
+            queryset = queryset.exclude(mal_id__in=relation_mal_ids)
         if relation_slugs:
             queryset = queryset.exclude(slug__in=relation_slugs)
 

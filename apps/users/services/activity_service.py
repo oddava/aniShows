@@ -7,6 +7,7 @@ from django.db.models.functions import Greatest, TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from ...animes.models import Anime
 from ..models import UserActivity
 
 try:
@@ -47,8 +48,8 @@ def build_activity_queryset(request):
     if target_user is None:
         return UserActivity.objects.none()
 
-    queryset = UserActivity.objects.select_related("anime", "anime__studio").prefetch_related(
-        "anime__genres"
+    queryset = UserActivity.objects.select_related("anime").prefetch_related(
+        "anime__genres", Anime.studios_prefetch("anime__")
     )
     queryset = queryset.filter(user=target_user)
 

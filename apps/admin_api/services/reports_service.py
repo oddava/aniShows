@@ -376,7 +376,7 @@ def _content_payload(days: int) -> dict:
         Q(cover_image_external_url__isnull=True) | Q(cover_image_external_url=""),
     ).count()
     missing_synopsis = anime_queryset.filter(Q(synopsis__isnull=True) | Q(synopsis="")).count()
-    missing_studio = anime_queryset.filter(studio__isnull=True).count()
+    missing_studio = anime_queryset.filter(studios__isnull=True).count()
     missing_rating = anime_queryset.filter(rating__isnull=True).count()
 
     completeness = 100.0

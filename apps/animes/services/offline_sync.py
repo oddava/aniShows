@@ -25,6 +25,7 @@ from .metrics import (
     OFFLINE_SYNC_STAGE_FAILURE_TOTAL,
     OFFLINE_SYNC_STAGE_SUCCESS_TOTAL,
 )
+from .relation_links import anime_relation_edges, link_relation_slugs, relations_from_edges
 
 STAGE_METADATA = "metadata"
 STAGE_FRANCHISE = "franchise"
@@ -420,11 +421,11 @@ class OfflineSyncService:
         service: JikanService | None = None,
         runner=None,
     ) -> StageResult:
-        if not anime.anilist_id:
+        if not anime.mal_id:
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="missing_ids",
-                reason_message="Sync ID is required for franchise stage.",
+                reason_message="MAL ID is required for franchise stage.",
             )
         return self._run_stage_coroutine(
             self._sync_franchise_stage_async(anime, service=service),
@@ -440,65 +441,25 @@ class OfflineSyncService:
         owned_service = service is None
         service = service or JikanService(enable_caching=True, enable_rate_limiting=True)
         try:
-            media = await service.get_anime_by_id(anime.anilist_id)
+            media = await service.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
             if not media:
                 return self._stage_result_from_external_error(
                     code=service.last_error_code or "not_found",
                     message=service.last_error_message or "Jikan media not found.",
                 )
-            if media.get("id") != anime.anilist_id:
+            if media.get("idMal") != anime.mal_id:
                 return StageResult(
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
                     reason_code="identity_conflict",
                     reason_message=(
-                        f"Sync ID mismatch: expected {anime.anilist_id}, got {media.get('id')}"
+                        f"MAL mismatch: expected {anime.mal_id}, got {media.get('idMal')}"
                     ),
                 )
 
-            relation_edges = (media.get("relations") or {}).get("edges", [])
-            anime_relations = [
-                edge for edge in relation_edges if (edge.get("node") or {}).get("type") == "ANIME"
-            ]
-            current_relations = anime.relations or []
-            current_map = {row.get("id"): row for row in current_relations if row.get("id")}
-            relation_ids = {
-                (edge.get("node") or {}).get("id")
-                for edge in anime_relations
-                if (edge.get("node") or {}).get("id")
-            }
-
-            slug_map = await sync_to_async(
-                lambda: {
-                    row["anilist_id"]: row["slug"]
-                    for row in Anime.objects.filter(anilist_id__in=relation_ids).values(
-                        "anilist_id",
-                        "slug",
-                    )
-                }
-            )()
-
-            new_relations = []
-            for edge in anime_relations:
-                node = edge.get("node") or {}
-                related_anilist_id = node.get("id")
-                title_data = node.get("title") or {}
-                relation_entry = {
-                    "id": related_anilist_id,
-                    "type": edge.get("relationType"),
-                    "title": title_data.get("english")
-                    or title_data.get("romaji")
-                    or title_data.get("native")
-                    or "Unknown",
-                    "format": node.get("format"),
-                    "status": node.get("status"),
-                    "cover": (node.get("coverImage") or {}).get("large"),
-                    "slug": None,
-                }
-                if related_anilist_id in current_map and current_map[related_anilist_id].get("slug"):
-                    relation_entry["slug"] = current_map[related_anilist_id]["slug"]
-                elif related_anilist_id in slug_map:
-                    relation_entry["slug"] = slug_map[related_anilist_id]
-                new_relations.append(relation_entry)
+            new_relations = relations_from_edges(
+                anime_relation_edges(media), anime.relations or []
+            )
+            await sync_to_async(link_relation_slugs)(new_relations, keep_existing=True)
 
             anime.relations = new_relations
             await sync_to_async(anime.save)(update_fields=["relations", "updated_at"])

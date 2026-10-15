@@ -266,11 +266,12 @@ class JikanServiceNormalizationTests(TestCase):
             raise AssertionError(f"Unhandled request: {request.url}")
 
         service = self._build_service(handler)
-        payload = asyncio.run(service.get_anime_by_id(JikanService.ANIME_ID_OFFSET + 1))
+        payload = asyncio.run(service.search_by_mal_id(1))
 
         self.assertIsNotNone(payload)
         assert payload is not None
-        self.assertEqual(payload["id"], JikanService.ANIME_ID_OFFSET + 1)
+        # Jikan never invents AniList IDs; the MAL ID is the identity.
+        self.assertIsNone(payload["id"])
         self.assertEqual(payload["idMal"], 1)
         self.assertEqual(payload["title"]["english"], "Test Anime")
         self.assertEqual(payload["format"], "TV")
@@ -280,13 +281,14 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(payload["genres"], ["Action"])
         self.assertEqual(payload["tags"], ["school", "shounen"])
         self.assertEqual(payload["producers"], ["Aniplex"])
-        self.assertEqual(payload["relations"]["edges"][0]["node"]["id"], JikanService.ANIME_ID_OFFSET + 2)
+        self.assertIsNone(payload["relations"]["edges"][0]["node"]["id"])
+        self.assertEqual(payload["relations"]["edges"][0]["node"]["idMal"], 2)
         self.assertEqual(payload["characterPreview"]["edges"][0]["node"]["id"], JikanService.CHARACTER_ID_OFFSET + 101)
         self.assertEqual(payload["staffPreview"]["edges"][0]["node"]["id"], JikanService.STAFF_ID_OFFSET + 301)
         self.assertEqual(payload["openings"], ["OP 1"])
         self.assertEqual(payload["stats"]["statusDistribution"][0]["status"], "CURRENT")
 
-    def test_get_anime_by_id_preserves_legacy_sync_identifier_for_existing_rows(self):
+    def test_get_anime_by_id_keeps_real_anilist_id_for_existing_rows(self):
         async def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             if path == "/v4/anime/1/full":
@@ -337,8 +339,8 @@ class JikanServiceNormalizationTests(TestCase):
         service = self._build_service(handler)
         with patch.object(
             service,
-            "_resolve_mal_id_for_service_id",
-            new=AsyncMock(return_value=(1, True)),
+            "_mal_id_for_anilist_id",
+            new=AsyncMock(return_value=1),
         ):
             payload = asyncio.run(service.get_anime_by_id(111))
 
@@ -360,7 +362,7 @@ class JikanServiceNormalizationTests(TestCase):
         )
         service = self._build_db_service()
         item = {
-            "id": Anime.JIKAN_ANILIST_ID_OFFSET + 30276,
+            "id": None,
             "idMal": 30276,
             "title": {
                 "english": "One Punch Man",
@@ -408,7 +410,26 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(saved.id, existing.id)
         self.assertEqual(Anime.objects.count(), 1)
         self.assertEqual(existing.mal_id, 30276)
-        self.assertEqual(existing.anilist_id, Anime.JIKAN_ANILIST_ID_OFFSET + 30276)
+        self.assertIsNone(existing.anilist_id)
+
+        # A different show with the same title is a new row with its title unchanged.
+        remake = {
+            **item,
+            "idMal": 99999,
+            "providerIds": {"myanimelist": 99999, "jikan": 99999},
+            "seasonYear": 2026,
+        }
+        with (
+            patch.object(service, "_handle_relationships_async", new=AsyncMock()),
+            patch.object(service, "_download_and_save_images", new=AsyncMock()),
+        ):
+            second = service.save_anime_to_db(remake)
+
+        self.assertNotEqual(second.id, existing.id)
+        self.assertEqual(second.title, "One Punch Man")
+        self.assertEqual(second.slug, "one-punch-man-2026")
+        self.assertIsNone(second.anilist_id)
+        self.assertEqual(Anime.objects.filter(title="One Punch Man").count(), 2)
 
     def test_get_recent_updates_prefers_current_season_and_falls_back_to_top_airing(self):
         async def handler(request: httpx.Request) -> httpx.Response:

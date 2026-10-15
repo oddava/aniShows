@@ -12,6 +12,12 @@ from django.db.models import Q
 from ...shared.celery import observed_shared_task
 from ..models import Anime
 from ..services.jikan import JikanService
+from ..services.relation_links import (
+    anime_relation_edges,
+    link_relation_slugs,
+    relation_key,
+    relations_from_edges,
+)
 from .base import BaseTask, run_async_in_task
 
 
@@ -99,7 +105,7 @@ class FranchiseSyncTask(BaseTask):
             for i, anime in enumerate(anime_list):
                 try:
                     if skip_recently_updated and service.call_cache:
-                        if service.call_cache.is_recently_updated(anime.anilist_id or 0, window=update_window):
+                        if service.call_cache.is_recently_updated(anime.mal_id or 0, window=update_window):
                             skipped_count += 1
                             continue
 
@@ -112,8 +118,8 @@ class FranchiseSyncTask(BaseTask):
                         total_imported += result.get("imported_count", 0)
                         total_linked += result.get("relations_linked", 0)
 
-                        if service.call_cache and anime.anilist_id:
-                            service.call_cache.mark_updated(anime.anilist_id)
+                        if service.call_cache and anime.mal_id:
+                            service.call_cache.mark_updated(anime.mal_id)
 
                         logger.info(
                             f"✓ ({i+1}/{total}) {anime.title}: "
@@ -149,173 +155,73 @@ class FranchiseSyncTask(BaseTask):
     ) -> dict:
         """Process franchises for a single anime."""
         try:
-            if not anime.anilist_id:
-                return {"status": "error", "error": "No anilist_id", "relations_count": 0}
+            if not anime.mal_id:
+                return {"status": "error", "error": "No mal_id", "relations_count": 0}
 
-            data = await service.get_anime_by_id(anime.anilist_id)
+            data = await service.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
 
             if not data:
                 return {"status": "error", "error": "No data from Jikan", "relations_count": 0}
 
-            # Extract relations
-            relations_data = data.get("relations", {})
-            anilist_relations = relations_data.get("edges", [])
+            anime_relations = anime_relation_edges(data)
+            current_keys = {
+                key for rel in anime.relations or [] if (key := relation_key(rel)) is not None
+            }
+            new_relations = relations_from_edges(anime_relations, anime.relations or [])
 
-            # Filter to only ANIME type
-            anime_relations = [
-                edge for edge in anilist_relations
-                if edge.get("node", {}).get("type") == "ANIME"
-            ]
-
-            if not anime_relations:
-                anime.relations = []
-                await sync_to_async(anime.save)(update_fields=["relations"])
-                return {
-                    "status": "success",
-                    "relations_count": 0,
-                    "relations_added": 0,
-                    "relations_updated": 0,
-                    "relations_linked": 0,
-                    "imported_count": 0,
-                    "missing_slugs": 0,
-                }
-
-            # Get current relations
-            current_relations = anime.relations or []
-            current_relations_map = {r.get("id"): r for r in current_relations if r.get("id")}
-
-            # Build new relations
-            new_relations = []
-            for edge in anime_relations:
-                node = edge.get("node", {})
-                anilist_id = node.get("id")
-
-                title = node.get("title", {}).get("english") or node.get("title", {}).get("romaji") or "Unknown"
-
-                relation_entry = {
-                    "id": anilist_id,
-                    "type": edge.get("relationType"),
-                    "title": title,
-                    "format": node.get("format"),
-                    "status": node.get("status"),
-                    "cover": node.get("coverImage", {}).get("large"),
-                    "slug": None,
-                }
-
-                # Preserve existing slug
-                if anilist_id in current_relations_map:
-                    existing_slug = current_relations_map[anilist_id].get("slug")
-                    if existing_slug:
-                        relation_entry["slug"] = existing_slug
-
-                new_relations.append(relation_entry)
-
-            # Import missing and link slugs
-            ids_needing_slugs = {rel["id"] for rel in new_relations if rel.get("slug") is None}
             imported_count = 0
-
-            if import_missing and ids_needing_slugs:
-                imported_ids = await self._import_missing_anime_batch(
-                    service, anime_relations, ids_needing_slugs, max_imports
+            if import_missing:
+                missing_mal_ids = [
+                    rel["mal_id"] for rel in new_relations if rel.get("mal_id") and not rel.get("slug")
+                ]
+                imported_count = await self._import_missing_anime_batch(
+                    service, missing_mal_ids, max_imports
                 )
-                imported_count = len(imported_ids)
-                ids_needing_slugs -= imported_ids
 
-            # Link slugs
-            all_related_ids = {rel["id"] for rel in new_relations}
-            slug_map = await self._get_existing_slugs(all_related_ids)
+            relations_linked = await sync_to_async(link_relation_slugs)(
+                new_relations, keep_existing=True
+            )
 
-            relations_linked = 0
-            for rel in new_relations:
-                rel_id = rel.get("id")
-                if rel_id and rel_id in slug_map:
-                    rel["slug"] = slug_map[rel_id]
-                    relations_linked += 1
-
-            # Save
             anime.relations = new_relations
             await sync_to_async(anime.save)(update_fields=["relations"])
 
-            missing_slugs = len(new_relations) - relations_linked
-
+            relations_added = sum(1 for rel in new_relations if relation_key(rel) not in current_keys)
             return {
                 "status": "success",
                 "relations_count": len(new_relations),
-                "relations_added": len([r for r in new_relations if r["id"] not in current_relations_map]),
-                "relations_updated": len([r for r in new_relations if r["id"] in current_relations_map]),
+                "relations_added": relations_added,
+                "relations_updated": len(new_relations) - relations_added,
                 "relations_linked": relations_linked,
                 "imported_count": imported_count,
-                "missing_slugs": missing_slugs,
+                "missing_slugs": len(new_relations) - relations_linked,
             }
 
         except Exception as e:
             logger.error(f"Error processing franchises for {anime.title}: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "relations_count": 0}
 
-    async def _get_existing_slugs(self, anilist_ids: set[int]) -> dict[int, str]:
-        """Get slug mapping for existing anime by sync ID."""
-        if not anilist_ids:
-            return {}
-
-        @sync_to_async
-        def fetch_slugs():
-            return {
-                anime.anilist_id: anime.slug
-                for anime in Anime.objects.filter(anilist_id__in=anilist_ids)
-                if anime.anilist_id
-            }
-
-        return await fetch_slugs()
-
     async def _import_missing_anime_batch(
-        self, service: JikanService, anime_relations: list[dict],
-        ids_to_import: set[int], max_imports: int
-    ) -> set[int]:
-        """Import missing related anime from Jikan."""
-        imported_ids = set()
-
-        # Build node map
-        node_map = {}
-        for edge in anime_relations:
-            node = edge.get("node", {})
-            if node.get("type") == "ANIME":
-                node_map[node.get("id")] = node
-
-        for anilist_id in list(ids_to_import)[:max_imports]:
-            node = node_map.get(anilist_id)
-            if not anilist_id or not node:
-                continue
-
+        self, service: JikanService, mal_ids: list[int], max_imports: int
+    ) -> int:
+        """Import related anime that are not in the catalog yet. Returns how many were created."""
+        imported = 0
+        for mal_id in list(dict.fromkeys(mal_ids))[:max_imports]:
             try:
-                # Check if exists
-                @sync_to_async
-                def check_exists(aid):
-                    try:
-                        return Anime.objects.get(anilist_id=aid)
-                    except Anime.DoesNotExist:
-                        return None
-
-                existing = await check_exists(anilist_id)
-                if existing:
-                    imported_ids.add(anilist_id)
+                exists = await sync_to_async(Anime.objects.filter(mal_id=mal_id).exists)()
+                if exists:
                     continue
 
-                # Fetch and import
                 await asyncio.sleep(0.3)
-                full_data = await service.get_anime_by_id(anilist_id)
-
+                full_data = await service.search_by_mal_id(mal_id)
                 if full_data:
-                    stats = await service.process_media_list([full_data])
-                    if stats.get("created", 0) > 0:
-                        title = node.get("title", {}).get("english") or node.get("title", {}).get("romaji")
-                        logger.info(f"Imported: {title} (ID: {anilist_id})")
-                        imported_ids.add(anilist_id)
-
+                    anime = await service._save_anime_to_db_async(full_data)
+                    logger.info(f"Imported: {anime.title} (MAL ID: {mal_id})")
+                    imported += 1
             except Exception as e:
-                logger.warning(f"Could not import ID {anilist_id}: {e}")
+                logger.warning(f"Could not import MAL ID {mal_id}: {e}")
                 continue
 
-        return imported_ids
+        return imported
 
 @observed_shared_task(
     base=FranchiseSyncTask,
@@ -368,26 +274,11 @@ def update_relation_slugs(self, batch_size: int = 100):
         for anime in anime_list:
             try:
                 relations = anime.relations or []
-                needs_update = False
-                ids_to_lookup = {rel.get("id") for rel in relations if not rel.get("slug") and rel.get("id")}
-
-                if ids_to_lookup:
-                    @sync_to_async
-                    def fetch_slugs_batch():
-                        return {
-                            a.anilist_id: a.slug
-                            for a in Anime.objects.filter(anilist_id__in=ids_to_lookup)
-                            if a.anilist_id
-                        }
-
-                    slug_map = await fetch_slugs_batch()
-
-                    for rel in relations:
-                        rel_id = rel.get("id")
-                        if not rel.get("slug") and rel_id in slug_map:
-                            rel["slug"] = slug_map[rel_id]
-                            linked_count += 1
-                            needs_update = True
+                unlinked_before = sum(1 for rel in relations if not rel.get("slug"))
+                await sync_to_async(link_relation_slugs)(relations, keep_existing=True)
+                newly_linked = unlinked_before - sum(1 for rel in relations if not rel.get("slug"))
+                linked_count += newly_linked
+                needs_update = newly_linked > 0
 
                 if needs_update:
                     anime.relations = relations

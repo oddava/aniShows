@@ -14,7 +14,7 @@ class AdminAnimeActionResult:
 
 
 def get_admin_anime_queryset():
-    return Anime.objects.prefetch_related("genres").select_related("studio").annotate(
+    return Anime.objects.prefetch_related("genres", Anime.studios_prefetch()).annotate(
         favorites_count=Count("favorites"),
         reviews_count=Count("reviews"),
         avg_review_rating=Avg("reviews__rating"),

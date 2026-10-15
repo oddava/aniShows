@@ -388,7 +388,7 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(second.offline_db_last_seen_at, original_started_at)
         self.assertEqual(set(result["changed_anime_ids"]), {first.id, second.id})
 
-    def test_run_import_avoids_generated_title_variant_collision(self):
+    def test_run_import_keeps_shared_titles_and_only_varies_the_slug(self):
         Anime.objects.create(
             title="Doraemon",
             slug="doraemon",
@@ -420,7 +420,9 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(result["records_failed"], 0)
         self.assertEqual(result["records_created"], 1)
-        self.assertTrue(Anime.objects.filter(title="Doraemon (2)").exists())
+        created = Anime.objects.exclude(slug__in=["doraemon", "doraemon-2005"]).get()
+        self.assertEqual(created.title, "Doraemon")
+        self.assertEqual(created.slug, "doraemon-2")
 
     def test_run_import_does_not_fallback_match_when_only_one_side_has_year(self):
         Anime.objects.create(

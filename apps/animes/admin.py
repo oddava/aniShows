@@ -6,6 +6,7 @@ from .models import (
     Anime,
     AnimeCharacter,
     AnimeStaff,
+    AnimeStudio,
     Character,
     EpisodeRating,
     Genre,
@@ -83,6 +84,16 @@ class StudioAdmin(admin.ModelAdmin):
         """Optimize queryset with annotation."""
         return super().get_queryset(request).annotate(anime_count=Count("anime"))
 
+class AnimeStudioInline(admin.TabularInline):
+    """Studios for an anime; position 0 is the primary studio."""
+
+    model = AnimeStudio
+    extra = 0
+    fields = ["studio", "position"]
+    autocomplete_fields = ["studio"]
+    ordering = ["position", "id"]
+
+
 class ReviewInline(admin.TabularInline):
     """Inline reviews for anime."""
 
@@ -129,14 +140,12 @@ class AnimeAdmin(admin.ModelAdmin):
         "title",
         "title_jp",
         "synopsis",
-        "studio__name",
+        "studios__name",
     ]
 
     prepopulated_fields = {"slug": ("title",)}
 
     filter_horizontal = ["genres"]
-
-    autocomplete_fields = ["studio"]
 
     date_hierarchy = "release_date"
 
@@ -152,7 +161,7 @@ class AnimeAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Basic Information", {"fields": ("title", "title_jp", "slug", "synopsis")}),
-        ("Classification", {"fields": ("anime_type", "status", "genres", "studio")}),
+        ("Classification", {"fields": ("anime_type", "status", "genres")}),
         (
             "Episodes & Duration",
             {
@@ -182,7 +191,7 @@ class AnimeAdmin(admin.ModelAdmin):
         ),
     )
 
-    inlines = [ReviewInline]
+    inlines = [AnimeStudioInline, ReviewInline]
 
     actions = [
         "trigger_sync_task",
@@ -334,8 +343,7 @@ class AnimeAdmin(admin.ModelAdmin):
         return (
             super()
             .get_queryset(request)
-            .prefetch_related("genres")
-            .select_related("studio")
+            .prefetch_related("genres", Anime.studios_prefetch())
             .annotate(
                 favorites_count=Count("favorites", distinct=True),
                 reviews_count=Count("reviews", distinct=True),

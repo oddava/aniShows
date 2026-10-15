@@ -43,7 +43,7 @@ class AdminAnimeSerializer(ModelSerializer):
     reviews_count = IntegerField(read_only=True, default=0)
     avg_review_rating = FloatField(read_only=True, default=None)
 
-    studio = AdminStudioSerializer(read_only=True)
+    studio = AdminStudioSerializer(source="primary_studio", read_only=True)
     genres = AdminGenreSerializer(many=True, read_only=True)
 
     cover_image = SerializerMethodField()

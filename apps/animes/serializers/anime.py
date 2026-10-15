@@ -15,6 +15,7 @@ from rest_framework.serializers import (
 from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
 from ..services.jikan import JikanService
+from ..services.relation_links import anime_keys, match_relation
 from .base import (
     AnimeCharacterSerializer,
     AnimeStaffSerializer,
@@ -56,7 +57,7 @@ class AnimeMinimalSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Minimal serializer for list views - excludes synopsis for smaller payload"""
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio_name = CharField(source="studio.name", read_only=True, default=None)
+    studio_name = CharField(source="primary_studio.name", read_only=True, default=None)
     is_favorite = SerializerMethodField()
     user_list_status = SerializerMethodField()
     cover_image = SerializerMethodField()
@@ -109,7 +110,7 @@ class AnimeListSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     """Lightweight serializer for browse/list surfaces."""
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio_name = CharField(source="studio.name", read_only=True, default=None)
+    studio_name = CharField(source="primary_studio.name", read_only=True, default=None)
     is_favorite = SerializerMethodField()
     user_list_status = SerializerMethodField()
     cover_image = SerializerMethodField()
@@ -238,7 +239,9 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
     STAFF_PREVIEW_LIMIT = 3
 
     genres = GenreSerializer(many=True, read_only=True)
-    studio = StudioSerializer(read_only=True)
+    # "studio" stays the primary studio for older clients; "studios" has the full list.
+    studio = StudioSerializer(source="primary_studio", read_only=True)
+    studios = StudioSerializer(source="ordered_studios", many=True, read_only=True)
     character_count = IntegerField(read_only=True)
     staff_count = IntegerField(read_only=True)
     theme_songs = ThemeSongSerializer(many=True, read_only=True)
@@ -290,6 +293,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "end_date",
             "genres",
             "studio",
+            "studios",
             "character_count",
             "staff_count",
             "characters_preview",
@@ -461,45 +465,48 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             return []
 
         linked_slugs = []
-        linked_ids = []
+        linked_anilist_ids = []
+        linked_mal_ids = []
         relations = []
         for relation in raw_relations:
             if not isinstance(relation, dict):
                 continue
 
             relation_data = relation.copy()
-            relation_slug = relation_data.get("slug")
-            relation_id = relation_data.get("id")
-            if relation_slug:
-                linked_slugs.append(relation_slug)
-            if relation_id:
-                linked_ids.append(relation_id)
+            if relation_data.get("slug"):
+                linked_slugs.append(relation_data["slug"])
+            if relation_data.get("id"):
+                linked_anilist_ids.append(relation_data["id"])
+            if relation_data.get("mal_id"):
+                linked_mal_ids.append(relation_data["mal_id"])
             relations.append(relation_data)
 
         linked_anime_by_slug = {}
-        linked_anime_by_id = {}
-        if linked_slugs or linked_ids:
+        linked_anime_by_key = {}
+        if linked_slugs or linked_anilist_ids or linked_mal_ids:
             linked_anime = Anime.objects.filter(
-                Q(slug__in=linked_slugs) | Q(anilist_id__in=linked_ids)
+                Q(slug__in=linked_slugs)
+                | Q(anilist_id__in=linked_anilist_ids)
+                | Q(mal_id__in=linked_mal_ids)
             ).only(
                 "slug",
                 "anilist_id",
+                "mal_id",
                 "cover_image",
                 "cover_image_external_url",
             )
-            linked_anime_by_slug = {anime.slug: anime for anime in linked_anime if anime.slug}
-            linked_anime_by_id = {
-                anime.anilist_id: anime for anime in linked_anime if anime.anilist_id
-            }
+            for anime in linked_anime:
+                linked_anime_by_slug[anime.slug] = anime
+                for key in anime_keys(anime):
+                    linked_anime_by_key[key] = anime
 
         for relation in relations:
             linked = None
             relation_slug = relation.get("slug")
-            relation_id = relation.get("id")
             if relation_slug:
                 linked = linked_anime_by_slug.get(relation_slug)
-            if linked is None and relation_id:
-                linked = linked_anime_by_id.get(relation_id)
+            if linked is None:
+                linked = match_relation(relation, linked_anime_by_key)
             if linked is not None and not relation.get("slug"):
                 relation["slug"] = linked.slug
 

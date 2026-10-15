@@ -13,13 +13,14 @@ from django.db.models import (
     JSONField,
     ManyToManyField,
     Model,
-    Subquery,
+    PositiveSmallIntegerField,
+    Prefetch,
     TextField,
     TimeField,
+    UniqueConstraint,
     URLField,
 )
 from django.db.models.enums import TextChoices
-from django.db.models.functions import Cast, Coalesce
 from django.db.models.indexes import Index
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFit
@@ -30,8 +31,6 @@ from ...shared.models import SlugMixin, TimestampMixin
 
 
 class Anime(TimestampMixin, SlugMixin, Model):
-    JIKAN_ANILIST_ID_OFFSET = 1_500_000_000
-
     class AnimeType(TextChoices):
         tv = "TV"
         movie = "Movie"
@@ -60,7 +59,8 @@ class Anime(TimestampMixin, SlugMixin, Model):
         card_game = "Card Game", "Card Game"
         other = "Other", "Other"
 
-    title = CharField(max_length=200, unique=True)
+    # Titles are not unique (remakes, films sharing a name); slug and the provider IDs are.
+    title = CharField(max_length=200)
     title_jp = CharField(max_length=200, blank=True)
     synopsis = TextField()
     anime_type = CharField(max_length=20, choices=AnimeType.choices, default=AnimeType.tv)
@@ -129,7 +129,9 @@ class Anime(TimestampMixin, SlugMixin, Model):
     )
 
     genres = ManyToManyField("anime.Genre", related_name="anime")
-    studio = ForeignKey("anime.Studio", SET_NULL, null=True, related_name="anime")
+    studios = ManyToManyField(
+        "anime.Studio", through="anime.AnimeStudio", related_name="anime", blank=True
+    )
 
     characters = ManyToManyField(
         "anime.Character",
@@ -179,8 +181,9 @@ class Anime(TimestampMixin, SlugMixin, Model):
     )
     season_year = IntegerField(null=True, blank=True)
 
-    mal_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
-    anilist_id = IntegerField(null=True, blank=True, unique=True, db_index=True)
+    # Real provider IDs only. Jikan-only rows have anilist_id=NULL and are deduped by mal_id.
+    mal_id = IntegerField(null=True, blank=True, unique=True)
+    anilist_id = IntegerField(null=True, blank=True, unique=True)
     offline_db_last_seen_at = DateTimeField(null=True, blank=True, db_index=True)
     offline_db_last_update = DateField(null=True, blank=True)
 
@@ -192,9 +195,6 @@ class Anime(TimestampMixin, SlugMixin, Model):
             Index(fields=["-popularity_rank"]),
             Index(fields=["-trending_rank"]),
             Index(fields=["-site_rank"]),
-            Index(fields=["studio", "-rating"]),
-            Index(fields=["slug"]),
-            Index(fields=["title"]),
             Index(fields=["release_date"]),
             Index(fields=["-member_count"]),
             Index(fields=["status", "anime_type", "-release_date"]),
@@ -225,37 +225,71 @@ class Anime(TimestampMixin, SlugMixin, Model):
     def get_absolute_url(self):
         return f"/anime/{self.slug}/"
 
+    @staticmethod
+    def studios_prefetch(prefix: str = "") -> Prefetch:
+        """Prefetch for ``ordered_studios``/``primary_studio`` without per-row queries.
+
+        ``prefix`` is the lookup path to the anime, e.g. ``"anime__"`` from a review.
+        """
+        return Prefetch(
+            f"{prefix}studio_links", queryset=AnimeStudio.objects.select_related("studio")
+        )
+
+    @property
+    def ordered_studios(self) -> list:
+        """Studios in provider order; uses a prefetched ``studio_links`` when present."""
+        return [link.studio for link in self.studio_links.all()]
+
+    @property
+    def primary_studio(self):
+        studios = self.ordered_studios
+        return studios[0] if studios else None
+
+    def set_studios(self, studios) -> None:
+        """Replace the studio list, keeping the given order (first = primary)."""
+        unique = list(dict.fromkeys(studio for studio in studios if studio is not None))
+        current = [link.studio_id for link in self.studio_links.order_by("position", "id")]
+        if current == [studio.pk for studio in unique]:
+            return
+        self.studio_links.all().delete()
+        AnimeStudio.objects.bulk_create(
+            AnimeStudio(anime=self, studio=studio, position=index)
+            for index, studio in enumerate(unique)
+        )
+        if hasattr(self, "_prefetched_objects_cache"):
+            self._prefetched_objects_cache.pop("studio_links", None)
+            self._prefetched_objects_cache.pop("studios", None)
+
+    @classmethod
+    def available_slug(cls, base_slug: str, *, year: int | None = None) -> str:
+        """First free slug among base, base-YEAR, base-2 ... base-101."""
+        base_slug = base_slug[:190] or "anime"
+        candidates = [base_slug]
+        if year:
+            candidates.append(f"{base_slug}-{year}")
+        candidates.extend(f"{base_slug}-{counter}" for counter in range(2, 102))
+        taken = set(cls.objects.filter(slug__in=candidates).values_list("slug", flat=True))
+        for candidate in candidates:
+            if candidate not in taken:
+                return candidate
+        raise ValueError(f"Could not generate a unique slug from '{base_slug}'")
+
     @classmethod
     def public_queryset(cls):
         """Anime visible on public user-facing surfaces."""
-        canonical_mal_ids = (
-            cls.objects.exclude(anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET)
-            .annotate(
-                curated_mal_id=Coalesce(
-                    Cast("mal_id", CharField()),
-                    Cast("provider_ids__myanimelist", CharField()),
-                )
-            )
-            .exclude(curated_mal_id__isnull=True)
-            .exclude(curated_mal_id="")
-            .values("curated_mal_id")
-        )
+        return cls.objects.exclude(offline_sync_state__quarantined=True)
 
-        hidden_shadow_duplicates = (
-            cls.objects.annotate(
-                shadow_mal_id=Cast("provider_ids__myanimelist", CharField()),
-            )
-            .filter(
-                anilist_id__gte=cls.JIKAN_ANILIST_ID_OFFSET,
-                shadow_mal_id__in=Subquery(canonical_mal_ids),
-            )
-            .values("pk")
-        )
 
-        return (
-            cls.objects.exclude(offline_sync_state__quarantined=True)
-            .exclude(pk__in=Subquery(hidden_shadow_duplicates))
-        )
+class AnimeStudio(Model):
+    anime = ForeignKey("anime.Anime", CASCADE, related_name="studio_links")
+    studio = ForeignKey("anime.Studio", CASCADE, related_name="anime_links")
+    position = PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [
+            UniqueConstraint(fields=["anime", "studio"], name="anime_studio_unique"),
+        ]
 
 
 class AnimeCharacter(Model):

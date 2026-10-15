@@ -4,6 +4,7 @@ from django.http import Http404
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 
+from ...animes.models import Anime
 from ..models import UserAnimeList
 from .cache import (
     invalidate_anime_detail_cache,
@@ -33,7 +34,9 @@ def get_user_anime_list_queryset(request_user, username=None, list_status=None):
     else:
         return UserAnimeList.objects.none()
 
-    queryset = queryset.select_related("anime__studio").prefetch_related("anime__genres")
+    queryset = queryset.select_related("anime").prefetch_related(
+        "anime__genres", Anime.studios_prefetch("anime__")
+    )
     if list_status:
         queryset = queryset.filter(status=list_status)
     return queryset.order_by("-updated_at")
