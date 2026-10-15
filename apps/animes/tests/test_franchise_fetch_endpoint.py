@@ -4,7 +4,6 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient, APITestCase
 
-from ..services.franchise_import import FranchiseImportResult
 
 
 class FranchiseFetchEndpointTests(APITestCase):
@@ -36,13 +35,7 @@ class FranchiseFetchEndpointTests(APITestCase):
         mock_import.assert_not_called()
 
     @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
-    def test_superuser_session_without_csrf_token_is_not_blocked(self, mock_import):
-        mock_import.return_value = FranchiseImportResult(
-            slug="boruto",
-            title="Boruto",
-            imported=False,
-        )
-
+    def test_superuser_session_without_csrf_token_is_rejected(self, mock_import):
         user = get_user_model().objects.create_superuser(
             username="csrf-session-user",
             email="csrf-session-user@example.com",
@@ -57,9 +50,8 @@ class FranchiseFetchEndpointTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["slug"], "boruto")
-        mock_import.assert_called_once()
+        self.assertEqual(response.status_code, 403)
+        mock_import.assert_not_called()
 
     @patch("apps.animes.services.franchise_import.FranchiseImportService.import_from_anilist")
     def test_invalid_anilist_id_returns_400(self, mock_import):

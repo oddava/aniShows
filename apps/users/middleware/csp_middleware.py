@@ -1,71 +1,61 @@
-"""Content Security Policy middleware."""
+"""Content Security Policy for responses served by Django.
 
+The React app's CSP is set by Caddy (Caddyfile.prod); this covers the API,
+Django admin and the few server-rendered pages.
+"""
+
+from django.conf import settings
 from django.utils.deprecation import MiddlewareMixin
+
+# JSON API responses never need to load anything.
+API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+# Django admin: the Jazzmin theme needs inline scripts and eval.
+ADMIN_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+        "img-src 'self' data: https: blob:",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+    ]
+)
+
+# Other server-rendered pages (profile share previews, allauth). No inline scripts.
+PAGE_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https: blob:",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+    ]
+)
 
 
 class CSPMiddleware(MiddlewareMixin):
-    """
-    Add Content Security Policy headers.
-
-    Add to settings.py MIDDLEWARE (before SecurityMiddleware):
-    'api.middleware.csp_middleware.CSPMiddleware',
-    """
-
     def process_response(self, request, response):
-        # Always add CSP headers for security
-        from django.conf import settings
-
-        # Base CSP directives - stricter without unsafe-inline
-        csp_directives = {
-            "default-src": ["'self'"],
-            "script-src": [
-                "'self'",
-                "'unsafe-inline'",  # Note: Consider removing after refactoring inline scripts
-                "'unsafe-eval'",  # Required by Jazzmin admin theme
-                "https://www.googletagmanager.com",
-                "https://www.google-analytics.com",
-                "https://static.cloudflareinsights.com",
-            ],
-            "style-src": [
-                "'self'",
-                "'unsafe-inline'",
-                "https://fonts.googleapis.com",
-                "https://cdnjs.cloudflare.com",
-            ],
-            "font-src": [
-                "'self'",
-                "https://fonts.gstatic.com",
-                "https://cdnjs.cloudflare.com",
-            ],
-            "img-src": ["'self'", "data:", "https:", "http:", "blob:"],
-            "connect-src": [
-                "'self'",
-                "https://www.google-analytics.com",
-                "https://fonts.googleapis.com",
-                "https://fonts.gstatic.com",
-                "wss://anishows.com",
-            ],
-            "media-src": ["'self'", "https:", "http:"],
-            "frame-src": ["'self'", "https://www.youtube.com", "https://youtube.com"],
-            "frame-ancestors": ["'none'"],
-            "base-uri": ["'self'"],
-            "form-action": ["'self'"],
-        }
-
-        # Build CSP header
-        csp_header = "; ".join(
-            f"{key} {' '.join(values)}" for key, values in csp_directives.items()
-        )
-
-        # Use report-only mode in DEBUG, enforce in production
-        if settings.DEBUG:
-            response["Content-Security-Policy-Report-Only"] = csp_header
+        if request.path.startswith("/django-admin/"):
+            policy = ADMIN_CSP
+        elif response.get("Content-Type", "").startswith("application/json"):
+            policy = API_CSP
         else:
-            response["Content-Security-Policy"] = csp_header
+            policy = PAGE_CSP
 
-        # Additional security headers
-        response["X-Content-Type-Options"] = "nosniff"
-        response["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-
+        # Report-only in DEBUG so dev tools (debug toolbar, API docs) keep working.
+        header = (
+            "Content-Security-Policy-Report-Only" if settings.DEBUG else "Content-Security-Policy"
+        )
+        response.setdefault(header, policy)
+        response.setdefault("X-Content-Type-Options", "nosniff")
+        response.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
         return response

@@ -17,7 +17,6 @@ from .views import (
     StaffViewSet,
     StudioViewSet,
 )
-from .views.image_views import ImageResizeView
 
 router = DefaultRouter()
 router.register(r"anime", AnimeViewSet, basename="anime")
@@ -33,6 +32,4 @@ router.register(r"recommendations", RecommendationsViewSet, basename="recommenda
 
 urlpatterns = [
     path("", include(router.urls)),
-    # Image optimization endpoints
-    path("media/resize/<path:filepath>", ImageResizeView.as_view(), name="image_resize"),
 ]
