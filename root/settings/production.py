@@ -122,6 +122,16 @@ CORS_ALLOWED_ORIGINS = cors_origins
 CORS_ALLOW_CREDENTIALS = True
 
 # =============================================================================
+# CLIENT IP FOR THROTTLING
+# =============================================================================
+
+# Exactly one proxy (Caddy) sits in front of the app and appends the client
+# address to X-Forwarded-For. Rate limits must key on that last entry: by
+# default DRF uses the whole header, which a client can vary at will to dodge
+# the login and sign-up throttles. Raise this if a CDN is added in front.
+REST_FRAMEWORK = {**REST_FRAMEWORK, "NUM_PROXIES": int(os.getenv("DRF_NUM_PROXIES", "1"))}
+
+# =============================================================================
 # CSRF SETTINGS
 # =============================================================================
 

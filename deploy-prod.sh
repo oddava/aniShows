@@ -100,16 +100,28 @@ roll_web() {
 
 command -v docker >/dev/null || die "docker is not installed"
 
-# docker-compose.prod.yml keeps the old insecure fallbacks so existing servers
-# keep working; nag until real values are set in .env.
+# docker-compose.prod.yml still has well-known fallbacks for these secrets. They are
+# public (the defaults of MinIO, Umami, ...), so a server running on them is
+# open: the Umami secret signs dashboard logins, for one. Refuse to deploy
+# until real values are in .env; ALLOW_INSECURE_DEFAULTS=1 overrides it for
+# a single emergency run.
+# Also catches the placeholders shipped in .env.example.
+is_placeholder() {
+    case "$1" in
+        ""|1|postgres|minioadmin|redispassword123|umami|change_me|change-me|changeme) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 insecure=()
-[ "${DB_PASSWORD:-1}" = 1 ] && insecure+=(DB_PASSWORD)
-[ "${REDIS_PASSWORD:-redispassword123}" = redispassword123 ] && insecure+=(REDIS_PASSWORD)
-[ "${AWS_SECRET_ACCESS_KEY:-minioadmin}" = minioadmin ] && insecure+=(AWS_SECRET_ACCESS_KEY)
-[ "${UMAMI_DB_PASSWORD:-umami}" = umami ] && insecure+=(UMAMI_DB_PASSWORD)
-[ "${UMAMI_APP_SECRET:-change-me}" = change-me ] && insecure+=(UMAMI_APP_SECRET)
+for var in DB_PASSWORD REDIS_PASSWORD AWS_SECRET_ACCESS_KEY UMAMI_DB_PASSWORD UMAMI_APP_SECRET; do
+    is_placeholder "${!var:-}" && insecure+=("$var")
+done
 if [ "${#insecure[@]}" -gt 0 ]; then
-    warn "Using default/insecure values for: ${insecure[*]} (set them in .env)"
+    if [ "${ALLOW_INSECURE_DEFAULTS:-0}" = 1 ]; then
+        warn "Deploying with default/insecure values for: ${insecure[*]} (ALLOW_INSECURE_DEFAULTS=1)"
+    else
+        die "Refusing to deploy with default/insecure values for: ${insecure[*]}. Set them in .env (or rerun with ALLOW_INSECURE_DEFAULTS=1 once)."
+    fi
 fi
 
 step "Frontend: ${FRONTEND_IMAGE}"

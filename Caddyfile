@@ -28,6 +28,10 @@
     # MinIO Media - proxy /media/* to MinIO bucket
     # Note: /media/CACHE/* is also handled here when thumbnails are in S3
     handle_path /media/* {
+        # Read-only: MinIO would otherwise accept signed S3 writes and deletes.
+        @media_write not method GET HEAD
+        respond @media_write 405
+
         # Fix MIME types for common image formats (MinIO sometimes returns application/octet-stream)
         @webp path *.webp
         header @webp Content-Type "image/webp"
