@@ -18,6 +18,7 @@ from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from ..core.utils import get_client_ip
 from ..shared.public_cache import get_or_build_public_payload
+from ..users.permissions import VerifiedEmailForWrites
 from ..users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 from .cache_utils import (
     CACHEABLE_POST_LIST_PARAMS,
@@ -135,7 +136,7 @@ class CategoryViewSet(ReadOnlyModelViewSet):
 
 
 class ThreadViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly, VerifiedEmailForWrites]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["category__slug", "author__username", "tags__slug"]
     search_fields = ["title", "content"]
@@ -226,7 +227,7 @@ class ThreadViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def like(self, request, pk=None):
@@ -248,7 +249,7 @@ class ThreadViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def unlike(self, request, pk=None):
@@ -259,7 +260,7 @@ class ThreadViewSet(ModelViewSet):
 
 class PostViewSet(ModelViewSet):
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly, VerifiedEmailForWrites]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["thread__id"]
     ordering_fields = ["created_at"]
@@ -331,7 +332,7 @@ class PostViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def like(self, request, pk=None):
@@ -342,7 +343,7 @@ class PostViewSet(ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
         throttle_classes=[ForumLikeRateThrottle],
     )
     def unlike(self, request, pk=None):

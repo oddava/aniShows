@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import toast from 'react-hot-toast';
 
 import logger from '../utils/logger';
 
@@ -240,6 +241,15 @@ api.interceptors.response.use(
                 // AUTH_EXPIRED_EVENT listener signs the user out.
                 return Promise.reject(isAuthFailureError(refreshError) ? error : refreshError);
             }
+        }
+
+        if (error.response?.data?.code === 'email_verification_required') {
+            // One message app-wide (the banner offers "Resend Email"), however
+            // many components hit the gate at once.
+            toast.error(
+                error.response.data.detail || 'Please verify your email address to do this.',
+                { id: 'email-verification-required' },
+            );
         }
 
         if (isMaintenanceResponse(error)) {

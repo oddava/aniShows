@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from ...users.models import UserProfile
 from ..models import Category, Post, Thread
 
 User = get_user_model()
@@ -10,7 +11,9 @@ User = get_user_model()
 
 @pytest.fixture
 def author(db):
-    return User.objects.create_user(username="author", email="a@example.com", password="x")
+    user = User.objects.create_user(username="author", email="a@example.com", password="x")
+    UserProfile.objects.filter(user=user).update(email_verified=True)
+    return user
 
 
 @pytest.fixture

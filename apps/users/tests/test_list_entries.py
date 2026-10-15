@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from ...animes.models import Anime
-from ..models import UserAnimeList
+from ..models import UserAnimeList, UserProfile
 
 User = get_user_model()
 
@@ -10,6 +10,7 @@ User = get_user_model()
 class ListEntryIntegrityTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="lister", email="l@example.com", password="x")
+        UserProfile.objects.filter(user=self.user).update(email_verified=True)
         self.client.force_authenticate(user=self.user)
         self.first = Anime.objects.create(title="First", slug="first", episode_count=12)
         self.second = Anime.objects.create(title="Second", slug="second", episode_count=12)
