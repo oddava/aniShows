@@ -25,7 +25,7 @@ from .metrics import (
     OFFLINE_SYNC_STAGE_FAILURE_TOTAL,
     OFFLINE_SYNC_STAGE_SUCCESS_TOTAL,
 )
-from .relation_links import anime_relation_edges, link_relation_slugs, relations_from_edges
+from .relation_links import anime_relation_edges, relations_from_edges, set_relations
 
 STAGE_METADATA = "metadata"
 STAGE_FRANCHISE = "franchise"
@@ -456,13 +456,10 @@ class OfflineSyncService:
                     ),
                 )
 
-            new_relations = relations_from_edges(
-                anime_relation_edges(media), anime.relations or []
+            await sync_to_async(set_relations)(
+                anime, relations_from_edges(anime_relation_edges(media))
             )
-            await sync_to_async(link_relation_slugs)(new_relations, keep_existing=True)
-
-            anime.relations = new_relations
-            await sync_to_async(anime.save)(update_fields=["relations", "updated_at"])
+            await sync_to_async(anime.save)(update_fields=["updated_at"])
             return StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
         except Exception as exc:
             return StageResult(

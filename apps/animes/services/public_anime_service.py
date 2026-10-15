@@ -254,7 +254,9 @@ class AnimeQueryService:
             queryset = queryset.prefetch_related(self._genre_prefetch())
         else:
             queryset = (
-                queryset.prefetch_related(self._genre_prefetch(), self._theme_song_prefetch())
+                queryset.prefetch_related(
+                    self._genre_prefetch(), self._theme_song_prefetch(), Anime.relations_prefetch()
+                )
                 .defer(*self.DETAIL_DEFER_FIELDS)
                 .annotate(
                     character_count=Coalesce(
@@ -337,17 +339,17 @@ class AnimeQueryService:
         return Anime.public_queryset().only(*self.ACTION_ANIME_ONLY_FIELDS).get(slug=slug)
 
     def related_queryset(self, anime):
-        relation_slugs = self._relation_slugs(anime)[:8]
+        related_ids = self._related_anime_ids(anime)[:8]
         base_queryset = self.base_shelf_queryset()
 
-        if relation_slugs:
+        if related_ids:
             ordering = Case(
-                *[When(slug=slug, then=Value(index)) for index, slug in enumerate(relation_slugs)],
-                default=Value(len(relation_slugs)),
+                *[When(id=anime_id, then=Value(index)) for index, anime_id in enumerate(related_ids)],
+                default=Value(len(related_ids)),
                 output_field=IntegerField(),
             )
             return (
-                base_queryset.filter(slug__in=relation_slugs)
+                base_queryset.filter(id__in=related_ids)
                 .annotate(relation_order=ordering)
                 .order_by("relation_order", "-id")
             )
@@ -1190,24 +1192,23 @@ class AnimeQueryService:
     @staticmethod
     def _relation_mal_ids(anime) -> list[int]:
         relation_ids = []
-        for relation in anime.relations or []:
-            if not isinstance(relation, dict):
-                continue
-            relation_mal_id = relation.get("mal_id")
+        for target_mal_id, linked_mal_id in anime.relations.values_list(
+            "target_mal_id", "to_anime__mal_id"
+        ):
+            relation_mal_id = target_mal_id or linked_mal_id
             if relation_mal_id and relation_mal_id != anime.mal_id:
                 relation_ids.append(relation_mal_id)
         return list(dict.fromkeys(relation_ids))
 
     @staticmethod
-    def _relation_slugs(anime) -> list[str]:
-        relation_slugs = []
-        for relation in anime.relations or []:
-            if not isinstance(relation, dict):
-                continue
-            relation_slug = relation.get("slug")
-            if relation_slug and relation_slug != anime.slug:
-                relation_slugs.append(relation_slug)
-        return list(dict.fromkeys(relation_slugs))
+    def _related_anime_ids(anime) -> list[int]:
+        """Linked related anime IDs in provider order."""
+        related_ids = (
+            anime.relations.filter(to_anime__isnull=False)
+            .exclude(to_anime=anime.id)
+            .values_list("to_anime_id", flat=True)
+        )
+        return list(dict.fromkeys(related_ids))
 
     @staticmethod
     def _genre_ids(anime) -> list[int]:
@@ -1219,14 +1220,14 @@ class AnimeQueryService:
 
     def _fallback_recommendations_queryset(self, anime):
         relation_mal_ids = self._relation_mal_ids(anime)
-        relation_slugs = self._relation_slugs(anime)
+        related_ids = self._related_anime_ids(anime)
         genre_ids = self._genre_ids(anime)
 
         queryset = self.base_shelf_queryset().exclude(id=anime.id)
         if relation_mal_ids:
             queryset = queryset.exclude(mal_id__in=relation_mal_ids)
-        if relation_slugs:
-            queryset = queryset.exclude(slug__in=relation_slugs)
+        if related_ids:
+            queryset = queryset.exclude(id__in=related_ids)
 
         return (
             queryset.filter(genres__in=genre_ids)
