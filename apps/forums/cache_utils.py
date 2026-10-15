@@ -75,15 +75,23 @@ def get_cached_thread_list(category_slug=None, tag_slug=None, page=1, ordering="
     return cache.get(key)
 
 
+# Only these orderings are cached, so invalidation can enumerate every key.
+CACHEABLE_THREAD_ORDERINGS = ("-updated_at", "-created_at", "-view_count")
+CACHEABLE_THREAD_LIST_PARAMS = frozenset({"category__slug", "tags__slug", "page", "ordering"})
+CACHEABLE_POST_LIST_PARAMS = frozenset({"thread__id", "page", "ordering"})
+CACHEABLE_POST_ORDERING = "created_at"
+
+
 def invalidate_thread_list_cache(category_slug=None):
-    """Invalidate thread list cache for a category"""
-    # Pattern-based cache invalidation is not directly supported,
-    # so we'll use a version-based approach or cache tags if available
-    # For now, we'll clear specific known keys
-    if category_slug:
-        for page in range(1, 11):  # Clear first 10 pages
-            for ordering in ["-updated_at", "-created_at", "-view_count"]:
-                key = get_thread_list_cache_key(category_slug, None, page, ordering)
+    """Invalidate the cached thread lists a thread in ``category_slug`` appears in.
+
+    That is the category's own list and the all-categories list (first 10
+    pages each). Tag-filtered lists are left to expire.
+    """
+    for slug in {category_slug, None}:
+        for page in range(1, 11):
+            for ordering in CACHEABLE_THREAD_ORDERINGS:
+                key = get_thread_list_cache_key(slug, None, page, ordering)
                 invalidate_public_cache_keys(key)
 
 

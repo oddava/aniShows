@@ -169,12 +169,24 @@ class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer
     reply_count = SerializerMethodField()
 
     def validate(self, attrs):
+        if self.instance is not None:
+            # A post cannot be moved: that would bypass the checks below and
+            # break the reply tree and the threads' reply counters.
+            attrs.pop("thread", None)
+            attrs.pop("parent", None)
+            return attrs
+
         parent = attrs.get("parent")
         thread = attrs.get("thread")
         if parent and thread and parent.thread_id != thread.id:
             raise ValidationError(
                 {"parent": "Parent post must belong to the same thread."}
             )
+
+        request = self.context.get("request")
+        is_staff = bool(request and request.user.is_staff)
+        if thread and thread.is_locked and not is_staff:
+            raise ValidationError({"thread": "This thread is locked."})
         return attrs
 
     class Meta:

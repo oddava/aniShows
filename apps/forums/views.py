@@ -20,6 +20,10 @@ from ..core.utils import get_client_ip
 from ..shared.public_cache import get_or_build_public_payload
 from ..users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 from .cache_utils import (
+    CACHEABLE_POST_LIST_PARAMS,
+    CACHEABLE_POST_ORDERING,
+    CACHEABLE_THREAD_LIST_PARAMS,
+    CACHEABLE_THREAD_ORDERINGS,
     buffer_thread_view_increment,
     cache_category_detail,
     cache_category_list,
@@ -174,7 +178,14 @@ class ThreadViewSet(ModelViewSet):
         page = query_serializer.validated_data["page"]
         ordering = request.query_params.get("ordering", "-updated_at")
 
-        if request.query_params.get("search") or request.user.is_authenticated:
+        # The shared cache key covers only these parameters; any other filter
+        # (author, search, page_size, ...) would be served to everyone.
+        cacheable = (
+            not request.user.is_authenticated
+            and set(request.query_params) <= CACHEABLE_THREAD_LIST_PARAMS
+            and ordering in CACHEABLE_THREAD_ORDERINGS
+        )
+        if not cacheable:
             return super().list(request, *args, **kwargs)
 
         cache_key = get_thread_list_cache_key(category_slug, tag_slug, page, ordering)
@@ -252,6 +263,8 @@ class PostViewSet(ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["thread__id"]
     ordering_fields = ["created_at"]
+    # Explicit: Meta.ordering is dropped from the reply-count GROUP BY query.
+    ordering = [CACHEABLE_POST_ORDERING]
 
     def get_throttles(self) -> list[BaseThrottle]:
         if self.action in ("create", "update", "partial_update", "destroy"):
@@ -268,8 +281,14 @@ class PostViewSet(ModelViewSet):
         query_serializer.is_valid(raise_exception=True)
         page = query_serializer.validated_data["page"]
 
-        if thread_id and not request.user.is_authenticated:
-            # Try to get from cache first
+        cacheable = (
+            thread_id
+            and not request.user.is_authenticated
+            and set(request.query_params) <= CACHEABLE_POST_LIST_PARAMS
+            and request.query_params.get("ordering", CACHEABLE_POST_ORDERING)
+            == CACHEABLE_POST_ORDERING
+        )
+        if cacheable:
             cached = get_cached_post_list(thread_id, page)
             if cached is not None:
                 return Response(cached)
@@ -287,7 +306,7 @@ class PostViewSet(ModelViewSet):
                 serializer = self.get_serializer(final_posts, many=True)
                 response = self.get_paginated_response(serializer.data)
 
-                if thread_id and not request.user.is_authenticated:
+                if cacheable:
                     cache_post_list(thread_id, page, response.data)
 
                 return response

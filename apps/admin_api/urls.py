@@ -1,5 +1,5 @@
 from django.urls import include, path
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import SimpleRouter
 
 from ..core.views.admin_import_jobs import AdminImportJobViewSet
 from ..core.views.celery_admin import (
@@ -26,7 +26,8 @@ from .views.reviews import AdminReviewViewSet
 from .views.settings import AdminSettingsView
 from .views.users import AdminFavoritesViewSet, AdminUserListViewSet, AdminUserViewSet
 
-admin_router = DefaultRouter()
+# SimpleRouter: no browsable root view listing every admin endpoint.
+admin_router = SimpleRouter()
 admin_router.register(r"users", AdminUserViewSet, basename="admin-users")
 admin_router.register(r"badges", AdminBadgeViewSet, basename="admin-badges")
 admin_router.register(r"anime", AdminAnimeViewSet, basename="admin-anime")
@@ -47,7 +48,7 @@ admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
 admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
 
 # Celery admin router
-celery_router = DefaultRouter()
+celery_router = SimpleRouter()
 celery_router.register(r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results")
 celery_router.register(
     r"celery/tasks/schedules", CeleryTaskScheduleViewSet, basename="celery-task-schedules"
