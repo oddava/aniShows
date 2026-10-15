@@ -7,6 +7,7 @@ from django.utils.http import urlsafe_base64_encode
 
 from ...shared.celery import observed_shared_task
 from ...shared.logger import logger
+from ..tokens import email_verification_token_generator
 
 
 class EmailService:
@@ -14,7 +15,7 @@ class EmailService:
 
     def send_verification_email(self, user):
         """Queue verification email."""
-        token = default_token_generator.make_token(user)
+        token = email_verification_token_generator.make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         verify_link = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}/"
 
