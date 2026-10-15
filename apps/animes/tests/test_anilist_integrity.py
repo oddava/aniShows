@@ -64,7 +64,7 @@ class AniListIntegrityTests(TestCase):
             resolved["title"]["english"], "Canonical Title"
         )
 
-    def test_update_anime_sync_keeps_existing_title_on_conflict(self):
+    def test_update_anime_sync_allows_titles_shared_with_other_rows(self):
         anime = Anime.objects.create(
             title="Unique Source",
             slug="unique-source",
@@ -89,10 +89,11 @@ class AniListIntegrityTests(TestCase):
         sync_update(service, anime, {"title": "Taken Title", "synopsis": "updated synopsis"})
 
         anime.refresh_from_db()
-        self.assertEqual(anime.title, "Unique Source")
+        # Titles are not unique, so the incoming title is stored as-is.
+        self.assertEqual(anime.title, "Taken Title")
         self.assertEqual(anime.synopsis, "updated synopsis")
 
-    def test_metadata_resolver_prefers_anilist_id_lookup(self):
+    def test_metadata_resolver_prefers_mal_id_lookup(self):
         anime = Anime.objects.create(
             title="Resolver Anime",
             slug="resolver-anime",
@@ -105,7 +106,7 @@ class AniListIntegrityTests(TestCase):
 
         service = self._jikan_service_with_mocked_fetches(
             get_anime_by_id=AsyncMock(return_value={"id": 555, "title": {"english": "ok"}}),
-            search_by_mal_id=AsyncMock(return_value={"id": 999}),
+            search_by_mal_id=AsyncMock(return_value={"id": 555, "idMal": 999}),
             search_anime=AsyncMock(return_value=[{"id": 1}]),
         )
 
@@ -113,8 +114,9 @@ class AniListIntegrityTests(TestCase):
         result = async_to_sync(task._resolve_media_for_anime)(service, anime)
 
         self.assertEqual(result["id"], 555)
-        service.get_anime_by_id.assert_awaited_once_with(555)
-        service.search_by_mal_id.assert_not_awaited()
+        self.assertEqual(result["idMal"], 999)
+        service.search_by_mal_id.assert_awaited_once_with(999, anilist_id=555)
+        service.get_anime_by_id.assert_not_awaited()
         service.search_anime.assert_not_awaited()
 
     def test_metadata_resolver_uses_exact_title_match_when_searching(self):

@@ -16,8 +16,9 @@ export const animeApi = {
     getEpisodeRatings: (slug, signal) => api.get(`/anime/${slug}/episode-ratings/`, { signal }),
     setEpisodeRating: (slug, episodeNumber, data) => api.put(`/anime/${slug}/episode-ratings/${episodeNumber}/`, data),
     clearEpisodeRating: (slug, episodeNumber) => api.delete(`/anime/${slug}/episode-ratings/${episodeNumber}/`),
-    fetchFranchise: (anilistId, sourceSlug) => api.post('/anime/franchise/fetch/', {
-        anilist_id: anilistId,
+    fetchFranchise: ({ anilistId, malId }, sourceSlug) => api.post('/anime/franchise/fetch/', {
+        anilist_id: anilistId || undefined,
+        mal_id: malId || undefined,
         source_slug: sourceSlug,
     }),
 };

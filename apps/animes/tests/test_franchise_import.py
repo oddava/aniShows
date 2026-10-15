@@ -47,12 +47,12 @@ class FranchiseImportServiceTests(TestCase):
         }
         mock_jikan_service_cls.normalize_external_image_url.side_effect = lambda value: value or ""
         mock_service = mock_jikan_service_cls.return_value
-        mock_service.get_anime_by_id = AsyncMock(return_value=anilist_payload)
+        mock_service.resolve_media_for_anime = AsyncMock(return_value=anilist_payload)
         mock_service.close = AsyncMock(return_value=None)
         mock_service.save_anime_to_db.return_value = existing
 
         service = FranchiseImportService()
-        result = service.import_from_anilist(
+        result = service.import_related_anime(
             anilist_id=1001, client_ip="127.0.0.1", source_slug=source.slug
         )
 
@@ -63,7 +63,7 @@ class FranchiseImportServiceTests(TestCase):
         source.refresh_from_db()
         self.assertEqual(source.relations[0]["slug"], existing.slug)
 
-        mock_service.get_anime_by_id.assert_awaited_once_with(1001)
+        mock_service.resolve_media_for_anime.assert_awaited_once_with(existing)
         mock_service.save_anime_to_db.assert_called_once_with(anilist_payload)
         mock_service.close.assert_awaited_once()
 
@@ -102,7 +102,7 @@ class FranchiseImportServiceTests(TestCase):
         )
 
         service = FranchiseImportService()
-        result = service.import_from_anilist(
+        result = service.import_related_anime(
             anilist_id=2002, client_ip="127.0.0.1", source_slug=source.slug
         )
 

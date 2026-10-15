@@ -6,6 +6,9 @@ import { animeApi } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import AnimeMediaImage from './common/AnimeMediaImage';
 
+// Relations carry the AniList ID in uid=1000(oddava) gid=1000(oddava) groups=1000(oddava),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),100(users),989(docker) (null for Jikan-sourced entries) and the MAL ID in .
+const relationKey = (rel) => (rel.id ?  : );
+
 export default function FranchiseSection({ relations, accentColor, sourceSlug }) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -16,10 +19,13 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
 
     const handleFetchAndNavigate = useCallback(async (rel) => {
         if (loadingId) return;
-        setLoadingId(rel.id);
+        setLoadingId(relationKey(rel));
 
         try {
-            const response = await animeApi.fetchFranchise(rel.id, sourceSlug);
+            const response = await animeApi.fetchFranchise(
+                { anilistId: rel.id, malId: rel.mal_id },
+                sourceSlug,
+            );
             const { slug } = response.data;
             if (slug) {
                 // Ensure we don't reuse stale detail payloads for newly linked franchise entries.
@@ -128,7 +134,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
             <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory">
                 {displayRelations.map((rel) => (
                     <FranchiseCard
-                        key={rel.id}
+                        key={relationKey(rel)}
                         rel={rel}
                         label={relationLabels[rel.type] || 'Related'}
                         onFetch={handleFetchAndNavigate}
@@ -144,7 +150,7 @@ function FranchiseCard({ rel, label, onFetch }) {
 
     useEffect(() => {
         setIsLoaded(false);
-    }, [rel?.id, rel?.cover]);
+    }, [rel?.id, rel?.mal_id, rel?.cover]);
 
     const handleImageError = useCallback(() => {
         // Prevent permanent skeleton state if image + fallback both fail.

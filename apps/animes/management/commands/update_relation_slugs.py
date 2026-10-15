@@ -5,6 +5,7 @@ This updates existing relations data to include the slug field for proper naviga
 from django.core.management.base import BaseCommand
 
 from ...models import Anime
+from ...services.relation_links import find_related_anime, match_relation
 
 
 class Command(BaseCommand):
@@ -37,22 +38,19 @@ class Command(BaseCommand):
                 relations = anime.relations or []
                 needs_update = False
 
-                for rel in relations:
-                    # Check if slug is missing
-                    if "slug" not in rel or rel.get("slug") is None:
-                        anilist_id = rel.get("id")
-                        if anilist_id:
-                            try:
-                                related = Anime.objects.get(anilist_id=anilist_id)
-                                rel["slug"] = related.slug
-                                needs_update = True
-                                if dry_run:
-                                    self.stdout.write(
-                                        f"Would update {anime.title} -> {rel.get('title')}: {related.slug}"
-                                    )
-                            except Anime.DoesNotExist:
-                                # Related anime not in database yet, skip
-                                pass
+                missing = [rel for rel in relations if not rel.get("slug")]
+                found = find_related_anime(missing)
+                for rel in missing:
+                    related = match_relation(rel, found)
+                    if related is None:
+                        # Related anime not in database yet, skip
+                        continue
+                    rel["slug"] = related.slug
+                    needs_update = True
+                    if dry_run:
+                        self.stdout.write(
+                            f"Would update {anime.title} -> {rel.get('title')}: {related.slug}"
+                        )
 
                 if needs_update and not dry_run:
                     anime.relations = relations

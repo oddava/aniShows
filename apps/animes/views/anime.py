@@ -433,27 +433,30 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         permission_classes=[IsSuperUser],
     )
     def franchise_fetch(self, request):
-        anilist_id = request.data.get("anilist_id")
-        if not anilist_id:
+        provider_ids = {}
+        for field in ("anilist_id", "mal_id"):
+            raw_value = request.data.get(field)
+            if raw_value in (None, ""):
+                continue
+            try:
+                provider_ids[field] = int(raw_value)
+            except (ValueError, TypeError):
+                return error_response(
+                    f"{field} must be a valid integer",
+                    code=f"invalid_{field}",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+        if not provider_ids:
             return error_response(
-                "anilist_id is required",
+                "anilist_id or mal_id is required",
                 code="missing_anilist_id",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            anilist_id = int(anilist_id)
-        except (ValueError, TypeError):
-            return error_response(
-                "anilist_id must be a valid integer",
-                code="invalid_anilist_id",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
             client_ip = get_client_ip(request)
-            result = self.franchise_import_service.import_from_anilist(
-                anilist_id=anilist_id,
+            result = self.franchise_import_service.import_related_anime(
+                **provider_ids,
                 client_ip=client_ip,
                 source_slug=request.data.get("source_slug"),
                 rate_limit_key=f"user:{request.user.pk}:{client_ip}",

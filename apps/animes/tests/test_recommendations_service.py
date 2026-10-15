@@ -40,10 +40,11 @@ class RecommendationServiceQualityTests(APITestCase):
             "site_rank": 180,
             "trending_rank": 120,
             "release_date": date(2020, 1, 1),
-            "studio": self.studio_a,
         }
+        studio = overrides.pop("studio", self.studio_a)
         payload.update(overrides)
         anime = Anime.objects.create(**payload)
+        anime.set_studios([studio])
         if genres:
             anime.genres.set(genres)
         return anime

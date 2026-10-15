@@ -28,9 +28,11 @@ class AnimeDetailRecommendationsTests(APITestCase):
             anime_type="TV",
             status="Finished",
             anilist_id=100,
+            mal_id=1100,
             relations=[
                 {
                     "id": 200,
+                    "mal_id": 1200,
                     "slug": "frieren-season-2",
                     "type": "SEQUEL",
                     "title": "Frieren Season 2",
@@ -46,6 +48,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
             anime_type="TV",
             status="Upcoming",
             anilist_id=200,
+            mal_id=1200,
             rating=8.8,
         )
         self.franchise_entry.genres.add(self.genre)
@@ -57,6 +60,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
             anime_type="TV",
             status="Finished",
             anilist_id=300,
+            mal_id=1300,
             rating=8.9,
         )
         self.anilist_recommendation.genres.add(self.genre)
@@ -68,6 +72,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
             anime_type="TV",
             status="Finished",
             anilist_id=400,
+            mal_id=1400,
             rating=8.7,
         )
         self.fallback_recommendation.genres.add(self.genre)
@@ -78,9 +83,9 @@ class AnimeDetailRecommendationsTests(APITestCase):
     )
     def test_anilist_recommendations_exclude_franchise_entries(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [
-            {"id": 200, "title": "Frieren Season 2"},
-            {"id": 300, "title": "Delicious in Dungeon"},
-            {"id": 100, "title": "Frieren"},
+            {"mal_id": 1200, "title": "Frieren Season 2"},
+            {"mal_id": 1300, "title": "Delicious in Dungeon"},
+            {"mal_id": 1100, "title": "Frieren"},
         ]
 
         response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
@@ -91,7 +96,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
             [self.anilist_recommendation.slug],
         )
         mock_get_recommendations.assert_awaited_once_with(
-            self.anime.anilist_id,
+            self.anime.mal_id,
             limit=12,
             request_budget="interactive",
         )

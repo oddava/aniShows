@@ -147,15 +147,6 @@ class BaseImporter:
                     self.fetched_count += 1
                     return anime
 
-            if anilist_id and anilist_id >= JikanService.ANIME_ID_OFFSET:
-                logger.info(f"Fetching anime by sync ID: {anilist_id}")
-                anime_data = self._run_async(service.get_anime_by_id(anilist_id))
-                if anime_data:
-                    anime = service.save_anime_to_db(anime_data)
-                    logger.info(f"Fetched and saved: {anime.title}")
-                    self.fetched_count += 1
-                    return anime
-
             if title and (allow_title_search or (anilist_id and not mal_id)):
                 logger.info(f"Searching anime by title: {title}")
                 results = self._run_async(service.search_anime(title))

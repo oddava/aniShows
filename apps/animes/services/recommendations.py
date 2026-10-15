@@ -20,6 +20,12 @@ from ...users.models import UserAnimeList
 from ..models import Anime, UserFavorite, UserRecommendation
 from .offline_catalog import PLACEHOLDER_SYNOPSIS
 
+ANIME_STUDIOS_PREFETCH = Anime.studios_prefetch("anime__")
+
+
+def _studio_ids(anime: Anime) -> set[int]:
+    return {studio.id for studio in anime.ordered_studios}
+
 User = get_user_model()
 
 
@@ -62,8 +68,8 @@ class ContentBasedRecommender:
 
         user_lists = (
             UserAnimeList.objects.filter(user=user)
-            .select_related("anime", "anime__studio")
-            .prefetch_related("anime__genres")
+            .select_related("anime")
+            .prefetch_related("anime__genres", ANIME_STUDIOS_PREFETCH)
         )
 
         for entry in user_lists:
@@ -82,8 +88,8 @@ class ContentBasedRecommender:
 
         favorites = (
             UserFavorite.objects.filter(user=user)
-            .select_related("anime", "anime__studio")
-            .prefetch_related("anime__genres")
+            .select_related("anime")
+            .prefetch_related("anime__genres", ANIME_STUDIOS_PREFETCH)
         )
         for fav in favorites:
             anime = fav.anime
@@ -118,7 +124,7 @@ class ContentBasedRecommender:
                     "id": anime.id,
                     "title": anime.title,
                     "genre_ids": {g.id for g in anime.genres.all()},
-                    "studio_id": anime.studio_id,
+                    "studio_ids": _studio_ids(anime),
                     "anime_type": anime.anime_type,
                     "rating": float(anime.rating) if anime.rating is not None else None,
                 }
@@ -156,8 +162,8 @@ class ContentBasedRecommender:
         for genre in anime.genres.all():
             preferences["liked_genres"][genre.id] += weight
 
-        if anime.studio_id:
-            preferences["liked_studios"][anime.studio_id] += weight
+        for studio_id in _studio_ids(anime):
+            preferences["liked_studios"][studio_id] += weight
 
         preferences["preferred_types"][anime.anime_type] += weight
 
@@ -213,6 +219,7 @@ class ContentBasedRecommender:
             return 0.0, None
 
         candidate_genres = {g.id for g in anime.genres.all()}
+        candidate_studios = _studio_ids(anime)
         anime_rating = float(anime.rating) if anime.rating is not None else None
 
         best_similarity = 0.0
@@ -226,9 +233,7 @@ class ContentBasedRecommender:
                 if union:
                     genre_similarity = len(candidate_genres & anchor_genres) / len(union)
 
-            studio_similarity = (
-                1.0 if anime.studio_id and anchor["studio_id"] and anime.studio_id == anchor["studio_id"] else 0.0
-            )
+            studio_similarity = 1.0 if candidate_studios & anchor["studio_ids"] else 0.0
             type_similarity = 1.0 if anime.anime_type == anchor["anime_type"] else 0.0
 
             rating_similarity = 0.0
@@ -272,10 +277,14 @@ class ContentBasedRecommender:
 
         score = genre_similarity * 0.35 + anchor_similarity * 0.4 + quality_prior * 0.15
 
-        if anime.studio_id and anime.studio_id in preferences["liked_studios"]:
+        liked_studio = next(
+            (studio for studio in anime.ordered_studios if studio.id in preferences["liked_studios"]),
+            None,
+        )
+        if liked_studio is not None:
             metadata["studio_match"] = True
-            metadata["studio"] = anime.studio.name if anime.studio else ""
-            score += preferences["liked_studios"][anime.studio_id] * 0.07
+            metadata["studio"] = liked_studio.name
+            score += preferences["liked_studios"][liked_studio.id] * 0.07
 
         if anime.anime_type in preferences["preferred_types"]:
             metadata["type_match"] = True
@@ -309,8 +318,7 @@ class ContentBasedRecommender:
             .exclude(status=Anime.AnimeStatus.unknown)
             .exclude(anime_type=Anime.AnimeType.unknown)
             .filter(rating__isnull=False)
-            .select_related("studio")
-            .prefetch_related("genres")
+            .prefetch_related("genres", Anime.studios_prefetch())
         )
 
     def _determine_reason(self, metadata: dict) -> str:
@@ -494,8 +502,7 @@ class ContentBasedRecommender:
             .exclude(status=Anime.AnimeStatus.unknown)
             .exclude(anime_type=Anime.AnimeType.unknown)
             .filter(rating__isnull=False, member_count__gte=self.SOFT_MIN_MEMBER_COUNT)
-            .select_related("studio")
-            .prefetch_related("genres")
+            .prefetch_related("genres", Anime.studios_prefetch())
         )
 
         def append_unique(queryset, score: float, reason: str) -> None:
@@ -614,8 +621,8 @@ class RecommendationService:
         base_queryset = (
             UserRecommendation.objects.filter(user=user, is_dismissed=False)
             .exclude(anime__offline_sync_state__quarantined=True)
-            .select_related("anime", "anime__studio")
-            .prefetch_related("anime__genres")
+            .select_related("anime")
+            .prefetch_related("anime__genres", ANIME_STUDIOS_PREFETCH)
         )
 
         stale_before = timezone.now() - timedelta(hours=self.STALE_AFTER_HOURS)
@@ -627,8 +634,8 @@ class RecommendationService:
             base_queryset = (
                 UserRecommendation.objects.filter(user=user, is_dismissed=False)
                 .exclude(anime__offline_sync_state__quarantined=True)
-                .select_related("anime", "anime__studio")
-                .prefetch_related("anime__genres")
+                .select_related("anime")
+                .prefetch_related("anime__genres", ANIME_STUDIOS_PREFETCH)
             )
 
         return list(base_queryset.order_by("-score", "-created_at")[:limit])

@@ -7,6 +7,7 @@ from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
 from ..models import Anime
 from .jikan import JikanService
+from .relation_links import anime_keys, relation_key
 
 
 class FranchiseImportError(Exception):
@@ -27,22 +28,26 @@ class FranchiseImportService:
     rate_limit = 10
     rate_window_seconds = 60
 
-    def import_from_anilist(
+    def import_related_anime(
         self,
         *,
-        anilist_id: int,
+        anilist_id: int | None = None,
+        mal_id: int | None = None,
         client_ip: str,
         source_slug: str | None = None,
         rate_limit_key: str | None = None,
     ) -> FranchiseImportResult:
-        existing = Anime.objects.filter(anilist_id=anilist_id).first()
+        if not anilist_id and not mal_id:
+            raise FranchiseImportError("anilist_id or mal_id is required", 400)
+
+        existing = self._find_existing(anilist_id=anilist_id, mal_id=mal_id)
         if existing:
             if source_slug:
-                self.update_relation_slug(source_slug, anilist_id, existing.slug)
+                self.update_relation_slug(source_slug, existing)
 
             if self._is_missing_primary_images(existing):
                 self._enforce_rate_limit(rate_limit_key or client_ip)
-                self._refresh_existing_anime(existing, anilist_id)
+                self._refresh_existing_anime(existing)
                 existing.refresh_from_db(fields=["title", "slug"])
 
             invalidate_public_cache_keys(
@@ -55,15 +60,19 @@ class FranchiseImportService:
                 imported=False,
             )
 
+        if not mal_id:
+            # Jikan can only fetch by MAL ID; an unknown AniList-only relation can't be imported.
+            raise FranchiseImportError("Not found", 404)
+
         self._enforce_rate_limit(rate_limit_key or client_ip)
 
         service = JikanService(enable_caching=False, enable_rate_limiting=True)
         try:
-            item = async_to_sync(service.get_anime_by_id)(anilist_id)
+            item = async_to_sync(service.search_by_mal_id)(mal_id, anilist_id=anilist_id)
             if not item:
                 raise FranchiseImportError("Not found", 404)
 
-            imported = self._will_create_new_anime(item)
+            imported = self._find_existing(anilist_id=item.get("id"), mal_id=item.get("idMal")) is None
             anime = service.save_anime_to_db(item)
             self._ensure_external_image_refs(anime, item)
             invalidate_public_cache_keys(
@@ -77,7 +86,7 @@ class FranchiseImportService:
                 sync_theme_songs.delay(anime_id=anime.id)
 
             if source_slug:
-                self.update_relation_slug(source_slug, anilist_id, anime.slug)
+                self.update_relation_slug(source_slug, anime)
 
             return FranchiseImportResult(
                 slug=anime.slug,
@@ -87,25 +96,36 @@ class FranchiseImportService:
         except FranchiseImportError:
             raise
         except Exception as exc:
-            logger.error(f"Error importing franchise anime {anilist_id}: {exc}", exc_info=True)
+            logger.error(
+                f"Error importing franchise anime (MAL {mal_id}, AniList {anilist_id}): {exc}",
+                exc_info=True,
+            )
             raise FranchiseImportError("Import failed", 500) from exc
         finally:
             async_to_sync(service.close)()
 
-    def _refresh_existing_anime(self, anime: Anime, anilist_id: int) -> None:
+    @staticmethod
+    def _find_existing(*, anilist_id: int | None, mal_id: int | None) -> Anime | None:
+        if anilist_id:
+            anime = Anime.objects.filter(anilist_id=anilist_id).first()
+            if anime:
+                return anime
+        if mal_id:
+            return Anime.objects.filter(mal_id=mal_id).first()
+        return None
+
+    def _refresh_existing_anime(self, anime: Anime) -> None:
         """Fetch fresh sync data for an existing anime with missing media metadata."""
         service = JikanService(enable_caching=False, enable_rate_limiting=True)
         try:
-            item = async_to_sync(service.get_anime_by_id)(anilist_id)
+            item = async_to_sync(service.resolve_media_for_anime)(anime)
             if item:
                 refreshed = service.save_anime_to_db(item)
                 self._ensure_external_image_refs(refreshed, item)
             else:
-                logger.warning(
-                    f"No Jikan payload returned while refreshing existing anime {anilist_id}"
-                )
+                logger.warning(f"No Jikan payload returned while refreshing existing anime {anime.slug}")
         except Exception as exc:
-            logger.warning(f"Failed to refresh existing anime {anime.slug} ({anilist_id}): {exc}")
+            logger.warning(f"Failed to refresh existing anime {anime.slug}: {exc}")
         finally:
             async_to_sync(service.close)()
 
@@ -152,31 +172,15 @@ class FranchiseImportService:
         cache.set(rate_key, current_count + 1, timeout=self.rate_window_seconds)
 
     @staticmethod
-    def _will_create_new_anime(item: dict) -> bool:
-        anilist_id = item.get("id")
-        mal_id = item.get("idMal")
-        title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
-
-        if anilist_id and Anime.objects.filter(anilist_id=anilist_id).exists():
-            return False
-        if mal_id and Anime.objects.filter(mal_id=mal_id).exists():
-            return False
-        if title:
-            from django.utils.text import slugify
-
-            if Anime.objects.filter(slug=slugify(title)).exists():
-                return False
-        return True
-
-    @staticmethod
-    def update_relation_slug(source_slug: str, anilist_id: int, target_slug: str) -> None:
+    def update_relation_slug(source_slug: str, target: Anime) -> None:
         try:
             source_anime = Anime.objects.get(slug=source_slug)
             relations = source_anime.relations or []
+            target_keys = set(anime_keys(target))
             updated = False
             for rel in relations:
-                if rel.get("id") == anilist_id and not rel.get("slug"):
-                    rel["slug"] = target_slug
+                if relation_key(rel) in target_keys and not rel.get("slug"):
+                    rel["slug"] = target.slug
                     updated = True
             if updated:
                 source_anime.relations = relations

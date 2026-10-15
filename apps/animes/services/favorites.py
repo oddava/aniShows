@@ -50,8 +50,8 @@ def get_favorite_queryset(request_user, username=None):
 
     return (
         UserFavorite.objects.filter(user=target_user)
-        .select_related("anime__studio")
-        .prefetch_related("anime__genres")
+        .select_related("anime")
+        .prefetch_related("anime__genres", Anime.studios_prefetch("anime__"))
     )
 
 

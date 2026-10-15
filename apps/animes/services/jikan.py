@@ -25,9 +25,11 @@ from ...shared.logger import logger
 from ...shared.retry import backoff
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
 from .rate_limiting import APICallCache, CircuitBreaker
+from .relation_links import link_relation_slugs
 
 DEFAULT_JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
+UNIQUE_ANIME_FIELDS = ("anilist_id", "mal_id", "slug")
 
 
 def get_jikan_base_url() -> str:
@@ -208,7 +210,9 @@ class JikanService:
     """
     )
 
-    ANIME_ID_OFFSET = 1_500_000_000
+    # Anime payloads carry the real AniList ID (or None) in "id" and the MAL ID in "idMal".
+    # Characters and staff still get synthetic IDs in their own ranges (Character/Staff
+    # rows are keyed by anilist_id).
     CHARACTER_ID_OFFSET = 1_600_000_000
     STAFF_ID_OFFSET = 1_700_000_000
     MAX_INT_32 = 2_147_483_647
@@ -724,62 +728,62 @@ class JikanService:
         return []
 
     async def get_anime_by_id(self, anilist_id: int) -> dict | None:
+        """Fetch by real AniList ID. Jikan only knows MAL IDs, so this needs a local row."""
         if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > self.MAX_INT_32:
-            self._set_last_error("invalid_variable", "invalid_sync_id")
+            self._set_last_error("invalid_variable", "invalid_anilist_id")
             return None
 
-        mal_id, preserve_requested_id = await self._resolve_mal_id_for_service_id(anilist_id)
+        mal_id = await self._mal_id_for_anilist_id(anilist_id)
         if not mal_id:
-            self._set_last_error("not_found", f"sync_id:{anilist_id}")
+            self._set_last_error("not_found", f"anilist_id:{anilist_id}")
             return None
 
-        item = await self._get_full_anime_payload(mal_id, preserve_service_id=anilist_id if preserve_requested_id else None)
+        item = await self._get_full_anime_payload(mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
-            self._set_last_error("not_found", f"sync_id:{anilist_id}")
+            self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
     async def get_airing_anime_by_id(self, anilist_id: int) -> dict | None:
         if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > self.MAX_INT_32:
-            self._set_last_error("invalid_variable", "invalid_sync_id")
+            self._set_last_error("invalid_variable", "invalid_anilist_id")
             return None
 
-        mal_id, preserve_requested_id = await self._resolve_mal_id_for_service_id(anilist_id)
+        mal_id = await self._mal_id_for_anilist_id(anilist_id)
         if not mal_id:
-            self._set_last_error("not_found", f"sync_id:{anilist_id}")
+            self._set_last_error("not_found", f"anilist_id:{anilist_id}")
             return None
 
-        item = await self._get_airing_anime_payload(
-            mal_id,
-            preserve_service_id=anilist_id if preserve_requested_id else None,
-        )
+        item = await self._get_airing_anime_payload(mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
-            self._set_last_error("not_found", f"sync_id:{anilist_id}")
+            self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
-    async def search_by_mal_id(self, mal_id: int) -> dict | None:
+    async def search_by_mal_id(self, mal_id: int, *, anilist_id: int | None = None) -> dict | None:
         resolved_mal_id = self._coerce_positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
 
-        item = await self._get_full_anime_payload(resolved_mal_id)
+        item = await self._get_full_anime_payload(resolved_mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
             self._set_last_error("not_found", f"mal_id:{resolved_mal_id}")
         return None
 
-    async def search_airing_by_mal_id(self, mal_id: int) -> dict | None:
+    async def search_airing_by_mal_id(
+        self, mal_id: int, *, anilist_id: int | None = None
+    ) -> dict | None:
         resolved_mal_id = self._coerce_positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
 
-        item = await self._get_airing_anime_payload(resolved_mal_id)
+        item = await self._get_airing_anime_payload(resolved_mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
@@ -823,31 +827,17 @@ class JikanService:
         return True
 
     async def resolve_airing_media_for_anime(self, anime: Anime) -> dict | None:
-        if anime.anilist_id:
-            item = await self.get_airing_anime_by_id(anime.anilist_id)
-            if item:
-                return item
-
         if anime.mal_id:
-            item = await self.search_airing_by_mal_id(anime.mal_id)
+            item = await self.search_airing_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
             if item:
-                if anime.anilist_id and item.get("id") != anime.anilist_id:
-                    item = {**item, "id": anime.anilist_id}
                 return item
 
         return await self.resolve_media_for_anime(anime)
 
     async def resolve_media_for_anime(self, anime: Anime) -> dict | None:
-        if anime.anilist_id:
-            item = await self.get_anime_by_id(anime.anilist_id)
-            if item:
-                return item
-
         if anime.mal_id:
-            item = await self.search_by_mal_id(anime.mal_id)
+            item = await self.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
             if item:
-                if anime.anilist_id and item.get("id") != anime.anilist_id:
-                    item = {**item, "id": anime.anilist_id}
                 return item
 
         title = (anime.title or "").strip()
@@ -866,13 +856,9 @@ class JikanService:
         if anime.title_jp:
             expected_titles.add(anime.title_jp.casefold())
 
+        # Jikan results never carry AniList IDs, so match on MAL ID (when known) and title.
         for candidate in results:
-            candidate_service_id = candidate.get("id")
-            candidate_mal_id = candidate.get("idMal")
-
-            if anime.anilist_id and candidate_service_id != anime.anilist_id and anime.mal_id is None:
-                continue
-            if anime.mal_id and candidate_mal_id != anime.mal_id:
+            if anime.mal_id and candidate.get("idMal") != anime.mal_id:
                 continue
 
             titles = candidate.get("title") or {}
@@ -882,20 +868,14 @@ class JikanService:
                 (titles.get("native") or "").casefold(),
             }
             if expected_titles.intersection(candidate_titles):
-                full_item = candidate
-                if anime.anilist_id and full_item and full_item.get("id") != anime.anilist_id:
-                    full_item = {**full_item, "id": anime.anilist_id}
-                return full_item
+                if anime.anilist_id:
+                    return {**candidate, "id": anime.anilist_id}
+                return candidate
 
-        if anime.anilist_id or anime.mal_id:
+        if anime.mal_id:
             for candidate in results:
-                if anime.anilist_id and candidate.get("id") == anime.anilist_id:
-                    return candidate
-                if anime.mal_id and candidate.get("idMal") == anime.mal_id:
-                    full_item = await self.search_by_mal_id(anime.mal_id)
-                    if anime.anilist_id and full_item and full_item.get("id") != anime.anilist_id:
-                        full_item = {**full_item, "id": anime.anilist_id}
-                    return full_item
+                if candidate.get("idMal") == anime.mal_id:
+                    return await self.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
 
         self._set_last_error("not_found", f"title:{title}")
         return None
@@ -1066,7 +1046,8 @@ class JikanService:
             "tags": tags,
             "relations": [
                 {
-                    "id": edge["node"]["id"],
+                    "id": edge["node"].get("id"),
+                    "mal_id": edge["node"].get("idMal"),
                     "type": edge["relationType"],
                     "title": edge["node"]["title"].get("english")
                     or edge["node"]["title"].get("romaji")
@@ -1109,7 +1090,7 @@ class JikanService:
         self,
         mal_id: int,
         *,
-        preserve_service_id: int | None = None,
+        anilist_id: int | None = None,
     ) -> dict | None:
         anime_payload, characters_payload, staff_payload, themes_payload, stats_payload, next_airing = (
             await asyncio.gather(
@@ -1133,14 +1114,14 @@ class JikanService:
             themes_payload=themes_payload,
             stats_payload=stats_payload,
             next_airing=next_airing,
-            preserve_service_id=preserve_service_id,
+            anilist_id=anilist_id,
         )
 
     async def _get_airing_anime_payload(
         self,
         mal_id: int,
         *,
-        preserve_service_id: int | None = None,
+        anilist_id: int | None = None,
     ) -> dict | None:
         anime_payload = await self._get(
             f"/anime/{mal_id}/full",
@@ -1157,7 +1138,7 @@ class JikanService:
         return self._normalize_anime_item(
             anime_data,
             next_airing=next_airing,
-            preserve_service_id=preserve_service_id,
+            anilist_id=anilist_id,
         )
 
     @classmethod
@@ -1179,10 +1160,6 @@ class JikanService:
         return sync_id
 
     @classmethod
-    def _anime_sync_id(cls, mal_id: int | None) -> int | None:
-        return cls._service_id_from_mal_id(mal_id, offset=cls.ANIME_ID_OFFSET)
-
-    @classmethod
     def _character_sync_id(cls, mal_id: int | None) -> int | None:
         return cls._service_id_from_mal_id(mal_id, offset=cls.CHARACTER_ID_OFFSET)
 
@@ -1190,25 +1167,10 @@ class JikanService:
     def _staff_sync_id(cls, mal_id: int | None) -> int | None:
         return cls._service_id_from_mal_id(mal_id, offset=cls.STAFF_ID_OFFSET)
 
-    @classmethod
-    def _anime_mal_id_from_sync_id(cls, sync_id: int | None) -> int | None:
-        resolved_sync_id = cls._coerce_positive_int(sync_id)
-        if not resolved_sync_id or resolved_sync_id < cls.ANIME_ID_OFFSET:
-            return None
-        return resolved_sync_id - cls.ANIME_ID_OFFSET
-
-    async def _resolve_mal_id_for_service_id(self, service_id: int) -> tuple[int | None, bool]:
-        decoded = self._anime_mal_id_from_sync_id(service_id)
-        if decoded:
-            return decoded, False
-
-        mal_id = await sync_to_async(
-            lambda: Anime.objects.filter(anilist_id=service_id).values_list("mal_id", flat=True).first()
+    async def _mal_id_for_anilist_id(self, anilist_id: int) -> int | None:
+        return await sync_to_async(
+            lambda: Anime.objects.filter(anilist_id=anilist_id).values_list("mal_id", flat=True).first()
         )()
-        if mal_id:
-            return mal_id, True
-
-        return self._coerce_positive_int(service_id), False
 
     @staticmethod
     def _response_message(response: httpx.Response) -> str:
@@ -1323,11 +1285,16 @@ class JikanService:
         title: str | None = None,
         provider_ids: dict[str, Any] | None = None,
     ) -> Anime | None:
+        """Find the local row for a payload by provider IDs.
+
+        Titles are not unique, so slug/title are only consulted when the payload has no
+        provider IDs at all.
+        """
         resolved_anilist_id = self._coerce_positive_int(anilist_id)
         resolved_mal_id = self._coerce_positive_int(mal_id)
 
-        if resolved_anilist_id and resolved_anilist_id < Anime.JIKAN_ANILIST_ID_OFFSET:
-            anime = Anime.objects.filter(anilist_id=anilist_id).first()
+        if resolved_anilist_id:
+            anime = Anime.objects.filter(anilist_id=resolved_anilist_id).first()
             if anime:
                 return anime
 
@@ -1349,16 +1316,17 @@ class JikanService:
             if anime:
                 return anime
 
-            anime = Anime.objects.filter(anilist_id=resolved_anilist_id).first()
-            if anime:
-                return anime
-
+        has_provider_id = bool(resolved_anilist_id or resolved_mal_id)
         for provider, value in (provider_ids or {}).items():
             if value in (None, ""):
                 continue
+            has_provider_id = True
             anime = Anime.objects.filter(**{f"provider_ids__{provider}": value}).first()
             if anime:
                 return anime
+
+        if has_provider_id:
+            return None
 
         if slug:
             anime = Anime.objects.filter(slug=slug).first()
@@ -1378,7 +1346,7 @@ class JikanService:
         self._apply_recent_airing_transition(anime, anime_data)
         original_values = {field: getattr(anime, field, None) for field in anime_data}
 
-        for unique_field in ("title", "anilist_id", "mal_id", "slug"):
+        for unique_field in UNIQUE_ANIME_FIELDS:
             if unique_field not in anime_data:
                 continue
             value = anime_data.get(unique_field)
@@ -1400,7 +1368,7 @@ class JikanService:
         try:
             anime.save()
         except IntegrityError as exc:
-            for unique_field in ("title", "anilist_id", "mal_id", "slug"):
+            for unique_field in UNIQUE_ANIME_FIELDS:
                 if unique_field in original_values:
                     setattr(anime, unique_field, original_values[unique_field])
             anime.save()
@@ -1444,7 +1412,7 @@ class JikanService:
         themes_payload: dict | None = None,
         stats_payload: dict | None = None,
         next_airing: dict | None = None,
-        preserve_service_id: int | None = None,
+        anilist_id: int | None = None,
     ) -> dict[str, Any]:
         mal_id = self._coerce_positive_int(item.get("mal_id"))
         broadcast = self._normalize_broadcast_payload(item.get("broadcast"))
@@ -1465,7 +1433,7 @@ class JikanService:
         )
 
         normalized = {
-            "id": preserve_service_id or self._anime_sync_id(mal_id),
+            "id": anilist_id,
             "idMal": mal_id,
             "title": self._normalize_title_payload(item),
             "format": self._normalize_format(item.get("type")),
@@ -1693,7 +1661,8 @@ class JikanService:
                     {
                         "relationType": relation_type,
                         "node": {
-                            "id": self._anime_sync_id(mal_id),
+                            "id": None,
+                            "idMal": mal_id,
                             "title": {
                                 "romaji": (entry.get("name") or "").strip(),
                                 "english": (entry.get("name") or "").strip(),
@@ -1839,13 +1808,14 @@ class JikanService:
             )
             anime.genres.add(genre)
 
-        studios = (item.get("studios") or {}).get("nodes") or []
-        if studios:
-            studio_name = studios[0].get("name")
-            if studio_name:
-                studio, _ = Studio.objects.get_or_create(name=studio_name)
-                anime.studio = studio
-                anime.save()
+        studio_names = [
+            node.get("name") for node in (item.get("studios") or {}).get("nodes") or []
+        ]
+        studio_names = [name for name in studio_names if name]
+        if studio_names:
+            anime.set_studios(
+                Studio.objects.get_or_create(name=name)[0] for name in studio_names
+            )
 
         characters_data = (item.get("characterPreview") or {}).get("edges") or []
         for edge in characters_data:
@@ -2056,7 +2026,7 @@ class JikanService:
         return async_to_sync(self._save_anime_to_db_async)(item)
 
     async def _save_anime_to_db_async(self, item: dict) -> Anime:
-        sync_id = item.get("id")
+        anilist_id = item.get("id")
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
         title_native = item.get("title", {}).get("native")
@@ -2067,7 +2037,7 @@ class JikanService:
 
         base_slug = slugify(title)
         existing = await sync_to_async(self._lookup_existing_anime)(
-            anilist_id=sync_id,
+            anilist_id=anilist_id,
             mal_id=mal_id,
             slug=base_slug,
             title=title,
@@ -2075,48 +2045,29 @@ class JikanService:
         )
         if existing:
             logger.info(
-                "Found existing anime for Jikan sync_id=%s mal_id=%s: %s",
-                sync_id,
+                "Found existing anime for Jikan anilist_id=%s mal_id=%s: %s",
+                anilist_id,
                 mal_id,
                 existing.title,
             )
             await self._update_anime_async(existing, item, title, title_native, existing.slug)
             return existing
 
-        final_slug = base_slug
-        counter = 0
-        while True:
-            try:
-                await sync_to_async(Anime.objects.get)(slug=final_slug)
-                counter += 1
-                final_slug = f"{base_slug}-{counter}"
-                if counter > 100:
-                    raise ValueError(
-                        f"Could not generate unique slug for '{title}' after 100 attempts"
-                    )
-            except Anime.DoesNotExist:
-                break
+        final_slug = await sync_to_async(Anime.available_slug)(
+            base_slug, year=item.get("seasonYear")
+        )
 
         anime_data = self._prepare_anime_data(item, title, title_native, final_slug)
-        anime_data["anilist_id"] = sync_id
+        anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
-
-        relations = anime_data.get("relations", [])
-        for rel in relations:
-            related_sync_id = rel.get("id")
-            if related_sync_id:
-                try:
-                    related_anime = await sync_to_async(Anime.objects.get)(anilist_id=related_sync_id)
-                    rel["slug"] = related_anime.slug
-                except Anime.DoesNotExist:
-                    rel["slug"] = None
+        await sync_to_async(link_relation_slugs)(anime_data.get("relations", []))
 
         try:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
         except IntegrityError as exc:
             recovered = await sync_to_async(self._lookup_existing_anime)(
-                anilist_id=sync_id,
+                anilist_id=anilist_id,
                 mal_id=mal_id,
                 slug=final_slug,
                 title=title,
@@ -2124,7 +2075,7 @@ class JikanService:
             )
             if recovered:
                 logger.warning(
-                    f"Recovered from create integrity conflict for '{title}' (sync ID: {sync_id}): {exc}"
+                    f"Recovered from create integrity conflict for '{title}' (MAL ID: {mal_id}): {exc}"
                 )
                 await self._update_anime_async(recovered, item, title, title_native, recovered.slug)
                 return recovered
@@ -2149,15 +2100,7 @@ class JikanService:
             anime_data["next_airing_episode"] = anime.next_airing_episode
             anime_data["next_airing_date"] = anime.next_airing_date
 
-        relations = anime_data.get("relations", [])
-        for rel in relations:
-            related_sync_id = rel.get("id")
-            if related_sync_id:
-                try:
-                    related_anime = await sync_to_async(Anime.objects.get)(anilist_id=related_sync_id)
-                    rel["slug"] = related_anime.slug
-                except Anime.DoesNotExist:
-                    rel["slug"] = None
+        await sync_to_async(link_relation_slugs)(anime_data.get("relations", []))
 
         await self._update_anime(anime, anime_data)
         await self._handle_relationships_async(anime, item)
@@ -2172,10 +2115,10 @@ class JikanService:
     ) -> dict | None:
         resolved_mal_id = self._coerce_positive_int(mal_id)
         if resolved_mal_id is None and anilist_id is not None:
-            resolved_mal_id, _ = await self._resolve_mal_id_for_service_id(anilist_id)
+            resolved_mal_id = await self._mal_id_for_anilist_id(anilist_id)
 
         if resolved_mal_id is None:
-            self._set_last_error("invalid_variable", "missing_sync_or_mal_id")
+            self._set_last_error("invalid_variable", "missing_mal_id")
             return None
 
         payload = await self._get(
@@ -2202,21 +2145,21 @@ class JikanService:
             )
 
         return {
-            "id": anilist_id or self._anime_sync_id(resolved_mal_id),
+            "id": anilist_id,
             "idMal": resolved_mal_id,
             "streamingEpisodes": streaming_episodes,
         }
 
     async def get_recommendations_for_anime(
         self,
-        anilist_id: int,
+        mal_id: int,
         *,
         limit: int = 8,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> list[dict]:
-        resolved_mal_id, _ = await self._resolve_mal_id_for_service_id(anilist_id)
+        resolved_mal_id = self._coerce_positive_int(mal_id)
         if not resolved_mal_id:
-            self._set_last_error("invalid_variable", "invalid_sync_id")
+            self._set_last_error("invalid_variable", "invalid_mal_id")
             return []
 
         payload = await self._get(
@@ -2234,15 +2177,13 @@ class JikanService:
         for item in items:
             entry = (item or {}).get("entry") or {}
             recommendation_mal_id = self._coerce_positive_int(entry.get("mal_id"))
-            recommendation_id = self._anime_sync_id(recommendation_mal_id)
-            if not recommendation_id or recommendation_id in seen_ids:
+            if not recommendation_mal_id or recommendation_mal_id in seen_ids:
                 continue
 
-            seen_ids.add(recommendation_id)
+            seen_ids.add(recommendation_mal_id)
             image_data = entry.get("images")
             recommendations.append(
                 {
-                    "id": recommendation_id,
                     "mal_id": recommendation_mal_id,
                     "title": entry.get("title") or "",
                     "title_jp": "",

@@ -69,7 +69,7 @@ class QuarantinedAnimeVisibilityTests(APITestCase):
         self.assertEqual(hidden_response.status_code, status.HTTP_404_NOT_FOUND)
 
 
-class ShadowDuplicateVisibilityTests(APITestCase):
+class SharedTitleVisibilityTests(APITestCase):
     def _anime(self, title: str, **overrides) -> Anime:
         payload = {
             "title": title,
@@ -82,72 +82,28 @@ class ShadowDuplicateVisibilityTests(APITestCase):
         payload.update(overrides)
         return Anime.objects.create(**payload)
 
-    def test_public_anime_list_excludes_shadow_duplicate_when_bannered_canonical_exists(self):
-        canonical = self._anime(
-            "Frieren: Beyond Journey\u2019s End",
-            slug="frieren-beyond-journeys-end",
-            anilist_id=154587,
-            mal_id=52991,
-            banner_image_external_url="https://img.anilist.co/banner.jpg",
-            provider_ids={"anilist": 154587, "myanimelist": 52991},
+    def test_public_anime_list_shows_distinct_anime_sharing_a_title(self):
+        # Titles are not unique: a remake and the original keep their real titles.
+        original = self._anime(
+            "Hunter x Hunter",
+            slug="hunter-x-hunter",
+            mal_id=136,
+            season_year=1999,
         )
-        shadow = self._anime(
-            "Frieren: Beyond Journey's End",
-            slug="frieren-beyond-journeys-end-2",
-            anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 52991,
-            provider_ids={"jikan": 52991, "myanimelist": 52991},
+        remake = self._anime(
+            "Hunter x Hunter",
+            slug="hunter-x-hunter-2011",
+            mal_id=11061,
+            anilist_id=11061,
+            season_year=2011,
         )
 
-        response = self.client.get(reverse("anime-list"), {"q": "Frieren"})
+        response = self.client.get(reverse("anime-list"), {"q": "Hunter"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        titles = [row["title"] for row in response.data["results"]]
-        self.assertIn(canonical.title, titles)
-        self.assertNotIn(shadow.title, titles)
-
-    def test_public_anime_detail_returns_404_for_shadow_duplicate_when_canonical_exists(self):
-        self._anime(
-            "Frieren: Beyond Journey\u2019s End",
-            slug="frieren-beyond-journeys-end",
-            anilist_id=154587,
-            mal_id=52991,
-            banner_image_external_url="https://img.anilist.co/banner.jpg",
-            provider_ids={"anilist": 154587, "myanimelist": 52991},
-        )
-        shadow = self._anime(
-            "Frieren: Beyond Journey's End",
-            slug="frieren-beyond-journeys-end-2",
-            anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 52991,
-            provider_ids={"jikan": 52991, "myanimelist": 52991},
-        )
-
-        response = self.client.get(reverse("anime-detail", args=[shadow.slug]))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_public_anime_list_excludes_shadow_duplicate_even_without_banner_on_canonical(self):
-        canonical = self._anime(
-            "One Punch Man",
-            slug="one-punch-man",
-            anilist_id=21087,
-            mal_id=30276,
-            provider_ids={"anilist": 21087, "myanimelist": 30276},
-        )
-        # Titles are unique, so a shadow duplicate always differs slightly in title.
-        shadow = self._anime(
-            "One-Punch Man",
-            slug="one-punch-man-jikan",
-            anilist_id=Anime.JIKAN_ANILIST_ID_OFFSET + 30276,
-            provider_ids={"jikan": 30276, "myanimelist": 30276},
-        )
-
-        response = self.client.get(reverse("anime-list"), {"q": "Punch"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-        titles = [row["title"] for row in response.data["results"]]
-        slugs = [row["slug"] for row in response.data["results"]]
-        self.assertIn(canonical.title, titles)
-        self.assertIn(canonical.slug, slugs)
-        self.assertNotIn(shadow.slug, slugs)
+        rows = {row["slug"]: row["title"] for row in response.data["results"]}
+        self.assertEqual(rows.get(original.slug), "Hunter x Hunter")
+        self.assertEqual(rows.get(remake.slug), "Hunter x Hunter")
 
 
 class QuarantinedRecommendationTests(APITestCase):

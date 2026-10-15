@@ -9,7 +9,7 @@ from ...core.services.admin_settings_service import are_reviews_enabled
 from ...core.services.notification_service import NotificationService
 from ...users.models import UserAnimeList
 from ...users.services.cache import invalidate_user_caches
-from ..models import Review, ReviewReaction, ReviewReport, ReviewVote
+from ..models import Anime, Review, ReviewReaction, ReviewReport, ReviewVote
 
 
 @dataclass(slots=True)
@@ -34,9 +34,9 @@ def _base_review_queryset():
         "user",
         "user__userprofile",
         "anime",
-        "anime__studio",
     ).prefetch_related(
         "anime__genres",
+        Anime.studios_prefetch("anime__"),
         Prefetch(
             "user__socialaccount_set",
             queryset=SocialAccount.objects.filter(provider="google").only(
