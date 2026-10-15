@@ -65,8 +65,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--batch-size",
             type=int,
-            default=50,
-            help="Batch size for backfill mode",
+            default=None,
+            help="Batch size (default: 50; offline catalog commands use OFFLINE_RECONCILE_BATCH_SIZE)",
         )
         parser.add_argument(
             "--missing-tags-only",
@@ -260,7 +260,7 @@ class Command(BaseCommand):
         from ...tasks import sync_airing_workflow
 
         phases = options.get("phases") or ["sync", "cleanup", "backfill"]
-        batch_size = options.get("batch_size", 100)
+        batch_size = options["batch_size"] or 50
 
         self.stdout.write(f"Running airing workflow: {phases}")
 
@@ -276,7 +276,7 @@ class Command(BaseCommand):
         from ...tasks import enrich_metadata
 
         mode = options["mode"]
-        batch_size = options["batch_size"]
+        batch_size = options["batch_size"] or 50
         anime_id = options.get("anime_id")
         missing_tags_only = options["missing_tags_only"]
 
@@ -307,7 +307,7 @@ class Command(BaseCommand):
         )
 
         anime_id = options.get("anime_id")
-        batch_size = options["batch_size"]
+        batch_size = options["batch_size"] or 50
         statuses = options.get("status_filter") or None
         force = options["force"]
 
@@ -372,7 +372,7 @@ class Command(BaseCommand):
             resume=resume,
             enqueue_enrichment=enqueue_enrichment,
             enforce_full_sync=True,
-            batch_size=options["batch_size"],
+            batch_size=options["batch_size"] or settings.OFFLINE_RECONCILE_BATCH_SIZE,
             enrichment_chunk_size=enrichment_chunk_size,
         )
 
@@ -382,7 +382,7 @@ class Command(BaseCommand):
         """Reconcile metadata, franchise, and themes for offline-imported anime."""
         from ...tasks import reconcile_offline_catalog_sync
 
-        batch_size = options["batch_size"]
+        batch_size = options["batch_size"] or settings.OFFLINE_RECONCILE_BATCH_SIZE
         chunk_size = options["chunk_size"]
         strict = options["strict"]
         anime_id = options.get("anime_id")
