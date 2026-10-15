@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import random
 import re
@@ -18,20 +17,17 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
-from django.utils import timezone
 from django.utils.text import slugify
 
 from ...shared.logger import logger
-from ...shared.retry import backoff
+from ...shared.retry import backoff, retry_after_seconds
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
+from .provider_base import CatalogProviderBase, with_creation_defaults
 from .rate_limiting import APICallCache, CircuitBreaker
 from .relation_links import sync_relations_from_media
 
 DEFAULT_JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
-UNIQUE_ANIME_FIELDS = ("anilist_id", "mal_id", "slug")
-
-
 def get_jikan_base_url() -> str:
     candidate = DEFAULT_JIKAN_BASE_URL
     if getattr(settings, "configured", False):
@@ -140,7 +136,7 @@ class JikanRateLimiter:
         }
 
 
-class JikanService:
+class JikanService(CatalogProviderBase):
     """Jikan-backed service for MAL-linked enrichment and detail lookups."""
 
     BASE_URL = DEFAULT_JIKAN_BASE_URL
@@ -266,23 +262,6 @@ class JikanService:
         "spin-off": "SPIN_OFF",
         "summary": "SUMMARY",
     }
-    _WEEKDAY_MAP = {
-        "monday": 0,
-        "mondays": 0,
-        "tuesday": 1,
-        "tuesdays": 1,
-        "wednesday": 2,
-        "wednesdays": 2,
-        "thursday": 3,
-        "thursdays": 3,
-        "friday": 4,
-        "fridays": 4,
-        "saturday": 5,
-        "saturdays": 5,
-        "sunday": 6,
-        "sundays": 6,
-    }
-    _WEEKDAY_LABELS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
     def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
         self.base_url = get_jikan_base_url()
@@ -297,13 +276,6 @@ class JikanService:
         self.last_error_code = ""
         self.last_error_message = ""
 
-    def _set_last_error(self, code: str, message: str):
-        self.last_error_code = code
-        self.last_error_message = (message or "")[:500]
-
-    def _reset_last_error(self):
-        self.last_error_code = ""
-        self.last_error_message = ""
 
     def _get_cached_result(self, endpoint: str, params: str) -> dict | None:
         if self.call_cache:
@@ -323,9 +295,6 @@ class JikanService:
     def _record_failure(self):
         self.circuit_breaker.record_failure()
 
-    async def close(self):
-        with contextlib.suppress(Exception):
-            await self.client.aclose()
 
     async def download_image(self, url: str) -> bytes | None:
         """Download image bytes from a trusted HTTPS URL."""
@@ -408,13 +377,6 @@ class JikanService:
         logger.info(f"Blocked untrusted image domain before fetch queue: {domain}")
         return ""
 
-    def _sanitize_search_query(self, query_string: str) -> str:
-        cleaned = (query_string or "").strip()
-        if not cleaned:
-            return ""
-        cleaned = "".join(ch for ch in cleaned if ch.isprintable())
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        return cleaned[:120]
 
     def _search_variants(self, query_string: str) -> list[str]:
         primary = self._sanitize_search_query(query_string)
@@ -490,8 +452,9 @@ class JikanService:
 
                 if response.status_code == 429:
                     _status = "rate_limited"
-                    retry_after = response.headers.get("Retry-After")
-                    wait_time = float(retry_after) if retry_after else min(2 ** attempt, 60)
+                    wait_time = retry_after_seconds(response.headers.get("Retry-After"))
+                    if wait_time is None:
+                        wait_time = min(2**attempt, 60)
                     if self.rate_limiter:
                         self.rate_limiter.record_429(cooldown_hint=wait_time)
                     self._set_last_error("rate_limited", f"http_429:{endpoint_name}")
@@ -880,25 +843,6 @@ class JikanService:
         self._set_last_error("not_found", f"title:{title}")
         return None
 
-    @classmethod
-    def _normalize_broadcast_day(cls, day_name: str | None) -> str:
-        weekday = cls._WEEKDAY_MAP.get(str(day_name or "").strip().lower())
-        if weekday is None:
-            return ""
-        return cls._WEEKDAY_LABELS[weekday]
-
-    @staticmethod
-    def _parse_broadcast_time(time_text: str | None):
-        candidate = str(time_text or "").strip()
-        if not candidate:
-            return None
-
-        for fmt in ("%H:%M", "%H:%M:%S"):
-            try:
-                return datetime.strptime(candidate, fmt).time()
-            except ValueError:
-                continue
-        return None
 
     def _normalize_broadcast_payload(self, payload: dict[str, Any] | None) -> dict[str, str]:
         broadcast = payload if isinstance(payload, dict) else {}
@@ -907,10 +851,6 @@ class JikanService:
             "time": str(broadcast.get("time") or "").strip(),
             "timezone": str(broadcast.get("timezone") or "").strip(),
         }
-
-    def _has_broadcast_payload(self, item: dict[str, Any] | None) -> bool:
-        broadcast = self._normalize_broadcast_payload((item or {}).get("broadcast"))
-        return any(broadcast.values())
 
     @staticmethod
     def _parse_next_episode_airing_at(value: Any) -> int | None:
@@ -967,109 +907,6 @@ class JikanService:
 
         return estimated_next_airing
 
-    def _has_next_airing_payload(self, item: dict[str, Any] | None) -> bool:
-        return self._merge_next_airing_payload(item or {}, None) is not None
-
-    def _prepare_anime_data(self, item, title, title_native, slug):
-        rankings = self._iter_rankings(item)
-        status_distribution = self._status_distribution(item)
-        cover_image = item.get("coverImage") or {}
-        if not isinstance(cover_image, dict):
-            cover_image = {}
-        broadcast = item.get("broadcast") or {}
-
-        format_map = {
-            "TV": Anime.AnimeType.tv,
-            "TV_SHORT": Anime.AnimeType.tv,
-            "MOVIE": Anime.AnimeType.movie,
-            "OVA": Anime.AnimeType.ova,
-            "ONA": Anime.AnimeType.special,
-            "SPECIAL": Anime.AnimeType.special,
-            "MUSIC": Anime.AnimeType.special,
-        }
-        anime_type = format_map.get(item.get("format", "TV"), Anime.AnimeType.tv)
-
-        status_map = {
-            "RELEASING": Anime.AnimeStatus.airing,
-            "FINISHED": Anime.AnimeStatus.finished,
-            "NOT_YET_RELEASED": Anime.AnimeStatus.upcoming,
-            "CANCELLED": Anime.AnimeStatus.finished,
-        }
-        status = status_map.get(item.get("status", "FINISHED"), Anime.AnimeStatus.finished)
-
-        start_date = self._parse_date(item.get("startDate", {}))
-        end_date = self._parse_date(item.get("endDate", {}))
-
-        avg_score = item.get("averageScore", 0)
-        rating = round(avg_score / 10, 1) if avg_score else None
-
-        description = item.get("description", "")
-        if description:
-            description = re.sub(r"<[^>]+>", "", description).strip()
-
-        tags = self._normalized_tags(item)
-
-        return {
-            "title": title,
-            "title_jp": title_native or "",
-            "slug": slug,
-            "synopsis": description or "No description available.",
-            "anime_type": anime_type,
-            "status": status,
-            "episode_count": item.get("episodes") or 0,
-            "duration_minutes": item.get("duration") or 24,
-            "member_count": item.get("popularity") or 0,
-            "release_date": start_date,
-            "end_date": end_date,
-            "rating": rating,
-            "meta_description": (description[:157] + "...")
-            if description and len(description) > 160
-            else (description or ""),
-            "site_rank": next(
-                (
-                    ranking.get("rank")
-                    for ranking in rankings
-                    if ranking.get("allTime") and ranking.get("type") == "RATED"
-                ),
-                None,
-            ),
-            "popularity_rank": next(
-                (
-                    ranking.get("rank")
-                    for ranking in rankings
-                    if ranking.get("allTime") and ranking.get("type") == "POPULAR"
-                ),
-                None,
-            ),
-            "status_distribution": status_distribution,
-            "external_links": item.get("externalLinks", []),
-            "tags": tags,
-            "next_airing_episode": item.get("nextAiringEpisode", {}).get("episode")
-            if item.get("nextAiringEpisode")
-            else None,
-            "next_airing_date": timezone.make_aware(
-                datetime.fromtimestamp(item["nextAiringEpisode"]["airingAt"]),
-                timezone=UTC,
-            )
-            if item.get("nextAiringEpisode") and item["nextAiringEpisode"].get("airingAt")
-            else None,
-            "broadcast_day": self._normalize_broadcast_day(broadcast.get("day")),
-            "broadcast_time": self._parse_broadcast_time(broadcast.get("time")),
-            "broadcast_timezone": str(broadcast.get("timezone") or "").strip()[:64],
-            "source_material": self._map_source_material(item.get("source")),
-            "season": item.get("season") or "",
-            "season_year": item.get("seasonYear"),
-            "cover_image_external_url": self.normalize_external_image_url(
-                cover_image.get("extraLarge") or cover_image.get("large")
-            ),
-            "banner_image_external_url": self.normalize_external_image_url(item.get("bannerImage")),
-            "anilist_id": item.get("id"),
-            "mal_id": item.get("idMal"),
-            "synonyms": item.get("synonyms") or [],
-            "producers": item.get("producers") or [],
-            "provider_ids": item.get("providerIds") or {},
-            "source_urls": item.get("sourceUrls") or [],
-        }
 
     async def _get_full_anime_payload(
         self,
@@ -1171,95 +1008,6 @@ class JikanService:
                     return str(value)[:500]
         return json.dumps(payload, ensure_ascii=False)[:500]
 
-    @staticmethod
-    def _iter_rankings(item: dict) -> list[dict]:
-        rankings = item.get("rankings") or []
-        if not isinstance(rankings, list):
-            return []
-        return [ranking for ranking in rankings if isinstance(ranking, dict)]
-
-    @staticmethod
-    def _status_distribution(item: dict) -> dict:
-        stats = item.get("stats") or {}
-        if not isinstance(stats, dict):
-            return {}
-
-        distribution = stats.get("statusDistribution") or []
-        if not isinstance(distribution, list):
-            return {}
-
-        return {
-            status: amount
-            for entry in distribution
-            if isinstance(entry, dict)
-            and (status := entry.get("status"))
-            and (amount := entry.get("amount")) is not None
-        }
-
-    @staticmethod
-    def _normalized_tags(item: dict) -> list[str]:
-        raw_tags = item.get("tags") or []
-        if not isinstance(raw_tags, list):
-            return []
-
-        normalized_tags: list[str] = []
-        seen: set[str] = set()
-
-        for entry in raw_tags:
-            if isinstance(entry, dict):
-                if entry.get("isMediaSpoiler") or entry.get("isGeneralSpoiler"):
-                    continue
-                name = entry.get("name")
-            elif isinstance(entry, str):
-                name = entry
-            else:
-                continue
-
-            if not isinstance(name, str):
-                continue
-
-            clean_name = " ".join(name.split()).strip().lower()
-            if not clean_name or clean_name in seen:
-                continue
-
-            seen.add(clean_name)
-            normalized_tags.append(clean_name)
-
-        return normalized_tags
-
-    def _parse_date(self, date_obj):
-        if not date_obj or not date_obj.get("year"):
-            return None
-        year = date_obj.get("year")
-        month = date_obj.get("month") or 1
-        day = date_obj.get("day") or 1
-        try:
-            return datetime(year, month, day).date()
-        except ValueError:
-            return None
-
-    def _map_source_material(self, source):
-        source_map = {
-            "ORIGINAL": "Original",
-            "MANGA": "Manga",
-            "LIGHT_NOVEL": "Light Novel",
-            "VISUAL_NOVEL": "Visual Novel",
-            "VIDEO_GAME": "Game",
-            "WEB_NOVEL": "Novel",
-            "NOVEL": "Novel",
-            "DOUJINSHI": "Other",
-            "ANIME": "Original",
-            "MUSIC": "Music",
-            "MIXED_MEDIA": "Mixed Media",
-            "PICTURE_BOOK": "Picture Book",
-            "CARD_GAME": "Card Game",
-            "WEB_MANGA": "Web Manga",
-            "COMIC": "Manga",
-            "LIVE_ACTION": "Other",
-            "MULTIMEDIA_PROJECT": "Mixed Media",
-            "OTHER": "Other",
-        }
-        return source_map.get(source, "") if source else ""
 
     def _lookup_existing_anime(
         self,
@@ -1284,7 +1032,7 @@ class JikanService:
                 return anime
 
         if resolved_mal_id:
-            anime = Anime.objects.filter(mal_id=mal_id).first()
+            anime = Anime.objects.filter(mal_id=resolved_mal_id).first()
             if anime:
                 return anime
 
@@ -1325,68 +1073,6 @@ class JikanService:
 
         return None
 
-    @sync_to_async
-    def _update_anime(self, anime, anime_data_dict):
-        anime_data = dict(anime_data_dict)
-        self._apply_recent_airing_transition(anime, anime_data)
-        original_values = {field: getattr(anime, field, None) for field in anime_data}
-
-        for unique_field in UNIQUE_ANIME_FIELDS:
-            if unique_field not in anime_data:
-                continue
-            value = anime_data.get(unique_field)
-            if value in (None, ""):
-                continue
-
-            conflict_exists = Anime.objects.filter(**{unique_field: value}).exclude(
-                id=anime.id
-            ).exists()
-            if conflict_exists:
-                logger.info(
-                    f"Skipping conflicting {unique_field} '{value}' while updating Anime ID {anime.id}"
-                )
-                anime_data[unique_field] = original_values.get(unique_field)
-
-        for key, value in anime_data.items():
-            setattr(anime, key, value)
-
-        try:
-            anime.save()
-        except IntegrityError as exc:
-            for unique_field in UNIQUE_ANIME_FIELDS:
-                if unique_field in original_values:
-                    setattr(anime, unique_field, original_values[unique_field])
-            anime.save()
-            logger.warning(
-                f"Recovered from integrity conflict while updating Anime ID {anime.id}: {exc}"
-            )
-
-    def _apply_recent_airing_transition(self, anime: Anime, anime_data: dict) -> None:
-        previous_episode = anime.next_airing_episode
-        previous_airing_date = anime.next_airing_date
-
-        if previous_episode is None or previous_airing_date is None:
-            return
-
-        if previous_airing_date > timezone.now():
-            return
-
-        incoming_episode = anime_data.get("next_airing_episode")
-        incoming_airing_date = anime_data.get("next_airing_date")
-
-        episode_advanced = incoming_episode is not None and incoming_episode > previous_episode
-        airing_window_closed = incoming_episode is None or incoming_airing_date is None
-
-        if not (episode_advanced or airing_window_closed):
-            return
-
-        last_aired_episode = anime.last_aired_episode
-        last_aired_at = anime.last_aired_at
-        if last_aired_episode == previous_episode and last_aired_at == previous_airing_date:
-            return
-
-        anime_data["last_aired_episode"] = previous_episode
-        anime_data["last_aired_at"] = previous_airing_date
 
     def _normalize_anime_item(
         self,
@@ -2045,7 +1731,9 @@ class JikanService:
             base_slug, year=item.get("seasonYear")
         )
 
-        anime_data = self._prepare_anime_data(item, title, title_native, final_slug)
+        anime_data = with_creation_defaults(
+            self._prepare_anime_data(item, title, title_native, final_slug)
+        )
         anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
         try:
@@ -2078,13 +1766,11 @@ class JikanService:
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
 
-        if not self._has_broadcast_payload(item):
-            anime_data["broadcast_day"] = anime.broadcast_day
-            anime_data["broadcast_time"] = anime.broadcast_time
-            anime_data["broadcast_timezone"] = anime.broadcast_timezone
-        if not self._has_next_airing_payload(item):
-            anime_data["next_airing_episode"] = anime.next_airing_episode
-            anime_data["next_airing_date"] = anime.next_airing_date
+        if not item.get("nextAiringEpisode"):
+            # Jikan often has no schedule even for airing shows; unlike
+            # AniList, its silence does not mean the show stopped airing.
+            anime_data.pop("next_airing_episode", None)
+            anime_data.pop("next_airing_date", None)
 
         await self._update_anime(anime, anime_data)
         await self._handle_relationships_async(anime, item)
@@ -2314,10 +2000,8 @@ async def fetch_themes_from_jikan_with_reason(
 
             if response.status_code == 429:
                 _status = "rate_limited"
-                retry_after = response.headers.get("Retry-After")
-                if retry_after:
-                    wait_time = float(retry_after)
-                else:
+                wait_time = retry_after_seconds(response.headers.get("Retry-After"))
+                if wait_time is None:
                     wait_time = min(2**attempt + random.uniform(0, 2), 60)
                 rate_limiter.record_429(cooldown_hint=wait_time)
 
