@@ -23,14 +23,19 @@ class EmailVerificationFlowTests(APITestCase):
         from ..models import UserProfile
         UserProfile.objects.get_or_create(user=self.user)
 
+    def _verify_url(self, token=None):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = token or email_verification_token_generator.make_token(self.user)
+        return reverse('verify_email', kwargs={'uid': uid, 'token': token})
+
+    def _assert_no_session(self, response):
+        self.assertNotIn('access', response.data)
+        self.assertNotIn('refresh', response.data)
+        self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
+
     def test_verify_email_returns_tokens(self):
         """Verify-email logs the user in: access token in the body, refresh in the cookie."""
-        token = email_verification_token_generator.make_token(self.user)
-        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-
-        url = reverse('verify_email', kwargs={'uid': uid, 'token': token})
-
-        response = self.client.get(url)
+        response = self.client.post(self._verify_url())
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
         self.assertNotIn('refresh', response.data)
@@ -50,36 +55,46 @@ class EmailVerificationFlowTests(APITestCase):
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
         self.assertEqual(profile_response.data['email'], self.user.email)
 
-    def test_verification_link_is_single_use(self):
-        """A reused link must not mint another session (it used to, for days)."""
-        token = email_verification_token_generator.make_token(self.user)
-        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        url = reverse('verify_email_body')
-
-        first = self.client.post(url, {'uid': uid, 'token': token})
-        self.assertEqual(first.status_code, status.HTTP_200_OK)
+    def test_replayed_link_does_not_start_a_session(self):
+        """A used verification link reports success but never mints another session."""
+        url = self._verify_url()
+        first = self.client.post(url)
         self.assertIn('access', first.data)
 
-        self.client.cookies.clear()
-        second = self.client.post(url, {'uid': uid, 'token': token})
-        self.assertEqual(second.status_code, status.HTTP_200_OK)
-        self.assertEqual(second.data, {'message': 'Email already verified'})
-        self.assertNotIn(REFRESH_COOKIE_NAME, second.cookies)
+        replay = self.client.post(url)
+        self.assertEqual(replay.status_code, status.HTTP_200_OK)
+        self.assertTrue(replay.data['already_verified'])
+        self._assert_no_session(replay)
 
-    def test_password_reset_token_cannot_verify_a_verified_account(self):
-        from ..models import UserProfile
+    def test_already_verified_returns_no_session(self):
+        """An unexpired link for an already verified user gets a plain success."""
+        url = self._verify_url()  # issued while the user was still unverified
+        self.user.userprofile.email_verified = True
+        self.user.userprofile.save()
 
-        UserProfile.objects.filter(user=self.user).update(email_verified=True)
-        token = default_token_generator.make_token(self.user)
-        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-
-        response = self.client.get(reverse('verify_email', kwargs={'uid': uid, 'token': token}))
-        self.assertNotIn('access', response.data)
-
-    def test_legacy_link_still_verifies_a_pending_account(self):
-        token = default_token_generator.make_token(self.user)
-        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-
-        response = self.client.get(reverse('verify_email', kwargs={'uid': uid, 'token': token}))
+        response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
+        self.assertEqual(response.data['message'], 'Email already verified')
+        self._assert_no_session(response)
+
+    def test_bogus_token_for_verified_user_is_rejected(self):
+        """Already-verified status isn't revealed to someone without a genuine link."""
+        self.user.userprofile.email_verified = True
+        self.user.userprofile.save()
+
+        response = self.client.post(self._verify_url(token='abc-123'))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self._assert_no_session(response)
+
+    def test_password_reset_token_cannot_verify_email(self):
+        response = self.client.post(self._verify_url(token=default_token_generator.make_token(self.user)))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.userprofile.refresh_from_db()
+        self.assertFalse(self.user.userprofile.email_verified)
+
+    def test_get_is_not_allowed(self):
+        """Link prefetchers issue GETs; they must not consume the token."""
+        response = self.client.get(self._verify_url())
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.user.userprofile.refresh_from_db()
+        self.assertFalse(self.user.userprofile.email_verified)

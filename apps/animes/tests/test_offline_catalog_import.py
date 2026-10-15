@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from ..models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
 from ..services.offline_catalog import OfflineCatalogImportService
+from ..services.relation_links import set_relations
 
 
 class OfflineCatalogImportServiceTests(TestCase):
@@ -224,11 +225,11 @@ class OfflineCatalogImportServiceTests(TestCase):
             status=Anime.AnimeStatus.finished,
             anilist_id=1535,
             mal_id=1535,
-            relations=[{"id": 1, "title": "Existing relation"}],
             cover_image_external_url="https://existing.example.com/cover.jpg",
             banner_image_external_url="https://existing.example.com/banner.jpg",
             rating=9.1,
         )
+        set_relations(anime, [{"id": 1, "title": "Existing relation"}])
         fixture_path = self._write_jsonl_fixture(self._entry())
 
         result = OfflineCatalogImportService(batch_size=1).run_import(
@@ -240,7 +241,10 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(result["records_created"], 0)
         self.assertEqual(result["records_updated"], 1)
-        self.assertEqual(anime.relations, [{"id": 1, "title": "Existing relation"}])
+        self.assertEqual(
+            list(anime.relations.values_list("target_anilist_id", "title")),
+            [(1, "Existing relation")],
+        )
         self.assertEqual(anime.cover_image_external_url, "https://existing.example.com/cover.jpg")
         self.assertEqual(anime.banner_image_external_url, "https://existing.example.com/banner.jpg")
         self.assertEqual(float(anime.rating), 9.1)

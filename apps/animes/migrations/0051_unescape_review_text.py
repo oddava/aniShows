@@ -33,7 +33,7 @@ def escape_review_text(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("anime", "0048_anime_data_model_cleanup"),
+        ("anime", "0050_remove_anime_relations_json"),
     ]
 
     operations = [

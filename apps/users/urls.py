@@ -82,14 +82,8 @@ urlpatterns = [
     # Auth Workflow Routes (Verify Email, Resend, Reset Password)
     path(
         "verify-email/<str:uid>/<str:token>/",
-        AuthViewSet.as_view({"get": "verify_email", "post": "verify_email"}),
-        name="verify_email",
-    ),
-    # Same action, token in the body only so it never lands in access logs.
-    path(
-        "auth/verify-email/",
         AuthViewSet.as_view({"post": "verify_email"}),
-        name="verify_email_body",
+        name="verify_email",
     ),
     path(
         "auth/resend-verification/",

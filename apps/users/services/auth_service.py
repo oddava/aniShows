@@ -2,7 +2,6 @@ from typing import Dict
 
 from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from django.utils.encoding import force_str
@@ -12,10 +11,15 @@ from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
+from ..models import UserProfile
 from ..tokens import email_verification_token_generator
 from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
+
+VERIFY_SUCCESS = "verified"
+VERIFY_ALREADY_VERIFIED = "already_verified"
+VERIFY_INVALID = "invalid"
 
 
 def revoke_all_sessions(user) -> None:
@@ -29,6 +33,7 @@ def revoke_all_sessions(user) -> None:
         ],
         ignore_conflicts=True,
     )
+
 
 class AuthService:
     """Handles authentication business logic."""
@@ -105,35 +110,35 @@ class AuthService:
 
         return login.account.user
 
-    def verify_email(self, uidb64: str, token: str) -> tuple[bool, User | None]:
-        """Verify an email link. Returns ``(newly_verified, user)``.
+    def verify_email(self, uidb64: str, token: str) -> tuple[str, User | None]:
+        """Verify email with a single-use token.
 
-        ``user`` is set whenever the link names a real user, so callers can
-        tell a reused link for an already verified account from a bad one.
-        The token is single-use: verifying changes the state it is hashed over.
+        Returns ``(outcome, user)`` where outcome is one of the ``VERIFY_*``
+        constants; ``user`` is None for ``VERIFY_INVALID``.
         """
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
-            # Annotated queryset so the serializer can render the user.
+            # Get user with annotations for proper serializer output
             user = get_annotated_user_queryset().get(pk=uid)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return False, None
+            return VERIFY_INVALID, None
 
         profile = getattr(user, "userprofile", None)
-        if profile is None or profile.email_verified:
-            return False, user
+        if profile is None:
+            return VERIFY_INVALID, None
 
-        # Links emailed before verification tokens got their own generator
-        # used the password-reset one; honour them only while still unverified.
-        if not (
-            email_verification_token_generator.check_token(user, token)
-            or default_token_generator.check_token(user, token)
+        if email_verification_token_generator.check_token(user, token):
+            # Conditional update so concurrent requests with the same link
+            # can't both count as the first verification.
+            claimed = UserProfile.objects.filter(pk=profile.pk, email_verified=False).update(
+                email_verified=True
+            )
+            profile.email_verified = True
+            return (VERIFY_SUCCESS if claimed else VERIFY_ALREADY_VERIFIED), user
+
+        if profile.email_verified and email_verification_token_generator.was_valid_before_verification(
+            user, token
         ):
-            return False, user
+            return VERIFY_ALREADY_VERIFIED, user
 
-        # Conditional update: of two concurrent uses of one link, only one wins.
-        won = type(profile).objects.filter(pk=profile.pk, email_verified=False).update(
-            email_verified=True
-        )
-        profile.email_verified = True
-        return bool(won), user
+        return VERIFY_INVALID, None

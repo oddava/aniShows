@@ -5,8 +5,8 @@ from django.test import TransactionTestCase
 
 User = get_user_model()
 
-BEFORE = [("anime", "0048_anime_data_model_cleanup")]
-AFTER = [("anime", "0049_unescape_review_text")]
+BEFORE = [("anime", "0050_remove_anime_relations_json")]
+AFTER = [("anime", "0051_unescape_review_text")]
 
 
 class UnescapeReviewTextMigrationTests(TransactionTestCase):

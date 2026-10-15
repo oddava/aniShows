@@ -32,6 +32,7 @@ from .rate_limiting import (
     APICallCache,
     CircuitBreaker,
 )
+from .relation_links import sync_relations_from_media
 
 
 class MediaSort(StrEnum):
@@ -476,7 +477,6 @@ class AniListService:
         Returns stats dict with created anime IDs for theme sync.
         """
         stats = {"created": 0, "updated": 0, "skipped": 0, "created_anime_ids": []}
-        all_anime_ids = []  # Track all anime IDs for post-processing
 
         for i, item in enumerate(media_list):
             try:
@@ -493,7 +493,6 @@ class AniListService:
 
                 # Get or Create
                 anime, created = await self._get_or_create_anime(slug, anime_data_dict)
-                all_anime_ids.append(anime.id)
 
                 if created:
                     stats["created"] += 1
@@ -526,11 +525,6 @@ class AniListService:
                 stats["skipped"] += 1
                 if progress_callback:
                     await progress_callback(i + 1)
-
-        # Post-processing: Update relation slugs for all processed anime
-        # This ensures related anime from the same batch are properly linked
-        if all_anime_ids:
-            await self._update_relation_slugs(all_anime_ids)
 
         return stats
 
@@ -847,19 +841,6 @@ class AniListService:
             "status_distribution": status_distribution,
             "external_links": item.get("externalLinks", []),
             "tags": tags,
-            "relations": [
-                {
-                    "id": edge["node"]["id"],
-                    "type": edge["relationType"],
-                    "title": edge["node"]["title"].get("english")
-                    or edge["node"]["title"].get("romaji"),
-                    "format": edge["node"]["format"],
-                    "status": edge["node"]["status"],
-                    "cover": edge["node"]["coverImage"].get("large"),
-                }
-                for edge in item.get("relations", {}).get("edges", [])
-                if edge["node"]["type"] == "ANIME"
-            ],
             "next_airing_episode": item.get("nextAiringEpisode", {}).get("episode")
             if item.get("nextAiringEpisode")
             else None,
@@ -937,6 +918,8 @@ class AniListService:
             anime.set_studios(
                 Studio.objects.get_or_create(name=name)[0] for name in studio_names
             )
+
+        sync_relations_from_media(anime, item)
 
     @sync_to_async
     def _handle_extended_info_async(self, anime, item):
@@ -1536,20 +1519,6 @@ class AniListService:
         anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
 
-        # Add slugs to relations by looking up related anime in database
-        relations = anime_data.get("relations", [])
-        if relations:
-            for rel in relations:
-                rel_anilist_id = rel.get("id")
-                if rel_anilist_id:
-                    try:
-                        related_anime = await sync_to_async(Anime.objects.get)(
-                            anilist_id=rel_anilist_id
-                        )
-                        rel["slug"] = related_anime.slug
-                    except Anime.DoesNotExist:
-                        rel["slug"] = None
-
         try:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
@@ -1590,78 +1559,7 @@ class AniListService:
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
 
-        # Add slugs to relations by looking up related anime in database
-        relations = anime_data.get("relations", [])
-        if relations:
-            for rel in relations:
-                anilist_id = rel.get("id")
-                if anilist_id:
-                    try:
-                        related_anime = await sync_to_async(Anime.objects.get)(
-                            anilist_id=anilist_id
-                        )
-                        rel["slug"] = related_anime.slug
-                    except Anime.DoesNotExist:
-                        rel["slug"] = None
-
         await self._update_anime(anime, anime_data)
         await self._handle_relationships_async(anime, item)
         await self._download_and_save_images(anime, item)
 
-    async def _update_relation_slugs(self, anime_ids: list[int]):
-        """Post-processing step to update relation slugs for processed anime.
-        This ensures related anime from the same batch are properly linked.
-        """
-        logger.info(f"Updating relation slugs for {len(anime_ids)} anime")
-
-        @sync_to_async
-        def update_slugs():
-            from ..models import Anime
-
-            # Step 1: Collect all anilist_ids referenced in relations that need slug lookup
-            anime_list = list(Anime.objects.filter(id__in=anime_ids))
-            needed_anilist_ids = set()
-            for anime in anime_list:
-                relations = anime.relations or []
-                for rel in relations:
-                    rel_anilist_id = rel.get("id")
-                    if rel_anilist_id and not rel.get("slug"):
-                        needed_anilist_ids.add(rel_anilist_id)
-
-            if not needed_anilist_ids:
-                return 0
-
-            # Step 2: Single batch query to resolve anilist_id -> slug
-            anilist_to_slug = dict(
-                Anime.objects.filter(anilist_id__in=needed_anilist_ids).values_list(
-                    "anilist_id", "slug"
-                )
-            )
-
-            # Step 3: Update relations with resolved slugs
-            updated_count = 0
-            for anime in anime_list:
-                relations = anime.relations or []
-                needs_save = False
-
-                for rel in relations:
-                    rel_anilist_id = rel.get("id")
-                    if rel_anilist_id and not rel.get("slug"):
-                        slug = anilist_to_slug.get(rel_anilist_id)
-                        if slug:
-                            rel["slug"] = slug
-                            needs_save = True
-                            logger.debug(f"Linked relation {rel_anilist_id} -> {slug}")
-
-                if needs_save:
-                    anime.relations = relations
-                    anime.save(update_fields=["relations"])
-                    updated_count += 1
-
-            return updated_count
-
-        try:
-            count = await update_slugs()
-            logger.info(f"Updated relation slugs for {count} anime")
-        except Exception as e:
-            logger.error(f"Error updating relation slugs: {e}")
