@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.utils.html import escape
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -81,12 +80,6 @@ class ReviewSerializer(ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "user", "anime", "created_at", "updated_at"]
-
-    def validate_text(self, value):
-        """Sanitize review text to prevent XSS."""
-        if value:
-            return escape(value)
-        return value
 
     def get_user_votes(self, obj):
         helpful_attr = getattr(obj, "_user_helpful_vote", None)
