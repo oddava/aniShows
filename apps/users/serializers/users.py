@@ -505,8 +505,15 @@ class UserAnimeListSerializer(ModelSerializer):
         return 0
 
     def validate(self, attrs):
-        if not self.instance and "anime" not in attrs:
-            raise ValidationError({"anime_id": "This field is required."})
+        if self.instance:
+            # An entry belongs to one anime; re-pointing it would collide with
+            # another entry or detach the user's review from their list.
+            attrs.pop("anime", None)
+        else:
+            if "anime" not in attrs:
+                raise ValidationError({"anime_id": "This field is required."})
+            # The model has no default; never store an empty status.
+            attrs.setdefault("status", UserAnimeList.UserAnimeStatus.plan_to_watch)
 
         episodes_watched = attrs.get("episodes_watched")
         anime = attrs.get("anime")

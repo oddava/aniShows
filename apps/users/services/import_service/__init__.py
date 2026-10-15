@@ -10,11 +10,16 @@ class ImportService:
 
     @staticmethod
     def create_importer(job: UserImportJob, **kwargs) -> BaseImporter:
-        """Create appropriate importer based on job source"""
+        """Create appropriate importer based on job source.
+
+        The username falls back to the job's ``source_identifier`` so a job
+        re-queued with only its id (admin retry) still knows whose list to read.
+        """
+        username = kwargs.get("username") or job.source_identifier
         if job.source == UserImportJob.ImportSource.myanimelist_api:
             return MyAnimeListAPIImporter(
                 job=job,
-                username=kwargs.get("username"),
+                username=username,
                 client_id=kwargs.get("client_id"),
             )
         elif job.source == UserImportJob.ImportSource.myanimelist_xml:
@@ -22,7 +27,7 @@ class ImportService:
         elif job.source == UserImportJob.ImportSource.anilist:
             return AniListImporter(
                 job=job,
-                username=kwargs.get("username"),
+                username=username,
                 access_token=kwargs.get("access_token"),
             )
         else:

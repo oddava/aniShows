@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from ...shared.celery import redact_task_kwargs
 from ...shared.logger import logger
 from ..models import UserImportJob
 from ..tasks import process_import_job
@@ -89,7 +90,11 @@ def _validate_import_limits(user, task_kwargs: dict | None = None) -> ImportJobA
 def _queue_import_job(job_id: int, **task_kwargs) -> None:
     def _enqueue():
         try:
-            process_import_job.delay(job_id=job_id, **task_kwargs)
+            kwargs = {"job_id": job_id, **task_kwargs}
+            # kwargsrepr is what the result backend stores: no tokens, no XML.
+            process_import_job.apply_async(
+                kwargs=kwargs, kwargsrepr=repr(redact_task_kwargs(kwargs))
+            )
         except Exception:
             logger.exception("Failed to queue import job", extra={"job_id": job_id})
             try:

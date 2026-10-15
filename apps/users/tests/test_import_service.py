@@ -12,7 +12,11 @@ from rest_framework.test import APIClient, APITestCase
 
 from ...animes.models import Anime
 from ..models import UserActivity, UserImportJob, UserProfile
-from ..services.import_job_service import create_mal_import_job, create_mal_xml_import_job
+from ..services.import_job_service import (
+    create_anilist_import_job,
+    create_mal_import_job,
+    create_mal_xml_import_job,
+)
 from ..services.import_service.anilist import AniListImporter
 from ..services.import_service.mal_api import MyAnimeListAPIImporter
 from ..services.import_service.mal_xml import MyAnimeListXMLImporter
@@ -212,7 +216,7 @@ class ImportJobServiceTests(TestCase):
             password="password123",
         )
 
-    @patch("apps.users.services.import_job_service.process_import_job.delay")
+    @patch("apps.users.services.import_job_service.process_import_job.apply_async")
     @patch("apps.users.services.import_job_service.transaction.on_commit")
     def test_create_mal_import_job_queues_task_on_commit(self, mock_on_commit, mock_delay):
         result = create_mal_import_job(self.user, "sample-user")
@@ -263,7 +267,10 @@ class ImportJobServiceTests(TestCase):
         self.assertEqual(result.status_code, 400)
         self.assertEqual(result.payload["code"], "import_payload_too_large")
 
-    @patch("apps.users.services.import_job_service.process_import_job.delay", side_effect=RuntimeError("broker down"))
+    @patch(
+        "apps.users.services.import_job_service.process_import_job.apply_async",
+        side_effect=RuntimeError("broker down"),
+    )
     def test_create_mal_import_job_marks_job_failed_when_enqueue_fails(self, _mock_delay):
         with self.captureOnCommitCallbacks(execute=True):
             result = create_mal_import_job(self.user, "sample-user")
@@ -271,6 +278,47 @@ class ImportJobServiceTests(TestCase):
         job = UserImportJob.objects.get(id=result.payload["job_id"])
         self.assertEqual(job.status, UserImportJob.ImportStatus.failed)
         self.assertIn("Failed to queue import job", job.errors)
+
+
+    @patch("apps.users.services.import_job_service.process_import_job.apply_async")
+    def test_anilist_token_is_sent_to_worker_but_not_stored(self, mock_apply_async):
+        with self.captureOnCommitCallbacks(execute=True):
+            create_anilist_import_job(self.user, "sample-user", "secret-bearer-token")
+
+        call = mock_apply_async.call_args.kwargs
+        self.assertEqual(call["kwargs"]["access_token"], "secret-bearer-token")
+        self.assertNotIn("secret-bearer-token", call["kwargsrepr"])
+
+    def test_prerun_signal_stores_redacted_kwargs(self):
+        from ...core.celery_signals import on_task_prerun
+        from ...core.models import CeleryTaskResult
+
+        on_task_prerun(
+            task_id="redaction-test",
+            task=process_import_job,
+            args=(),
+            kwargs={"job_id": 1, "access_token": "secret-bearer-token", "xml_content": "<x/>"},
+        )
+
+        stored = CeleryTaskResult.objects.get(task_id="redaction-test").task_kwargs
+        self.assertEqual(
+            stored, {"job_id": 1, "access_token": "[redacted]", "xml_content": "[4 characters]"}
+        )
+
+
+    def test_importer_for_requeued_job_uses_stored_username(self):
+        """Admin retry re-queues with only the job id."""
+        from ..services.import_service import ImportService
+
+        job = UserImportJob.objects.create(
+            user=self.user,
+            source=UserImportJob.ImportSource.anilist,
+            source_identifier="stored-name",
+        )
+
+        importer = ImportService.create_importer(job)
+
+        self.assertEqual(importer.username, "stored-name")
 
 
 class ImportTaskWrapperTests(TestCase):

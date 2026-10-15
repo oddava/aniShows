@@ -13,6 +13,7 @@ from celery.signals import (
 )
 from django.utils import timezone
 
+from ..shared.celery import redact_task_kwargs
 from ..shared.logger import logger
 from .db_safety import (
     is_missing_relation_error,
@@ -56,7 +57,7 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
                 "status": CeleryTaskResult.TaskStatus.STARTED,
                 "date_started": timezone.now(),
                 "task_args": list(args) if args else [],
-                "task_kwargs": dict(kwargs) if kwargs else {},
+                "task_kwargs": redact_task_kwargs(kwargs),
             },
         )
         if not created:
@@ -69,7 +70,7 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
             if not job.task_args and args:
                 job.task_args = list(args)
             if not job.task_kwargs and kwargs:
-                job.task_kwargs = dict(kwargs)
+                job.task_kwargs = redact_task_kwargs(kwargs)
             job.save(
                 update_fields=["status", "date_started", "task_name", "task_args", "task_kwargs"]
             )
