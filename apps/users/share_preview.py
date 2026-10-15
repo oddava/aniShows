@@ -74,12 +74,15 @@ class ProfileSharePreviewView(View):
         self, request, username: str, section: str | None, should_redirect: bool
     ) -> HttpResponse:
         canonical_url = request.build_absolute_uri(self._canonical_profile_path(username, section))
+        # Hand people to the SPA's route, as for found profiles; redirecting to
+        # the canonical /u/ URL would reload this same view forever.
+        app_url = request.build_absolute_uri(self._legacy_profile_path(username, section))
         html = self._render_html(
             title="Profile Not Found | AniShows",
             description="This AniShows profile could not be found.",
             canonical_url=canonical_url,
             image_url=self._default_image_url(request),
-            redirect_url=canonical_url if should_redirect else None,
+            redirect_url=app_url if should_redirect else None,
         )
         return HttpResponse(html, status=404, content_type="text/html; charset=utf-8")
 

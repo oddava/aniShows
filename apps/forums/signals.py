@@ -35,7 +35,7 @@ def update_thread_on_post_create(sender, instance, created, **kwargs):
         instance.thread.adjust_reply_count(1)
         # Invalidate caches AFTER transaction commits to prevent race conditions
         invalidate_after_commit(
-            lambda: invalidate_thread_caches(instance.thread.id, instance.thread.category.slug)
+            lambda: invalidate_thread_caches(instance.thread.id)
         )
         invalidate_after_commit(lambda: invalidate_post_list_cache(instance.thread.id))
 
@@ -49,7 +49,7 @@ def update_thread_on_post_delete(sender, instance, **kwargs):
     instance.thread.adjust_reply_count(-1)
     # Invalidate caches AFTER transaction commits
     invalidate_after_commit(
-        lambda: invalidate_thread_caches(instance.thread.id, instance.thread.category.slug)
+        lambda: invalidate_thread_caches(instance.thread.id)
     )
     invalidate_after_commit(lambda: invalidate_post_list_cache(instance.thread.id))
 
@@ -117,7 +117,7 @@ def update_category_on_thread_create(sender, instance, created, **kwargs):
         # Invalidate caches AFTER transaction commits
         invalidate_after_commit(invalidate_category_list_cache)
         invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))
-        invalidate_after_commit(lambda: invalidate_thread_list_cache(instance.category.slug))
+        invalidate_after_commit(invalidate_thread_list_cache)
 
 @receiver(post_delete, sender=Thread)
 def update_category_on_thread_delete(sender, instance, **kwargs):
@@ -130,5 +130,5 @@ def update_category_on_thread_delete(sender, instance, **kwargs):
     # Invalidate caches AFTER transaction commits
     invalidate_after_commit(invalidate_category_list_cache)
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))
-    invalidate_after_commit(lambda: invalidate_thread_list_cache(instance.category.slug))
+    invalidate_after_commit(invalidate_thread_list_cache)
     invalidate_after_commit(lambda: invalidate_thread_detail_cache(instance.id))
