@@ -120,18 +120,18 @@ class AnimeListTests(APITestCase):
 
         score_response = self.client.patch(detail_url, {'score': 11})
         self.assertEqual(score_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('score', score_response.data)
+        self.assertIn('score', score_response.data['errors'])
 
         rewatches_response = self.client.patch(detail_url, {'total_rewatches': -1})
         self.assertEqual(rewatches_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('total_rewatches', rewatches_response.data)
+        self.assertIn('total_rewatches', rewatches_response.data['errors'])
 
         dates_response = self.client.patch(
             detail_url,
             {'started_at': '2024-03-10', 'finished_at': '2024-03-01'},
         )
         self.assertEqual(dates_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('finished_at', dates_response.data)
+        self.assertIn('finished_at', dates_response.data['errors'])
 
     def test_cannot_update_others_list_entry(self):
         """Test that users cannot update other users' list entries."""

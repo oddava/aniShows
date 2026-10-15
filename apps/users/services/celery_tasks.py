@@ -159,21 +159,21 @@ class UserTaskService:
                 logger.info("Fetching anime by sync ID", extra={"anilist_id": anilist_id})
                 anime_data = asyncio.run(service.get_anime_by_id(anilist_id))
                 if anime_data:
-                    anime = asyncio.run(service._save_anime_to_db_async(anime_data))
+                    anime = service.save_anime_to_db(anime_data)
                     return anime.id
 
             if mal_id:
                 logger.info("Fetching anime by MAL ID", extra={"mal_id": mal_id})
                 anime_data = asyncio.run(service.search_by_mal_id(mal_id))
                 if anime_data:
-                    anime = asyncio.run(service._save_anime_to_db_async(anime_data))
+                    anime = service.save_anime_to_db(anime_data)
                     return anime.id
 
             if title:
                 logger.info("Searching anime by title", extra={"title": title})
                 results = asyncio.run(service.search_anime(title))
                 if results:
-                    anime = asyncio.run(service._save_anime_to_db_async(results[0]))
+                    anime = service.save_anime_to_db(results[0])
                     return anime.id
 
             logger.warning(

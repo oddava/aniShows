@@ -313,7 +313,7 @@ class ReviewSubRatingTests(APITestCase):
         }
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('rating_story', response.data)
+        self.assertIn('rating_story', response.data['errors'])
 
 
 class ReviewInteractionTests(APITestCase):
@@ -525,7 +525,7 @@ class ReviewInteractionTests(APITestCase):
             response = self.client.get(reverse("reviews-list"), {"anime": self.anime.slug})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertLessEqual(len(queries), 5)
+        self.assertLessEqual(len(queries), 5, "\n".join(q["sql"][:160] for q in queries.captured_queries))
 
     def test_reactions_toggle_per_emoji(self):
         """Each reaction type toggles independently for a review."""

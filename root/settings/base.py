@@ -76,6 +76,11 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "http://jikan:8080/v4").strip().rstrip("/")
 
+# Application tuning defaults
+# Non-secret runtime tuning values are defined here in settings.py with Python
+# defaults, but they may still be overridden by environment variables for a
+# specific deployment or by a future runtime config/admin model.
+
 # Runtime controls for request logging overhead and policy checks
 REQUEST_LOGGING_ENABLED = _env_bool("REQUEST_LOGGING_ENABLED", True)
 REQUEST_LOG_SUCCESS_SAMPLE_RATE = min(

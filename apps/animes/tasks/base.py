@@ -7,12 +7,12 @@ Provides:
 - Metrics collection
 """
 
-import asyncio
 import hashlib
 import time
 from contextlib import asynccontextmanager
 from typing import Any
 
+from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
 from ...shared.celery import RETRY_POLICIES, ObservedTask
@@ -207,7 +207,7 @@ class BaseTask(ObservedTask):
 
     def run_async(self, coro):
         """Run async coroutine in sync context."""
-        return asyncio.run(coro)
+        return run_async_in_task(coro)
 
     def on_success(self, retval, task_id, args, kwargs):
         """Called when task succeeds."""
@@ -339,5 +339,16 @@ class BaseTask(ObservedTask):
 
 # Helper to run async code in sync celery task
 def run_async_in_task(coro):
-    """Helper to run async code in sync celery task context."""
-    return asyncio.run(coro)
+    """Helper to run async code in sync celery task context.
+
+    Uses async_to_sync rather than asyncio.run so sync_to_async ORM
+    calls inside the coroutine run on this thread and share its DB connection.
+    With asyncio.run they run on asgiref's executor thread with a second
+    connection, which can't see this thread's uncommitted rows and is never
+    closed by Celery's per-task connection cleanup.
+    """
+
+    async def _await():
+        return await coro
+
+    return async_to_sync(_await)()

@@ -133,9 +133,9 @@ class TestCheckNewEpisodes(TestCase):
             status=UserAnimeList.UserAnimeStatus.watching,
         )
 
-        created = check_new_episodes()
+        result = check_new_episodes()
 
-        self.assertEqual(created, 1)
+        self.assertEqual(result["notifications_created"], 1)
         notification = Notification.objects.get(
             user=self.user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
@@ -155,9 +155,9 @@ class TestCheckNewEpisodes(TestCase):
             status=UserAnimeList.UserAnimeStatus.watching,
         )
 
-        created = check_new_episodes()
+        result = check_new_episodes()
 
-        self.assertEqual(created, 1)
+        self.assertEqual(result["notifications_created"], 1)
         notification = Notification.objects.get(
             user=self.user,
             notification_type=Notification.NotificationType.NEW_EPISODE,
@@ -182,9 +182,9 @@ class TestCheckNewEpisodes(TestCase):
             data={"anime_id": anime.id, "episode_number": 5},
         )
 
-        created = check_new_episodes()
+        result = check_new_episodes()
 
-        self.assertEqual(created, 0)
+        self.assertEqual(result["notifications_created"], 0)
         self.assertEqual(
             Notification.objects.filter(
                 user=self.user,

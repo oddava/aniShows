@@ -7,6 +7,7 @@ from django.test import TestCase
 
 from ..models import Anime, Staff
 from ..services.anilist import AniListService
+from ..services.jikan import JikanService
 from ..tasks.metadata import MetadataEnrichmentTask
 
 
@@ -15,6 +16,14 @@ class AniListIntegrityTests(TestCase):
         self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
         self.enrich_patcher.start()
         self.addCleanup(self.enrich_patcher.stop)
+
+    def _jikan_service_with_mocked_fetches(self, **fetch_mocks):
+        """Real JikanService (so its resolver logic runs) with network fetches mocked."""
+        service = JikanService(enable_caching=False, enable_rate_limiting=False)
+        self.addCleanup(lambda: async_to_sync(service.close)())
+        for name, mock in fetch_mocks.items():
+            setattr(service, name, mock)
+        return service
 
     def test_resolve_manual_update_item_refetches_when_anilist_id_mismatches(self):
         Anime.objects.create(
@@ -94,7 +103,7 @@ class AniListIntegrityTests(TestCase):
             mal_id=999,
         )
 
-        service = SimpleNamespace(
+        service = self._jikan_service_with_mocked_fetches(
             get_anime_by_id=AsyncMock(return_value={"id": 555, "title": {"english": "ok"}}),
             search_by_mal_id=AsyncMock(return_value={"id": 999}),
             search_anime=AsyncMock(return_value=[{"id": 1}]),
@@ -118,7 +127,7 @@ class AniListIntegrityTests(TestCase):
             title_jp="Exact Native",
         )
 
-        service = SimpleNamespace(
+        service = self._jikan_service_with_mocked_fetches(
             get_anime_by_id=AsyncMock(return_value=None),
             search_by_mal_id=AsyncMock(return_value=None),
             search_anime=AsyncMock(

@@ -142,7 +142,7 @@ class BaseImporter:
                 logger.info(f"Fetching anime by MAL ID: {mal_id}")
                 anime_data = self._run_async(service.search_by_mal_id(mal_id))
                 if anime_data:
-                    anime = self._run_async(service._save_anime_to_db_async(anime_data))
+                    anime = service.save_anime_to_db(anime_data)
                     logger.info(f"Fetched and saved: {anime.title}")
                     self.fetched_count += 1
                     return anime
@@ -151,7 +151,7 @@ class BaseImporter:
                 logger.info(f"Fetching anime by sync ID: {anilist_id}")
                 anime_data = self._run_async(service.get_anime_by_id(anilist_id))
                 if anime_data:
-                    anime = self._run_async(service._save_anime_to_db_async(anime_data))
+                    anime = service.save_anime_to_db(anime_data)
                     logger.info(f"Fetched and saved: {anime.title}")
                     self.fetched_count += 1
                     return anime
@@ -161,7 +161,7 @@ class BaseImporter:
                 results = self._run_async(service.search_anime(title))
                 if results:
                     anime_data = results[0]
-                    anime = self._run_async(service._save_anime_to_db_async(anime_data))
+                    anime = service.save_anime_to_db(anime_data)
                     logger.info(f"Fetched and saved: {anime.title}")
                     self.fetched_count += 1
                     return anime

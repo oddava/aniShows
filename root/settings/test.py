@@ -20,6 +20,9 @@ DATABASES = {
         "HOST": os.getenv("TEST_DB_HOST", "db"),
         "PORT": os.getenv("TEST_DB_PORT", "5432"),
         "CONN_MAX_AGE": 0,
+        # Fail a lock wait instead of hanging: pytest-timeout's signal can't
+        # interrupt a blocked libpq call (e.g. two connections in one test).
+        "OPTIONS": {"options": "-c lock_timeout=30000"},
     }
 }
 DATABASES["default"]["TEST"] = {
@@ -27,25 +30,21 @@ DATABASES["default"]["TEST"] = {
 }
 ALLOWED_HOSTS = [*ALLOWED_HOSTS, "testserver"]
 
-# Use very high throttle rates during tests (effectively disabled)
+# Use very high throttle rates during tests (effectively disabled), derived from
+# base so new scopes can't go missing. Scopes whose limits are under test keep
+# their real rates.
+_THROTTLE_SCOPES_UNDER_TEST = {"social_links"}
 REST_FRAMEWORK = {
     **REST_FRAMEWORK,
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "10000/hour",
-        "user": "10000/hour",
-        "user_profile_lookup": "10000/minute",
-        "anime_list": "10000/minute",
-        "review_access": "10000/minute",
-        "login": "10000/minute",
-        "register": "10000/hour",
-        "password_reset": "10000/hour",
-        "user_actions": "10000/minute",
-        "admin_actions": "10000/minute",
-        "strict_user": "10000/minute",
-        "forum_write": "10000/minute",
-        "forum_like": "10000/minute",
+        scope: rate if scope in _THROTTLE_SCOPES_UNDER_TEST else "10000/minute"
+        for scope, rate in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"].items()
     },
 }
+
+# Don't randomly sample successful requests into the (eager) request-log task:
+# it adds queries to ~5% of requests and makes query-count tests flaky.
+REQUEST_LOG_SUCCESS_SAMPLE_RATE = 0.0
 
 # Use synchronous email backend for tests
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
@@ -62,6 +61,11 @@ ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = False
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    }
+}
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
     }
 }
 # Avoid cross-test pollution from cached runtime policy settings.
