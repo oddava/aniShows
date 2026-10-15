@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticate
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from ..permissions import VerifiedEmailForWrites
 from ..serializers.users import (
     FollowSerializer,
     FriendWatchingSerializer,
@@ -21,7 +22,7 @@ from ..services.follow_service import (
 class FollowViewSet(GenericViewSet):
     """Handle follow/unfollow operations and listing followers/following"""
 
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
 
     @action(detail=False, methods=["POST"])
     def toggle(self, request):
@@ -33,7 +34,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="followers/(?P<username>[^/.]+)",
+        url_path="followers/(?P<username>[^/]+)",
         permission_classes=[AllowAny],
     )
     def followers(self, request, username=None):
@@ -58,7 +59,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="following/(?P<username>[^/.]+)",
+        url_path="following/(?P<username>[^/]+)",
         permission_classes=[AllowAny],
     )
     def following(self, request, username=None):
@@ -81,7 +82,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="mutuals/(?P<username>[^/.]+)",
+        url_path="mutuals/(?P<username>[^/]+)",
         permission_classes=[AllowAny],
     )
     def mutuals(self, request, username=None):
@@ -104,7 +105,7 @@ class FollowViewSet(GenericViewSet):
     @action(
         detail=False,
         methods=["GET"],
-        url_path="check/(?P<username>[^/.]+)",
+        url_path="check/(?P<username>[^/]+)",
         permission_classes=[IsAuthenticated],
     )
     def check(self, request, username=None):

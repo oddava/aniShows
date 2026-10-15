@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from ...users.models import UserProfile
 from ..models import Anime, EpisodeRating
 
 User = get_user_model()
@@ -20,6 +21,7 @@ class EpisodeRatingApiTests(APITestCase):
             email="other@example.com",
             password="password123",
         )
+        UserProfile.objects.filter(user__in=[self.user, self.other_user]).update(email_verified=True)
         self.anime = Anime.objects.create(
             title="Test Anime",
             slug="test-anime",

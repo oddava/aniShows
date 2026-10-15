@@ -24,6 +24,11 @@ x-backend: &backend
     JIKAN_BASE_URL: http://jikan:8080/v4
     PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     SENTRY_ENVIRONMENT: production
+    # Only Caddy can reach the backend (it publishes no ports), and Caddy
+    # replaces X-Forwarded-For with the real client address. Without this,
+    # every request looks like it came from Caddy's container IP (logs,
+    # anonymous forum view counting, audit trails).
+    TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
   user: "1000:1000"
   depends_on: &backend-deps
     pgbouncer:

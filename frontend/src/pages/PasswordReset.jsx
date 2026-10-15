@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { Link } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { Mail, ArrowRight, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
@@ -19,7 +20,7 @@ export default function PasswordReset() {
             setMessage('If an account exists with this email, a reset link has been sent.');
         } catch (err) {
             setStatus('error');
-            setMessage(err.response?.data?.error || 'Failed to send reset link');
+            setMessage(getApiErrorMessage(err, 'Failed to send reset link'));
         }
     };
 

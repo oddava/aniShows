@@ -94,6 +94,7 @@ class TestReviewReportFlow(APITestCase):
             email="reporter@example.com",
             password="password123",
         )
+        UserProfile.objects.filter(user=self.reporter).update(email_verified=True)
         self.anime = Anime.objects.create(
             title="Review Report Test Anime",
             slug="review-report-test-anime",

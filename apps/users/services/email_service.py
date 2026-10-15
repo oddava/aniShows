@@ -7,7 +7,7 @@ from django.utils.http import urlsafe_base64_encode
 
 from ...shared.celery import observed_shared_task
 from ...shared.logger import logger
-from ..tokens import email_verification_token_generator
+from ..tokens import EmailChangeTokenGenerator, email_verification_token_generator
 
 
 class EmailService:
@@ -39,7 +39,7 @@ class EmailService:
 
     def send_email_change_confirmation(self, user, new_email):
         """Queue email change confirmation email."""
-        token = default_token_generator.make_token(user)
+        token = EmailChangeTokenGenerator(new_email).make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         new_email_encoded = urlsafe_base64_encode(force_bytes(new_email))
 

@@ -23,11 +23,6 @@ def _table_names() -> set[str]:
         return set()
 
 
-def invalidate_table_cache() -> None:
-    """Invalidate cached table names (useful after migrations)."""
-    _table_names.cache_clear()
-
-
 def model_table_exists(model_cls: type[Model]) -> bool:
     """Return whether the model's DB table currently exists."""
     return model_cls._meta.db_table in _table_names()

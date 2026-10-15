@@ -76,8 +76,8 @@ class ReviewCreationTests(APITestCase):
             Review.objects.filter(user=self.user, anime=self.anime).exists()
         )
 
-    def test_create_review_xss_prevention(self):
-        """Test that review text is sanitized against XSS."""
+    def test_create_review_stores_text_verbatim(self):
+        """Review text is stored exactly as typed."""
         UserAnimeList.objects.create(
             user=self.user,
             anime=self.anime,
@@ -92,9 +92,11 @@ class ReviewCreationTests(APITestCase):
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+        # Stored as typed: reviews are rendered as text (React escapes), and
+        # escaping here showed apostrophes as "&#x27;" and broke exports.
         review = Review.objects.get(user=self.user, anime=self.anime)
-        self.assertNotIn('<script>', review.text)
-        self.assertIn('&lt;script&gt;', review.text)  # Escaped
+        self.assertEqual(review.text, data['text'])
+        self.assertEqual(response.data['text'], data['text'])
 
     def test_create_review_unauthenticated(self):
         """Test that unauthenticated users cannot create reviews."""

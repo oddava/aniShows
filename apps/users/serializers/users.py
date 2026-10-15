@@ -4,6 +4,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import bleach
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
     BooleanField,
@@ -37,11 +39,11 @@ from ...animes.serializers.base import (
     validate_image_content,
 )
 from ...animes.serializers_mixins import BadgesMixin, UserProfileMixin
-from ...core.services.admin_settings_service import username_length_limits
 from ...shared.logger import logger
 from ..models import Badge, UserActivity, UserAnimeList, UserBadge
 from ..services.auth_service import AuthService
 from ..services.avatar_service import get_user_avatar_url
+from ..services.username_sanitizer import validate_username
 
 User = get_user_model()
 
@@ -338,27 +340,13 @@ class UserProfileUpdateSerializer(Serializer):
     username = CharField(max_length=150, required=False)
     avatar = ImageField(required=False, allow_null=True)
     banner = ImageField(required=False, allow_null=True)
-    remove_banner = BooleanField(required=False, default=False)
+    remove_banner = BooleanField(required=False)
     bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
-    is_private = BooleanField(required=False, default=False)
+    # No defaults: an omitted field must leave the stored value alone.
+    is_private = BooleanField(required=False)
     show_adult_content = BooleanField(required=False)
     profile_primary_color = CharField(required=False, max_length=7)
     preferred_timezone = CharField(required=False, allow_blank=True, max_length=64)
-
-    def validate_is_private(self, value):
-        if isinstance(value, str):
-            return value.lower() in ("true", "1", "yes", "on")
-        return value
-
-    def validate_remove_banner(self, value):
-        if isinstance(value, str):
-            return value.lower() in ("true", "1", "yes", "on")
-        return value
-
-    def validate_show_adult_content(self, value):
-        if isinstance(value, str):
-            return value.lower() in ("true", "1", "yes", "on")
-        return value
 
     def validate_bio(self, value):
         # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
@@ -397,45 +385,11 @@ class UserProfileUpdateSerializer(Serializer):
     social_links = JSONField(required=False)
 
     def validate_social_links(self, value):
-        import json
-
-        from ...core.services.social_links_service import (
-            SocialLinksService,
-            SocialLinkValidationError,
-        )
-
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                raise ValidationError("Social links must be valid JSON.")
-
-        if not isinstance(value, list):
-            raise ValidationError("Social links must be a list.")
-
-        if len(value) > 5:
-            raise ValidationError("Maximum 5 social links allowed.")
-
-        cleaned_links = []
-        for link in value:
-            if (
-                isinstance(link, dict)
-                and link.get("platform", "").strip()
-                and link.get("value", "").strip()
-            ):
-                cleaned_links.append(
-                    {
-                        "platform": link["platform"].strip(),
-                        "value": link["value"].strip(),
-                    }
-                )
-
-        service = SocialLinksService()
+        from ...core.services.social_links_service import SocialLinkValidationError
+        from ..services.profile_update_service import validate_social_links_input
 
         try:
-            user = self.context.get("request").user if self.context.get("request") else None
-            processed_links = service.validate_and_process(cleaned_links, user)
-            return processed_links
+            return validate_social_links_input(value)
         except SocialLinkValidationError as e:
             raise ValidationError(str(e))
 
@@ -461,18 +415,22 @@ class RegisterSerializer(ModelSerializer):
         fields = ["username", "email", "password"]
 
     def validate_username(self, value):
-        normalized = value.strip()
-        min_length, max_length = username_length_limits()
-
-        if len(normalized) < min_length:
-            raise ValidationError(f"Username must be at least {min_length} characters long.")
-        if len(normalized) > max_length:
-            raise ValidationError(f"Username must be at most {max_length} characters long.")
-
-        return normalized
+        try:
+            return validate_username(value)
+        except DjangoValidationError as exc:
+            raise ValidationError(list(exc.messages)) from exc
 
     def validate_email(self, value):
         return value.lower().strip()
+
+    def validate(self, attrs):
+        # Validators such as UserAttributeSimilarityValidator need the user's fields.
+        candidate = User(username=attrs.get("username"), email=attrs.get("email"))
+        try:
+            validate_password(attrs["password"], candidate)
+        except DjangoValidationError as exc:
+            raise ValidationError({"password": list(exc.messages)}) from exc
+        return attrs
 
     def create(self, validated_data):
         return self.auth_service.register_user(validated_data)
@@ -547,8 +505,15 @@ class UserAnimeListSerializer(ModelSerializer):
         return 0
 
     def validate(self, attrs):
-        if not self.instance and "anime" not in attrs:
-            raise ValidationError({"anime_id": "This field is required."})
+        if self.instance:
+            # An entry belongs to one anime; re-pointing it would collide with
+            # another entry or detach the user's review from their list.
+            attrs.pop("anime", None)
+        else:
+            if "anime" not in attrs:
+                raise ValidationError({"anime_id": "This field is required."})
+            # The model has no default; never store an empty status.
+            attrs.setdefault("status", UserAnimeList.UserAnimeStatus.plan_to_watch)
 
         episodes_watched = attrs.get("episodes_watched")
         anime = attrs.get("anime")
@@ -669,6 +634,11 @@ class ChangePasswordSerializer(Serializer):
                 raise ValidationError(
                     {"old_password": "The current password you entered is incorrect."}
                 )
+
+        try:
+            validate_password(attrs["new_password"], user)
+        except DjangoValidationError as exc:
+            raise ValidationError({"new_password": list(exc.messages)}) from exc
 
         return attrs
 

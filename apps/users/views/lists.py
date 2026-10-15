@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.viewsets import ModelViewSet
 
-from ..permissions import EmailVerificationMixin
+from ..permissions import VerifiedEmailForWrites
 from ..serializers.users import UserAnimeListSerializer
 from ..services.list_service import (
     create_user_anime_list_entry,
@@ -13,10 +13,9 @@ from ..services.list_service import (
 
 User = get_user_model()
 
-class UserAnimeListViewSet(EmailVerificationMixin, ModelViewSet):
+class UserAnimeListViewSet(ModelViewSet):
     serializer_class = UserAnimeListSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    verification_error_message = "Please verify your email to add anime to your list."
+    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
 
     def get_queryset(self):
         return get_user_anime_list_queryset(

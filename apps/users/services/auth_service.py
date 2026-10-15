@@ -2,10 +2,13 @@ from typing import Dict
 
 from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import HttpRequest
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
 from ..models import UserProfile
@@ -17,6 +20,20 @@ User = get_user_model()
 VERIFY_SUCCESS = "verified"
 VERIFY_ALREADY_VERIFIED = "already_verified"
 VERIFY_INVALID = "invalid"
+
+
+def revoke_all_sessions(user) -> None:
+    """Blacklist every refresh token issued to ``user`` (all devices log out)."""
+    BlacklistedToken.objects.bulk_create(
+        [
+            BlacklistedToken(token=token)
+            for token in OutstandingToken.objects.filter(
+                user=user, blacklistedtoken__isnull=True
+            )
+        ],
+        ignore_conflicts=True,
+    )
+
 
 class AuthService:
     """Handles authentication business logic."""
@@ -44,7 +61,7 @@ class AuthService:
         return queryset.exists()
 
     def email_exists(self, email: str, *, exclude_pk: int | None = None) -> bool:
-        queryset = User.objects.filter(email=email)
+        queryset = User.objects.filter(email__iexact=email)
         if exclude_pk is not None:
             queryset = queryset.exclude(pk=exclude_pk)
         return queryset.exists()
@@ -58,11 +75,18 @@ class AuthService:
 
     def register_user(self, data: Dict) -> User:
         """Create a new user with profile."""
-        user = User.objects.create_user(
-            username=data["username"],
-            email=data["email"],
-            password=data["password"],
-        )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=data["username"],
+                    email=data["email"],
+                    password=data["password"],
+                )
+        except IntegrityError as exc:
+            # Lost a race with a concurrent sign-up for the same name or email.
+            raise ValidationError(
+                "Unable to create account. The email or username may already be in use."
+            ) from exc
         verification_required = is_email_verification_required()
         # Profile is auto-created via signal; sync verification state with panel settings.
         profile = getattr(user, "userprofile", None)
@@ -93,9 +117,6 @@ class AuthService:
         constants; ``user`` is None for ``VERIFY_INVALID``.
         """
         try:
-            from django.utils.encoding import force_str
-            from django.utils.http import urlsafe_base64_decode
-
             uid = force_str(urlsafe_base64_decode(uidb64))
             # Get user with annotations for proper serializer output
             user = get_annotated_user_queryset().get(pk=uid)

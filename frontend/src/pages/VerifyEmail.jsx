@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client';
+import { getApiErrorMessage } from '../api/errors';
 import { useAuth } from '../context/AuthContext';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import logger from '../utils/logger';
@@ -45,7 +46,7 @@ export default function VerifyEmail() {
                 setStatus('success');
             } catch (err) {
                 setStatus('error');
-                setMessage(err.response?.data?.error || 'Verification failed');
+                setMessage(getApiErrorMessage(err, 'Verification failed'));
             }
         };
 

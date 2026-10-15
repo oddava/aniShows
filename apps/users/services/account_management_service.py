@@ -1,11 +1,14 @@
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
-from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.db import IntegrityError, transaction
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
+from ..tokens import EmailChangeTokenGenerator, normalize_email
+from .auth_service import AuthService, revoke_all_sessions
 from .email_service import EmailService
 
 User = get_user_model()
@@ -18,8 +21,10 @@ class AccountManagementResult:
 
 
 def change_password(user, new_password):
+    """Set a new password and end every session; the caller re-issues its own."""
     user.set_password(new_password)
-    user.save()
+    user.save(update_fields=["password"])
+    revoke_all_sessions(user)
     return AccountManagementResult(
         payload={"message": "Password changed successfully"},
         status_code=200,
@@ -61,7 +66,22 @@ def request_email_change(user, new_email, password, email_service: EmailService)
                 status_code=400,
             )
 
-    if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+    new_email = normalize_email(new_email)
+    try:
+        validate_email(new_email)
+    except ValidationError:
+        return AccountManagementResult(
+            payload={"error": "Enter a valid email address."},
+            status_code=400,
+        )
+
+    if new_email == normalize_email(user.email):
+        return AccountManagementResult(
+            payload={"error": "This is already your email address."},
+            status_code=400,
+        )
+
+    if AuthService().email_exists(new_email, exclude_pk=user.pk):
         return AccountManagementResult(
             payload={"error": "This email is already in use"},
             status_code=400,
@@ -83,29 +103,39 @@ def confirm_email_change(uidb64, token, new_email_encoded):
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
         user = User.objects.get(pk=uid)
-        new_email = force_str(urlsafe_base64_decode(new_email_encoded))
+        new_email = normalize_email(force_str(urlsafe_base64_decode(new_email_encoded)))
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         return AccountManagementResult(payload={"error": "Invalid link"}, status_code=400)
 
-    if not default_token_generator.check_token(user, token):
+    # The token is bound to this exact new address and to the current one, so
+    # it cannot be replayed or pointed at an address the user never confirmed.
+    if not EmailChangeTokenGenerator(new_email).check_token(user, token):
         return AccountManagementResult(
             payload={"error": "Invalid or expired link"},
             status_code=400,
         )
 
-    if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+    if AuthService().email_exists(new_email, exclude_pk=user.pk):
         return AccountManagementResult(
             payload={"error": "This email is already in use"},
             status_code=400,
         )
 
-    user.email = new_email
-    user.save()
+    try:
+        with transaction.atomic():
+            user.email = new_email
+            user.save(update_fields=["email"])
 
-    profile = getattr(user, "userprofile", None)
-    if profile:
-        profile.email_verified = True
-        profile.save()
+            profile = getattr(user, "userprofile", None)
+            if profile:
+                profile.email_verified = True
+                profile.save(update_fields=["email_verified"])
+    except IntegrityError:
+        # Another account claimed the address after the check above.
+        return AccountManagementResult(
+            payload={"error": "This email is already in use"},
+            status_code=400,
+        )
 
     return AccountManagementResult(
         payload={"message": "Email changed successfully!"},

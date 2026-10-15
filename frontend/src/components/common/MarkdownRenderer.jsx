@@ -15,6 +15,9 @@ const alignedBlockClassNames = {
 };
 
 const extractYouTubeId = (url) => {
+    // User-authored <youtube> tags may arrive without a src (or with one the
+    // sanitizer removed); a throw here would take down the whole page.
+    if (typeof url !== "string") return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return match && match[2].length === 11 ? match[2] : null;
@@ -336,12 +339,14 @@ const markdownComponents = {
     },
     youtube: ({ node, src, ...props }) => {
         const videoId = extractYouTubeId(src);
-        if (!videoId)
+        if (!videoId) {
+            if (!src) return null;
             return (
                 <a href={src} className="text-accent-light">
                     {src}
                 </a>
             );
+        }
         return (
             <span className="block relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden my-4 border border-gray-800">
                 <iframe

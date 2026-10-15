@@ -12,6 +12,7 @@ from ...core.utils import get_client_ip
 from ...shared.logger import logger
 from ...shared.pagination import NoCountPagination, StandardPagination
 from ...shared.public_cache import get_or_build_public_payload
+from ...users.permissions import VerifiedEmailForWrites
 from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
 from ..serializers import (
     AnimeCharacterSerializer,
@@ -392,7 +393,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         detail=True,
         methods=["put", "patch", "delete"],
         url_path=r"episode-ratings/(?P<episode_number>\d+)",
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
     )
     def episode_rating(self, request, slug=None, episode_number=None):
         anime = self._get_action_anime(slug)

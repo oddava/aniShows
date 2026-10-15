@@ -162,19 +162,3 @@ def create_or_update_user_stats(user):
     return stats
 
 
-def get_user_stats_with_fallback(user):
-    """
-    Get user stats, falling back to on-the-fly calculation if UserStats doesn't exist.
-
-    Args:
-        user: User instance
-
-    Returns:
-        dict: User statistics dictionary
-    """
-    try:
-        stats = user.stats
-        return get_materialized_user_stats_payload(stats, include_follow_counts=True)
-    except UserStats.DoesNotExist:
-        # Fall back to on-the-fly calculation
-        return serialize_user_stats(calculate_user_stats_with_follows(user), include_follow_counts=True)
