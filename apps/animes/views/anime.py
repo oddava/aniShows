@@ -1,7 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -10,7 +9,7 @@ from ...core.api_errors import error_response
 from ...core.permissions import IsSuperUser
 from ...core.utils import get_client_ip
 from ...shared.logger import logger
-from ...shared.pagination import NoCountPagination, StandardPagination
+from ...shared.pagination import LargePagination, NoCountPagination, StandardPagination
 from ...shared.public_cache import get_or_build_public_payload
 from ...users.permissions import VerifiedEmailForWrites
 from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
@@ -37,18 +36,6 @@ from ..services.public_anime_service import (
     AnimeQueryService,
 )
 from ..services.watch_episodes import AnimeWatchEpisodeService
-
-
-class WatchEpisodesPagination(PageNumberPagination):
-    page_size = 50
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
-
-class AnimeDetailRelationPagination(PageNumberPagination):
-    page_size = 50
-    page_size_query_param = "page_size"
-    max_page_size = 100
 
 
 class AnimeViewSet(ReadOnlyModelViewSet):
@@ -315,7 +302,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
             .order_by("role", "character__name", "id")
         )
-        paginator = AnimeDetailRelationPagination()
+        paginator = LargePagination()
         page = paginator.paginate_queryset(characters, request, view=self)
         serializer = AnimeCharacterSerializer(page, many=True)
         response = paginator.get_paginated_response(serializer.data)
@@ -340,7 +327,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             )
             .order_by("id")
         )
-        paginator = AnimeDetailRelationPagination()
+        paginator = LargePagination()
         page = paginator.paginate_queryset(staff, request, view=self)
         serializer = AnimeStaffSerializer(page, many=True)
         response = paginator.get_paginated_response(serializer.data)
@@ -353,7 +340,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             anime,
             request_budget=AnimeWatchEpisodeService.REQUEST_BUDGET_INTERACTIVE,
         )
-        paginator = WatchEpisodesPagination()
+        paginator = LargePagination()
         page = paginator.paginate_queryset(episodes, request, view=self)
         episode_numbers = [episode.get("number") for episode in (page or [])]
         episode_rating_map = {

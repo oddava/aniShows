@@ -1,49 +1,39 @@
-from ...shared.logger import logger
-
-"""
-Middleware for tracking user activity timestamps.
-"""
+"""Record when each signed-in user was last active (admin "active users" reports)."""
 
 from django.core.cache import cache
 from django.utils import timezone
 
-# Throttle database updates to once per minute per user
+from ...shared.logger import logger
+
+# At most one profile write per user per minute.
 DB_UPDATE_THROTTLE = 60
 
-class UserActivityMiddleware:
-    """
-    Middleware that tracks user activity on authenticated requests.
-    Updates database timestamps with throttling.
-    """
 
+def activity_throttle_key(user_id) -> str:
+    return f"user_db_update:{user_id}"
+
+
+class UserActivityMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Process the request first
         response = self.get_response(request)
 
-        # Only track activity on successful responses (2xx/3xx)
-        # Failed requests (4xx/5xx) should not count as active usage
-        if request.user.is_authenticated and response.status_code < 400:
-            self._track_activity(request.user)
+        # Checked after the view: DRF's JWT authentication sets request.user
+        # during the view. Failed requests do not count as activity.
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated and response.status_code < 400:
+            self._track_activity(user.id)
 
         return response
 
-    def _track_activity(self, user):
-        """Track user activity timestamp in database."""
-        user_id = user.id
+    def _track_activity(self, user_id):
+        if not cache.add(activity_throttle_key(user_id), True, timeout=DB_UPDATE_THROTTLE):
+            return
+        try:
+            from ..models import UserProfile
 
-        # Throttle database updates to avoid excessive writes
-        # Only update DB once per minute per user
-        db_update_key = f"user_db_update:{user_id}"
-        if cache.add(db_update_key, True, timeout=DB_UPDATE_THROTTLE):
-            try:
-                from ..models import UserProfile
-
-                queryset = UserProfile.objects.filter(user=user_id)
-                queryset.update(
-                    last_activity=timezone.now()
-                )
-            except Exception as e:
-                logger.error(f"Failed to update last_activity for user {user_id}: {e}")
+            UserProfile.objects.filter(user=user_id).update(last_activity=timezone.now())
+        except Exception:
+            logger.exception("Failed to update last_activity for user %s", user_id)

@@ -238,11 +238,12 @@ def flush_buffered_thread_views(*, max_threads: int | None = None) -> dict[str, 
         for raw_id in raw_ids:
             thread_id = int(raw_id)
             key = get_thread_view_buffer_key(thread_id)
-            count = int(redis_conn.get(key) or 0)
+            # Read and clear in one MULTI so views counted in between survive.
             pipeline = redis_conn.pipeline()
             pipeline.srem(THREAD_VIEW_DIRTY_SET_KEY, raw_id)
+            pipeline.get(key)
             pipeline.delete(key)
-            pipeline.execute()
+            count = int(pipeline.execute()[1] or 0)
             if count <= 0:
                 continue
             updated = Thread.objects.filter(pk=thread_id).update(view_count=F("view_count") + count)

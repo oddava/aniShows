@@ -188,12 +188,8 @@ LOGGING = {
             "level": "ERROR",
             "propagate": False,
         },
-        "apps.animes": {
-            "handlers": ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "apps.users.views.auth": {
+        # Application code logs through apps.shared.logger ("anishows.*").
+        "anishows": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": False,

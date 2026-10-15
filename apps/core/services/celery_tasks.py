@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -12,6 +11,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from ...animes.models import Anime
+from ...shared.logger import logger
 from ...users.models import UserProfile
 from ..db_safety import (
     model_table_exists,
@@ -21,8 +21,6 @@ from ..models import AuditLog, Notification, SystemLog
 from .metadata_service import MetadataService
 from .notification_service import NotificationService
 from .push_service import PushService
-
-logger = logging.getLogger(__name__)
 
 NEW_EPISODE_LOOKBACK_HOURS = 24
 NEW_EPISODE_DEDUP_LOOKBACK_DAYS = 7

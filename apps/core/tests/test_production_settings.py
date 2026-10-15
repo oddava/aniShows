@@ -45,3 +45,13 @@ class ProductionThrottleIdentityTests(SimpleTestCase):
                 for spoof in ("1.1.1.1", "2.2.2.2", "9.9.9.9")
             }
         self.assertEqual(idents, {"203.0.113.9"})
+
+
+class ProductionLoggingTests(SimpleTestCase):
+    def test_application_info_logs_are_kept(self):
+        # Root is at WARNING in production; the app logger must be configured
+        # by the name the code actually uses or its INFO lines are dropped.
+        level = _production_setting(
+            '__import__("logging").getLogger("anishows.celery").getEffectiveLevel()'
+        )
+        self.assertEqual(level, 20)

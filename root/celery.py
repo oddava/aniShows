@@ -30,7 +30,7 @@ from kombu import Queue
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "root.settings")
 
 app = Celery("root")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("anishows.celery")
 
 # Configure from Django settings
 app.config_from_object("django.conf:settings", namespace="CELERY")

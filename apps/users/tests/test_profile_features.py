@@ -13,6 +13,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from ...animes.models import Anime, Review, ReviewVote
+from ..middleware.activity_middleware import activity_throttle_key
 from ..models import UserAnimeList, UserFollow, UserProfile, UserStats
 
 User = get_user_model()
@@ -140,6 +141,7 @@ class ProfileFeaturesTest(APITestCase):
             },
         )
         cache.clear()
+        cache.add(activity_throttle_key(self.user.id), True)
 
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(self.profile_url)
@@ -265,6 +267,7 @@ class ProfileFeaturesTest(APITestCase):
         )
         UserFollow.objects.create(follower=self.user, following=other_user)
         cache.clear()
+        cache.add(activity_throttle_key(self.user.id), True)
 
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(self.public_profile_url(other_user.username))
@@ -323,6 +326,7 @@ class ProfileFeaturesTest(APITestCase):
         UserProfile.objects.update_or_create(user=follower, defaults={"email_verified": True})
         UserFollow.objects.create(follower=follower, following=target_user)
         cache.clear()
+        cache.add(activity_throttle_key(self.user.id), True)
 
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(f"/api/v1/follows/followers/{target_user.username}/")
@@ -355,6 +359,7 @@ class ProfileFeaturesTest(APITestCase):
             episodes_watched=3,
         )
         cache.clear()
+        cache.add(activity_throttle_key(self.user.id), True)
 
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(reverse("follows-friends-watching"), {"anime_id": anime.id})
