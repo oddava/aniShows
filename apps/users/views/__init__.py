@@ -5,7 +5,9 @@ from .auth import (
     AuthViewSet,
     CustomTokenObtainPairView,
     LoggingTokenRefreshView,
+    LogoutView,
     RegisterView,
+    WebSocketTicketView,
 )
 from .badges import UserBadgeViewSet
 from .follows import FollowViewSet

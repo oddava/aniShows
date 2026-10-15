@@ -1,63 +1,43 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { authApi, refreshAccessToken } from '../api/client';
+import {
+    AUTH_EXPIRED_EVENT,
+    SESSION_HINT_KEY,
+    authApi,
+    clearSession,
+    hasSession,
+    isAuthFailureError,
+    refreshAccessToken,
+    setAccessToken,
+} from '../api/client';
 import {
     clearStoredTimeZonePreference,
     syncStoredTimeZonePreference,
 } from '../utils/dateUtils';
-import logger, { isRequestAbortError } from '../utils/logger';
+import logger from '../utils/logger';
 
 const AuthContext = createContext(null);
 
-// Decode JWT token to get user info instantly without API call
-const decodeToken = (token) => {
+// Last-resort user when /users/me/ can't be reached right after sign-in.
+// The token carries only id and username; role flags (is_staff/is_superuser)
+// are never read from it, so admin UI stays hidden until the profile loads.
+const userFromToken = (token) => {
     try {
         const decoded = jwtDecode(token);
-
-        // Handle both old tokens (only user_id) and new tokens (with username/email)
-        // For old tokens without username, we'll need to fetch from API
-        if (!decoded.username && !decoded.email) {
-            return {
-                id: decoded.user_id,
-                username: null, // Will be populated by API call
-                email: null,
-                avatar: null,
-                bio: '',
-                is_private: false,
-                email_verified: true,
-                preferred_timezone: 'auto',
-                is_staff: Boolean(decoded.is_staff),
-                is_superuser: Boolean(decoded.is_superuser),
-                _needsApiFetch: true, // Flag to indicate we need API data
-            };
-        }
-
         return {
             id: decoded.user_id,
-            username: decoded.username || 'User', // Fallback if somehow missing
-            email: decoded.email || '',
+            username: decoded.username || null,
+            email: '',
             avatar: null,
             bio: '',
             is_private: false,
             email_verified: true,
             preferred_timezone: 'auto',
-            is_staff: Boolean(decoded.is_staff),
-            is_superuser: Boolean(decoded.is_superuser),
-            _needsApiFetch: false,
+            is_staff: false,
+            is_superuser: false,
         };
-    } catch (error) {
-        return null;
-    }
-};
-
-// Check if token is expired
-const isTokenExpired = (token) => {
-    try {
-        const decoded = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
-        return decoded.exp < currentTime;
     } catch {
-        return true;
+        return null;
     }
 };
 
@@ -65,81 +45,61 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const checkAuth = useCallback(async () => {
-        const token = localStorage.getItem('access_token');
-        const refreshToken = localStorage.getItem('refresh_token');
-
-        if (token && !isTokenExpired(token)) {
-            try {
-                // Fetch full profile to get admin status
-                const response = await authApi.getProfile();
-                setUser(response.data);
-                setLoading(false);
-                return;
-            } catch (error) {
-                if (isRequestAbortError(error)) {
-                    const decodedUser = decodeToken(token);
-                    if (decodedUser) {
-                        setUser(decodedUser);
-                    }
-                    setLoading(false);
-                    return;
-                }
-                logger.warn('Failed to fetch profile with valid token, trying refresh:', error.message);
-                // Fall through to refresh logic if profile fetch fails
-            }
+    const loadProfileFor = useCallback(async (access) => {
+        try {
+            const response = await authApi.getProfile();
+            setUser(response.data);
+            return response.data;
+        } catch (error) {
+            if (isAuthFailureError(error)) throw error;
+            logger.warn('Profile fetch failed, using minimal user from token:', error.message);
+            const fallbackUser = userFromToken(access);
+            setUser(fallbackUser);
+            return fallbackUser;
         }
-
-        // Token is expired or missing, but we have a refresh token - try to refresh
-        if (refreshToken) {
-            try {
-                logger.info('Access token expired or missing, attempting refresh...');
-                await refreshAccessToken();
-                logger.info('Token refresh successful on app load');
-
-                // Fetch full profile after refresh
-                const response = await authApi.getProfile();
-                setUser(response.data);
-                setLoading(false);
-                return;
-            } catch (refreshError) {
-                if (isRequestAbortError(refreshError)) {
-                    const activeToken = localStorage.getItem('access_token') || token;
-                    const decodedUser = decodeToken(activeToken);
-                    if (decodedUser) {
-                        setUser(decodedUser);
-                    }
-                    setLoading(false);
-                    return;
-                }
-                const errorMessage = refreshError?.message || '';
-                const isAuthFailure =
-                    refreshError?.response?.status === 401 ||
-                    errorMessage.includes('expired') ||
-                    errorMessage.includes('Invalid refresh token') ||
-                    errorMessage.includes('No refresh token');
-
-                if (isAuthFailure) {
-                    logger.error('Refresh failed due to invalid auth state, clearing tokens:', errorMessage);
-                    localStorage.removeItem('access_token');
-                    localStorage.removeItem('refresh_token');
-                } else {
-                    logger.warn('Refresh failed due to temporary error, keeping tokens for retry:', errorMessage);
-                }
-            }
-        }
-
-        // No token or invalid token
-        if (token && isTokenExpired(token) && !refreshToken) {
-            localStorage.removeItem('access_token');
-        }
-
-        setLoading(false);
     }, []);
+
+    // The access token lives in memory only, so every page load starts by
+    // trading the httpOnly refresh cookie for a new one.
+    const checkAuth = useCallback(async () => {
+        if (!hasSession()) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const access = await refreshAccessToken();
+            await loadProfileFor(access);
+        } catch (error) {
+            if (!isAuthFailureError(error)) {
+                logger.warn('Could not restore session, will retry on next load:', error.message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    }, [loadProfileFor]);
 
     useEffect(() => {
         checkAuth();
     }, [checkAuth]);
+
+    // Sign out locally when a refresh fails, or when another tab logs out.
+    useEffect(() => {
+        const handleExpired = () => setUser(null);
+        const handleStorage = (event) => {
+            if (event.key === SESSION_HINT_KEY && !event.newValue) {
+                clearSession();
+                setUser(null);
+            }
+        };
+
+        window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+        window.addEventListener('storage', handleStorage);
+        return () => {
+            window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+            window.removeEventListener('storage', handleStorage);
+        };
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -150,27 +110,24 @@ export function AuthProvider({ children }) {
         clearStoredTimeZonePreference();
     }, [user]);
 
+    /**
+     * Start a session from an access token returned by a login-style endpoint
+     * (the refresh token arrived as an httpOnly cookie on the same response).
+     */
+    const startSession = useCallback(async (access, userData = null) => {
+        setAccessToken(access);
+
+        if (userData) {
+            setUser(userData);
+            return userData;
+        }
+        return loadProfileFor(access);
+    }, [loadProfileFor]);
+
     const login = useCallback(async (username, password) => {
         const response = await authApi.login({ username, password });
-        const { access, refresh } = response.data;
-
-        localStorage.setItem('access_token', access);
-        localStorage.setItem('refresh_token', refresh);
-
-        // Fetch full profile immediately after login to get admin status
-        try {
-            const profileResponse = await authApi.getProfile();
-            setUser(profileResponse.data);
-            return profileResponse.data;
-        } catch (error) {
-            // Fallback to token decode if profile fetch fails
-            const decodedUser = decodeToken(access);
-            if (decodedUser) {
-                setUser(decodedUser);
-            }
-            return decodedUser;
-        }
-    }, []);
+        return startSession(response.data.access);
+    }, [startSession]);
 
     const register = useCallback(async (username, email, password) => {
         const response = await authApi.register({
@@ -183,9 +140,14 @@ export function AuthProvider({ children }) {
         return response.data;
     }, []);
 
-    const logout = useCallback(() => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+    const logout = useCallback(async () => {
+        try {
+            // Blacklists the refresh token and clears its cookie.
+            await authApi.logout();
+        } catch (error) {
+            logger.warn('Logout request failed, clearing local session anyway:', error.message);
+        }
+        clearSession();
         clearStoredTimeZonePreference();
         setUser(null);
     }, []);
@@ -206,33 +168,16 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
-    const setTokens = useCallback(async (access, refresh, userData = null) => {
-        localStorage.setItem('access_token', access);
-        localStorage.setItem('refresh_token', refresh);
-
-        if (userData) {
-            syncStoredTimeZonePreference(userData.preferred_timezone);
-            setUser(userData);
-        } else {
-            // If no user data provided, decode it from token
-            const decodedUser = decodeToken(access);
-            if (decodedUser) {
-                syncStoredTimeZonePreference(decodedUser.preferred_timezone);
-                setUser(decodedUser);
-            }
-        }
-    }, []);
-
     const value = useMemo(() => ({
         user,
         loading,
         login,
         register,
         logout,
-        setTokens,
+        startSession,
         refreshProfile,
         isAuthenticated: !!user,
-    }), [user, loading, login, register, logout, setTokens, refreshProfile]);
+    }), [user, loading, login, register, logout, startSession, refreshProfile]);
 
     return (
         <AuthContext.Provider value={value}>

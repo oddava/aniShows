@@ -6,6 +6,8 @@ from django.utils.http import urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from ..auth_cookies import REFRESH_COOKIE_NAME
+
 User = get_user_model()
 
 class EmailVerificationFlowTests(APITestCase):
@@ -21,7 +23,7 @@ class EmailVerificationFlowTests(APITestCase):
         UserProfile.objects.get_or_create(user=self.user)
 
     def test_verify_email_returns_tokens(self):
-        """Ensure the VerifyEmailView returns access and refresh tokens upon success."""
+        """Verify-email logs the user in: access token in the body, refresh in the cookie."""
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
 
@@ -30,7 +32,8 @@ class EmailVerificationFlowTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
+        self.assertNotIn('refresh', response.data)
+        self.assertTrue(response.cookies[REFRESH_COOKIE_NAME].value)
         self.assertIn('user', response.data)
 
         # Verify user is marked as verified
@@ -66,4 +69,4 @@ class EmailVerificationFlowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should still return tokens for auto-login
         self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
+        self.assertTrue(response.cookies[REFRESH_COOKIE_NAME].value)

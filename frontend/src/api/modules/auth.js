@@ -3,7 +3,9 @@ import api from '../httpClient';
 export const authApi = {
     login: (credentials) => api.post('/auth/login/', credentials),
     register: (data) => api.post('/auth/register/', data),
-    logout: () => api.post('/auth/logout/'),
+    // Lives under the refresh cookie's path so the browser sends the cookie.
+    logout: () => api.post('/auth/refresh/logout/', null, { _skipProactiveRefresh: true }),
+    getWsTicket: () => api.post('/auth/ws-ticket/'),
     getProfile: (full = false) => api.get('/users/me/', { params: { full } }),
     getByUsername: (username) => api.get(`/users/${username}/`),
     getStats: () => api.get('/users/me/stats/'),

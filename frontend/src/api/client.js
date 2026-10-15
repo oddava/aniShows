@@ -1,5 +1,14 @@
 export { default } from './httpClient';
-export { refreshAccessToken } from './httpClient';
+export {
+    AUTH_EXPIRED_EVENT,
+    SESSION_HINT_KEY,
+    clearSession,
+    getAccessToken,
+    hasSession,
+    isAuthFailureError,
+    refreshAccessToken,
+    setAccessToken,
+} from './httpClient';
 export { animeApi, characterApi, genreApi, studioApi, staffApi } from './modules/anime';
 export { authApi } from './modules/auth';
 export {

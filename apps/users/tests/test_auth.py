@@ -23,6 +23,7 @@ from requests.exceptions import RequestException
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from ..auth_cookies import REFRESH_COOKIE_NAME
 from ..models import UserProfile
 from ..serializers.social_auth import SocialLoginSerializer
 from ..views.google import GoogleLogin
@@ -237,7 +238,8 @@ class LoginTests(APITestCase):
         response = self.client.post(self.login_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
-        self.assertIn("refresh", response.data)
+        self.assertNotIn("refresh", response.data)
+        self.assertTrue(response.cookies[REFRESH_COOKIE_NAME].value)
 
     def test_login_with_email(self):
         """Test login with email and password."""
@@ -438,35 +440,6 @@ class SocialLoginSerializerTests(SimpleTestCase):
             serializer.errors["non_field_errors"][0],
             "Failed to exchange code for access token",
         )
-
-
-class TokenRefreshTests(APITestCase):
-    """Tests for token refresh endpoint."""
-
-    def setUp(self):
-        self.login_url = reverse("token_obtain_pair")
-        self.refresh_url = reverse("token_refresh")
-        self.user = User.objects.create_user(
-            username="testuser", email="test@example.com", password="securepass123"
-        )
-
-    def test_refresh_token(self):
-        """Test refreshing access token with valid refresh token."""
-        # First login to get tokens
-        login_response = self.client.post(
-            self.login_url, {"username": "testuser", "password": "securepass123"}
-        )
-        refresh_token = login_response.data["refresh"]
-
-        # Refresh the token
-        response = self.client.post(self.refresh_url, {"refresh": refresh_token})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("access", response.data)
-
-    def test_refresh_with_invalid_token(self):
-        """Test refresh fails with invalid token."""
-        response = self.client.post(self.refresh_url, {"refresh": "invalidtoken"})
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class GoogleLoginViewTests(SimpleTestCase):

@@ -12,6 +12,7 @@ from .views import (
     CustomTokenObtainPairView,
     FollowViewSet,
     LoggingTokenRefreshView,
+    LogoutView,
     PublicUserProfileViewSet,
     RegisterView,
     UserActivityViewSet,
@@ -19,6 +20,7 @@ from .views import (
     UserBadgeViewSet,
     UserProfileView,
     UserStatsView,
+    WebSocketTicketView,
 )
 from .views.google import GoogleLogin
 from .views.import_export import (
@@ -71,6 +73,9 @@ urlpatterns = [
     # Core Auth (Obtain Pair, Refresh, Register)
     path("auth/login/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", LoggingTokenRefreshView.as_view(), name="token_refresh"),
+    # Under the refresh cookie path so the browser sends the cookie to it.
+    path("auth/refresh/logout/", LogoutView.as_view(), name="token_logout"),
+    path("auth/ws-ticket/", WebSocketTicketView.as_view(), name="ws_ticket"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/google/", GoogleLogin.as_view(), name="google_login"),
 

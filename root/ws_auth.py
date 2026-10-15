@@ -1,11 +1,12 @@
 """
-JWT authentication middleware for Django Channels WebSocket connections.
+Ticket authentication middleware for Django Channels WebSocket connections.
 
-Authenticates WebSocket connections using a JWT access token passed as a
-query parameter: ws://host/ws/path/?token=<jwt_access_token>
+The SPA first calls ``POST /api/v1/auth/ws-ticket/`` with its access token and
+then connects with the single-use ticket it gets back:
+``ws://host/ws/path/?ticket=<ticket>``. The JWT itself never appears in a URL,
+so it cannot leak through proxy access logs.
 
-On successful auth, ``scope["user"]`` is set to the authenticated Django user.
-On failure, ``scope["user"]`` is set to ``AnonymousUser``.
+On success ``scope["user"]`` is the ticket's user; otherwise ``AnonymousUser``.
 """
 
 from urllib.parse import parse_qs
@@ -14,64 +15,38 @@ from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.shared.logger import logger
+from apps.users.services.ws_ticket_service import consume_ws_ticket
 
 User = get_user_model()
 
 
-@database_sync_to_async
-def get_user_from_token(token_str):
-    """Validate a JWT access token and return the corresponding user.
-
-    Args:
-        token_str: Raw JWT access token string.
-
-    Returns:
-        User instance if valid, AnonymousUser otherwise.
-    """
+def user_for_ticket(ticket):
+    """Consume a WebSocket ticket and return its user, or ``AnonymousUser``."""
     try:
-        token = AccessToken(token_str)
-        user_id = token["user_id"]
-        return User.objects.get(id=user_id)
-    except (InvalidToken, TokenError) as exc:
-        logger.debug("WebSocket JWT auth failed: %s", exc)
-        return AnonymousUser()
+        user_id = consume_ws_ticket(ticket)
+        if user_id is None:
+            logger.debug("WebSocket ticket unknown, expired or already used")
+            return AnonymousUser()
+        return User.objects.get(id=user_id, is_active=True)
     except User.DoesNotExist:
-        logger.warning("WebSocket JWT token references non-existent user_id")
+        logger.warning("WebSocket ticket references a missing or inactive user")
         return AnonymousUser()
     except Exception:
-        logger.exception("Unexpected error during WebSocket JWT auth")
+        logger.exception("Unexpected error during WebSocket ticket auth")
         return AnonymousUser()
 
 
-class JWTAuthMiddleware(BaseMiddleware):
-    """Channels middleware that authenticates via JWT query parameter.
+get_user_from_ticket = database_sync_to_async(user_for_ticket)
 
-    Usage in ASGI routing::
 
-        application = ProtocolTypeRouter({
-            "websocket": JWTAuthMiddleware(
-                URLRouter(websocket_urlpatterns),
-            ),
-        })
-
-    The frontend connects with::
-
-        new WebSocket("ws://host/ws/notifications/?token=<access_token>")
-    """
+class WSTicketAuthMiddleware(BaseMiddleware):
+    """Channels middleware that authenticates via a ``ticket`` query parameter."""
 
     async def __call__(self, scope, receive, send):
-        """Extract token from query string and authenticate."""
-        query_string = scope.get("query_string", b"").decode("utf-8")
-        query_params = parse_qs(query_string)
-        token_list = query_params.get("token", [])
+        query_params = parse_qs(scope.get("query_string", b"").decode("utf-8"))
+        ticket = (query_params.get("ticket") or [None])[0]
 
-        if token_list:
-            scope["user"] = await get_user_from_token(token_list[0])
-        else:
-            scope["user"] = AnonymousUser()
-
+        scope["user"] = await get_user_from_ticket(ticket) if ticket else AnonymousUser()
         return await super().__call__(scope, receive, send)
