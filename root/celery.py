@@ -40,7 +40,7 @@ app.autodiscover_tasks()
 
 # Import Celery signals for global task monitoring
 try:
-    import apps.core.celery_signals
+    import apps.core.celery_signals  # noqa: F401 - registers the signal handlers
 except ImportError as e:
     logger.warning("Failed to import celery_signals: %s", e)
 
