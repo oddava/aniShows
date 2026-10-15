@@ -5,6 +5,8 @@ import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
+import { getApiErrorMessage, getApiFieldErrors } from '../api/errors';
+import { PASSWORD_HINT, getPasswordProblem } from '../utils/password';
 
 export function Login() {
     const [formData, setFormData] = useState({
@@ -39,7 +41,7 @@ export function Login() {
         setLoading(true);
 
         try {
-            const loggedInUser = await login(formData.username.trim(), formData.password.trim());
+            const loggedInUser = await login(formData.username.trim(), formData.password);
             const isAdminUser = Boolean(loggedInUser?.is_staff || loggedInUser?.is_superuser);
             navigate(isAdminUser ? '/admin' : '/browse');
         } catch (err) {
@@ -203,6 +205,11 @@ export function Register() {
             setErrors({ password: ['Passwords do not match'] });
             return;
         }
+        const passwordProblem = getPasswordProblem(formData.password);
+        if (passwordProblem) {
+            setErrors({ password: [passwordProblem] });
+            return;
+        }
 
         setLoading(true);
 
@@ -219,27 +226,15 @@ export function Register() {
             });
 
         } catch (err) {
-            // Handle field errors from DRF
-            if (err.response?.data) {
-                const data = err.response.data;
-                const newErrors = { ...data };
-
-                // Map non_field_errors to general
-                if (data.non_field_errors) {
-                    newErrors.general = Array.isArray(data.non_field_errors)
-                        ? data.non_field_errors[0]
-                        : data.non_field_errors;
-                }
-
-                // Map detail to general
-                if (data.detail) {
-                    newErrors.general = data.detail;
-                }
-
-                setErrors(newErrors);
-            } else {
-                setErrors({ general: 'Registration failed. Please try again.' });
+            // Field errors live under `errors` in the API's error envelope.
+            const fieldErrors = getApiFieldErrors(err);
+            const newErrors = { ...fieldErrors };
+            if (fieldErrors.non_field_errors) {
+                newErrors.general = [].concat(fieldErrors.non_field_errors)[0];
+            } else if (Object.keys(fieldErrors).length === 0) {
+                newErrors.general = getApiErrorMessage(err, 'Registration failed. Please try again.');
             }
+            setErrors(newErrors);
         } finally {
             setLoading(false);
         }
@@ -291,7 +286,7 @@ export function Register() {
                                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                                 />
                             </div>
-                            {errors.username && <p className="text-red-400 text-xs mt-1">{errors.username}</p>}
+                            {errors.username && <p className="text-red-400 text-xs mt-1">{[].concat(errors.username).join(' ')}</p>}
                         </div>
 
                         <div>
@@ -309,7 +304,7 @@ export function Register() {
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 />
                             </div>
-                            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
+                            {errors.email && <p className="text-red-400 text-xs mt-1">{[].concat(errors.email).join(' ')}</p>}
                         </div>
 
                         <div>
@@ -327,7 +322,8 @@ export function Register() {
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                 />
                             </div>
-                            {errors.password && <p className="text-red-400 text-xs mt-1">{errors.password}</p>}
+                            {errors.password && <p className="text-red-400 text-xs mt-1">{[].concat(errors.password).join(' ')}</p>}
+                            {!errors.password && <p className="text-gray-500 text-xs mt-1">{PASSWORD_HINT}</p>}
                         </div>
 
                         <div>
