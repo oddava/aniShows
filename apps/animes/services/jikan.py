@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from ...shared.logger import logger
+from ...shared.retry import backoff
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
 from .rate_limiting import APICallCache, CircuitBreaker
 
@@ -502,7 +503,7 @@ class JikanService:
                     if self.rate_limiter:
                         self.rate_limiter.record_error()
                     if attempt < retry_count - 1:
-                        await asyncio.sleep(min(2**attempt, 15))
+                        await backoff(min(2**attempt, 15))
                         continue
                     self._set_last_error("transport_error", f"http_{response.status_code}")
                     self._record_failure()
@@ -535,7 +536,7 @@ class JikanService:
                 if self.rate_limiter:
                     self.rate_limiter.record_error()
                 if attempt < retry_count - 1:
-                    await asyncio.sleep(min(2**attempt, 15))
+                    await backoff(min(2**attempt, 15))
                     continue
                 self._set_last_error("transport_error", str(exc))
                 self._record_failure()
@@ -545,7 +546,7 @@ class JikanService:
                 if self.rate_limiter:
                     self.rate_limiter.record_error()
                 if attempt < retry_count - 1:
-                    await asyncio.sleep(min(2**attempt, 15))
+                    await backoff(min(2**attempt, 15))
                     continue
                 self._set_last_error("transport_error", str(exc))
                 self._record_failure()

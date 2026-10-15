@@ -8,6 +8,7 @@ from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
 from ...shared.logger import logger
+from ...shared.retry import backoff
 from ..models import Anime
 from .jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
@@ -176,7 +177,7 @@ class AnimeWatchEpisodeService:
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 limiter.record_error()
                 if attempt < max_retries:
-                    await asyncio.sleep(min(2**attempt, 10))
+                    await backoff(min(2**attempt, 10))
                     continue
                 logger.warning("Jikan episode fetch failed for page %s: %s", page, exc)
                 return None
@@ -200,7 +201,7 @@ class AnimeWatchEpisodeService:
             if 500 <= response.status_code < 600:
                 limiter.record_error()
                 if attempt < max_retries:
-                    await asyncio.sleep(min(2**attempt, 10))
+                    await backoff(min(2**attempt, 10))
                     continue
                 return None
 

@@ -1,4 +1,5 @@
 from ...shared.logger import logger
+from ...shared.retry import backoff
 
 """
 Image processing tasks for anime.
@@ -168,7 +169,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
 
                 if response.status_code == 429:
                     limiter.record_429()
-                    await asyncio.sleep(2 ** attempt)
+                    await backoff(2**attempt)
                     continue
 
                 if response.status_code >= 500:
@@ -179,7 +180,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
                         response.status_code,
                         attempt + 1,
                     )
-                    await asyncio.sleep(2 ** attempt)
+                    await backoff(2**attempt)
                     continue
 
                 if 400 <= response.status_code < 500:
@@ -216,7 +217,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
                 attempt + 1,
                 exc_info=True,
             )
-            await asyncio.sleep(2 ** attempt)
+            await backoff(2**attempt)
         except httpx.HTTPStatusError as exc:
             limiter.record_error()
             status_code = exc.response.status_code if exc.response is not None else "unknown"
@@ -229,7 +230,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
             )
             if exc.response is not None and 400 <= exc.response.status_code < 500:
                 return None
-            await asyncio.sleep(2 ** attempt)
+            await backoff(2**attempt)
         except Exception:
             logger.warning("Jikan banner fallback failed for MAL %s", mal_id, exc_info=True)
             return None

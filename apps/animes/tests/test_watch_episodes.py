@@ -330,7 +330,10 @@ class AnimeWatchEpisodeTaskTests(TestCase):
         self.assertNotIn(finished.id, result['anime_ids'])
 
 
-@override_settings(ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED=True)
+@override_settings(
+    ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED=True,
+    ANIME_METADATA_AUTO_ENRICH_ENABLED=True,
+)
 class AnimeWatchEpisodeSignalTests(TestCase):
     @patch('apps.animes.signals.enrich_metadata.delay')
     @patch('apps.animes.signals.sync_watch_episodes_for_anime.apply_async')

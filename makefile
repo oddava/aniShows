@@ -87,8 +87,9 @@ superuser:                      ## Create superuser
 	$(RUN_MANAGE) migrate
 	docker compose run --rm web python manage.py createsuperuser
 
-test:                           ## Run backend tests in the isolated test service (ARGS="apps/users -x")
-	docker compose --profile test run --rm test python -m pytest $(ARGS); \
+TEST_WORKERS ?= 3
+test:                           ## Run backend tests in parallel (ARGS="apps/users -x", TEST_WORKERS=0 for serial)
+	docker compose --profile test run --rm test python -m pytest -n $(TEST_WORKERS) $(ARGS); \
 	status=$$?; docker compose --profile test rm -sf test_db >/dev/null 2>&1; exit $$status
 
 lint:                           ## Run linter (ruff)

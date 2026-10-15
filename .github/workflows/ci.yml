@@ -72,7 +72,7 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
 
       - name: Pytest
-        run: uv run pytest -p no:cacheprovider
+        run: uv run pytest -p no:cacheprovider -n auto
 
   frontend:
     name: Frontend (eslint + vitest + build)

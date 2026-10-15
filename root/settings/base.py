@@ -701,6 +701,9 @@ CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
 ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = True
+ANIME_METADATA_AUTO_ENRICH_ENABLED = True
+# Multiplier for retry backoff after failed external API calls (0 in tests).
+RETRY_BACKOFF_SCALE = 1.0
 
 from celery.schedules import crontab
 
