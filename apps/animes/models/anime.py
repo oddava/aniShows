@@ -144,7 +144,6 @@ class Anime(TimestampMixin, SlugMixin, Model):
     )
 
     external_links = JSONField(default=list, blank=True)
-    relations = JSONField(default=list, blank=True)
     status_distribution = JSONField(default=dict, blank=True)
     provider_ids = JSONField(default=dict, blank=True)
     synonyms = JSONField(default=list, blank=True)
@@ -235,6 +234,21 @@ class Anime(TimestampMixin, SlugMixin, Model):
             f"{prefix}studio_links", queryset=AnimeStudio.objects.select_related("studio")
         )
 
+    @staticmethod
+    def relations_prefetch(prefix: str = "") -> Prefetch:
+        """Prefetch outgoing relations with the linked anime fields the detail payload uses."""
+        return Prefetch(
+            f"{prefix}relations",
+            queryset=AnimeRelation.objects.select_related("to_anime").only(
+                *(field.name for field in AnimeRelation._meta.concrete_fields),
+                "to_anime__slug",
+                "to_anime__anilist_id",
+                "to_anime__mal_id",
+                "to_anime__cover_image",
+                "to_anime__cover_image_external_url",
+            ),
+        )
+
     @property
     def ordered_studios(self) -> list:
         """Studios in provider order; uses a prefetched ``studio_links`` when present."""
@@ -290,6 +304,39 @@ class AnimeStudio(Model):
         constraints = [
             UniqueConstraint(fields=["anime", "studio"], name="anime_studio_unique"),
         ]
+
+
+class AnimeRelation(Model):
+    """A franchise edge from one anime to another (sequel, prequel, side story...).
+
+    Providers name the target by AniList and/or MAL ID, and it is often not imported yet:
+    ``to_anime`` stays NULL until a local row with a matching ID exists. ``title``,
+    ``format``, ``status`` and ``cover`` are the provider's snapshot, shown for unlinked
+    targets.
+    """
+
+    from_anime = ForeignKey("anime.Anime", CASCADE, related_name="relations")
+    to_anime = ForeignKey(
+        "anime.Anime", SET_NULL, null=True, blank=True, related_name="incoming_relations"
+    )
+    relation_type = CharField(max_length=32, blank=True)
+    target_anilist_id = IntegerField(null=True, blank=True)
+    target_mal_id = IntegerField(null=True, blank=True)
+    title = CharField(max_length=500, blank=True)
+    format = CharField(max_length=32, blank=True)
+    status = CharField(max_length=32, blank=True)
+    cover = URLField(max_length=1000, blank=True)
+    position = PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["position", "id"]
+        indexes = [
+            Index(fields=["target_anilist_id"], name="anime_relation_anilist_idx"),
+            Index(fields=["target_mal_id"], name="anime_relation_mal_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.from_anime_id} {self.relation_type} -> {self.to_anime_id or self.title}"
 
 
 class AnimeCharacter(Model):

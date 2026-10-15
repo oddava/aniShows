@@ -5,6 +5,7 @@ from django.utils.html import format_html
 from .models import (
     Anime,
     AnimeCharacter,
+    AnimeRelation,
     AnimeStaff,
     AnimeStudio,
     Character,
@@ -91,6 +92,24 @@ class AnimeStudioInline(admin.TabularInline):
     extra = 0
     fields = ["studio", "position"]
     autocomplete_fields = ["studio"]
+    ordering = ["position", "id"]
+
+
+class AnimeRelationInline(admin.TabularInline):
+    """Franchise relations; ``to_anime`` is empty until the related anime is imported."""
+
+    model = AnimeRelation
+    fk_name = "from_anime"
+    extra = 0
+    fields = [
+        "position",
+        "relation_type",
+        "title",
+        "target_anilist_id",
+        "target_mal_id",
+        "to_anime",
+    ]
+    raw_id_fields = ["to_anime"]
     ordering = ["position", "id"]
 
 
@@ -191,7 +210,7 @@ class AnimeAdmin(admin.ModelAdmin):
         ),
     )
 
-    inlines = [AnimeStudioInline, ReviewInline]
+    inlines = [AnimeStudioInline, AnimeRelationInline, ReviewInline]
 
     actions = [
         "trigger_sync_task",

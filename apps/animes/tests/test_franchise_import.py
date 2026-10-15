@@ -4,6 +4,7 @@ from django.test import TestCase
 
 from ..models import Anime
 from ..services.franchise_import import FranchiseImportService
+from ..services.relation_links import set_relations
 
 
 class FranchiseImportServiceTests(TestCase):
@@ -18,7 +19,10 @@ class FranchiseImportServiceTests(TestCase):
             synopsis="Source",
             anime_type=Anime.AnimeType.tv,
             status=Anime.AnimeStatus.airing,
-            relations=[
+        )
+        set_relations(
+            source,
+            [
                 {
                     "id": 1001,
                     "type": "SEQUEL",
@@ -26,7 +30,6 @@ class FranchiseImportServiceTests(TestCase):
                     "format": "TV",
                     "status": "FINISHED",
                     "cover": "https://img.anilist.co/cover.jpg",
-                    "slug": None,
                 }
             ],
         )
@@ -60,8 +63,7 @@ class FranchiseImportServiceTests(TestCase):
         self.assertEqual(result.slug, existing.slug)
         self.assertEqual(result.title, existing.title)
 
-        source.refresh_from_db()
-        self.assertEqual(source.relations[0]["slug"], existing.slug)
+        self.assertEqual(source.relations.get().to_anime, existing)
 
         mock_service.resolve_media_for_anime.assert_awaited_once_with(existing)
         mock_service.save_anime_to_db.assert_called_once_with(anilist_payload)
@@ -78,7 +80,10 @@ class FranchiseImportServiceTests(TestCase):
             synopsis="Source",
             anime_type=Anime.AnimeType.tv,
             status=Anime.AnimeStatus.airing,
-            relations=[
+        )
+        set_relations(
+            source,
+            [
                 {
                     "id": 2002,
                     "type": "SEQUEL",
@@ -86,7 +91,6 @@ class FranchiseImportServiceTests(TestCase):
                     "format": "TV",
                     "status": "FINISHED",
                     "cover": "https://img.anilist.co/cover2.jpg",
-                    "slug": None,
                 }
             ],
         )
@@ -110,7 +114,6 @@ class FranchiseImportServiceTests(TestCase):
         self.assertEqual(result.slug, existing.slug)
         self.assertEqual(result.title, existing.title)
 
-        source.refresh_from_db()
-        self.assertEqual(source.relations[0]["slug"], existing.slug)
+        self.assertEqual(source.relations.get().to_anime, existing)
 
         mock_jikan_service_cls.assert_not_called()

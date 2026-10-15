@@ -7,16 +7,15 @@ Franchise/Relations synchronization task.
 import asyncio
 
 from asgiref.sync import sync_to_async
-from django.db.models import Q
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
 from ..services.jikan import JikanService
 from ..services.relation_links import (
     anime_relation_edges,
-    link_relation_slugs,
-    relation_key,
+    link_pending_relations,
     relations_from_edges,
+    set_relations,
 )
 from .base import BaseTask, run_async_in_task
 
@@ -80,9 +79,7 @@ class FranchiseSyncTask(BaseTask):
     ) -> dict:
         """Batch sync franchises for multiple anime."""
         async with self.service_context() as service:
-            queryset = Anime.objects.filter(
-                Q(relations__isnull=True) | Q(relations=[])
-            )
+            queryset = Anime.objects.filter(relations__isnull=True)
             if anime_ids:
                 queryset = queryset.filter(id__in=anime_ids)
             queryset = queryset.order_by(priority_field)[:batch_size]
@@ -163,42 +160,58 @@ class FranchiseSyncTask(BaseTask):
             if not data:
                 return {"status": "error", "error": "No data from Jikan", "relations_count": 0}
 
-            anime_relations = anime_relation_edges(data)
-            current_keys = {
-                key for rel in anime.relations or [] if (key := relation_key(rel)) is not None
-            }
-            new_relations = relations_from_edges(anime_relations, anime.relations or [])
+            current_keys = await sync_to_async(self._relation_keys)(anime)
+            await sync_to_async(set_relations)(
+                anime, relations_from_edges(anime_relation_edges(data))
+            )
 
             imported_count = 0
             if import_missing:
-                missing_mal_ids = [
-                    rel["mal_id"] for rel in new_relations if rel.get("mal_id") and not rel.get("slug")
-                ]
+                # Imported anime link themselves to these relations when saved.
+                missing_mal_ids = await sync_to_async(list)(
+                    anime.relations.filter(
+                        to_anime__isnull=True, target_mal_id__isnull=False
+                    ).values_list("target_mal_id", flat=True)
+                )
                 imported_count = await self._import_missing_anime_batch(
                     service, missing_mal_ids, max_imports
                 )
 
-            relations_linked = await sync_to_async(link_relation_slugs)(
-                new_relations, keep_existing=True
+            rows = await sync_to_async(list)(
+                anime.relations.values_list("target_anilist_id", "target_mal_id", "to_anime_id")
             )
-
-            anime.relations = new_relations
-            await sync_to_async(anime.save)(update_fields=["relations"])
-
-            relations_added = sum(1 for rel in new_relations if relation_key(rel) not in current_keys)
+            relations_linked = sum(1 for *_, to_anime_id in rows if to_anime_id)
+            relations_added = sum(
+                1
+                for anilist_id, mal_id, _ in rows
+                if ("anilist", anilist_id) not in current_keys
+                and ("mal", mal_id) not in current_keys
+            )
             return {
                 "status": "success",
-                "relations_count": len(new_relations),
+                "relations_count": len(rows),
                 "relations_added": relations_added,
-                "relations_updated": len(new_relations) - relations_added,
+                "relations_updated": len(rows) - relations_added,
                 "relations_linked": relations_linked,
                 "imported_count": imported_count,
-                "missing_slugs": len(new_relations) - relations_linked,
+                "missing_slugs": len(rows) - relations_linked,
             }
 
         except Exception as e:
             logger.error(f"Error processing franchises for {anime.title}: {e}", exc_info=True)
             return {"status": "error", "error": str(e), "relations_count": 0}
+
+    @staticmethod
+    def _relation_keys(anime: Anime) -> set[tuple[str, int]]:
+        keys = set()
+        for anilist_id, mal_id in anime.relations.values_list(
+            "target_anilist_id", "target_mal_id"
+        ):
+            if anilist_id:
+                keys.add(("anilist", anilist_id))
+            if mal_id:
+                keys.add(("mal", mal_id))
+        return keys
 
     async def _import_missing_anime_batch(
         self, service: JikanService, mal_ids: list[int], max_imports: int
@@ -256,38 +269,8 @@ def sync_franchises(
     soft_time_limit=1500,
 )
 def update_relation_slugs(self, batch_size: int = 100):
-    """Update slugs for existing relations."""
-    async def _process():
-        @sync_to_async
-        def get_anime_with_relations():
-            return list(
-                Anime.objects.exclude(relations__isnull=True)
-                .exclude(relations=[])
-                .order_by("-popularity_rank")[:batch_size]
-            )
+    """Link relations whose target anime has been imported since.
 
-        anime_list = await get_anime_with_relations()
-        total = len(anime_list)
-        updated_count = 0
-        linked_count = 0
-
-        for anime in anime_list:
-            try:
-                relations = anime.relations or []
-                unlinked_before = sum(1 for rel in relations if not rel.get("slug"))
-                await sync_to_async(link_relation_slugs)(relations, keep_existing=True)
-                newly_linked = unlinked_before - sum(1 for rel in relations if not rel.get("slug"))
-                linked_count += newly_linked
-                needs_update = newly_linked > 0
-
-                if needs_update:
-                    anime.relations = relations
-                    await sync_to_async(anime.save)(update_fields=["relations"])
-                    updated_count += 1
-
-            except Exception as e:
-                logger.error(f"Error updating {anime.title}: {e}")
-
-        return {"total": total, "updated": updated_count, "linked": linked_count}
-
-    return run_async_in_task(_process())
+    ``batch_size`` is unused (linking is one set-based update); kept for queued calls.
+    """
+    return {"linked": link_pending_relations()}

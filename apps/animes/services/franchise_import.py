@@ -7,7 +7,7 @@ from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
 from ..models import Anime
 from .jikan import JikanService
-from .relation_links import anime_keys, relation_key
+from .relation_links import link_relations_to
 
 
 class FranchiseImportError(Exception):
@@ -173,19 +173,8 @@ class FranchiseImportService:
 
     @staticmethod
     def update_relation_slug(source_slug: str, target: Anime) -> None:
+        """Link the unlinked relations that point at ``target``, the source page's included."""
         try:
-            source_anime = Anime.objects.get(slug=source_slug)
-            relations = source_anime.relations or []
-            target_keys = set(anime_keys(target))
-            updated = False
-            for rel in relations:
-                if relation_key(rel) in target_keys and not rel.get("slug"):
-                    rel["slug"] = target.slug
-                    updated = True
-            if updated:
-                source_anime.relations = relations
-                source_anime.save(update_fields=["relations"])
-        except Anime.DoesNotExist:
-            return
+            link_relations_to(target)
         except Exception as exc:
-            logger.warning(f"Failed to update relation slug for {source_slug}: {exc}")
+            logger.warning(f"Failed to link relations to {target.slug} from {source_slug}: {exc}")

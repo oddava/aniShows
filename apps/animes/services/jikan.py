@@ -25,7 +25,7 @@ from ...shared.logger import logger
 from ...shared.retry import backoff
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
 from .rate_limiting import APICallCache, CircuitBreaker
-from .relation_links import link_relation_slugs
+from .relation_links import sync_relations_from_media
 
 DEFAULT_JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
@@ -1044,21 +1044,6 @@ class JikanService:
             "status_distribution": status_distribution,
             "external_links": item.get("externalLinks", []),
             "tags": tags,
-            "relations": [
-                {
-                    "id": edge["node"].get("id"),
-                    "mal_id": edge["node"].get("idMal"),
-                    "type": edge["relationType"],
-                    "title": edge["node"]["title"].get("english")
-                    or edge["node"]["title"].get("romaji")
-                    or edge["node"]["title"].get("native"),
-                    "format": edge["node"]["format"],
-                    "status": edge["node"]["status"],
-                    "cover": edge["node"]["coverImage"].get("large"),
-                }
-                for edge in item.get("relations", {}).get("edges", [])
-                if edge["node"]["type"] == "ANIME"
-            ],
             "next_airing_episode": item.get("nextAiringEpisode", {}).get("episode")
             if item.get("nextAiringEpisode")
             else None,
@@ -1464,9 +1449,10 @@ class JikanService:
             "rankings": self._normalize_rankings(item),
             "stats": self._normalize_statistics(stats_payload),
             "externalLinks": external_links,
-            "relations": {
-                "edges": self._normalize_relations(item.get("relations") or [])
-            },
+            # List/search payloads carry no relations; None keeps the stored ones.
+            "relations": {"edges": self._normalize_relations(item["relations"] or [])}
+            if "relations" in item
+            else None,
             "characterPreview": {
                 "edges": self._normalize_characters((characters_payload or {}).get("data") or [])
             },
@@ -1817,6 +1803,8 @@ class JikanService:
                 Studio.objects.get_or_create(name=name)[0] for name in studio_names
             )
 
+        sync_relations_from_media(anime, item)
+
         characters_data = (item.get("characterPreview") or {}).get("edges") or []
         for edge in characters_data:
             node = edge["node"]
@@ -2060,8 +2048,6 @@ class JikanService:
         anime_data = self._prepare_anime_data(item, title, title_native, final_slug)
         anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
-        await sync_to_async(link_relation_slugs)(anime_data.get("relations", []))
-
         try:
             anime = await sync_to_async(Anime.objects.create)(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
@@ -2099,8 +2085,6 @@ class JikanService:
         if not self._has_next_airing_payload(item):
             anime_data["next_airing_episode"] = anime.next_airing_episode
             anime_data["next_airing_date"] = anime.next_airing_date
-
-        await sync_to_async(link_relation_slugs)(anime_data.get("relations", []))
 
         await self._update_anime(anime, anime_data)
         await self._handle_relationships_async(anime, item)
