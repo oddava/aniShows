@@ -3,6 +3,7 @@ from allauth.socialaccount.signals import social_account_added
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
+from django.db.models import F
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -145,14 +146,7 @@ def update_points_on_vote_save(sender, instance, created, **kwargs):
         return
 
     review_author = instance.review.user
-    profile, _ = UserProfile.objects.get_or_create(user=review_author)
-
-    if instance.vote_type == ReviewVote.VoteType.HELPFUL:
-        profile.points = profile.points + 1
-    else:
-        profile.points = profile.points - 1
-
-    profile.save(update_fields=["points"])
+    _adjust_points(review_author, _vote_points(instance.vote_type))
     transaction.on_commit(lambda: invalidate_user_caches(review_author.id, review_author.username))
 
 
@@ -164,15 +158,19 @@ def update_points_on_vote_delete(sender, instance, **kwargs):
     if not _user_exists(review_author):
         return
 
-    profile, _ = UserProfile.objects.get_or_create(user=review_author)
-
-    if instance.vote_type == ReviewVote.VoteType.HELPFUL:
-        profile.points = profile.points - 1
-    else:
-        profile.points = profile.points + 1
-
-    profile.save(update_fields=["points"])
+    _adjust_points(review_author, -_vote_points(instance.vote_type))
     transaction.on_commit(lambda: invalidate_user_caches(review_author.id, review_author.username))
+
+
+def _vote_points(vote_type) -> int:
+    return 1 if vote_type == ReviewVote.VoteType.HELPFUL else -1
+
+
+def _adjust_points(user, delta: int) -> None:
+    # A single UPDATE: votes on different reviews by the same author run
+    # concurrently and must not overwrite each other's increments.
+    UserProfile.objects.get_or_create(user=user)
+    UserProfile.objects.filter(user=user).update(points=F("points") + delta)
 
 
 def recalculate_user_points(user):
