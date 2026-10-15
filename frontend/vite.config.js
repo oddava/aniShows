@@ -134,20 +134,15 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
       },
       '/ws': {
-        target: 'http://daphne:8001',
+        target: 'http://web:8000',
         changeOrigin: true,
         ws: true,
       },
       '/media': {
-        // Media files are served by Caddy/MinIO, not Django.
-        // Proxying to web:8000 causes 404 for /media/* in dev.
-        target: 'http://caddy:80',
+        // Media lives in the MinIO bucket under the "media/" prefix.
+        target: 'http://minio:9000',
         changeOrigin: true,
-        // Caddy virtual host is bound to localhost in this setup.
-        // Force host header so /media requests always hit the correct site block.
-        headers: {
-          Host: 'localhost',
-        },
+        rewrite: (path) => `/${process.env.MEDIA_BUCKET || 'anishows-media'}${path}`,
       },
       '/django-admin': {
         target: 'http://web:8000',

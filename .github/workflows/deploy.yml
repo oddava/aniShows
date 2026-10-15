@@ -240,7 +240,7 @@ jobs:
             curl -sf --retry 3 --retry-delay 5 http://localhost:80/api/v1/health/ || { echo 'Health check FAILED'; exit 1; }
             
             echo '📊 Checking container status...'
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.prod.yml ps
             
             echo '✅ Deployment completed successfully!'
           "

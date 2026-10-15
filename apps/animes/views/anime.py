@@ -1,12 +1,10 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
-from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from ...core.api_errors import error_response
 from ...core.permissions import IsSuperUser
@@ -38,11 +36,6 @@ from ..services.public_anime_service import (
     AnimeQueryService,
 )
 from ..services.watch_episodes import AnimeWatchEpisodeService
-
-
-class CsrfExemptSessionAuthentication(SessionAuthentication):
-    def enforce_csrf(self, request):
-        return
 
 
 class WatchEpisodesPagination(PageNumberPagination):
@@ -438,7 +431,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         methods=["post"],
         url_path="franchise/fetch",
         permission_classes=[IsSuperUser],
-        authentication_classes=[JWTAuthentication, CsrfExemptSessionAuthentication],
     )
     def franchise_fetch(self, request):
         anilist_id = request.data.get("anilist_id")

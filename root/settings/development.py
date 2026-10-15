@@ -8,6 +8,10 @@ from .base import *
 
 DEBUG = True
 
+# Source is bind-mounted in dev, so serve static files straight from app dirs.
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = True
+
 # =============================================================================
 # INTERNAL IPS
 # =============================================================================

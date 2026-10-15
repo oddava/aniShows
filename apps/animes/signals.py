@@ -97,7 +97,7 @@ def capture_old_anime_watch_identity(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
-    if created:
+    if created and getattr(settings, "ANIME_METADATA_AUTO_ENRICH_ENABLED", True):
         transaction.on_commit(lambda: enrich_metadata.delay(anime_id=instance.id, mode="single"))
 
 

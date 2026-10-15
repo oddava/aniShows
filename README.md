@@ -68,14 +68,33 @@ root/                    Django project settings and runtime entrypoints
 ```bash
 cp .env.example .env
 make build
-make up
-make mig
+make up          # web, celery, beat, frontend, db, redis, minio (migrations run on start)
 make superuser
 ```
 
-- Frontend: <http://localhost:5173>
-- Backend API: <http://localhost:8000>
-- Django admin: <http://localhost:8000/admin>
+Everything is served through Vite at <http://localhost:5173>:
+
+- App: <http://localhost:5173>
+- API: <http://localhost:5173/api/v1/> (docs at `/api/docs/`)
+- Django admin: <http://localhost:5173/django-admin/>
+
+Backend and frontend sources are bind-mounted, so code changes hot-reload.
+Restart Celery after changing task code: `docker compose restart celery`.
+
+Optional services (compose profiles):
+
+| Profile | Services | When |
+|---|---|---|
+| `jikan` | self-hosted Jikan + MongoDB + Typesense | `api.jikan.moe` is unreachable from your network. Set `JIKAN_BASE_URL=http://jikan:8080/v4`. |
+| `analytics` | Umami | Working on analytics |
+| `proxy` | Caddy on :80 | Testing prod-like routing |
+| `backup` | Backup scheduler | Testing backup scripts |
+
+```bash
+docker compose --profile jikan up -d
+```
+
+Production uses the standalone `docker-compose.prod.yml` and is deployed by `deploy-prod.sh`.
 
 ## Documentation
 

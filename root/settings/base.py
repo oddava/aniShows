@@ -74,7 +74,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "http://jikan:8080/v4").strip().rstrip("/")
+JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "https://api.jikan.moe/v4").strip().rstrip("/")
 
 # Application tuning defaults
 # Non-secret runtime tuning values are defined here in settings.py with Python
@@ -192,7 +192,7 @@ ACCOUNT_LOGIN_METHODS = {"email", "username"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"
 SOCIALACCOUNT_AUTO_SIGNUP = True
-SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_LOGIN_ON_GET = False
 LOGIN_REDIRECT_URL = "/browse/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
 SITE_ID = 1
@@ -701,6 +701,9 @@ CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
 ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = True
+ANIME_METADATA_AUTO_ENRICH_ENABLED = True
+# Multiplier for retry backoff after failed external API calls (0 in tests).
+RETRY_BACKOFF_SCALE = 1.0
 
 from celery.schedules import crontab
 
