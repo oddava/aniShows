@@ -63,6 +63,9 @@ class FranchiseSyncTask(BaseTask):
                 result = await self._process_anime_franchises(
                     service, anime, import_missing, max_imports
                 )
+                if result.get("status") == "error":
+                    # Reported, not raised, so batches carry on; one anime can retry.
+                    raise RuntimeError(result["error"])
                 self.metrics.record_records(1)
                 return {"mode": "single", "anime_id": anime_id, "title": anime.title, **result}
             except Anime.DoesNotExist:

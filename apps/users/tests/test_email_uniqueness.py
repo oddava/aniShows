@@ -45,7 +45,10 @@ class DuplicateEmailMigrationTests(TransactionTestCase):
 
     def tearDown(self):
         User.objects.all().delete()
-        MigrationExecutor(connection).migrate(self.after)
+        # Back to the latest state of every app, not just self.after: later
+        # migrations must be reapplied for the tests that run next.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def test_migration_stops_with_instructions_when_duplicates_exist(self):
         executor = MigrationExecutor(connection)
