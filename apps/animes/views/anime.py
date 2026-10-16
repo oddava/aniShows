@@ -124,10 +124,14 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         return self._with_public_cache_control(response, request)
 
     def _get_cached_shelf(self, request, cache_key: str, queryset_fn):
+        # Shelves differ by the viewer's adult-content setting, so both the
+        # key and the queryset carry it.
+        can_view_adult_content = self.query_service.can_view_adult_content(request.user)
+        cache_key = f"{cache_key}:adult:{int(can_view_adult_content)}"
         result = self.payload_service.cache_shelf_payload(
             cache_key,
             lambda: AnimeShelfSerializer(
-                queryset_fn(self.query_service.base_shelf_queryset()),
+                queryset_fn(self.query_service.shelf_queryset_for(can_view_adult_content)),
                 many=True,
                 context={"request": request},
             ).data,
@@ -237,7 +241,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     def reviews(self, request, slug=None):
         from ..services.reviews import get_review_queryset
 
-        anime = self.get_object()
+        anime = self._get_action_anime(slug)
         reviews = get_review_queryset(request.user, request.query_params).filter(anime=anime)
         page = self.paginate_queryset(reviews)
         serializer = self.get_serializer(page, many=True)
@@ -245,12 +249,18 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["get"])
     def related(self, request, slug=None):
-        anime = self.get_object()
-        cache_key = f"anime_related:{self.payload_service.PUBLIC_CACHE_VERSION}:{anime.slug}"
+        anime = self._get_action_anime(slug)
+        can_view_adult_content = self.query_service.can_view_adult_content(request.user)
+        cache_key = (
+            f"anime_related:{self.payload_service.PUBLIC_CACHE_VERSION}:{anime.slug}"
+            f":adult:{int(can_view_adult_content)}"
+        )
         result = self.payload_service.cache_shelf_payload(
             cache_key,
             lambda: AnimeListSerializer(
-                self.query_service.related_queryset(anime),
+                self.query_service.related_queryset(
+                    anime, can_view_adult_content=can_view_adult_content
+                ),
                 many=True,
                 context={"request": request},
             ).data,
@@ -261,14 +271,18 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["get"])
     def recommendations(self, request, slug=None):
-        anime = self.get_object()
+        anime = self._get_action_anime(slug)
+        can_view_adult_content = self.query_service.can_view_adult_content(request.user)
         cache_key = (
             f"anime_recommendations:{self.payload_service.PUBLIC_CACHE_VERSION}:{anime.slug}"
+            f":adult:{int(can_view_adult_content)}"
         )
         result = self.payload_service.cache_shelf_payload(
             cache_key,
             lambda: AnimeListSerializer(
-                self.query_service.recommendations_queryset(anime),
+                self.query_service.recommendations_queryset(
+                    anime, can_view_adult_content=can_view_adult_content
+                ),
                 many=True,
                 context={"request": request},
             ).data,

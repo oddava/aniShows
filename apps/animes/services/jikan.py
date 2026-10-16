@@ -820,6 +820,7 @@ class JikanService(CatalogProviderBase):
             expected_titles.add(anime.title_jp.casefold())
 
         # Jikan results never carry AniList IDs, so match on MAL ID (when known) and title.
+        matches = []
         for candidate in results:
             if anime.mal_id and candidate.get("idMal") != anime.mal_id:
                 continue
@@ -831,9 +832,21 @@ class JikanService(CatalogProviderBase):
                 (titles.get("native") or "").casefold(),
             }
             if expected_titles.intersection(candidate_titles):
-                if anime.anilist_id:
-                    return {**candidate, "id": anime.anilist_id}
-                return candidate
+                matches.append(candidate)
+
+        if not anime.mal_id:
+            # A title alone also matches remakes and reboots ("Hunter x Hunter"
+            # 1999 and 2011): require the same year, and never guess between
+            # several, since the winner's data overwrites this row.
+            matches = [c for c in matches if self._release_years_compatible(anime, c)]
+            if len(matches) > 1:
+                self._set_last_error("not_found", f"ambiguous_title:{title}")
+                return None
+
+        if matches:
+            if anime.anilist_id:
+                return {**matches[0], "id": anime.anilist_id}
+            return matches[0]
 
         if anime.mal_id:
             for candidate in results:
@@ -843,6 +856,16 @@ class JikanService(CatalogProviderBase):
         self._set_last_error("not_found", f"title:{title}")
         return None
 
+
+    @staticmethod
+    def _release_years_compatible(anime: Anime, candidate: dict) -> bool:
+        anime_year = anime.season_year or (anime.release_date.year if anime.release_date else None)
+        candidate_year = candidate.get("seasonYear") or (candidate.get("startDate") or {}).get(
+            "year"
+        )
+        if not anime_year or not candidate_year:
+            return True
+        return abs(int(anime_year) - int(candidate_year)) <= 1
 
     def _normalize_broadcast_payload(self, payload: dict[str, Any] | None) -> dict[str, str]:
         broadcast = payload if isinstance(payload, dict) else {}

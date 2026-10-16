@@ -187,7 +187,10 @@ class CatalogSyncService:
             )
 
         invalidate_public_cache_keys(
-            f"anime_trending:{AnimePublicPayloadService.PUBLIC_CACHE_VERSION}"
+            *(
+                f"anime_trending:{AnimePublicPayloadService.PUBLIC_CACHE_VERSION}:adult:{flag}"
+                for flag in (0, 1)
+            )
         )
         AnimePublicPayloadService.bump_collection_cache_namespace()
         return len(rank_updates)

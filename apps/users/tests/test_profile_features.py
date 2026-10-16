@@ -420,6 +420,15 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(self.profile.preferred_timezone, "America/New_York")
         self.assertEqual(res.data["preferred_timezone"], "America/New_York")
 
+    def test_profile_update_rejects_path_like_timezones(self):
+        # ZoneInfo raises ValueError (not ZoneInfoNotFoundError) for these.
+        for value in ("/etc/localtime", "../UTC", "Not/A_Zone"):
+            with self.subTest(value=value):
+                res = self.client.patch(
+                    self.profile_url, {"preferred_timezone": value}, format="json"
+                )
+                self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_profile_update_preferred_timezone_auto(self):
         self.profile.preferred_timezone = "Asia/Tokyo"
         self.profile.save(update_fields=["preferred_timezone"])

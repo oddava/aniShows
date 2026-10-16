@@ -375,7 +375,7 @@ class UserProfileUpdateSerializer(Serializer):
 
         try:
             ZoneInfo(normalized)
-        except ZoneInfoNotFoundError as exc:
+        except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValidationError(
                 "Preferred timezone must be a valid IANA timezone like 'America/New_York'."
             ) from exc
