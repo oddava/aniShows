@@ -1,5 +1,6 @@
 import uuid
 
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
@@ -50,6 +51,9 @@ class OfflineCatalogImportTask(BaseTask):
                 resume=resume,
                 enqueue_enrichment=enqueue_enrichment,
             )
+        except SoftTimeLimitExceeded:
+            # Restarting the import now would just be killed by the hard limit.
+            raise
         except Exception:
             if source_path or limit or resume:
                 raise

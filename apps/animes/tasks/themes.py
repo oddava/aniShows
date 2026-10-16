@@ -12,6 +12,8 @@ from urllib.parse import quote_plus
 
 import httpx
 from asgiref.sync import sync_to_async
+from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from ...shared.celery import observed_shared_task
@@ -174,21 +176,17 @@ class ThemeSongSyncTask(BaseTask):
 
         # Get anime to process
         if retry_failed:
-            # Retry anime that failed previously (checked > 7 days ago with no themes)
+            # Checked more than 7 days ago and still without themes.
             seven_days_ago = timezone.now() - timedelta(days=7)
             queryset = (
                 Anime.objects.filter(
                     theme_songs__isnull=True,
                     mal_id__isnull=False,
                     status__in=[Anime.AnimeStatus.finished, Anime.AnimeStatus.airing],
-                )
-                .exclude(
-                    id__in=ThemeSong.objects.filter(
-                        title="No themes available",
-                        last_synced__gt=seven_days_ago,
-                    ).values_list("anime_id", flat=True)
+                    themes_checked_at__lt=seven_days_ago,
                 )
                 .distinct()
+                .order_by("themes_checked_at")
             )
         elif force_resync:
             queryset = Anime.objects.exclude(mal_id__isnull=True).filter(
@@ -197,11 +195,16 @@ class ThemeSongSyncTask(BaseTask):
         else:
             # Get anime without themes (either never checked or not marked as no themes)
             # Only process anime that have aired (FINISHED or Airing status)
-            queryset = Anime.objects.filter(
-                theme_songs__isnull=True,
-                mal_id__isnull=False,
-                status__in=[Anime.AnimeStatus.finished, Anime.AnimeStatus.airing],
-            ).distinct()
+            queryset = (
+                Anime.objects.filter(
+                    theme_songs__isnull=True,
+                    mal_id__isnull=False,
+                    status__in=[Anime.AnimeStatus.finished, Anime.AnimeStatus.airing],
+                    themes_checked_at__isnull=True,
+                )
+                .distinct()
+                .order_by(F("popularity_rank").asc(nulls_last=True), "id")
+            )
 
         if anime_ids:
             queryset = queryset.filter(id__in=anime_ids)
@@ -241,6 +244,10 @@ class ThemeSongSyncTask(BaseTask):
                         logger.debug(f"Skipping {anime.title} - invalid MAL ID: {anime.mal_id}")
                         stats["skipped"] += 1
                         continue
+
+                    await sync_to_async(Anime.objects.filter(pk=anime.pk).update)(
+                        themes_checked_at=timezone.now()
+                    )
 
                     # Fetch themes
                     themes = await fetch_themes_from_jikan(
@@ -332,76 +339,45 @@ class ThemeSongSyncTask(BaseTask):
 
     @sync_to_async
     def _save_theme_songs(self, anime: Anime, themes_data: dict) -> int:
-        """Save theme songs to database."""
-        count = 0
+        """Replace the anime's theme songs with the fetched ones."""
+        from ..signals import _invalidate_anime_public_caches  # signals imports tasks
 
-        # Clear existing themes
-        queryset = ThemeSong.objects.filter(anime=anime)
-        queryset.delete()
-
-        # Parse and save openings
-        openings = themes_data.get("openings", [])
-        for idx, opening_text in enumerate(openings, 1):
-            if opening_text and opening_text.strip():
-                clean_text = re.sub(r"^\d+:\s*", "", opening_text)
-                parsed = self._parse_theme_song(clean_text)
-
-                try:
-                    # Truncate fields to fit database limits (200 chars for title/artist)
-                    title = (parsed["title"] or "")[:200]
-                    artist = (parsed["artist"] or "")[:200]
-                    episodes = (parsed["episodes"] or "")[:100]
-
-                    ThemeSong.objects.create(
+        now = timezone.now()
+        songs = []
+        for song_type, entries in (
+            (ThemeSong.SongType.OPENING, themes_data.get("openings") or []),
+            (ThemeSong.SongType.ENDING, themes_data.get("endings") or []),
+        ):
+            for idx, raw_text in enumerate(entries, 1):
+                if not isinstance(raw_text, str) or not raw_text.strip():
+                    continue
+                parsed = self._parse_theme_song(re.sub(r"^\d+:\s*", "", raw_text))
+                title = (parsed["title"] or "")[:200]
+                artist = (parsed["artist"] or "")[:200]
+                songs.append(
+                    ThemeSong(
                         anime=anime,
-                        song_type=ThemeSong.SongType.OPENING,
+                        song_type=song_type,
                         track_number=idx,
                         title=title,
                         artist=artist,
-                        episodes=episodes,
-                        anilist_raw=opening_text[:500],  # Also limit raw text
+                        episodes=(parsed["episodes"] or "")[:100],
+                        anilist_raw=raw_text[:500],
                         sync_source="jikan",
-                        last_synced=timezone.now(),
+                        last_synced=now,
                         youtube_url=self._generate_youtube_url(
-                            title, artist, "opening", anime.title
+                            title, artist, song_type.label.lower(), anime.title
                         ),
                     )
-                    count += 1
-                except Exception as e:
-                    logger.error(f"Error saving opening for {anime.title}: {e}")
+                )
 
-        # Parse and save endings
-        endings = themes_data.get("endings", [])
-        for idx, ending_text in enumerate(endings, 1):
-            if ending_text and ending_text.strip():
-                clean_text = re.sub(r"^\d+:\s*", "", ending_text)
-                parsed = self._parse_theme_song(clean_text)
-
-                try:
-                    # Truncate fields to fit database limits (200 chars for title/artist)
-                    title = (parsed["title"] or "")[:200]
-                    artist = (parsed["artist"] or "")[:200]
-                    episodes = (parsed["episodes"] or "")[:100]
-
-                    ThemeSong.objects.create(
-                        anime=anime,
-                        song_type=ThemeSong.SongType.ENDING,
-                        track_number=idx,
-                        title=title,
-                        artist=artist,
-                        episodes=episodes,
-                        anilist_raw=ending_text[:500],  # Also limit raw text
-                        sync_source="jikan",
-                        last_synced=timezone.now(),
-                        youtube_url=self._generate_youtube_url(
-                            title, artist, "ending", anime.title
-                        ),
-                    )
-                    count += 1
-                except Exception as e:
-                    logger.error(f"Error saving ending for {anime.title}: {e}")
-
-        return count
+        # Delete and insert together: a failed insert must not leave the anime
+        # with no themes at all.
+        with transaction.atomic():
+            ThemeSong.objects.filter(anime=anime).delete()
+            ThemeSong.objects.bulk_create(songs)
+        transaction.on_commit(lambda: _invalidate_anime_public_caches(anime.slug))
+        return len(songs)
 
     def _parse_theme_song(self, text: str) -> dict:
         """Parse theme song format: 'Song Title' by Artist (eps X-Y)"""

@@ -226,7 +226,11 @@ class AiringWorkflowTask(BaseTask):
                         anime.next_airing_date = None
                         anime.next_airing_episode = None
                         anime.status = Anime.AnimeStatus.finished
-                        await sync_to_async(anime.save)()
+                        # Only these fields: the row was loaded before the slow
+                        # provider calls, and other syncs may have written since.
+                        await sync_to_async(anime.save)(
+                            update_fields=["next_airing_date", "next_airing_episode", "status"]
+                        )
                         cleared_count += 1
                         status_changed_count += 1
                         logger.debug(f"Updated {anime.title} to Finished")
@@ -234,23 +238,34 @@ class AiringWorkflowTask(BaseTask):
                         # Episode aired but still releasing
                         anime.next_airing_date = None
                         anime.next_airing_episode = None
-                        await sync_to_async(anime.save)()
+                        await sync_to_async(anime.save)(
+                            update_fields=["next_airing_date", "next_airing_episode"]
+                        )
                         cleared_count += 1
 
             except Exception as e:
                 logger.error(f"Error cleaning up {anime.title}: {e}")
                 error_count += 1
 
-        # Batch clear for explicitly finished anime
+        from ..signals import _invalidate_anime_public_caches  # signals imports tasks
+
+        # Batch clear for explicitly finished anime. update() skips post_save,
+        # so drop their cached detail pages here.
+        finished_with_dates_queryset = Anime.objects.filter(
+            status=Anime.AnimeStatus.finished,
+            next_airing_date__isnull=False,
+        )
+        finished_slugs = await sync_to_async(list)(
+            finished_with_dates_queryset.values_list("slug", flat=True)
+        )
         finished_with_dates = await sync_to_async(
-            Anime.objects.filter(
-                status=Anime.AnimeStatus.finished,
-                next_airing_date__isnull=False,
-            ).update
+            Anime.objects.filter(slug__in=finished_slugs).update
         )(
             next_airing_date=None,
             next_airing_episode=None,
         )
+        for slug in finished_slugs:
+            await sync_to_async(_invalidate_anime_public_caches)(slug)
 
         return {
             "cleared_past_dates": cleared_count,

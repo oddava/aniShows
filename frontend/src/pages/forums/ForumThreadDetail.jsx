@@ -205,8 +205,8 @@ const ForumThreadDetail = () => {
     const createPostMutation = useMutation({
         mutationFn: (data) => forumsApi.createPost(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries(['forumPosts', id]);
-            queryClient.invalidateQueries(['forumThread', id]);
+            queryClient.invalidateQueries({ queryKey: ['forumPosts', id] });
+            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
             setReplyContent('');
             setShowReplyForm(false);
             setReplyTo(null);
@@ -220,7 +220,7 @@ const ForumThreadDetail = () => {
     const updateThreadMutation = useMutation({
         mutationFn: (data) => forumsApi.updateThread(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries(['forumThread', id]);
+            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
             setEditingThread(false);
             toast.success('Thread updated!');
         }
@@ -493,8 +493,8 @@ const ForumThreadDetail = () => {
     const deletePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.deletePost(postId),
         onSuccess: () => {
-            queryClient.invalidateQueries(['forumPosts', id, page]);
-            queryClient.invalidateQueries(['forumThread', id]);
+            queryClient.invalidateQueries({ queryKey: ['forumPosts', id, page] });
+            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
             toast.success('Reply deleted');
         },
         onError: (error) => {
@@ -824,7 +824,7 @@ const ForumThreadDetail = () => {
                         <div className="py-12 text-center text-gray-500">
                             <p>Failed to load replies. Please try again.</p>
                             <button
-                                onClick={() => queryClient.invalidateQueries(['forumPosts', id, page])}
+                                onClick={() => queryClient.invalidateQueries({ queryKey: ['forumPosts', id, page] })}
                                 className="mt-4 text-accent hover:underline"
                             >
                                 Retry

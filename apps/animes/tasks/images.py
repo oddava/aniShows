@@ -6,7 +6,6 @@ Image processing tasks for anime.
 
 Includes thumbnail generation for anime images.
 """
-import asyncio
 import hashlib
 
 import httpx
@@ -19,6 +18,7 @@ from ...core.services.celery_monitoring import get_queue_size
 from ...shared.celery import observed_shared_task
 from ...shared.task_lock import cache_lock
 from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
+from .base import run_async_in_task
 
 try:
     from botocore.exceptions import ConnectionClosedError, EndpointConnectionError
@@ -316,7 +316,7 @@ def fetch_anime_images(
             finally:
                 await service.close()
 
-        asyncio.run(_download_job())
+        run_async_in_task(_download_job())
 
         return {"anime_id": anime_id, "status": "success", "storage_retry": storage_retry}
 

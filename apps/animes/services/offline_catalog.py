@@ -57,6 +57,9 @@ OFFLINE_UPDATE_FIELDS = [
     "offline_db_last_update",
     "updated_at",
 ]
+OFFLINE_ALWAYS_WRITTEN_FIELDS = frozenset(
+    {"offline_db_payload", "offline_db_last_seen_at", "offline_db_last_update", "updated_at"}
+)
 LATEST_DOWNLOAD_URL = (
     "https://github.com/manami-project/anime-offline-database/releases/latest/download/"
     f"{DEFAULT_ASSET_NAME}"
@@ -262,7 +265,17 @@ class OfflineCatalogImportService:
                         summary["last_update"] = payload.get("lastUpdate")
                         continue
 
-                    entry = self._prepare_entry(payload)
+                    try:
+                        entry = self._prepare_entry(payload)
+                    except Exception:
+                        # One bad record must not fail the run: a resume would
+                        # stop on the same line again.
+                        logger.warning(
+                            "Skipping malformed offline catalog record at line %s",
+                            line_number,
+                            exc_info=True,
+                        )
+                        entry = None
                     if entry is None:
                         import_run.records_failed += 1
                         import_run.last_processed_line = line_number
@@ -321,16 +334,21 @@ class OfflineCatalogImportService:
             import_run.records_marked_stale = stale_count
 
             followup_ids = created_ids + updated_ids
+            new_ids = created_ids
             if resume:
-                followup_ids = list(
-                    Anime.objects.filter(offline_db_last_seen_at=run_started_at).values_list(
-                        "id",
-                        flat=True,
+                seen_this_run = Anime.objects.filter(offline_db_last_seen_at=run_started_at)
+                followup_ids = list(seen_this_run.values_list("id", flat=True))
+                new_ids = list(
+                    seen_this_run.filter(created_at__gte=run_started_at).values_list(
+                        "id", flat=True
                     )
                 )
 
             if enqueue_enrichment:
-                sync_state_summary = self._initialize_sync_states(followup_ids, [])
+                new_id_set = set(new_ids)
+                sync_state_summary = self._initialize_sync_states(
+                    new_ids, [anime_id for anime_id in followup_ids if anime_id not in new_id_set]
+                )
                 summary.update(sync_state_summary)
                 queued = self._enqueue_enrichment(followup_ids, [])
                 summary.update(queued)
@@ -476,15 +494,21 @@ class OfflineCatalogImportService:
 
         client = httpx.Client(timeout=60.0, follow_redirects=True)
         stream_context = client.stream("GET", source_url)
-        response = stream_context.__enter__()
-        response.raise_for_status()
+        try:
+            response = stream_context.__enter__()
+            response.raise_for_status()
 
-        stream = _IteratorStream(response.iter_bytes())
-        if source_url.endswith(".zst"):
-            reader = zstandard.ZstdDecompressor().stream_reader(stream)
-            text_stream = io.TextIOWrapper(reader, encoding="utf-8")
-        else:
-            text_stream = io.TextIOWrapper(stream, encoding="utf-8")
+            stream = _IteratorStream(response.iter_bytes())
+            if source_url.endswith(".zst"):
+                reader = zstandard.ZstdDecompressor().stream_reader(stream)
+                text_stream = io.TextIOWrapper(reader, encoding="utf-8")
+            else:
+                text_stream = io.TextIOWrapper(stream, encoding="utf-8")
+        except BaseException:
+            # A 404 for a bad release tag, say: nothing below will close these.
+            stream_context.__exit__(None, None, None)
+            client.close()
+            raise
 
         class _ManagedTextStream:
             def __enter__(self):
@@ -510,7 +534,9 @@ class OfflineCatalogImportService:
         status = self._map_status(payload.get("status"))
         season_info = payload.get("animeSeason") or {}
         season = self._truncate_text(season_info.get("season") or "", ANIME_SEASON_MAX_LENGTH)
-        season_year = season_info.get("year")
+        season_year = self._coerce_int(season_info.get("year"))
+        if season_year is not None and not 1900 <= season_year <= 2100:
+            season_year = None
         picture = self._truncate_text(
             JikanService.normalize_external_image_url(payload.get("picture")),
             ANIME_URL_MAX_LENGTH,
@@ -530,7 +556,7 @@ class OfflineCatalogImportService:
             base_slug=slugify(title),
             anime_type=anime_type,
             status=status,
-            episode_count=payload.get("episodes") or 0,
+            episode_count=max(self._coerce_int(payload.get("episodes"), 0), 0),
             duration_minutes=self._duration_to_minutes(payload.get("duration")),
             rating=self._score_to_rating(payload.get("score")),
             season=season,
@@ -674,11 +700,11 @@ class OfflineCatalogImportService:
                 touched_slugs.extend(persist_result["touched_slugs"])
 
             if to_update:
-                Anime.objects.bulk_update(
-                    to_update,
-                    OFFLINE_UPDATE_FIELDS,
-                    batch_size=self.batch_size,
-                )
+                by_fields: dict[frozenset[str], list[Anime]] = defaultdict(list)
+                for anime in to_update:
+                    by_fields[frozenset(self._pop_offline_dirty_fields(anime))].append(anime)
+                for fields, rows in by_fields.items():
+                    Anime.objects.bulk_update(rows, sorted(fields), batch_size=self.batch_size)
                 for anime in to_update:
                     self._index_fallback_anime(anime)
                 updated_ids.extend(anime.id for anime in to_update if anime.id)
@@ -793,7 +819,7 @@ class OfflineCatalogImportService:
                 existing = self._find_conflicting_existing(entry, anime)
                 if existing is not None:
                     self._apply_offline_updates(existing, entry, last_update, seen_at)
-                    existing.save(update_fields=OFFLINE_UPDATE_FIELDS)
+                    existing.save(update_fields=sorted(self._pop_offline_dirty_fields(existing)))
                     self._attach_primary_studios([(existing, studio)] if studio else [])
                     self._index_fallback_anime(existing)
                     return {
@@ -851,6 +877,28 @@ class OfflineCatalogImportService:
         return None
 
     def _apply_offline_updates(
+        self,
+        anime: Anime,
+        entry: OfflineCatalogEntry,
+        last_update: date | None,
+        seen_at,
+    ) -> None:
+        before = {field: getattr(anime, field) for field in OFFLINE_UPDATE_FIELDS}
+        self._fill_offline_fields(anime, entry, last_update, seen_at)
+        # Only what this import changed gets written: the instance may have been
+        # loaded long before, and writing every field back would revert other
+        # syncs' updates made since (an airing sync marking a show Finished).
+        changed = {field for field in OFFLINE_UPDATE_FIELDS if getattr(anime, field) != before[field]}
+        changed |= OFFLINE_ALWAYS_WRITTEN_FIELDS
+        anime._offline_dirty_fields = getattr(anime, "_offline_dirty_fields", set()) | changed
+
+    @staticmethod
+    def _pop_offline_dirty_fields(anime: Anime) -> set[str]:
+        fields = getattr(anime, "_offline_dirty_fields", None) or set(OFFLINE_UPDATE_FIELDS)
+        anime._offline_dirty_fields = set()
+        return fields
+
+    def _fill_offline_fields(
         self,
         anime: Anime,
         entry: OfflineCatalogEntry,
@@ -1184,13 +1232,15 @@ class OfflineCatalogImportService:
                 "sync_states_total": 0,
             }
 
-        state_summary = OfflineSyncService().ensure_states_for_anime_ids(
-            changed_ids,
-            reset_pipeline=True,
-        )
+        # Only new rows start the pipeline from scratch. Every matched row
+        # counts as updated, so resetting those would re-queue the whole
+        # catalog on each import.
+        service = OfflineSyncService()
+        created_summary = service.ensure_states_for_anime_ids(created_ids, reset_pipeline=True)
+        updated_summary = service.ensure_states_for_anime_ids(updated_ids)
         return {
-            "sync_states_created": state_summary["created"],
-            "sync_states_updated": state_summary["updated"],
+            "sync_states_created": created_summary["created"] + updated_summary["created"],
+            "sync_states_updated": created_summary["updated"] + updated_summary["updated"],
             "sync_states_total": len(changed_ids),
         }
 
@@ -1309,9 +1359,12 @@ class OfflineCatalogImportService:
         if not duration:
             return None
 
-        value = duration.get("value")
-        unit = (duration.get("unit") or "").upper()
-        if not value:
+        try:
+            value = float(duration.get("value") or 0)
+        except (TypeError, ValueError):
+            return None
+        unit = str(duration.get("unit") or "").upper()
+        if value <= 0:
             return None
 
         if unit == "SECONDS":
@@ -1330,9 +1383,10 @@ class OfflineCatalogImportService:
             value = score.get("arithmeticMean")
         if value is None:
             value = score.get("median")
-        if value is None:
+        try:
+            return round(float(value), 1)
+        except (TypeError, ValueError):
             return None
-        return round(float(value), 1)
 
     def _season_to_date(self, season: str | None, year: int | None) -> date | None:
         if not year:

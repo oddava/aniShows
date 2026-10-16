@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getApiErrorMessage } from '../api/errors';
+import { PASSWORD_HINT, getPasswordProblem } from '../utils/password';
 import { Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
@@ -400,8 +401,9 @@ export default function Settings() {
             setAccountError('New passwords do not match');
             return;
         }
-        if (newPassword.length < 8) {
-            setAccountError('Password must be at least 8 characters');
+        const passwordProblem = getPasswordProblem(newPassword);
+        if (passwordProblem) {
+            setAccountError(passwordProblem);
             return;
         }
 
@@ -1136,6 +1138,7 @@ export default function Settings() {
                                                 {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
+                                        <p className="text-gray-500 text-xs mt-1">{PASSWORD_HINT}</p>
                                     </div>
 
                                     {/* Confirm Password */}

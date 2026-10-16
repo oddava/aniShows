@@ -1,6 +1,7 @@
 import contextlib
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -11,6 +12,8 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings as jwt_settings
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
@@ -236,8 +239,14 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
 
     def validate(self, attrs):
         try:
-            data = super().validate(attrs)
-            return data
+            with transaction.atomic():
+                # Two requests with the same refresh token (two tabs, a
+                # retried request) would both pass the blacklist check before
+                # either blacklists it, and both get a new token. Lock the
+                # token's row so the second waits and then sees it blacklisted.
+                jti = self.token_class(attrs["refresh"])[jwt_settings.JTI_CLAIM]
+                OutstandingToken.objects.select_for_update().filter(jti=jti).first()
+                return super().validate(attrs)
         except User.DoesNotExist:
             logger.warning(
                 "Token refresh failed",

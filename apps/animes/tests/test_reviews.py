@@ -9,6 +9,7 @@ Tests for:
 - XSS prevention in review text
 """
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -16,6 +17,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from ...core.models import Notification
+from ...users.middleware.activity_middleware import activity_throttle_key
 from ...users.models import UserAnimeList, UserProfile
 from ..models import Anime, Review, ReviewReaction, ReviewVote
 
@@ -523,6 +525,8 @@ class ReviewInteractionTests(APITestCase):
                 reaction_type=ReviewReaction.ReactionType.HEART,
             )
 
+        # The once-a-minute activity write is not part of this view's cost.
+        cache.add(activity_throttle_key(self.voter.id), True)
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(reverse("reviews-list"), {"anime": self.anime.slug})
 

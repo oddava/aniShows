@@ -21,6 +21,7 @@ import httpx
 from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 
+from ....shared.retry import retry_after_seconds
 from ...models import Anime, ThemeSong
 from ...services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
@@ -287,10 +288,8 @@ class Command(BaseCommand):
                     rate_limiter.record_429()
 
                     # Try to get retry-after header
-                    retry_after = response.headers.get("Retry-After")
-                    if retry_after:
-                        wait_time = float(retry_after)
-                    else:
+                    wait_time = retry_after_seconds(response.headers.get("Retry-After"))
+                    if wait_time is None:
                         # Exponential backoff with jitter
                         wait_time = min(2**attempt + random.uniform(0, 2), 60)
 

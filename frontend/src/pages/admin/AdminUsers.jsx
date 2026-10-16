@@ -23,6 +23,7 @@ const AdminUsers = () => {
 
     const fetchUsers = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = new URLSearchParams({
                 page,
@@ -37,6 +38,11 @@ const AdminUsers = () => {
             setTotalPages(Math.ceil(response.data.count / 20));
         } catch (err) {
             logger.error('Failed to fetch users:', err);
+            if (err.response?.status === 404 && page > 1) {
+                // The page no longer exists, e.g. after deleting its last row.
+                setPage((current) => Math.max(1, current - 1));
+                return;
+            }
             setError(err.response?.data?.detail || 'Failed to load users');
         } finally {
             setLoading(false);
@@ -53,18 +59,26 @@ const AdminUsers = () => {
         fetchUsers();
     };
 
-    const toggleUserActive = async (userId) => {
+    const toggleUserActive = async (user) => {
+        const action = user.is_active ? 'Ban' : 'Reactivate';
+        if (!confirm(`${action} user "${user.username}"?`)) {
+            return;
+        }
         try {
-            await api.post(`/admin/users/${userId}/toggle_active/`);
+            await api.post(`/admin/users/${user.id}/toggle_active/`);
             fetchUsers();
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to toggle user status');
         }
     };
 
-    const toggleUserStaff = async (userId) => {
+    const toggleUserStaff = async (user) => {
+        const action = user.is_staff ? 'Remove admin access from' : 'Grant admin access to';
+        if (!confirm(`${action} "${user.username}"?`)) {
+            return;
+        }
         try {
-            await api.post(`/admin/users/${userId}/toggle_staff/`);
+            await api.post(`/admin/users/${user.id}/toggle_staff/`);
             fetchUsers();
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to toggle staff status');
@@ -112,7 +126,7 @@ const AdminUsers = () => {
                         type="text"
                         placeholder="Search users by name or email..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                         className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
                     />
                 </form>
@@ -121,7 +135,7 @@ const AdminUsers = () => {
                     <div className="flex-1 md:flex-none">
                         <CustomSelect
                             value={filters.is_active}
-                            onChange={(nextValue) => setFilters((f) => ({ ...f, is_active: nextValue }))}
+                            onChange={(nextValue) => { setFilters((f) => ({ ...f, is_active: nextValue })); setPage(1); }}
                             options={[
                                 { value: '', label: 'All Status' },
                                 { value: 'true', label: 'Active Only' },
@@ -136,7 +150,7 @@ const AdminUsers = () => {
                     <div className="flex-1 md:flex-none">
                         <CustomSelect
                             value={filters.is_staff}
-                            onChange={(nextValue) => setFilters((f) => ({ ...f, is_staff: nextValue }))}
+                            onChange={(nextValue) => { setFilters((f) => ({ ...f, is_staff: nextValue })); setPage(1); }}
                             options={[
                                 { value: '', label: 'All Roles' },
                                 { value: 'true', label: 'Staff & Admins' },
@@ -235,7 +249,7 @@ const AdminUsers = () => {
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
                                             <button
-                                                onClick={() => toggleUserActive(user.id)}
+                                                onClick={() => toggleUserActive(user)}
                                                 disabled={user.is_superuser}
                                                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed group/btn"
                                                 title={user.is_active ? 'Ban User' : 'Unban User'}
@@ -244,7 +258,7 @@ const AdminUsers = () => {
                                             </button>
 
                                             <button
-                                                onClick={() => toggleUserStaff(user.id)}
+                                                onClick={() => toggleUserStaff(user)}
                                                 disabled={user.is_superuser}
                                                 className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed group/btn"
                                                 title={user.is_staff ? 'Remove Staff Role' : 'Promote to Staff'}

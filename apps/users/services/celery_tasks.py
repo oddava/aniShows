@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -11,11 +10,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from ...animes.services.jikan import JikanService
+from ...shared.logger import logger
 from ..models import UserImportJob
 from .import_service import ImportService
 from .user_queryset import get_annotated_user_queryset
-
-logger = logging.getLogger(__name__)
 
 User = get_user_model()
 

@@ -4,3 +4,16 @@ from .favorites import CharacterFavoriteViewSet, FavoriteViewSet, StaffFavoriteV
 from .recommendations import RecommendationsViewSet
 from .reviews import ReviewViewSet
 from .staff import StaffViewSet
+
+__all__ = [
+    "AnimeViewSet",
+    "CharacterFavoriteViewSet",
+    "CharacterViewSet",
+    "FavoriteViewSet",
+    "GenreViewSet",
+    "RecommendationsViewSet",
+    "ReviewViewSet",
+    "StaffFavoriteViewSet",
+    "StaffViewSet",
+    "StudioViewSet",
+]

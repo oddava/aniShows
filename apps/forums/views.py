@@ -199,8 +199,9 @@ class ThreadViewSet(ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         """Cache thread detail and handle unique view counts"""
-        thread_id = kwargs.get("pk")
         instance = self.get_object()
+        # The canonical id, not the URL's spelling ("01" and "1" are one thread).
+        thread_id = instance.pk
 
         if request.user.is_authenticated:
             viewer_id = f"user_{request.user.id}"
@@ -211,7 +212,7 @@ class ThreadViewSet(ModelViewSet):
         view_cache_key = f"forum:view:{thread_id}:{viewer_id}"
         if not cache.get(view_cache_key):
             cache.set(view_cache_key, True, timeout=3600)
-            buffer_thread_view_increment(int(thread_id))
+            buffer_thread_view_increment(thread_id)
 
         if request.user.is_authenticated:
             serializer = self.get_serializer(instance)
@@ -284,6 +285,7 @@ class PostViewSet(ModelViewSet):
 
         cacheable = (
             thread_id
+            and thread_id.isdigit()
             and not request.user.is_authenticated
             and set(request.query_params) <= CACHEABLE_POST_LIST_PARAMS
             and request.query_params.get("ordering", CACHEABLE_POST_ORDERING)

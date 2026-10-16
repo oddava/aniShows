@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-
 from ...shared.celery import observed_shared_task
+from ...shared.logger import logger
 from ...shared.task_lock import cache_lock
 from ..services.celery_tasks import CoreTaskService
-
-logger = logging.getLogger(__name__)
-
 
 # Overlapping runs would deliver (or create) the same notifications twice.
 # The lock outlives the task's hard time limit.

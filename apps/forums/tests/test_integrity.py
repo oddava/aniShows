@@ -4,7 +4,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from ...users.models import UserProfile
-from ..models import Category, Post, Thread
+from ..models import Category, Post, Tag, Thread
 
 User = get_user_model()
 
@@ -120,3 +120,50 @@ def test_new_thread_appears_in_cached_all_categories_list(
     assert created.status_code == 201
 
     assert len(anon.get(url, {"ordering": "-updated_at"}).data["results"]) == 1
+
+
+@pytest.mark.django_db
+def test_tag_filtered_list_sees_new_thread(client_for, category, django_capture_on_commit_callbacks):
+    tag = Tag.objects.create(name="News", slug="news")
+    anon = APIClient()
+    url = reverse("forums:thread-list")
+    params = {"tags__slug": "news", "ordering": "-updated_at"}
+    assert anon.get(url, params).data["results"] == []
+
+    with django_capture_on_commit_callbacks(execute=True):
+        client_for.post(
+            url,
+            {"category": category.id, "title": "Tagged", "content": "c", "tag_ids": [tag.id]},
+            format="json",
+        )
+
+    assert len(anon.get(url, params).data["results"]) == 1
+
+
+@pytest.mark.django_db
+def test_every_cached_post_page_is_invalidated():
+    """Invalidation used to clear only the first 20 pages."""
+    from ..cache_utils import cache_post_list, get_cached_post_list, invalidate_post_list_cache
+
+    cache_post_list(7, 25, {"results": ["stale"]})
+    invalidate_post_list_cache(7)
+
+    assert get_cached_post_list(7, 25) is None
+
+
+@pytest.mark.django_db
+def test_thread_detail_cache_is_shared_by_id_spellings(category, author):
+    from ..cache_utils import get_thread_detail_cache_key
+
+    thread = _thread(category, author)
+    assert get_thread_detail_cache_key("0" + str(thread.id)) == get_thread_detail_cache_key(thread.id)
+
+    anon = APIClient()
+    response = anon.get(f"/api/v1/forums/threads/0{thread.id}/")
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_non_numeric_thread_filter_is_not_a_server_error():
+    response = APIClient().get(reverse("forums:post-list"), {"thread__id": "abc"})
+    assert response.status_code in (200, 400)

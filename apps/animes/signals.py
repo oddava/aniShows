@@ -56,12 +56,17 @@ def _invalidate_anime_public_caches(slug: str) -> None:
         f"anime_detail_base:v3:{slug}",
         f"anime_detail_base:v2:{slug}",
         f"anime_detail_base:{slug}",
-        f"anime_trending:{current}",
-        f"anime_top_rated:{current}",
-        f"anime_browse_rows:{current}:adult:0",
-        f"anime_browse_rows:{current}:adult:1",
-        f"anime_related:{current}:{slug}",
-        f"anime_recommendations:{current}:{slug}",
+        *(
+            f"{key}:adult:{flag}"
+            for key in (
+                f"anime_trending:{current}",
+                f"anime_top_rated:{current}",
+                f"anime_browse_rows:{current}",
+                f"anime_related:{current}:{slug}",
+                f"anime_recommendations:{current}:{slug}",
+            )
+            for flag in (0, 1)
+        ),
         f"anime_related:v2:{slug}",
     )
 

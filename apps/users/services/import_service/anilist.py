@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from ....shared.logger import logger
+from ....shared.retry import retry_after_seconds
 from ...models import UserImportJob
 from .base import AniListStatusMapper, BaseImporter
 
@@ -97,12 +98,9 @@ class AniListImporter(BaseImporter):
 
     def _retry_delay(self, attempt: int, response: requests.Response | None = None) -> float:
         if response is not None:
-            retry_after = response.headers.get("Retry-After")
-            if retry_after:
-                try:
-                    return max(float(retry_after), 1.0)
-                except ValueError:
-                    pass
+            retry_after = retry_after_seconds(response.headers.get("Retry-After"))
+            if retry_after is not None:
+                return max(retry_after, 1.0)
 
         backoff = min(self.BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)), self.MAX_BACKOFF_SECONDS)
         return backoff + random.uniform(0.2, 0.8)

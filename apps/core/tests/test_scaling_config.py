@@ -11,6 +11,7 @@ Tests cover:
 
 from unittest.mock import patch
 
+import pytest
 from django.test import TestCase, override_settings
 
 
@@ -132,6 +133,8 @@ class TestGunicornSizing(TestCase):
             assert gunicorn_tuning.detect_available_cpu_count() == 12
             assert gunicorn_tuning.default_gunicorn_workers() == 4
 
+# These tests override DATABASES on purpose to exercise the router.
+@pytest.mark.filterwarnings("ignore:Overriding setting DATABASES:UserWarning")
 class TestPrimaryReplicaRouter(TestCase):
     """Test the database router for primary/replica deployments."""
 
