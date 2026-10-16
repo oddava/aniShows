@@ -89,6 +89,9 @@ roll_web() {
             done
             [ -n "$new_id" ] || die "could not find the new web container"
             wait_ready "$new_id" web || { docker rm -f "$new_id" >/dev/null; die "new web container failed; old ones still serving"; }
+            # SIGTERM first so gunicorn finishes in-flight requests
+            # (graceful_timeout is 30s); rm -f alone sends SIGKILL.
+            docker stop -t 35 "$old" >/dev/null || true
             docker rm -f "$old" >/dev/null
             ok "replaced web ${old:0:12} -> ${new_id:0:12}"
         done
@@ -99,6 +102,11 @@ roll_web() {
 }
 
 command -v docker >/dev/null || die "docker is not installed"
+
+# Caddyfile.prod uses UMAMI_DOMAIN as a site address: empty, Caddy refuses
+# the whole config and the deploy dies at the reload.
+[ -n "${UMAMI_DOMAIN:-}" ] || die "UMAMI_DOMAIN must be set in .env (see .env.example)"
+[ -n "${UMAMI_PUBLIC_ORIGIN:-}" ] || warn "UMAMI_PUBLIC_ORIGIN is unset; the CSP will block the Umami script."
 
 # docker-compose.prod.yml still has well-known fallbacks for these secrets. They are
 # public (the defaults of MinIO, Umami, ...), so a server running on them is

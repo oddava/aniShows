@@ -94,7 +94,7 @@ cleanup() {
             -c "DROP DATABASE IF EXISTS \"$APPLY_DB_NAME\" WITH (FORCE);" >/dev/null 2>&1 || true
     fi
     if [ "$LOCK_ACQUIRED" = "1" ] && [ -d "$LOCK_DIR" ]; then
-        rmdir "$LOCK_DIR" 2>/dev/null || true
+        rm -rf "$LOCK_DIR"
     fi
 }
 trap cleanup EXIT
@@ -146,9 +146,24 @@ parse_args() {
 
 acquire_lock() {
     if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        die "Another backup/restore operation is currently running (lock: $LOCK_DIR)."
+        if ! reclaim_stale_lock; then
+            die "Another backup/restore operation is currently running (lock: $LOCK_DIR)."
+        fi
     fi
     LOCK_ACQUIRED=1
+    printf '%s %s\n' "$$" "$(hostname 2>/dev/null || echo unknown)" >"$LOCK_DIR/owner"
+}
+
+# Same rule as backup.sh: take over a lock whose owner is gone.
+reclaim_stale_lock() {
+    local owner_pid owner_host
+    read -r owner_pid owner_host <"$LOCK_DIR/owner" 2>/dev/null || return 1
+    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ] && kill -0 "$owner_pid" 2>/dev/null; then
+        return 1
+    fi
+    echo "Warning: removing stale lock left by PID $owner_pid on $owner_host." >&2
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" 2>/dev/null
 }
 
 resolve_backup_dir() {
@@ -352,7 +367,9 @@ restore_media() {
     tar -tzf "$MEDIA_FILE" >/dev/null
 
     log "Restoring MinIO data..."
-    find /minio_data -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    # Backups exclude .minio.sys (MinIO's own format and bucket policies), so
+    # keep the live one rather than leave MinIO without it.
+    find /minio_data -mindepth 1 -maxdepth 1 ! -name .minio.sys -exec rm -rf {} +
     tar -xzf "$MEDIA_FILE" -C /minio_data
 }
 

@@ -5,6 +5,12 @@
 
     encode gzip zstd
 
+    # Django spools a whole request body to disk before any auth check, so
+    # cap it here. The largest real upload is the 10MB MAL XML import.
+    request_body {
+        max_size 12MB
+    }
+
     # API
     handle /api/* {
         reverse_proxy web:8000

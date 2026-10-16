@@ -5,6 +5,8 @@ TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 TYPE="${1:-manual}" # manual, daily, weekly, pre-restore
 LOCK_DIR="$BACKUP_DIR/.backup.lock"
+# Backups of each group (regular, pre-restore) to keep, the new one included.
+KEEP="${BACKUP_KEEP:-1}"
 
 DB_HOST="${POSTGRES_HOST:-db}"
 DB_PORT="${POSTGRES_PORT:-5432}"
@@ -32,7 +34,7 @@ cleanup() {
         rm -rf "$WORK_DIR"
     fi
     if [ "$LOCK_ACQUIRED" = "1" ] && [ -d "$LOCK_DIR" ]; then
-        rmdir "$LOCK_DIR" 2>/dev/null || true
+        rm -rf "$LOCK_DIR"
     fi
 }
 trap cleanup EXIT
@@ -50,10 +52,26 @@ acquire_lock() {
     fi
 
     if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        echo "Error: Another backup/restore operation is currently running (lock: $LOCK_DIR)." >&2
-        exit 1
+        if ! reclaim_stale_lock; then
+            echo "Error: Another backup/restore operation is currently running (lock: $LOCK_DIR)." >&2
+            exit 1
+        fi
     fi
     LOCK_ACQUIRED=1
+    printf '%s %s\n' "$$" "$(hostname 2>/dev/null || echo unknown)" >"$LOCK_DIR/owner"
+}
+
+# A killed run (OOM, SIGKILL on redeploy) never removes its lock. Take it over
+# when its owner is gone: another container, or a process no longer running.
+reclaim_stale_lock() {
+    local owner_pid owner_host
+    read -r owner_pid owner_host <"$LOCK_DIR/owner" 2>/dev/null || return 1
+    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ] && kill -0 "$owner_pid" 2>/dev/null; then
+        return 1
+    fi
+    echo "Warning: removing stale lock left by PID $owner_pid on $owner_host." >&2
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" 2>/dev/null
 }
 
 assert_numeric_positive() {
@@ -91,12 +109,14 @@ backup_media() {
 
     log "Staging MinIO data snapshot (passes=$MEDIA_RSYNC_PASSES)..."
     while [ "$pass" -le "$MEDIA_RSYNC_PASSES" ]; do
+        # "|| ..." keeps set -e from aborting on exit 24 (files vanished
+        # mid-copy), which is normal while MinIO is writing.
+        local rsync_status=0
         rsync \
             -a \
             --delete \
             --exclude=".minio.sys/" \
-            /minio_data/ "$snapshot_dir/"
-        local rsync_status=$?
+            /minio_data/ "$snapshot_dir/" || rsync_status=$?
         if [ "$rsync_status" -ne 0 ]; then
             if [ "$rsync_status" -ne 24 ]; then
                 echo "Error: rsync failed while staging MinIO data (exit=$rsync_status)." >&2
@@ -155,9 +175,35 @@ EOF
     fi
 }
 
+# Rotation only touches timestamped backups of the current run's group:
+# regular (manual/daily/weekly) or pre-restore. A pre-restore snapshot must
+# never remove the backup being restored, and exports/, imported-env/ and
+# imported backups (named *-imported) are never rotated.
 prune_previous_backups() {
-    log "Removing previous backups and keeping only $(basename "$CURRENT_BACKUP_DIR")..."
-    find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d ! -path "$CURRENT_BACKUP_DIR" ! -name ".*" -exec rm -rf {} +
+    local group_pattern
+    if [ "$TYPE" = "pre-restore" ]; then
+        group_pattern='^[0-9]{8}_[0-9]{6}-pre-restore$'
+    else
+        group_pattern='^[0-9]{8}_[0-9]{6}-(manual|daily|weekly)$'
+    fi
+
+    log "Keeping the newest $KEEP backup(s) of this kind..."
+    local path name
+    local -a group=()
+    for path in "$BACKUP_DIR"/*/; do
+        name="$(basename "$path")"
+        if [[ "$name" =~ $group_pattern ]]; then
+            group+=("$name")
+        fi
+    done
+    if [ "${#group[@]}" -le "$KEEP" ]; then
+        return
+    fi
+    # Names start with the timestamp, so a reverse sort is newest first.
+    printf '%s\n' "${group[@]}" | sort -r | tail -n +"$((KEEP + 1))" | while IFS= read -r name; do
+        log "Removing old backup $name"
+        rm -rf "${BACKUP_DIR:?}/$name"
+    done
 }
 
 main() {
@@ -178,6 +224,7 @@ main() {
         exit 1
     fi
     assert_numeric_positive "$MEDIA_RSYNC_PASSES" "BACKUP_MEDIA_RSYNC_PASSES"
+    assert_numeric_positive "$KEEP" "BACKUP_KEEP"
 
     mkdir -p "$BACKUP_DIR"
     acquire_lock
