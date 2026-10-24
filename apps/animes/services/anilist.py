@@ -1,7 +1,5 @@
 import asyncio
-import contextlib
 import re
-from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 from urllib.parse import urlparse, urlunparse
@@ -10,7 +8,6 @@ import httpx
 from asgiref.sync import async_to_sync, sync_to_async
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
-from django.utils import timezone
 from django.utils.text import slugify
 
 from ...shared.logger import logger
@@ -27,6 +24,7 @@ from ..models import (
 )
 
 # Import rate limiting utilities
+from .provider_base import CatalogProviderBase, with_creation_defaults
 from .rate_limiting import (
     AniListRateLimiter,
     APICallCache,
@@ -43,7 +41,7 @@ class MediaSort(StrEnum):
     START_DATE = "START_DATE_DESC"
 
 
-class AniListService:
+class AniListService(CatalogProviderBase):
     RUNTIME_ACCESS_DISABLED_MESSAGE = (
         "AniListService network access is disabled. "
         "Runtime anime data fetches must go through the self-hosted Jikan instance."
@@ -125,13 +123,6 @@ class AniListService:
         self.last_error_code = ""
         self.last_error_message = ""
 
-    def _set_last_error(self, code: str, message: str):
-        self.last_error_code = code
-        self.last_error_message = (message or "")[:500]
-
-    def _reset_last_error(self):
-        self.last_error_code = ""
-        self.last_error_message = ""
 
     def _parse_graphql_error_code(self, message: str) -> str:
         lowered = (message or "").lower()
@@ -270,61 +261,6 @@ class AniListService:
         logger.info(f"Blocked untrusted image domain before fetch queue: {domain}")
         return ""
 
-    @staticmethod
-    def _iter_rankings(item: dict) -> list[dict]:
-        rankings = item.get("rankings") or []
-        if not isinstance(rankings, list):
-            return []
-        return [ranking for ranking in rankings if isinstance(ranking, dict)]
-
-    @staticmethod
-    def _status_distribution(item: dict) -> dict:
-        stats = item.get("stats") or {}
-        if not isinstance(stats, dict):
-            return {}
-
-        distribution = stats.get("statusDistribution") or []
-        if not isinstance(distribution, list):
-            return {}
-
-        return {
-            status: amount
-            for entry in distribution
-            if isinstance(entry, dict)
-            and (status := entry.get("status"))
-            and (amount := entry.get("amount")) is not None
-        }
-
-    @staticmethod
-    def _normalized_tags(item: dict) -> list[str]:
-        raw_tags = item.get("tags") or []
-        if not isinstance(raw_tags, list):
-            return []
-
-        normalized_tags: list[str] = []
-        seen: set[str] = set()
-
-        for entry in raw_tags:
-            if isinstance(entry, dict):
-                if entry.get("isMediaSpoiler") or entry.get("isGeneralSpoiler"):
-                    continue
-                name = entry.get("name")
-            elif isinstance(entry, str):
-                name = entry
-            else:
-                continue
-
-            if not isinstance(name, str):
-                continue
-
-            clean_name = " ".join(name.split()).strip().lower()
-            if not clean_name or clean_name in seen:
-                continue
-
-            seen.add(clean_name)
-            normalized_tags.append(clean_name)
-
-        return normalized_tags
 
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
@@ -422,13 +358,6 @@ class AniListService:
             limit=limit,
         )
 
-    def _sanitize_search_query(self, query_string: str) -> str:
-        cleaned = (query_string or "").strip()
-        if not cleaned:
-            return ""
-        cleaned = "".join(ch for ch in cleaned if ch.isprintable())
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        return cleaned[:120]
 
     def _search_variants(self, query_string: str) -> list[str]:
         primary = self._sanitize_search_query(query_string)
@@ -466,9 +395,6 @@ class AniListService:
 
         return []
 
-    async def close(self):
-        with contextlib.suppress(Exception):
-            await self.client.aclose()
 
     # --- Processing Logic (Extracted from Command) ---
 
@@ -664,242 +590,30 @@ class AniListService:
         mal_id = anime_data_dict.get("mal_id")
         title = anime_data_dict.get("title")
 
-        if anilist_id:
-            try:
-                anime = Anime.objects.get(anilist_id=anilist_id)
-                return anime, False
-            except Anime.DoesNotExist:
-                pass
+        existing = self._lookup_existing_anime(
+            anilist_id=anilist_id, mal_id=mal_id, slug=slug, title=title
+        )
+        if existing:
+            return existing, False
 
-        if mal_id:
-            try:
-                anime = Anime.objects.get(mal_id=mal_id)
-                return anime, False
-            except Anime.DoesNotExist:
-                pass
-
-        if title and not (anilist_id or mal_id):
-            anime = Anime.objects.filter(title=title).first()
-            if anime:
-                return anime, False
-
+        # A new show gets a free slug. Matching on the slug instead would hand
+        # back a different show that shares the title (a remake, a sequel
+        # season) and the caller would overwrite it with this payload.
+        anime_data = with_creation_defaults(anime_data_dict)
+        anime_data["slug"] = Anime.available_slug(slug, year=anime_data.get("season_year"))
         try:
-            return Anime.objects.get_or_create(slug=slug, defaults=anime_data_dict)
+            return Anime.objects.create(**anime_data), True
         except IntegrityError as exc:
-            existing = self._lookup_existing_anime(
-                anilist_id=anilist_id,
-                mal_id=mal_id,
-                slug=slug,
-                title=title,
+            recovered = self._lookup_existing_anime(
+                anilist_id=anilist_id, mal_id=mal_id, slug=anime_data["slug"], title=title
             )
-            if existing:
+            if recovered:
                 logger.warning(
                     f"Recovered from create race for slug '{slug}' (AniList ID: {anilist_id}): {exc}"
                 )
-                return existing, False
+                return recovered, False
             raise
 
-    @sync_to_async
-    def _update_anime(self, anime, anime_data_dict):
-        anime_data = dict(anime_data_dict)
-        self._apply_recent_airing_transition(anime, anime_data)
-        original_values = {field: getattr(anime, field, None) for field in anime_data}
-
-        # Preemptively avoid unique-constraint collisions.
-        for unique_field in ("anilist_id", "mal_id", "slug"):
-            if unique_field not in anime_data:
-                continue
-            value = anime_data.get(unique_field)
-            if value in (None, ""):
-                continue
-
-            conflict_exists = Anime.objects.filter(**{unique_field: value}).exclude(
-                id=anime.id
-            ).exists()
-            if conflict_exists:
-                logger.info(
-                    f"Skipping conflicting {unique_field} '{value}' while updating Anime ID {anime.id}"
-                )
-                anime_data[unique_field] = original_values.get(unique_field)
-
-        for key, value in anime_data.items():
-            setattr(anime, key, value)
-
-        try:
-            anime.save()
-        except IntegrityError as exc:
-            # Last-resort safety: keep identity fields stable and persist remaining updates.
-            for unique_field in ("anilist_id", "mal_id", "slug"):
-                if unique_field in original_values:
-                    setattr(anime, unique_field, original_values[unique_field])
-            anime.save()
-            logger.warning(
-                f"Recovered from integrity conflict while updating Anime ID {anime.id}: {exc}"
-            )
-
-    def _apply_recent_airing_transition(self, anime: Anime, anime_data: dict) -> None:
-        """Persist the last confirmed aired episode before AniList advances the schedule."""
-        previous_episode = anime.next_airing_episode
-        previous_airing_date = anime.next_airing_date
-
-        if previous_episode is None or previous_airing_date is None:
-            return
-
-        if previous_airing_date > timezone.now():
-            return
-
-        incoming_episode = anime_data.get("next_airing_episode")
-        incoming_airing_date = anime_data.get("next_airing_date")
-
-        episode_advanced = incoming_episode is not None and incoming_episode > previous_episode
-        airing_window_closed = incoming_episode is None or incoming_airing_date is None
-
-        if not (episode_advanced or airing_window_closed):
-            return
-
-        last_aired_episode = anime.last_aired_episode
-        last_aired_at = anime.last_aired_at
-        if last_aired_episode == previous_episode and last_aired_at == previous_airing_date:
-            return
-
-        anime_data["last_aired_episode"] = previous_episode
-        anime_data["last_aired_at"] = previous_airing_date
-
-    def _prepare_anime_data(self, item, title, title_native, slug):
-        rankings = self._iter_rankings(item)
-        status_distribution = self._status_distribution(item)
-        cover_image = item.get("coverImage") or {}
-        if not isinstance(cover_image, dict):
-            cover_image = {}
-
-        format_map = {
-            "TV": Anime.AnimeType.tv,
-            "TV_SHORT": Anime.AnimeType.tv,
-            "MOVIE": Anime.AnimeType.movie,
-            "OVA": Anime.AnimeType.ova,
-            "ONA": Anime.AnimeType.special,
-            "SPECIAL": Anime.AnimeType.special,
-            "MUSIC": Anime.AnimeType.special,
-        }
-        anime_type = format_map.get(item.get("format", "TV"), Anime.AnimeType.tv)
-
-        status_map = {
-            "RELEASING": Anime.AnimeStatus.airing,
-            "FINISHED": Anime.AnimeStatus.finished,
-            "NOT_YET_RELEASED": Anime.AnimeStatus.upcoming,
-            "CANCELLED": Anime.AnimeStatus.finished,
-        }
-        status = status_map.get(item.get("status", "FINISHED"), Anime.AnimeStatus.finished)
-
-        start_date = self._parse_date(item.get("startDate", {}))
-        end_date = self._parse_date(item.get("endDate", {}))
-
-        avg_score = item.get("averageScore", 0)
-        rating = round(avg_score / 10, 1) if avg_score else None
-
-        description = item.get("description", "")
-        if description:
-            import re
-
-            description = re.sub(r"<[^>]+>", "", description)
-            description = description.strip()
-
-        tags = self._normalized_tags(item)
-
-        return {
-            "title": title,
-            "title_jp": title_native or "",
-            "slug": slug,
-            "synopsis": description or "No description available.",
-            "anime_type": anime_type,
-            "status": status,
-            "episode_count": item.get("episodes") or 0,
-            "duration_minutes": item.get("duration") or 24,
-            "member_count": item.get("popularity") or 0,
-            "release_date": start_date,
-            "end_date": end_date,
-            "rating": rating,
-            "meta_description": (description[:157] + "...")
-            if description and len(description) > 160
-            else (description or ""),
-            "site_rank": next(
-                (
-                    ranking.get("rank")
-                    for ranking in rankings
-                    if ranking.get("allTime") and ranking.get("type") == "RATED"
-                ),
-                None,
-            ),
-            "popularity_rank": next(
-                (
-                    ranking.get("rank")
-                    for ranking in rankings
-                    if ranking.get("allTime") and ranking.get("type") == "POPULAR"
-                ),
-                None,
-            ),
-            "status_distribution": status_distribution,
-            "external_links": item.get("externalLinks", []),
-            "tags": tags,
-            "next_airing_episode": item.get("nextAiringEpisode", {}).get("episode")
-            if item.get("nextAiringEpisode")
-            else None,
-            "next_airing_date": timezone.make_aware(
-                datetime.fromtimestamp(item["nextAiringEpisode"]["airingAt"]),
-                timezone=UTC,
-            )
-            if item.get("nextAiringEpisode") and item["nextAiringEpisode"].get("airingAt")
-            else None,
-            # Source Material
-            "source_material": self._map_source_material(item.get("source")),
-            # Season Information
-            "season": item.get("season") or "",
-            "season_year": item.get("seasonYear"),
-            # External image URLs are available immediately while background jobs
-            # fetch and persist local image files.
-            "cover_image_external_url": self.normalize_external_image_url(
-                cover_image.get("extraLarge") or cover_image.get("large")
-            ),
-            "banner_image_external_url": self.normalize_external_image_url(item.get("bannerImage")),
-            # External IDs
-            "anilist_id": item.get("id"),
-            "mal_id": item.get("idMal"),
-        }
-
-    def _parse_date(self, date_obj):
-        if not date_obj or not date_obj.get("year"):
-            return None
-        year = date_obj.get("year")
-        month = date_obj.get("month") or 1
-        day = date_obj.get("day") or 1
-        try:
-            return datetime(year, month, day).date()
-        except ValueError:
-            return None
-
-    def _map_source_material(self, source):
-        """Map AniList source to our SourceMaterial choices"""
-        source_map = {
-            "ORIGINAL": "Original",
-            "MANGA": "Manga",
-            "LIGHT_NOVEL": "Light Novel",
-            "VISUAL_NOVEL": "Visual Novel",
-            "VIDEO_GAME": "Game",
-            "WEB_NOVEL": "Novel",
-            "NOVEL": "Novel",
-            "DOUJINSHI": "Other",
-            "ANIME": "Original",
-            "MUSIC": "Music",
-            "MIXED_MEDIA": "Mixed Media",
-            "PICTURE_BOOK": "Picture Book",
-            "CARD_GAME": "Card Game",
-            "WEB_MANGA": "Web Manga",
-            "COMIC": "Manga",
-            "LIVE_ACTION": "Other",
-            "MULTIMEDIA_PROJECT": "Mixed Media",
-            "OTHER": "Other",
-        }
-        return source_map.get(source, "") if source else ""
 
     @sync_to_async
     def _handle_relationships_async(self, anime, item):
@@ -1515,7 +1229,9 @@ class AniListService:
         )
 
         # Create new anime with unique slug
-        anime_data = self._prepare_anime_data(item, title, title_native, final_slug)
+        anime_data = with_creation_defaults(
+            self._prepare_anime_data(item, title, title_native, final_slug)
+        )
         anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
 

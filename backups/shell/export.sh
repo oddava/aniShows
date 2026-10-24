@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# Bundles hold a full DB dump and the source server's secrets.
+umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 EXPORT_DIR="${BACKUP_EXPORT_DIR:-$BACKUP_DIR/exports}"

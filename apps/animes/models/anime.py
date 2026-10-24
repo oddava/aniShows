@@ -184,6 +184,10 @@ class Anime(TimestampMixin, SlugMixin, Model):
     mal_id = IntegerField(null=True, blank=True, unique=True)
     anilist_id = IntegerField(null=True, blank=True, unique=True)
     offline_db_last_seen_at = DateTimeField(null=True, blank=True, db_index=True)
+    # When the daily backfills last tried this row, so each run moves on to
+    # rows not tried recently instead of re-fetching the same ones.
+    metadata_checked_at = DateTimeField(null=True, blank=True)
+    themes_checked_at = DateTimeField(null=True, blank=True)
     offline_db_last_update = DateField(null=True, blank=True)
 
     class Meta:

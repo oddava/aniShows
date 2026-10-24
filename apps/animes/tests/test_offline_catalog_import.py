@@ -724,3 +724,82 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(line, '{"hello":"world"}')
         self.assertEqual(calls["url"], "https://example.com/offline.jsonl")
+
+
+class OfflineCatalogRobustnessTests(TestCase):
+    setUp = OfflineCatalogImportServiceTests.setUp
+    _write_jsonl_fixture = OfflineCatalogImportServiceTests._write_jsonl_fixture
+    _entry = OfflineCatalogImportServiceTests._entry
+
+    def test_malformed_records_are_counted_and_the_import_completes(self):
+        path = self._write_jsonl_fixture(
+            self._entry(title="Broken Sources", sources=[123]),
+            self._entry(
+                title="Stringly Typed",
+                sources=["https://anilist.co/anime/9001"],
+                animeSeason={"season": "FALL", "year": "2020"},
+                episodes="?",
+                duration={"value": "1440", "unit": "SECONDS"},
+                score={"arithmeticGeometricMean": "n/a"},
+            ),
+            self._entry(),
+        )
+
+        OfflineCatalogImportService().run_import(source_path=path)
+
+        run = OfflineCatalogImport.objects.latest("created_at")
+        self.assertEqual(run.status, OfflineCatalogImport.Status.COMPLETED)
+        self.assertEqual(run.records_failed, 1)
+        self.assertTrue(Anime.objects.filter(title="Death Note").exists())
+        stringly = Anime.objects.get(title="Stringly Typed")
+        self.assertEqual(stringly.season_year, 2020)
+        self.assertEqual(stringly.episode_count, 0)
+        self.assertEqual(stringly.duration_minutes, 24)
+
+    def test_reimport_keeps_sync_progress_and_admin_quarantines(self):
+        synced = Anime.objects.create(title="Synced", slug="synced")
+        merged = Anime.objects.create(title="Merged Duplicate", slug="merged-duplicate")
+        new = Anime.objects.create(title="New", slug="new")
+        done = OfflineAnimeSyncState.StageStatus.SYNCED
+        OfflineAnimeSyncState.objects.create(
+            anime=synced, metadata_status=done, franchise_status=done, themes_status=done
+        )
+        OfflineAnimeSyncState.objects.create(
+            anime=merged,
+            quarantined=True,
+            quarantine_reason="merged_into:1",
+            quarantine_context={"manual": True, "action": "mark_skipped"},
+        )
+
+        OfflineCatalogImportService()._initialize_sync_states([new.id], [synced.id, merged.id])
+
+        self.assertEqual(OfflineAnimeSyncState.objects.get(anime=synced).metadata_status, done)
+        merged_state = OfflineAnimeSyncState.objects.get(anime=merged)
+        self.assertTrue(merged_state.quarantined)
+        self.assertEqual(merged_state.quarantine_reason, "merged_into:1")
+        self.assertEqual(
+            OfflineAnimeSyncState.objects.get(anime=new).metadata_status,
+            OfflineAnimeSyncState.StageStatus.PENDING,
+        )
+
+    def test_import_does_not_revert_fields_changed_by_another_sync_meanwhile(self):
+        anime = Anime.objects.create(
+            title="Death Note", slug="death-note", anilist_id=1535, mal_id=1535,
+            status=Anime.AnimeStatus.airing, episode_count=37,
+        )
+        path = self._write_jsonl_fixture(self._entry())
+        original_fill = OfflineCatalogImportService._fill_offline_fields
+
+        def airing_sync_lands_first(service, row, *args):
+            # The import already loaded `row`; another sync finishes the show now.
+            Anime.objects.filter(pk=row.pk).update(status=Anime.AnimeStatus.finished)
+            return original_fill(service, row, *args)
+
+        with patch.object(
+            OfflineCatalogImportService, "_fill_offline_fields", airing_sync_lands_first
+        ):
+            OfflineCatalogImportService().run_import(source_path=path)
+
+        anime.refresh_from_db()
+        self.assertEqual(anime.status, Anime.AnimeStatus.finished)
+        self.assertIsNotNone(anime.offline_db_last_seen_at)

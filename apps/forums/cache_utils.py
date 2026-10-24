@@ -1,5 +1,7 @@
 """Forum caching utilities for high-performance thread and post retrieval."""
 
+import uuid
+
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import F
@@ -7,9 +9,14 @@ from django.db.models import F
 from ..shared.public_cache import invalidate_public_cache_keys
 
 # Cache key templates
-THREAD_LIST_CACHE_KEY = "forum:threads:{category_slug}:{tag_slug}:{page}:{ordering}"
+THREAD_LIST_CACHE_KEY = "forum:threads:{version}:{category_slug}:{tag_slug}:{page}:{ordering}"
 THREAD_DETAIL_CACHE_KEY = "forum:thread:{thread_id}"
-POST_LIST_CACHE_KEY = "forum:posts:{thread_id}:{page}"
+POST_LIST_CACHE_KEY = "forum:posts:{thread_id}:{version}:{page}"
+# Version tokens let one write invalidate every cached page of a list at once.
+THREAD_LIST_VERSION_KEY = "forum:threads:version"
+POST_LIST_VERSION_KEY = "forum:posts:version:{thread_id}"
+# Outlives every list entry (TTL + stale copies); expiry only causes a miss.
+CACHE_VERSION_TTL = 24 * 60 * 60
 CATEGORY_LIST_CACHE_KEY = "forum:categories"
 CATEGORY_DETAIL_CACHE_KEY = "forum:category:{slug}"
 TAG_LIST_CACHE_KEY = "forum:tags"
@@ -25,9 +32,24 @@ CATEGORY_DETAIL_CACHE_TTL = 300  # 5 minutes
 TAG_LIST_CACHE_TTL = 3600  # 1 hour (tags rarely change)
 
 
+def _current_version(version_key: str) -> str:
+    version = cache.get(version_key)
+    if version is None:
+        cache.add(version_key, uuid.uuid4().hex, timeout=CACHE_VERSION_TTL)
+        version = cache.get(version_key)
+    return version
+
+
+def _start_new_version(version_key: str) -> None:
+    # A random token (not a counter) can never revive entries cached under an
+    # older version if the version key itself was evicted.
+    cache.set(version_key, uuid.uuid4().hex, timeout=CACHE_VERSION_TTL)
+
+
 def get_thread_list_cache_key(category_slug=None, tag_slug=None, page=1, ordering="-updated_at"):
     """Generate cache key for thread list"""
     return THREAD_LIST_CACHE_KEY.format(
+        version=_current_version(THREAD_LIST_VERSION_KEY),
         category_slug=category_slug or "all",
         tag_slug=tag_slug or "all",
         page=page,
@@ -37,12 +59,14 @@ def get_thread_list_cache_key(category_slug=None, tag_slug=None, page=1, orderin
 
 def get_thread_detail_cache_key(thread_id):
     """Generate cache key for thread detail"""
-    return THREAD_DETAIL_CACHE_KEY.format(thread_id=thread_id)
+    return THREAD_DETAIL_CACHE_KEY.format(thread_id=int(thread_id))
 
 
 def get_post_list_cache_key(thread_id, page=1):
     """Generate cache key for post list"""
-    return POST_LIST_CACHE_KEY.format(thread_id=thread_id, page=page)
+    thread_id = int(thread_id)
+    version = _current_version(POST_LIST_VERSION_KEY.format(thread_id=thread_id))
+    return POST_LIST_CACHE_KEY.format(thread_id=thread_id, version=version, page=page)
 
 
 def get_category_list_cache_key():
@@ -60,24 +84,16 @@ def get_tag_list_cache_key():
     return TAG_LIST_CACHE_KEY
 
 
-# Only these orderings are cached, so invalidation can enumerate every key.
+# Only these orderings are cached, which keeps the key space small.
 CACHEABLE_THREAD_ORDERINGS = ("-updated_at", "-created_at", "-view_count")
 CACHEABLE_THREAD_LIST_PARAMS = frozenset({"category__slug", "tags__slug", "page", "ordering"})
 CACHEABLE_POST_LIST_PARAMS = frozenset({"thread__id", "page", "ordering"})
 CACHEABLE_POST_ORDERING = "created_at"
 
 
-def invalidate_thread_list_cache(category_slug=None):
-    """Invalidate the cached thread lists a thread in ``category_slug`` appears in.
-
-    That is the category's own list and the all-categories list (first 10
-    pages each). Tag-filtered lists are left to expire.
-    """
-    for slug in {category_slug, None}:
-        for page in range(1, 11):
-            for ordering in CACHEABLE_THREAD_ORDERINGS:
-                key = get_thread_list_cache_key(slug, None, page, ordering)
-                invalidate_public_cache_keys(key)
+def invalidate_thread_list_cache():
+    """Invalidate every cached thread list (all categories, tags, pages, orderings)."""
+    _start_new_version(THREAD_LIST_VERSION_KEY)
 
 
 def invalidate_thread_detail_cache(thread_id):
@@ -100,10 +116,8 @@ def get_cached_post_list(thread_id, page=1):
 
 
 def invalidate_post_list_cache(thread_id):
-    """Invalidate all post list cache for a thread"""
-    for page in range(1, 21):  # Clear first 20 pages
-        key = get_post_list_cache_key(thread_id, page)
-        invalidate_public_cache_keys(key)
+    """Invalidate every cached page of a thread's posts."""
+    _start_new_version(POST_LIST_VERSION_KEY.format(thread_id=int(thread_id)))
 
 
 def cache_category_list(data, timeout=None):
@@ -164,12 +178,11 @@ def invalidate_tag_list_cache():
 
 
 # Convenience function to invalidate all caches related to a thread
-def invalidate_thread_caches(thread_id, category_slug=None):
+def invalidate_thread_caches(thread_id):
     """Invalidate all caches related to a specific thread"""
     invalidate_thread_detail_cache(thread_id)
     invalidate_post_list_cache(thread_id)
-    if category_slug:
-        invalidate_thread_list_cache(category_slug)
+    invalidate_thread_list_cache()
     invalidate_category_list_cache()
 
 
@@ -225,11 +238,12 @@ def flush_buffered_thread_views(*, max_threads: int | None = None) -> dict[str, 
         for raw_id in raw_ids:
             thread_id = int(raw_id)
             key = get_thread_view_buffer_key(thread_id)
-            count = int(redis_conn.get(key) or 0)
+            # Read and clear in one MULTI so views counted in between survive.
             pipeline = redis_conn.pipeline()
             pipeline.srem(THREAD_VIEW_DIRTY_SET_KEY, raw_id)
+            pipeline.get(key)
             pipeline.delete(key)
-            pipeline.execute()
+            count = int(pipeline.execute()[1] or 0)
             if count <= 0:
                 continue
             updated = Thread.objects.filter(pk=thread_id).update(view_count=F("view_count") + count)

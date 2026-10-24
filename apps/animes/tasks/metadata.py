@@ -15,6 +15,8 @@ With support for:
 """
 
 from asgiref.sync import sync_to_async
+from django.db.models import F
+from django.utils import timezone
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
@@ -56,7 +58,7 @@ class MetadataEnrichmentTask(BaseTask):
         mode: str = "single",
         batch_size: int = 50,
         filters: dict | None = None,
-        priority_field: str = "-popularity_rank",
+        priority_field: str = "popularity_rank",
         anime_ids: list[int] | None = None,
         missing_tags_only: bool = False,
     ):
@@ -67,7 +69,7 @@ class MetadataEnrichmentTask(BaseTask):
             mode: 'single' or 'backfill'
             batch_size: Maximum anime to process in batch mode
             filters: Optional filters for queryset (e.g., {'status': 'airing'})
-            priority_field: Field to order by (default: -popularity_rank)
+            priority_field: Field to order by (default: popularity_rank, 1 = most popular)
 
         Returns:
             Dict with enrichment results
@@ -168,8 +170,18 @@ class MetadataEnrichmentTask(BaseTask):
             if filters:
                 queryset = queryset.filter(**filters)
 
-            # Apply priority ordering and limit
-            queryset = queryset.order_by(priority_field)[:batch_size]
+            # Rows not tried recently first, then by priority. Unranked rows sort
+            # last: Postgres puts NULLs first in DESC order by default.
+            priority = priority_field.lstrip("-")
+            priority_order = (
+                F(priority).desc(nulls_last=True)
+                if priority_field.startswith("-")
+                else F(priority).asc(nulls_last=True)
+            )
+            ordering = [priority_order]
+            if not anime_ids:
+                ordering.insert(0, F("metadata_checked_at").asc(nulls_first=True))
+            queryset = queryset.order_by(*ordering)[:batch_size]
 
             # Execute query
             anime_list = await sync_to_async(list)(queryset)
@@ -200,6 +212,10 @@ class MetadataEnrichmentTask(BaseTask):
                     ):
                         logger.debug(f"Skipping {anime.title} - recently updated")
                         continue
+
+                    await sync_to_async(
+                        Anime.objects.filter(pk=anime.pk).update
+                    )(metadata_checked_at=timezone.now())
 
                     # Search and update
                     media = await self._resolve_media_for_anime(service, anime)
@@ -252,7 +268,7 @@ def enrich_metadata(
     mode: str = "single",
     batch_size: int = 50,
     filters: dict | None = None,
-    priority_field: str = "-popularity_rank",
+    priority_field: str = "popularity_rank",
     anime_ids: list[int] | None = None,
     missing_tags_only: bool = False,
 ):
@@ -263,7 +279,7 @@ def enrich_metadata(
         mode: 'single' or 'backfill'
         batch_size: Maximum anime to process
         filters: Optional queryset filters
-        priority_field: Field for ordering (default: -popularity_rank)
+        priority_field: Field for ordering (default: popularity_rank, 1 = most popular)
 
     Returns:
         Dict with enrichment results

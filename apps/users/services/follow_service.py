@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -59,28 +59,22 @@ def toggle_follow(user, username) -> FollowActionResult:
             status_code=400,
         )
 
-    follow, created = UserFollow.objects.get_or_create(follower=user, following=target_user)
-    if not created:
-        follow.delete()
-        logger.info("%s unfollowed %s", user.username, target_user.username)
-        invalidate_user_caches(target_user.id, target_user.username)
-        invalidate_user_caches(user.id, user.username)
+    try:
+        with transaction.atomic():
+            follow, created = UserFollow.objects.get_or_create(
+                follower=user, following=target_user
+            )
+    except IntegrityError:
+        # A concurrent request (a double click) created it first: the user
+        # wants to follow, so that is the outcome, not a 500.
+        created = True
+    else:
+        if not created:
+            follow.delete()
 
-        counts = User.objects.filter(pk__in=[target_user.pk, user.pk]).aggregate(
-            target_followers=Count("followers", filter=models.Q(pk=target_user.pk)),
-            user_following=Count("following", filter=models.Q(pk=user.pk)),
-        )
-        return FollowActionResult(
-            payload={
-                "status": "unfollowed",
-                "is_following": False,
-                "followers_count": counts["target_followers"],
-                "following_count": counts["user_following"],
-            },
-            status_code=200,
-        )
-
-    logger.info("%s followed %s", user.username, target_user.username)
+    logger.info(
+        "%s %s %s", user.username, "followed" if created else "unfollowed", target_user.username
+    )
     invalidate_user_caches(target_user.id, target_user.username)
     invalidate_user_caches(user.id, user.username)
 
@@ -90,12 +84,12 @@ def toggle_follow(user, username) -> FollowActionResult:
     )
     return FollowActionResult(
         payload={
-            "status": "followed",
-            "is_following": True,
+            "status": "followed" if created else "unfollowed",
+            "is_following": created,
             "followers_count": counts["target_followers"],
             "following_count": counts["user_following"],
         },
-        status_code=201,
+        status_code=201 if created else 200,
     )
 
 

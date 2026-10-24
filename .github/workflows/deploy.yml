@@ -221,18 +221,20 @@ jobs:
             echo '🏷️  Tagging as latest so docker compose uses the correct image...'
             docker tag ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} ghcr.io/oddava/anishows-frontend:latest
             
-            echo '🧹 Wiping frontend volume...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'rm -rf /srv/frontend/*'
-            
-            echo '📋 Copying new frontend files from image...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} sh -c 'cp -r /app/dist/* /srv/frontend/ && echo DONE'
-            
-            echo '🔍 Verifying deployed files...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'ls -la /srv/frontend/ && echo --- && ls /srv/frontend/assets/ | head -10 && echo --- && md5sum /srv/frontend/index.html'
-            
+            # Backend first: deploy-prod.sh refuses placeholder secrets and runs
+            # migrations, and the new SPA must not go live if it stops.
             echo '🐳 Running deployment script for remaining services...'
             bash ./deploy-prod.sh
-            
+
+            # Copy over the old build instead of wiping it: open tabs still load
+            # their old hashed chunks, and index.html (copied last) never points
+            # at assets that are not there yet. Chunks unused for a week go.
+            echo '📋 Copying new frontend files from image...'
+            docker run --rm -v anishows_frontend_dist:/srv/frontend ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} sh -c 'mkdir -p /srv/frontend/assets && cp -r /app/dist/assets/. /srv/frontend/assets/ && cp -r /app/dist/. /srv/frontend/ && find /srv/frontend/assets -type f -mtime +7 -delete && echo DONE'
+
+            echo '🔍 Verifying deployed files...'
+            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'ls -la /srv/frontend/ && echo --- && ls /srv/frontend/assets/ | head -10 && echo --- && md5sum /srv/frontend/index.html'
+
             echo 'Verifying deployment health...'
             sleep 5
             

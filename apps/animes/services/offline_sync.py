@@ -114,7 +114,10 @@ class OfflineSyncService:
 
         updated = 0
         if reset_pipeline:
-            queryset = OfflineAnimeSyncState.objects.filter(anime_id__in=ids)
+            # An admin's skip or merge decision outlives any reset.
+            queryset = OfflineAnimeSyncState.objects.filter(anime_id__in=ids).exclude(
+                quarantine_context__manual=True
+            )
             updated = queryset.update(
                 metadata_status=OfflineAnimeSyncState.StageStatus.PENDING,
                 franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
@@ -242,11 +245,16 @@ class OfflineSyncService:
         with transaction.atomic():
             rows = list(
                 self._due_queryset(anime_ids=anime_ids)
-                .select_for_update(skip_locked=True)[:batch_size]
+                # of=self: lock the state rows, not the joined Anime rows.
+                .select_for_update(skip_locked=True, of=("self",))[:batch_size]
             )
             for state in rows:
                 stage = self._next_stage(state)
                 if not stage:
+                    # Nothing left to run (e.g. an admin retry of a fully synced
+                    # row). Left due, it would head every batch forever.
+                    state.next_attempt_at = now + timedelta(days=36500)
+                    state.save(update_fields=["next_attempt_at", "updated_at"])
                     continue
 
                 status_field = STATUS_FIELD_BY_STAGE[stage]
@@ -528,6 +536,15 @@ class OfflineSyncService:
                 await task._save_theme_songs(anime, themes)
 
             return StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
+        except Exception as exc:
+            # As the other stages do: an escaped error would abort the batch
+            # and leave this state unrecorded, so it would never back off.
+            return StageResult(
+                status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR,
+                reason_code="transport_error",
+                reason_message=str(exc),
+                transient=True,
+            )
         finally:
             if owned_http_client:
                 await http_client.aclose()
@@ -809,6 +826,24 @@ class OfflineSyncService:
                 if state.themes_status != OfflineAnimeSyncState.StageStatus.SYNCED
                 else OfflineAnimeSyncState.StageStatus.SYNCED
             ),
+            # Fresh attempts too: quarantine triggers on the attempt count, so
+            # without this one more failure would quarantine it again.
+            metadata_attempt_count=(
+                state.metadata_attempt_count
+                if state.metadata_status == OfflineAnimeSyncState.StageStatus.SYNCED
+                else 0
+            ),
+            franchise_attempt_count=(
+                state.franchise_attempt_count
+                if state.franchise_status == OfflineAnimeSyncState.StageStatus.SYNCED
+                else 0
+            ),
+            themes_attempt_count=(
+                state.themes_attempt_count
+                if state.themes_status == OfflineAnimeSyncState.StageStatus.SYNCED
+                else 0
+            ),
+            attempt_count=0,
             quarantined=False,
             quarantine_reason="",
             quarantine_context={},

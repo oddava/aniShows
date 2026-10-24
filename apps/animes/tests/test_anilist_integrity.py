@@ -146,6 +146,34 @@ class AniListIntegrityTests(TestCase):
         self.assertEqual(result["id"], 2)
         service.search_anime.assert_awaited_once_with("Exact Match")
 
+    def _hunter_x_hunter_service(self):
+        return self._jikan_service_with_mocked_fetches(
+            search_anime=AsyncMock(
+                return_value=[
+                    {"idMal": 136, "seasonYear": 1999, "title": {"romaji": "Hunter x Hunter"}},
+                    {"idMal": 11061, "seasonYear": 2011, "title": {"romaji": "Hunter x Hunter"}},
+                ]
+            ),
+        )
+
+    def test_title_only_match_picks_the_entry_from_the_same_year(self):
+        anime = Anime.objects.create(
+            title="Hunter x Hunter", slug="hxh-2011", synopsis="x", season_year=2011,
+            anilist_id=11061,
+        )
+
+        result = async_to_sync(self._hunter_x_hunter_service().resolve_media_for_anime)(anime)
+
+        self.assertEqual(result["idMal"], 11061)
+        self.assertEqual(result["id"], 11061)
+
+    def test_title_only_match_refuses_to_guess_between_remakes(self):
+        anime = Anime.objects.create(title="Hunter x Hunter", slug="hxh", synopsis="x")
+
+        result = async_to_sync(self._hunter_x_hunter_service().resolve_media_for_anime)(anime)
+
+        self.assertIsNone(result)
+
     def test_process_theme_songs_handles_none_theme_lists(self):
         anime = Anime.objects.create(
             title="Theme Null Guard",

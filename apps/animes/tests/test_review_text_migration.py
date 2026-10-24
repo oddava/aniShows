@@ -11,7 +11,10 @@ AFTER = [("anime", "0051_unescape_review_text")]
 
 class UnescapeReviewTextMigrationTests(TransactionTestCase):
     def tearDown(self):
-        MigrationExecutor(connection).migrate(AFTER)
+        # Back to the latest state of every app, not just AFTER: later
+        # migrations must be reapplied for the tests that run next.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def _review_model(self, target):
         executor = MigrationExecutor(connection)
