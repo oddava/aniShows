@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient, useMutation, useInfiniteQuery } from '@tanstack/react-query';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Star, Heart, Plus, Loader, Film, BarChart3, Users, Mic, ChevronDown, Tv, Disc, Pencil } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, memo, useCallback, lazy, Suspense } from 'react';
 import { animeApi, favoriteApi, reviewApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -9,7 +9,6 @@ import StatusSelector from '../components/StatusSelector';
 import ReviewCard from '../components/ReviewCard';
 import ReviewForm from '../components/ReviewForm';
 import ReviewSummary from '../components/ReviewSummary';
-import StatsTab from '../components/StatsTab';
 import InformationBox from '../components/InformationBox';
 import FriendsWatching from '../components/FriendsWatching';
 import SEOHelmet from '../components/SEOHelmet';
@@ -27,6 +26,9 @@ import {
 } from '../utils/imageUtils';
 import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
+
+// recharts is heavy; load it only when the Stats tab is opened.
+const StatsTab = lazy(() => import('../components/StatsTab'));
 
 // Memoized tab configuration to prevent re-renders
 const TABS = [
@@ -878,12 +880,14 @@ export default function AnimeDetail() {
                                     <ThemesTab anime={anime} accentColor={accentColor} />
                                 )}
                                 {activeTab === 'stats' && (
-                                    <StatsTab
-                                        anime={anime}
-                                        accentColor={accentColor}
-                                        episodeRatings={episodeRatings || []}
-                                        isEpisodeRatingsLoading={episodeRatingsLoading}
-                                    />
+                                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                                        <StatsTab
+                                            anime={anime}
+                                            accentColor={accentColor}
+                                            episodeRatings={episodeRatings || []}
+                                            isEpisodeRatingsLoading={episodeRatingsLoading}
+                                        />
+                                    </Suspense>
                                 )}
                                 {activeTab === 'characters' && (
                                     <CharactersTab

@@ -23,7 +23,6 @@ import {
 } from '../utils/imageUtils';
 import { isActiveElementEditable } from '../utils/dom';
 
-import Fuse from 'fuse.js';
 import Logo from './Logo';
 
 // Navigation Item Component with Active State
@@ -57,7 +56,8 @@ const normalizeText = (text) => {
         .trim();
 };
 
-const useFuzzySearch = (data, options = {}) => {
+// Fuse is passed in once its lazily imported module has loaded (null before).
+const useFuzzySearch = (Fuse, data, options = {}) => {
     // Pre-process data with normalized titles for better matching
     const processedData = useMemo(() => {
         return data.map(item => ({
@@ -68,6 +68,7 @@ const useFuzzySearch = (data, options = {}) => {
     }, [data]);
 
     const fuse = useMemo(() => {
+        if (!Fuse) return null;
         const defaultOptions = {
             keys: [
                 { name: 'title', weight: 0.6 },
@@ -86,7 +87,7 @@ const useFuzzySearch = (data, options = {}) => {
             ...options
         };
         return new Fuse(processedData, defaultOptions);
-    }, [processedData, options]);
+    }, [Fuse, processedData, options]);
 
     const search = useCallback((query) => {
         if (!query || query.trim().length < 1) return [];
@@ -115,7 +116,7 @@ const useFuzzySearch = (data, options = {}) => {
         });
 
         // Get fuzzy results with extended search
-        const fuzzyResults = fuse.search(query.trim(), { limit: 10 });
+        const fuzzyResults = fuse ? fuse.search(query.trim(), { limit: 10 }) : [];
 
         // Combine and deduplicate, prioritizing exact matches
         const seen = new Set();
@@ -155,6 +156,7 @@ export default function Navbar() {
     const [isMobileAnimeOpen, setIsMobileAnimeOpen] = useState(false);
     const [lastScrollY, setLastScrollY] = useState(0);
     const [allAnimeCache, setAllAnimeCache] = useState([]);
+    const [FuseClass, setFuseClass] = useState(null);
     const [selectedIndex, setSelectedIndex] = useState(-1);
     const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
     const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
@@ -169,7 +171,7 @@ export default function Navbar() {
     const longPressTriggeredRef = useRef(false);
 
     // Initialize fuzzy search with cache - options are now inside the hook
-    const { search: fuzzySearch } = useFuzzySearch(allAnimeCache, {});
+    const { search: fuzzySearch } = useFuzzySearch(FuseClass, allAnimeCache, {});
 
     // Load all anime data for fuzzy search on mount
     useEffect(() => {
@@ -192,6 +194,15 @@ export default function Navbar() {
         };
 
         loadAllAnime();
+
+        // fuse.js only powers the search box, so keep it out of the entry chunk.
+        import('fuse.js')
+            .then((module) => {
+                if (active) {
+                    setFuseClass(() => module.default);
+                }
+            })
+            .catch((error) => logger.error('Failed to load fuzzy search:', error));
 
         return () => {
             active = false;

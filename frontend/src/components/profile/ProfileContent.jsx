@@ -11,10 +11,11 @@ import {
     getImageFallbackUrl,
     getOptimizedImageUrl,
 } from '../../utils/imageUtils';
-import ProfileInsights from '../ProfileInsights';
 import FriendsTab from './FriendsTab';
 
 const ActivityFeed = lazy(() => import('./ActivityFeed'));
+// recharts is heavy; load it only when the Insights tab is opened.
+const ProfileInsights = lazy(() => import('../ProfileInsights'));
 
 const STATUS_TABS = [
     { value: 'Watching', label: 'Watching', icon: '👀' },
@@ -122,11 +123,13 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <ProfileInsights
-                        username={targetUsername}
-                        isPrivate={isPrivate}
-                        accentColor={displayUser?.profile_primary_color}
-                    />
+                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                        <ProfileInsights
+                            username={targetUsername}
+                            isPrivate={isPrivate}
+                            accentColor={displayUser?.profile_primary_color}
+                        />
+                    </Suspense>
                 </ProfileErrorBoundary>
             );
 

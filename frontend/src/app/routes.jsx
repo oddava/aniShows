@@ -1,8 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import AdminLayout from '../components/AdminLayout';
-import AdminRoute from '../components/AdminRoute';
 import Layout from '../components/Layout';
 import { ForumCategoryPageSkeleton } from '../components/forums/ForumSkeletons';
 
@@ -62,6 +60,11 @@ const ForumCategoryList = lazyWithRetry(forumCategoryListImport);
 const ForumThreadList = lazyWithRetry(forumThreadListImport);
 const ForumThreadDetail = lazyWithRetry(forumThreadDetailImport);
 const CreateThread = lazyWithRetry(createThreadImport);
+
+// Admin shell: lazy so no admin code (or admin.css) ships in the public entry.
+// AdminLayout only loads after AdminRoute has confirmed the user is staff.
+const AdminRoute = lazyWithRetry(() => import('../components/AdminRoute'));
+const AdminLayout = lazyWithRetry(() => import('../components/AdminLayout'));
 
 const AdminDashboard = lazyWithRetry(() => import('../pages/admin/AdminDashboard'));
 const AdminUsers = lazyWithRetry(() => import('../pages/admin/AdminUsers'));
@@ -142,9 +145,11 @@ export default function AppRoutes() {
                 <Route
                     path="/admin"
                     element={(
-                        <AdminRoute>
-                            <AdminLayout />
-                        </AdminRoute>
+                        <Suspense fallback={<PageLoader />}>
+                            <AdminRoute>
+                                <AdminLayout />
+                            </AdminRoute>
+                        </Suspense>
                     )}
                 >
                     <Route index element={<AdminDashboard />} />
