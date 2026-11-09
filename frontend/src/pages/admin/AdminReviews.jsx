@@ -1,16 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
-import logger from '../../utils/logger';
+import { adminKeys } from '../../api/queries/admin';
 import CustomSelect from '../../components/common/CustomSelect';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const AdminReviews = () => {
-    const [reviews, setReviews] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [filters, setFilters] = useState({
         has_spoilers: '',
         min_rating: '',
@@ -19,43 +16,37 @@ const AdminReviews = () => {
     });
     const [selectedReview, setSelectedReview] = useState(null);
 
-    const fetchReviews = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = new URLSearchParams({
-                page,
-                ...(search && { search }),
-                ...(filters.has_spoilers && { has_spoilers: filters.has_spoilers }),
-                ...(filters.min_rating && { min_rating: filters.min_rating }),
-                ...(filters.max_rating && { max_rating: filters.max_rating }),
-                ordering: filters.ordering,
-            });
+    const {
+        items: reviews,
+        totalPages,
+        isFetching: loading,
+        error: queryError,
+        refetch,
+    } = useAdminList({
+        resource: 'reviews',
+        params: {
+            page,
+            ...(search && { search }),
+            ...(filters.has_spoilers && { has_spoilers: filters.has_spoilers }),
+            ...(filters.min_rating && { min_rating: filters.min_rating }),
+            ...(filters.max_rating && { max_rating: filters.max_rating }),
+            ordering: filters.ordering,
+        },
+        page,
+        setPage,
+        errorLog: 'Failed to fetch reviews:',
+    });
+    const error = queryError ? getAdminErrorMessage(queryError, 'Failed to load reviews') : null;
 
-            const response = await api.get(`/admin/reviews/?${params}`);
-            setReviews(response.data.results);
-            setTotalPages(Math.ceil(response.data.count / 20));
-        } catch (err) {
-            logger.error('Failed to fetch reviews:', err);
-            if (err.response?.status === 404 && page > 1) {
-                // The page no longer exists, e.g. after deleting its last row.
-                setPage((current) => Math.max(1, current - 1));
-                return;
-            }
-            setError(err.response?.data?.detail || 'Failed to load reviews');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, search, filters]);
-
-    useEffect(() => {
-        fetchReviews();
-    }, [fetchReviews]);
+    const deleteMutation = useAdminMutation(
+        (reviewId) => api.delete(`/admin/reviews/${reviewId}/`),
+        { invalidate: [adminKeys.resource('reviews')] },
+    );
 
     const handleSearch = (e) => {
         e.preventDefault();
-        setPage(1);
-        fetchReviews();
+        if (page === 1) refetch();
+        else setPage(1);
     };
 
     const deleteReview = async (reviewId) => {
@@ -63,9 +54,8 @@ const AdminReviews = () => {
             return;
         }
         try {
-            await api.delete(`/admin/reviews/${reviewId}/`);
+            await deleteMutation.mutateAsync(reviewId);
             setSelectedReview(null);
-            fetchReviews();
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to delete review');
         }

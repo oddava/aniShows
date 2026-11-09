@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AdminUsers from '../AdminUsers';
 
 const getMock = vi.fn();
@@ -15,6 +16,11 @@ const user = (id) => ({
     is_superuser: false,
     date_joined: '2026-01-01T00:00:00Z',
 });
+
+const render = (ui) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
 
 const pageOf = (url) => new URL(url, 'http://x').searchParams.get('page');
 

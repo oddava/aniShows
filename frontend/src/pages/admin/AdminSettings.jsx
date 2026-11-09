@@ -1,54 +1,55 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import api from '../../api/client';
 import logger from '../../utils/logger';
+import { adminKeys, adminQueries } from '../../api/queries/admin';
+import { getAdminErrorMessage, useAdminQuery } from './hooks/useAdminQuery';
 import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminSettings = () => {
   const [activeTab, setActiveTab] = useState('general');
-  const [isSaving, setIsSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState(null);
+  const queryClient = useQueryClient();
+  // Unsaved edits. Until the first edit the form shows the loaded settings.
+  const [draft, setDraft] = useState(null);
 
-  useEffect(() => {
-    const fetchSettings = async () => {
-      setLoading(true);
-      try {
-        const response = await api.get('/admin/settings/');
-        setSettings(response.data);
-      } catch (err) {
-        logger.error('Failed to load admin settings:', err);
-        toast.error(err.response?.data?.detail || 'Failed to load settings');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data, isPending: loading } = useAdminQuery({
+    ...adminQueries.settings(),
+    errorLog: 'Failed to load admin settings:',
+    errorToast: (err) => getAdminErrorMessage(err, 'Failed to load settings'),
+  });
+  const settings = draft ?? data ?? null;
 
-    fetchSettings();
-  }, []);
+  const saveMutation = useMutation({
+    mutationFn: (nextSettings) => api.put('/admin/settings/', nextSettings),
+    onSuccess: (response) => {
+      queryClient.setQueryData(adminKeys.settings(), response.data.settings);
+      setDraft(null);
+    },
+  });
+  const isSaving = saveMutation.isPending;
 
   const handleChange = (section, field, value) => {
-    setSettings((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: value,
-      },
-    }));
+    setDraft((prev) => {
+      const base = prev ?? data;
+      return {
+        ...base,
+        [section]: {
+          ...base[section],
+          [field]: value,
+        },
+      };
+    });
   };
 
   const handleSave = async () => {
     if (!settings) return;
-    setIsSaving(true);
     try {
-      const response = await api.put('/admin/settings/', settings);
-      setSettings(response.data.settings);
+      await saveMutation.mutateAsync(settings);
       toast.success('Settings saved successfully');
     } catch (err) {
       logger.error('Failed to save admin settings:', err);
       toast.error(err.response?.data?.detail || 'Failed to save settings');
-    } finally {
-      setIsSaving(false);
     }
   };
 

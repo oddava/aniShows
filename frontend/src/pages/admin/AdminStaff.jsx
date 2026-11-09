@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const DEFAULT_FORM = {
   name: '',
@@ -15,42 +16,40 @@ const DEFAULT_FORM = {
 };
 
 const AdminStaff = () => {
-  const [staffList, setStaffList] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM);
 
-  const fetchStaff = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(search && { search }),
-      });
-      const response = await api.get(`/admin/staff/?${params}`);
-      setStaffList(response.data.results || []);
-      setTotalPages(Math.ceil((response.data.count || 0) / 20) || 1);
-    } catch (err) {
-      logger.error('Failed to fetch staff:', err);
-      toast.error('Failed to load staff');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
+  const { items: staffList, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'staff',
+    params: {
+      page,
+      ...(search && { search }),
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch staff:',
+    errorToast: 'Failed to load staff',
+  });
 
-  useEffect(() => {
-    fetchStaff();
-  }, [fetchStaff]);
+  const invalidate = [adminKeys.resource('staff')];
+  const saveMutation = useAdminMutation(
+    ({ id, data }) => (id ? api.put(`/admin/staff/${id}/`, data) : api.post('/admin/staff/', data)),
+    { invalidate },
+  );
+  const deleteMutation = useAdminMutation((id) => api.delete(`/admin/staff/${id}/`), { invalidate });
+  const bulkDeleteMutation = useAdminMutation(
+    (ids) => api.post('/admin/bulk/', { operation: 'delete', entity: 'staff', ids }),
+    { invalidate },
+  );
 
   const handleSearch = (event) => {
     event.preventDefault();
-    setPage(1);
-    fetchStaff();
+    if (page === 1) refetch();
+    else setPage(1);
   };
 
   const openCreateModal = () => {
@@ -85,15 +84,9 @@ const AdminStaff = () => {
     };
 
     try {
-      if (editingStaff) {
-        await api.put(`/admin/staff/${editingStaff.id}/`, payload);
-        toast.success('Staff updated');
-      } else {
-        await api.post('/admin/staff/', payload);
-        toast.success('Staff created');
-      }
+      await saveMutation.mutateAsync({ id: editingStaff?.id, data: payload });
+      toast.success(editingStaff ? 'Staff updated' : 'Staff created');
       closeModal();
-      fetchStaff();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to save staff');
     }
@@ -102,9 +95,8 @@ const AdminStaff = () => {
   const deleteStaff = async (id) => {
     if (!confirm('Delete this staff record?')) return;
     try {
-      await api.delete(`/admin/staff/${id}/`);
+      await deleteMutation.mutateAsync(id);
       toast.success('Staff deleted');
-      fetchStaff();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete staff');
     }
@@ -114,14 +106,9 @@ const AdminStaff = () => {
     if (!selectedRows.length) return;
     if (!confirm(`Delete ${selectedRows.length} staff records?`)) return;
     try {
-      await api.post('/admin/bulk/', {
-        operation: 'delete',
-        entity: 'staff',
-        ids: selectedRows,
-      });
+      await bulkDeleteMutation.mutateAsync(selectedRows);
       toast.success('Selected staff deleted');
       setSelectedRows([]);
-      fetchStaff();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete selected staff');
     }
