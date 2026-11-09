@@ -128,7 +128,6 @@ ignore = [
     "RUF012", # Mutable default values - common in Django, can be fixed later
     "E501",  # Line too long
     "E402",  # Module level import not at top of file
-    "F811",  # Redefinition of unused
     "N806",  # Variable in function should be lowercase
     "PTH122", # os.path.splitext() should be replaced
     "PTH123", # open() should be replaced by Path.open()
@@ -142,9 +141,7 @@ ignore = [
     "UP006",  # Use list instead of List for type annotation
     "S311",   # Standard pseudo-random generators are not suitable for cryptographic purposes
     "S110",   # try-except-pass detected
-    "F823",   # Local variable referenced before assignment
     "D417",   # Missing argument description in docstring
-    "B023",   # Function definition does not bind loop variable
 ]
 
 [tool.ruff.lint.pydocstyle]

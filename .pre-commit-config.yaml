@@ -42,9 +42,9 @@ repos:
         pass_filenames: false
         always_run: true
 
-      - id: django-test
-        name: Django Test Check
-        entry: python manage.py test --verbosity=0
+      - id: pytest
+        name: Backend tests (pytest)
+        entry: make test
         language: system
         types: [python]
         pass_filenames: false

@@ -96,3 +96,30 @@ Thresholds are enforced for:
 - global checks pass rate
 - global failed request rate
 - p95 duration per API group / op type
+
+## In-process endpoint benchmark (refactor baselines)
+
+`scripts/bench_public_api.py` times the public read endpoints inside Django
+(test client, no HTTP or proxy) against the dev database. It reports, per
+endpoint, the median cold time (app cache emptied first), the median warm time
+(served from cache), and the cold request's query count and SQL time.
+
+```bash
+make bench-api                                   # Markdown table on stdout
+make bench-api ARGS="--rounds 5 --json /app/docs/benchmarks/run.json"
+```
+
+It is safe to run against the dev stack: it uses its own Redis key prefix and
+deletes only those keys, disables request logging (so no Celery tasks are
+queued), and never writes to the database. Use it before and after a
+performance change on the same machine and DB snapshot; the k6 suite above is
+for load and throughput.
+
+Two test files lock in what the benchmark measures, so a refactor can't
+quietly regress it:
+
+- `apps/animes/tests/test_query_budgets.py`: cold-cache query budgets per
+  endpoint, and a check that the count doesn't grow with the number of rows
+  (N+1).
+- `apps/animes/tests/test_public_contract.py`: the response *shape* of each
+  public endpoint, compared with `apps/animes/tests/snapshots/public_contract.json`.

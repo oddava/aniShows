@@ -8,6 +8,7 @@
 !scripts/
 scripts/*
 !scripts/run_with_migration_check.sh
+!scripts/bench_public_api.py
 pyvenv.cfg
 .venv
 pip-selfcheck.json
