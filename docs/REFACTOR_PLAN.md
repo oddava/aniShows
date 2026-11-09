@@ -267,7 +267,10 @@ settings; the image builds; I report the image size before and after; the
 5. Turn on ruff `BLE001` with a per-file ignore list that only gets shorter.
 
 **Done when:** tests assert the 500 envelope and that `exc_info` is logged;
-there are 0 hand-built 500s; `except Exception` count is ≤ 80.
+there are 0 hand-built 500s in public and user-facing views; `except Exception`
+count is ≤ 80. The admin Celery and import-job actions keep their explanatory
+500 bodies (only admins see them, and the message is what they act on) but log
+the traceback with `logger.exception`.
 
 ### Phase 3: Shared helpers, settings and task results (~2 days)
 | Change | Files |
