@@ -103,15 +103,13 @@ class UserTaskService:
         importer = ImportService.create_importer(job, **kwargs)
         result = importer.run()
 
-        try:
-            from ...animes.services.metrics import USER_IMPORTS_PROCESSED
+        # Metric objects swallow their own failures.
+        from ...animes.services.metrics import USER_IMPORTS_PROCESSED
 
-            USER_IMPORTS_PROCESSED.labels(
-                source=getattr(job, "source", "unknown"),
-                status="success",
-            ).inc()
-        except Exception:
-            logger.debug("Unable to record import success metric", exc_info=True)
+        USER_IMPORTS_PROCESSED.labels(
+            source=getattr(job, "source", "unknown"),
+            status="success",
+        ).inc()
 
         logger.info("Import job completed", extra={"job_id": job_id})
         return {"job_id": job_id, "status": "success", "result": result}
@@ -134,15 +132,13 @@ class UserTaskService:
             )
             return
 
-        try:
-            from ...animes.services.metrics import USER_IMPORTS_PROCESSED
+        # Metric objects swallow their own failures.
+        from ...animes.services.metrics import USER_IMPORTS_PROCESSED
 
-            USER_IMPORTS_PROCESSED.labels(
-                source=getattr(job, "source", "unknown"),
-                status="failure",
-            ).inc()
-        except Exception:
-            logger.debug("Unable to record import failure metric", exc_info=True)
+        USER_IMPORTS_PROCESSED.labels(
+            source=getattr(job, "source", "unknown"),
+            status="failure",
+        ).inc()
 
     @staticmethod
     def fetch_anime_by_external_id(

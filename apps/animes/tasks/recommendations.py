@@ -80,13 +80,10 @@ class RecommendationTask(BaseTask):
             # Generate recommendations
             recs = service.generate_for_user(user, limit=limit)
 
-            # Record a metric
-            try:
-                from ..services.metrics import RECOMMENDATIONS_GENERATED
+            # Record a metric. Metric objects swallow their own failures.
+            from ..services.metrics import RECOMMENDATIONS_GENERATED
 
-                RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(len(recs))
-            except Exception:
-                logger.debug("Unable to record recommendation metric for user %s", user_id, exc_info=True)
+            RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(len(recs))
 
             logger.info(f"Generated {len(recs)} recommendations for {user.username}")
 
@@ -99,7 +96,7 @@ class RecommendationTask(BaseTask):
             }
 
         except User.DoesNotExist:
-            logger.error(f"User {user_id} not found")
+            logger.error("User %s not found", user_id)
             return {
                 "mode": "single",
                 "user_id": user_id,
@@ -107,7 +104,7 @@ class RecommendationTask(BaseTask):
                 "reason": "user_not_found",
             }
         except Exception as e:
-            logger.exception(f"Error generating recommendations for user {user_id}")
+            logger.exception("Error generating recommendations for user %s", user_id)
             raise self.retry(exc=e)
 
     def _generate_for_all(
@@ -122,13 +119,10 @@ class RecommendationTask(BaseTask):
             total = result.get("total_users", 0)
             total_recs = result.get("total_recommendations", 0)
 
-            # Record a metric
-            try:
-                from ..services.metrics import RECOMMENDATIONS_GENERATED
+            # Record a metric. Metric objects swallow their own failures.
+            from ..services.metrics import RECOMMENDATIONS_GENERATED
 
-                RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(total_recs)
-            except Exception:
-                logger.debug("Unable to record batch recommendation metrics", exc_info=True)
+            RECOMMENDATIONS_GENERATED.labels(algorithm=algorithm).inc(total_recs)
 
             logger.info(
                 f"Batch complete: {result.get('processed', 0)}/{total} users, "
