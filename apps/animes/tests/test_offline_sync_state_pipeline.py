@@ -293,3 +293,52 @@ class OfflineSyncStatePipelineTests(TestCase):
 
         mock_warning.assert_called_once()
         self.assertEqual(mock_warning.call_args.args[1], "Offline sync stage retry scheduled")
+
+
+class OfflineSyncRecoveryTests(TestCase):
+    _anime = OfflineSyncStatePipelineTests._anime
+    _state = OfflineSyncStatePipelineTests._state
+
+    def test_admin_retry_gives_quarantined_stages_fresh_attempts(self):
+        done = OfflineAnimeSyncState.StageStatus.SYNCED
+        state = self._state(
+            self._anime("Quarantined"),
+            metadata_status=done,
+            metadata_attempt_count=1,
+            franchise_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
+            franchise_attempt_count=12,
+            attempt_count=13,
+            quarantined=True,
+        )
+
+        OfflineSyncService().reset_for_retry(state)
+
+        state.refresh_from_db()
+        self.assertFalse(state.quarantined)
+        self.assertEqual(state.franchise_attempt_count, 0)
+        self.assertEqual(state.attempt_count, 0)
+        self.assertEqual(state.metadata_attempt_count, 1)
+
+    def test_fully_synced_due_row_is_moved_out_of_the_queue(self):
+        done = OfflineAnimeSyncState.StageStatus.SYNCED
+        state = self._state(
+            self._anime("All Done"),
+            metadata_status=done,
+            franchise_status=done,
+            themes_status=done,
+        )
+
+        OfflineSyncService().reconcile_due(batch_size=1)
+
+        state.refresh_from_db()
+        self.assertGreater(state.next_attempt_at, timezone.now() + timedelta(days=365))
+
+    def test_unexpected_themes_error_is_a_transient_stage_result(self):
+        anime = self._anime("Themes Boom", mal_id=5)
+        with patch(
+            "apps.animes.services.offline_sync.fetch_themes_from_jikan_with_reason",
+            new=AsyncMock(side_effect=RuntimeError("db down")),
+        ):
+            result = OfflineSyncService().sync_themes_stage(anime)
+
+        self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)

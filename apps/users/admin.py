@@ -350,7 +350,16 @@ class UserImportJobAdmin(admin.ModelAdmin):
         from .tasks import process_import_job
 
         retried = 0
-        for job in queryset.filter(status="failed"):
+        failed_jobs = queryset.filter(status="failed")
+        # The uploaded XML is not kept, so those jobs cannot be re-run.
+        skipped = failed_jobs.filter(source=UserImportJob.ImportSource.myanimelist_xml).count()
+        if skipped:
+            self.message_user(
+                request,
+                f"Skipped {skipped} XML import job(s): the user must upload the file again.",
+                level="warning",
+            )
+        for job in failed_jobs.exclude(source=UserImportJob.ImportSource.myanimelist_xml):
             try:
                 job.status = "pending"
                 job.errors = []

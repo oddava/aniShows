@@ -51,6 +51,49 @@ class TestSendPendingNotifications(TestCase):
         self.assertEqual(mock_send_email.call_count, 0)
 
     @patch("apps.users.services.email_service.send_email_task.delay")
+    @patch("apps.core.services.celery_tasks.PushService.has_active_subscriptions", return_value=True)
+    @patch("apps.core.services.celery_tasks.PushService.send_to_user")
+    def test_sends_before_a_crash_are_not_repeated_by_the_retry(
+        self, mock_send_push, _mock_active, _mock_email
+    ):
+        """Flags used to be written in batches of 200, after the sends."""
+        first, second = (
+            Notification.objects.create(
+                user=self.user,
+                notification_type=Notification.NotificationType.NEW_FOLLOWER,
+                title=f"Follower {i}",
+                message="m",
+            )
+            for i in range(2)
+        )
+        # The worker dies (not a per-item error) after the first push went out.
+        mock_send_push.side_effect = [1, SystemExit("worker lost")]
+        with self.assertRaises(SystemExit):
+            send_pending_notifications()
+
+        mock_send_push.side_effect = None
+        mock_send_push.return_value = 1
+        send_pending_notifications()
+
+        sent_titles = [call.kwargs["title"] for call in mock_send_push.call_args_list]
+        # One title was delivered before the crash and must not go out again;
+        # the other was being sent when the worker died, then by the retry.
+        self.assertEqual(
+            sorted(sent_titles.count(title) for title in (first.title, second.title)), [1, 2]
+        )
+
+    @patch("apps.core.services.celery_tasks.CoreTaskService.send_pending_notifications")
+    def test_overlapping_run_is_skipped(self, mock_send):
+        from django.core.cache import cache
+
+        cache.add("notifications:send-pending:lock", "other-worker", timeout=60)
+
+        result = send_pending_notifications()
+
+        self.assertEqual(result["status"], "skipped")
+        mock_send.assert_not_called()
+
+    @patch("apps.users.services.email_service.send_email_task.delay")
     @patch("apps.core.services.celery_tasks.PushService.send_to_user")
     def test_push_notifications_without_active_subscriptions_are_finalized(
         self, mock_send_push, mock_send_email

@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from ..models import UserProfile
+from ..tokens import EmailChangeTokenGenerator
 
 User = get_user_model()
 
@@ -77,7 +78,7 @@ class AccountManagementTests(APITestCase):
         """Email confirmation link should work even when user is not logged in."""
         new_email = 'updated@example.com'
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        token = default_token_generator.make_token(self.user)
+        token = EmailChangeTokenGenerator(new_email).make_token(self.user)
         encoded_email = urlsafe_base64_encode(force_bytes(new_email))
 
         self.client.force_authenticate(user=None)
@@ -93,6 +94,75 @@ class AccountManagementTests(APITestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.user.email, new_email)
         self.assertTrue(self.profile.email_verified)
+
+    def _confirm(self, token, new_email):
+        self.client.force_authenticate(user=None)
+        return self.client.post(
+            self.confirm_email_url,
+            {
+                'uid': urlsafe_base64_encode(force_bytes(self.user.pk)),
+                'token': token,
+                'new_email': urlsafe_base64_encode(force_bytes(new_email)),
+            },
+            format='json',
+        )
+
+    def test_confirm_email_change_rejects_swapped_address(self):
+        """The address in the emailed link is bound to the token and cannot be edited."""
+        self.client.post(
+            self.change_email_url, {'new_email': 'mine@example.com', 'password': 'testpassword123'}
+        )
+        link = mail.outbox[0].body.split('/confirm-email-change/')[1].split()[0]
+        _uid, token, _encoded_email = link.strip('/').split('/')
+
+        response = self._confirm(token, 'someone-else@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'test@example.com')
+
+    def test_confirm_email_change_rejects_other_purpose_tokens(self):
+        token = default_token_generator.make_token(self.user)
+
+        response = self._confirm(token, 'new@example.com')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_confirm_email_change_link_is_single_use(self):
+        token = EmailChangeTokenGenerator('new@example.com').make_token(self.user)
+        self.assertEqual(self._confirm(token, 'new@example.com').status_code, 200)
+
+        self.assertEqual(self._confirm(token, 'new@example.com').status_code, 400)
+
+    def test_emailed_change_link_confirms(self):
+        self.client.post(
+            self.change_email_url, {'new_email': 'New@Example.com', 'password': 'testpassword123'}
+        )
+        link = mail.outbox[0].body.split('/confirm-email-change/')[1].split()[0]
+        uid, token, encoded_email = link.strip('/').split('/')
+
+        self.client.force_authenticate(user=None)
+        response = self.client.post(
+            self.confirm_email_url,
+            {'uid': uid, 'token': token, 'new_email': encoded_email},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'new@example.com')
+
+    def test_change_email_rejects_invalid_and_case_variant_duplicates(self):
+        User.objects.create_user(username='other', email='taken@example.com', password='pw')
+
+        for new_email in ('not-an-email', '', 'TAKEN@example.com'):
+            with self.subTest(new_email=new_email):
+                response = self.client.post(
+                    self.change_email_url,
+                    {'new_email': new_email, 'password': 'testpassword123'},
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_resend_verification(self):
         """Test resending verification email."""

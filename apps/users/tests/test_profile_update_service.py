@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -63,4 +63,21 @@ class ProfileUpdateServiceTests(TestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.user.username, "renamed-user")
         self.assertIsNotNone(self.profile.last_username_change)
-        mock_invalidate.assert_called_once_with(self.user.id, "renamed-user")
+        self.assertEqual(
+            mock_invalidate.call_args_list,
+            [
+                call(self.user.id, "renamed-user"),
+                # The public profile cached under the old name must go too.
+                call(self.user.id, "serviceuser", trigger_stats_update=False),
+            ],
+        )
+
+    def test_username_change_rejects_invalid_characters_and_reserved_names(self):
+        from rest_framework.exceptions import ValidationError
+
+        for bad in ("has space", "a/b", "<b>x</b>", "me", "ME"):
+            with self.subTest(username=bad), self.assertRaises(ValidationError):
+                update_user_profile(self.user, {"username": bad})
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "serviceuser")

@@ -46,8 +46,8 @@ export default function BadgesSettings() {
     const updateMutation = useMutation({
         mutationFn: (badgeIds) => badgeApi.updateFeatured(badgeIds),
         onSuccess: () => {
-            queryClient.invalidateQueries(['myBadges']);
-            queryClient.invalidateQueries(['userProfile']);
+            queryClient.invalidateQueries({ queryKey: ['myBadges'] });
+            queryClient.invalidateQueries({ queryKey: ['userProfile'] });
             // Refresh AuthContext user so featured badges are up-to-date across the app
             refreshProfile();
         }
@@ -94,12 +94,18 @@ export default function BadgesSettings() {
                     
                     <button
                         onClick={handleSave}
-                        disabled={updateMutation.isLoading || userBadges.length === 0}
+                        disabled={updateMutation.isPending || userBadges.length === 0}
                         className="px-6 py-2 bg-accent hover:bg-accent-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
                     >
-                        {updateMutation.isLoading ? 'Saving...' : 'Save Badges'}
+                        {updateMutation.isPending ? 'Saving...' : 'Save Badges'}
                     </button>
                 </div>
+
+                {updateMutation.isError && (
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                        {updateMutation.error?.response?.data?.detail || 'Failed to update featured badges. Please try again.'}
+                    </div>
+                )}
 
                 {updateMutation.isSuccess && (
                     <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm flex items-center gap-2">

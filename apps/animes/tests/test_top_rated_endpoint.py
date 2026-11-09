@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from ..models import Anime
+from ..services.relation_links import set_relations
 
 
 class TopRatedEndpointTests(APITestCase):
@@ -161,7 +162,10 @@ class AnimeDetailExternalLinksTests(APITestCase):
             anime_type=Anime.AnimeType.tv,
             status=Anime.AnimeStatus.finished,
             anilist_id=111,
-            relations=[
+        )
+        set_relations(
+            anime,
+            [
                 {
                     "id": related.anilist_id,
                     "type": "SEQUEL",
@@ -169,18 +173,38 @@ class AnimeDetailExternalLinksTests(APITestCase):
                     "format": "TV",
                     "status": "FINISHED",
                     "cover": "",
-                    "slug": related.slug,
-                }
+                },
+                {"id": None, "mal_id": 999, "type": "SIDE_STORY", "title": "Not imported"},
             ],
         )
 
         response = self.client.get(reverse("anime-detail", args=[anime.slug]))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data["relations"]), 1)
         self.assertEqual(
-            response.data["relations"][0]["cover"],
-            related.cover_image_external_url,
+            response.data["relations"],
+            [
+                {
+                    "id": related.anilist_id,
+                    "mal_id": None,
+                    "type": "SEQUEL",
+                    "title": related.title,
+                    "format": "TV",
+                    "status": "FINISHED",
+                    "cover": related.cover_image_external_url,
+                    "slug": related.slug,
+                },
+                {
+                    "id": None,
+                    "mal_id": 999,
+                    "type": "SIDE_STORY",
+                    "title": "Not imported",
+                    "format": None,
+                    "status": None,
+                    "cover": "",
+                    "slug": None,
+                },
+            ],
         )
 
 

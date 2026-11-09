@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.viewsets import ModelViewSet
 
 from ...core.api_errors import api_response, error_response
-from ...users.permissions import EmailVerificationMixin
+from ...users.permissions import VerifiedEmailForWrites
 from ..serializers import (
     ReviewReactionActionSerializer,
     ReviewReportCreateSerializer,
@@ -26,10 +26,9 @@ from ..services.reviews import (
 
 User = get_user_model()
 
-class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
+class ReviewViewSet(ModelViewSet):
     serializer_class = ReviewSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    verification_error_message = "Please verify your email to write reviews."
+    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
 
     def get_queryset(self):
         return get_review_queryset(self.request.user, self.request.query_params)
@@ -57,7 +56,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
         url_path="votes",
     )
     def votes(self, request, pk=None):
@@ -70,7 +69,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, VerifiedEmailForWrites],
         url_path="reactions",
     )
     def reactions(self, request, pk=None):
@@ -88,7 +87,7 @@ class ReviewViewSet(EmailVerificationMixin, ModelViewSet):
             default_code="review_reaction_failed",
         )
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, VerifiedEmailForWrites])
     def report(self, request, pk=None):
         review = self.get_object()
         serializer = ReviewReportCreateSerializer(data=request.data)

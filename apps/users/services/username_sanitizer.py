@@ -1,46 +1,28 @@
-import re
-
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
 
-RESERVED_USERNAMES = {
-    "admin",
-    "api",
-    "auth",
-    "www",
-    "mail",
-    "ftp",
-    "localhost",
-    "root",
-    "system",
-    "support",
-    "help",
-    "info",
-    "contact",
-    "anime",
-    "user",
-    "users",
-    "login",
-    "logout",
-    "register",
-}
+from ...core.services.admin_settings_service import username_length_limits
+
+# Names that collide with routes such as /users/me/.
+RESERVED_USERNAMES = frozenset({"me"})
+
+_character_validator = UnicodeUsernameValidator()
 
 
-def sanitize_username(username: str) -> str:
-    """Sanitize and validate username."""
-    username = username.strip().lower()
+def validate_username(value: str) -> str:
+    """Return the stripped username or raise ``ValidationError``.
 
-    if len(username) < 3:
-        raise ValidationError("Username must be at least 3 characters.")
+    The single source of username rules for both sign-up and renames.
+    """
+    username = (value or "").strip()
+    min_length, max_length = username_length_limits()
 
-    if len(username) > 30:
-        raise ValidationError("Username must be under 30 characters.")
-
-    if not re.match(r"^[a-z0-9_-]+$", username):
-        raise ValidationError(
-            "Username can only contain letters, numbers, underscores, and hyphens."
-        )
-
-    if username in RESERVED_USERNAMES:
+    if len(username) < min_length:
+        raise ValidationError(f"Username must be at least {min_length} characters long.")
+    if len(username) > max_length:
+        raise ValidationError(f"Username must be at most {max_length} characters long.")
+    _character_validator(username)
+    if username.lower() in RESERVED_USERNAMES:
         raise ValidationError("This username is reserved.")
 
     return username

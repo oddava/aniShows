@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-
 from ...shared.celery import observed_shared_task
+from ...shared.logger import logger
 from ..db_safety import is_missing_relation_error
 from ..services.celery_tasks import CoreTaskService, log_data_preview
-
-logger = logging.getLogger(__name__)
 
 
 @observed_shared_task(retry_policy="quick")

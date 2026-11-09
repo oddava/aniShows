@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 
+from ..users.models import UserProfile
 from .cache_utils import flush_buffered_thread_views
 from .models import Category, Post, Tag, Thread, ThreadLike
 
@@ -10,9 +11,11 @@ User = get_user_model()
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(
+    user = User.objects.create_user(
         username="testuser", email="test@example.com", password="password123"
     )
+    UserProfile.objects.filter(user=user).update(email_verified=True)
+    return user
 
 @pytest.fixture
 def api_client():

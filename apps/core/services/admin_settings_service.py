@@ -97,11 +97,6 @@ def cache_admin_settings(payload: dict) -> None:
     else:
         _clear_local_cached_settings()
 
-def clear_admin_settings_cache() -> None:
-    """Clear both shared and local settings caches."""
-    cache.delete(ADMIN_SETTINGS_CACHE_KEY)
-    _clear_local_cached_settings()
-
 
 def merge_admin_settings(payload: dict | None) -> dict:
     merged = deepcopy(DEFAULT_ADMIN_SETTINGS)

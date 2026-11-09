@@ -254,7 +254,9 @@ class AnimeQueryService:
             queryset = queryset.prefetch_related(self._genre_prefetch())
         else:
             queryset = (
-                queryset.prefetch_related(self._genre_prefetch(), self._theme_song_prefetch())
+                queryset.prefetch_related(
+                    self._genre_prefetch(), self._theme_song_prefetch(), Anime.relations_prefetch()
+                )
                 .defer(*self.DETAIL_DEFER_FIELDS)
                 .annotate(
                     character_count=Coalesce(
@@ -327,7 +329,7 @@ class AnimeQueryService:
         timezone_name = getattr(anime, "broadcast_timezone", "") or "Asia/Tokyo"
         try:
             local_tz = ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
+        except (ZoneInfoNotFoundError, ValueError):
             local_tz = ZoneInfo("Asia/Tokyo")
         # Jikan next-airing timestamps are tied to the broadcast timezone; UTC shifts late-night JST shows backward.
         localized = timezone.localtime(next_airing_date, local_tz)
@@ -336,18 +338,18 @@ class AnimeQueryService:
     def get_action_anime(self, slug: str) -> Anime:
         return Anime.public_queryset().only(*self.ACTION_ANIME_ONLY_FIELDS).get(slug=slug)
 
-    def related_queryset(self, anime):
-        relation_slugs = self._relation_slugs(anime)[:8]
-        base_queryset = self.base_shelf_queryset()
+    def related_queryset(self, anime, *, can_view_adult_content: bool = True):
+        related_ids = self._related_anime_ids(anime)[:8]
+        base_queryset = self.shelf_queryset_for(can_view_adult_content)
 
-        if relation_slugs:
+        if related_ids:
             ordering = Case(
-                *[When(slug=slug, then=Value(index)) for index, slug in enumerate(relation_slugs)],
-                default=Value(len(relation_slugs)),
+                *[When(id=anime_id, then=Value(index)) for index, anime_id in enumerate(related_ids)],
+                default=Value(len(related_ids)),
                 output_field=IntegerField(),
             )
             return (
-                base_queryset.filter(slug__in=relation_slugs)
+                base_queryset.filter(id__in=related_ids)
                 .annotate(relation_order=ordering)
                 .order_by("relation_order", "-id")
             )
@@ -360,7 +362,7 @@ class AnimeQueryService:
             .order_by("-shared_genres", "-id")[:8]
         )
 
-    def recommendations_queryset(self, anime):
+    def recommendations_queryset(self, anime, *, can_view_adult_content: bool = True):
         relation_mal_ids = set(self._relation_mal_ids(anime))
         if anime.mal_id:
             service = JikanService(enable_caching=True, enable_rate_limiting=True)
@@ -403,7 +405,7 @@ class AnimeQueryService:
                     output_field=IntegerField(),
                 )
                 queryset = (
-                    self.base_shelf_queryset()
+                    self.shelf_queryset_for(can_view_adult_content)
                     .filter(mal_id__in=ordered_mal_ids)
                     .exclude(id=anime.id)
                     .annotate(recommendation_order=ordering)
@@ -412,7 +414,15 @@ class AnimeQueryService:
                 if queryset.exists():
                     return queryset
 
-        return self._fallback_recommendations_queryset(anime)
+        return self._fallback_recommendations_queryset(
+            anime, can_view_adult_content=can_view_adult_content
+        )
+
+    def shelf_queryset_for(self, can_view_adult_content: bool):
+        queryset = self.base_shelf_queryset()
+        if not can_view_adult_content:
+            queryset = self._exclude_adult_content(queryset)
+        return queryset
 
     @staticmethod
     def base_shelf_queryset():
@@ -1190,24 +1200,23 @@ class AnimeQueryService:
     @staticmethod
     def _relation_mal_ids(anime) -> list[int]:
         relation_ids = []
-        for relation in anime.relations or []:
-            if not isinstance(relation, dict):
-                continue
-            relation_mal_id = relation.get("mal_id")
+        for target_mal_id, linked_mal_id in anime.relations.values_list(
+            "target_mal_id", "to_anime__mal_id"
+        ):
+            relation_mal_id = target_mal_id or linked_mal_id
             if relation_mal_id and relation_mal_id != anime.mal_id:
                 relation_ids.append(relation_mal_id)
         return list(dict.fromkeys(relation_ids))
 
     @staticmethod
-    def _relation_slugs(anime) -> list[str]:
-        relation_slugs = []
-        for relation in anime.relations or []:
-            if not isinstance(relation, dict):
-                continue
-            relation_slug = relation.get("slug")
-            if relation_slug and relation_slug != anime.slug:
-                relation_slugs.append(relation_slug)
-        return list(dict.fromkeys(relation_slugs))
+    def _related_anime_ids(anime) -> list[int]:
+        """Linked related anime IDs in provider order."""
+        related_ids = (
+            anime.relations.filter(to_anime__isnull=False)
+            .exclude(to_anime=anime.id)
+            .values_list("to_anime_id", flat=True)
+        )
+        return list(dict.fromkeys(related_ids))
 
     @staticmethod
     def _genre_ids(anime) -> list[int]:
@@ -1217,16 +1226,16 @@ class AnimeQueryService:
             return [genre.id for genre in prefetched_genres]
         return list(anime.genres.values_list("id", flat=True))
 
-    def _fallback_recommendations_queryset(self, anime):
+    def _fallback_recommendations_queryset(self, anime, *, can_view_adult_content: bool = True):
         relation_mal_ids = self._relation_mal_ids(anime)
-        relation_slugs = self._relation_slugs(anime)
+        related_ids = self._related_anime_ids(anime)
         genre_ids = self._genre_ids(anime)
 
-        queryset = self.base_shelf_queryset().exclude(id=anime.id)
+        queryset = self.shelf_queryset_for(can_view_adult_content).exclude(id=anime.id)
         if relation_mal_ids:
             queryset = queryset.exclude(mal_id__in=relation_mal_ids)
-        if relation_slugs:
-            queryset = queryset.exclude(slug__in=relation_slugs)
+        if related_ids:
+            queryset = queryset.exclude(id__in=related_ids)
 
         return (
             queryset.filter(genres__in=genre_ids)
@@ -1320,6 +1329,7 @@ class AnimePublicPayloadService:
     def get_detail_payload(cls, slug: str, request, query_service: AnimeQueryService):
         cache_keys = cls.detail_cache_keys(slug)
         primary_cache_key = cache_keys[0]
+        coverless_marker_key = f"{primary_cache_key}:coverless_checked"
         cached_base = None
         cache_hit_key = None
         cache_status = "hit"
@@ -1333,8 +1343,14 @@ class AnimePublicPayloadService:
         if cached_base:
             data = cls.sanitize_public_user_fields(cached_base)
             cache_payload_changed = data != cached_base
+            # Rebuild a coverless payload to pick up a cover saved since, but at
+            # most once a minute: a show with no cover would otherwise rebuild
+            # the full detail query on every request.
+            coverless_needs_check = not cls.has_cover_media(data) and not cache.get(
+                coverless_marker_key
+            )
             if (
-                not cls.has_cover_media(data)
+                coverless_needs_check
                 or cls.item_has_internal_media_urls(data)
                 or cls.item_has_stale_imagekit_cache_urls(data)
             ):
@@ -1369,6 +1385,8 @@ class AnimePublicPayloadService:
                     and not cls.item_has_stale_imagekit_cache_urls(payload)
                 ),
             )
+            if cache_status == "miss" and not cls.has_cover_media(data):
+                cache.set(coverless_marker_key, True, 60)
             if cache_hit_key and cache_hit_key != primary_cache_key:
                 ttl = 3600 if cls.has_cover_media(data) else 60
                 # Rehydrate the legacy key that was actually requested so older readers converge.

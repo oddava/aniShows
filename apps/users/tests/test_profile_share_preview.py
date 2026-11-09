@@ -76,3 +76,13 @@ class ProfileSharePreviewViewTests(TestCase):
         content = response.content.decode()
         self.assertIn("http-equiv=\"refresh\"", content)
         self.assertIn("window.location.replace", content)
+
+    def test_missing_profile_does_not_redirect_a_browser_to_itself(self):
+        response = self.client.get(
+            "/u/missing-user",
+            HTTP_USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        )
+
+        content = response.content.decode()
+        self.assertIn('content="0;url=http://testserver/profile/missing-user"', content)
+        self.assertNotIn('content="0;url=http://testserver/u/', content)

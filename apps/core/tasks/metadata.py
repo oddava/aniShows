@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 from ...shared.celery import observed_shared_task
+from ...shared.logger import logger
 from ..services.celery_tasks import CoreTaskService
-
-logger = logging.getLogger(__name__)
 
 
 @observed_shared_task(retry_policy="standard")

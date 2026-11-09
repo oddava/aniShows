@@ -6,6 +6,7 @@ import requests
 from django.utils import timezone
 
 from ....shared.logger import logger
+from ....shared.retry import retry_after_seconds
 from ...models import UserImportJob
 from .base import BaseImporter, MALStatusMapper
 
@@ -31,12 +32,9 @@ class MyAnimeListAPIImporter(BaseImporter):
 
     def _retry_delay(self, attempt: int, response: requests.Response | None = None) -> float:
         if response is not None:
-            retry_after = response.headers.get("Retry-After")
-            if retry_after:
-                try:
-                    return max(float(retry_after), 1.0)
-                except ValueError:
-                    pass
+            retry_after = retry_after_seconds(response.headers.get("Retry-After"))
+            if retry_after is not None:
+                return max(retry_after, 1.0)
         return min(self.BASE_BACKOFF_SECONDS * (2 ** (attempt - 1)), self.MAX_BACKOFF_SECONDS)
 
     def fetch_user_list(self) -> List[Dict]:

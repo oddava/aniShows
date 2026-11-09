@@ -321,6 +321,8 @@ restore:                        ## Safe full restore (Usage: make restore TIMEST
 		echo "Restore failed. Services were started back up."; \
 		exit $$restore_status; \
 	fi
+	# Re-apply the bucket and its public-read policy (a fresh MinIO lacks them).
+	docker compose run --rm createbuckets
 	docker compose exec web python manage.py migrate --noinput
 
 restore-db-only:                ## Restore DB only (Usage: make restore-db-only TIMESTAMP=... FORCE=1)
@@ -357,6 +359,7 @@ restore-media-only:             ## Restore media only (Usage: make restore-media
 	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP) --yes --skip-db || restore_status=$$?; \
 	docker compose start $$services; \
 	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi
+	docker compose run --rm createbuckets
 
 # ============================================================================
 # Help

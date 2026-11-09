@@ -77,9 +77,9 @@ def create_thread(serializer, author):
             thread.id,
         )
         _run_after_commit(
-            lambda: invalidate_thread_list_cache(thread.category.slug),
-            "Failed to invalidate thread list cache for category %s",
-            thread.category.slug,
+            invalidate_thread_list_cache,
+            "Failed to invalidate thread lists after creating thread %s",
+            thread.id,
         )
     return thread
 
@@ -88,7 +88,7 @@ def update_thread(serializer):
     with transaction.atomic():
         thread = serializer.save()
         _run_after_commit(
-            lambda: invalidate_thread_caches(thread.id, thread.category.slug),
+            lambda: invalidate_thread_caches(thread.id),
             "Failed to invalidate thread caches for thread %s",
             thread.id,
         )
@@ -96,12 +96,11 @@ def update_thread(serializer):
 
 
 def delete_thread(instance):
-    category_slug = instance.category.slug
     thread_id = instance.id
     with transaction.atomic():
         instance.delete()
         _run_after_commit(
-            lambda: invalidate_thread_caches(thread_id, category_slug),
+            lambda: invalidate_thread_caches(thread_id),
             "Failed to invalidate deleted thread caches for thread %s",
             thread_id,
         )
@@ -209,14 +208,9 @@ def toggle_thread_pin(thread) -> ForumActionResult:
         locked_thread.is_pinned = not locked_thread.is_pinned
         locked_thread.save(update_fields=["is_pinned"])
         _run_after_commit(
-            lambda: invalidate_thread_caches(locked_thread.id, locked_thread.category.slug),
+            lambda: invalidate_thread_caches(locked_thread.id),
             "Failed to invalidate pinned thread caches for thread %s",
             locked_thread.id,
-        )
-        _run_after_commit(
-            lambda: invalidate_thread_list_cache(locked_thread.category.slug),
-            "Failed to invalidate thread list cache for category %s",
-            locked_thread.category.slug,
         )
     return ForumActionResult(
         payload={
@@ -278,7 +272,7 @@ def create_post(serializer, author):
             thread.id,
         )
         _run_after_commit(
-            lambda: invalidate_thread_caches(thread.id, thread.category.slug),
+            lambda: invalidate_thread_caches(thread.id),
             "Failed to invalidate thread caches for thread %s",
             thread.id,
         )
@@ -330,7 +324,7 @@ def delete_post(instance):
             thread_id,
         )
         _run_after_commit(
-            lambda: invalidate_thread_caches(thread.id, thread.category.slug),
+            lambda: invalidate_thread_caches(thread.id),
             "Failed to invalidate thread caches for thread %s",
             thread.id,
         )

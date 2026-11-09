@@ -26,7 +26,6 @@ import asyncio
 
 from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
-from django.db.models import Q
 
 from ...models import Anime
 
@@ -138,10 +137,8 @@ class Command(BaseCommand):
                 self.stderr.write(f"Anime with ID {anime_id} not found")
                 return
         else:
-            # Find anime without relations data: NULL or empty list []
-            queryset = Anime.objects.filter(
-                Q(relations__isnull=True) | Q(relations=[])
-            ).distinct()
+            # Find anime without any relation rows
+            queryset = Anime.objects.filter(relations__isnull=True)
             if limit:
                 queryset = queryset[:limit]
 

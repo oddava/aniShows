@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from asgiref.sync import async_to_sync
+from celery._state import _task_stack
 from django.core.cache import cache
 
 from ...shared.celery import RETRY_POLICIES, ObservedTask
@@ -129,8 +130,10 @@ class BaseTask(ObservedTask):
         task_args = args or ()
         task_kwargs = kwargs or {}
 
-        # Check idempotency
-        if getattr(self.run, "_enable_deduplication", self.enable_deduplication):
+        # Check idempotency. A retry re-sends the same args, so it would match
+        # the marker its own first run set and be dropped.
+        is_retry = bool(options.get("retries"))
+        if not is_retry and getattr(self.run, "_enable_deduplication", self.enable_deduplication):
             idempotency_key = options.pop("idempotency_key", None)
             if not idempotency_key:
                 idempotency_key = self._generate_idempotency_key(task_args, task_kwargs)
@@ -170,6 +173,8 @@ class BaseTask(ObservedTask):
 
     def __call__(self, *args, **kwargs):
         """Execute task with optional locking."""
+        # The task object lives for the whole worker process; count per run.
+        self.metrics = TaskMetrics()
         if getattr(self.run, "_enable_locking", self.enable_locking):
             lock_key = self._get_lock_key(args, kwargs)
 
@@ -314,28 +319,6 @@ class BaseTask(ObservedTask):
             logger.warning(f"Failed to emit failure metrics: {e}")
         super().on_failure(exc, task_id, args, kwargs, einfo)
 
-    def on_retry(self, exc, task_id, args, kwargs, einfo):
-        """Called when task retries."""
-        # Update CeleryTaskResult
-        try:
-            from ...core.models import CeleryTaskResult
-
-            job = CeleryTaskResult.objects.get(task_id=task_id)
-            job.status = CeleryTaskResult.TaskStatus.RETRY
-            job.retries += 1
-            job.error_message = f"Retrying: {exc}"
-            job.save(update_fields=["status", "retries", "error_message"])
-        except Exception as e:
-            logger.error(f"Failed to update CeleryTaskResult on retry: {e}")
-
-        # Emit retry metric
-        try:
-            from ..services.metrics import TASK_RETRY_COUNT
-
-            TASK_RETRY_COUNT.labels(task_name=self.name).inc()
-        except Exception:
-            pass
-        super().on_retry(exc, task_id, args, kwargs, einfo)
 
 # Helper to run async code in sync celery task
 def run_async_in_task(coro):
@@ -347,8 +330,22 @@ def run_async_in_task(coro):
     connection, which can't see this thread's uncommitted rows and is never
     closed by Celery's per-task connection cleanup.
     """
+    # async_to_sync runs the coroutine on its own loop thread, and Celery's
+    # current-task and request stacks are thread-local. Carry them over, or
+    # self.request.id is None in the coroutine and self.retry() re-raises the
+    # error instead of scheduling a retry.
+    task = _task_stack.top
+    request = task.request_stack.top if task is not None else None
 
     async def _await():
-        return await coro
+        if request is None:
+            return await coro
+        _task_stack.push(task)
+        task.request_stack.push(request)
+        try:
+            return await coro
+        finally:
+            task.request_stack.pop()
+            _task_stack.pop()
 
     return async_to_sync(_await)()

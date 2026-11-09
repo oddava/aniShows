@@ -89,12 +89,8 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        "apps.animes": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "apps.users.views.auth": {
+        # Application code logs through apps.shared.logger ("anishows.*").
+        "anishows": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,

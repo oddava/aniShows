@@ -1,36 +1,35 @@
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import SAFE_METHODS, BasePermission
+
+from ..core.services.admin_settings_service import is_email_verification_required
+from .models import UserProfile
+
+EMAIL_VERIFICATION_REQUIRED_CODE = "email_verification_required"
 
 
-class EmailVerificationMixin:
+def has_verified_email(user) -> bool:
+    """Whether ``user`` may create content, honouring the admin's verification setting."""
+    if not is_email_verification_required() or user.is_staff:
+        return True
+    # Queried, not read from user.userprofile: a cached relation can be stale.
+    return UserProfile.objects.filter(user_id=user.pk, email_verified=True).exists()
+
+
+class VerifiedEmailForWrites(BasePermission):
+    """Require a verified email for writes that create content or reach other users.
+
+    Reads are open, and DELETE stays allowed so people can always remove their
+    own data. Anonymous requests are left to the authentication permissions.
+    Unverified accounts are deleted after a week, so anything they create
+    would vanish with them.
     """
-    Mixin to enforce email verification across viewsets.
-    Reduces the repeated check pattern seen in current views.
-    """
 
-    require_verified_email = True
-    verification_error_message = "Please verify your email to perform this action."
+    message = "Please verify your email address to do this."
+    code = EMAIL_VERIFICATION_REQUIRED_CODE
 
-    def check_email_verified(self, user):
-        """Check if user has verified email."""
-        if not self.require_verified_email:
-            return
-
-        profile = getattr(user, "userprofile", None)
-        if not profile or not profile.email_verified:
-            raise PermissionDenied(self.verification_error_message)
-
-    def perform_create(self, serializer):
-        self.check_email_verified(self.request.user)
-        serializer.save(user=self.request.user)
-
-    def perform_update(self, serializer):
-        self.check_email_verified(self.request.user)
-        if serializer.instance.user != self.request.user:
-            raise PermissionDenied("You can only modify your own data.")
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        self.check_email_verified(self.request.user)
-        if instance.user != self.request.user:
-            raise PermissionDenied("You can only delete your own data.")
-        instance.delete()
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS or request.method == "DELETE":
+            return True
+        user = request.user
+        if not user or not user.is_authenticated:
+            return True
+        return has_verified_email(user)

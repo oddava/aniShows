@@ -96,4 +96,12 @@ describe('ReviewCard', () => {
             expect(reviewApi.react).toHaveBeenCalledWith(7, 'heart');
         });
     });
+
+    it('renders review text exactly as typed, markup and entities included', () => {
+        const typed = `I don't <3 it, <img src=x onerror="alert(1)"> &lt;literal&gt;`;
+        const { container } = renderReviewCard({ text: typed });
+
+        expect(screen.getByText(typed)).toBeInTheDocument();
+        expect(container.querySelector('img[onerror]')).toBeNull();
+    });
 });

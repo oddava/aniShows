@@ -1,4 +1,5 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import api, {
     AUTH_EXPIRED_EVENT,
@@ -135,6 +136,27 @@ describe('httpClient auth', () => {
 
         await expect(api.get('/users/me/')).rejects.toMatchObject({ response: { status: 401 } });
         expect(refreshAdapter).not.toHaveBeenCalled();
+    });
+
+    it('shows one verification toast when the email gate refuses a write', async () => {
+        const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => 'id');
+        apiAdapter.mockImplementation((config) => {
+            const response = {
+                data: { detail: 'Please verify your email address to do this.', code: 'email_verification_required' },
+                status: 403,
+                statusText: '',
+                headers: {},
+                config,
+            };
+            return Promise.reject(new axios.AxiosError('HTTP 403', '403', config, null, response));
+        });
+
+        await expect(api.post('/lists/', {})).rejects.toBeTruthy();
+
+        expect(toastSpy).toHaveBeenCalledWith('Please verify your email address to do this.', {
+            id: 'email-verification-required',
+        });
+        toastSpy.mockRestore();
     });
 });
 

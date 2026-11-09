@@ -114,15 +114,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
             const hasAnySubRating = Object.values(loadedSubRatings).some(v => v > 0);
             setShowAdvanced(hasAnySubRating);
 
-            // Decoded text to handle accidentally escaped data from DB
-            let loadedText = (initialData.text || '')
-                .replace(/&amp;/g, '&')
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'");
-
-            setText(loadedText);
+            setText(initialData.text || '');
             setHasSpoilers(initialData.has_spoilers || false);
             hasLoaded.current = true;
         } else {

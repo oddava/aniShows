@@ -12,6 +12,7 @@ from ...animes.serializers.imports import UserImportJobSerializer
 from ...core.api_errors import api_response, error_response
 from ...shared.logger import logger
 from ..models import UserImportJob
+from ..permissions import VerifiedEmailForWrites
 from ..services.export_service import ExportService
 from ..services.import_job_service import (
     cancel_import_job,
@@ -32,17 +33,7 @@ class ImportExportViewSet(ViewSet):
     Consolidates previously separate APIViews for MAL, AniList, and Exports.
     """
 
-    permission_classes = [IsAuthenticated]
-
-    def _require_verified_email(self, request):
-        profile = getattr(request.user, "userprofile", None)
-        if not profile or not profile.email_verified:
-            return error_response(
-                "Please verify your email before importing anime lists.",
-                code="email_verification_required",
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
-        return None
+    permission_classes = [IsAuthenticated, VerifiedEmailForWrites]
 
     def _validate_xml_entry_count(self, xml_content: str):
         try:
@@ -71,10 +62,6 @@ class ImportExportViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def import_mal(self, request):
         """Start MAL import from username"""
-        verification_error = self._require_verified_email(request)
-        if verification_error:
-            return verification_error
-
         username = request.data.get("username")
 
         if not username:
@@ -96,10 +83,6 @@ class ImportExportViewSet(ViewSet):
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_mal_xml(self, request):
         """Upload and import MAL XML file"""
-        verification_error = self._require_verified_email(request)
-        if verification_error:
-            return verification_error
-
         if "file" not in request.FILES:
             return error_response(
                 "XML file is required",
@@ -148,10 +131,6 @@ class ImportExportViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def import_anilist(self, request):
         """Start AniList import from username"""
-        verification_error = self._require_verified_email(request)
-        if verification_error:
-            return verification_error
-
         username = request.data.get("username")
         access_token = request.data.get("access_token")  # Optional
 

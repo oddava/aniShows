@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 import httpx
 from django.conf import settings
 from django.core.cache import cache
@@ -11,10 +9,9 @@ from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
 from ..shared.celery import observed_shared_task
+from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
 from .services.celery_tasks import UserTaskService
-
-logger = logging.getLogger(__name__)
 
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
 RETRYABLE_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}

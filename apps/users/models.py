@@ -10,8 +10,10 @@ from django.db.models import (
     JSONField,
     Model,
     OneToOneField,
+    Q,
     SlugField,
     TextChoices,
+    UniqueConstraint,
 )
 from django.db.models.fields import (
     CharField,
@@ -21,6 +23,7 @@ from django.db.models.fields import (
     IntegerField,
     TextField,
 )
+from django.db.models.functions import Lower
 from django.utils.text import slugify
 
 from root.storage_backends import MediaStorage
@@ -30,7 +33,16 @@ from .utils.file_security import badge_image_path, user_avatar_path, user_banner
 
 
 class CustomUser(AbstractUser):
-    pass
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            # One account per address, whatever its case. Blank emails (some
+            # admin-created accounts) are exempt.
+            UniqueConstraint(
+                Lower("email"),
+                condition=~Q(email=""),
+                name="users_customuser_email_ci_unique",
+            ),
+        ]
 
 
 class UserProfile(Model):

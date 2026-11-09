@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -110,7 +111,7 @@ const ImportPage = () => {
             setSuccess('Import cancelled successfully');
             fetchJobs();
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to cancel import');
+            setError(getApiErrorMessage(err, 'Failed to cancel import'));
         } finally {
             setCancellingJob(null);
         }
@@ -136,7 +137,7 @@ const ImportPage = () => {
             pollJobStatus(job_id);
             setMalUsername('');
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to start import');
+            setError(getApiErrorMessage(err, 'Failed to start import'));
         } finally {
             setLoading(false);
         }
@@ -162,7 +163,7 @@ const ImportPage = () => {
             pollJobStatus(job_id);
             setAnilistUsername('');
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to start import');
+            setError(getApiErrorMessage(err, 'Failed to start import'));
         } finally {
             setLoading(false);
         }
@@ -201,7 +202,7 @@ const ImportPage = () => {
             // Reset file input
             e.target.reset();
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to start import');
+            setError(getApiErrorMessage(err, 'Failed to start import'));
         } finally {
             setLoading(false);
         }

@@ -21,6 +21,7 @@ const AdminReviews = () => {
 
     const fetchReviews = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = new URLSearchParams({
                 page,
@@ -36,6 +37,11 @@ const AdminReviews = () => {
             setTotalPages(Math.ceil(response.data.count / 20));
         } catch (err) {
             logger.error('Failed to fetch reviews:', err);
+            if (err.response?.status === 404 && page > 1) {
+                // The page no longer exists, e.g. after deleting its last row.
+                setPage((current) => Math.max(1, current - 1));
+                return;
+            }
             setError(err.response?.data?.detail || 'Failed to load reviews');
         } finally {
             setLoading(false);
@@ -105,14 +111,14 @@ const AdminReviews = () => {
                                 type="text"
                                 placeholder="Search reviews..."
                                 value={search}
-                                onChange={(e) => setSearch(e.target.value)}
+                                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                             />
                         </form>
 
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <CustomSelect
                                 value={filters.has_spoilers}
-                                onChange={(nextValue) => setFilters((f) => ({ ...f, has_spoilers: nextValue }))}
+                                onChange={(nextValue) => { setFilters((f) => ({ ...f, has_spoilers: nextValue })); setPage(1); }}
                                 options={[
                                     { value: '', label: 'All Reviews' },
                                     { value: 'true', label: 'With Spoilers' },
@@ -125,7 +131,7 @@ const AdminReviews = () => {
 
                             <CustomSelect
                                 value={filters.min_rating}
-                                onChange={(nextValue) => setFilters((f) => ({ ...f, min_rating: nextValue }))}
+                                onChange={(nextValue) => { setFilters((f) => ({ ...f, min_rating: nextValue })); setPage(1); }}
                                 options={[
                                     { value: '', label: 'Min Rating' },
                                     ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => ({
@@ -140,7 +146,7 @@ const AdminReviews = () => {
 
                             <CustomSelect
                                 value={filters.ordering}
-                                onChange={(nextValue) => setFilters((f) => ({ ...f, ordering: nextValue }))}
+                                onChange={(nextValue) => { setFilters((f) => ({ ...f, ordering: nextValue })); setPage(1); }}
                                 options={[
                                     { value: '-created_at', label: 'Newest First' },
                                     { value: 'created_at', label: 'Oldest First' },

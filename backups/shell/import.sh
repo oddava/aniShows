@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# Bundles hold a full DB dump and the source server's secrets.
+umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 EXPORT_DIR="${BACKUP_EXPORT_DIR:-$BACKUP_DIR/exports}"
@@ -104,6 +106,12 @@ resolve_backup_payload() {
 import_backup_dir() {
     local base_name
     base_name="$(basename "$IMPORTED_BACKUP_DIR")"
+    # The -imported suffix keeps backup rotation from pruning it before it
+    # is restored.
+    case "$base_name" in
+        *-imported*) ;;
+        *) base_name="${base_name}-imported" ;;
+    esac
     DEST_BACKUP_PATH="$BACKUP_DIR/$base_name"
 
     if [ -e "$DEST_BACKUP_PATH" ]; then

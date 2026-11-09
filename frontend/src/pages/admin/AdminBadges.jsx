@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminBadgeApi } from '../../api/client';
 import api from '../../api/client';
 import { Search, Plus, Edit2, Trash2, Award, UserPlus, UserMinus, Shield, Star, Zap, Crown, Users, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -41,7 +41,7 @@ export default function AdminBadges() {
     const { data, isLoading } = useQuery({
         queryKey: ['adminBadges', page, searchTerm],
         queryFn: () => adminBadgeApi.getAll({ page, search: searchTerm }),
-        keepPreviousData: true,
+        placeholderData: keepPreviousData,
     });
 
     const { data: usersData } = useQuery({
@@ -55,7 +55,7 @@ export default function AdminBadges() {
     const createMutation = useMutation({
         mutationFn: (formData) => adminBadgeApi.create(formData),
         onSuccess: () => {
-            queryClient.invalidateQueries(['adminBadges']);
+            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
             setIsModalOpen(false);
             setEditingBadge(null);
             setFormError(null);
@@ -68,27 +68,36 @@ export default function AdminBadges() {
     const updateMutation = useMutation({
         mutationFn: ({ id, formData }) => adminBadgeApi.update(id, formData),
         onSuccess: () => {
-            queryClient.invalidateQueries(['adminBadges']);
+            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
             setIsModalOpen(false);
             setEditingBadge(null);
+        },
+        onError: (error) => {
+            setFormError(error.response?.data?.detail || error.message || 'Failed to update badge');
         }
     });
 
     const deleteMutation = useMutation({
         mutationFn: (id) => adminBadgeApi.delete(id),
         onSuccess: () => {
-            queryClient.invalidateQueries(['adminBadges']);
+            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
+        },
+        onError: (error) => {
+            alert(error.response?.data?.detail || 'Failed to delete badge');
         }
     });
 
     const grantMutation = useMutation({
         mutationFn: ({ id, userIds, reason }) => adminBadgeApi.grant(id, userIds, reason),
         onSuccess: () => {
-            queryClient.invalidateQueries(['adminBadges']);
+            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
             setIsGrantModalOpen(false);
             setSelectedUsers([]);
             setGrantReason('');
             setSelectedBadge(null);
+        },
+        onError: (error) => {
+            alert(error.response?.data?.detail || 'Failed to grant badge');
         }
     });
 
@@ -96,14 +105,17 @@ export default function AdminBadges() {
         queryKey: ['adminBadgeHolders', selectedBadge?.id, holdersPage],
         queryFn: () => adminBadgeApi.getHolders(selectedBadge.id, { page: holdersPage }),
         enabled: isHoldersModalOpen && !!selectedBadge,
-        keepPreviousData: true,
+        placeholderData: keepPreviousData,
     });
 
     const revokeMutation = useMutation({
         mutationFn: ({ badgeId, userIds }) => adminBadgeApi.revoke(badgeId, userIds),
         onSuccess: () => {
-            queryClient.invalidateQueries(['adminBadges']);
-            queryClient.invalidateQueries(['adminBadgeHolders', selectedBadge?.id]);
+            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
+            queryClient.invalidateQueries({ queryKey: ['adminBadgeHolders', selectedBadge?.id] });
+        },
+        // On failure too, or the holder's button stays disabled.
+        onSettled: () => {
             setRevokingUserIds(new Set());
         }
     });
@@ -407,7 +419,7 @@ export default function AdminBadges() {
                                     </button>
                                     <button
                                         type="submit"
-                                        disabled={createMutation.isLoading || updateMutation.isLoading}
+                                        disabled={createMutation.isPending || updateMutation.isPending}
                                         className="px-6 py-2 bg-accent hover:bg-accent-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                                     >
                                         {editingBadge ? 'Update Badge' : 'Create Badge'}
@@ -523,7 +535,7 @@ export default function AdminBadges() {
                                     </button>
                                     <button
                                         type="submit"
-                                        disabled={selectedUsers.length === 0 || grantMutation.isLoading}
+                                        disabled={selectedUsers.length === 0 || grantMutation.isPending}
                                         className="px-6 py-2 bg-accent hover:bg-accent-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                                     >
                                         Grant to {selectedUsers.length} User(s)
@@ -608,7 +620,7 @@ export default function AdminBadges() {
                                                             });
                                                         }
                                                     }}
-                                                    disabled={revokingUserIds.has(holder.user.id) || revokeMutation.isLoading}
+                                                    disabled={revokingUserIds.has(holder.user.id) || revokeMutation.isPending}
                                                     className="p-2 text-red-400 hover:bg-red-400/10 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-50 shrink-0"
                                                     title={`Revoke from ${holder.user.username}`}
                                                 >

@@ -1,6 +1,7 @@
 import contextlib
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
@@ -11,6 +12,8 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings as jwt_settings
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
@@ -150,16 +153,15 @@ class AuthViewSet(ViewSet):
             return [throttling.StrictUserRateThrottle()]
         return super().get_throttles()
 
-    @action(detail=False, methods=["get", "post"])
+    @action(detail=False, methods=["post"])
     def verify_email(self, request, **kwargs):
-        """Verify email using URL parameters or POST data."""
-        if request.method == "GET":
-            # Support both query params and URL kwargs
-            uidb64 = kwargs.get("uid") or request.query_params.get("uid")
-            token = kwargs.get("token") or request.query_params.get("token")
-        else:
-            uidb64 = request.data.get("uid")
-            token = request.data.get("token")
+        """Verify email from the link's URL kwargs (or POST data).
+
+        POST-only so mail scanners and link prefetchers that GET the URL
+        can't consume the single-use token.
+        """
+        uidb64 = kwargs.get("uid") or request.data.get("uid")
+        token = kwargs.get("token") or request.data.get("token")
 
         try:
             result = verify_email_flow(uidb64, token, request, self.auth_service)
@@ -237,8 +239,14 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
 
     def validate(self, attrs):
         try:
-            data = super().validate(attrs)
-            return data
+            with transaction.atomic():
+                # Two requests with the same refresh token (two tabs, a
+                # retried request) would both pass the blacklist check before
+                # either blacklists it, and both get a new token. Lock the
+                # token's row so the second waits and then sees it blacklisted.
+                jti = self.token_class(attrs["refresh"])[jwt_settings.JTI_CLAIM]
+                OutstandingToken.objects.select_for_update().filter(jti=jti).first()
+                return super().validate(attrs)
         except User.DoesNotExist:
             logger.warning(
                 "Token refresh failed",

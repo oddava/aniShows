@@ -128,7 +128,6 @@ ignore = [
     "RUF012", # Mutable default values - common in Django, can be fixed later
     "E501",  # Line too long
     "E402",  # Module level import not at top of file
-    "F401",  # Unused imports
     "F811",  # Redefinition of unused
     "N806",  # Variable in function should be lowercase
     "PTH122", # os.path.splitext() should be replaced
@@ -195,6 +194,10 @@ addopts = [
     "--verbose",
     "--tb=short",
     "-ra",
+]
+filterwarnings = [
+    # Tests never run collectstatic, so WhiteNoise finds no STATIC_ROOT.
+    "ignore:No directory at:UserWarning",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

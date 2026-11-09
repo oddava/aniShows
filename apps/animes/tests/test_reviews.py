@@ -9,6 +9,7 @@ Tests for:
 - XSS prevention in review text
 """
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -16,6 +17,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from ...core.models import Notification
+from ...users.middleware.activity_middleware import activity_throttle_key
 from ...users.models import UserAnimeList, UserProfile
 from ..models import Anime, Review, ReviewReaction, ReviewVote
 
@@ -76,8 +78,8 @@ class ReviewCreationTests(APITestCase):
             Review.objects.filter(user=self.user, anime=self.anime).exists()
         )
 
-    def test_create_review_xss_prevention(self):
-        """Test that review text is sanitized against XSS."""
+    def test_create_review_stores_text_verbatim(self):
+        """Review text is stored exactly as typed."""
         UserAnimeList.objects.create(
             user=self.user,
             anime=self.anime,
@@ -92,9 +94,11 @@ class ReviewCreationTests(APITestCase):
         response = self.client.post(self.reviews_url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+        # Stored as typed: reviews are rendered as text (React escapes), and
+        # escaping here showed apostrophes as "&#x27;" and broke exports.
         review = Review.objects.get(user=self.user, anime=self.anime)
-        self.assertNotIn('<script>', review.text)
-        self.assertIn('&lt;script&gt;', review.text)  # Escaped
+        self.assertEqual(review.text, data['text'])
+        self.assertEqual(response.data['text'], data['text'])
 
     def test_create_review_unauthenticated(self):
         """Test that unauthenticated users cannot create reviews."""
@@ -521,6 +525,8 @@ class ReviewInteractionTests(APITestCase):
                 reaction_type=ReviewReaction.ReactionType.HEART,
             )
 
+        # The once-a-minute activity write is not part of this view's cost.
+        cache.add(activity_throttle_key(self.voter.id), True)
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(reverse("reviews-list"), {"anime": self.anime.slug})
 

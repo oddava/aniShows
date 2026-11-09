@@ -6,4 +6,4 @@ class ForumsConfig(AppConfig):
     name = "apps.forums"
 
     def ready(self):
-        from . import signals
+        from . import signals  # noqa: F401 - registers the signal handlers

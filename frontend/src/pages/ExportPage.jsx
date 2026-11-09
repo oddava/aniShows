@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getApiErrorMessage } from '../api/errors';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -48,7 +49,7 @@ const ExportPage = () => {
             
             setSuccess('Export downloaded successfully!');
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to export data');
+            setError(getApiErrorMessage(err, 'Failed to export data'));
         } finally {
             setLoading(false);
         }
@@ -75,7 +76,7 @@ const ExportPage = () => {
             
             setSuccess('Export downloaded successfully!');
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to export data');
+            setError(getApiErrorMessage(err, 'Failed to export data'));
         } finally {
             setLoading(false);
         }
@@ -90,7 +91,7 @@ const ExportPage = () => {
             setJsonPreview(JSON.parse(response.data.data));
             setShowPreview(true);
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to load preview');
+            setError(getApiErrorMessage(err, 'Failed to load preview'));
         } finally {
             setLoading(false);
         }

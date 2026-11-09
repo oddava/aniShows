@@ -7,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from ...users.models import UserAnimeList
 from ..models import Anime, Genre, UserFavorite
+from ..services.relation_links import set_relations
 
 User = get_user_model()
 
@@ -29,15 +30,6 @@ class AnimeDetailRecommendationsTests(APITestCase):
             status="Finished",
             anilist_id=100,
             mal_id=1100,
-            relations=[
-                {
-                    "id": 200,
-                    "mal_id": 1200,
-                    "slug": "frieren-season-2",
-                    "type": "SEQUEL",
-                    "title": "Frieren Season 2",
-                }
-            ],
         )
         self.anime.genres.add(self.genre)
 
@@ -52,6 +44,10 @@ class AnimeDetailRecommendationsTests(APITestCase):
             rating=8.8,
         )
         self.franchise_entry.genres.add(self.genre)
+        set_relations(
+            self.anime,
+            [{"id": 200, "mal_id": 1200, "type": "SEQUEL", "title": "Frieren Season 2"}],
+        )
 
         self.anilist_recommendation = Anime.objects.create(
             title="Delicious in Dungeon",

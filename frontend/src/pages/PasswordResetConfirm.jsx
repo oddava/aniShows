@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { getApiErrorMessage } from '../api/errors';
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, getPasswordProblem } from '../utils/password';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
@@ -19,6 +21,11 @@ export default function PasswordResetConfirm() {
             setError('Passwords do not match');
             return;
         }
+        const passwordProblem = getPasswordProblem(password);
+        if (passwordProblem) {
+            setError(passwordProblem);
+            return;
+        }
 
         setStatus('loading');
 
@@ -29,7 +36,7 @@ export default function PasswordResetConfirm() {
             });
         } catch (err) {
             setStatus('error');
-            setError(err.response?.data?.error || 'Failed to reset password');
+            setError(getApiErrorMessage(err, 'Failed to reset password'));
         } finally {
             if (status !== 'success') setStatus('idle');
         }
@@ -65,9 +72,10 @@ export default function PasswordResetConfirm() {
                                     placeholder="Enter new password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    minLength={8}
+                                    minLength={PASSWORD_MIN_LENGTH}
                                 />
                             </div>
+                            <p className="text-gray-500 text-xs mt-1">{PASSWORD_HINT}</p>
                         </div>
 
                         <div>

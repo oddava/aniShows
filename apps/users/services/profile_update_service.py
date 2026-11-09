@@ -2,18 +2,17 @@ import json
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from ...core.services.admin_settings_service import (
-    is_username_change_allowed,
-    username_length_limits,
-)
+from ...core.services.admin_settings_service import is_username_change_allowed
 from ...core.services.social_links_service import SocialLinksService
 from ...shared.logger import logger
 from ..models import UserProfile
 from .cache import invalidate_user_caches
+from .username_sanitizer import validate_username
 
 User = get_user_model()
 
@@ -22,6 +21,7 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
     with transaction.atomic():
         user = User.objects.select_for_update().get(pk=user.pk)
         profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
+        previous_username = user.username
 
         _handle_username_change(user, validated_data, profile=profile)
 
@@ -59,7 +59,13 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         if update_fields:
             profile.save(update_fields=update_fields)
 
-        transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
+        def invalidate():
+            invalidate_user_caches(user.id, user.username)
+            if previous_username != user.username:
+                # The public profile is also cached under the old name.
+                invalidate_user_caches(user.id, previous_username, trigger_stats_update=False)
+
+        transaction.on_commit(invalidate)
 
 
 def normalize_social_links_input(raw_value):
@@ -77,24 +83,19 @@ def normalize_social_links_input(raw_value):
 
     cleaned_links = []
     for link in raw_value:
-        if (
-            isinstance(link, dict)
-            and link.get("platform", "").strip()
-            and link.get("value", "").strip()
-        ):
-            cleaned_links.append(
-                {
-                    "platform": link["platform"].strip(),
-                    "value": link["value"].strip(),
-                }
-            )
+        if not isinstance(link, dict):
+            continue
+        platform, value = link.get("platform"), link.get("value")
+        if not isinstance(platform, str) or not isinstance(value, str):
+            raise ValidationError("Social link platform and value must be strings.")
+        if platform.strip() and value.strip():
+            cleaned_links.append({"platform": platform.strip(), "value": value.strip()})
     return cleaned_links
 
 
-def validate_social_links_input(raw_value, user):
+def validate_social_links_input(raw_value):
     cleaned_links = normalize_social_links_input(raw_value)
-    service = SocialLinksService()
-    return service.validate_and_process(cleaned_links, user)
+    return SocialLinksService().validate_and_process(cleaned_links)
 
 
 def _handle_username_change(user, validated_data, *, profile=None) -> None:
@@ -105,12 +106,10 @@ def _handle_username_change(user, validated_data, *, profile=None) -> None:
     if not is_username_change_allowed():
         raise ValidationError({"username": "Username changes are currently disabled."})
 
-    min_length, max_length = username_length_limits()
-    normalized_username = new_username.strip()
-    if len(normalized_username) < min_length:
-        raise ValidationError({"username": f"Username must be at least {min_length} characters."})
-    if len(normalized_username) > max_length:
-        raise ValidationError({"username": f"Username must be at most {max_length} characters."})
+    try:
+        normalized_username = validate_username(new_username)
+    except DjangoValidationError as exc:
+        raise ValidationError({"username": list(exc.messages)}) from exc
 
     if profile is None:
         profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
@@ -144,8 +143,12 @@ def _apply_social_links(profile, user, new_links, ip_address: str | None) -> boo
     except Exception as exc:
         logger.warning("Failed to log social link changes: %s", exc)
 
-    processed_links = service.validate_and_process(new_links, user, skip_metadata=True)
-    profile.social_links = processed_links
+    # ``new_links`` were validated by the serializer; don't redo network checks here.
+    profile.social_links = new_links
+    old_urls = {link.get("url") or link.get("value") for link in old_links}
+    SocialLinksService.schedule_metadata_fetch(
+        [link["url"] for link in new_links if link["url"] not in old_urls], user.id
+    )
     return True
 
 

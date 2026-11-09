@@ -25,6 +25,7 @@ const AdminAnime = () => {
 
     const fetchAnime = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const params = new URLSearchParams({
                 page,
@@ -39,6 +40,11 @@ const AdminAnime = () => {
             setTotalPages(Math.ceil(response.data.count / 20));
         } catch (err) {
             logger.error('Failed to fetch anime:', err);
+            if (err.response?.status === 404 && page > 1) {
+                // The page no longer exists, e.g. after deleting its last row.
+                setPage((current) => Math.max(1, current - 1));
+                return;
+            }
             setError(err.response?.data?.detail || 'Failed to load anime');
         } finally {
             setLoading(false);
@@ -105,7 +111,7 @@ const AdminAnime = () => {
                         type="text"
                         placeholder="Search anime titles..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                         className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
                     />
                 </form>
@@ -114,7 +120,7 @@ const AdminAnime = () => {
                     <div className="flex-1 md:flex-none">
                         <CustomSelect
                             value={filters.status}
-                            onChange={(nextValue) => setFilters((f) => ({ ...f, status: nextValue }))}
+                            onChange={(nextValue) => { setFilters((f) => ({ ...f, status: nextValue })); setPage(1); }}
                             options={[
                                 { value: '', label: 'All Statuses' },
                                 { value: 'Airing', label: 'Airing' },
@@ -130,7 +136,7 @@ const AdminAnime = () => {
                     <div className="flex-1 md:flex-none">
                         <CustomSelect
                             value={filters.type}
-                            onChange={(nextValue) => setFilters((f) => ({ ...f, type: nextValue }))}
+                            onChange={(nextValue) => { setFilters((f) => ({ ...f, type: nextValue })); setPage(1); }}
                             options={[
                                 { value: '', label: 'All Types' },
                                 { value: 'TV', label: 'TV Show' },
@@ -147,7 +153,7 @@ const AdminAnime = () => {
                     <div className="w-full md:w-auto md:flex-none">
                         <CustomSelect
                             value={filters.ordering}
-                            onChange={(nextValue) => setFilters((f) => ({ ...f, ordering: nextValue }))}
+                            onChange={(nextValue) => { setFilters((f) => ({ ...f, ordering: nextValue })); setPage(1); }}
                             options={[
                                 { value: '-created_at', label: 'Newest First' },
                                 { value: 'created_at', label: 'Oldest First' },

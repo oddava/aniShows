@@ -1,3 +1,4 @@
+import json
 
 from django.conf import settings
 from django.utils import timezone
@@ -60,7 +61,7 @@ class PushService:
                         "auth": subscription.auth,
                     },
                 },
-                data=str(payload).replace("'", '"'),  # JSON string
+                data=json.dumps(payload),
                 vapid_private_key=getattr(settings, "VAPID_PRIVATE_KEY", None),
                 vapid_claims=cls.get_vapid_claims(),
             )

@@ -51,9 +51,7 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
         Clients only receive server-pushed updates. A ping/pong is supported
         for keep-alive.
         """
-        msg_type = content.get("type")
-
-        if msg_type == "ping":
+        if isinstance(content, dict) and content.get("type") == "ping":
             await self.send_json({"type": "pong"})
 
     # ------------------------------------------------------------------

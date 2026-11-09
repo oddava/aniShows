@@ -8,7 +8,7 @@ from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
 from ...shared.logger import logger
-from ...shared.retry import backoff
+from ...shared.retry import backoff, retry_after_seconds
 from ..models import Anime
 from .jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
@@ -190,8 +190,9 @@ class AnimeWatchEpisodeService:
                 return None
 
             if response.status_code == 429:
-                retry_after = response.headers.get("Retry-After")
-                wait_time = float(retry_after) if retry_after else min(2**attempt + 1, 60)
+                wait_time = retry_after_seconds(response.headers.get("Retry-After"))
+                if wait_time is None:
+                    wait_time = min(2**attempt + 1, 60)
                 limiter.record_429(cooldown_hint=wait_time)
                 if attempt < max_retries:
                     await asyncio.sleep(wait_time)

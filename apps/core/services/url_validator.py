@@ -207,7 +207,7 @@ class URLValidator:
 
             # Check 7: Domain age (WHOIS) - only for suspicious domains
             # Skip for known good platforms to speed up validation
-            platform = self._detect_platform(parsed.netloc)
+            platform = self._detect_platform(hostname)
             domain_age_days = None
             if not platform:  # Only check age for unknown platforms
                 domain_age_days = self._get_domain_age(hostname)
@@ -249,43 +249,40 @@ class URLValidator:
             result = (False, str(e), {})
             cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
             return result
-        except Exception as e:
-            logger.error(f"Unexpected error validating URL {url}: {e}")
-            result = (False, f"Validation error: {str(e)}", {})
-            cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
-            return result
+        except Exception:
+            # Not cached: an unexpected failure is likely transient.
+            logger.exception("Unexpected error validating URL")
+            return (False, "Could not validate this URL right now. Please try again.", {})
 
     def _normalize_url(self, url: str) -> str:
-        """Normalize URL to standard format"""
+        """Normalize URL to standard format.
+
+        Raises ``URLValidationError`` for embedded credentials: in
+        ``https://youtube.com@evil.example`` the visible "youtube.com" is only
+        a username and the real host is evil.example.
+        """
         url = url.strip()
 
         # Add scheme if missing
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
 
-        # Parse and reconstruct to normalize
         parsed = urlparse(url)
+        if parsed.username is not None or parsed.password is not None:
+            raise URLValidationError("URLs with embedded credentials are not allowed")
 
-        # Remove default port if present
-        netloc = parsed.netloc
-        if ":443" in netloc and parsed.scheme == "https":
-            netloc = netloc.replace(":443", "")
-        elif ":80" in netloc and parsed.scheme == "http":
-            netloc = netloc.replace(":80", "")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise URLValidationError("Invalid port") from exc
 
-        # Reconstruct normalized URL
-        normalized = urlunparse(
-            (
-                parsed.scheme,
-                netloc.lower(),
-                parsed.path,
-                parsed.params,
-                parsed.query,
-                "",  # Remove fragment
-            )
-        )
+        host = (parsed.hostname or "").lower()
+        if ":" in host:
+            host = f"[{host}]"
+        default_port = {"https": 443, "http": 80}.get(parsed.scheme)
+        netloc = host if port in (None, default_port) else f"{host}:{port}"
 
-        return normalized
+        return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, ""))
 
     def validate_public_target(
         self, url: str, *, allowed_schemes: tuple[str, ...] = ("https",)
@@ -384,10 +381,6 @@ class URLValidator:
             if host.startswith("xn--"):
                 return True
             return False
-
-    def _resolve_dns(self, netloc: str) -> bool:
-        """Check if domain resolves to a valid IP"""
-        return bool(self._resolve_public_ips(netloc))
 
     def _resolve_public_ips(
         self, netloc: str

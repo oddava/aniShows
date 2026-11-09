@@ -51,6 +51,25 @@ TIME_LIMIT_PRESETS: dict[str, tuple[int, int]] = {
 }
 
 
+# Task kwargs are persisted (result backend, CeleryTaskResult) and logged;
+# these never may be. Bulky payloads are summarised instead of stored.
+SECRET_TASK_KWARGS = frozenset({"access_token", "password", "token", "secret"})
+BULKY_TASK_KWARGS = frozenset({"xml_content"})
+
+
+def redact_task_kwargs(kwargs: dict | None) -> dict:
+    """Return a copy of ``kwargs`` that is safe to store, display and log."""
+    redacted = {}
+    for key, value in (kwargs or {}).items():
+        if key in SECRET_TASK_KWARGS and value:
+            redacted[key] = "[redacted]"
+        elif key in BULKY_TASK_KWARGS and isinstance(value, str):
+            redacted[key] = f"[{len(value)} characters]"
+        else:
+            redacted[key] = value
+    return redacted
+
+
 def _serialize_for_log(value: Any) -> str:
     return limited_repr(value)
 
@@ -68,7 +87,7 @@ class ObservedTask(Task):
             extra={
                 "task_id": task_id,
                 "task_args": _serialize_for_log(args),
-                "task_kwargs": _serialize_for_log(kwargs),
+                "task_kwargs": _serialize_for_log(redact_task_kwargs(kwargs)),
             },
         )
         super().before_start(task_id, args, kwargs)

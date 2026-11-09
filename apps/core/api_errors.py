@@ -99,6 +99,15 @@ def api_response(
     )
 
 
+def _exception_code(exc) -> str | None:
+    if hasattr(exc, "get_codes"):
+        derived_code = _first_code(exc.get_codes())
+        if derived_code:
+            return derived_code
+    default_code = getattr(exc, "default_code", None)
+    return str(default_code) if default_code else None
+
+
 def api_exception_handler(exc, context):
     response = drf_exception_handler(exc, context)
     if response is None:
@@ -108,7 +117,8 @@ def api_exception_handler(exc, context):
         {"detail", "code", "errors"}
     ):
         response.data.setdefault("detail", "Request failed.")
-        response.data.setdefault("code", "request_failed")
+        # Keep the exception's own code (e.g. "not_authenticated", "throttled").
+        response.data.setdefault("code", _exception_code(exc) or "request_failed")
         return response
 
     errors = None
@@ -126,12 +136,7 @@ def api_exception_handler(exc, context):
 
     code = "validation_error" if errors is not None else "request_failed"
     if errors is None:
-        if hasattr(exc, "get_codes"):
-            derived_code = _first_code(exc.get_codes())
-            if derived_code:
-                code = derived_code
-        elif hasattr(exc, "default_code") and getattr(exc, "default_code", None):
-            code = str(exc.default_code)
+        code = _exception_code(exc) or code
 
     response.data = build_error_payload(
         detail=detail or "Request failed.",

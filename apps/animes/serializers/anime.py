@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.db.models import Q
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -15,7 +14,6 @@ from rest_framework.serializers import (
 from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
 from ..services.jikan import JikanService
-from ..services.relation_links import anime_keys, match_relation
 from .base import (
     AnimeCharacterSerializer,
     AnimeStaffSerializer,
@@ -460,68 +458,29 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         return links
 
     def get_relations(self, obj):
-        raw_relations = obj.relations or []
-        if not isinstance(raw_relations, list):
-            return []
+        if "relations" in getattr(obj, "_prefetched_objects_cache", {}):
+            rows = obj.relations.all()
+        else:
+            rows = Anime.relations_prefetch().queryset.filter(from_anime=obj)
 
-        linked_slugs = []
-        linked_anilist_ids = []
-        linked_mal_ids = []
         relations = []
-        for relation in raw_relations:
-            if not isinstance(relation, dict):
-                continue
-
-            relation_data = relation.copy()
-            if relation_data.get("slug"):
-                linked_slugs.append(relation_data["slug"])
-            if relation_data.get("id"):
-                linked_anilist_ids.append(relation_data["id"])
-            if relation_data.get("mal_id"):
-                linked_mal_ids.append(relation_data["mal_id"])
-            relations.append(relation_data)
-
-        linked_anime_by_slug = {}
-        linked_anime_by_key = {}
-        if linked_slugs or linked_anilist_ids or linked_mal_ids:
-            linked_anime = Anime.objects.filter(
-                Q(slug__in=linked_slugs)
-                | Q(anilist_id__in=linked_anilist_ids)
-                | Q(mal_id__in=linked_mal_ids)
-            ).only(
-                "slug",
-                "anilist_id",
-                "mal_id",
-                "cover_image",
-                "cover_image_external_url",
+        for relation in rows:
+            linked = relation.to_anime
+            cover = JikanService.normalize_external_image_url(relation.cover)
+            if not cover and linked is not None:
+                cover = self.get_image_url(linked, "cover_image", "cover_image_external_url")
+            relations.append(
+                {
+                    "id": relation.target_anilist_id or (linked and linked.anilist_id),
+                    "mal_id": relation.target_mal_id or (linked and linked.mal_id),
+                    "type": relation.relation_type or None,
+                    "title": relation.title,
+                    "format": relation.format or None,
+                    "status": relation.status or None,
+                    "cover": cover or "",
+                    "slug": linked.slug if linked is not None else None,
+                }
             )
-            for anime in linked_anime:
-                linked_anime_by_slug[anime.slug] = anime
-                for key in anime_keys(anime):
-                    linked_anime_by_key[key] = anime
-
-        for relation in relations:
-            linked = None
-            relation_slug = relation.get("slug")
-            if relation_slug:
-                linked = linked_anime_by_slug.get(relation_slug)
-            if linked is None:
-                linked = match_relation(relation, linked_anime_by_key)
-            if linked is not None and not relation.get("slug"):
-                relation["slug"] = linked.slug
-
-            normalized_cover = JikanService.normalize_external_image_url(relation.get("cover"))
-            if normalized_cover:
-                relation["cover"] = normalized_cover
-            elif linked is not None:
-                relation["cover"] = self.get_image_url(
-                    linked,
-                    "cover_image",
-                    "cover_image_external_url",
-                )
-            else:
-                relation["cover"] = ""
-
         return relations
 
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):

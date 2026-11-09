@@ -248,6 +248,7 @@ MIDDLEWARE = [
     "apps.core.middleware.SiteControlMiddleware",
     "apps.core.middleware.LoggingMiddleware",
     "apps.core.middleware.AdminAuditMiddleware",
+    "apps.users.middleware.activity_middleware.UserActivityMiddleware",
     "apps.core.middleware.ExceptionLoggingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

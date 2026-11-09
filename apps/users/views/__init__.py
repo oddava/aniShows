@@ -13,3 +13,21 @@ from .badges import UserBadgeViewSet
 from .follows import FollowViewSet
 from .lists import UserAnimeListViewSet
 from .users import PublicUserProfileViewSet, UserProfileView, UserStatsView
+
+__all__ = [
+    "AccountManagementViewSet",
+    "AdminBadgeViewSet",
+    "AuthViewSet",
+    "CustomTokenObtainPairView",
+    "FollowViewSet",
+    "LoggingTokenRefreshView",
+    "LogoutView",
+    "PublicUserProfileViewSet",
+    "RegisterView",
+    "UserActivityViewSet",
+    "UserAnimeListViewSet",
+    "UserBadgeViewSet",
+    "UserProfileView",
+    "UserStatsView",
+    "WebSocketTicketView",
+]

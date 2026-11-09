@@ -11,6 +11,16 @@ from ..shared.logger import logger
 from .services.notification_service import NotificationService
 
 
+def _positive_int(value) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for real-time user notifications.
 
@@ -70,10 +80,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             - ``{"type": "mark_all_read"}``
             - ``{"type": "ping"}``
         """
+        # Malformed client messages are ignored; raising here would drop the
+        # user's live connection.
+        if not isinstance(content, dict):
+            return
         msg_type = content.get("type")
 
         if msg_type == "mark_read":
-            notification_id = content.get("notification_id")
+            notification_id = _positive_int(content.get("notification_id"))
             if notification_id:
                 success = await self._mark_as_read(notification_id)
                 if success:
