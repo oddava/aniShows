@@ -22,6 +22,7 @@ import {
     getSupportedTimeZones,
     normalizeTimeZonePreference,
 } from '../utils/dateUtils';
+import { profileKeys } from '../api/queries/user';
 
 function getResponsiveBannerAspect(width) {
     const safeWidth = Math.max(320, Number(width) || 320);
@@ -365,15 +366,15 @@ export default function Settings() {
             // Use PATCH response as source of truth to avoid stale re-fetch fallback
             if (updatedProfile && typeof updatedProfile === 'object') {
                 refreshProfile(updatedProfile);
-                queryClient.setQueryData(['ownProfile'], updatedProfile);
+                queryClient.setQueryData(profileKeys.own, updatedProfile);
             } else {
                 refreshProfile();
             }
 
             // Invalidate React Query profile caches so Profile page shows fresh data
             // (avatar, banner, bio, username changes etc.)
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            queryClient.invalidateQueries({ queryKey: profileKeys.all });
         } catch (err) {
             logger.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
@@ -433,8 +434,8 @@ export default function Settings() {
         try {
             await authApi.updateProfile({ is_private: newPrivacy });
             // Invalidate profile caches since privacy affects public profile visibility
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            queryClient.invalidateQueries({ queryKey: profileKeys.all });
         } catch (err) {
             logger.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure

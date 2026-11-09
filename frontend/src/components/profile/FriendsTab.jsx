@@ -3,6 +3,7 @@ import { followApi } from '../../api/client';
 import { Link } from 'react-router-dom';
 import { UserRound, Users } from 'lucide-react';
 import { useState } from 'react';
+import { friendKeys } from '../../api/queries/user';
 
 function FriendItem({ item }) {
     const user = item.user;
@@ -48,7 +49,7 @@ export default function FriendsTab({ username, isPrivate }) {
         isError,
         refetch,
     } = useInfiniteQuery({
-        queryKey: ['friends-infinite', username],
+        queryKey: friendKeys.list(username),
         queryFn: async ({ pageParam }) => {
             const res = await followApi.getMutuals(username, { page: pageParam, page_size: 20 });
             return res.data || { results: [], count: 0, next: null };

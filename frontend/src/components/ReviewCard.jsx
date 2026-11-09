@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewApi } from '../api/client';
 import MiniProfileHoverCard from './common/MiniProfileHoverCard';
 import AnimeMediaImage from './common/AnimeMediaImage';
+import { reviewKeys } from '../api/queries/user';
 
 // Generate consistent color from string
 const stringToColor = (str) => {
@@ -132,14 +133,14 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     const voteMutation = useMutation({
         mutationFn: (voteType) => reviewApi.vote(review.id, voteType),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
         }
     });
 
     const reactionMutation = useMutation({
         mutationFn: (reactionType) => reviewApi.react(review.id, reactionType),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
         }
     });
 

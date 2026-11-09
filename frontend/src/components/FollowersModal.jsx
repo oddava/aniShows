@@ -5,6 +5,7 @@ import { followApi } from '../api/client';
 import { X, Users, User, UserCheck, UserPlus, UserMinus, Loader2, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { followKeys, profileKeys } from '../api/queries/user';
 
 const ITEM_HEIGHT = 68; // px per row — must match actual rendered height
 
@@ -54,7 +55,7 @@ export default function FollowersModal({
         isError,
         refetch
     } = useInfiniteQuery({
-        queryKey: ['follows', username, activeTab],
+        queryKey: followKeys.list(username, activeTab),
         queryFn: async ({ pageParam }) => {
             const apiCall = activeTab === 'followers'
                 ? followApi.getFollowers
@@ -123,10 +124,10 @@ export default function FollowersModal({
     // On close: invalidate queries so the profile page gets fresh data
     const handleClose = useCallback(() => {
         if (didMutateRef.current) {
-            queryClient.invalidateQueries({ queryKey: ['profile', username] });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-            queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
-            queryClient.invalidateQueries({ queryKey: ['follows'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.byUsername(username) });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            queryClient.invalidateQueries({ queryKey: profileKeys.me });
+            queryClient.invalidateQueries({ queryKey: followKeys.all });
         }
         onClose();
     }, [onClose, queryClient, username]);

@@ -15,6 +15,7 @@ import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
 import ListEntryEditModal from './ListEntryEditModal';
+import { listKeys, profileKeys } from '../api/queries/user';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', color: 'bg-green-500', icon: Eye },
@@ -35,8 +36,8 @@ const DEFAULT_MODAL_ENTRY = {
 };
 
 function invalidateLocalListQueries(queryClient) {
-    queryClient.invalidateQueries({ queryKey: ['lists'] });
-    queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+    queryClient.invalidateQueries({ queryKey: listKeys.all });
+    queryClient.invalidateQueries({ queryKey: profileKeys.own });
 }
 
 export default function StatusSelector({

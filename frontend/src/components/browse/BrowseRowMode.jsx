@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import { animeApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import CategoryRow from './CategoryRow';
+import { animeKeys } from '../../api/queries/anime';
 
 const ROW_PAGE_SIZE = 6;
 const BROWSE_ROWS_TIMEOUT_MS = 12000;
@@ -41,7 +42,7 @@ export default function BrowseRowMode({ titleLanguage = 'en' }) {
     const adultContentEnabled = Boolean(user?.show_adult_content);
 
     const { data: browseRows = [], isLoading, isError, isFetching, refetch } = useQuery({
-        queryKey: ['anime', 'browse-row', adultContentEnabled],
+        queryKey: animeKeys.browseRow(adultContentEnabled),
         queryFn: ({ signal }) => {
             let timeoutId;
             const request = animeApi.getBrowseRows(signal).then((res) => res.data || []);

@@ -4,13 +4,7 @@ import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
 import AnimeMediaImage from '../common/AnimeMediaImage';
-import {
-    activityApi,
-    characterFavoriteApi,
-    favoriteApi,
-    listApi,
-    staffFavoriteApi,
-} from '../../api/client';
+import { activityQueries, characterFavoriteQueries, favoriteQueries, insightsQueries, listQueries, staffFavoriteQueries } from '../../api/queries/user';
 
 const OVERVIEW_GRID_MAX_ROWS = 6;
 const OVERVIEW_GRID_COLUMNS = 6;
@@ -228,16 +222,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
 
 function GenreOverviewSidebar({ username, isPrivate }) {
     const { data: listsData, isLoading } = useQuery({
-        queryKey: ['insights-lists', username],
-        queryFn: async () => {
-            const statuses = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
-            const results = await Promise.all(
-                statuses.map(status =>
-                    listApi.getAll({ status, username }).then(res => res.data.results || res.data || [])
-                )
-            );
-            return results.flat();
-        },
+        ...insightsQueries.overviewLists(username),
         enabled: !isPrivate && !!username,
         staleTime: 2 * 60 * 1000, // 2 minutes
         refetchOnMount: true,
@@ -311,8 +296,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
 
 function ActivityHistorySidebar({ username, isPrivate, accentColor }) {
     const { data: heatmapData, isLoading, isError } = useQuery({
-        queryKey: ['activity-heatmap', username],
-        queryFn: () => activityApi.getHeatmap({ username }).then(res => res.data),
+        ...activityQueries.heatmap(username),
         enabled: !isPrivate && !!username,
         staleTime: 2 * 60 * 1000, // 2 minutes
         refetchOnMount: true,
@@ -334,49 +318,28 @@ export default function OverviewTab({
     onTabChange
 }) {
     const { data: watchingItemsData } = useQuery({
-        queryKey: ['lists', targetUsername, 'Watching', 'overview'],
-        queryFn: () => listApi.getAll({
-            status: 'Watching',
-            username: targetUsername,
-            page: 1,
-            page_size: OVERVIEW_GRID_MAX_ITEMS,
-        }).then(res => res.data.results || res.data || []),
+        ...listQueries.overview(targetUsername, 'Watching', OVERVIEW_GRID_MAX_ITEMS),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000, // 1 minute
         refetchOnMount: true,
     });
 
     const { data: favsData } = useQuery({
-        queryKey: ['favorites-overview', targetUsername],
-        queryFn: () => favoriteApi.getAll({
-            username: targetUsername,
-            page: 1,
-            page_size: OVERVIEW_GRID_MAX_ITEMS,
-        }).then(res => res.data),
+        ...favoriteQueries.overview(targetUsername, OVERVIEW_GRID_MAX_ITEMS),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000, // 1 minute
         refetchOnMount: true,
     });
 
     const { data: characterFavsData } = useQuery({
-        queryKey: ['character-favorites', targetUsername, 'overview'],
-        queryFn: () => characterFavoriteApi.getAll({
-            username: targetUsername,
-            page: 1,
-            page_size: OVERVIEW_GRID_MAX_ITEMS,
-        }).then((res) => res.data),
+        ...characterFavoriteQueries.overview(targetUsername, OVERVIEW_GRID_MAX_ITEMS),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000,
         refetchOnMount: true,
     });
 
     const { data: staffFavsData } = useQuery({
-        queryKey: ['staff-favorites', targetUsername, 'overview'],
-        queryFn: () => staffFavoriteApi.getAll({
-            username: targetUsername,
-            page: 1,
-            page_size: OVERVIEW_GRID_MAX_ITEMS,
-        }).then((res) => res.data),
+        ...staffFavoriteQueries.overview(targetUsername, OVERVIEW_GRID_MAX_ITEMS),
         enabled: !!displayUser && !isPrivate,
         staleTime: 60 * 1000,
         refetchOnMount: true,

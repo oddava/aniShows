@@ -26,6 +26,8 @@ import {
 } from '../utils/imageUtils';
 import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
+import { animeKeys, animeQueries } from '../api/queries/anime';
+import { favoriteKeys, listKeys, profileKeys, reviewKeys, reviewQueries, userKeys } from '../api/queries/user';
 
 // recharts is heavy; load it only when the Stats tab is opened.
 const StatsTab = lazy(() => import('../components/StatsTab'));
@@ -44,20 +46,6 @@ const DEFAULT_TAB_ID = 'overview';
 const WATCH_PREVIEW_PAGE_SIZE = 4;
 const WATCH_TAB_PAGE_SIZE = 50;
 const DETAIL_RELATION_PAGE_SIZE = 50;
-
-const getNextPageParamFromUrl = (lastPage) => {
-    if (!lastPage?.next) {
-        return undefined;
-    }
-
-    try {
-        const url = new URL(lastPage.next);
-        const nextPage = Number.parseInt(url.searchParams.get('page'), 10);
-        return Number.isFinite(nextPage) && nextPage > 0 ? nextPage : undefined;
-    } catch {
-        return undefined;
-    }
-};
 
 const getTabByPath = (tabPath) => {
     const normalizedPath = tabPath?.replace(/^\/+|\/+$/g, '') || '';
@@ -223,18 +211,15 @@ export default function AnimeDetail() {
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
-    const animeDetailQueryKey = useMemo(() => ['anime', slug, user?.id || 'anonymous'], [slug, user?.id]);
-    const watchPreviewQueryKey = useMemo(() => ['anime', slug, 'watch-episodes-preview'], [slug]);
-    const watchEpisodesQueryKey = useMemo(() => ['anime', slug, 'watch-episodes', WATCH_TAB_PAGE_SIZE], [slug]);
-    const charactersQueryKey = useMemo(() => ['anime', slug, 'characters', DETAIL_RELATION_PAGE_SIZE], [slug]);
-    const staffQueryKey = useMemo(() => ['anime', slug, 'staff', DETAIL_RELATION_PAGE_SIZE], [slug]);
+    const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
+    const watchPreviewQueryKey = useMemo(() => animeKeys.watchPreview(slug), [slug]);
+    const watchEpisodesQueryKey = useMemo(() => animeKeys.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE), [slug]);
     const shouldLoadWatchPreview = activeTab === 'overview';
     const shouldLoadWatchTab = activeTab === 'watch';
 
     // Queries
     const { data: anime, isLoading, isError } = useQuery({
-        queryKey: animeDetailQueryKey,
-        queryFn: () => animeApi.getBySlug(slug).then(res => res.data),
+        ...animeQueries.detail(slug, user?.id),
         staleTime: 300000, // 5 minutes
         gcTime: 600000, // 10 minutes
     });
@@ -246,13 +231,7 @@ export default function AnimeDetail() {
         isFetchingNextPage: isFetchingNextCharactersPage,
         isLoading: charactersLoading,
     } = useInfiniteQuery({
-        queryKey: charactersQueryKey,
-        queryFn: ({ pageParam }) => animeApi.getCharacters(slug, {
-            page: pageParam,
-            page_size: DETAIL_RELATION_PAGE_SIZE,
-        }).then(res => res.data),
-        initialPageParam: 1,
-        getNextPageParam: getNextPageParamFromUrl,
+        ...animeQueries.characters(slug, DETAIL_RELATION_PAGE_SIZE),
         enabled: !!anime && activeTab === 'characters',
         staleTime: Infinity, // Character lists rarely change
     });
@@ -264,13 +243,7 @@ export default function AnimeDetail() {
         isFetchingNextPage: isFetchingNextStaffPage,
         isLoading: staffLoading,
     } = useInfiniteQuery({
-        queryKey: staffQueryKey,
-        queryFn: ({ pageParam }) => animeApi.getStaff(slug, {
-            page: pageParam,
-            page_size: DETAIL_RELATION_PAGE_SIZE,
-        }).then(res => res.data),
-        initialPageParam: 1,
-        getNextPageParam: getNextPageParamFromUrl,
+        ...animeQueries.staff(slug, DETAIL_RELATION_PAGE_SIZE),
         enabled: !!anime && activeTab === 'staff',
         staleTime: Infinity, // Staff lists rarely change
     });
@@ -278,11 +251,7 @@ export default function AnimeDetail() {
     const {
         data: watchPreviewData,
     } = useQuery({
-        queryKey: watchPreviewQueryKey,
-        queryFn: () => animeApi.getWatchEpisodes(slug, {
-            page: 1,
-            page_size: WATCH_PREVIEW_PAGE_SIZE,
-        }).then((res) => res.data),
+        ...animeQueries.watchPreview(slug, WATCH_PREVIEW_PAGE_SIZE),
         enabled: !!anime && shouldLoadWatchPreview,
         staleTime: 300000,
     });
@@ -296,13 +265,7 @@ export default function AnimeDetail() {
         isError: watchEpisodesIsError,
         refetch: refetchWatchEpisodes,
     } = useInfiniteQuery({
-        queryKey: watchEpisodesQueryKey,
-        queryFn: ({ pageParam }) => animeApi.getWatchEpisodes(slug, {
-            page: pageParam,
-            page_size: WATCH_TAB_PAGE_SIZE,
-        }).then(res => res.data),
-        initialPageParam: 1,
-        getNextPageParam: getNextPageParamFromUrl,
+        ...animeQueries.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE),
         enabled: !!anime && shouldLoadWatchTab,
         staleTime: 300000,
     });
@@ -311,14 +274,13 @@ export default function AnimeDetail() {
         data: episodeRatings,
         isLoading: episodeRatingsLoading,
     } = useQuery({
-        queryKey: ['anime', slug, 'episode-ratings', user?.id || 'anonymous'],
-        queryFn: () => animeApi.getEpisodeRatings(slug).then(res => res.data),
+        ...animeQueries.episodeRatings(slug, user?.id),
         enabled: !!anime && (activeTab === 'watch' || activeTab === 'stats'),
         staleTime: 60000,
     });
 
     const { data: reviewsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading: reviewsLoading } = useInfiniteQuery({
-        queryKey: ['reviews', slug, reviewSort, ratingFilter],
+        queryKey: reviewKeys.forAnime(slug, reviewSort, ratingFilter),
         queryFn: ({ pageParam }) => reviewApi.getAll({
             anime: slug,
             page: pageParam,
@@ -339,14 +301,12 @@ export default function AnimeDetail() {
     });
 
     const { data: reviewStats } = useQuery({
-        queryKey: ['reviewStats', slug],
-        queryFn: () => reviewApi.getStats(slug).then(res => res.data),
+        ...reviewQueries.stats(slug),
         enabled: !!slug
     });
 
     const { data: recommendations } = useQuery({
-        queryKey: ['anime', slug, 'recommendations'],
-        queryFn: () => animeApi.getRecommendations(slug).then(res => res.data),
+        ...animeQueries.recommendations(slug),
         enabled: !!anime,
     });
 
@@ -417,25 +377,20 @@ export default function AnimeDetail() {
         }
 
         queryClient.prefetchInfiniteQuery({
-            queryKey: watchEpisodesQueryKey,
-            queryFn: ({ pageParam = 1 }) => animeApi.getWatchEpisodes(slug, {
-                page: pageParam,
-                page_size: WATCH_TAB_PAGE_SIZE,
-            }).then((res) => res.data),
-            initialPageParam: 1,
+            ...animeQueries.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE),
             staleTime: 300000,
         });
-    }, [anime, activeTab, queryClient, slug, watchEpisodesQueryKey]);
+    }, [anime, activeTab, queryClient, slug]);
 
     // Mutations
     const createReviewMutation = useMutation({
         mutationFn: (data) => reviewApi.create({ ...data, anime_slug: slug }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
             queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
             if (user?.username) {
-                queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
+                queryClient.invalidateQueries({ queryKey: profileKeys.byUsername(user.username) });
             }
             setIsWritingReview(false);
         },
@@ -444,7 +399,7 @@ export default function AnimeDetail() {
     const updateReviewMutation = useMutation({
         mutationFn: ({ id, data }) => reviewApi.update(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
             queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             setEditingReview(null);
         },
@@ -453,13 +408,13 @@ export default function AnimeDetail() {
     const deleteReviewMutation = useMutation({
         mutationFn: (id) => reviewApi.delete(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
+            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
             queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
             if (user?.username) {
-                queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
-                queryClient.invalidateQueries({ queryKey: ['favorites', user.username] });
-                queryClient.invalidateQueries({ queryKey: ['favorites-overview', user.username] });
+                queryClient.invalidateQueries({ queryKey: profileKeys.byUsername(user.username) });
+                queryClient.invalidateQueries({ queryKey: favoriteKeys.byUser(user.username) });
+                queryClient.invalidateQueries({ queryKey: favoriteKeys.overview(user.username) });
             }
         },
     });
@@ -470,7 +425,7 @@ export default function AnimeDetail() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: watchEpisodesQueryKey });
             queryClient.invalidateQueries({ queryKey: watchPreviewQueryKey });
-            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'episode-ratings'] });
+            queryClient.invalidateQueries({ queryKey: animeKeys.episodeRatingsAll(slug) });
         },
     });
 
@@ -479,7 +434,7 @@ export default function AnimeDetail() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: watchEpisodesQueryKey });
             queryClient.invalidateQueries({ queryKey: watchPreviewQueryKey });
-            queryClient.invalidateQueries({ queryKey: ['anime', slug, 'episode-ratings'] });
+            queryClient.invalidateQueries({ queryKey: animeKeys.episodeRatingsAll(slug) });
         },
     });
 
@@ -489,11 +444,11 @@ export default function AnimeDetail() {
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
             if (user?.username) {
-                queryClient.invalidateQueries({ queryKey: ['profile', user.username] });
-                queryClient.invalidateQueries({ queryKey: ['favorites', user.username] });
-                queryClient.invalidateQueries({ queryKey: ['favorites-overview', user.username] });
+                queryClient.invalidateQueries({ queryKey: profileKeys.byUsername(user.username) });
+                queryClient.invalidateQueries({ queryKey: favoriteKeys.byUser(user.username) });
+                queryClient.invalidateQueries({ queryKey: favoriteKeys.overview(user.username) });
             }
         } catch (error) {
             logger.error('Error toggling favorite:', error);
@@ -534,11 +489,11 @@ export default function AnimeDetail() {
             };
         });
 
-        queryClient.invalidateQueries({ queryKey: ['anime'] });
+        queryClient.invalidateQueries({ queryKey: animeKeys.all });
         queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
-        queryClient.invalidateQueries({ queryKey: ['user', 'list', 'watching'] });
-        queryClient.invalidateQueries({ queryKey: ['lists'] });
-        queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+        queryClient.invalidateQueries({ queryKey: userKeys.watching });
+        queryClient.invalidateQueries({ queryKey: listKeys.all });
+        queryClient.invalidateQueries({ queryKey: profileKeys.own });
     }, [animeDetailQueryKey, queryClient]);
 
     const handleReviewSubmit = useCallback(async (data) => {

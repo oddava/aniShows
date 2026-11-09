@@ -13,6 +13,7 @@ import RichTextEditor from '../../components/forums/RichTextEditor';
 import MarkdownRenderer from '../../components/common/MarkdownRenderer';
 import { preloadForumChunks } from '../../App';
 import React, { memo } from 'react';
+import { forumQueries } from '../../api/queries/forums';
 
 const CategorySelector = memo(({ allCategories, selectedCategoryId, onChange }) => (
     <div className="px-5 py-4">
@@ -50,19 +51,16 @@ const CreateThread = () => {
     const [selectedCategoryId, setSelectedCategoryId] = useState(null);
 
     const { data: categoryFromSlug, isLoading: isCategoryLoading } = useQuery({
-        queryKey: ['forumCategory', slug],
-        queryFn: () => forumsApi.getCategory(slug),
+        ...forumQueries.category(slug),
         enabled: !!slug,
     });
 
     const { data: allCategories, isLoading: isCategoriesLoading } = useQuery({
-        queryKey: ['forumCategories'],
-        queryFn: forumsApi.getCategories,
+        ...forumQueries.categories(),
     });
 
     const { data: tagsData } = useQuery({
-        queryKey: ['forumTags'],
-        queryFn: forumsApi.getTags,
+        ...forumQueries.tags(),
     });
 
     const activeCategory = categoryFromSlug || allCategories?.results?.find(c => c.id === selectedCategoryId);

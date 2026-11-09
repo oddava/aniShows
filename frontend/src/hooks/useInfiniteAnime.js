@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { animeApi } from '../api/client';
 import { getNextPageNumber } from '../api/pagination';
+import { animeKeys } from '../api/queries/anime';
 
 /**
  * Hook to fetch anime with infinite scroll/pagination
@@ -19,9 +20,7 @@ export function useInfiniteAnime({
     pageSize = 12,
 }) {
     return useInfiniteQuery({
-        queryKey: [
-            'anime',
-            'list',
+        queryKey: animeKeys.filteredList(
             {
                 genres: currentGenres,
                 sort: currentSort,
@@ -34,7 +33,7 @@ export function useInfiniteAnime({
                 minRating: currentMinRating,
                 maxRating: currentMaxRating,
             }
-        ],
+        ),
         queryFn: ({ pageParam = 1 }) =>
             animeApi.getAll({
                 page: pageParam,

@@ -13,7 +13,7 @@ import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
 import ViewModeToggle from '../components/browse/ViewModeToggle';
 import TrendingCarousel from '../components/browse/TrendingCarousel';
-import { animeApi, genreApi, studioApi, authApi } from '../api/client';
+import { animeApi, authApi } from '../api/client';
 import { getNextPageNumber } from '../api/pagination';
 import { useAuth } from '../context/AuthContext';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
@@ -27,6 +27,8 @@ import { useTheme } from '../context/ThemeContext';
 import TopFilterBar from '../components/browse/TopFilterBar';
 import BrowseRowMode from '../components/browse/BrowseRowMode';
 import { filterBrowseGenres } from '../utils/realGenres';
+import { animeKeys, genreQueries, studioQueries } from '../api/queries/anime';
+import { profileKeys } from '../api/queries/user';
 
 const SORT_OPTIONS = [
   { value: 'popular', label: 'Most Popular' },
@@ -314,13 +316,13 @@ export default function Browse() {
       const updatedProfile = response?.data;
       if (updatedProfile && typeof updatedProfile === 'object') {
         await refreshProfile(updatedProfile);
-        queryClient.setQueryData(['ownProfile'], updatedProfile);
+        queryClient.setQueryData(profileKeys.own, updatedProfile);
       } else {
         await refreshProfile();
       }
-      queryClient.removeQueries({ queryKey: ['anime'] });
-      queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.removeQueries({ queryKey: animeKeys.all });
+      queryClient.invalidateQueries({ queryKey: profileKeys.own });
+      queryClient.invalidateQueries({ queryKey: profileKeys.all });
     } finally {
       setIsUpdatingAdultContent(false);
     }
@@ -402,16 +404,14 @@ export default function Browse() {
 
   // Fetch genres
   const { data: genres, isError: isGenresError } = useQuery({
-    queryKey: ['genres'],
-    queryFn: () => genreApi.getAll().then(res => res.data),
+    ...genreQueries.all(),
     staleTime: 1000 * 60 * 30,
   });
   const browseGenres = useMemo(() => filterBrowseGenres(genres), [genres]);
 
   // Fetch studios
   const { data: studios, isError: isStudiosError } = useQuery({
-    queryKey: ['studios'],
-    queryFn: () => studioApi.getAll().then(res => res.data),
+    ...studioQueries.all(),
     staleTime: 1000 * 60 * 30,
     enabled: shouldLoadStudios,
   });
@@ -427,31 +427,29 @@ export default function Browse() {
     isError,
     refetch,
   } = useInfiniteQuery({
-    queryKey: [
-      'anime',
-      'list',
-      currentGenres.join(','),
-      currentTags.join(','),
-      currentSort,
-      currentSearch,
-      currentTypes,
-      currentStatuses,
-      currentStudio,
-      currentSeason,
-      currentYear,
-      currentExcludeIds,
-      currentShelf,
-      currentMinRating,
-      currentMaxRating,
-      currentSource,
-      currentMinEpisodes,
-      currentMaxEpisodes,
-      currentMinDuration,
-      currentMaxDuration,
-      currentMinYear,
-      currentMaxYear,
+    queryKey: animeKeys.browseList({
+      genres: currentGenres.join(','),
+      tags: currentTags.join(','),
+      sort: currentSort,
+      search: currentSearch,
+      type: currentTypes,
+      status: currentStatuses,
+      studio: currentStudio,
+      season: currentSeason,
+      year: currentYear,
+      excludeIds: currentExcludeIds,
+      shelf: currentShelf,
+      minRating: currentMinRating,
+      maxRating: currentMaxRating,
+      source: currentSource,
+      minEpisodes: currentMinEpisodes,
+      maxEpisodes: currentMaxEpisodes,
+      minDuration: currentMinDuration,
+      maxDuration: currentMaxDuration,
+      minYear: currentMinYear,
+      maxYear: currentMaxYear,
       adultContentEnabled,
-    ],
+    }),
     queryFn: ({ pageParam, signal }) =>
       animeApi.getAll({
         page: pageParam,
