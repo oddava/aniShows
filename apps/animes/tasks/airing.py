@@ -176,8 +176,8 @@ class AiringWorkflowTask(BaseTask):
                         f"(updated: {updated_count}, skipped: {skipped_count})"
                     )
 
-            except Exception as e:
-                logger.error(f"Error updating {anime.title}: {e}")
+            except Exception:
+                logger.exception("Error updating airing data for %s", anime.title)
                 error_count += 1
 
         self.metrics.record_api_call("jikan", updated_count)
@@ -243,8 +243,8 @@ class AiringWorkflowTask(BaseTask):
                         )
                         cleared_count += 1
 
-            except Exception as e:
-                logger.error(f"Error cleaning up {anime.title}: {e}")
+            except Exception:
+                logger.exception("Error cleaning up airing data for %s", anime.title)
                 error_count += 1
 
         from ..signals import _invalidate_anime_public_caches  # signals imports tasks
@@ -330,8 +330,8 @@ class AiringWorkflowTask(BaseTask):
                 if (i + 1) % 10 == 0 or (i + 1) == total:
                     logger.info(f"Backfill progress: {i + 1}/{total}")
 
-            except Exception as e:
-                logger.error(f"Error backfilling {anime.title}: {e}")
+            except Exception:
+                logger.exception("Error backfilling airing data for %s", anime.title)
                 error_count += 1
 
         return {

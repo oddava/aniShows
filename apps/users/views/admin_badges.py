@@ -121,8 +121,9 @@ class AdminBadgeViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
                 NotificationService.create_badge_awarded_notification(
                     user=user, badge=badge, granted_by=request.user
                 )
-            except Exception as notify_error:
-                logger.warning(f"Could not send badge notification: {notify_error}")
+            except Exception:
+                # The badges are already granted; a notification failure must not undo that.
+                logger.warning("Could not send badge notification", exc_info=True)
 
         AuditLog.objects.create(
             user=request.user,

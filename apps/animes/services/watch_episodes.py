@@ -81,6 +81,7 @@ class AnimeWatchEpisodeService:
                     "Failed to fetch episode streaming metadata for %s: %s",
                     anime.slug,
                     exc,
+                    exc_info=True,
                 )
             finally:
                 await service.close()

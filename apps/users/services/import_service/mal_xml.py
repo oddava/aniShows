@@ -33,7 +33,7 @@ class MyAnimeListXMLImporter(BaseImporter):
                 entries.append(entry)
 
         except ElementTree.ParseError as e:
-            logger.error(f"Error parsing XML: {e}")
+            logger.warning("Error parsing XML: %s", e)
             raise ValueError("Invalid XML file format")
 
         return entries
@@ -108,7 +108,7 @@ class MyAnimeListXMLImporter(BaseImporter):
                 except Exception as e:
                     self.failed_count += 1
                     self.errors.append(f"{entry.get('title', 'Unknown')}: {str(e)}")
-                    logger.error(f"Error importing entry: {e}")
+                    logger.exception("Error importing entry %s", entry.get("title"))
 
                 self.update_job_progress()
 
@@ -128,7 +128,7 @@ class MyAnimeListXMLImporter(BaseImporter):
             )
 
         except Exception as e:
-            logger.error(f"Import failed: {e}")
+            logger.exception("Import failed for job %s", self.job.id)
             self.job.status = UserImportJob.ImportStatus.failed
             self.job.errors.append(str(e))
             self.job.save(update_fields=["status", "errors"])

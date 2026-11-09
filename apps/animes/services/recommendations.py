@@ -613,7 +613,7 @@ class RecommendationService:
             return saved_recs
 
         except Exception:
-            logger.exception(f"Error generating recommendations for user {user.username}")
+            logger.exception("Error generating recommendations for user %s", user.username)
             return []
 
     def get_recommendations_for_user(self, user, limit: int = 12) -> list[UserRecommendation]:

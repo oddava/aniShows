@@ -433,7 +433,7 @@ class URLValidator:
 
             return None
         except Exception as e:
-            logger.warning(f"Could not get WHOIS info for {registered_domain}: {e}")
+            logger.warning("Could not get WHOIS info for %s: %s", registered_domain, e)
             return None
 
     def _check_safe_browsing(self, url: str) -> dict:
@@ -477,8 +477,9 @@ class URLValidator:
 
             return {"safe": True, "threat": None}
 
-        except Exception as e:
-            logger.error(f"Safe Browsing API error: {e}")
+        except Exception:
+            # Third-party client: fail closed (or open, if configured) on any error.
+            logger.exception("Safe Browsing API error")
             return {
                 "safe": self.safe_browsing_fail_open,
                 "threat": None if self.safe_browsing_fail_open else "validation unavailable",
