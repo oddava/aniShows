@@ -20,6 +20,7 @@ from django.db import IntegrityError
 from django.utils.text import slugify
 
 from ...shared.logger import logger
+from ...shared.parsing import positive_int
 from ...shared.retry import backoff, retry_after_seconds
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
 from .provider_base import CatalogProviderBase, with_creation_defaults
@@ -553,7 +554,7 @@ class JikanService(CatalogProviderBase):
         deduped_results: list[dict] = []
         seen_mal_ids: set[int] = set()
         for item in self._sort_trending_candidates(results):
-            mal_id = self._coerce_positive_int(item.get("idMal"))
+            mal_id = positive_int(item.get("idMal"))
             if not mal_id or mal_id in seen_mal_ids:
                 continue
             seen_mal_ids.add(mal_id)
@@ -629,7 +630,7 @@ class JikanService(CatalogProviderBase):
                 continue
 
             normalized = self._normalize_anime_item(item)
-            mal_id = self._coerce_positive_int(normalized.get("idMal"))
+            mal_id = positive_int(normalized.get("idMal"))
             if not mal_id or mal_id in seen_mal_ids:
                 continue
 
@@ -726,7 +727,7 @@ class JikanService(CatalogProviderBase):
         return None
 
     async def search_by_mal_id(self, mal_id: int, *, anilist_id: int | None = None) -> dict | None:
-        resolved_mal_id = self._coerce_positive_int(mal_id)
+        resolved_mal_id = positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
@@ -741,7 +742,7 @@ class JikanService(CatalogProviderBase):
     async def search_airing_by_mal_id(
         self, mal_id: int, *, anilist_id: int | None = None
     ) -> dict | None:
-        resolved_mal_id = self._coerce_positive_int(mal_id)
+        resolved_mal_id = positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
@@ -919,7 +920,7 @@ class JikanService(CatalogProviderBase):
                 continue
 
             merged = {"airingAt": airing_at}
-            episode = self._coerce_positive_int(
+            episode = positive_int(
                 candidate.get("episode") or candidate.get("number")
             )
             if episode:
@@ -987,16 +988,8 @@ class JikanService(CatalogProviderBase):
         )
 
     @classmethod
-    def _coerce_positive_int(cls, value: Any) -> int | None:
-        try:
-            resolved = int(value)
-        except (TypeError, ValueError):
-            return None
-        return resolved if resolved > 0 else None
-
-    @classmethod
     def _service_id_from_mal_id(cls, mal_id: int | None, *, offset: int) -> int | None:
-        resolved_mal_id = cls._coerce_positive_int(mal_id)
+        resolved_mal_id = positive_int(mal_id)
         if not resolved_mal_id:
             return None
         sync_id = offset + resolved_mal_id
@@ -1046,8 +1039,8 @@ class JikanService(CatalogProviderBase):
         Titles are not unique, so slug/title are only consulted when the payload has no
         provider IDs at all.
         """
-        resolved_anilist_id = self._coerce_positive_int(anilist_id)
-        resolved_mal_id = self._coerce_positive_int(mal_id)
+        resolved_anilist_id = positive_int(anilist_id)
+        resolved_mal_id = positive_int(mal_id)
 
         if resolved_anilist_id:
             anime = Anime.objects.filter(anilist_id=resolved_anilist_id).first()
@@ -1108,7 +1101,7 @@ class JikanService(CatalogProviderBase):
         next_airing: dict | None = None,
         anilist_id: int | None = None,
     ) -> dict[str, Any]:
-        mal_id = self._coerce_positive_int(item.get("mal_id"))
+        mal_id = positive_int(item.get("mal_id"))
         broadcast = self._normalize_broadcast_payload(item.get("broadcast"))
         next_airing_payload = self._merge_next_airing_payload(item, next_airing)
         aired = item.get("aired") or {}
@@ -1132,14 +1125,14 @@ class JikanService(CatalogProviderBase):
             "title": self._normalize_title_payload(item),
             "format": self._normalize_format(item.get("type")),
             "status": self._normalize_status(item.get("status")),
-            "episodes": self._coerce_positive_int(item.get("episodes")) or 0,
+            "episodes": positive_int(item.get("episodes")) or 0,
             "averageScore": average_score,
-            "popularity": self._coerce_positive_int(item.get("members")) or 0,
+            "popularity": positive_int(item.get("members")) or 0,
             "duration": self._normalize_duration_minutes(item.get("duration")),
             "startDate": start_date,
             "endDate": end_date,
             "season": str(item.get("season") or "").upper(),
-            "seasonYear": self._coerce_positive_int(item.get("year"))
+            "seasonYear": positive_int(item.get("year"))
             or (start_date.get("year") if start_date else None),
             "source": self._normalize_source(item.get("source")),
             "genres": [genre["name"] for genre in item.get("genres") or [] if genre.get("name")],
@@ -1350,7 +1343,7 @@ class JikanService(CatalogProviderBase):
             for entry in (relation or {}).get("entry") or []:
                 if not isinstance(entry, dict):
                     continue
-                mal_id = self._coerce_positive_int(entry.get("mal_id"))
+                mal_id = positive_int(entry.get("mal_id"))
                 media_type = str(entry.get("type") or "").upper()
                 edges.append(
                     {
@@ -1806,7 +1799,7 @@ class JikanService(CatalogProviderBase):
         mal_id: int | None = None,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> dict | None:
-        resolved_mal_id = self._coerce_positive_int(mal_id)
+        resolved_mal_id = positive_int(mal_id)
         if resolved_mal_id is None and anilist_id is not None:
             resolved_mal_id = await self._mal_id_for_anilist_id(anilist_id)
 
@@ -1850,7 +1843,7 @@ class JikanService(CatalogProviderBase):
         limit: int = 8,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> list[dict]:
-        resolved_mal_id = self._coerce_positive_int(mal_id)
+        resolved_mal_id = positive_int(mal_id)
         if not resolved_mal_id:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return []
@@ -1869,7 +1862,7 @@ class JikanService(CatalogProviderBase):
 
         for item in items:
             entry = (item or {}).get("entry") or {}
-            recommendation_mal_id = self._coerce_positive_int(entry.get("mal_id"))
+            recommendation_mal_id = positive_int(entry.get("mal_id"))
             if not recommendation_mal_id or recommendation_mal_id in seen_ids:
                 continue
 
@@ -1925,7 +1918,7 @@ class JikanService(CatalogProviderBase):
             endpoint="anime_episodes",
         )
         pagination = first_page.get("pagination") or {}
-        last_visible_page = self._coerce_positive_int(pagination.get("last_visible_page")) or 1
+        last_visible_page = positive_int(pagination.get("last_visible_page")) or 1
         last_page = first_page
         if last_visible_page > 1:
             last_page = await self._get(
@@ -1938,7 +1931,7 @@ class JikanService(CatalogProviderBase):
         if latest_episode is None:
             return {"episode": 1, "airingAt": next_airing_at}
 
-        total_episodes = self._coerce_positive_int(anime_data.get("episodes"))
+        total_episodes = positive_int(anime_data.get("episodes"))
         next_episode = latest_episode + 1
         if total_episodes and next_episode > total_episodes:
             return None
@@ -1980,7 +1973,7 @@ class JikanService(CatalogProviderBase):
     def _latest_episode_number(self, items: list[dict[str, Any]]) -> int | None:
         max_episode = None
         for item in items:
-            number = self._coerce_positive_int((item or {}).get("mal_id"))
+            number = positive_int((item or {}).get("mal_id"))
             if number is None:
                 continue
             max_episode = max(max_episode or number, number)

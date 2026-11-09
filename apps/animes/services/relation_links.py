@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, Subquery
 
+from ...shared.parsing import positive_int
 from ..models import Anime, AnimeRelation
 
 if TYPE_CHECKING:
@@ -48,14 +49,6 @@ def relations_from_edges(edges: Iterable[dict[str, Any]]) -> list[dict[str, Any]
     return relations
 
 
-def _positive_int(value: Any) -> int | None:
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return None
-    return number if number > 0 else None
-
-
 def set_relations(anime: Anime, entries: Iterable[dict[str, Any]]) -> int:
     """Replace ``anime``'s relations, linking targets that exist locally.
 
@@ -67,8 +60,8 @@ def set_relations(anime: Anime, entries: Iterable[dict[str, Any]]) -> int:
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        anilist_id = _positive_int(entry.get("id"))
-        mal_id = _positive_int(entry.get("mal_id"))
+        anilist_id = positive_int(entry.get("id"))
+        mal_id = positive_int(entry.get("mal_id"))
         keys = {key for key in (("anilist", anilist_id), ("mal", mal_id)) if key[1]}
         if keys & seen:
             continue

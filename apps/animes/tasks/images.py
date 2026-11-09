@@ -16,6 +16,7 @@ from django.db.models import Q
 
 from ...core.services.celery_monitoring import get_queue_size
 from ...shared.celery import observed_shared_task
+from ...shared.errors import iter_exception_chain
 from ...shared.task_lock import cache_lock
 from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 from .base import run_async_in_task
@@ -56,19 +57,9 @@ _STORAGE_RETRY_ATTEMPT_LIMIT = 24
 _MEDIA_SELF_HEAL_LOCK_KEY = "anime:media-self-heal:lock"
 
 
-def _iter_exception_chain(exc: Exception):
-    """Iterate through an exception and its causes/contexts."""
-    seen = set()
-    current = exc
-    while current and id(current) not in seen:
-        yield current
-        seen.add(id(current))
-        current = current.__cause__ or current.__context__
-
-
 def _is_storage_endpoint_error(exc: Exception) -> bool:
     """Return True when the error is likely a transient storage endpoint outage."""
-    for current in _iter_exception_chain(exc):
+    for current in iter_exception_chain(exc):
         if _BOTOCORE_STORAGE_ERRORS and isinstance(current, _BOTOCORE_STORAGE_ERRORS):
             return True
 

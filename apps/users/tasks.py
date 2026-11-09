@@ -9,6 +9,7 @@ from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
 from ..shared.celery import observed_shared_task, retry_on_error
+from ..shared.errors import iter_exception_chain
 from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
 from .services.celery_tasks import UserTaskService
@@ -55,22 +56,13 @@ def schedule_user_stats_refresh(
         raise
 
 
-def _iter_exception_chain(exc: Exception):
-    seen = set()
-    current = exc
-    while current and id(current) not in seen:
-        yield current
-        seen.add(id(current))
-        current = current.__cause__ or current.__context__
-
-
 def _can_retry(task, exc: Exception) -> bool:
     max_retries = getattr(task, "max_retries", 0)
     return task.request.retries < max_retries and max_retries > 0
 
 
 def _is_retryable_external_error(exc: Exception) -> bool:
-    for current in _iter_exception_chain(exc):
+    for current in iter_exception_chain(exc):
         if isinstance(current, RETRYABLE_DB_ERRORS):
             return True
         if isinstance(current, (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError)):

@@ -28,6 +28,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ...shared.logger import logger
+from ...shared.parsing import positive_int
 from ...shared.public_cache import (
     get_or_build_public_payload,
     invalidate_public_cache_keys,
@@ -1055,16 +1056,7 @@ class AnimeQueryService:
         if not raw_value:
             return []
 
-        resolved_ids = []
-        for value in raw_value.split(","):
-            try:
-                parsed = int(value)
-            except (TypeError, ValueError):
-                continue
-            if parsed > 0:
-                resolved_ids.append(parsed)
-
-        return resolved_ids
+        return [parsed for value in raw_value.split(",") if (parsed := positive_int(value))]
 
     @staticmethod
     def _filter_case_insensitive_values(
