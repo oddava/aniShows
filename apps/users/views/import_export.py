@@ -10,7 +10,6 @@ from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 
 from ...animes.serializers.imports import UserImportJobSerializer
 from ...core.api_errors import api_response, error_response
-from ...shared.logger import logger
 from ..models import UserImportJob
 from ..permissions import VerifiedEmailForWrites
 from ..services.export_service import ExportService
@@ -176,31 +175,15 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            # Generate export
-            export_data = ExportService.export_user_data(request.user, export_format)
+        export_data = ExportService.export_user_data(request.user, export_format)
+        if not download and export_format == "json":
+            return Response({"data": export_data})
 
-            if not download and export_format == "json":
-                return Response({"data": export_data})
-
-            # Determine content type and filename
-            content_type = "application/json" if export_format == "json" else "application/xml"
-
-            filename = ExportService.get_export_filename(request.user, export_format)
-
-            # Create response with proper headers for download
-            response = HttpResponse(export_data, content_type=content_type)
-            response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-            return response
-
-        except Exception as e:
-            logger.error(f"Export error: {e}")
-            return error_response(
-                "Failed to generate export",
-                code="export_failed",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        content_type = "application/json" if export_format == "json" else "application/xml"
+        filename = ExportService.get_export_filename(request.user, export_format)
+        response = HttpResponse(export_data, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class UserImportJobViewSet(ReadOnlyModelViewSet):

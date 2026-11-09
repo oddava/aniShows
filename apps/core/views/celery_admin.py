@@ -15,6 +15,7 @@ from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 
+from ...shared.logger import logger
 from ..models import CeleryTaskResult, CeleryTaskSchedule
 from ..permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 from ..serializers import (
@@ -211,6 +212,7 @@ class CeleryTaskScheduleViewSet(SuperUserRequiredForActionsMixin, viewsets.Model
         except CeleryTaskValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
+            logger.exception("Celery admin action failed")
             return Response(
                 {"detail": f"Failed to trigger task: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -265,6 +267,7 @@ class CeleryAdminControlViewSet(SuperUserRequiredForActionsMixin, viewsets.ViewS
         except CeleryTaskValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as exc:
+            logger.exception("Celery admin action failed")
             return Response(
                 {"detail": f"Failed to trigger task: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -286,6 +289,7 @@ class CeleryAdminControlViewSet(SuperUserRequiredForActionsMixin, viewsets.ViewS
         try:
             result = control_task(task_id=task_id, action=task_action, terminate=terminate)
         except Exception as exc:
+            logger.exception("Celery admin action failed")
             return Response(
                 {"detail": f"Failed to {task_action} task: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -297,6 +301,7 @@ class CeleryAdminControlViewSet(SuperUserRequiredForActionsMixin, viewsets.ViewS
         try:
             return Response(get_worker_status_payload())
         except Exception as exc:
+            logger.exception("Celery admin action failed")
             return Response(
                 {"detail": f"Failed to get worker status: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -321,6 +326,7 @@ class CeleryAdminControlViewSet(SuperUserRequiredForActionsMixin, viewsets.ViewS
         try:
             result = perform_worker_control(action=action_name, worker=worker)
         except Exception as exc:
+            logger.exception("Celery admin action failed")
             return Response(
                 {"detail": f"Failed to perform action: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

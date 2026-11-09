@@ -26,10 +26,10 @@ class MetricsView(View):
         try:
             metrics_data = self._generate_metrics()
             return HttpResponse(metrics_data, content_type=CONTENT_TYPE_LATEST)
-        except Exception as e:
-            logger.error(f"Error generating metrics: {e}")
+        except Exception:
+            logger.exception("Error generating metrics")
             return HttpResponse(
-                f"# Error generating metrics: {e}\n",
+                "# Error generating metrics\n",
                 content_type=CONTENT_TYPE_LATEST,
                 status=500,
             )
