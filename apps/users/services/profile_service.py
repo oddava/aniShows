@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
@@ -8,6 +7,7 @@ from django.db.models import Count, Prefetch, Q
 
 from ...shared.logger import logger
 from ...shared.media_urls import normalize_media_url
+from ...shared.text import normalize_bio, normalize_primary_color
 from ..models import UserBadge, UserStats
 from .avatar_service import get_user_avatar_url
 
@@ -20,18 +20,6 @@ except ImportError:
 
 
 User = get_user_model()
-DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
-HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
-
-
-def _decode_escaped_html_entities(value: str) -> str:
-    return (
-        value.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
-    )
 
 
 @dataclass(slots=True)
@@ -161,12 +149,12 @@ def _build_profile_data(user, stats_data):
         "date_joined": user.date_joined,
         "avatar": get_user_avatar_url(user),
         "banner": normalize_media_url(profile.banner.url) if profile and profile.banner else None,
-        "bio": _normalize_bio(profile.bio if profile else None),
+        "bio": normalize_bio(profile.bio if profile else None),
         "is_private": profile.is_private if profile else False,
         "show_adult_content": profile.show_adult_content if profile else False,
         "email_verified": profile.email_verified if profile else False,
         "social_links": profile.social_links if profile else [],
-        "profile_primary_color": _normalize_profile_primary_color(
+        "profile_primary_color": normalize_primary_color(
             profile.profile_primary_color if profile else None
         ),
         "preferred_timezone": profile.preferred_timezone if profile and profile.preferred_timezone else "auto",
@@ -183,18 +171,12 @@ def _build_profile_data(user, stats_data):
     return data
 
 
-def _normalize_bio(value):
-    if isinstance(value, str):
-        return _decode_escaped_html_entities(value)
-    return value
-
-
 def _normalize_profile_payload(data):
     if not isinstance(data, dict):
         return data
     normalized = dict(data)
-    normalized["bio"] = _normalize_bio(normalized.get("bio"))
-    normalized["profile_primary_color"] = _normalize_profile_primary_color(
+    normalized["bio"] = normalize_bio(normalized.get("bio"))
+    normalized["profile_primary_color"] = normalize_primary_color(
         normalized.get("profile_primary_color")
     )
     normalized["show_adult_content"] = bool(normalized.get("show_adult_content", False))
@@ -202,14 +184,6 @@ def _normalize_profile_payload(data):
         normalized.get("preferred_timezone")
     )
     return normalized
-
-
-def _normalize_profile_primary_color(value):
-    if isinstance(value, str):
-        candidate = value.strip().lower()
-        if HEX_COLOR_PATTERN.match(candidate):
-            return candidate
-    return DEFAULT_PROFILE_PRIMARY_COLOR
 
 
 def _normalize_preferred_timezone(value):

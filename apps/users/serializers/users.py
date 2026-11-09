@@ -1,4 +1,3 @@
-import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import bleach
@@ -40,6 +39,7 @@ from ...animes.serializers.base import (
 )
 from ...animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from ...shared.logger import logger
+from ...shared.text import HEX_COLOR_PATTERN, decode_escaped_html_entities
 from ..models import Badge, UserActivity, UserAnimeList, UserBadge
 from ..services.auth_service import AuthService
 from ..services.avatar_service import get_user_avatar_url
@@ -83,17 +83,7 @@ ALLOWED_BIO_ATTRIBUTES = {
     "youtube": ["src"],
     "mention": ["username"],
 }
-HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
-
-def _decode_escaped_html_entities(value: str) -> str:
-    return (
-        value.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
-    )
 
 class BadgeSerializer(ModelSerializer):
     """Serializer for a badge definition."""
@@ -350,7 +340,7 @@ class UserProfileUpdateSerializer(Serializer):
 
     def validate_bio(self, value):
         # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
-        normalized_value = _decode_escaped_html_entities(value or "")
+        normalized_value = decode_escaped_html_entities(value or "")
 
         # Keep markdown/allowed HTML intact while stripping unsafe tags/attributes.
         return bleach.clean(

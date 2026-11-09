@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
@@ -7,6 +6,7 @@ from django.db.models import Exists, OuterRef
 
 from ...shared.logger import logger
 from ...shared.media_urls import normalize_media_url
+from ...shared.text import normalize_bio, normalize_primary_color
 from ..serializers.users import PublicUserSerializer
 from .avatar_service import get_user_avatar_url
 from .cache import get_public_profile_cache_key
@@ -14,18 +14,6 @@ from .profile_service import build_profile_user_queryset, get_featured_badges
 from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
-DEFAULT_PROFILE_PRIMARY_COLOR = "#8b5cf6"
-HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
-
-
-def _decode_escaped_html_entities(value: str) -> str:
-    return (
-        value.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
-    )
 
 
 class PublicProfileError(Exception):
@@ -98,10 +86,10 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                 "banner": normalize_media_url(user.userprofile.banner.url)
                 if user.userprofile and user.userprofile.banner
                 else None,
-                "bio": _normalize_bio(user.userprofile.bio if user.userprofile else None),
+                "bio": normalize_bio(user.userprofile.bio if user.userprofile else None),
                 "is_private": user.userprofile.is_private if user.userprofile else False,
                 "social_links": user.userprofile.social_links if user.userprofile else [],
-                "profile_primary_color": _normalize_profile_primary_color(
+                "profile_primary_color": normalize_primary_color(
                     user.userprofile.profile_primary_color if user.userprofile else None
                 ),
                 "points": user.userprofile.points if user.userprofile else 0,
@@ -154,26 +142,12 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     return PublicProfileResult(data=data, cache_hit=False, source="fallback")
 
 
-def _normalize_bio(value):
-    if isinstance(value, str):
-        return _decode_escaped_html_entities(value)
-    return value
-
-
 def _normalize_public_profile_payload(data):
     if not isinstance(data, dict):
         return data
     normalized = dict(data)
-    normalized["bio"] = _normalize_bio(normalized.get("bio"))
-    normalized["profile_primary_color"] = _normalize_profile_primary_color(
+    normalized["bio"] = normalize_bio(normalized.get("bio"))
+    normalized["profile_primary_color"] = normalize_primary_color(
         normalized.get("profile_primary_color")
     )
     return normalized
-
-
-def _normalize_profile_primary_color(value):
-    if isinstance(value, str):
-        candidate = value.strip().lower()
-        if HEX_COLOR_PATTERN.match(candidate):
-            return candidate
-    return DEFAULT_PROFILE_PRIMARY_COLOR
