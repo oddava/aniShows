@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 
 from ....animes.models import Anime
 from ....animes.services.jikan import JikanService
+from ....shared.errors import ENQUEUE_ERRORS
 from ....shared.logger import logger
 from ...models import UserAnimeList, UserImportJob
 
@@ -240,9 +241,11 @@ class BaseImporter:
 
             schedule_user_stats_refresh(user_id=self.user.id)
             generate_recommendations.apply_async(kwargs={"user_id": self.user.id}, countdown=30)
-        except Exception as e:
+        except ENQUEUE_ERRORS:
             logger.warning(
-                f"Failed to queue post-import refresh tasks for user {self.user.id}: {e}"
+                "Failed to queue post-import refresh tasks for user %s",
+                self.user.id,
+                exc_info=True,
             )
 
     def update_job_progress(self, force: bool = False):

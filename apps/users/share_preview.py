@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.utils.html import strip_tags
 from django.views import View
 
-from ..shared.media_urls import normalize_media_url
+from ..shared.media_urls import field_media_url
 from .models import UserProfile, UserStats
 from .services.avatar_service import get_user_avatar_url
 
@@ -128,12 +128,7 @@ class ProfileSharePreviewView(View):
         return f"{username} on AniShows. {DEFAULT_PREVIEW_DESCRIPTION}"
 
     def _build_image_url(self, request, user, profile: UserProfile | None) -> str:
-        banner_url = None
-        if profile and profile.banner:
-            try:
-                banner_url = normalize_media_url(profile.banner.url)
-            except Exception:
-                banner_url = None
+        banner_url = field_media_url(profile.banner) if profile else None
 
         avatar_url = get_user_avatar_url(user)
         chosen = banner_url or avatar_url or self._default_image_url(request)

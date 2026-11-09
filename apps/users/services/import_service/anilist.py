@@ -126,7 +126,7 @@ class AniListImporter(BaseImporter):
                 )
             except requests.exceptions.RequestException as e:
                 if attempt >= self.MAX_FETCH_RETRIES:
-                    logger.error(f"Error fetching AniList list after retries: {e}")
+                    logger.exception("Error fetching AniList list after retries")
                     raise ValueError(
                         "AniList API is currently unavailable. Please try again later."
                     ) from e
@@ -176,7 +176,10 @@ class AniListImporter(BaseImporter):
                         detail = response_data["errors"][0].get("message", "")
                     else:
                         detail = response.text[:200]
-                except Exception:
+                except (ValueError, AttributeError, LookupError, TypeError):
+                    # Not JSON (ValueError), or JSON of another shape: not an
+                    # object, empty or non-list "errors" (LookupError covers
+                    # IndexError/KeyError), entries that are not objects.
                     detail = response.text[:200]
                 raise ValueError(
                     f"AniList API rejected the request ({response.status_code}): {detail}"
@@ -302,7 +305,7 @@ class AniListImporter(BaseImporter):
                 except Exception as e:
                     self.failed_count += 1
                     self.errors.append(f"{entry.get('title', 'Unknown')}: {str(e)}")
-                    logger.error(f"Error importing entry: {e}")
+                    logger.exception("Error importing entry %s", entry.get("title"))
 
                 self.update_job_progress()
 
@@ -322,7 +325,7 @@ class AniListImporter(BaseImporter):
             )
 
         except Exception as e:
-            logger.error(f"Import failed: {e}")
+            logger.exception("Import failed for job %s", self.job.id)
             self.job.status = UserImportJob.ImportStatus.failed
             self.job.errors.append(str(e))
             self.job.save(update_fields=["status", "errors"])

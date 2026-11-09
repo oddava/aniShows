@@ -38,15 +38,22 @@ def validate_image_content(file, max_size, field_name):
     magic_bytes = file.read(2048)
     file.seek(0)
 
+    # A disallowed MIME type is only logged, not rejected (long-standing
+    # behaviour); the Pillow verification below is what rejects bad files.
+    from ...shared.logger import logger
+
     try:
         mime = magic.from_buffer(magic_bytes, mime=True)
+    except magic.MagicException:
+        logger.warning("Image magic validation failed for %s", field_name, exc_info=True)
+    else:
         if mime not in ALLOWED_IMAGE_TYPES:
-            raise ValidationError(
-                f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
+            logger.warning(
+                "Image magic validation failed for %s: Invalid file content for %s. "
+                "Allowed types: JPEG, PNG, WebP, GIF.",
+                field_name,
+                field_name,
             )
-    except Exception as e:
-        from ...shared.logger import logger
-        logger.warning(f"Image magic validation failed for {field_name}: {e}")
 
     Image = get_pillow_image_module()
     if Image is None:
@@ -58,8 +65,10 @@ def validate_image_content(file, max_size, field_name):
         img = Image.open(file)
         img.verify()
         file.seek(0)
-    except Exception:
-        raise ValidationError(f"Invalid or corrupted image file for {field_name}.")
+    except Exception as exc:
+        # Pillow signals a bad file with many unrelated types (OSError,
+        # SyntaxError, ValueError, struct.error, DecompressionBombError...).
+        raise ValidationError(f"Invalid or corrupted image file for {field_name}.") from exc
 
     return file
 

@@ -8,12 +8,12 @@ Optimized for small EC2 instances with minimal Redis overhead.
 import asyncio
 import contextlib
 import time
-from collections.abc import Callable
 from datetime import datetime
-from functools import wraps
 from typing import Any
 
 from django.core.cache import cache
+
+from ...shared.errors import CACHE_ERRORS
 
 
 class AniListRateLimiter:
@@ -74,9 +74,10 @@ class AniListRateLimiter:
                 logger.warning(f"Rate limit approaching: {count}/{self.RATE_LIMIT} requests")
                 await asyncio.sleep(1)
 
-            except Exception as e:
-                # Redis failure - fall back to local rate limiting
-                logger.error(f"Redis rate limiter failed: {e}. Using local fallback.")
+            except (AttributeError, *CACHE_ERRORS):
+                # Redis failure, or a cache backend without a raw Redis client
+                # (AttributeError): fall back to local rate limiting.
+                logger.exception("Redis rate limiter failed; using local fallback")
                 if time_since_last >= self.min_delay:
                     self._local_last_request = time.time()
                     return
@@ -150,8 +151,9 @@ class CircuitBreaker:
 
             return False  # CLOSED state - normal operation
 
-        except Exception as e:
-            logger.error(f"Circuit breaker check failed: {e}")
+        except (TypeError, *CACHE_ERRORS):
+            # TypeError: a last-failure value that is not a datetime.
+            logger.exception("Circuit breaker check failed")
             return False  # Fail open on error
 
     def record_success(self) -> None:
@@ -168,8 +170,8 @@ class CircuitBreaker:
             else:
                 # Just reset failure count
                 cache.set(self._get_failures_key(), 0, self.recovery_timeout)
-        except Exception as e:
-            logger.error(f"Failed to record success: {e}")
+        except CACHE_ERRORS:
+            logger.exception("Failed to record circuit breaker success")
 
     def record_failure(self) -> None:
         """Record a failed API call."""
@@ -189,8 +191,9 @@ class CircuitBreaker:
                     f"API calls will fail fast for {self.recovery_timeout}s"
                 )
 
-        except Exception as e:
-            logger.error(f"Failed to record failure: {e}")
+        except (TypeError, *CACHE_ERRORS):
+            # TypeError: a failure counter that is not a number.
+            logger.exception("Failed to record circuit breaker failure")
 
 class APICallCache:
     """Cache for API responses to prevent duplicate calls.
@@ -211,76 +214,29 @@ class APICallCache:
         """Get cached API response if available."""
         try:
             return cache.get(self._get_cache_key(endpoint, params))
-        except Exception:
+        except CACHE_ERRORS:
             return None
 
     def set(self, endpoint: str, params: str, value: Any) -> None:
         """Cache API response."""
         try:
             cache.set(self._get_cache_key(endpoint, params), value, self.ttl)
-        except Exception as e:
-            logger.warning(f"Failed to cache API response: {e}")
+        except CACHE_ERRORS:
+            logger.warning("Failed to cache API response", exc_info=True)
 
     def is_recently_updated(self, anilist_id: int, window: int = 1800) -> bool:
         """Check if anime was updated within the window (seconds)."""
         try:
             return cache.get(self._get_recent_key(anilist_id)) is not None
-        except Exception:
+        except CACHE_ERRORS:
             return False
 
     def mark_updated(self, anilist_id: int, window: int = 1800) -> None:
         """Mark anime as recently updated."""
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(*CACHE_ERRORS):
             cache.set(self._get_recent_key(anilist_id), True, window)
 
     def invalidate(self, anilist_id: int) -> None:
         """Invalidate cache for specific anime."""
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(*CACHE_ERRORS):
             cache.delete(self._get_recent_key(anilist_id))
-
-def circuit_breaker_protected(
-    name: str, failure_threshold: int = 5, recovery_timeout: int = 300
-) -> Callable:
-    """Decorator to protect functions with circuit breaker pattern.
-
-    Usage:
-        @circuit_breaker_protected("anilist_api")
-        async def fetch_anime_data(anime_id):
-            # API call here
-            pass
-    """
-    breaker = CircuitBreaker(name, failure_threshold, recovery_timeout)
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            if breaker.is_open():
-                raise Exception(f"Circuit breaker {name} is OPEN")
-
-            try:
-                result = await func(*args, **kwargs)
-                breaker.record_success()
-                return result
-            except Exception:
-                breaker.record_failure()
-                raise
-
-        @wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            if breaker.is_open():
-                raise Exception(f"Circuit breaker {name} is OPEN")
-
-            try:
-                result = func(*args, **kwargs)
-                breaker.record_success()
-                return result
-            except Exception:
-                breaker.record_failure()
-                raise
-
-        # Return appropriate wrapper based on function type
-        if asyncio.iscoroutinefunction(func):
-            return async_wrapper
-        return sync_wrapper
-
-    return decorator

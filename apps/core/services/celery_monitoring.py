@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.core.cache import cache
 
 from ...animes.services.metrics import update_queue_size
+from ...shared.errors import CACHE_ERRORS
 
 DEFAULT_QUEUE_NAMES = (
     "critical",
@@ -21,7 +22,8 @@ DEFAULT_QUEUE_NAMES = (
 def _get_redis_client():
     try:
         return cache.client.get_client()
-    except Exception:
+    except (AttributeError, *CACHE_ERRORS):
+        # AttributeError: a cache backend without a Redis client (LocMemCache).
         return None
 
 
@@ -32,7 +34,7 @@ def get_queue_size(queue_name: str) -> int | None:
 
     try:
         return int(client.llen(queue_name))
-    except Exception:
+    except CACHE_ERRORS:
         return None
 
 

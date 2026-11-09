@@ -8,6 +8,7 @@ import httpx
 from bs4 import BeautifulSoup
 from django.core.cache import cache
 
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
 from .url_validator import URLValidationError, URLValidator
 
@@ -55,8 +56,9 @@ class MetadataService:
             metadata = self._scrape_metadata(url)
             cache.set(cache_key, metadata, timeout=self.CACHE_TTL.total_seconds())
             return metadata
-        except Exception as e:
-            logger.error(f"Error fetching metadata for {url}: {e}")
+        except CACHE_ERRORS:
+            # _scrape_metadata handles its own failures; only caching can fail here.
+            logger.exception("Error caching metadata for %s", url)
             return self._fallback_metadata(url)
 
     def _scrape_metadata(self, url: str) -> Dict:
@@ -73,16 +75,18 @@ class MetadataService:
                 "site_name": self._extract_site_name(soup, final_url),
             }
         except URLValidationError as e:
-            logger.warning(f"Blocked unsafe metadata fetch for {url}: {e}")
+            logger.warning("Blocked unsafe metadata fetch for %s: %s", url, e)
             return self._fallback_metadata(url)
         except httpx.TimeoutException:
-            logger.warning(f"Timeout fetching metadata for {url}")
+            logger.warning("Timeout fetching metadata for %s", url)
             return self._fallback_metadata(url)
         except httpx.HTTPStatusError as e:
-            logger.warning(f"HTTP error {e.response.status_code} for {url}")
+            logger.warning("HTTP error %s for %s", e.response.status_code, url)
             return self._fallback_metadata(url)
-        except Exception as e:
-            logger.error(f"Error scraping metadata for {url}: {e}")
+        except Exception:
+            # Arbitrary third-party pages: other transport errors, unknown
+            # encodings, parser failures. Any of them just means "no preview".
+            logger.exception("Error scraping metadata for %s", url)
             return self._fallback_metadata(url)
 
     def _fetch_html(self, url: str) -> tuple[str, str]:

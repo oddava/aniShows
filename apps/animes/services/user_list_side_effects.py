@@ -2,10 +2,11 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import Count, Q
 from django.utils import timezone as tz
 
+from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.models import UserActivity, UserAnimeList
 from ...users.services.cache import invalidate_user_caches
@@ -35,13 +36,14 @@ def update_user_stats_and_cache(user):
             countdown=2,
         )
         logger.debug("Invalidated cache and queued stats update for user %s", user.username)
-    except Exception as exc:
+    except ENQUEUE_ERRORS:
+        # Cache or broker unavailable: refresh the stats inline instead.
         try:
             create_or_update_user_stats(user)
             invalidate_user_caches(user.id, user.username)
-        except Exception:
-            pass
-        logger.exception("Failed to update stats for user %s: %s", user.username, exc)
+        except (DatabaseError, *CACHE_ERRORS):
+            logger.warning("Inline stats refresh failed for user %s", user.username, exc_info=True)
+        logger.exception("Failed to update stats for user %s", user.username)
 
 
 def invalidate_heatmap_cache(user_id):
