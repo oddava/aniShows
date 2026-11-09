@@ -54,9 +54,9 @@ def _bench_settings(prefix: str) -> dict:
     caches["default"]["KEY_PREFIX"] = prefix
     rest_framework = {
         **settings.REST_FRAMEWORK,
-        "DEFAULT_THROTTLE_RATES": {
-            scope: "1000000/minute" for scope in settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
-        },
+        "DEFAULT_THROTTLE_RATES": dict.fromkeys(
+            settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"], "1000000/minute"
+        ),
     }
     return {
         "CACHES": caches,

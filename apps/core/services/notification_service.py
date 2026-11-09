@@ -196,7 +196,7 @@ class NotificationService:
 
         This is called synchronously from Django views/services. It uses
         ``async_to_sync`` to send a message to the channel layer which
-        Daphne then delivers to the connected WebSocket consumer.
+        The ASGI server then delivers it to the connected WebSocket consumer.
         """
         try:
             channel_layer = get_channel_layer()

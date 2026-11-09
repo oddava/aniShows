@@ -45,17 +45,6 @@ def _parse_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _parse_sentinel_nodes(value: str) -> list[tuple[str, int]]:
-    """Parse Redis Sentinel nodes from ``host:port,host:port`` env format."""
-    nodes: list[tuple[str, int]] = []
-    for node in _parse_csv(value):
-        if ":" in node:
-            host, port = node.split(":", 1)
-            nodes.append((host.strip(), int(port.strip())))
-        else:
-            nodes.append((node, 26379))
-    return nodes
-
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -135,7 +124,6 @@ OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS = max(
 # =============================================================================
 
 DJANGO_APPS = [
-    "daphne",
     "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -314,30 +302,6 @@ DATABASES = {
 # PgBouncer transaction pooling is not compatible with server-side cursors.
 if DB_USE_PGBOUNCER:
     DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
-
-# Read replicas (optional): set DB_REPLICA_HOSTS as comma-separated hosts.
-READ_REPLICA_HOSTS = _parse_csv(os.getenv("DB_REPLICA_HOSTS", ""))
-READ_REPLICA_ALIASES: list[str] = []
-
-for index, replica_host in enumerate(READ_REPLICA_HOSTS, start=1):
-    alias = f"replica{index}"
-    READ_REPLICA_ALIASES.append(alias)
-    DATABASES[alias] = {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv(f"DB_REPLICA_{index}_NAME", DB_NAME),
-        "USER": os.getenv(f"DB_REPLICA_{index}_USER", DB_USER),
-        "PASSWORD": os.getenv(f"DB_REPLICA_{index}_PASSWORD", DB_PASSWORD),
-        "HOST": replica_host,
-        "PORT": os.getenv(f"DB_REPLICA_{index}_PORT", os.getenv("DB_REPLICA_PORT", "5432")),
-        "CONN_MAX_AGE": int(os.getenv("DB_REPLICA_CONN_MAX_AGE", "600")),
-        "OPTIONS": {
-            "options": "-c default_transaction_read_only=on",
-        },
-    }
-
-DB_ENABLE_READ_REPLICA_ROUTING = _env_bool("DB_ENABLE_READ_REPLICA_ROUTING", False)
-if DB_ENABLE_READ_REPLICA_ROUTING and READ_REPLICA_ALIASES:
-    DATABASE_ROUTERS = ["root.db_routers.PrimaryReplicaRouter"]
 
 # =============================================================================
 # PASSWORD VALIDATION
@@ -597,75 +561,28 @@ REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 REDIS_CACHE_MAX_CONNECTIONS = _env_int("REDIS_CACHE_MAX_CONNECTIONS", 500)
-REDIS_SENTINEL_ENABLED = _env_bool("REDIS_SENTINEL_ENABLED", False)
-REDIS_SENTINEL_SERVICE_NAME = os.getenv("REDIS_SENTINEL_SERVICE_NAME", "mymaster")
-REDIS_SENTINEL_NODES = _parse_sentinel_nodes(
-    os.getenv("REDIS_SENTINEL_NODES", "redis-sentinel-1:26379,redis-sentinel-2:26379")
-)
 
-if REDIS_SENTINEL_ENABLED:
-    sentinel_password_part = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
-    # Use the first sentinel node for URL-based configuration; transport options
-    # handle the full sentinel list.
-    first_host, first_port = REDIS_SENTINEL_NODES[0]
-    REDIS_URL = f"redis://{sentinel_password_part}{first_host}:{first_port}/{REDIS_DB}"
-    REDIS_BROKER_URL = f"sentinel://{sentinel_password_part}{first_host}:{first_port}/1"
-    REDIS_CHANNEL_LAYER_URL = REDIS_URL
-
-    redis_cache_options = {
-        "CLIENT_CLASS": "django_redis.client.SentinelClient",
-        "SENTINELS": REDIS_SENTINEL_NODES,
-        "SENTINEL_KWARGS": {
-            "password": REDIS_PASSWORD,
-        },
-        "CONNECTION_FACTORY": "django_redis.pool.SentinelConnectionFactory",
-        "SENTINEL_MASTER": REDIS_SENTINEL_SERVICE_NAME,
-        "SOCKET_CONNECT_TIMEOUT": 5,
-        "SOCKET_TIMEOUT": 5,
-        "RETRY_ON_TIMEOUT": True,
-        "CONNECTION_POOL_KWARGS": {
-            "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
-        },
-        "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-    }
-
-    channel_layer_hosts = [
-        {
-            "sentinels": REDIS_SENTINEL_NODES,
-            "master_name": REDIS_SENTINEL_SERVICE_NAME,
-            "db": 2,
-            "password": REDIS_PASSWORD,
-        }
-    ]
+if REDIS_PASSWORD:
+    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+    REDIS_BROKER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/1"
+    REDIS_CHANNEL_LAYER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/2"
 else:
-    if REDIS_PASSWORD:
-        REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-        REDIS_BROKER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/1"
-        REDIS_CHANNEL_LAYER_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/2"
-    else:
-        # Fallback to REDIS_URL env var for backward compatibility.
-        REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
-        REDIS_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
-        REDIS_CHANNEL_LAYER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
-
-    redis_cache_options = {
-        "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        "SOCKET_CONNECT_TIMEOUT": 5,
-        "SOCKET_TIMEOUT": 5,
-        "RETRY_ON_TIMEOUT": True,
-        "CONNECTION_POOL_KWARGS": {
-            "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
-        },
-        "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-    }
-
-    channel_layer_hosts = [REDIS_CHANNEL_LAYER_URL]
+    REDIS_URL = os.getenv("REDIS_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
+    REDIS_BROKER_URL = os.getenv("CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/1")
+    REDIS_CHANNEL_LAYER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
 
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL,
-        "OPTIONS": redis_cache_options,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SOCKET_CONNECT_TIMEOUT": 5,
+            "SOCKET_TIMEOUT": 5,
+            "RETRY_ON_TIMEOUT": True,
+            "CONNECTION_POOL_KWARGS": {"max_connections": REDIS_CACHE_MAX_CONNECTIONS},
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+        },
     }
 }
 
@@ -677,7 +594,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": channel_layer_hosts,
+            "hosts": [REDIS_CHANNEL_LAYER_URL],
             "capacity": _env_int("REDIS_CHANNEL_LAYER_CAPACITY", 3000),
             "expiry": _env_int("REDIS_CHANNEL_LAYER_EXPIRY", 15),
             "group_expiry": _env_int("REDIS_CHANNEL_LAYER_GROUP_EXPIRY", 86400),
@@ -691,16 +608,6 @@ CHANNEL_LAYERS = {
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_BROKER_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
-if REDIS_SENTINEL_ENABLED:
-    CELERY_BROKER_TRANSPORT_OPTIONS = {
-        "master_name": REDIS_SENTINEL_SERVICE_NAME,
-        "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
-    }
-    if CELERY_RESULT_BACKEND != "django-db":
-        CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {
-            "master_name": REDIS_SENTINEL_SERVICE_NAME,
-            "sentinel_kwargs": {"password": REDIS_PASSWORD} if REDIS_PASSWORD else {},
-        }
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

@@ -1,17 +1,14 @@
 """Unit tests for horizontal scaling configuration.
 
 Tests cover:
-- PrimaryReplicaRouter (read/write routing)
-- Environment parsing helpers (_env_bool, _env_int, _env_float, _parse_csv, _parse_sentinel_nodes)
+- Environment parsing helpers (_env_bool, _env_int, _env_float, _parse_csv)
 - Gunicorn container-aware worker sizing
 - CDN URL construction
 - Celery queue routing consistency
-- PgBouncer compatibility settings
 """
 
 from unittest.mock import patch
 
-import pytest
 from django.test import TestCase, override_settings
 
 
@@ -78,26 +75,6 @@ class TestEnvParsers(TestCase):
 
         assert _parse_csv("a,b,") == ["a", "b"]
 
-    def test_parse_sentinel_nodes_with_ports(self):
-        """Sentinel nodes with explicit ports should be parsed correctly."""
-        from root.settings.base import _parse_sentinel_nodes
-
-        result = _parse_sentinel_nodes("host1:26379,host2:26380")
-        assert result == [("host1", 26379), ("host2", 26380)]
-
-    def test_parse_sentinel_nodes_default_port(self):
-        """Sentinel nodes without ports should default to 26379."""
-        from root.settings.base import _parse_sentinel_nodes
-
-        result = _parse_sentinel_nodes("host1,host2")
-        assert result == [("host1", 26379), ("host2", 26379)]
-
-    def test_parse_sentinel_nodes_empty(self):
-        """Empty string should return empty list."""
-        from root.settings.base import _parse_sentinel_nodes
-
-        assert _parse_sentinel_nodes("") == []
-
     def test_public_cache_defaults_bias_toward_single_builder(self):
         """Cold public-cache misses should wait long enough to avoid DB stampedes."""
         from root.settings.base import (
@@ -133,63 +110,6 @@ class TestGunicornSizing(TestCase):
             assert gunicorn_tuning.detect_available_cpu_count() == 12
             assert gunicorn_tuning.default_gunicorn_workers() == 4
 
-# These tests override DATABASES on purpose to exercise the router.
-@pytest.mark.filterwarnings("ignore:Overriding setting DATABASES:UserWarning")
-class TestPrimaryReplicaRouter(TestCase):
-    """Test the database router for primary/replica deployments."""
-
-    def _get_router(self):
-        from root.db_routers import PrimaryReplicaRouter
-
-        return PrimaryReplicaRouter()
-
-    def test_write_always_to_default(self):
-        """All writes must go to 'default' (primary)."""
-        router = self._get_router()
-        assert router.db_for_write(None) == "default"
-
-    def test_read_to_default_without_replicas(self):
-        """Without configured replicas, reads should fall back to 'default'."""
-        router = self._get_router()
-        with self.settings(READ_REPLICA_ALIASES=[]):
-            assert router.db_for_read(None) == "default"
-
-    @override_settings(
-        READ_REPLICA_ALIASES=["replica1"],
-        DATABASES={
-            "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"},
-            "replica1": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"},
-        },
-    )
-    def test_read_routes_to_replica(self):
-        """With a configured replica, reads should route to it."""
-        router = self._get_router()
-        result = router.db_for_read(None)
-        assert result == "replica1"
-
-    @override_settings(
-        READ_REPLICA_ALIASES=["replica_missing"],
-        DATABASES={
-            "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"},
-        },
-    )
-    def test_read_ignores_missing_replica_alias(self):
-        """Replica aliases not in DATABASES should be ignored gracefully."""
-        router = self._get_router()
-        # replica_missing is not in DATABASES, so _replicas() returns empty → default
-        assert router.db_for_read(None) == "default"
-
-    def test_allow_relation_always_true(self):
-        """Relations across primary/replica databases should always be allowed."""
-        router = self._get_router()
-        assert router.allow_relation(None, None) is True
-
-    def test_allow_migrate_only_default(self):
-        """Migrations must only run on the primary ('default') database."""
-        router = self._get_router()
-        assert router.allow_migrate("default", "users") is True
-        assert router.allow_migrate("replica1", "users") is False
-        assert router.allow_migrate("replica2", "users") is False
 
 class TestCeleryQueueRouting(TestCase):
     """Verify Celery beat schedule queues match task_routes configuration."""
@@ -259,36 +179,6 @@ class TestCeleryQueueRouting(TestCase):
 
         assert not undefined, f"Task routes reference undefined queues: {undefined}"
 
-class TestPgBouncerSettings(TestCase):
-    """Verify PgBouncer compatibility settings."""
-
-    def test_server_side_cursors_disabled_when_pgbouncer_on(self):
-        """DISABLE_SERVER_SIDE_CURSORS logic in base.py must set it when pgbouncer is on.
-
-        The test env overrides DATABASES to SQLite, so we test the logic directly.
-        """
-        db_config = {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": "test_db",
-        }
-        # Simulate what base.py does
-        db_use_pgbouncer = True
-        if db_use_pgbouncer:
-            db_config["DISABLE_SERVER_SIDE_CURSORS"] = True
-
-        assert db_config["DISABLE_SERVER_SIDE_CURSORS"] is True
-
-    def test_server_side_cursors_not_set_when_pgbouncer_off(self):
-        """Without pgbouncer, DISABLE_SERVER_SIDE_CURSORS should not be set."""
-        db_config = {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": "test_db",
-        }
-        db_use_pgbouncer = False
-        if db_use_pgbouncer:
-            db_config["DISABLE_SERVER_SIDE_CURSORS"] = True
-
-        assert "DISABLE_SERVER_SIDE_CURSORS" not in db_config
 
 class TestCDNUrlConstruction(TestCase):
     """Verify CDN URL construction logic."""
@@ -322,7 +212,7 @@ class TestRedisConfig(TestCase):
         password = getattr(settings, "REDIS_PASSWORD", "")
         redis_url = getattr(settings, "REDIS_URL", "")
 
-        if password and not getattr(settings, "REDIS_SENTINEL_ENABLED", False):
+        if password:
             assert f":{password}@" in redis_url, (
                 f"REDIS_URL should contain password but got: {redis_url}"
             )
