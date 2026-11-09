@@ -64,8 +64,9 @@ class MetricsView(View):
             username, password = decoded_credentials.split(":", 1)
 
             return username == expected_username and password == expected_password
-        except Exception as e:
-            logger.warning(f"Invalid auth header: {e}")
+        except ValueError as e:
+            # Bad base64 (binascii.Error), non-UTF-8 bytes, or no ":" separator.
+            logger.warning("Invalid auth header: %s", e)
             return False
 
     @staticmethod

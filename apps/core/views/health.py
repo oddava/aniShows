@@ -11,8 +11,8 @@ from ..services.migration_health import has_pending_migrations
 def _safe_maintenance_mode() -> bool:
     try:
         return is_maintenance_mode_enabled()
-    except Exception as exc:
-        logger.error("Health check - Maintenance lookup failed: %s", exc)
+    except Exception:
+        logger.exception("Health check - Maintenance lookup failed")
         return False
 
 
@@ -63,21 +63,21 @@ def readiness_check(request):
             cursor.execute("SELECT 1")
             cursor.fetchone()
         checks["database"] = True
-    except Exception as exc:
-        logger.error("Readiness check - Database failed: %s", exc)
+    except Exception:
+        logger.exception("Readiness check - Database failed")
 
     try:
         cache.set("health_check", "ok", timeout=5)
         if cache.get("health_check") == "ok":
             checks["cache"] = True
-    except Exception as exc:
-        logger.error("Readiness check - Cache failed: %s", exc)
+    except Exception:
+        logger.exception("Readiness check - Cache failed")
 
     if checks["database"]:
         try:
             checks["migrations"] = not has_pending_migrations()
-        except Exception as exc:
-            logger.error("Readiness check - Migration status failed: %s", exc)
+        except Exception:
+            logger.exception("Readiness check - Migration status failed")
 
     maintenance_mode = _safe_maintenance_mode()
     status_code = 200 if all(checks.values()) else 503

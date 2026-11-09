@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
+from django.db import DatabaseError
 
 from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
@@ -96,9 +97,8 @@ class FranchiseImportService:
         except FranchiseImportError:
             raise
         except Exception as exc:
-            logger.error(
-                f"Error importing franchise anime (MAL {mal_id}, AniList {anilist_id}): {exc}",
-                exc_info=True,
+            logger.exception(
+                "Error importing franchise anime (MAL %s, AniList %s)", mal_id, anilist_id
             )
             raise FranchiseImportError("Import failed", 500) from exc
         finally:
@@ -123,9 +123,13 @@ class FranchiseImportService:
                 refreshed = service.save_anime_to_db(item)
                 self._ensure_external_image_refs(refreshed, item)
             else:
-                logger.warning(f"No Jikan payload returned while refreshing existing anime {anime.slug}")
-        except Exception as exc:
-            logger.warning(f"Failed to refresh existing anime {anime.slug}: {exc}")
+                logger.warning(
+                    "No Jikan payload returned while refreshing existing anime %s", anime.slug
+                )
+        except Exception:
+            # Best-effort refresh through the provider layer, which can fail in
+            # many ways (HTTP, payload shape, DB); the existing row stays usable.
+            logger.warning("Failed to refresh existing anime %s", anime.slug, exc_info=True)
         finally:
             async_to_sync(service.close)()
 
@@ -176,5 +180,7 @@ class FranchiseImportService:
         """Link the unlinked relations that point at ``target``, the source page's included."""
         try:
             link_relations_to(target)
-        except Exception as exc:
-            logger.warning(f"Failed to link relations to {target.slug} from {source_slug}: {exc}")
+        except DatabaseError:
+            logger.warning(
+                "Failed to link relations to %s from %s", target.slug, source_slug, exc_info=True
+            )

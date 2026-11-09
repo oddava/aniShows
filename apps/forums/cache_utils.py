@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db.models import F
 
+from ..shared.errors import CACHE_ERRORS
 from ..shared.public_cache import invalidate_public_cache_keys
 
 # Cache key templates
@@ -195,7 +196,8 @@ def _get_redis_connection():
         from django_redis import get_redis_connection
 
         return get_redis_connection("default")
-    except Exception:
+    except (NotImplementedError, *CACHE_ERRORS):
+        # NotImplementedError: the cache backend is not django-redis.
         return None
 
 

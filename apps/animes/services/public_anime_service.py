@@ -378,6 +378,7 @@ class AnimeQueryService:
                     anime.slug,
                     anime.mal_id,
                     exc,
+                    exc_info=True,
                 )
                 recommendations = []
             finally:

@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.db import DatabaseError
 from django.utils.html import format_html
 
+from ..shared.errors import ENQUEUE_ERRORS
 from .models import (
     CustomUser,
     SocialLinkChangeLog,
@@ -368,7 +370,7 @@ class UserImportJobAdmin(admin.ModelAdmin):
                 # Trigger the task
                 process_import_job.delay(job.id)
                 retried += 1
-            except Exception as e:
+            except (DatabaseError, *ENQUEUE_ERRORS) as e:
                 self.message_user(request, f"Failed to retry job {job.id}: {e}", level="error")
 
         if retried > 0:

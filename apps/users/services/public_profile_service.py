@@ -131,7 +131,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     except PublicProfileError:
         raise
     except Exception as exc:
-        logger.warning("Stats table lookup failed for %s: %s", username, exc)
+        logger.warning("Stats table lookup failed for %s: %s", username, exc, exc_info=True)
 
     queryset = get_annotated_user_queryset(viewer if is_authenticated else None).filter(
         username=username

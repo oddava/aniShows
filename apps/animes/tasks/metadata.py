@@ -128,14 +128,14 @@ class MetadataEnrichmentTask(BaseTask):
                     }
 
             except Anime.DoesNotExist:
-                logger.error(f"Anime {anime_id} not found")
+                logger.error("Anime %s not found", anime_id)
                 return {
                     "mode": "single",
                     "anime_id": anime_id,
                     "status": "not_found",
                 }
             except Exception as e:
-                logger.error(f"Error enriching metadata for {anime_id}: {e}")
+                logger.exception("Error enriching metadata for %s", anime_id)
                 raise self.retry(exc=e, countdown=60)
 
     async def _resolve_media_for_anime(
@@ -240,8 +240,8 @@ class MetadataEnrichmentTask(BaseTask):
                     if (i + 1) % 10 == 0 or (i + 1) == total:
                         logger.info(f"Progress: {i + 1}/{total} anime processed")
 
-                except Exception as e:
-                    logger.error(f"Error updating {anime.title}: {e}")
+                except Exception:
+                    logger.exception("Error updating metadata for %s", anime.title)
                     error_count += 1
 
             self.metrics.record_records(updated_count)

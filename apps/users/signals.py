@@ -101,8 +101,9 @@ def handle_new_follower(sender, instance, created, **kwargs):
             f"Created new follower notification for user {instance.following.id} "
             f"from follower {instance.follower.id}"
         )
-    except Exception as e:
-        logger.exception(f"Failed to create new follower notification: {e}")
+    except Exception:
+        # A post_save receiver: never let it break the follow itself.
+        logger.exception("Failed to create new follower notification")
 
 
 @receiver(post_delete, sender=UserFollow)

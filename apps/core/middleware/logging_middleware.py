@@ -97,8 +97,8 @@ class LoggingMiddleware:
             log_request_async.delay(
                 self._build_log_data(request, response, user_id=user_id, duration_ms=duration_ms)
             )
-        except Exception as exc:
-            logger.error("Failed to queue async log entry: %s", exc)
+        except Exception:
+            logger.exception("Failed to queue async log entry")
 
         return response
 
@@ -161,8 +161,8 @@ class AdminAuditMiddleware:
                         },
                     }
                 )
-            except Exception as exc:
-                logger.error("Failed to queue audit log: %s", exc)
+            except Exception:
+                logger.exception("Failed to queue audit log")
 
         return response
 
@@ -262,9 +262,14 @@ class ExceptionLoggingMiddleware:
                 }
             )
         except Exception:
+            # Queueing failed: log the request's own exception, with its traceback.
             logger.error(
-                f"Unhandled exception at {request.method} {request.path}: "
-                f"{type(exception).__name__}: {exception}"
+                "Unhandled exception at %s %s: %s: %s",
+                request.method,
+                request.path,
+                type(exception).__name__,
+                exception,
+                exc_info=exception,
             )
 
         return None

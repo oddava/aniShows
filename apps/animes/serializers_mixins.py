@@ -3,7 +3,8 @@
 from django.conf import settings
 from imagekit.cachefiles import ImageCacheFile
 
-from ..shared.media_urls import normalize_media_url
+from ..shared.logger import logger
+from ..shared.media_urls import field_media_url, normalize_media_url
 from ..users.services.avatar_service import get_user_avatar_url
 from .services.public_anime_service import build_user_list_status_payload
 
@@ -32,12 +33,7 @@ class ImageUrlMixin:
 
     def _build_url(self, field):
         """Build absolute URL from an image field using request context."""
-        try:
-            url = field.url
-        except Exception:
-            return None
-
-        url = normalize_media_url(url)
+        url = field_media_url(field)
         if not url:
             return None
 
@@ -59,7 +55,13 @@ class ImageUrlMixin:
             return self._build_url(thumbnail_field)
 
         if getattr(settings, "IMAGEKIT_GENERATE_DURING_REQUESTS", False):
-            thumbnail_field.generate()
+            try:
+                thumbnail_field.generate()
+            except Exception:
+                # Generation can fail in Pillow, ImageKit or the storage backend.
+                # The caller falls back to the original image, then the external URL.
+                logger.warning("On-request thumbnail generation failed", exc_info=True)
+                return None
         return self._build_url(thumbnail_field)
 
     def get_image_url(self, obj, field_name, fallback_field_name=None):
@@ -76,12 +78,9 @@ class ImageUrlMixin:
         image_field = getattr(obj, field_name, None)
 
         if image_field:
-            try:
-                image_url = self._build_url(image_field)
-                if image_url:
-                    return image_url
-            except Exception:
-                pass
+            image_url = self._build_url(image_field)
+            if image_url:
+                return image_url
 
         if fallback_field_name:
             return getattr(obj, fallback_field_name, None)
@@ -108,22 +107,16 @@ class ImageUrlMixin:
         # Try thumbnail (ImageKit ImageSpecField)
         thumbnail_field = getattr(obj, thumbnail_field_name, None)
         if thumbnail_field:
-            try:
-                thumbnail_url = self._ensure_thumbnail(thumbnail_field)
-                if thumbnail_url:
-                    return thumbnail_url
-            except Exception:
-                pass
+            thumbnail_url = self._ensure_thumbnail(thumbnail_field)
+            if thumbnail_url:
+                return thumbnail_url
 
         # Try original image
         original_field = getattr(obj, original_field_name, None)
         if original_field:
-            try:
-                original_url = self._build_url(original_field)
-                if original_url:
-                    return original_url
-            except Exception:
-                pass
+            original_url = self._build_url(original_field)
+            if original_url:
+                return original_url
 
         # Fallback to external URL
         if fallback_field_name:
@@ -160,10 +153,7 @@ class UserProfileMixin:
         profile = getattr(obj, "userprofile", None)
         if not profile or not profile.banner:
             return None
-        try:
-            return normalize_media_url(profile.banner.url)
-        except Exception:
-            return None
+        return field_media_url(profile.banner)
 
     def get_bio(self, obj):
         profile = getattr(obj, "userprofile", None)

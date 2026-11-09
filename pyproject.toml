@@ -103,7 +103,12 @@ select = [
     "DJ",  # flake8-django
     "ASYNC", # flake8-async
     "S",   # flake8-bandit (security)
+    "BLE", # flake8-blind-except: no `except Exception` unless re-raised or logged with a traceback
 ]
+
+# Lets ruff see that our shared logger is a logging.Logger, so BLE001 accepts
+# `except Exception` blocks that call logger.exception(...).
+logger-objects = ["apps.shared.logger.logger"]
 
 ignore = [
     "D100",  # Missing docstring in public module
@@ -149,6 +154,40 @@ known-first-party = ["apps", "root"]
 [tool.ruff.lint.per-file-ignores]
 "root/settings/*.py" = ["F403", "F405"]
 "root/settings/__init__.py" = ["F403"]
+# BLE001: files that still need a broad `except Exception` that is neither
+# re-raised nor logged with logger.exception. This list may only get shorter.
+# - Provider layer, rewritten in Phase 4: leave as is until then.
+"apps/animes/services/jikan.py" = ["BLE001"]
+"apps/animes/services/anilist.py" = ["BLE001"]
+"apps/animes/services/offline_catalog.py" = ["BLE001"]
+"apps/animes/services/offline_sync.py" = ["BLE001"]
+"apps/animes/services/provider_base.py" = ["BLE001"]
+# - Best effort through the provider layer (any failure means "no data"),
+#   logged as a warning with the traceback.
+"apps/animes/services/franchise_import.py" = ["BLE001"]
+"apps/animes/services/public_anime_service.py" = ["BLE001"]
+"apps/animes/services/watch_episodes.py" = ["BLE001"]
+"apps/animes/tasks/franchises.py" = ["BLE001"]
+"apps/users/services/public_profile_service.py" = ["BLE001"]
+# - Other best-effort steps (media URLs, thumbnails, WHOIS, link previews,
+#   cleanup, a notification after the badges are granted): warning or debug.
+"apps/shared/media_urls.py" = ["BLE001"]
+"apps/animes/serializers_mixins.py" = ["BLE001"]
+"apps/animes/tasks/images.py" = ["BLE001"]
+"apps/core/services/url_validator.py" = ["BLE001"]
+"apps/core/services/celery_tasks.py" = ["BLE001"]
+"apps/users/services/import_service/base.py" = ["BLE001"]
+"apps/users/views/admin_badges.py" = ["BLE001"]
+# - Management commands: per-item loops report the error on stdout and go on.
+"apps/animes/management/commands/backfill_external_urls.py" = ["BLE001"]
+"apps/animes/management/commands/backfill_theme_youtube.py" = ["BLE001"]
+"apps/animes/management/commands/cleanup_anime_media.py" = ["BLE001"]
+"apps/animes/management/commands/copy_thumbnails_to_s3.py" = ["BLE001"]
+"apps/animes/management/commands/generate_thumbnails.py" = ["BLE001"]
+"apps/animes/management/commands/populate_franchises.py" = ["BLE001"]
+"apps/animes/management/commands/populate_themes.py" = ["BLE001"]
+"apps/animes/management/commands/warm_watch_episodes.py" = ["BLE001"]
+"apps/users/management/commands/populate_user_stats.py" = ["BLE001"]
 
 [tool.ruff.format]
 quote-style = "double"

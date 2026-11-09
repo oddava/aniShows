@@ -10,10 +10,12 @@ from apps.shared.logger import logger
 mimetypes.add_type("image/webp", ".webp")
 mimetypes.add_type("image/avif", ".avif")
 
-try:
-    from botocore.exceptions import ClientError
-except Exception:  # pragma: no cover - botocore is available in runtime environments
-    ClientError = None
+# Importing S3Boto3Storage above already requires boto3, so botocore is present.
+from botocore.exceptions import BotoCoreError, ClientError
+
+# Everything a botocore client call raises: ClientError for error responses,
+# BotoCoreError subclasses for connection, credential and parameter problems.
+S3_CLIENT_ERRORS = (BotoCoreError, ClientError)
 
 
 class MediaStorage(S3Boto3Storage):
@@ -24,7 +26,7 @@ class MediaStorage(S3Boto3Storage):
 
     @staticmethod
     def _is_missing_bucket_error(exc: Exception) -> bool:
-        if ClientError is not None and isinstance(exc, ClientError):
+        if isinstance(exc, ClientError):
             error_code = str(exc.response.get("Error", {}).get("Code", "")).lower()
             status_code = str(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", ""))
             return error_code in {"404", "no such bucket", "nosuchbucket", "notfound"} or status_code == "404"
@@ -47,7 +49,7 @@ class MediaStorage(S3Boto3Storage):
         try:
             self.connection.meta.client.head_bucket(Bucket=self.bucket_name)
             return
-        except Exception as exc:
+        except S3_CLIENT_ERRORS as exc:
             if not self._is_missing_bucket_error(exc):
                 logger.warning(
                     "Could not verify S3 bucket %s before save; skipping auto-create",
@@ -59,8 +61,8 @@ class MediaStorage(S3Boto3Storage):
         try:
             self.connection.meta.client.create_bucket(Bucket=self.bucket_name)
             logger.info("Created S3 bucket: %s", self.bucket_name)
-        except Exception as exc:
-            logger.warning("Could not create bucket %s: %s", self.bucket_name, exc)
+        except S3_CLIENT_ERRORS:
+            logger.warning("Could not create bucket %s", self.bucket_name, exc_info=True)
 
     def save(self, name, content, max_length=None):
         # Runtime bucket auto-creation is opt-in to keep profile/avatar updates fast.

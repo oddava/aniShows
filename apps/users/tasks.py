@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
-from ..shared.celery import observed_shared_task
+from ..shared.celery import observed_shared_task, retry_on_error
 from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
 from .services.celery_tasks import UserTaskService
@@ -83,11 +83,8 @@ def _is_retryable_external_error(exc: Exception) -> bool:
 
 @observed_shared_task(retry_policy="standard")
 def cleanup_unverified_accounts(self, days: int = 7):
-    try:
+    with retry_on_error(self, "Unverified account cleanup failed", extra={"days": days}):
         return UserTaskService.cleanup_unverified_accounts(days=days)
-    except Exception as exc:
-        logger.exception("Unverified account cleanup failed", extra={"days": days})
-        raise self.retry(exc=exc)
 
 
 @observed_shared_task(retry_policy="standard")
@@ -135,12 +132,9 @@ def fetch_anime_by_external_id(
 
 @observed_shared_task(retry_policy="standard")
 def cleanup_old_import_jobs(self, days: int = 30):
-    try:
+    with retry_on_error(self, "Old import job cleanup failed", extra={"days": days}):
         deleted = UserTaskService.cleanup_old_import_jobs(days=days)
         return {"deleted": deleted, "days": days}
-    except Exception as exc:
-        logger.exception("Old import job cleanup failed", extra={"days": days})
-        raise self.retry(exc=exc)
 
 
 @observed_shared_task(retry_policy="standard")
@@ -151,16 +145,13 @@ def run_user_maintenance_workflow(
     unverified_days: int = 7,
     import_days: int = 30,
 ):
-    try:
+    with retry_on_error(self, "User maintenance workflow failed to queue"):
         return UserTaskService.run_user_maintenance_workflow(
             cleanup_unverified=cleanup_unverified,
             cleanup_imports=cleanup_imports,
             unverified_days=unverified_days,
             import_days=import_days,
         )
-    except Exception as exc:
-        logger.exception("User maintenance workflow failed to queue")
-        raise self.retry(exc=exc)
 
 
 @observed_shared_task(retry_policy="standard", time_limit_preset="quick")
@@ -197,8 +188,5 @@ def update_all_user_stats(self):
 
 @observed_shared_task(retry_policy="standard")
 def warm_profile_cache(self, usernames: list | None = None):
-    try:
+    with retry_on_error(self, "Profile cache warmup failed", extra={"usernames": usernames}):
         return UserTaskService.warm_profile_cache(usernames=usernames)
-    except Exception as exc:
-        logger.exception("Profile cache warmup failed", extra={"usernames": usernames})
-        raise self.retry(exc=exc)

@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.db.models import Count
 from django.utils.html import format_html
 
+from ..shared.errors import ENQUEUE_ERRORS
 from .models import (
     Anime,
     AnimeCharacter,
@@ -304,7 +305,7 @@ class AnimeAdmin(admin.ModelAdmin):
                     queue="default",
                 )
                 triggered += 1
-            except Exception as e:
+            except ENQUEUE_ERRORS as e:
                 self.message_user(
                     request,
                     f"Failed to trigger task for {anime.title}: {e}",
@@ -336,7 +337,7 @@ class AnimeAdmin(admin.ModelAdmin):
                 f"Metadata enrichment triggered for {len(anime_ids)} anime.",
                 level="success",
             )
-        except Exception as e:
+        except ENQUEUE_ERRORS as e:
             self.message_user(request, f"Failed to trigger metadata task: {e}", level="error")
 
     @admin.action(description="Update status to Airing")

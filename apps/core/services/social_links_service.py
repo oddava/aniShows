@@ -3,12 +3,13 @@
 from typing import Any, Dict, List
 
 from django.conf import settings
-from django.db import transaction
+from django.db import DatabaseError, transaction
 
+from ...shared.errors import ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.models import SocialLinkChangeLog
 from .metadata_service import MetadataService
-from .url_validator import URLValidator
+from .url_validator import URLValidationError, URLValidator
 
 
 class SocialLinkValidationError(Exception):
@@ -116,8 +117,9 @@ class SocialLinksService:
                 from ..tasks import fetch_multiple_link_metadata
 
                 fetch_multiple_link_metadata.delay(urls, user_id)
-            except Exception as e:
-                logger.warning(f"Failed to trigger async metadata fetch: {e}")
+            except ENQUEUE_ERRORS:
+                # Runs from on_commit: never fail the request that saved the links.
+                logger.warning("Failed to trigger async metadata fetch", exc_info=True)
 
         transaction.on_commit(enqueue)
 
@@ -218,8 +220,10 @@ class SocialLinksService:
                             new_value=new_link,
                             ip_address=ip_address,
                         )
-        except Exception as e:
-            logger.error(f"Error logging social link changes: {e}")
+        except (DatabaseError, AttributeError, TypeError):
+            # The audit trail is best effort. AttributeError: a stored link that
+            # is not a dict; TypeError: a link value that is not JSON-serialisable.
+            logger.exception("Error logging social link changes")
 
     def validate_single_url(self, url: str) -> Dict:
         """
@@ -261,8 +265,11 @@ class SocialLinksService:
                 "subdomain_count": validation_metadata.get("subdomain_count", 0),
                 "domain_age_days": validation_metadata.get("domain_age_days"),
             }
-        except Exception as e:
-            logger.error(f"Error validating URL {url}: {e}")
+        except (URLValidationError, ValueError) as e:
+            # _normalize_url rejects credentials and bad ports (URLValidationError);
+            # urlparse rejects malformed IPv6 hosts (ValueError). validate()
+            # handles its own unexpected errors.
+            logger.warning("Rejected URL %s: %s", url, e)
             return {
                 "valid": False,
                 "error": str(e),

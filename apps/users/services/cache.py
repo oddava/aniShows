@@ -9,6 +9,8 @@ user actions occur, all relevant caches are properly invalidated.
 
 from django.core.cache import cache
 
+from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
+
 
 def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
     """
@@ -45,8 +47,8 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
             # If the key doesn't exist, set it to 1
             cache.set(version_key, 1, timeout=86400)  # Long timeout as it's a version counter
             logger.debug(f"Initialized cache version for {username}")
-        except Exception as e:
-            logger.warning(f"Failed to increment cache version for {username}: {e}")
+        except CACHE_ERRORS:
+            logger.warning("Failed to increment cache version for %s", username, exc_info=True)
 
     # Trigger async stats update for immediate data consistency
     if trigger_stats_update:
@@ -56,8 +58,8 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
             task_result = schedule_user_stats_refresh(user_id=user_id)
             if task_result is not None:
                 logger.debug(f"Triggered stats update for user {user_id}")
-        except Exception as e:
-            logger.warning(f"Failed to trigger stats update for user {user_id}: {e}")
+        except ENQUEUE_ERRORS:
+            logger.warning("Failed to trigger stats update for user %s", user_id, exc_info=True)
 
     logger.debug(f"Invalidated caches for user {user_id}")
 

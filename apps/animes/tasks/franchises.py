@@ -69,10 +69,10 @@ class FranchiseSyncTask(BaseTask):
                 self.metrics.record_records(1)
                 return {"mode": "single", "anime_id": anime_id, "title": anime.title, **result}
             except Anime.DoesNotExist:
-                logger.error(f"Anime {anime_id} not found")
+                logger.error("Anime %s not found", anime_id)
                 return {"mode": "single", "anime_id": anime_id, "status": "not_found"}
             except Exception as e:
-                logger.error(f"Error syncing franchises for anime {anime_id}: {e}")
+                logger.exception("Error syncing franchises for anime %s", anime_id)
                 raise self.retry(exc=e, countdown=60)
 
     async def _sync_batch(
@@ -134,9 +134,9 @@ class FranchiseSyncTask(BaseTask):
                     if (i + 1) % 10 == 0 or (i + 1) == total:
                         logger.info(f"Progress: {i+1}/{total} (updated: {updated_count}, skipped: {skipped_count}, errors: {error_count})")
 
-                except Exception as e:
+                except Exception:
                     error_count += 1
-                    logger.error(f"✗ Error processing {anime.title}: {e}")
+                    logger.exception("Error processing franchises for %s", anime.title)
                     continue
 
             return {
@@ -201,7 +201,7 @@ class FranchiseSyncTask(BaseTask):
             }
 
         except Exception as e:
-            logger.error(f"Error processing franchises for {anime.title}: {e}", exc_info=True)
+            logger.exception("Error processing franchises for %s", anime.title)
             return {"status": "error", "error": str(e), "relations_count": 0}
 
     @staticmethod
@@ -233,8 +233,8 @@ class FranchiseSyncTask(BaseTask):
                     anime = await service._save_anime_to_db_async(full_data)
                     logger.info(f"Imported: {anime.title} (MAL ID: {mal_id})")
                     imported += 1
-            except Exception as e:
-                logger.warning(f"Could not import MAL ID {mal_id}: {e}")
+            except Exception:
+                logger.warning("Could not import MAL ID %s", mal_id, exc_info=True)
                 continue
 
         return imported
