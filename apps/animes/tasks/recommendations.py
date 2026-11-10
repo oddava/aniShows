@@ -21,6 +21,7 @@ from .base import BaseTask
 
 User = get_user_model()
 
+
 class RecommendationTask(BaseTask):
     """Unified task for generating anime recommendations.
 
@@ -142,6 +143,7 @@ class RecommendationTask(BaseTask):
         except Exception as e:
             logger.exception("Error in batch recommendation generation")
             raise self.retry(exc=e)
+
 
 @observed_shared_task(
     base=RecommendationTask,

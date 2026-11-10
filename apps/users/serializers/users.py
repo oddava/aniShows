@@ -326,6 +326,7 @@ class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
         """Return following count from annotations only."""
         return int(getattr(obj, "_following_count", 0) or 0)
 
+
 class UserProfileUpdateSerializer(Serializer):
     username = CharField(max_length=150, required=False)
     avatar = ImageField(required=False, allow_null=True)
@@ -732,8 +733,10 @@ class FriendWatchingSerializer(ModelSerializer):
             "episode_count": obj.anime.episode_count,
         }
 
+
 class FavoriteCompactSerializer(ModelSerializer):
     """Ultra-minimal serializer for favorites list display."""
+
     anime = AnimeCompactSerializer(read_only=True)
 
     class Meta:

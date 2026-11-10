@@ -15,7 +15,9 @@ from ..tasks.images import (
 
 class ImageTaskOutageDetectionTests(TestCase):
     def test_detects_minio_endpoint_error_message(self):
-        exc = Exception('Could not connect to the endpoint URL: "http://minio:9000/bucket/path.jpg"')
+        exc = Exception(
+            'Could not connect to the endpoint URL: "http://minio:9000/bucket/path.jpg"'
+        )
         self.assertTrue(_is_storage_endpoint_error(exc))
 
     def test_non_storage_errors_are_not_misclassified(self):
@@ -156,8 +158,12 @@ class ImageTaskSelfHealTests(TestCase):
         mock_fetch_delay.assert_called_once()
         kwargs = mock_fetch_delay.call_args.kwargs
         self.assertEqual(kwargs["anime_id"], anime.id)
-        self.assertEqual(kwargs["cover_url"], "https://cdn.myanimelist.net/images/anime/1/cover2.jpg")
-        self.assertEqual(kwargs["banner_url"], "https://cdn.myanimelist.net/images/anime/1/banner2.jpg")
+        self.assertEqual(
+            kwargs["cover_url"], "https://cdn.myanimelist.net/images/anime/1/cover2.jpg"
+        )
+        self.assertEqual(
+            kwargs["banner_url"], "https://cdn.myanimelist.net/images/anime/1/banner2.jpg"
+        )
         self.assertEqual(kwargs["mal_id"], 1234)
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)

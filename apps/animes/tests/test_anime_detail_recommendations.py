@@ -101,7 +101,9 @@ class AnimeDetailRecommendationsTests(APITestCase):
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
         new_callable=AsyncMock,
     )
-    def test_fallback_recommendations_also_exclude_franchise_entries(self, mock_get_recommendations):
+    def test_fallback_recommendations_also_exclude_franchise_entries(
+        self, mock_get_recommendations
+    ):
         mock_get_recommendations.return_value = []
 
         response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))

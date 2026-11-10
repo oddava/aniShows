@@ -345,7 +345,10 @@ class AnimeQueryService:
 
         if related_ids:
             ordering = Case(
-                *[When(id=anime_id, then=Value(index)) for index, anime_id in enumerate(related_ids)],
+                *[
+                    When(id=anime_id, then=Value(index))
+                    for index, anime_id in enumerate(related_ids)
+                ],
                 default=Value(len(related_ids)),
                 output_field=IntegerField(),
             )
@@ -445,10 +448,7 @@ class AnimeQueryService:
         if search_is_active:
             search_words = search.split()
             if len(search_words) == 1:
-                search_filter = (
-                    Q(title__icontains=search)
-                    | Q(title_jp__icontains=search)
-                )
+                search_filter = Q(title__icontains=search) | Q(title_jp__icontains=search)
                 if len(search) >= MIN_SYNOPSIS_SEARCH_LENGTH:
                     search_filter |= Q(synopsis__icontains=search)
                 queryset = queryset.filter(search_filter)
@@ -1019,12 +1019,10 @@ class AnimeQueryService:
     @classmethod
     def _exclude_adult_content(cls, queryset):
         adult_genre_ids = (
-            Anime.objects.using(queryset.db)
-            .filter(genres__slug__in=ADULT_GENRE_SLUGS)
-            .values("pk")
+            Anime.objects.using(queryset.db).filter(genres__slug__in=ADULT_GENRE_SLUGS).values("pk")
         )
-        adult_tag_ids = Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values(
-            "pk"
+        adult_tag_ids = (
+            Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values("pk")
         )
         return queryset.exclude(pk__in=adult_genre_ids).exclude(pk__in=adult_tag_ids)
 

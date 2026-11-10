@@ -29,7 +29,10 @@ class MediaStorage(S3Boto3Storage):
         if isinstance(exc, ClientError):
             error_code = str(exc.response.get("Error", {}).get("Code", "")).lower()
             status_code = str(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", ""))
-            return error_code in {"404", "no such bucket", "nosuchbucket", "notfound"} or status_code == "404"
+            return (
+                error_code in {"404", "no such bucket", "nosuchbucket", "notfound"}
+                or status_code == "404"
+            )
         return False
 
     def _ensure_bucket_exists(self):

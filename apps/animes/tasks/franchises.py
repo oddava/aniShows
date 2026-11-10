@@ -42,14 +42,17 @@ class FranchiseSyncTask(BaseTask):
         self.metrics.start()
 
         if mode == "single" and anime_id:
-            return run_async_in_task(
-                self._sync_single(anime_id, import_missing, max_imports)
-            )
+            return run_async_in_task(self._sync_single(anime_id, import_missing, max_imports))
         elif mode == "backfill":
             return run_async_in_task(
                 self._sync_batch(
-                    batch_size, import_missing, max_imports, priority_field,
-                    skip_recently_updated, update_window, anime_ids
+                    batch_size,
+                    import_missing,
+                    max_imports,
+                    priority_field,
+                    skip_recently_updated,
+                    update_window,
+                    anime_ids,
                 )
             )
         else:
@@ -76,8 +79,13 @@ class FranchiseSyncTask(BaseTask):
                 raise self.retry(exc=e, countdown=60)
 
     async def _sync_batch(
-        self, batch_size: int, import_missing: bool, max_imports: int,
-        priority_field: str, skip_recently_updated: bool, update_window: int,
+        self,
+        batch_size: int,
+        import_missing: bool,
+        max_imports: int,
+        priority_field: str,
+        skip_recently_updated: bool,
+        update_window: int,
         anime_ids: list[int] | None,
     ) -> dict:
         """Batch sync franchises for multiple anime."""
@@ -105,7 +113,9 @@ class FranchiseSyncTask(BaseTask):
             for i, anime in enumerate(anime_list):
                 try:
                     if skip_recently_updated and service.call_cache:
-                        if service.call_cache.is_recently_updated(anime.mal_id or 0, window=update_window):
+                        if service.call_cache.is_recently_updated(
+                            anime.mal_id or 0, window=update_window
+                        ):
                             skipped_count += 1
                             continue
 
@@ -122,17 +132,19 @@ class FranchiseSyncTask(BaseTask):
                             service.call_cache.mark_updated(anime.mal_id)
 
                         logger.info(
-                            f"✓ ({i+1}/{total}) {anime.title}: "
+                            f"✓ ({i + 1}/{total}) {anime.title}: "
                             f"{result.get('relations_count', 0)} rels, "
                             f"{result.get('relations_linked', 0)} linked, "
                             f"{result.get('imported_count', 0)} imported"
                         )
                     else:
                         error_count += 1
-                        logger.warning(f"⚠ ({i+1}/{total}) {anime.title}: {result.get('error')}")
+                        logger.warning(f"⚠ ({i + 1}/{total}) {anime.title}: {result.get('error')}")
 
                     if (i + 1) % 10 == 0 or (i + 1) == total:
-                        logger.info(f"Progress: {i+1}/{total} (updated: {updated_count}, skipped: {skipped_count}, errors: {error_count})")
+                        logger.info(
+                            f"Progress: {i + 1}/{total} (updated: {updated_count}, skipped: {skipped_count}, errors: {error_count})"
+                        )
 
                 except Exception:
                     error_count += 1
@@ -207,9 +219,7 @@ class FranchiseSyncTask(BaseTask):
     @staticmethod
     def _relation_keys(anime: Anime) -> set[tuple[str, int]]:
         keys = set()
-        for anilist_id, mal_id in anime.relations.values_list(
-            "target_anilist_id", "target_mal_id"
-        ):
+        for anilist_id, mal_id in anime.relations.values_list("target_anilist_id", "target_mal_id"):
             if anilist_id:
                 keys.add(("anilist", anilist_id))
             if mal_id:
@@ -239,6 +249,7 @@ class FranchiseSyncTask(BaseTask):
 
         return imported
 
+
 @observed_shared_task(
     base=FranchiseSyncTask,
     retry_policy="standard",
@@ -259,11 +270,17 @@ def sync_franchises(
 ):
     """Sync anime franchise/relations data from Jikan."""
     return self.execute(
-        anime_id=anime_id, mode=mode, batch_size=batch_size,
-        import_missing=import_missing, max_imports=max_imports,
-        priority_field=priority_field, skip_recently_updated=skip_recently_updated,
-        update_window=update_window, anime_ids=anime_ids,
+        anime_id=anime_id,
+        mode=mode,
+        batch_size=batch_size,
+        import_missing=import_missing,
+        max_imports=max_imports,
+        priority_field=priority_field,
+        skip_recently_updated=skip_recently_updated,
+        update_window=update_window,
+        anime_ids=anime_ids,
     )
+
 
 @observed_shared_task(
     base=FranchiseSyncTask,

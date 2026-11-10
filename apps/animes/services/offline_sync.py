@@ -92,8 +92,7 @@ class OfflineSyncService:
             return {"created": 0, "updated": 0}
 
         existing = {
-            row.anime_id: row
-            for row in OfflineAnimeSyncState.objects.filter(anime_id__in=ids)
+            row.anime_id: row for row in OfflineAnimeSyncState.objects.filter(anime_id__in=ids)
         }
         now = timezone.now()
         to_create = [
@@ -279,7 +278,9 @@ class OfflineSyncService:
                         "updated_at",
                     ]
                 )
-                claims.append(StageClaim(state_id=state.id, stage=stage, retry_age_seconds=retry_age))
+                claims.append(
+                    StageClaim(state_id=state.id, stage=stage, retry_age_seconds=retry_age)
+                )
 
         return claims
 
@@ -737,9 +738,7 @@ class OfflineSyncService:
         message: str,
         quarantined: bool,
     ):
-        request_fingerprint = (
-            f"a:{anime.anilist_id or '-'}|m:{anime.mal_id or '-'}|t:{(anime.title or '')[:40].casefold()}"
-        )
+        request_fingerprint = f"a:{anime.anilist_id or '-'}|m:{anime.mal_id or '-'}|t:{(anime.title or '')[:40].casefold()}"
         truncated_message = (message or "")[:500]
         if quarantined:
             log_method = logger.warning
@@ -770,7 +769,9 @@ class OfflineSyncService:
         )
 
     def _state_summary(self, *, anime_ids: list[int] | None = None) -> dict:
-        queryset = OfflineAnimeSyncState.objects.filter(anime__offline_db_last_seen_at__isnull=False)
+        queryset = OfflineAnimeSyncState.objects.filter(
+            anime__offline_db_last_seen_at__isnull=False
+        )
         if anime_ids:
             queryset = queryset.filter(anime_id__in=anime_ids)
 
@@ -780,16 +781,24 @@ class OfflineSyncService:
             themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             quarantined=False,
         ).count()
-        pending = queryset.filter(quarantined=False).exclude(
-            metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-        ).count()
-        transient_backlog = queryset.filter(quarantined=False).filter(
-            Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-            | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-            | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-        ).count()
+        pending = (
+            queryset.filter(quarantined=False)
+            .exclude(
+                metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+                themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
+            )
+            .count()
+        )
+        transient_backlog = (
+            queryset.filter(quarantined=False)
+            .filter(
+                Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+                | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+                | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+            )
+            .count()
+        )
         quarantined_count = queryset.filter(quarantined=True).count()
         top_reasons = list(
             queryset.filter(quarantined=True)

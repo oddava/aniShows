@@ -84,7 +84,9 @@ def api_response(
             normalized_payload.setdefault("detail", "Request failed.")
             normalized_payload.setdefault("code", default_code)
             return Response(normalized_payload, status=status_code, headers=headers)
-        detail = _coerce_text(payload.get("detail") or payload.get("error") or payload.get("errors"))
+        detail = _coerce_text(
+            payload.get("detail") or payload.get("error") or payload.get("errors")
+        )
         errors = payload.get("errors")
         code = str(payload.get("code") or default_code)
     else:

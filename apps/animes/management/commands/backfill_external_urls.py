@@ -59,8 +59,7 @@ class Command(BaseCommand):
 
             if not force:
                 queryset = queryset.filter(
-                    Q(cover_image_external_url="")
-                    | Q(cover_image_external_url__isnull=True)
+                    Q(cover_image_external_url="") | Q(cover_image_external_url__isnull=True)
                 )
 
             self.stdout.write(f"Found {queryset.count()} anime to process")
@@ -105,17 +104,15 @@ class Command(BaseCommand):
 
                     if not data:
                         self.stdout.write(
-                            self.style.WARNING(
-                                f"[{idx}/{total}] No data: {anime.title}"
-                            )
+                            self.style.WARNING(f"[{idx}/{total}] No data: {anime.title}")
                         )
                         failed += 1
                         continue
 
                     # Extract image URLs
-                    cover_url = data.get("coverImage", {}).get(
-                        "extraLarge"
-                    ) or data.get("coverImage", {}).get("large")
+                    cover_url = data.get("coverImage", {}).get("extraLarge") or data.get(
+                        "coverImage", {}
+                    ).get("large")
                     banner_url = data.get("bannerImage")
 
                     # Update anime
@@ -142,18 +139,14 @@ class Command(BaseCommand):
                         )
                         updated += 1
                         self.stdout.write(
-                            self.style.SUCCESS(
-                                f"[{idx}/{total}] Updated: {anime.title}"
-                            )
+                            self.style.SUCCESS(f"[{idx}/{total}] Updated: {anime.title}")
                         )
                     else:
                         skipped += 1
 
                 except Exception as e:
                     self.stdout.write(
-                        self.style.ERROR(
-                            f"[{idx}/{total}] Error processing '{anime.title}': {e}"
-                        )
+                        self.style.ERROR(f"[{idx}/{total}] Error processing '{anime.title}': {e}")
                     )
                     failed += 1
 

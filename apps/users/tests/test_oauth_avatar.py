@@ -29,7 +29,9 @@ class OAuthAvatarDownloadTests(SimpleTestCase):
 
     @patch("apps.users.adapters.httpx.stream")
     def test_rejects_untrusted_avatar_host(self, mock_stream):
-        self.assertIsNone(_download_google_avatar("https://googleusercontent.com.evil.test/a/avatar"))
+        self.assertIsNone(
+            _download_google_avatar("https://googleusercontent.com.evil.test/a/avatar")
+        )
         mock_stream.assert_not_called()
 
     @patch("apps.users.adapters.httpx.stream")

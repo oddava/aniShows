@@ -27,9 +27,7 @@ from ...services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 
 
 class Command(BaseCommand):
-    help = (
-        "Populate theme songs (openings/endings) for existing anime from Jikan/MAL API"
-    )
+    help = "Populate theme songs (openings/endings) for existing anime from Jikan/MAL API"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -73,9 +71,7 @@ class Command(BaseCommand):
             try:
                 anime = Anime.objects.get(id=anime_id)
                 self.stdout.write(f"Processing themes for: {anime.title}")
-                asyncio.run(
-                    self.process_single_anime(anime, max_retries, adaptive_delay)
-                )
+                asyncio.run(self.process_single_anime(anime, max_retries, adaptive_delay))
             except Anime.DoesNotExist:
                 self.stderr.write(f"Anime with ID {anime_id} not found")
                 return
@@ -88,18 +84,12 @@ class Command(BaseCommand):
             self.stdout.write(f"Found {total} anime without theme songs")
 
             if total == 0:
-                self.stdout.write(
-                    self.style.SUCCESS("All anime already have theme songs!")
-                )
+                self.stdout.write(self.style.SUCCESS("All anime already have theme songs!"))
                 return
 
-            asyncio.run(
-                self.process_batch(queryset, batch_size, max_retries, adaptive_delay)
-            )
+            asyncio.run(self.process_batch(queryset, batch_size, max_retries, adaptive_delay))
 
-    async def process_single_anime(
-        self, anime, max_retries: int, adaptive_delay: float
-    ):
+    async def process_single_anime(self, anime, max_retries: int, adaptive_delay: float):
         """Process themes for a single anime with smart rate limiting"""
         rate_limiter = JikanRateLimiter(base_delay=adaptive_delay)
 
@@ -115,9 +105,7 @@ class Command(BaseCommand):
                 )
                 if themes:
                     await self.save_theme_songs(anime, themes)
-                    self.stdout.write(
-                        self.style.SUCCESS(f"✓ Updated themes for: {anime.title}")
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"✓ Updated themes for: {anime.title}"))
                 else:
                     self.stderr.write(f"No theme data found for: {anime.title}")
 
@@ -224,8 +212,7 @@ class Command(BaseCommand):
                     if attempt < max_retries:
                         wait_time = min(2**attempt, 10)  # Max 10s wait for other errors
                         self.stderr.write(
-                            f"  Error on {anime.title}: {error_str}, "
-                            f"retrying in {wait_time:.1f}s"
+                            f"  Error on {anime.title}: {error_str}, retrying in {wait_time:.1f}s"
                         )
                         await asyncio.sleep(wait_time)
                         continue
@@ -301,17 +288,14 @@ class Command(BaseCommand):
                         await asyncio.sleep(wait_time)
                         continue
                     else:
-                        logger.error(
-                            f"Jikan 429 max retries exceeded for MAL ID {mal_id}"
-                        )
+                        logger.error(f"Jikan 429 max retries exceeded for MAL ID {mal_id}")
                         return None
 
                 # Handle other HTTP errors
                 if response.status_code >= 500 and attempt < max_retries:
                     wait_time = min(2**attempt, 10)
                     logger.warning(
-                        f"Jikan server error {response.status_code}, "
-                        f"retrying in {wait_time:.1f}s"
+                        f"Jikan server error {response.status_code}, retrying in {wait_time:.1f}s"
                     )
                     await asyncio.sleep(wait_time)
                     continue
@@ -319,9 +303,7 @@ class Command(BaseCommand):
                 # 4xx errors (except 429 handled above) are non-retryable.
                 if 400 <= response.status_code < 500:
                     if response.status_code == 404:
-                        logger.info(
-                            f"Jikan MAL ID {mal_id} not found (404) - skipping retries"
-                        )
+                        logger.info(f"Jikan MAL ID {mal_id} not found (404) - skipping retries")
                     else:
                         logger.warning(
                             f"Jikan client error {response.status_code} for MAL ID {mal_id} - "
@@ -391,9 +373,7 @@ class Command(BaseCommand):
             return result
 
         # Extract episode range (eps X-Y)
-        episode_match = re.search(
-            r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE
-        )
+        episode_match = re.search(r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE)
         if episode_match:
             result["episodes"] = episode_match.group(1).strip()
             text = text[: episode_match.start()].strip()

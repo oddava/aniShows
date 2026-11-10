@@ -550,7 +550,9 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(result["records_failed"], 1)
         self.assertEqual(result["records_created"], 1)
-        self.assertEqual(OfflineCatalogImport.objects.get().status, OfflineCatalogImport.Status.COMPLETED)
+        self.assertEqual(
+            OfflineCatalogImport.objects.get().status, OfflineCatalogImport.Status.COMPLETED
+        )
 
     def test_run_import_skips_non_object_json_payload_lines(self):
         metadata = {
@@ -571,7 +573,9 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(result["records_failed"], 1)
         self.assertEqual(result["records_created"], 1)
-        self.assertEqual(OfflineCatalogImport.objects.get().status, OfflineCatalogImport.Status.COMPLETED)
+        self.assertEqual(
+            OfflineCatalogImport.objects.get().status, OfflineCatalogImport.Status.COMPLETED
+        )
 
     def test_run_import_merges_duplicate_ids_within_same_batch(self):
         first = self._entry(
@@ -784,8 +788,12 @@ class OfflineCatalogRobustnessTests(TestCase):
 
     def test_import_does_not_revert_fields_changed_by_another_sync_meanwhile(self):
         anime = Anime.objects.create(
-            title="Death Note", slug="death-note", anilist_id=1535, mal_id=1535,
-            status=Anime.AnimeStatus.airing, episode_count=37,
+            title="Death Note",
+            slug="death-note",
+            anilist_id=1535,
+            mal_id=1535,
+            status=Anime.AnimeStatus.airing,
+            episode_count=37,
         )
         path = self._write_jsonl_fixture(self._entry())
         original_fill = OfflineCatalogImportService._fill_offline_fields

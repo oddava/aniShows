@@ -48,9 +48,7 @@ class Command(BaseCommand):
         cache_dir = Path(settings.BASE_DIR) / cache_prefix
 
         if not cache_dir.exists():
-            self.stdout.write(
-                self.style.WARNING(f"CACHE directory not found: {cache_dir}")
-            )
+            self.stdout.write(self.style.WARNING(f"CACHE directory not found: {cache_dir}"))
             return
 
         self.stdout.write(f"Scanning for thumbnails in: {cache_dir}")
@@ -59,9 +57,7 @@ class Command(BaseCommand):
         webp_files = list(cache_dir.rglob("*.webp"))
 
         if not webp_files:
-            self.stdout.write(
-                self.style.WARNING("No .webp files found in CACHE directory")
-            )
+            self.stdout.write(self.style.WARNING("No .webp files found in CACHE directory"))
             return
 
         self.stdout.write(f"Found {len(webp_files)} thumbnail files")
@@ -108,9 +104,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"    Deleted local file: {file_path}")
 
             except Exception as e:
-                self.stdout.write(
-                    self.style.ERROR(f"  Failed to upload {storage_path}: {e}")
-                )
+                self.stdout.write(self.style.ERROR(f"  Failed to upload {storage_path}: {e}"))
                 failed += 1
 
         # Summary
@@ -125,9 +119,6 @@ class Command(BaseCommand):
 
         if dry_run:
             self.stdout.write(
-                "\n"
-                + self.style.WARNING(
-                    "This was a dry run. No files were actually copied."
-                )
+                "\n" + self.style.WARNING("This was a dry run. No files were actually copied.")
             )
             self.stdout.write("Run without --dry-run to perform the actual copy.")

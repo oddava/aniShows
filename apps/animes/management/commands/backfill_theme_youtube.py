@@ -42,9 +42,7 @@ class Command(BaseCommand):
         if force:
             queryset = ThemeSong.objects.exclude(title="No themes available")
         else:
-            queryset = ThemeSong.objects.filter(youtube_url="").exclude(
-                title="No themes available"
-            )
+            queryset = ThemeSong.objects.filter(youtube_url="").exclude(title="No themes available")
 
         if anime_id:
             queryset = queryset.filter(anime_id=anime_id)
@@ -95,9 +93,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f"  Error processing {theme}: {e}"))
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"\nComplete! Updated {updated} themes with YouTube URLs."
-            )
+            self.style.SUCCESS(f"\nComplete! Updated {updated} themes with YouTube URLs.")
         )
         if skipped_too_long > 0:
             self.stdout.write(
@@ -161,9 +157,7 @@ class Command(BaseCommand):
             if len(encoded_query) > max_query_length and len(query_parts) >= 3:
                 # Shorten anime title to just first word
                 anime_title = query_parts[-1]
-                shortened = (
-                    anime_title.split()[0] if anime_title.split() else anime_title[:20]
-                )
+                shortened = anime_title.split()[0] if anime_title.split() else anime_title[:20]
                 query_parts[-1] = shortened
                 query = " ".join(query_parts)
                 encoded_query = quote_plus(query)

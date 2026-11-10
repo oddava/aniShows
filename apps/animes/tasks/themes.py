@@ -477,6 +477,7 @@ class ThemeSongSyncTask(BaseTask):
 
         return count
 
+
 @observed_shared_task(
     base=ThemeSongSyncTask,
     retry_policy="long",
@@ -505,6 +506,7 @@ def sync_theme_songs(
         Dict with sync results
     """
     return self.execute(anime_id, limit, force_resync, retry_failed, base_delay, anime_ids)
+
 
 @observed_shared_task(retry_policy="long")
 def backfill_theme_youtube_urls(self, limit: int = 100):
@@ -553,6 +555,7 @@ def backfill_theme_youtube_urls(self, limit: int = 100):
 
     logger.info(f"YouTube URL backfill complete: {result}")
     return result
+
 
 def _generate_youtube_url_sync(title: str, artist: str, song_type: str, anime_title: str) -> str:
     """Synchronous version of _generate_youtube_url for use in tasks."""

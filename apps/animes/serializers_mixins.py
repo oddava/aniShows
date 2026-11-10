@@ -114,6 +114,7 @@ class ImageUrlMixin:
             return getattr(obj, fallback_field_name, None)
         return None
 
+
 class UserStatusMixin:
     """Mixin for serializers that need is_favorite and user_list_status fields.
     Used by AnimeMinimalSerializer, AnimeListSerializer, AnimeDetailSerializer.
@@ -131,6 +132,7 @@ class UserStatusMixin:
             entry = obj._user_list_entries[0]
             return build_user_list_status_payload(entry, obj.episode_count)
         return None
+
 
 class UserProfileMixin:
     """Mixin for serializers that need profile-derived fields (avatar, bio, etc.).
@@ -184,6 +186,7 @@ class UserProfileMixin:
     def get_preferred_timezone(self, obj):
         profile = getattr(obj, "userprofile", None)
         return profile.preferred_timezone if profile and profile.preferred_timezone else "auto"
+
 
 class BadgesMixin:
     """Mixin for serializers that display user badges.

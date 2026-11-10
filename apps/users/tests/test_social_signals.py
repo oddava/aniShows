@@ -9,10 +9,13 @@ from ..models import UserProfile
 
 User = get_user_model()
 
+
 class SocialSignalTest(TestCase):
     def test_social_account_auto_verify(self):
         """Test that social account registration automatically verifies the user."""
-        user = User.objects.create_user(username='socialuser', email='social@gmail.com', password='password123')
+        user = User.objects.create_user(
+            username="socialuser", email="social@gmail.com", password="password123"
+        )
 
         # Manually trigger social_account_added signal
         sociallogin = MagicMock(spec=SocialLogin)
@@ -24,11 +27,15 @@ class SocialSignalTest(TestCase):
 
         # Check profile
         profile = UserProfile.objects.get(user=user)
-        self.assertTrue(profile.email_verified, "Email should be automatically verified for social login")
+        self.assertTrue(
+            profile.email_verified, "Email should be automatically verified for social login"
+        )
 
     def test_post_save_profile_creation(self):
         """Test that every new user gets a UserProfile via post_save signal."""
-        user = User.objects.create_user(username='newuser', email='new@example.com', password='password123')
+        user = User.objects.create_user(
+            username="newuser", email="new@example.com", password="password123"
+        )
 
         # Signal should have created the profile
         self.assertTrue(UserProfile.objects.filter(user=user).exists())
@@ -36,7 +43,10 @@ class SocialSignalTest(TestCase):
     def test_oauth_signup_auto_verify(self):
         """Test that user_signed_up signal automatically verifies OAuth users."""
         from allauth.account.signals import user_signed_up
-        user = User.objects.create_user(username='oauthnew', email='oauthnew@gmail.com', password='password123')
+
+        user = User.objects.create_user(
+            username="oauthnew", email="oauthnew@gmail.com", password="password123"
+        )
 
         # Manually trigger user_signed_up with sociallogin in kwargs
         sociallogin = MagicMock(spec=SocialLogin)
@@ -53,12 +63,15 @@ class SocialSignalTest(TestCase):
         """Test that unsaved EmailAddress objects don't crash the signup signal."""
         from allauth.account.models import EmailAddress
         from allauth.account.signals import user_signed_up
-        user = User.objects.create_user(username='integrityuser', email='integ@gmail.com', password='password123')
+
+        user = User.objects.create_user(
+            username="integrityuser", email="integ@gmail.com", password="password123"
+        )
 
         sociallogin = MagicMock(spec=SocialLogin)
         sociallogin.user = user
         # Create an unsaved EmailAddress object (no user_id, no pk)
-        email_addr = EmailAddress(email='integ@gmail.com', verified=False)
+        email_addr = EmailAddress(email="integ@gmail.com", verified=False)
         sociallogin.email_addresses = [email_addr]
 
         # This shouldn't raise IntegrityError now

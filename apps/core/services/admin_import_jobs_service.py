@@ -150,7 +150,9 @@ def describe_metadata_mode(mode: str) -> str:
 
 def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
     try:
-        state_queryset = OfflineAnimeSyncState.objects.filter(anime__offline_db_last_seen_at__isnull=False)
+        state_queryset = OfflineAnimeSyncState.objects.filter(
+            anime__offline_db_last_seen_at__isnull=False
+        )
         total_states = state_queryset.count()
 
         def stage_progress(stage_field: str):
@@ -170,7 +172,9 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
                 "successful": synced,
                 "failed": failed,
                 "running": running,
-                "completion_percent": round((synced / total_states) * 100) if total_states > 0 else None,
+                "completion_percent": round((synced / total_states) * 100)
+                if total_states > 0
+                else None,
                 "status_counts": counts,
             }
 
@@ -183,11 +187,15 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
             themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             quarantined=False,
         ).count()
-        transient_backlog = state_queryset.filter(quarantined=False).filter(
-            Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-            | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-            | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-        ).count()
+        transient_backlog = (
+            state_queryset.filter(quarantined=False)
+            .filter(
+                Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+                | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+                | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
+            )
+            .count()
+        )
         quarantined_count = state_queryset.filter(quarantined=True).count()
         top_reasons = list(
             state_queryset.filter(quarantined=True)
@@ -244,7 +252,9 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
     overall_running = (
         metadata_progress["running"] + franchise_progress["running"] + theme_progress["running"]
     )
-    overall_percent = round((overall_completed / overall_queued) * 100) if overall_queued > 0 else None
+    overall_percent = (
+        round((overall_completed / overall_queued) * 100) if overall_queued > 0 else None
+    )
 
     return {
         "metadata": metadata_progress,
@@ -285,7 +295,9 @@ def format_task_result(result):
                 reason = result.result_data.get("reason") or result.result_data.get("status")
                 fetched = result.result_data.get("fetched")
                 if fetched is not None:
-                    error_message = f"Catalog sync returned no usable data ({reason}; fetched {fetched})."
+                    error_message = (
+                        f"Catalog sync returned no usable data ({reason}; fetched {fetched})."
+                    )
                 else:
                     error_message = f"Catalog sync returned no usable data ({reason})."
 
@@ -310,7 +322,9 @@ def format_task_result(result):
                 )
                 error_count = coerce_int_or_none(result.result_data.get("errors")) or 0
         else:
-            total_items = 1 if mode == "single" else coerce_int_or_none(task_kwargs.get("batch_size")) or 0
+            total_items = (
+                1 if mode == "single" else coerce_int_or_none(task_kwargs.get("batch_size")) or 0
+            )
 
         if result.status == "FAILURE" and error_count == 0:
             error_count = 1
@@ -369,7 +383,9 @@ def format_task_result(result):
         "error_count": error_count,
         "error_message": error_message,
         "created_at": result.date_created.isoformat(),
-        "updated_at": result.date_completed.isoformat() if result.date_completed else result.date_created.isoformat(),
+        "updated_at": result.date_completed.isoformat()
+        if result.date_completed
+        else result.date_created.isoformat(),
         "duration_seconds": int(result.execution_time) if result.execution_time else None,
         "metadata": {
             "task_args": result.task_args,

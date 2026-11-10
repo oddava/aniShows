@@ -26,8 +26,8 @@ class ProfileSharePreviewViewTests(TestCase):
         self.assertIn("oddava on AniShows", content)
         self.assertIn("128 anime tracked", content)
         self.assertIn("42 followers", content)
-        self.assertIn("meta property=\"og:title\"", content)
-        self.assertIn("meta name=\"twitter:description\"", content)
+        self.assertIn('meta property="og:title"', content)
+        self.assertIn('meta name="twitter:description"', content)
 
     def test_private_profile_preview_returns_not_found_for_unauthorized_viewer(self):
         user = User.objects.create_user(username="secret", password="pw")
@@ -61,7 +61,7 @@ class ProfileSharePreviewViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("tguser on AniShows", content)
-        self.assertNotIn("http-equiv=\"refresh\"", content)
+        self.assertNotIn('http-equiv="refresh"', content)
         self.assertNotIn("window.location.replace", content)
 
     def test_regular_browser_preview_keeps_redirect(self):
@@ -74,7 +74,7 @@ class ProfileSharePreviewViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        self.assertIn("http-equiv=\"refresh\"", content)
+        self.assertIn('http-equiv="refresh"', content)
         self.assertIn("window.location.replace", content)
 
     def test_missing_profile_does_not_redirect_a_browser_to_itself(self):

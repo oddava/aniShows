@@ -16,7 +16,9 @@ class AiringScheduleTestMixin:
     def setUp(self):
         super().setUp()
         self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
-        self.watch_sync_patcher = patch("apps.animes.signals.sync_watch_episodes_for_anime.apply_async")
+        self.watch_sync_patcher = patch(
+            "apps.animes.signals.sync_watch_episodes_for_anime.apply_async"
+        )
         self.enrich_patcher.start()
         self.watch_sync_patcher.start()
         self.addCleanup(self.enrich_patcher.stop)
@@ -159,7 +161,10 @@ class AiringWorkflowTaskTests(AiringScheduleTestMixin, TestCase):
         task = AiringWorkflowTask()
         service = AsyncMock()
         service.resolve_airing_media_for_anime.return_value = {
-            "nextAiringEpisode": {"episode": 2, "airingAt": int((timezone.now() + timedelta(days=1)).timestamp())}
+            "nextAiringEpisode": {
+                "episode": 2,
+                "airingAt": int((timezone.now() + timedelta(days=1)).timestamp()),
+            }
         }
         service.update_anime_manual.return_value = True
         service.last_error_code = ""
@@ -169,7 +174,9 @@ class AiringWorkflowTaskTests(AiringScheduleTestMixin, TestCase):
         result = async_to_sync(task._sync_airing)(service, call_cache, None)
 
         service.resolve_airing_media_for_anime.assert_awaited_once_with(anime)
-        service.update_anime_manual.assert_awaited_once_with(anime, service.resolve_airing_media_for_anime.return_value)
+        service.update_anime_manual.assert_awaited_once_with(
+            anime, service.resolve_airing_media_for_anime.return_value
+        )
         call_cache.mark_updated.assert_called_once_with(anime.mal_id)
         self.assertEqual(result["updated"], 1)
         self.assertEqual(result["errors"], 0)

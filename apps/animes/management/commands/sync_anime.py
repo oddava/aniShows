@@ -359,9 +359,7 @@ class Command(BaseCommand):
             enqueue_enrichment = True
         enrichment_chunk_size = options["enrichment_chunk_size"]
 
-        self.stdout.write(
-            f"Importing Anime Offline Database: {release_tag} ({asset_name})"
-        )
+        self.stdout.write(f"Importing Anime Offline Database: {release_tag} ({asset_name})")
 
         task = import_offline_catalog.s(
             release_tag=release_tag,
@@ -461,9 +459,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Task chain queued. ID: {result.id}"))
         else:
             self.stdout.write(
-                self.style.WARNING(
-                    "Full sync cannot run synchronously. Use --async flag."
-                )
+                self.style.WARNING("Full sync cannot run synchronously. Use --async flag.")
             )
 
     def _dispatch_task(self, task, run_async, queue):

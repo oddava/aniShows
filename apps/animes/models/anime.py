@@ -211,7 +211,10 @@ class Anime(TimestampMixin, SlugMixin, Model):
             Index(fields=["season_year", "-popularity_rank"], name="anime_season_year_pop_idx"),
             Index(fields=["title", "status"]),
             Index(fields=["title_jp", "status"]),
-            Index(fields=["status", "broadcast_day", "next_airing_date"], name="anime_schedule_day_idx"),
+            Index(
+                fields=["status", "broadcast_day", "next_airing_date"],
+                name="anime_schedule_day_idx",
+            ),
             GinIndex(fields=["title"], name="anime_title_trgm_gin", opclasses=["gin_trgm_ops"]),
             GinIndex(
                 fields=["title_jp"], name="anime_title_jp_trgm_gin", opclasses=["gin_trgm_ops"]
@@ -352,7 +355,9 @@ class AnimeCharacter(Model):
     anime = ForeignKey("anime.Anime", CASCADE, related_name="cast")
     character = ForeignKey("anime.Character", CASCADE, related_name="roles")
     role = CharField(max_length=20, choices=Role.choices, default=Role.SUPPORTING)
-    voice_actor = ForeignKey("anime.Staff", SET_NULL, null=True, blank=True, related_name="voice_roles")
+    voice_actor = ForeignKey(
+        "anime.Staff", SET_NULL, null=True, blank=True, related_name="voice_roles"
+    )
 
     class Meta:
         ordering = ["role", "character__name"]

@@ -204,9 +204,9 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
 
                 # Find the largest picture
                 for pic in data:
-                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get("jpg", {}).get(
-                        "large_image_url"
-                    )
+                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get(
+                        "jpg", {}
+                    ).get("large_image_url")
                     if large_img:
                         return large_img
         except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError):
@@ -284,7 +284,9 @@ def fetch_anime_images(
                     if banner_url:
                         # Save external URL reference
                         anime.banner_image_external_url = banner_url
-                        await service._save_external_url(anime, "banner_image_external_url", banner_url)
+                        await service._save_external_url(
+                            anime, "banner_image_external_url", banner_url
+                        )
 
                 async def _clear_local_image(field_name: str):
                     image_field = getattr(anime, field_name, None)
@@ -406,12 +408,16 @@ def heal_missing_anime_media(self, batch_size: int | None = None):
             }
 
         resolved_batch_size = max(int(batch_size or settings.MEDIA_SELF_HEAL_BATCH_SIZE), 1)
-        missing_cover = (Q(cover_image__isnull=True) | Q(cover_image="")) & Q(
-            cover_image_external_url__isnull=False
-        ) & ~Q(cover_image_external_url="")
-        missing_banner = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
-            banner_image_external_url__isnull=False
-        ) & ~Q(banner_image_external_url="")
+        missing_cover = (
+            (Q(cover_image__isnull=True) | Q(cover_image=""))
+            & Q(cover_image_external_url__isnull=False)
+            & ~Q(cover_image_external_url="")
+        )
+        missing_banner = (
+            (Q(banner_image__isnull=True) | Q(banner_image=""))
+            & Q(banner_image_external_url__isnull=False)
+            & ~Q(banner_image_external_url="")
+        )
         missing_banner_with_mal = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
             mal_id__isnull=False
         )
@@ -496,7 +502,9 @@ def generate_image_thumbnails(self, anime_id: int):
                 )
 
         if attempted_batches and failed_batches == attempted_batches and generated_count == 0:
-            raise last_error or RuntimeError("Thumbnail generation failed for all requested image variants")
+            raise last_error or RuntimeError(
+                "Thumbnail generation failed for all requested image variants"
+            )
 
         logger.info(
             f"Thumbnail generation complete for {anime.title}. Generated: {generated_count}"

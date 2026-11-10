@@ -232,6 +232,7 @@ class AdminAuditMiddleware:
             return parts[3:]
         return []
 
+
 class ExceptionLoggingMiddleware:
     """Middleware to log exceptions."""
 

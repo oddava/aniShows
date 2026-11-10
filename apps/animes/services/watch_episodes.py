@@ -57,7 +57,9 @@ class AnimeWatchEpisodeService:
 
     @classmethod
     def _cache_key_for_identity(cls, anime_id: int, updated_at) -> str:
-        updated_at_token = int(updated_at.timestamp()) if getattr(updated_at, "timestamp", None) else 0
+        updated_at_token = (
+            int(updated_at.timestamp()) if getattr(updated_at, "timestamp", None) else 0
+        )
         return f"anime_watch_episodes:{cls.CACHE_VERSION}:{anime_id}:{updated_at_token}"
 
     async def _build_for_anime(
@@ -72,11 +74,14 @@ class AnimeWatchEpisodeService:
         if anime.anilist_id or mal_id:
             service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
-                episode_media = await service.get_streaming_episodes_for_anime(
-                    anilist_id=anime.anilist_id,
-                    mal_id=mal_id,
-                    request_budget=request_budget,
-                ) or {}
+                episode_media = (
+                    await service.get_streaming_episodes_for_anime(
+                        anilist_id=anime.anilist_id,
+                        mal_id=mal_id,
+                        request_budget=request_budget,
+                    )
+                    or {}
+                )
             except Exception as exc:
                 logger.warning(
                     "Failed to fetch episode streaming metadata for %s: %s",
@@ -95,7 +100,9 @@ class AnimeWatchEpisodeService:
         if not jikan_episodes:
             return self._build_fallback_episodes(anime)
 
-        crunchyroll_index = self._index_streaming_episodes(episode_media.get("streamingEpisodes") or [])
+        crunchyroll_index = self._index_streaming_episodes(
+            episode_media.get("streamingEpisodes") or []
+        )
         return [
             self._merge_episode(anime, episode, crunchyroll_index.get(episode["number"]))
             for episode in jikan_episodes
@@ -270,7 +277,9 @@ class AnimeWatchEpisodeService:
 
         return index
 
-    def _merge_episode(self, anime: Anime, jikan_episode: dict, streaming_episode: dict | None) -> dict:
+    def _merge_episode(
+        self, anime: Anime, jikan_episode: dict, streaming_episode: dict | None
+    ) -> dict:
         number = jikan_episode["number"]
         crunchyroll_url = (
             streaming_episode.get("crunchyroll_url") if streaming_episode else ""

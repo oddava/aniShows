@@ -33,11 +33,12 @@ User = get_user_model()
 
 
 class UserFilter(FilterSet):
-    is_staff = BooleanFilter(field_name='is_staff')
-    is_active = BooleanFilter(field_name='is_active')
+    is_staff = BooleanFilter(field_name="is_staff")
+    is_active = BooleanFilter(field_name="is_active")
+
     class Meta:
         model = User
-        fields = ['is_staff', 'is_active']
+        fields = ["is_staff", "is_active"]
 
 
 class AdminUserViewSet(
@@ -54,9 +55,9 @@ class AdminUserViewSet(
     serializer_class = AdminUserSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = UserFilter
-    search_fields = ['username', 'email']
-    ordering_fields = ['date_joined', 'username', 'email']
-    ordering = ['-date_joined']
+    search_fields = ["username", "email"]
+    ordering_fields = ["date_joined", "username", "email"]
+    ordering = ["-date_joined"]
 
     def get_queryset(self):
         queryset = (
@@ -110,6 +111,7 @@ class AdminUserListViewSet(SuperUserRequiredForActionsMixin, ViewSet):
 
     permission_classes = [IsAdminUser]
     superuser_actions = frozenset({"destroy", "bulk_delete"})
+
     def list(self, request):
         queryset = build_user_list_queryset(request.query_params)
 
@@ -129,9 +131,7 @@ class AdminUserListViewSet(SuperUserRequiredForActionsMixin, ViewSet):
             queryset = UserAnimeList.objects.select_related("user", "anime")
             entry = queryset.get(pk=pk)
         except UserAnimeList.DoesNotExist:
-            return Response(
-                {"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(serialize_user_list_entry(entry))
 
@@ -140,9 +140,7 @@ class AdminUserListViewSet(SuperUserRequiredForActionsMixin, ViewSet):
             queryset = UserAnimeList.objects.all()
             entry = queryset.get(pk=pk)
         except UserAnimeList.DoesNotExist:
-            return Response(
-                {"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "List entry not found."}, status=status.HTTP_404_NOT_FOUND)
 
         entry.delete()
         return Response({"message": "List entry deleted successfully."})
@@ -151,7 +149,9 @@ class AdminUserListViewSet(SuperUserRequiredForActionsMixin, ViewSet):
     def bulk_delete(self, request):
         ids = request.data.get("ids", [])
         if not isinstance(ids, list) or not ids:
-            return Response({"detail": "ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         queryset = UserAnimeList.objects.filter(id__in=ids)
         deleted_count, _ = queryset.delete()
@@ -163,6 +163,7 @@ class AdminFavoritesViewSet(SuperUserRequiredForActionsMixin, ViewSet):
 
     permission_classes = [IsAdminUser]
     superuser_actions = frozenset({"destroy"})
+
     def list(self, request):
         queryset = build_user_favorites_queryset(request.query_params)
 
@@ -208,8 +209,12 @@ class AdminFavoritesViewSet(SuperUserRequiredForActionsMixin, ViewSet):
                 "title": item["anime__title"],
                 "slug": item["anime__slug"],
                 "favorite_count": item["favorite_count"],
-                "poster": item["anime__cover_image"] or item["anime__cover_image_external_url"] or "",
-                "poster_small": item["anime__cover_image"] or item["anime__cover_image_external_url"] or "",
+                "poster": item["anime__cover_image"]
+                or item["anime__cover_image_external_url"]
+                or "",
+                "poster_small": item["anime__cover_image"]
+                or item["anime__cover_image_external_url"]
+                or "",
             }
             for item in top_anime
         ]

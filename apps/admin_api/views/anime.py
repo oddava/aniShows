@@ -60,9 +60,9 @@ class AdminAnimeViewSet(
     serializer_class = AdminAnimeSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AnimeFilter
-    search_fields = ['title', 'title_jp']
-    ordering_fields = ['title', 'created_at', 'rating', 'release_date']
-    ordering = ['-created_at']
+    search_fields = ["title", "title_jp"]
+    ordering_fields = ["title", "created_at", "rating", "release_date"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         return get_admin_anime_queryset()
@@ -88,7 +88,7 @@ class AdminGenreViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminGenreSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ['name']
+    search_fields = ["name"]
 
     def get_queryset(self):
         return get_admin_genre_queryset()
@@ -114,7 +114,7 @@ class AdminStudioViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
     superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminStudioSerializer
     filter_backends = [filters.SearchFilter]
-    search_fields = ['name']
+    search_fields = ["name"]
 
     def get_queryset(self):
         return get_admin_studio_queryset()

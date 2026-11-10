@@ -150,7 +150,9 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
         self.assertEqual(anime.mal_id, 2002)
 
     @patch("apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync.delay")
-    def test_task_execute_enqueues_reconcile_and_prepares_state_pipeline(self, mock_reconcile_delay):
+    def test_task_execute_enqueues_reconcile_and_prepares_state_pipeline(
+        self, mock_reconcile_delay
+    ):
         source_path = self._write_jsonl_fixture(
             [
                 self._entry(title="Chunk One", anilist_id=1010, mal_id=2010),
@@ -174,7 +176,9 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
     @override_settings(ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED=True)
     @patch("apps.animes.tasks.offline_catalog.sync_watch_episodes_batch.apply_async")
-    def test_task_execute_enqueues_watch_episode_sync_for_changed_anime(self, mock_watch_apply_async):
+    def test_task_execute_enqueues_watch_episode_sync_for_changed_anime(
+        self, mock_watch_apply_async
+    ):
         source_path = self._write_jsonl_fixture(
             [self._entry(title="Watch Sync Import", anilist_id=1050, mal_id=2050)]
         )

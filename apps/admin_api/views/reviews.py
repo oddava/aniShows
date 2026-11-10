@@ -14,14 +14,14 @@ from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 
 
 class ReviewFilter(FilterSet):
-    has_spoilers = BooleanFilter(field_name='has_spoilers')
-    rating = NumberFilter(field_name='rating')
-    min_rating = NumberFilter(field_name='rating', lookup_expr='gte')
-    max_rating = NumberFilter(field_name='rating', lookup_expr='lte')
+    has_spoilers = BooleanFilter(field_name="has_spoilers")
+    rating = NumberFilter(field_name="rating")
+    min_rating = NumberFilter(field_name="rating", lookup_expr="gte")
+    max_rating = NumberFilter(field_name="rating", lookup_expr="lte")
 
     class Meta:
         model = Review
-        fields = ['has_spoilers', 'rating']
+        fields = ["has_spoilers", "rating"]
 
 
 class AdminReviewViewSet(
@@ -38,9 +38,9 @@ class AdminReviewViewSet(
     serializer_class = AdminReviewSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ReviewFilter
-    search_fields = ['text', 'user__username', 'anime__title']
-    ordering_fields = ['created_at', 'rating']
-    ordering = ['-created_at']
+    search_fields = ["text", "user__username", "anime__title"]
+    ordering_fields = ["created_at", "rating"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         queryset = Review.objects.select_related("user", "anime")
@@ -58,7 +58,9 @@ class AdminReviewViewSet(
         try:
             min_score = int(request.query_params.get("min_score", 1))
         except ValueError:
-            return Response({"detail": "min_score must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "min_score must be an integer."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         unresolved_report_statuses = [ReviewReport.Status.OPEN, ReviewReport.Status.IN_REVIEW]
         queryset = (

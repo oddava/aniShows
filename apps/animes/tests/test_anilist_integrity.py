@@ -60,9 +60,7 @@ class AniListIntegrityTests(TestCase):
             resolved = async_to_sync(service._resolve_manual_update_item)(anime, wrong_item)
 
         self.assertEqual(resolved["id"], 123)
-        self.assertEqual(
-            resolved["title"]["english"], "Canonical Title"
-        )
+        self.assertEqual(resolved["title"]["english"], "Canonical Title")
 
     def test_update_anime_sync_allows_titles_shared_with_other_rows(self):
         anime = Anime.objects.create(
@@ -158,7 +156,10 @@ class AniListIntegrityTests(TestCase):
 
     def test_title_only_match_picks_the_entry_from_the_same_year(self):
         anime = Anime.objects.create(
-            title="Hunter x Hunter", slug="hxh-2011", synopsis="x", season_year=2011,
+            title="Hunter x Hunter",
+            slug="hxh-2011",
+            synopsis="x",
+            season_year=2011,
             anilist_id=11061,
         )
 
@@ -264,7 +265,11 @@ class AniListIntegrityTests(TestCase):
                 "duration": 24,
                 "tags": [
                     {"name": "Time Loop", "isMediaSpoiler": False, "isGeneralSpoiler": False},
-                    {"name": "Female Protagonist", "isMediaSpoiler": False, "isGeneralSpoiler": False},
+                    {
+                        "name": "Female Protagonist",
+                        "isMediaSpoiler": False,
+                        "isGeneralSpoiler": False,
+                    },
                     {"name": "Time Loop", "isMediaSpoiler": False, "isGeneralSpoiler": False},
                     {"name": "Final Battle", "isMediaSpoiler": True, "isGeneralSpoiler": False},
                 ],

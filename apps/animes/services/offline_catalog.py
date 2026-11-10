@@ -888,7 +888,9 @@ class OfflineCatalogImportService:
         # Only what this import changed gets written: the instance may have been
         # loaded long before, and writing every field back would revert other
         # syncs' updates made since (an airing sync marking a show Finished).
-        changed = {field for field in OFFLINE_UPDATE_FIELDS if getattr(anime, field) != before[field]}
+        changed = {
+            field for field in OFFLINE_UPDATE_FIELDS if getattr(anime, field) != before[field]
+        }
         changed |= OFFLINE_ALWAYS_WRITTEN_FIELDS
         anime._offline_dirty_fields = getattr(anime, "_offline_dirty_fields", set()) | changed
 
@@ -1151,12 +1153,16 @@ class OfflineCatalogImportService:
                 return True
         return False
 
-    def _is_reasonable_alternate_title_match(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
+    def _is_reasonable_alternate_title_match(
+        self, anime: Anime, entry: OfflineCatalogEntry
+    ) -> bool:
         if entry.anilist_id or entry.mal_id:
             return False
         if not self._has_compatible_year(anime, entry):
             return False
-        return bool(self._anime_title_lookup_keys(anime).intersection(self._entry_title_lookup_keys(entry)))
+        return bool(
+            self._anime_title_lookup_keys(anime).intersection(self._entry_title_lookup_keys(entry))
+        )
 
     def _has_compatible_year(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
         anime_year = anime.season_year or (anime.release_date.year if anime.release_date else None)

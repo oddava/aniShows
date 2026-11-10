@@ -95,10 +95,14 @@ def _toggle_model_favorite(
             locked_user = User.objects.select_for_update().get(pk=user.pk)
             instance = model.objects.select_for_update().get(id=object_id)
 
-            favorite = favorite_model.objects.select_for_update().filter(
-                user=locked_user,
-                **{field_name: instance},
-            ).first()
+            favorite = (
+                favorite_model.objects.select_for_update()
+                .filter(
+                    user=locked_user,
+                    **{field_name: instance},
+                )
+                .first()
+            )
             if favorite:
                 favorite.delete()
                 is_favorite = False

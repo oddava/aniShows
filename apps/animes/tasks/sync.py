@@ -130,7 +130,9 @@ class SyncAnimeCatalogTask(BaseTask):
                     }
 
                 ranked_ids = await self._sync_trending_anime_rows(service, data)
-                ranked_count = await sync_to_async(CatalogSyncService().refresh_trending_ranks)(ranked_ids)
+                ranked_count = await sync_to_async(CatalogSyncService().refresh_trending_ranks)(
+                    ranked_ids
+                )
 
                 await update_job_progress(total_items, total_items)
                 self.metrics.record_records(ranked_count)

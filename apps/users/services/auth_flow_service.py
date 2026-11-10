@@ -40,7 +40,9 @@ def build_auth_response(user, request, message: str) -> AuthFlowResult:
     return AuthFlowResult(payload=payload, status_code=200)
 
 
-def verify_email_flow(uidb64: str | None, token: str | None, request, auth_service) -> AuthFlowResult:
+def verify_email_flow(
+    uidb64: str | None, token: str | None, request, auth_service
+) -> AuthFlowResult:
     if not uidb64 or not token:
         raise AuthFlowError("Missing UID or Token", 400)
 
@@ -95,7 +97,9 @@ def password_reset_flow(email: str | None, email_service) -> AuthFlowResult:
     )
 
 
-def password_reset_confirm_flow(uidb64: str | None, token: str | None, password: str | None) -> AuthFlowResult:
+def password_reset_confirm_flow(
+    uidb64: str | None, token: str | None, password: str | None
+) -> AuthFlowResult:
     if not all([uidb64, token, password]):
         raise AuthFlowError("Missing required fields", 400)
 

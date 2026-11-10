@@ -123,7 +123,6 @@ class AniListService(CatalogProviderBase):
         self.last_error_code = ""
         self.last_error_message = ""
 
-
     def _parse_graphql_error_code(self, message: str) -> str:
         lowered = (message or "").lower()
         if "too many requests" in lowered or "rate limit" in lowered:
@@ -218,7 +217,9 @@ class AniListService(CatalogProviderBase):
 
     @classmethod
     def _is_trusted_image_domain(cls, domain: str) -> bool:
-        return any(domain.endswith(trusted) or domain == trusted for trusted in cls.TRUSTED_IMAGE_DOMAINS)
+        return any(
+            domain.endswith(trusted) or domain == trusted for trusted in cls.TRUSTED_IMAGE_DOMAINS
+        )
 
     @classmethod
     def normalize_external_image_url(cls, url: str | None) -> str:
@@ -260,7 +261,6 @@ class AniListService(CatalogProviderBase):
 
         logger.info(f"Blocked untrusted image domain before fetch queue: {domain}")
         return ""
-
 
     @staticmethod
     def anime_query(include_season: bool = False) -> str:
@@ -358,14 +358,15 @@ class AniListService(CatalogProviderBase):
             limit=limit,
         )
 
-
     def _search_variants(self, query_string: str) -> list[str]:
         primary = self._sanitize_search_query(query_string)
         if not primary:
             return []
 
         variants = [primary]
-        simplified = re.sub(r"[^0-9A-Za-z\u00C0-\u024F\u0400-\u04FF\u3040-\u30FF\u4E00-\u9FFF\s]", " ", primary)
+        simplified = re.sub(
+            r"[^0-9A-Za-z\u00C0-\u024F\u0400-\u04FF\u3040-\u30FF\u4E00-\u9FFF\s]", " ", primary
+        )
         simplified = re.sub(r"\s+", " ", simplified).strip()
         if simplified and simplified not in variants:
             variants.append(simplified[:120])
@@ -394,7 +395,6 @@ class AniListService(CatalogProviderBase):
                 return media
 
         return []
-
 
     # --- Processing Logic (Extracted from Command) ---
 
@@ -525,10 +525,12 @@ class AniListService(CatalogProviderBase):
         # Don't attach an identity already owned by another row.
         if incoming_anilist_id and not anime.anilist_id:
             existing = await sync_to_async(
-                lambda: Anime.objects.filter(anilist_id=incoming_anilist_id)
-                .exclude(id=anime.id)
-                .values("id", "title")
-                .first()
+                lambda: (
+                    Anime.objects.filter(anilist_id=incoming_anilist_id)
+                    .exclude(id=anime.id)
+                    .values("id", "title")
+                    .first()
+                )
             )()
             if existing:
                 logger.info(
@@ -538,10 +540,12 @@ class AniListService(CatalogProviderBase):
 
         if incoming_mal_id and not anime.mal_id:
             existing = await sync_to_async(
-                lambda: Anime.objects.filter(mal_id=incoming_mal_id)
-                .exclude(id=anime.id)
-                .values("id", "title")
-                .first()
+                lambda: (
+                    Anime.objects.filter(mal_id=incoming_mal_id)
+                    .exclude(id=anime.id)
+                    .values("id", "title")
+                    .first()
+                )
             )()
             if existing:
                 logger.info(
@@ -614,7 +618,6 @@ class AniListService(CatalogProviderBase):
                 return recovered, False
             raise
 
-
     @sync_to_async
     def _handle_relationships_async(self, anime, item):
         genres = item.get("genres") or []
@@ -624,14 +627,10 @@ class AniListService(CatalogProviderBase):
             )
             anime.genres.add(genre)
 
-        studio_names = [
-            node.get("name") for node in (item.get("studios") or {}).get("nodes") or []
-        ]
+        studio_names = [node.get("name") for node in (item.get("studios") or {}).get("nodes") or []]
         studio_names = [name for name in studio_names if name]
         if studio_names:
-            anime.set_studios(
-                Studio.objects.get_or_create(name=name)[0] for name in studio_names
-            )
+            anime.set_studios(Studio.objects.get_or_create(name=name)[0] for name in studio_names)
 
         sync_relations_from_media(anime, item)
 
@@ -957,9 +956,7 @@ class AniListService(CatalogProviderBase):
     ) -> dict | None:
         """Fetch AniList streaming episode metadata for an anime."""
         resolved_anilist_id = (
-            anilist_id
-            if isinstance(anilist_id, int) and 0 < anilist_id <= 2_147_483_647
-            else None
+            anilist_id if isinstance(anilist_id, int) and 0 < anilist_id <= 2_147_483_647 else None
         )
         resolved_mal_id = (
             mal_id if isinstance(mal_id, int) and 0 < mal_id <= 2_147_483_647 else None
@@ -1039,9 +1036,9 @@ class AniListService(CatalogProviderBase):
         variables = {"id": anilist_id, "perPage": min(limit, self.MAX_PER_PAGE)}
         data = await self._query(query, variables, **self._query_options_for_budget(request_budget))
 
-        recommendation_nodes = (
-            ((data.get("Media") or {}).get("recommendations") or {}).get("nodes") or []
-        )
+        recommendation_nodes = ((data.get("Media") or {}).get("recommendations") or {}).get(
+            "nodes"
+        ) or []
         if not isinstance(recommendation_nodes, list):
             return []
 
@@ -1249,9 +1246,7 @@ class AniListService(CatalogProviderBase):
                 logger.warning(
                     f"Recovered from create integrity conflict for '{title}' (AniList ID: {anilist_id}): {e}"
                 )
-                await self._update_anime_async(
-                    recovered, item, title, title_native, recovered.slug
-                )
+                await self._update_anime_async(recovered, item, title, title_native, recovered.slug)
                 return recovered
             logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
             raise
@@ -1278,4 +1273,3 @@ class AniListService(CatalogProviderBase):
         await self._update_anime(anime, anime_data)
         await self._handle_relationships_async(anime, item)
         await self._download_and_save_images(anime, item)
-

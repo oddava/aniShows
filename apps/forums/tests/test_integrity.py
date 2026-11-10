@@ -47,7 +47,9 @@ def test_cannot_reply_to_locked_thread(client_for, category, author):
 @pytest.mark.django_db
 def test_staff_can_reply_to_locked_thread(category, author):
     thread = _thread(category, author, is_locked=True)
-    staff = User.objects.create_user(username="mod", email="m@example.com", password="x", is_staff=True)
+    staff = User.objects.create_user(
+        username="mod", email="m@example.com", password="x", is_staff=True
+    )
     client = APIClient()
     client.force_authenticate(user=staff)
 
@@ -123,7 +125,9 @@ def test_new_thread_appears_in_cached_all_categories_list(
 
 
 @pytest.mark.django_db
-def test_tag_filtered_list_sees_new_thread(client_for, category, django_capture_on_commit_callbacks):
+def test_tag_filtered_list_sees_new_thread(
+    client_for, category, django_capture_on_commit_callbacks
+):
     tag = Tag.objects.create(name="News", slug="news")
     anon = APIClient()
     url = reverse("forums:thread-list")
@@ -156,7 +160,9 @@ def test_thread_detail_cache_is_shared_by_id_spellings(category, author):
     from ..cache_utils import get_thread_detail_cache_key
 
     thread = _thread(category, author)
-    assert get_thread_detail_cache_key("0" + str(thread.id)) == get_thread_detail_cache_key(thread.id)
+    assert get_thread_detail_cache_key("0" + str(thread.id)) == get_thread_detail_cache_key(
+        thread.id
+    )
 
     anon = APIClient()
     response = anon.get(f"/api/v1/forums/threads/0{thread.id}/")

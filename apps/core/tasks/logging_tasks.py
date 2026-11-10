@@ -16,7 +16,9 @@ def log_request_async(self, log_data):
         if is_missing_relation_error(exc):
             logger.warning("Skipping async request log because the relation is missing")
             return {"status": "skipped", "reason": "missing_relation"}
-        logger.exception("Failed to create async request log", extra={"log_data": log_data_preview(log_data)})
+        logger.exception(
+            "Failed to create async request log", extra={"log_data": log_data_preview(log_data)}
+        )
         raise self.retry(exc=exc, countdown=5)
 
 
@@ -28,7 +30,9 @@ def log_audit_async(self, log_data):
         if is_missing_relation_error(exc):
             logger.warning("Skipping async audit log because the relation is missing")
             return {"status": "skipped", "reason": "missing_relation"}
-        logger.exception("Failed to create async audit log", extra={"log_data": log_data_preview(log_data)})
+        logger.exception(
+            "Failed to create async audit log", extra={"log_data": log_data_preview(log_data)}
+        )
         raise self.retry(exc=exc, countdown=5)
 
 

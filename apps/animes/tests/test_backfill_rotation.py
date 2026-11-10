@@ -38,9 +38,7 @@ class MetadataBackfillRotationTests(TestCase):
             return None
 
         with patch.object(task, "_resolve_media_for_anime", side_effect=resolve):
-            async_to_sync(task._enrich_batch)(
-                batch_size, None, "popularity_rank", None, False
-            )
+            async_to_sync(task._enrich_batch)(batch_size, None, "popularity_rank", None, False)
         return seen
 
     def test_most_popular_first_then_moves_on_to_unchecked_rows(self):
@@ -50,9 +48,7 @@ class MetadataBackfillRotationTests(TestCase):
 
         self.assertEqual(self._run(2), ["hit", "niche"])
         self.assertEqual(self._run(2), ["unranked", "hit"])
-        self.assertTrue(
-            all(Anime.objects.values_list("metadata_checked_at", flat=True))
-        )
+        self.assertTrue(all(Anime.objects.values_list("metadata_checked_at", flat=True)))
 
 
 class ThemeBackfillRotationTests(TestCase):
@@ -64,9 +60,7 @@ class ThemeBackfillRotationTests(TestCase):
     def test_checked_anime_without_themes_are_not_refetched_daily(self):
         checked = _anime("checked", mal_id=1, themes_checked_at=timezone.now())
         fresh = _anime("fresh", mal_id=2)
-        stale = _anime(
-            "stale", mal_id=3, themes_checked_at=timezone.now() - timedelta(days=8)
-        )
+        stale = _anime("stale", mal_id=3, themes_checked_at=timezone.now() - timedelta(days=8))
         fetch = AsyncMock(return_value={"openings": [], "endings": []})
 
         with patch("apps.animes.tasks.themes.fetch_themes_from_jikan", fetch):

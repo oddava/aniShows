@@ -64,7 +64,9 @@ class OfflineSyncStatePipelineTests(TestCase):
 
     @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
     @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
-    def test_identity_conflict_never_updates_identity_fields(self, mock_search_by_mal_id, mock_update):
+    def test_identity_conflict_never_updates_identity_fields(
+        self, mock_search_by_mal_id, mock_update
+    ):
         anime = self._anime("Conflict", anilist_id=111, mal_id=222)
         mock_search_by_mal_id.return_value = {"id": 999, "idMal": 333}
 
@@ -251,7 +253,9 @@ class OfflineSyncStatePipelineTests(TestCase):
 
     @patch("apps.animes.services.offline_sync.OfflineAnimeSyncState.objects.bulk_create")
     def test_ensure_states_uses_batched_bulk_create(self, mock_bulk_create):
-        anime_ids = [self._anime(f"Batch {index}", anilist_id=1000 + index).id for index in range(3)]
+        anime_ids = [
+            self._anime(f"Batch {index}", anilist_id=1000 + index).id for index in range(3)
+        ]
 
         summary = OfflineSyncService().ensure_states_for_anime_ids(anime_ids)
 

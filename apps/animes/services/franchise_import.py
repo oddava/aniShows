@@ -73,7 +73,9 @@ class FranchiseImportService:
             if not item:
                 raise FranchiseImportError("Not found", 404)
 
-            imported = self._find_existing(anilist_id=item.get("id"), mal_id=item.get("idMal")) is None
+            imported = (
+                self._find_existing(anilist_id=item.get("id"), mal_id=item.get("idMal")) is None
+            )
             anime = service.save_anime_to_db(item)
             self._ensure_external_image_refs(anime, item)
             invalidate_public_cache_keys(

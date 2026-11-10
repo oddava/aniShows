@@ -138,9 +138,7 @@ class MetadataEnrichmentTask(BaseTask):
                 logger.exception("Error enriching metadata for %s", anime_id)
                 raise self.retry(exc=e, countdown=60)
 
-    async def _resolve_media_for_anime(
-        self, service: JikanService, anime: Anime
-    ) -> dict | None:
+    async def _resolve_media_for_anime(self, service: JikanService, anime: Anime) -> dict | None:
         """Resolve the best Jikan media payload for a local Anime row."""
         return await service.resolve_media_for_anime(anime)
 
@@ -213,9 +211,9 @@ class MetadataEnrichmentTask(BaseTask):
                         logger.debug(f"Skipping {anime.title} - recently updated")
                         continue
 
-                    await sync_to_async(
-                        Anime.objects.filter(pk=anime.pk).update
-                    )(metadata_checked_at=timezone.now())
+                    await sync_to_async(Anime.objects.filter(pk=anime.pk).update)(
+                        metadata_checked_at=timezone.now()
+                    )
 
                     # Search and update
                     media = await self._resolve_media_for_anime(service, anime)
@@ -255,6 +253,7 @@ class MetadataEnrichmentTask(BaseTask):
                 "errors": error_count,
                 "missing_tags_only": missing_tags_only,
             }
+
 
 @observed_shared_task(
     base=MetadataEnrichmentTask,

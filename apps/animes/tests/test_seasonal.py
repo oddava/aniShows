@@ -23,6 +23,7 @@ from ..signals import trigger_metadata_fetch
 
 User = get_user_model()
 
+
 class SeasonalAnimeTests(APITestCase):
     """Tests for seasonal anime filtering and API."""
 
@@ -507,6 +508,7 @@ class SeasonalAnimeTests(APITestCase):
         self.assertIsNone(first_page.data.get("count"))
         self.assertIsNotNone(first_page.data.get("next"))
         self.assertIsNotNone(second_page.data.get("previous"))
+
 
 class SeasonalEdgeCasesTests(APITestCase):
     """Tests for edge cases in seasonal filtering."""

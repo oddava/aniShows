@@ -33,11 +33,15 @@ class FollowToggleRaceTests(APITestCase):
         UserFollow.objects.create(follower=self.user, following=self.target)
 
         with patch.object(UserFollow.objects, "get_or_create", side_effect=IntegrityError):
-            response = self.client.post("/api/v1/follows/toggle/", {"username": "idol"}, format="json")
+            response = self.client.post(
+                "/api/v1/follows/toggle/", {"username": "idol"}, format="json"
+            )
 
         self.assertEqual(response.status_code, 201)
         self.assertTrue(response.data["is_following"])
-        self.assertTrue(UserFollow.objects.filter(follower=self.user, following=self.target).exists())
+        self.assertTrue(
+            UserFollow.objects.filter(follower=self.user, following=self.target).exists()
+        )
 
 
 class RefreshRotationRaceTests(TransactionTestCase):
@@ -56,7 +60,9 @@ class RefreshRotationRaceTests(TransactionTestCase):
             try:
                 client = APIClient()
                 client.cookies[REFRESH_COOKIE_NAME] = token
-                response = client.post(reverse("token_refresh"), HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+                response = client.post(
+                    reverse("token_refresh"), HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+                )
                 statuses.append(response.status_code)
             finally:
                 connection.close()

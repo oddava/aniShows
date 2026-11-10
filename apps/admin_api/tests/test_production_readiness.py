@@ -325,7 +325,9 @@ class TestRuntimePolicyControls(APITestCase):
             email="regular@example.com",
             password="password123",
         )
-        UserProfile.objects.update_or_create(user=self.regular_user, defaults={"email_verified": True})
+        UserProfile.objects.update_or_create(
+            user=self.regular_user, defaults={"email_verified": True}
+        )
         self.anime = Anime.objects.create(
             title="Runtime Controls Anime",
             slug="runtime-controls-anime",

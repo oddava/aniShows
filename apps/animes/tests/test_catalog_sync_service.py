@@ -11,7 +11,9 @@ from ..services.catalog_sync import CatalogSyncService
 class CatalogSyncServiceTests(TestCase):
     def setUp(self):
         self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
-        self.watch_sync_patcher = patch("apps.animes.signals.sync_watch_episodes_for_anime.apply_async")
+        self.watch_sync_patcher = patch(
+            "apps.animes.signals.sync_watch_episodes_for_anime.apply_async"
+        )
         self.enrich_patcher.start()
         self.watch_sync_patcher.start()
         self.addCleanup(self.enrich_patcher.stop)
@@ -60,8 +62,12 @@ class CatalogSyncServiceTests(TestCase):
         self.assertIsNone(excluded.trending_rank)
 
     def test_seasonal_slice_uses_existing_season_fields(self):
-        first = self._anime("Spring Headliner", season="SPRING", season_year=2026, popularity_rank=1)
-        second = self._anime("Spring Followup", season="SPRING", season_year=2026, popularity_rank=3)
+        first = self._anime(
+            "Spring Headliner", season="SPRING", season_year=2026, popularity_rank=1
+        )
+        second = self._anime(
+            "Spring Followup", season="SPRING", season_year=2026, popularity_rank=3
+        )
         self._anime("Summer Show", season="SUMMER", season_year=2026, popularity_rank=1)
 
         anime_ids = self.service.get_seasonal_anime_ids(season="SPRING", year=2026, limit=10)

@@ -98,7 +98,9 @@ def request_email_change(user, new_email, password, email_service: EmailService)
 
 def confirm_email_change(uidb64, token, new_email_encoded):
     if not all([uidb64, token, new_email_encoded]):
-        return AccountManagementResult(payload={"error": "Missing required fields"}, status_code=400)
+        return AccountManagementResult(
+            payload={"error": "Missing required fields"}, status_code=400
+        )
 
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))

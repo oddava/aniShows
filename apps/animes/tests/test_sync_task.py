@@ -20,10 +20,17 @@ class SyncAnimeCatalogTaskTests(IsolatedAsyncioTestCase):
         )
 
         with (
-            patch.object(type(task), "request", new_callable=PropertyMock, return_value=SimpleNamespace(id=None)),
+            patch.object(
+                type(task),
+                "request",
+                new_callable=PropertyMock,
+                return_value=SimpleNamespace(id=None),
+            ),
             patch("apps.animes.tasks.sync.JikanService", return_value=fake_service),
             patch.object(task, "_sync_trending_anime_rows", new=AsyncMock()) as sync_rows,
-            patch("apps.animes.tasks.sync.CatalogSyncService.refresh_trending_ranks") as refresh_ranks,
+            patch(
+                "apps.animes.tasks.sync.CatalogSyncService.refresh_trending_ranks"
+            ) as refresh_ranks,
         ):
             result = await task._async_sync("trending", 50, {"update_ranks": True})
 

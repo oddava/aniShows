@@ -149,7 +149,7 @@ def get_review_queryset(request_user, query_params):
                 anime=OuterRef("anime"),
                 status=UserAnimeList.UserAnimeStatus.completed,
             )
-        )
+        ),
     )
 
     viewer_annotations = _viewer_review_annotations(request_user)
@@ -289,14 +289,18 @@ def vote_on_review(review, user, vote_type):
         )
 
     with transaction.atomic():
-        locked_review = Review.objects.select_for_update().select_related("user", "anime").get(
-            pk=review.pk
+        locked_review = (
+            Review.objects.select_for_update().select_related("user", "anime").get(pk=review.pk)
         )
         locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
-        existing_vote = ReviewVote.objects.select_for_update().filter(
-            user=locked_user,
-            review=locked_review,
-        ).first()
+        existing_vote = (
+            ReviewVote.objects.select_for_update()
+            .filter(
+                user=locked_user,
+                review=locked_review,
+            )
+            .first()
+        )
         if existing_vote:
             if existing_vote.vote_type != vote_type:
                 existing_vote.vote_type = vote_type
@@ -324,15 +328,19 @@ def vote_on_review(review, user, vote_type):
 def toggle_review_reaction(review, user, reaction_type):
     ensure_reviews_enabled()
     with transaction.atomic():
-        locked_review = Review.objects.select_for_update().select_related("user", "anime").get(
-            pk=review.pk
+        locked_review = (
+            Review.objects.select_for_update().select_related("user", "anime").get(pk=review.pk)
         )
         locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
-        existing_reaction = ReviewReaction.objects.select_for_update().filter(
-            user=locked_user,
-            review=locked_review,
-            reaction_type=reaction_type,
-        ).first()
+        existing_reaction = (
+            ReviewReaction.objects.select_for_update()
+            .filter(
+                user=locked_user,
+                review=locked_review,
+                reaction_type=reaction_type,
+            )
+            .first()
+        )
         if existing_reaction:
             existing_reaction.delete()
             if reaction_type in POSITIVE_REVIEW_REACTIONS:

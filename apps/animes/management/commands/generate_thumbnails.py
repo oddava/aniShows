@@ -41,6 +41,7 @@ MODEL_SPECS = {
     ),
 }
 
+
 class Command(BaseCommand):
     help = "Pre-generate all ImageKit thumbnails for Anime, Character, and Staff models"
 

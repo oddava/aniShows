@@ -54,12 +54,14 @@ DEFAULT_ADMIN_SETTINGS = {
 def _admin_settings_cache_enabled() -> bool:
     return bool(settings.ADMIN_SETTINGS_USE_CACHE)
 
+
 def _admin_settings_local_cache_ttl_seconds() -> float:
     raw = settings.ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS
     try:
         return max(float(raw), 0.0)
     except (TypeError, ValueError):
         return 2.0
+
 
 def _get_local_cached_settings() -> dict | None:
     ttl = _admin_settings_local_cache_ttl_seconds()
@@ -73,6 +75,7 @@ def _get_local_cached_settings() -> dict | None:
             return None
         return deepcopy(_LOCAL_SETTINGS_CACHE)
 
+
 def _set_local_cached_settings(payload: dict) -> None:
     ttl = _admin_settings_local_cache_ttl_seconds()
     if ttl <= 0:
@@ -83,11 +86,13 @@ def _set_local_cached_settings(payload: dict) -> None:
         _LOCAL_SETTINGS_CACHE = deepcopy(payload)
         _LOCAL_SETTINGS_CACHE_EXPIRES_AT = time.monotonic() + ttl
 
+
 def _clear_local_cached_settings() -> None:
     with _LOCAL_SETTINGS_LOCK:
         global _LOCAL_SETTINGS_CACHE, _LOCAL_SETTINGS_CACHE_EXPIRES_AT
         _LOCAL_SETTINGS_CACHE = None
         _LOCAL_SETTINGS_CACHE_EXPIRES_AT = 0.0
+
 
 def cache_admin_settings(payload: dict) -> None:
     """Write merged admin settings to shared cache and local micro-cache."""

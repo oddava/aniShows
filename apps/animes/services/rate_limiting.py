@@ -83,6 +83,7 @@ class AniListRateLimiter:
                     return
                 await asyncio.sleep(self.min_delay)
 
+
 class CircuitBreaker:
     """Circuit breaker pattern for external API calls.
     Prevents cascading failures when API is down.
@@ -132,6 +133,7 @@ class CircuitBreaker:
                         cache.set(self._get_state_key(), "HALF_OPEN", self.recovery_timeout)
                         cache.set(self._get_half_open_calls_key(), 0, self.recovery_timeout)
                         from .metrics import update_circuit_breaker_state
+
                         update_circuit_breaker_state(self.name, "HALF_OPEN")
                         logger.info(f"Circuit breaker {self.name} entering HALF_OPEN state")
                         return False
@@ -165,6 +167,7 @@ class CircuitBreaker:
                 cache.set(self._get_state_key(), "CLOSED", self.recovery_timeout)
                 cache.set(self._get_failures_key(), 0, self.recovery_timeout)
                 from .metrics import update_circuit_breaker_state
+
                 update_circuit_breaker_state(self.name, "CLOSED")
                 logger.info(f"Circuit breaker {self.name} CLOSED - service recovered")
             else:
@@ -185,6 +188,7 @@ class CircuitBreaker:
             if state == "HALF_OPEN" or failures >= self.failure_threshold:
                 cache.set(self._get_state_key(), "OPEN", self.recovery_timeout)
                 from .metrics import update_circuit_breaker_state
+
                 update_circuit_breaker_state(self.name, "OPEN")
                 logger.critical(
                     f"Circuit breaker {self.name} OPENED after {failures} failures. "
@@ -194,6 +198,7 @@ class CircuitBreaker:
         except (TypeError, *CACHE_ERRORS):
             # TypeError: a failure counter that is not a number.
             logger.exception("Failed to record circuit breaker failure")
+
 
 class APICallCache:
     """Cache for API responses to prevent duplicate calls.

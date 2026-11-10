@@ -26,7 +26,9 @@ urlpatterns = [
     path("i18n/", include("django.conf.urls.i18n")),
     path("metrics", MetricsView.as_view(), name="metrics"),
     path("u/<str:username>", ProfileSharePreviewView.as_view(), name="profile_share_preview"),
-    path("u/<str:username>/", ProfileSharePreviewView.as_view(), name="profile_share_preview_slash"),
+    path(
+        "u/<str:username>/", ProfileSharePreviewView.as_view(), name="profile_share_preview_slash"
+    ),
     path(
         "u/<str:username>/<path:section>",
         ProfileSharePreviewView.as_view(),

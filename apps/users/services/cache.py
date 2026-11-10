@@ -63,10 +63,12 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
 
     logger.debug(f"Invalidated caches for user {user_id}")
 
+
 def invalidate_user_anime_caches(user_id):
     """Clear user-specific anime caches when their list changes."""
     cache.delete(f"anime_trending_{user_id}")
     cache.delete(f"anime_top_rated_{user_id}")
+
 
 def invalidate_anime_detail_cache(anime_slug, user_id=None):
     """Clear anime detail cache for a specific anime.
@@ -82,22 +84,27 @@ def invalidate_anime_detail_cache(anime_slug, user_id=None):
         # but the cache key includes user_id, so we just document this limitation
         pass
 
+
 def get_user_profile_cache_key(user_id, full=False):
     """Get the cache key for a user's profile."""
     return f"user_profile:{user_id}:{'full' if full else 'light'}"
+
 
 def get_user_stats_cache_key(user_id):
     """Get the cache key for a user's stats."""
     return f"user_stats:{user_id}"
 
+
 def get_user_heatmap_cache_key(user_id):
     """Get the cache key for a user's activity heatmap."""
     return f"heatmap:{user_id}"
+
 
 def get_public_profile_cache_key(username, viewer_id="anonymous"):
     """Get the cache key for a public profile, including the current version."""
     version = get_profile_cache_version(username)
     return f"public_profile:{username}:v{version}:viewer:{viewer_id}"
+
 
 def get_profile_cache_version(username):
     """Get the current cache version for a user's profile."""

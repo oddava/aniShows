@@ -30,6 +30,7 @@ class MALStatusMapper:
         "Plan to Watch": UserAnimeList.UserAnimeStatus.plan_to_watch,
     }
 
+
 class AniListStatusMapper:
     """Map AniList status values to our status values"""
 
@@ -40,6 +41,7 @@ class AniListStatusMapper:
         "DROPPED": UserAnimeList.UserAnimeStatus.dropped,
         "PLANNING": UserAnimeList.UserAnimeStatus.plan_to_watch,
     }
+
 
 class BaseImporter:
     """Base class for importers"""

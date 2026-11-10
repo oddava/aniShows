@@ -350,9 +350,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
 
         response = self.client.get(reverse("anime-list"), {"sort": "title"})
         self.assertEqual(response.status_code, 200)
-        payload = next(
-            item for item in response.data["results"] if item["id"] == anime.id
-        )
+        payload = next(item for item in response.data["results"] if item["id"] == anime.id)
         self.assertEqual(payload["id"], anime.id)
         self.assertEqual(payload["cover_image"], "https://img.anilist.co/external-cover.jpg")
         self.assertEqual(payload["cover_image_small"], "https://img.anilist.co/external-cover.jpg")
@@ -376,9 +374,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         response = self.client.get(reverse("anime-list"), {"sort": "title"})
         self.assertEqual(response.status_code, 200)
 
-        payload = next(
-            item for item in response.data["results"] if item["id"] == anime.id
-        )
+        payload = next(item for item in response.data["results"] if item["id"] == anime.id)
         self.assertEqual(
             payload["cover_image_external_url"],
             "https://img.anilist.co/external-cover-2.jpg",

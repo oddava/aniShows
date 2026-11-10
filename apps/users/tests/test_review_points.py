@@ -12,7 +12,9 @@ User = get_user_model()
 
 class ReviewVotePointsTests(TestCase):
     def setUp(self):
-        self.author = User.objects.create_user(username="author", email="a@example.com", password="x")
+        self.author = User.objects.create_user(
+            username="author", email="a@example.com", password="x"
+        )
         anime = Anime.objects.create(title="A", slug="a", episode_count=1)
         self.review = Review.objects.create(user=self.author, anime=anime, rating=8, text="t")
         self.voters = [

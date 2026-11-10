@@ -48,8 +48,9 @@ class CoreTaskService:
         batches = 0
         while True:
             batch_ids = list(
-                CeleryTaskResult.objects.filter(date_created__lt=cutoff_date)
-                .values_list("id", flat=True)[:batch_size]
+                CeleryTaskResult.objects.filter(date_created__lt=cutoff_date).values_list(
+                    "id", flat=True
+                )[:batch_size]
             )
             if not batch_ids:
                 break
@@ -111,7 +112,9 @@ class CoreTaskService:
                 status_report["healthy"] += 1
             else:
                 status_report["unhealthy"] += 1
-                logger.warning("Celery worker appears unhealthy", extra={"worker": worker.worker_name})
+                logger.warning(
+                    "Celery worker appears unhealthy", extra={"worker": worker.worker_name}
+                )
 
         logger.info("Completed worker health check", extra=status_report)
         return status_report
@@ -194,11 +197,15 @@ class CoreTaskService:
                 metadata_by_url[url] = service.fetch_metadata(url)
             except Exception:
                 failed += 1
-                logger.warning("Failed to fetch social link metadata", extra={"url": url}, exc_info=True)
+                logger.warning(
+                    "Failed to fetch social link metadata", extra={"url": url}, exc_info=True
+                )
 
         updated = CoreTaskService._store_link_metadata(user_id, metadata_by_url)
         if updated is None:
-            logger.warning("UserProfile not found for batch metadata fetch", extra={"user_id": user_id})
+            logger.warning(
+                "UserProfile not found for batch metadata fetch", extra={"user_id": user_id}
+            )
             return {"status": "missing_profile", "user_id": user_id, "urls": urls}
 
         result = {
@@ -287,7 +294,10 @@ class CoreTaskService:
                             )
                             notification.is_push_sent = True
 
-                if email_sent != notification.is_email_sent or push_sent != notification.is_push_sent:
+                if (
+                    email_sent != notification.is_email_sent
+                    or push_sent != notification.is_push_sent
+                ):
                     notification.is_email_sent = email_sent
                     notification.is_push_sent = push_sent
                     pending_updates.append(notification)
@@ -353,8 +363,14 @@ class CoreTaskService:
             ).select_related("user", "user__userprofile")
         )
         if not interested_entries:
-            logger.info("No users were watching recently aired anime", extra={"anime_ids": anime_ids})
-            return {"notifications_created": 0, "anime_candidates": len(anime_ids), "user_entries": 0}
+            logger.info(
+                "No users were watching recently aired anime", extra={"anime_ids": anime_ids}
+            )
+            return {
+                "notifications_created": 0,
+                "anime_candidates": len(anime_ids),
+                "user_entries": 0,
+            }
 
         existing_notifications = _get_existing_new_episode_notifications(
             anime_ids=anime_ids,

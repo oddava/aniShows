@@ -85,9 +85,7 @@ class Command(BaseCommand):
         priority_field = options.get("priority_field")
 
         if use_async:
-            self._handle_async(
-                anime_id, batch_size, import_missing, max_imports, priority_field
-            )
+            self._handle_async(anime_id, batch_size, import_missing, max_imports, priority_field)
         else:
             self._handle_sync(anime_id, limit, batch_size, import_missing, max_imports)
 
@@ -148,14 +146,10 @@ class Command(BaseCommand):
                 self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
 
             if total == 0:
-                self.stdout.write(
-                    self.style.SUCCESS("All anime already have relations data!")
-                )
+                self.stdout.write(self.style.SUCCESS("All anime already have relations data!"))
                 return
 
-            asyncio.run(
-                self.process_batch(queryset, batch_size, import_missing, max_imports)
-            )
+            asyncio.run(self.process_batch(queryset, batch_size, import_missing, max_imports))
 
     async def process_single_anime(self, anime, import_missing: bool, max_imports: int):
         """Process relations for a single anime using the franchise task logic."""
@@ -185,9 +179,7 @@ class Command(BaseCommand):
 
                     self.stdout.write(self.style.SUCCESS(status_msg))
                 else:
-                    self.stderr.write(
-                        f"✗ Failed to update {anime.title}: {result.get('error')}"
-                    )
+                    self.stderr.write(f"✗ Failed to update {anime.title}: {result.get('error')}")
             except Exception as e:
                 self.stderr.write(f"✗ Error processing {anime.title}: {e}")
 
@@ -223,7 +215,7 @@ class Command(BaseCommand):
                         total_relations += rel_count
                         total_linked += linked_count
 
-                        status_msg = f"✓ ({i+1}/{total}) {anime.title}: {rel_count} relations"
+                        status_msg = f"✓ ({i + 1}/{total}) {anime.title}: {rel_count} relations"
                         if linked_count == rel_count:
                             status_msg += ", ALL linked"
                         else:
@@ -235,13 +227,13 @@ class Command(BaseCommand):
                     else:
                         errors += 1
                         self.stderr.write(
-                            f"⚠ ({i+1}/{total}) {anime.title}: {result.get('error')}"
+                            f"⚠ ({i + 1}/{total}) {anime.title}: {result.get('error')}"
                         )
 
                     # Progress indicator
                     if (i + 1) % 10 == 0:
                         self.stdout.write(
-                            f"--- Progress: {i+1}/{total} "
+                            f"--- Progress: {i + 1}/{total} "
                             f"(Success: {processed}, Errors: {errors}, "
                             f"Linked: {total_linked}/{total_relations}) ---"
                         )

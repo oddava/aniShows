@@ -66,6 +66,7 @@ class SystemLog(Model):
     def __str__(self):
         return f"[{self.timestamp}] {self.level}: {self.message[:50]}"
 
+
 class AuditLog(Model):
     class ActionType(TextChoices):
         CREATE = "CREATE", "Create"
@@ -225,6 +226,7 @@ class CeleryTaskResult(Model):
                 return f"{self.execution_time / 3600:.2f}h"
         return "N/A"
 
+
 class CeleryWorkerStatus(Model):
     class WorkerStatus(TextChoices):
         ONLINE = "ONLINE", "Online"
@@ -254,6 +256,7 @@ class CeleryWorkerStatus(Model):
 
     def __str__(self):
         return f"{self.worker_name} ({self.status})"
+
 
 class CeleryTaskSchedule(TimestampMixin, Model):
     class ScheduleType(TextChoices):
@@ -378,7 +381,6 @@ class CeleryTaskSchedule(TimestampMixin, Model):
                 month_of_year=self.crontab_month_of_year,
             )
         elif self.schedule_type == self.ScheduleType.INTERVAL:
-
             from celery.schedules import schedule
 
             period_map = {
@@ -398,6 +400,7 @@ class CeleryTaskSchedule(TimestampMixin, Model):
                 )
             return None
         raise ValidationError({"schedule_type": "Unsupported schedule type."})
+
 
 class Notification(CreatedAtMixin, Model):
     class NotificationType(TextChoices):
@@ -456,6 +459,7 @@ class Notification(CreatedAtMixin, Model):
             self.is_read = True
             self.read_at = timezone.now()
             self.save(update_fields=["is_read", "read_at"])
+
 
 class PushSubscription(CreatedAtMixin, Model):
     class DeviceType(TextChoices):

@@ -29,6 +29,8 @@ from .relation_links import sync_relations_from_media
 
 DEFAULT_JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
+
+
 def get_jikan_base_url() -> str:
     candidate = DEFAULT_JIKAN_BASE_URL
     if getattr(settings, "configured", False):
@@ -92,7 +94,10 @@ class JikanRateLimiter:
     def record_success(self) -> None:
         self.consecutive_429s = 0
         self.success_streak += 1
-        if self.success_streak >= self.success_streak_threshold and self.current_delay > self.min_delay:
+        if (
+            self.success_streak >= self.success_streak_threshold
+            and self.current_delay > self.min_delay
+        ):
             self.current_delay = max(self.min_delay, self.current_delay * 0.95)
             self.success_streak = 0
             logger.debug("Reduced Jikan delay to %.2fs", self.current_delay)
@@ -277,7 +282,6 @@ class JikanService(CatalogProviderBase):
         self.last_error_code = ""
         self.last_error_message = ""
 
-
     def _get_cached_result(self, endpoint: str, params: str) -> dict | None:
         if self.call_cache:
             return self.call_cache.get(endpoint, params)
@@ -295,7 +299,6 @@ class JikanService(CatalogProviderBase):
 
     def _record_failure(self):
         self.circuit_breaker.record_failure()
-
 
     async def download_image(self, url: str) -> bytes | None:
         """Download image bytes from a trusted HTTPS URL."""
@@ -337,7 +340,9 @@ class JikanService(CatalogProviderBase):
 
     @classmethod
     def _is_trusted_image_domain(cls, domain: str) -> bool:
-        return any(domain.endswith(trusted) or domain == trusted for trusted in cls.TRUSTED_IMAGE_DOMAINS)
+        return any(
+            domain.endswith(trusted) or domain == trusted for trusted in cls.TRUSTED_IMAGE_DOMAINS
+        )
 
     @classmethod
     def normalize_external_image_url(cls, url: str | None) -> str:
@@ -377,7 +382,6 @@ class JikanService(CatalogProviderBase):
 
         logger.info(f"Blocked untrusted image domain before fetch queue: {domain}")
         return ""
-
 
     def _search_variants(self, query_string: str) -> list[str]:
         primary = self._sanitize_search_query(query_string)
@@ -425,7 +429,9 @@ class JikanService(CatalogProviderBase):
 
         self._reset_last_error()
 
-        params = {key: value for key, value in (params or {}).items() if value not in (None, "", [])}
+        params = {
+            key: value for key, value in (params or {}).items() if value not in (None, "", [])
+        }
         endpoint_name = endpoint or path.strip("/").replace("/", "_") or "root"
         cache_key = json.dumps({"path": path, "params": params}, sort_keys=True, default=str)
 
@@ -484,10 +490,14 @@ class JikanService(CatalogProviderBase):
                         self._set_last_error("not_found", message or f"http_404:{endpoint_name}")
                     elif response.status_code in {400, 422}:
                         _status = "client_error"
-                        self._set_last_error("invalid_variable", message or f"http_{response.status_code}")
+                        self._set_last_error(
+                            "invalid_variable", message or f"http_{response.status_code}"
+                        )
                     else:
                         _status = "client_error"
-                        self._set_last_error("transport_error", message or f"http_{response.status_code}")
+                        self._set_last_error(
+                            "transport_error", message or f"http_{response.status_code}"
+                        )
                     return {}
 
                 response.raise_for_status()
@@ -857,7 +867,6 @@ class JikanService(CatalogProviderBase):
         self._set_last_error("not_found", f"title:{title}")
         return None
 
-
     @staticmethod
     def _release_years_compatible(anime: Anime, candidate: dict) -> bool:
         anime_year = anime.season_year or (anime.release_date.year if anime.release_date else None)
@@ -920,9 +929,7 @@ class JikanService(CatalogProviderBase):
                 continue
 
             merged = {"airingAt": airing_at}
-            episode = positive_int(
-                candidate.get("episode") or candidate.get("number")
-            )
+            episode = positive_int(candidate.get("episode") or candidate.get("number"))
             if episode:
                 merged["episode"] = episode
             elif estimated_next_airing and estimated_next_airing.get("episode"):
@@ -931,22 +938,26 @@ class JikanService(CatalogProviderBase):
 
         return estimated_next_airing
 
-
     async def _get_full_anime_payload(
         self,
         mal_id: int,
         *,
         anilist_id: int | None = None,
     ) -> dict | None:
-        anime_payload, characters_payload, staff_payload, themes_payload, stats_payload, next_airing = (
-            await asyncio.gather(
-                self._get(f"/anime/{mal_id}/full", endpoint="anime_full"),
-                self._get(f"/anime/{mal_id}/characters", endpoint="anime_characters"),
-                self._get(f"/anime/{mal_id}/staff", endpoint="anime_staff"),
-                self._get(f"/anime/{mal_id}/themes", endpoint="anime_themes"),
-                self._get(f"/anime/{mal_id}/statistics", endpoint="anime_statistics"),
-                self._estimate_next_airing_episode(mal_id),
-            )
+        (
+            anime_payload,
+            characters_payload,
+            staff_payload,
+            themes_payload,
+            stats_payload,
+            next_airing,
+        ) = await asyncio.gather(
+            self._get(f"/anime/{mal_id}/full", endpoint="anime_full"),
+            self._get(f"/anime/{mal_id}/characters", endpoint="anime_characters"),
+            self._get(f"/anime/{mal_id}/staff", endpoint="anime_staff"),
+            self._get(f"/anime/{mal_id}/themes", endpoint="anime_themes"),
+            self._get(f"/anime/{mal_id}/statistics", endpoint="anime_statistics"),
+            self._estimate_next_airing_episode(mal_id),
         )
 
         anime_data = anime_payload.get("data")
@@ -1007,7 +1018,9 @@ class JikanService(CatalogProviderBase):
 
     async def _mal_id_for_anilist_id(self, anilist_id: int) -> int | None:
         return await sync_to_async(
-            lambda: Anime.objects.filter(anilist_id=anilist_id).values_list("mal_id", flat=True).first()
+            lambda: (
+                Anime.objects.filter(anilist_id=anilist_id).values_list("mal_id", flat=True).first()
+            )
         )()
 
     @staticmethod
@@ -1023,7 +1036,6 @@ class JikanService(CatalogProviderBase):
                 if value:
                     return str(value)[:500]
         return json.dumps(payload, ensure_ascii=False)[:500]
-
 
     def _lookup_existing_anime(
         self,
@@ -1088,7 +1100,6 @@ class JikanService(CatalogProviderBase):
                 return anime
 
         return None
-
 
     def _normalize_anime_item(
         self,
@@ -1496,14 +1507,10 @@ class JikanService(CatalogProviderBase):
             )
             anime.genres.add(genre)
 
-        studio_names = [
-            node.get("name") for node in (item.get("studios") or {}).get("nodes") or []
-        ]
+        studio_names = [node.get("name") for node in (item.get("studios") or {}).get("nodes") or []]
         studio_names = [name for name in studio_names if name]
         if studio_names:
-            anime.set_studios(
-                Studio.objects.get_or_create(name=name)[0] for name in studio_names
-            )
+            anime.set_studios(Studio.objects.get_or_create(name=name)[0] for name in studio_names)
 
         sync_relations_from_media(anime, item)
 
@@ -2071,7 +2078,9 @@ async def fetch_themes_from_jikan_with_reason(
                         message="http_404",
                         transient=False,
                     )
-                code = "invalid_variable" if response.status_code in {400, 422} else "transport_error"
+                code = (
+                    "invalid_variable" if response.status_code in {400, 422} else "transport_error"
+                )
                 return JikanThemesFetchResult(
                     success=False,
                     reason_code=code,

@@ -72,7 +72,9 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         result = create_mal_import_job(request.user, username)
-        return api_response(result.payload, status_code=result.status_code, default_code="mal_import_failed")
+        return api_response(
+            result.payload, status_code=result.status_code, default_code="mal_import_failed"
+        )
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_mal_xml(self, request):

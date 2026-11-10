@@ -27,6 +27,7 @@ REACTION_EMOJI_MAP = {
     ReviewReaction.ReactionType.SAD: "😢",
 }
 
+
 class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
     """Lightweight user serializer for reviews
     queries that the full UserSerializer would trigger when user objects

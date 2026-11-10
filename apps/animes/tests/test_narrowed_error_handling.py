@@ -25,9 +25,10 @@ from ..tasks import images
 class CircuitBreakerCacheFailureTests(SimpleTestCase):
     def test_breaker_fails_open_when_redis_is_down(self):
         breaker = CircuitBreaker("narrow-test")
-        with mock.patch("apps.animes.services.rate_limiting.cache") as cache, mock.patch(
-            "apps.animes.services.rate_limiting.logger"
-        ) as logger:
+        with (
+            mock.patch("apps.animes.services.rate_limiting.cache") as cache,
+            mock.patch("apps.animes.services.rate_limiting.logger") as logger,
+        ):
             cache.get.side_effect = ConnectionInterrupted(connection=None)
             cache.set.side_effect = ConnectionInterrupted(connection=None)
 
@@ -40,8 +41,9 @@ class CircuitBreakerCacheFailureTests(SimpleTestCase):
     def test_breaker_tolerates_a_corrupt_last_failure_value(self):
         breaker = CircuitBreaker("narrow-test-corrupt")
         values = {breaker._get_state_key(): "OPEN", breaker._get_last_failure_key(): "not-a-date"}
-        with mock.patch("apps.animes.services.rate_limiting.cache") as cache, mock.patch(
-            "apps.animes.services.rate_limiting.logger"
+        with (
+            mock.patch("apps.animes.services.rate_limiting.cache") as cache,
+            mock.patch("apps.animes.services.rate_limiting.logger"),
         ):
             cache.get.side_effect = values.get
             self.assertFalse(breaker.is_open())
@@ -71,18 +73,20 @@ class CircuitBreakerCacheFailureTests(SimpleTestCase):
 @override_settings(USE_S3=True)
 class StorageProbeTests(SimpleTestCase):
     def test_endpoint_outage_is_reported_quietly(self):
-        with mock.patch("django.core.files.storage.default_storage") as storage, mock.patch(
-            "apps.animes.tasks.images.logger"
-        ) as logger:
+        with (
+            mock.patch("django.core.files.storage.default_storage") as storage,
+            mock.patch("apps.animes.tasks.images.logger") as logger,
+        ):
             storage.exists.side_effect = EndpointConnectionError(endpoint_url="http://minio:9000")
             self.assertFalse(images._is_storage_available())
         logger.warning.assert_not_called()
 
     def test_other_storage_errors_are_warned(self):
         error = ClientError({"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject")
-        with mock.patch("django.core.files.storage.default_storage") as storage, mock.patch(
-            "apps.animes.tasks.images.logger"
-        ) as logger:
+        with (
+            mock.patch("django.core.files.storage.default_storage") as storage,
+            mock.patch("apps.animes.tasks.images.logger") as logger,
+        ):
             storage.exists.side_effect = error
             self.assertFalse(images._is_storage_available())
         logger.warning.assert_called_once()
@@ -117,9 +121,10 @@ class ImageMagicCheckTests(SimpleTestCase):
     def test_libmagic_failure_is_logged(self):
         import magic
 
-        with mock.patch(
-            "magic.from_buffer", side_effect=magic.MagicException("libmagic broke")
-        ), mock.patch("apps.shared.logger.logger") as logger:
+        with (
+            mock.patch("magic.from_buffer", side_effect=magic.MagicException("libmagic broke")),
+            mock.patch("apps.shared.logger.logger") as logger,
+        ):
             validate_image_content(self._png(), 1024 * 1024, "Avatar")
         self.assertTrue(logger.warning.call_args.kwargs["exc_info"])
 
@@ -127,14 +132,15 @@ class ImageMagicCheckTests(SimpleTestCase):
 class StatsSideEffectFallbackTests(SimpleTestCase):
     def test_broker_outage_refreshes_stats_inline(self):
         user = mock.Mock(id=7, username="someone")
-        with mock.patch(
-            "apps.users.tasks.schedule_user_stats_refresh",
-            side_effect=KombuOperationalError("broker down"),
-        ), mock.patch.object(
-            user_list_side_effects, "invalidate_user_caches"
-        ), mock.patch.object(
-            user_list_side_effects, "create_or_update_user_stats"
-        ) as refresh, mock.patch.object(user_list_side_effects, "logger") as logger:
+        with (
+            mock.patch(
+                "apps.users.tasks.schedule_user_stats_refresh",
+                side_effect=KombuOperationalError("broker down"),
+            ),
+            mock.patch.object(user_list_side_effects, "invalidate_user_caches"),
+            mock.patch.object(user_list_side_effects, "create_or_update_user_stats") as refresh,
+            mock.patch.object(user_list_side_effects, "logger") as logger,
+        ):
             user_list_side_effects.update_user_stats_and_cache(user)
 
         refresh.assert_called_once_with(user)

@@ -42,6 +42,7 @@ class NotificationSerializer(ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "read_at"]
 
+
 class PushSubscriptionSerializer(ModelSerializer):
     endpoint = CharField(required=True, max_length=2048)
     p256dh = CharField(required=True)
@@ -292,7 +293,5 @@ class PushSubscriptionViewSet(GenericViewSet):
 
     def list(self, request, *args, **kwargs):
         """Get user's active push subscriptions."""
-        subscriptions = self.get_queryset().values(
-            "id", "device_type", "device_info", "created_at"
-        )
+        subscriptions = self.get_queryset().values("id", "device_type", "device_info", "created_at")
         return Response(list(subscriptions))

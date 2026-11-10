@@ -166,7 +166,9 @@ class MyAnimeListImporterTests(TestCase):
             client_id="test-client",
         )
 
-        with self.assertRaisesMessage(ValueError, "MyAnimeList is rate limiting imports right now."):
+        with self.assertRaisesMessage(
+            ValueError, "MyAnimeList is rate limiting imports right now."
+        ):
             importer.fetch_user_list()
 
 
@@ -279,7 +281,6 @@ class ImportJobServiceTests(TestCase):
         self.assertEqual(job.status, UserImportJob.ImportStatus.failed)
         self.assertIn("Failed to queue import job", job.errors)
 
-
     @patch("apps.users.services.import_job_service.process_import_job.apply_async")
     def test_anilist_token_is_sent_to_worker_but_not_stored(self, mock_apply_async):
         with self.captureOnCommitCallbacks(execute=True):
@@ -305,7 +306,6 @@ class ImportJobServiceTests(TestCase):
             stored, {"job_id": 1, "access_token": "[redacted]", "xml_content": "[4 characters]"}
         )
 
-
     def test_importer_for_requeued_job_uses_stored_username(self):
         """Admin retry re-queues with only the job id."""
         from ..services.import_service import ImportService
@@ -323,7 +323,10 @@ class ImportJobServiceTests(TestCase):
 
 class ImportTaskWrapperTests(TestCase):
     @patch("apps.users.tasks.UserTaskService.mark_import_job_failed")
-    @patch("apps.users.tasks.UserTaskService.process_import_job", side_effect=OperationalError("db down"))
+    @patch(
+        "apps.users.tasks.UserTaskService.process_import_job",
+        side_effect=OperationalError("db down"),
+    )
     @patch("apps.users.tasks._can_retry", return_value=True)
     @patch.object(process_import_job, "retry", side_effect=Retry())
     def test_process_import_job_does_not_mark_failed_before_retry(
@@ -339,7 +342,10 @@ class ImportTaskWrapperTests(TestCase):
         mock_mark_failed.assert_not_called()
 
     @patch("apps.users.tasks.UserTaskService.mark_import_job_failed")
-    @patch("apps.users.tasks.UserTaskService.process_import_job", side_effect=OperationalError("db down"))
+    @patch(
+        "apps.users.tasks.UserTaskService.process_import_job",
+        side_effect=OperationalError("db down"),
+    )
     @patch("apps.users.tasks._can_retry", return_value=False)
     def test_process_import_job_marks_failed_after_retry_budget_exhausted(
         self,

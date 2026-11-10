@@ -23,6 +23,7 @@ from ...shared.logger import logger
 # Retry configuration presets
 RETRY_PRESETS = RETRY_POLICIES
 
+
 # Time limit presets (in seconds)
 class TaskMetrics:
     """Collect metrics for task execution."""
@@ -69,6 +70,7 @@ class TaskMetrics:
             "records_processed": self.records_processed,
             "errors": self.errors,
         }
+
 
 class BaseTask(ObservedTask):
     """Base task class with common functionality.
@@ -261,7 +263,10 @@ class BaseTask(ObservedTask):
             if hasattr(self, "sync_type") and self.metrics.records_processed > 0:
                 source = "jikan"
                 service_class = getattr(self, "service_class", None)
-                if service_class is not None and getattr(service_class, "__name__", "") == "AniListService":
+                if (
+                    service_class is not None
+                    and getattr(service_class, "__name__", "") == "AniListService"
+                ):
                     source = "anilist"
                 ANIME_SYNCED.labels(
                     sync_type=getattr(self, "sync_type", "unknown"), source=source

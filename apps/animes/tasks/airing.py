@@ -84,9 +84,7 @@ class AiringWorkflowTask(BaseTask):
             # Phase 1: Sync airing anime
             if "sync" in phases:
                 logger.info("Phase 1: Syncing airing anime")
-                results["sync"] = await self._sync_airing(
-                    service, call_cache, batch_size
-                )
+                results["sync"] = await self._sync_airing(service, call_cache, batch_size)
 
             # Phase 2: Cleanup finished
             if "cleanup" in phases:
@@ -96,9 +94,7 @@ class AiringWorkflowTask(BaseTask):
             # Phase 3: Backfill missing
             if "backfill" in phases:
                 logger.info("Phase 3: Backfilling missing dates")
-                results["backfill"] = await self._backfill_missing(
-                    service, call_cache, batch_size
-                )
+                results["backfill"] = await self._backfill_missing(service, call_cache, batch_size)
 
         self.metrics.stop()
 
@@ -128,7 +124,14 @@ class AiringWorkflowTask(BaseTask):
         total = len(airing_anime)
         if total == 0:
             logger.info("No airing anime found to sync")
-            return {"total": 0, "updated": 0, "skipped": 0, "missing_dates": 0, "rate_limited": 0, "errors": 0}
+            return {
+                "total": 0,
+                "updated": 0,
+                "skipped": 0,
+                "missing_dates": 0,
+                "rate_limited": 0,
+                "errors": 0,
+            }
 
         logger.info(f"Found {total} airing anime to sync")
 
@@ -376,6 +379,7 @@ class AiringWorkflowTask(BaseTask):
             }
 
         return summary
+
 
 @observed_shared_task(
     base=AiringWorkflowTask,

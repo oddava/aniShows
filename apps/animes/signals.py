@@ -115,7 +115,9 @@ def trigger_watch_episode_sync(sender, instance, created, **kwargs):
     )
 
     if old_identity.get("updated_at") and identity_changed:
-        AnimeWatchEpisodeService.invalidate_for_anime_version(instance.id, old_identity["updated_at"])
+        AnimeWatchEpisodeService.invalidate_for_anime_version(
+            instance.id, old_identity["updated_at"]
+        )
 
     if not _watch_episode_auto_sync_enabled():
         return

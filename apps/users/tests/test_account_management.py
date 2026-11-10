@@ -12,48 +12,46 @@ from ..tokens import EmailChangeTokenGenerator
 
 User = get_user_model()
 
+
 class AccountManagementTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpassword123'
+            username="testuser", email="test@example.com", password="testpassword123"
         )
-        self.profile, _ = UserProfile.objects.update_or_create(user=self.user, defaults={'email_verified': True})
+        self.profile, _ = UserProfile.objects.update_or_create(
+            user=self.user, defaults={"email_verified": True}
+        )
         self.client.force_authenticate(user=self.user)
 
         # URLs
-        self.delete_account_url = reverse('delete_account')
-        self.change_email_url = reverse('change_email')
-        self.confirm_email_url = reverse('confirm_email_change')
-        self.resend_url = reverse('resend_verification')
+        self.delete_account_url = reverse("delete_account")
+        self.change_email_url = reverse("change_email")
+        self.confirm_email_url = reverse("confirm_email_change")
+        self.resend_url = reverse("resend_verification")
 
     def test_delete_account(self):
         """Test account deletion with correct password."""
         # Initial check
         self.assertEqual(User.objects.count(), 1)
 
-        data = {'password': 'testpassword123'}
-        response = self.client.delete(self.delete_account_url, data, format='json')
+        data = {"password": "testpassword123"}
+        response = self.client.delete(self.delete_account_url, data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(User.objects.count(), 0)
 
     def test_delete_account_wrong_password(self):
         """Test account deletion fails with wrong password."""
-        data = {'password': 'wrongpassword'}
-        response = self.client.delete(self.delete_account_url, data, format='json')
+        data = {"password": "wrongpassword"}
+        response = self.client.delete(self.delete_account_url, data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(User.objects.count(), 1)
 
     def test_change_email_request(self):
         """Test requesting email change sends confirmation email."""
-        new_email = 'new@example.com'
-        data = {
-            'new_email': new_email,
-            'password': 'testpassword123'
-        }
+        new_email = "new@example.com"
+        data = {"new_email": new_email, "password": "testpassword123"}
 
         response = self.client.post(self.change_email_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -61,22 +59,19 @@ class AccountManagementTests(APITestCase):
         # Check email sent
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(new_email, mail.outbox[0].to)
-        self.assertIn('Confirm your new email', mail.outbox[0].subject)
+        self.assertIn("Confirm your new email", mail.outbox[0].subject)
 
     def test_change_email_existing(self):
         """Test changing email to existing email fails."""
-        User.objects.create_user(username='other', email='taken@example.com', password='pw')
+        User.objects.create_user(username="other", email="taken@example.com", password="pw")
 
-        data = {
-            'new_email': 'taken@example.com',
-            'password': 'testpassword123'
-        }
+        data = {"new_email": "taken@example.com", "password": "testpassword123"}
         response = self.client.post(self.change_email_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_confirm_email_change_allows_unauthenticated_requests(self):
         """Email confirmation link should work even when user is not logged in."""
-        new_email = 'updated@example.com'
+        new_email = "updated@example.com"
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         token = EmailChangeTokenGenerator(new_email).make_token(self.user)
         encoded_email = urlsafe_base64_encode(force_bytes(new_email))
@@ -84,8 +79,8 @@ class AccountManagementTests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.post(
             self.confirm_email_url,
-            {'uid': uid, 'token': token, 'new_email': encoded_email},
-            format='json',
+            {"uid": uid, "token": token, "new_email": encoded_email},
+            format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -100,66 +95,66 @@ class AccountManagementTests(APITestCase):
         return self.client.post(
             self.confirm_email_url,
             {
-                'uid': urlsafe_base64_encode(force_bytes(self.user.pk)),
-                'token': token,
-                'new_email': urlsafe_base64_encode(force_bytes(new_email)),
+                "uid": urlsafe_base64_encode(force_bytes(self.user.pk)),
+                "token": token,
+                "new_email": urlsafe_base64_encode(force_bytes(new_email)),
             },
-            format='json',
+            format="json",
         )
 
     def test_confirm_email_change_rejects_swapped_address(self):
         """The address in the emailed link is bound to the token and cannot be edited."""
         self.client.post(
-            self.change_email_url, {'new_email': 'mine@example.com', 'password': 'testpassword123'}
+            self.change_email_url, {"new_email": "mine@example.com", "password": "testpassword123"}
         )
-        link = mail.outbox[0].body.split('/confirm-email-change/')[1].split()[0]
-        _uid, token, _encoded_email = link.strip('/').split('/')
+        link = mail.outbox[0].body.split("/confirm-email-change/")[1].split()[0]
+        _uid, token, _encoded_email = link.strip("/").split("/")
 
-        response = self._confirm(token, 'someone-else@example.com')
+        response = self._confirm(token, "someone-else@example.com")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.email, 'test@example.com')
+        self.assertEqual(self.user.email, "test@example.com")
 
     def test_confirm_email_change_rejects_other_purpose_tokens(self):
         token = default_token_generator.make_token(self.user)
 
-        response = self._confirm(token, 'new@example.com')
+        response = self._confirm(token, "new@example.com")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_confirm_email_change_link_is_single_use(self):
-        token = EmailChangeTokenGenerator('new@example.com').make_token(self.user)
-        self.assertEqual(self._confirm(token, 'new@example.com').status_code, 200)
+        token = EmailChangeTokenGenerator("new@example.com").make_token(self.user)
+        self.assertEqual(self._confirm(token, "new@example.com").status_code, 200)
 
-        self.assertEqual(self._confirm(token, 'new@example.com').status_code, 400)
+        self.assertEqual(self._confirm(token, "new@example.com").status_code, 400)
 
     def test_emailed_change_link_confirms(self):
         self.client.post(
-            self.change_email_url, {'new_email': 'New@Example.com', 'password': 'testpassword123'}
+            self.change_email_url, {"new_email": "New@Example.com", "password": "testpassword123"}
         )
-        link = mail.outbox[0].body.split('/confirm-email-change/')[1].split()[0]
-        uid, token, encoded_email = link.strip('/').split('/')
+        link = mail.outbox[0].body.split("/confirm-email-change/")[1].split()[0]
+        uid, token, encoded_email = link.strip("/").split("/")
 
         self.client.force_authenticate(user=None)
         response = self.client.post(
             self.confirm_email_url,
-            {'uid': uid, 'token': token, 'new_email': encoded_email},
-            format='json',
+            {"uid": uid, "token": token, "new_email": encoded_email},
+            format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.email, 'new@example.com')
+        self.assertEqual(self.user.email, "new@example.com")
 
     def test_change_email_rejects_invalid_and_case_variant_duplicates(self):
-        User.objects.create_user(username='other', email='taken@example.com', password='pw')
+        User.objects.create_user(username="other", email="taken@example.com", password="pw")
 
-        for new_email in ('not-an-email', '', 'TAKEN@example.com'):
+        for new_email in ("not-an-email", "", "TAKEN@example.com"):
             with self.subTest(new_email=new_email):
                 response = self.client.post(
                     self.change_email_url,
-                    {'new_email': new_email, 'password': 'testpassword123'},
+                    {"new_email": new_email, "password": "testpassword123"},
                 )
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(len(mail.outbox), 0)
@@ -169,19 +164,19 @@ class AccountManagementTests(APITestCase):
         self.profile.email_verified = False
         self.profile.save()
 
-        data = {'email': self.user.email}
+        data = {"email": self.user.email}
         response = self.client.post(self.resend_url, data)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn('Verify your email', mail.outbox[0].subject)
+        self.assertIn("Verify your email", mail.outbox[0].subject)
 
     def test_resend_verification_already_verified(self):
         """Test resending verification when already verified (should pretend success)."""
         self.profile.email_verified = True
         self.profile.save()
 
-        data = {'email': self.user.email}
+        data = {"email": self.user.email}
         response = self.client.post(self.resend_url, data)
 
         # Should return 200 but NOT send email (or maybe send "already verified" email?

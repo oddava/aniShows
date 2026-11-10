@@ -122,11 +122,13 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         cache_key = f"{cache_key}:adult:{int(can_view_adult_content)}"
         result = self.payload_service.cache_shelf_payload(
             cache_key,
-            lambda: AnimeShelfSerializer(
-                queryset_fn(self.query_service.shelf_queryset_for(can_view_adult_content)),
-                many=True,
-                context={"request": request},
-            ).data,
+            lambda: (
+                AnimeShelfSerializer(
+                    queryset_fn(self.query_service.shelf_queryset_for(can_view_adult_content)),
+                    many=True,
+                    context={"request": request},
+                ).data
+            ),
         )
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
         response = self._with_cache_status_header(Response(data), result.cache_status)
@@ -163,12 +165,13 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        anime_list = list(self.query_service.schedule_queryset(request.user, include_user_context=True))
+        anime_list = list(
+            self.query_service.schedule_queryset(request.user, include_user_context=True)
+        )
         serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
         schedule_days = {day.lower(): [] for day in self.query_service.SCHEDULE_DAY_NAMES}
         resolved_days = {
-            anime.id: self.query_service.resolve_schedule_day(anime)
-            for anime in anime_list
+            anime.id: self.query_service.resolve_schedule_day(anime) for anime in anime_list
         }
 
         for item in serializer.data:
@@ -178,7 +181,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
         if requested_day:
             key = requested_day.lower()
-            response = Response({"day": key, "items": schedule_days[key], "count": len(schedule_days[key])})
+            response = Response(
+                {"day": key, "items": schedule_days[key], "count": len(schedule_days[key])}
+            )
             return self._with_public_cache_control(response, request)
 
         response = Response(
@@ -249,13 +254,15 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         )
         result = self.payload_service.cache_shelf_payload(
             cache_key,
-            lambda: AnimeListSerializer(
-                self.query_service.related_queryset(
-                    anime, can_view_adult_content=can_view_adult_content
-                ),
-                many=True,
-                context={"request": request},
-            ).data,
+            lambda: (
+                AnimeListSerializer(
+                    self.query_service.related_queryset(
+                        anime, can_view_adult_content=can_view_adult_content
+                    ),
+                    many=True,
+                    context={"request": request},
+                ).data
+            ),
         )
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
         response = self._with_cache_status_header(Response(data), result.cache_status)
@@ -271,13 +278,15 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         )
         result = self.payload_service.cache_shelf_payload(
             cache_key,
-            lambda: AnimeListSerializer(
-                self.query_service.recommendations_queryset(
-                    anime, can_view_adult_content=can_view_adult_content
-                ),
-                many=True,
-                context={"request": request},
-            ).data,
+            lambda: (
+                AnimeListSerializer(
+                    self.query_service.recommendations_queryset(
+                        anime, can_view_adult_content=can_view_adult_content
+                    ),
+                    many=True,
+                    context={"request": request},
+                ).data
+            ),
         )
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
         response = self._with_cache_status_header(Response(data), result.cache_status)
@@ -366,9 +375,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 "rating_count": int(
                     (episode_rating_map.get(episode["number"]) or {}).get("rating_count") or 0
                 ),
-                "user_rating": (episode_rating_map.get(episode["number"]) or {}).get(
-                    "user_rating"
-                ),
+                "user_rating": (episode_rating_map.get(episode["number"]) or {}).get("user_rating"),
             }
             for episode in (page or [])
         ]

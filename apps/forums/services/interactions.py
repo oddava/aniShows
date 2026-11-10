@@ -110,10 +110,14 @@ def toggle_thread_like(thread, user) -> ForumActionResult:
     with transaction.atomic():
         locked_thread = thread.__class__.objects.select_for_update().get(pk=thread.pk)
         locked_user = User.objects.select_for_update().get(pk=user.pk)
-        existing_like = ThreadLike.objects.select_for_update().filter(
-            thread=locked_thread,
-            user=locked_user,
-        ).first()
+        existing_like = (
+            ThreadLike.objects.select_for_update()
+            .filter(
+                thread=locked_thread,
+                user=locked_user,
+            )
+            .first()
+        )
         if existing_like:
             like_count = locked_thread.like_count
             return ForumActionResult(
@@ -167,7 +171,9 @@ def unlike_thread(thread, user) -> ForumActionResult:
         with transaction.atomic():
             locked_thread = thread.__class__.objects.select_for_update().get(pk=thread.pk)
             locked_user = User.objects.select_for_update().get(pk=user.pk)
-            like = ThreadLike.objects.select_for_update().get(thread=locked_thread, user=locked_user)
+            like = ThreadLike.objects.select_for_update().get(
+                thread=locked_thread, user=locked_user
+            )
             like.delete()
             like_count = max(locked_thread.like_count - 1, 0)
 
@@ -223,8 +229,10 @@ def toggle_thread_pin(thread) -> ForumActionResult:
 
 def create_post(serializer, author):
     with transaction.atomic():
-        thread = serializer.validated_data["thread"].__class__.objects.select_for_update().get(
-            pk=serializer.validated_data["thread"].pk
+        thread = (
+            serializer.validated_data["thread"]
+            .__class__.objects.select_for_update()
+            .get(pk=serializer.validated_data["thread"].pk)
         )
         parent = serializer.validated_data.get("parent")
         if parent is not None:
@@ -334,10 +342,14 @@ def toggle_post_like(post, user) -> ForumActionResult:
     with transaction.atomic():
         locked_post = post.__class__.objects.select_for_update().get(pk=post.pk)
         locked_user = User.objects.select_for_update().get(pk=user.pk)
-        existing_like = PostLike.objects.select_for_update().filter(
-            post=locked_post,
-            user=locked_user,
-        ).first()
+        existing_like = (
+            PostLike.objects.select_for_update()
+            .filter(
+                post=locked_post,
+                user=locked_user,
+            )
+            .first()
+        )
         if existing_like:
             like_count = locked_post.like_count
             return ForumActionResult(

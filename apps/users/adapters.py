@@ -20,8 +20,7 @@ def _is_trusted_google_avatar_url(url: str) -> bool:
         return False
     hostname = parsed.hostname.lower()
     return any(
-        hostname == host or hostname.endswith(f".{host}")
-        for host in TRUSTED_GOOGLE_AVATAR_HOSTS
+        hostname == host or hostname.endswith(f".{host}") for host in TRUSTED_GOOGLE_AVATAR_HOSTS
     )
 
 

@@ -49,7 +49,9 @@ admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit
 
 # Celery admin router
 celery_router = SimpleRouter()
-celery_router.register(r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results")
+celery_router.register(
+    r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
+)
 celery_router.register(
     r"celery/tasks/schedules", CeleryTaskScheduleViewSet, basename="celery-task-schedules"
 )

@@ -54,11 +54,29 @@ class AdminAnimeSerializer(ModelSerializer):
 
         model = Anime
         fields = [
-            "id", "title", "title_jp", "slug", "synopsis", "status", "anime_type",
-            "rating", "episode_count", "duration_minutes", "release_date", "end_date",
-            "cover_image", "banner_image", "trailer_url", "studio", "genres",
-            "meta_description", "favorites_count", "reviews_count", "avg_review_rating",
-            "created_at", "updated_at"
+            "id",
+            "title",
+            "title_jp",
+            "slug",
+            "synopsis",
+            "status",
+            "anime_type",
+            "rating",
+            "episode_count",
+            "duration_minutes",
+            "release_date",
+            "end_date",
+            "cover_image",
+            "banner_image",
+            "trailer_url",
+            "studio",
+            "genres",
+            "meta_description",
+            "favorites_count",
+            "reviews_count",
+            "avg_review_rating",
+            "created_at",
+            "updated_at",
         ]
 
     def get_cover_image(self, obj):
@@ -91,8 +109,14 @@ class AdminReviewSerializer(ModelSerializer):
 
         model = Review
         fields = [
-            "id", "user", "anime", "rating", "text", "has_spoilers",
-            "created_at", "updated_at"
+            "id",
+            "user",
+            "anime",
+            "rating",
+            "text",
+            "has_spoilers",
+            "created_at",
+            "updated_at",
         ]
 
     def get_user(self, obj):

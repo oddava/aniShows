@@ -11,6 +11,7 @@ from .models import Category, Post, Tag, Thread
 
 User = get_user_model()
 
+
 class LikedByUserMixin:
     """Mixin for serializers that need is_liked_by_user field."""
 
@@ -21,11 +22,13 @@ class LikedByUserMixin:
 
         return False
 
+
 class ContentSanitizationMixin:
     """Mixin for serializers that sanitize content with bleach."""
 
     def validate_content(self, value):
         return bleach.clean(value, tags=[], strip=True)
+
 
 class CustomUserSerializer(ModelSerializer):
     avatar = SerializerMethodField()
@@ -42,10 +45,12 @@ class CustomUserSerializer(ModelSerializer):
         except DatabaseError:
             return None
 
+
 class TagSerializer(ModelSerializer):
     class Meta:
         model = Tag
         fields = ["id", "name", "slug", "color"]
+
 
 class CategorySerializer(ModelSerializer):
     latest_thread = SerializerMethodField()
@@ -76,6 +81,7 @@ class CategorySerializer(ModelSerializer):
                 "author": latest.author.username,
             }
         return None
+
 
 class ThreadListSerializer(LikedByUserMixin, ModelSerializer):
     """Lightweight serializer for thread lists - excludes content for faster loading"""
@@ -116,6 +122,7 @@ class ThreadListSerializer(LikedByUserMixin, ModelSerializer):
             "view_count",
             "reply_count",
         ]
+
 
 class ThreadSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer):
     """Full serializer for thread detail view"""
@@ -161,13 +168,12 @@ class ThreadSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializ
             "reply_count",
         ]
 
+
 class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer):
     author = CustomUserSerializer(read_only=True)
     like_count = IntegerField(read_only=True)
     is_liked_by_user = SerializerMethodField()
-    parent = PrimaryKeyRelatedField(
-        queryset=Post.objects.all(), required=False, allow_null=True
-    )
+    parent = PrimaryKeyRelatedField(queryset=Post.objects.all(), required=False, allow_null=True)
     depth = IntegerField(read_only=True)
     reply_count = SerializerMethodField()
 
@@ -182,9 +188,7 @@ class PostSerializer(ContentSanitizationMixin, LikedByUserMixin, ModelSerializer
         parent = attrs.get("parent")
         thread = attrs.get("thread")
         if parent and thread and parent.thread_id != thread.id:
-            raise ValidationError(
-                {"parent": "Parent post must belong to the same thread."}
-            )
+            raise ValidationError({"parent": "Parent post must belong to the same thread."})
 
         request = self.context.get("request")
         is_staff = bool(request and request.user.is_staff)

@@ -55,7 +55,9 @@ class TopRatedEndpointTests(APITestCase):
         self.assertNotIn("Thin Duplicate", titles)
 
     @patch("apps.animes.signals.enrich_metadata.delay")
-    def test_browse_rating_list_without_filters_uses_curated_thresholds(self, _mock_enrich_metadata):
+    def test_browse_rating_list_without_filters_uses_curated_thresholds(
+        self, _mock_enrich_metadata
+    ):
         Anime.objects.create(
             title="Thin Duplicate",
             slug="thin-duplicate-list",

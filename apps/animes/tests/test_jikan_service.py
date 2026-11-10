@@ -56,7 +56,9 @@ class JikanThemeFetchRetryTests(SimpleTestCase):
         async def run_test():
             limiter = JikanRateLimiter(base_delay=0.01)
             async with httpx.AsyncClient(transport=transport) as client:
-                with patch("apps.animes.services.jikan.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+                with patch(
+                    "apps.animes.services.jikan.asyncio.sleep", new=AsyncMock()
+                ) as sleep_mock:
                     themes = await fetch_themes_from_jikan(
                         client,
                         mal_id=1,
@@ -178,11 +180,15 @@ class JikanServiceNormalizationTests(TestCase):
                             "relations": [
                                 {
                                     "relation": "Sequel",
-                                    "entry": [{"mal_id": 2, "type": "anime", "name": "Test Anime 2"}],
+                                    "entry": [
+                                        {"mal_id": 2, "type": "anime", "name": "Test Anime 2"}
+                                    ],
                                 }
                             ],
                             "external": [{"name": "Official Site", "url": "https://example.com"}],
-                            "streaming": [{"name": "Crunchyroll", "url": "https://crunchyroll.com/test"}],
+                            "streaming": [
+                                {"name": "Crunchyroll", "url": "https://crunchyroll.com/test"}
+                            ],
                         }
                     },
                 )
@@ -208,7 +214,9 @@ class JikanServiceNormalizationTests(TestCase):
                                         "person": {
                                             "mal_id": 201,
                                             "name": "Actor",
-                                            "images": {"jpg": {"image_url": "https://cdn.test/actor.jpg"}},
+                                            "images": {
+                                                "jpg": {"image_url": "https://cdn.test/actor.jpg"}
+                                            },
                                         },
                                     }
                                 ],
@@ -228,7 +236,9 @@ class JikanServiceNormalizationTests(TestCase):
                                 "person": {
                                     "mal_id": 301,
                                     "name": "Director Name",
-                                    "images": {"jpg": {"image_url": "https://cdn.test/director.jpg"}},
+                                    "images": {
+                                        "jpg": {"image_url": "https://cdn.test/director.jpg"}
+                                    },
                                 },
                             }
                         ]
@@ -246,7 +256,15 @@ class JikanServiceNormalizationTests(TestCase):
                 return httpx.Response(
                     200,
                     request=request,
-                    json={"data": {"watching": 10, "completed": 20, "on_hold": 3, "dropped": 2, "plan_to_watch": 15}},
+                    json={
+                        "data": {
+                            "watching": 10,
+                            "completed": 20,
+                            "on_hold": 3,
+                            "dropped": 2,
+                            "plan_to_watch": 15,
+                        }
+                    },
                 )
 
             if path == "/v4/anime/1":
@@ -260,7 +278,10 @@ class JikanServiceNormalizationTests(TestCase):
                 return httpx.Response(
                     200,
                     request=request,
-                    json={"data": [], "pagination": {"last_visible_page": 1, "has_next_page": False}},
+                    json={
+                        "data": [],
+                        "pagination": {"last_visible_page": 1, "has_next_page": False},
+                    },
                 )
 
             raise AssertionError(f"Unhandled request: {request.url}")
@@ -283,8 +304,13 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(payload["producers"], ["Aniplex"])
         self.assertIsNone(payload["relations"]["edges"][0]["node"]["id"])
         self.assertEqual(payload["relations"]["edges"][0]["node"]["idMal"], 2)
-        self.assertEqual(payload["characterPreview"]["edges"][0]["node"]["id"], JikanService.CHARACTER_ID_OFFSET + 101)
-        self.assertEqual(payload["staffPreview"]["edges"][0]["node"]["id"], JikanService.STAFF_ID_OFFSET + 301)
+        self.assertEqual(
+            payload["characterPreview"]["edges"][0]["node"]["id"],
+            JikanService.CHARACTER_ID_OFFSET + 101,
+        )
+        self.assertEqual(
+            payload["staffPreview"]["edges"][0]["node"]["id"], JikanService.STAFF_ID_OFFSET + 301
+        )
         self.assertEqual(payload["openings"], ["OP 1"])
         self.assertEqual(payload["stats"]["statusDistribution"][0]["status"], "CURRENT")
 
@@ -321,7 +347,9 @@ class JikanServiceNormalizationTests(TestCase):
                 "/v4/anime/1/themes",
                 "/v4/anime/1/statistics",
             }:
-                return httpx.Response(200, request=request, json={"data": [] if "themes" not in path else {}})
+                return httpx.Response(
+                    200, request=request, json={"data": [] if "themes" not in path else {}}
+                )
             if path == "/v4/anime/1":
                 return httpx.Response(
                     200,
@@ -332,7 +360,10 @@ class JikanServiceNormalizationTests(TestCase):
                 return httpx.Response(
                     200,
                     request=request,
-                    json={"data": [], "pagination": {"last_visible_page": 1, "has_next_page": False}},
+                    json={
+                        "data": [],
+                        "pagination": {"last_visible_page": 1, "has_next_page": False},
+                    },
                 )
             raise AssertionError(f"Unhandled request: {request.url}")
 
@@ -533,8 +564,12 @@ class JikanServiceNormalizationTests(TestCase):
                                     "popularity": 20,
                                     "rank": 30,
                                     "duration": "24 min per ep",
-                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 1}}},
-                                    "images": {"jpg": {"large_image_url": "https://cdn.test/1.jpg"}},
+                                    "aired": {
+                                        "prop": {"from": {"year": 2024, "month": 4, "day": 1}}
+                                    },
+                                    "images": {
+                                        "jpg": {"large_image_url": "https://cdn.test/1.jpg"}
+                                    },
                                     "genres": [],
                                     "studios": [],
                                     "relations": [],
@@ -552,8 +587,12 @@ class JikanServiceNormalizationTests(TestCase):
                                     "popularity": 20,
                                     "rank": 30,
                                     "duration": "24 min per ep",
-                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 1}}},
-                                    "images": {"jpg": {"large_image_url": "https://cdn.test/1.jpg"}},
+                                    "aired": {
+                                        "prop": {"from": {"year": 2024, "month": 4, "day": 1}}
+                                    },
+                                    "images": {
+                                        "jpg": {"large_image_url": "https://cdn.test/1.jpg"}
+                                    },
                                     "genres": [],
                                     "studios": [],
                                     "relations": [],
@@ -581,8 +620,12 @@ class JikanServiceNormalizationTests(TestCase):
                                     "popularity": 25,
                                     "rank": 35,
                                     "duration": "24 min per ep",
-                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 2}}},
-                                    "images": {"jpg": {"large_image_url": "https://cdn.test/2.jpg"}},
+                                    "aired": {
+                                        "prop": {"from": {"year": 2024, "month": 4, "day": 2}}
+                                    },
+                                    "images": {
+                                        "jpg": {"large_image_url": "https://cdn.test/2.jpg"}
+                                    },
                                     "genres": [],
                                     "studios": [],
                                     "relations": [],
@@ -600,8 +643,12 @@ class JikanServiceNormalizationTests(TestCase):
                                     "popularity": 30,
                                     "rank": 40,
                                     "duration": "24 min per ep",
-                                    "aired": {"prop": {"from": {"year": 2024, "month": 4, "day": 3}}},
-                                    "images": {"jpg": {"large_image_url": "https://cdn.test/3.jpg"}},
+                                    "aired": {
+                                        "prop": {"from": {"year": 2024, "month": 4, "day": 3}}
+                                    },
+                                    "images": {
+                                        "jpg": {"large_image_url": "https://cdn.test/3.jpg"}
+                                    },
                                     "genres": [],
                                     "studios": [],
                                     "relations": [],
@@ -612,7 +659,9 @@ class JikanServiceNormalizationTests(TestCase):
                     )
 
             if path == "/v4/top/anime":
-                raise AssertionError("Fallback should not be needed when later season pages fill the unique limit")
+                raise AssertionError(
+                    "Fallback should not be needed when later season pages fill the unique limit"
+                )
 
             raise AssertionError(f"Unexpected path: {request.url}")
 

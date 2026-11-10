@@ -240,9 +240,7 @@ def build_task_result_stats() -> dict:
         ).count(),
     }
     stats_24h["success_rate"] = (
-        round((stats_24h["success"] / stats_24h["total"] * 100), 2)
-        if stats_24h["total"] > 0
-        else 0
+        round((stats_24h["success"] / stats_24h["total"] * 100), 2) if stats_24h["total"] > 0 else 0
     )
 
     stats_7d = {
@@ -257,9 +255,7 @@ def build_task_result_stats() -> dict:
         ).count(),
     }
     stats_7d["success_rate"] = (
-        round((stats_7d["success"] / stats_7d["total"] * 100), 2)
-        if stats_7d["total"] > 0
-        else 0
+        round((stats_7d["success"] / stats_7d["total"] * 100), 2) if stats_7d["total"] > 0 else 0
     )
 
     avg_execution = CeleryTaskResult.objects.filter(
@@ -277,7 +273,9 @@ def build_task_result_stats() -> dict:
     }
 
 
-def create_task_result_record(*, task_path: str, task_id: str, args=None, kwargs=None, queue: str, user):
+def create_task_result_record(
+    *, task_path: str, task_id: str, args=None, kwargs=None, queue: str, user
+):
     return CeleryTaskResult.objects.create(
         task_id=task_id,
         task_name=task_path,
@@ -294,7 +292,9 @@ def trigger_task(*, task_path: str, args=None, kwargs=None, queue: str | None, u
     args, kwargs = validate_task_invocation(task_path=task_path, args=args, kwargs=kwargs)
     task_info = AVAILABLE_TASKS[task_path]
     resolved_queue = queue or task_info.get("default_queue", "default")
-    result = current_app.send_task(task_path, args=args or [], kwargs=kwargs or {}, queue=resolved_queue)
+    result = current_app.send_task(
+        task_path, args=args or [], kwargs=kwargs or {}, queue=resolved_queue
+    )
     task_result = create_task_result_record(
         task_path=task_path,
         task_id=result.id,
@@ -455,12 +455,12 @@ def build_dashboard_payload() -> dict:
     }
     today_total = task_stats["success_today"] + task_stats["failed_today"]
     task_stats["success_rate_today"] = (
-        round((task_stats["success_today"] / today_total * 100), 1)
-        if today_total > 0
-        else 100.0
+        round((task_stats["success_today"] / today_total * 100), 1) if today_total > 0 else 100.0
     )
 
-    recent_tasks = CeleryTaskResult.objects.select_related("triggered_by").order_by("-date_created")[:10]
+    recent_tasks = CeleryTaskResult.objects.select_related("triggered_by").order_by(
+        "-date_created"
+    )[:10]
     recent_tasks_data = [
         {
             "id": task.id,

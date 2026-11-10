@@ -26,6 +26,7 @@ from ..services.reviews import (
 
 User = get_user_model()
 
+
 class ReviewViewSet(ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
@@ -64,7 +65,9 @@ class ReviewViewSet(ModelViewSet):
         serializer = ReviewVoteActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = vote_on_review(review, request.user, serializer.validated_data["vote_type"])
-        return api_response(result.payload, status_code=result.status_code, default_code="review_vote_failed")
+        return api_response(
+            result.payload, status_code=result.status_code, default_code="review_vote_failed"
+        )
 
     @action(
         detail=True,
@@ -87,7 +90,9 @@ class ReviewViewSet(ModelViewSet):
             default_code="review_reaction_failed",
         )
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, VerifiedEmailForWrites])
+    @action(
+        detail=True, methods=["post"], permission_classes=[IsAuthenticated, VerifiedEmailForWrites]
+    )
     def report(self, request, pk=None):
         review = self.get_object()
         serializer = ReviewReportCreateSerializer(data=request.data)

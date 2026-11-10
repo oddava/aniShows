@@ -15,7 +15,11 @@ GATED_WRITES = [
     ("post", "/api/v1/lists/", lambda ctx: {"anime_id": ctx["anime"].id}),
     ("post", "/api/v1/reviews/", lambda ctx: {"anime_slug": ctx["anime"].slug, "rating": 8}),
     ("post", "/api/v1/favorites/toggle/", lambda ctx: {"anime_id": ctx["anime"].id}),
-    ("post", "/api/v1/forums/threads/", lambda ctx: {"category": ctx["category"].id, "title": "t", "content": "c"}),
+    (
+        "post",
+        "/api/v1/forums/threads/",
+        lambda ctx: {"category": ctx["category"].id, "title": "t", "content": "c"},
+    ),
     ("post", "/api/v1/forums/posts/", lambda ctx: {"thread": ctx["thread"].id, "content": "c"}),
     ("post", "/api/v1/follows/toggle/", lambda ctx: {"username": ctx["other"].username}),
     ("put", "/api/v1/anime/{slug}/episode-ratings/1/", lambda ctx: {"rating": 8}),
@@ -80,7 +84,10 @@ def test_gate_follows_the_admin_setting(ctx, method, url, payload):
 
 def test_staff_and_reads_are_not_gated(ctx):
     _, staff = _client("mod", verified=False, staff=True)
-    assert staff.post("/api/v1/lists/", {"anime_id": ctx["anime"].id}, format="json").status_code == 201
+    assert (
+        staff.post("/api/v1/lists/", {"anime_id": ctx["anime"].id}, format="json").status_code
+        == 201
+    )
 
     _, pending = _client("pending", verified=False)
     assert pending.get("/api/v1/lists/").status_code == 200

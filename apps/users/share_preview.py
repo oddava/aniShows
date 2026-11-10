@@ -14,9 +14,7 @@ from .services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 
-DEFAULT_PREVIEW_DESCRIPTION = (
-    "Discover your next anime adventure. Track your favorites, write reviews, and join the community."
-)
+DEFAULT_PREVIEW_DESCRIPTION = "Discover your next anime adventure. Track your favorites, write reviews, and join the community."
 
 
 class ProfileSharePreviewView(View):
@@ -43,7 +41,11 @@ class ProfileSharePreviewView(View):
             return self._not_found_response(request, username, section, should_redirect)
 
         profile = self._get_profile(user)
-        if profile and profile.is_private and not self._is_authorized_for_private_profile(request, user):
+        if (
+            profile
+            and profile.is_private
+            and not self._is_authorized_for_private_profile(request, user)
+        ):
             return self._not_found_response(request, username, section, should_redirect)
 
         stats = self._get_stats(user)
