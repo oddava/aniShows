@@ -63,3 +63,54 @@ Scans per index after the workload (non-zero only):
 | `anime_anime_season__f7b111_idx` | 231 |
 | `anime_schedule_day_idx` | 242 |
 | `anime_anime_pkey` | 1,504 |
+
+## Step 5: D6 (`offline_db_payload` side table)
+
+Measured with `scripts/explain_public_queries.py table-stats` on the seeded
+catalog (40,000 rows; the seeder gives about 90% of rows a payload shaped like
+a manami offline-database entry, the shape the offline import stores).
+
+| Measure | Value |
+|---|---:|
+| `anime_anime` heap | 60 MB |
+| `anime_anime` TOAST | 17 MB |
+| `anime_anime` indexes | 88 MB |
+| average row (`pg_column_size` of the whole row) | 1,890 B (72 MB total) |
+| `offline_db_payload` stored | 35 MB, average 927 B |
+| `offline_db_payload` values over 2 kB (TOASTed) | 0 |
+| `synopsis` stored | 18 MB |
+| `tags` stored | 3.2 MB |
+
+The payload is about half of the row data and lives inline in the heap, so it
+is a large share. The second condition does not hold: **no public list, search,
+shelf, browse-row or schedule query selects it.** Every public queryset goes
+through `.only(LIST_FIELDS)`, and the detail queryset uses
+`.defer(*DETAIL_DEFER_FIELDS)`, which names `offline_db_payload`
+(`public_query/fields.py`). Outside migrations and tests, only the offline
+catalog import reads or writes the column.
+
+What it still costs the public path is heap width: queries that scan the table
+read pages that are half payload. To size that, a throwaway experiment
+(`CREATE TABLE ... AS SELECT * FROM anime_anime` twice, payload blanked and
+`VACUUM FULL` on one copy, primary keys added, no other indexes, so both copies
+are scanned sequentially) ran the captured list SQL against both copies,
+best of 5:
+
+| Query (sequential scan on the copy) | With payload (ms) | Without payload (ms) |
+|---|---:|---:|
+| `sort=newest` | 84.5 | 75.6 |
+| `sort=trending` | 147.4 | 139.3 |
+| `genre=action` | 110.4 | 98.0 |
+| default list, adult content allowed | 160.1 | 151.2 |
+
+The copy without the payload has a 39 MB heap instead of 63 MB, but the
+queries get only 5-11% faster: they are bound by evaluating and sorting the
+ordering expressions, not by reading pages (the test catalog is fully cached).
+With D5 the anonymous default list and search no longer scan the table at all.
+
+**Decision: skipped.** The column is a large share of the table, but the public
+queries do not read it, and the remaining heap-width effect is small next to
+what a side table would cost (a new model and migration, a join or second write
+in the offline import, and a backfill that copies 35 MB). Worth revisiting only
+if the payload grows past the TOAST threshold (then it leaves the heap on its
+own) or a sequential-scan list path becomes the bottleneck.
