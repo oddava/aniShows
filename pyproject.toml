@@ -157,10 +157,8 @@ known-first-party = ["apps", "root"]
 # re-raised nor logged with logger.exception. This list may only get shorter.
 # - Provider layer, rewritten in Phase 4: leave as is until then.
 "apps/animes/services/jikan.py" = ["BLE001"]
-"apps/animes/services/anilist.py" = ["BLE001"]
 "apps/animes/services/offline_catalog.py" = ["BLE001"]
 "apps/animes/services/offline_sync.py" = ["BLE001"]
-"apps/animes/services/provider_base.py" = ["BLE001"]
 # - Best effort through the provider layer (any failure means "no data"),
 #   logged as a warning with the traceback.
 "apps/animes/services/franchise_import.py" = ["BLE001"]

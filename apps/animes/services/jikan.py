@@ -23,7 +23,7 @@ from ...shared.logger import logger
 from ...shared.parsing import positive_int
 from ...shared.retry import backoff, retry_after_seconds
 from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Genre, Staff, Studio
-from .provider_base import CatalogProviderBase, with_creation_defaults
+from .providers.base import CatalogProviderBase, with_creation_defaults
 from .rate_limiting import APICallCache, CircuitBreaker
 from .relation_links import sync_relations_from_media
 
