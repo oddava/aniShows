@@ -1,0 +1,6 @@
+{
+  "status": 404,
+  "type": "BadResponseException",
+  "message": "Resource does not exist",
+  "error": "404 on https://myanimelist.net/anime/0/"
+}

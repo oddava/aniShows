@@ -1,0 +1,8 @@
+{
+  "pagination": {"last_visible_page": 2, "has_next_page": false},
+  "data": [
+    {"mal_id": 1122, "url": "https://myanimelist.net/anime/21/One_Piece/episode/1122", "title": "The Gate of Fate", "title_japanese": null, "title_romanji": null, "aired": "2024-10-06T00:00:00+09:00", "score": 4.5, "filler": false, "recap": false, "forum_url": null},
+    {"mal_id": 1123, "url": "https://myanimelist.net/anime/21/One_Piece/episode/1123", "title": "A Promise to Meet Again", "title_japanese": null, "title_romanji": null, "aired": "2024-10-13T00:00:00+09:00", "score": 4.6, "filler": false, "recap": false, "forum_url": null},
+    {"mal_id": null, "url": "", "title": "Broken row", "aired": null}
+  ]
+}

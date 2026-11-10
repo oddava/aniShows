@@ -1,0 +1,14 @@
+{
+  "data": {
+    "watching": 152331,
+    "completed": 640122,
+    "on_hold": 21004,
+    "dropped": 9877,
+    "plan_to_watch": 219878,
+    "total": 1043212,
+    "scores": [
+      {"score": 10, "votes": 301233, "percentage": 58.8},
+      {"score": 9, "votes": 120044, "percentage": 23.4}
+    ]
+  }
+}

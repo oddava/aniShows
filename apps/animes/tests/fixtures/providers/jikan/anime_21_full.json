@@ -1,0 +1,93 @@
+{
+  "data": {
+    "mal_id": 21,
+    "url": "https://myanimelist.net/anime/21/One_Piece",
+    "images": {
+      "jpg": {
+        "image_url": "https://cdn.myanimelist.net/images/anime/1244/138851.jpg",
+        "small_image_url": "https://cdn.myanimelist.net/images/anime/1244/138851t.jpg",
+        "large_image_url": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"
+      },
+      "webp": {
+        "image_url": "https://cdn.myanimelist.net/images/anime/1244/138851.webp",
+        "small_image_url": "https://cdn.myanimelist.net/images/anime/1244/138851t.webp"
+      }
+    },
+    "trailer": {"youtube_id": null, "url": null, "embed_url": null, "images": {}},
+    "approved": true,
+    "titles": [
+      {"type": "Default", "title": "One Piece"},
+      {"type": "Synonym", "title": "OP"},
+      {"type": "Japanese", "title": "ONE PIECE"}
+    ],
+    "title": "One Piece",
+    "title_english": "One Piece",
+    "title_japanese": "ONE PIECE",
+    "title_synonyms": ["OP"],
+    "type": "TV",
+    "source": "Manga",
+    "episodes": null,
+    "status": "Currently Airing",
+    "airing": true,
+    "aired": {
+      "from": "1999-10-20T00:00:00+00:00",
+      "to": null,
+      "prop": {
+        "from": {"day": 20, "month": 10, "year": 1999},
+        "to": {"day": null, "month": null, "year": null}
+      },
+      "string": "Oct 20, 1999 to ?"
+    },
+    "duration": "24 min",
+    "rating": "PG-13 - Teens 13 or older",
+    "score": 8.73,
+    "scored_by": 1501234,
+    "rank": 47,
+    "popularity": 18,
+    "members": 2512345,
+    "favorites": 240123,
+    "synopsis": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack by fearsome pirates.",
+    "background": null,
+    "season": "fall",
+    "year": 1999,
+    "broadcast": {
+      "day": "Sundays",
+      "time": "23:15",
+      "timezone": "Asia/Tokyo",
+      "string": "Sundays at 23:15 (JST)"
+    },
+    "producers": [
+      {"mal_id": 6, "type": "anime", "name": "Fuji TV", "url": "https://myanimelist.net/anime/producer/6/Fuji_TV"}
+    ],
+    "licensors": [],
+    "studios": [
+      {"mal_id": 18, "type": "anime", "name": "Toei Animation", "url": "https://myanimelist.net/anime/producer/18/Toei_Animation"},
+      {"mal_id": 0, "type": "anime", "name": "", "url": ""}
+    ],
+    "genres": [
+      {"mal_id": 1, "type": "anime", "name": "Action", "url": "https://myanimelist.net/anime/genre/1/Action"},
+      {"mal_id": 2, "type": "anime", "name": "Adventure", "url": "https://myanimelist.net/anime/genre/2/Adventure"}
+    ],
+    "explicit_genres": [],
+    "themes": [],
+    "demographics": [
+      {"mal_id": 27, "type": "anime", "name": "Shounen", "url": "https://myanimelist.net/anime/genre/27/Shounen"}
+    ],
+    "relations": [
+      {
+        "relation": "Side Story",
+        "entry": [
+          {"mal_id": 459, "type": "anime", "name": "One Piece Movie 01", "url": "https://myanimelist.net/anime/459"},
+          {"mal_id": 1094, "type": "anime", "name": "One Piece: Taose! Kaizoku Ganzack", "url": "https://myanimelist.net/anime/1094"}
+        ]
+      }
+    ],
+    "theme": {"openings": [], "endings": []},
+    "external": [
+      {"name": "Official Site", "url": "http://www.toei-anim.co.jp/tv/onep/"}
+    ],
+    "streaming": [
+      {"name": "Crunchyroll", "url": "http://www.crunchyroll.com/series-257631"}
+    ]
+  }
+}

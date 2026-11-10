@@ -1,0 +1,78 @@
+{
+  "pagination": {
+    "last_visible_page": 2,
+    "has_next_page": true,
+    "current_page": 1,
+    "items": {"count": 3, "total": 4, "per_page": 3}
+  },
+  "data": [
+    {
+      "mal_id": 57334,
+      "url": "https://myanimelist.net/anime/57334/Dandadan",
+      "images": {
+        "jpg": {"image_url": "https://cdn.myanimelist.net/images/anime/1584/143719.jpg", "large_image_url": "https://cdn.myanimelist.net/images/anime/1584/143719l.jpg"},
+        "webp": {}
+      },
+      "trailer": {"youtube_id": "d2OONzbtMVM"},
+      "title": "Dandadan",
+      "title_english": "DAN DA DAN",
+      "title_japanese": "ダンダダン",
+      "title_synonyms": [],
+      "type": "TV",
+      "source": "Web manga",
+      "episodes": 12,
+      "status": "Currently Airing",
+      "aired": {"prop": {"from": {"day": 4, "month": 10, "year": 2024}, "to": {"day": null, "month": null, "year": null}}},
+      "duration": "23 min per ep",
+      "score": 8.55,
+      "rank": 92,
+      "popularity": 380,
+      "members": 702311,
+      "synopsis": "Reeling from her recent breakup, Momo Ayase meets her classmate Ken Takakura.",
+      "season": "fall",
+      "year": 2024,
+      "broadcast": {"day": "Thursdays", "time": "23:56", "timezone": "Asia/Tokyo"},
+      "producers": [],
+      "studios": [{"name": "Science SARU"}],
+      "genres": [{"name": "Action"}, {"name": "Comedy"}, {"name": "Supernatural"}],
+      "explicit_genres": [],
+      "themes": [{"name": "Love Polygon"}],
+      "demographics": [{"name": "Shounen"}]
+    },
+    {
+      "mal_id": 57334,
+      "url": "https://myanimelist.net/anime/57334/Dandadan",
+      "title": "Dandadan (duplicate row)",
+      "type": "TV",
+      "status": "Currently Airing",
+      "members": 702311
+    },
+    {
+      "mal_id": 58514,
+      "url": "https://myanimelist.net/anime/58514/Kusuriya_no_Hitorigoto_2nd_Season",
+      "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/anime/1025/147458.jpg"}},
+      "trailer": {},
+      "title": "Kusuriya no Hitorigoto 2nd Season",
+      "title_english": null,
+      "title_japanese": "薬屋のひとりごと 第2期",
+      "type": "TV",
+      "source": "Light novel",
+      "episodes": 24,
+      "status": "Currently Airing",
+      "aired": {"prop": {"from": {"day": 10, "month": 1, "year": 2025}, "to": {"day": null, "month": null, "year": null}}},
+      "duration": "1 hr 2 min",
+      "score": 8.9,
+      "rank": 20,
+      "popularity": 900,
+      "members": 301002,
+      "synopsis": "Maomao returns to the inner court.",
+      "season": "winter",
+      "year": 2025,
+      "broadcast": {"day": "Fridays", "time": "23:40", "timezone": "Asia/Tokyo"},
+      "studios": [{"name": "OLM"}, {"name": "TOHO animation STUDIO"}],
+      "genres": [{"name": "Drama"}, {"name": "Mystery"}],
+      "themes": [],
+      "demographics": []
+    }
+  ]
+}
