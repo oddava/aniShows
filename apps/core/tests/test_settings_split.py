@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from celery.schedules import crontab
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TransactionTestCase
 
 SNAPSHOT_PATH = Path(__file__).parent / "snapshots" / "beat_schedule_and_jazzmin.json"
 
@@ -120,3 +120,54 @@ class TaskResultStoreTests(SimpleTestCase):
         # Nothing to expire, so beat does not add its own celery.backend_cleanup entry.
         self.assertIsNone(settings.CELERY_RESULT_EXPIRES)
         self.assertIsInstance(app.backend, DisabledBackend)
+
+
+def _database_settings(pool_size: str) -> dict:
+    code = (
+        "import json; from root.settings import base; "
+        "print(json.dumps(base.DATABASES['default'], default=str))"
+    )
+    env = {**os.environ, **SETTINGS_ENV, "DB_POOL_MAX_SIZE": pool_size}
+    env.pop("SENTRY_DSN", None)
+    output = subprocess.run(  # noqa: S603 - fixed interpreter and code
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=True
+    ).stdout
+    return json.loads(output.strip().splitlines()[-1])
+
+
+class DatabasePoolSettingsTests(SimpleTestCase):
+    """PgBouncer is gone (D2); pooling is Django's native psycopg 3 pool."""
+
+    def test_pool_is_off_by_default(self):
+        database = _database_settings("0")
+        self.assertNotIn("pool", database.get("OPTIONS", {}))
+        self.assertNotIn("DISABLE_SERVER_SIDE_CURSORS", database)
+
+    def test_pool_size_turns_on_the_native_pool(self):
+        database = _database_settings("7")
+        self.assertEqual(database["OPTIONS"]["pool"], {"min_size": 1, "max_size": 7, "timeout": 10})
+        # Django refuses persistent connections together with a pool.
+        self.assertEqual(database["CONN_MAX_AGE"], 0)
+
+
+class DatabasePoolConnectionTests(TransactionTestCase):
+    """The pool settings actually open pooled connections against Postgres."""
+
+    def test_pooled_connection_runs_queries(self):
+        from django.db import connection
+        from django.db.utils import ConnectionHandler
+
+        settings_dict = {
+            **connection.settings_dict,
+            "CONN_MAX_AGE": 0,
+            "OPTIONS": {"pool": {"min_size": 1, "max_size": 2, "timeout": 10}},
+        }
+        pooled = ConnectionHandler({"default": settings_dict})["default"]
+        try:
+            with pooled.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                self.assertEqual(cursor.fetchone(), (1,))
+            self.assertIsNotNone(pooled.pool)
+        finally:
+            pooled.close()
+            pooled.close_pool()

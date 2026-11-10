@@ -76,18 +76,14 @@ class SystemLogAdmin(admin.ModelAdmin):
             "CRITICAL": "dark",
         }
         color = colors.get(obj.level, "secondary")
-        return format_html(
-            '<span class="badge badge-{}">{}</span>', color, obj.get_level_display()
-        )
+        return format_html('<span class="badge badge-{}">{}</span>', color, obj.get_level_display())
 
     level_badge.short_description = "Level"
 
     def message_short(self, obj):
         """Display shortened message."""
         if len(obj.message) > 80:
-            return format_html(
-                '<span title="{}">{}...</span>', obj.message, obj.message[:77]
-            )
+            return format_html('<span title="{}">{}...</span>', obj.message, obj.message[:77])
         return obj.message
 
     message_short.short_description = "Message"
@@ -133,6 +129,7 @@ class SystemLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
@@ -239,9 +236,7 @@ class AuditLogAdmin(admin.ModelAdmin):
         """Display summary of changes."""
         if obj.changes:
             count = len(obj.changes)
-            return format_html(
-                '<span class="badge badge-info">{} field(s) changed</span>', count
-            )
+            return format_html('<span class="badge badge-info">{} field(s) changed</span>', count)
         return "-"
 
     changes_summary.short_description = "Changes"
@@ -296,6 +291,7 @@ class AuditLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     """Admin for user notifications."""
@@ -333,6 +329,7 @@ class NotificationAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
 
 @admin.register(PushSubscription)
 class PushSubscriptionAdmin(admin.ModelAdmin):

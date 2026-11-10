@@ -41,7 +41,9 @@ class EpisodeRatingSummaryService:
             {
                 "episode_number": episode_number,
                 "average_rating": (aggregate_map.get(episode_number) or {}).get("average_rating"),
-                "rating_count": int((aggregate_map.get(episode_number) or {}).get("rating_count") or 0),
+                "rating_count": int(
+                    (aggregate_map.get(episode_number) or {}).get("rating_count") or 0
+                ),
                 "user_rating": user_map.get(episode_number),
             }
             for episode_number in resolved_episode_numbers

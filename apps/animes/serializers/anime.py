@@ -43,7 +43,9 @@ class EpisodeRatingSummarySerializer(Serializer):
 
 
 class EpisodeRatingInputSerializer(Serializer):
-    rating = DecimalField(max_digits=2, decimal_places=1, min_value=Decimal("0.5"), max_value=Decimal("5.0"))
+    rating = DecimalField(
+        max_digits=2, decimal_places=1, min_value=Decimal("0.5"), max_value=Decimal("5.0")
+    )
 
     def validate_rating(self, value):
         if (value * 2) % 1 != 0:
@@ -482,6 +484,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
                 }
             )
         return relations
+
 
 class AnimeCompactSerializer(ImageUrlMixin, ModelSerializer):
     """Ultra-minimal serializer for displaying basic anime info (e.g. thumbnails)"""

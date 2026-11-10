@@ -153,7 +153,9 @@ def update_user_stats(self, user_id: int | None = None):
     except Exception as exc:
         if isinstance(exc, RETRYABLE_DB_ERRORS):
             close_old_connections()
-            logger.warning("Retrying user stats update after transient DB error", extra={"user_id": user_id})
+            logger.warning(
+                "Retrying user stats update after transient DB error", extra={"user_id": user_id}
+            )
         else:
             logger.exception("User stats update failed", extra={"user_id": user_id})
         raise self.retry(exc=exc, countdown=30)

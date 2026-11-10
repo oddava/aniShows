@@ -157,7 +157,9 @@ def _build_profile_data(user, stats_data):
         "profile_primary_color": normalize_primary_color(
             profile.profile_primary_color if profile else None
         ),
-        "preferred_timezone": profile.preferred_timezone if profile and profile.preferred_timezone else "auto",
+        "preferred_timezone": profile.preferred_timezone
+        if profile and profile.preferred_timezone
+        else "auto",
         "points": profile.points if profile else 0,
         "has_password": user.has_usable_password(),
         "is_staff": user.is_staff,

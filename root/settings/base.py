@@ -278,16 +278,13 @@ DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_PORT = os.getenv("DB_PORT")
-
-# PgBouncer (optional): route app traffic through pooler instead of Postgres directly.
-DB_USE_PGBOUNCER = _env_bool("DB_USE_PGBOUNCER", False)
-DB_PGBOUNCER_HOST = os.getenv("DB_PGBOUNCER_HOST", "pgbouncer")
-DB_PGBOUNCER_PORT = os.getenv("DB_PGBOUNCER_PORT", "6432")
-
 DB_HOST = os.getenv("DB_HOST", "db")
-if DB_USE_PGBOUNCER:
-    DB_HOST = DB_PGBOUNCER_HOST
-    DB_PORT = DB_PGBOUNCER_PORT
+
+# Django's native connection pool (psycopg 3), off when 0 (dev, tests). The
+# size is per process, so total connections are about
+# max_size x (gunicorn workers + celery processes + beat); keep that under
+# Postgres' max_connections.
+DB_POOL_MAX_SIZE = _env_int("DB_POOL_MAX_SIZE", 0)
 
 DATABASES = {
     "default": {
@@ -301,9 +298,12 @@ DATABASES = {
     }
 }
 
-# PgBouncer transaction pooling is not compatible with server-side cursors.
-if DB_USE_PGBOUNCER:
-    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
+if DB_POOL_MAX_SIZE:
+    # Django refuses persistent connections together with a pool.
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
+    DATABASES["default"]["OPTIONS"] = {
+        "pool": {"min_size": 1, "max_size": DB_POOL_MAX_SIZE, "timeout": 10},
+    }
 
 # =============================================================================
 # PASSWORD VALIDATION
@@ -346,9 +346,9 @@ CDN_BASE_URL = os.getenv("CDN_BASE_URL", "").strip().rstrip("/")
 STATIC_CDN_URL = os.getenv("STATIC_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
 MEDIA_CDN_URL = os.getenv("MEDIA_CDN_URL", CDN_BASE_URL).strip().rstrip("/")
 DEFAULT_IMAGEKIT_CACHEFILE_DIR = "CACHE/images-v2"
-IMAGEKIT_CACHEFILE_DIR = os.getenv(
-    "IMAGEKIT_CACHEFILE_DIR", DEFAULT_IMAGEKIT_CACHEFILE_DIR
-).strip().strip("/")
+IMAGEKIT_CACHEFILE_DIR = (
+    os.getenv("IMAGEKIT_CACHEFILE_DIR", DEFAULT_IMAGEKIT_CACHEFILE_DIR).strip().strip("/")
+)
 if not IMAGEKIT_CACHEFILE_DIR:
     IMAGEKIT_CACHEFILE_DIR = DEFAULT_IMAGEKIT_CACHEFILE_DIR
 IMAGEKIT_CACHE_PREFIX = os.getenv("IMAGEKIT_CACHE_PREFIX", IMAGEKIT_CACHEFILE_DIR).strip()

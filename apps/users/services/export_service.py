@@ -10,6 +10,7 @@ from ..models import UserAnimeList, UserProfile
 
 User = get_user_model()
 
+
 class UserDataExporter:
     """Export all user data in a structured format"""
 
@@ -126,6 +127,7 @@ class UserDataExporter:
 
         return reviews
 
+
 class MALXMLExporter:
     """Export user anime list to MyAnimeList XML format"""
 
@@ -196,6 +198,7 @@ class MALXMLExporter:
         ]
 
         return "\n".join(lines)
+
 
 class ExportService:
     """Service for handling all export operations"""

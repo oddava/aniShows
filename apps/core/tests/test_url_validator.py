@@ -75,7 +75,9 @@ class URLValidatorNormalizationTests(SimpleTestCase):
         self.assertEqual(
             validator._normalize_url("https://Example.com:4433/a"), "https://example.com:4433/a"
         )
-        self.assertEqual(validator._normalize_url("https://example.com:443/a"), "https://example.com/a")
+        self.assertEqual(
+            validator._normalize_url("https://example.com:443/a"), "https://example.com/a"
+        )
 
     def test_platform_detected_from_host_not_netloc(self, _resolve):
         is_valid, _, metadata = URLValidator().validate("https://github.com:443/me")

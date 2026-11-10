@@ -21,7 +21,9 @@ class FranchiseFetchEndpointTests(APITestCase):
 
     @patch("apps.animes.services.franchise_import.FranchiseImportService.import_related_anime")
     def test_authenticated_user_is_forbidden(self, mock_import):
-        user = get_user_model().objects.create_user(username="normal-franchise-user", password="pass12345")
+        user = get_user_model().objects.create_user(
+            username="normal-franchise-user", password="pass12345"
+        )
         self.client.force_authenticate(user=user)
 
         response = self.client.post(

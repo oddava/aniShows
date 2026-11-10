@@ -23,7 +23,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pillow>=12.0.0",
     "prometheus-client>=0.19.0",
-    "psycopg2-binary>=2.9.11",
+    "psycopg[binary,pool]>=3.2.0",
     "python-dotenv>=1.1.1",
     "python-magic>=0.4.27",
     "requests>=2.32.0",
@@ -157,10 +157,8 @@ known-first-party = ["apps", "root"]
 # re-raised nor logged with logger.exception. This list may only get shorter.
 # - Provider layer, rewritten in Phase 4: leave as is until then.
 "apps/animes/services/jikan.py" = ["BLE001"]
-"apps/animes/services/anilist.py" = ["BLE001"]
 "apps/animes/services/offline_catalog.py" = ["BLE001"]
 "apps/animes/services/offline_sync.py" = ["BLE001"]
-"apps/animes/services/provider_base.py" = ["BLE001"]
 # - Best effort through the provider layer (any failure means "no data"),
 #   logged as a warning with the traceback.
 "apps/animes/services/franchise_import.py" = ["BLE001"]

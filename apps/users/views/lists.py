@@ -13,6 +13,7 @@ from ..services.list_service import (
 
 User = get_user_model()
 
+
 class UserAnimeListViewSet(ModelViewSet):
     serializer_class = UserAnimeListSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]

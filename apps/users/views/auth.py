@@ -43,6 +43,7 @@ from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 
 User = get_user_model()
 
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -124,13 +125,11 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         self._validate_registration_availability(serializer.validated_data)
 
-        result = register_user_flow(serializer.validated_data, self.auth_service, self.email_service)
-        headers = self.get_success_headers(serializer.data)
-        return Response(
-            result.payload,
-            status=result.status_code,
-            headers=headers
+        result = register_user_flow(
+            serializer.validated_data, self.auth_service, self.email_service
         )
+        headers = self.get_success_headers(serializer.data)
+        return Response(result.payload, status=result.status_code, headers=headers)
 
 
 class AuthViewSet(ViewSet):
@@ -138,6 +137,7 @@ class AuthViewSet(ViewSet):
     ViewSet to handle email verification and password reset workflows.
     Consolidates verify_email, resend_verification, password_reset, and password_reset_confirm.
     """
+
     permission_classes = [AllowAny]
     authentication_classes = []
 
@@ -318,7 +318,9 @@ class LoggingTokenRefreshView(BaseTokenRefreshView):
             )
             return clear_refresh_cookie(response)
 
-        return move_refresh_to_cookie(Response(dict(serializer.validated_data), status=status.HTTP_200_OK))
+        return move_refresh_to_cookie(
+            Response(dict(serializer.validated_data), status=status.HTTP_200_OK)
+        )
 
 
 class LogoutView(APIView):

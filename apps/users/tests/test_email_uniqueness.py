@@ -28,7 +28,9 @@ class RegistrationRaceTests(APITestCase):
 
         # Both requests passed the availability check before either inserted.
         with (
-            patch("apps.users.services.auth_service.AuthService.username_exists", return_value=False),
+            patch(
+                "apps.users.services.auth_service.AuthService.username_exists", return_value=False
+            ),
             patch("apps.users.services.auth_service.AuthService.email_exists", return_value=False),
         ):
             response = self.client.post(

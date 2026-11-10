@@ -103,9 +103,12 @@ class TestGunicornSizing(TestCase):
     def test_falls_back_to_host_cpu_count_without_cgroup_limits(self):
         from root import gunicorn_tuning
 
-        with patch.object(gunicorn_tuning, "_read_text", return_value=None), patch(
-            "root.gunicorn_tuning.os.cpu_count",
-            return_value=12,
+        with (
+            patch.object(gunicorn_tuning, "_read_text", return_value=None),
+            patch(
+                "root.gunicorn_tuning.os.cpu_count",
+                return_value=12,
+            ),
         ):
             assert gunicorn_tuning.detect_available_cpu_count() == 12
             assert gunicorn_tuning.default_gunicorn_workers() == 4
@@ -140,13 +143,11 @@ class TestCeleryQueueRouting(TestCase):
 
             if beat_queue and route_queue and beat_queue != route_queue:
                 mismatches.append(
-                    f"{schedule_name}: beat queue={beat_queue!r}, "
-                    f"task_routes queue={route_queue!r}"
+                    f"{schedule_name}: beat queue={beat_queue!r}, task_routes queue={route_queue!r}"
                 )
 
         assert not mismatches, (
-            "Hourly beat schedule queue mismatches with task_routes:\n"
-            + "\n".join(mismatches)
+            "Hourly beat schedule queue mismatches with task_routes:\n" + "\n".join(mismatches)
         )
 
     def test_all_beat_queues_are_defined(self):
@@ -202,6 +203,7 @@ class TestCDNUrlConstruction(TestCase):
         assert not settings.STATIC_CDN_URL.endswith("/")
         assert not settings.MEDIA_CDN_URL.endswith("/")
 
+
 class TestRedisConfig(TestCase):
     """Verify Redis configuration is consistent."""
 
@@ -224,6 +226,7 @@ class TestRedisConfig(TestCase):
 
         assert "default" in base.CHANNEL_LAYERS
         assert base.CHANNEL_LAYERS["default"]["BACKEND"] == "channels_redis.core.RedisChannelLayer"
+
 
 class TestRuntimeScalingToggles(TestCase):
     """Verify high-throughput runtime toggles are available and bounded."""

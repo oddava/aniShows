@@ -79,6 +79,7 @@ class ThreadListQuerySerializer(Serializer):
 class PostListQuerySerializer(Serializer):
     page = IntegerField(required=False, default=1, min_value=1)
 
+
 class TagViewSet(ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer

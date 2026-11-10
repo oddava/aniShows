@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from asgiref.sync import async_to_sync
 from django.test import TestCase
 from django.utils import timezone
 
@@ -11,7 +10,7 @@ from ..services.anilist import AniListService
 class AiringNotificationStateTests(TestCase):
     def setUp(self):
         self.service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(async_to_sync(self.service.close))
+        self.addCleanup(self.service.close)
 
     def _create_anime(self, **overrides):
         data = {

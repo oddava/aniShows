@@ -41,6 +41,7 @@ class Category(Model):
             thread_count=Greatest(F("thread_count") + delta, Value(0))
         )
 
+
 class Tag(Model):
     name = CharField(max_length=50)
     slug = SlugField(unique=True)
@@ -51,6 +52,7 @@ class Tag(Model):
 
     def __str__(self):
         return self.name
+
 
 class Thread(TimestampMixin, Model):
     category = ForeignKey(Category, CASCADE, related_name="threads")
@@ -92,6 +94,7 @@ class Thread(TimestampMixin, Model):
         queryset.update(view_count=F("view_count") + 1)
         self.refresh_from_db(fields=["view_count"])
 
+
 class Post(TimestampMixin, Model):
     thread = ForeignKey(Thread, CASCADE, related_name="posts")
     author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_posts")
@@ -121,6 +124,7 @@ class Post(TimestampMixin, Model):
             like_count=Greatest(F("like_count") + delta, Value(0))
         )
 
+
 class ThreadLike(CreatedAtMixin, Model):
     thread = ForeignKey(Thread, CASCADE, related_name="likes")
     user = ForeignKey("users.CustomUser", CASCADE, related_name="liked_threads")
@@ -130,6 +134,7 @@ class ThreadLike(CreatedAtMixin, Model):
 
     def __str__(self):
         return f"{self.user.username} likes {self.thread.title}"
+
 
 class PostLike(CreatedAtMixin, Model):
     post = ForeignKey(Post, CASCADE, related_name="likes")

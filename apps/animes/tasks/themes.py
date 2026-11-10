@@ -11,7 +11,6 @@ from datetime import timedelta
 from urllib.parse import quote_plus
 
 import httpx
-from asgiref.sync import sync_to_async
 from django.db import DatabaseError, transaction
 from django.db.models import F
 from django.utils import timezone
@@ -19,7 +18,7 @@ from django.utils import timezone
 from ...shared.celery import observed_shared_task
 from ..models import Anime, ThemeSong
 from ..services.jikan import JikanRateLimiter, fetch_themes_from_jikan
-from .base import BaseTask, run_async_in_task
+from .base import BaseTask
 
 
 class ThemeSongSyncTask(BaseTask):
@@ -70,19 +69,17 @@ class ThemeSongSyncTask(BaseTask):
         self.metrics.start()
 
         if anime_id:
-            return run_async_in_task(self._sync_single(anime_id, base_delay))
+            return self._sync_single(anime_id, base_delay)
         else:
-            return run_async_in_task(
-                self._sync_batch(limit, force_resync, retry_failed, base_delay, anime_ids)
-            )
+            return self._sync_batch(limit, force_resync, retry_failed, base_delay, anime_ids)
 
-    async def _sync_single(self, anime_id: int, base_delay: float) -> dict:
+    def _sync_single(self, anime_id: int, base_delay: float) -> dict:
         """Sync themes for a single anime."""
         rate_limiter = JikanRateLimiter(base_delay=base_delay)
 
-        async with httpx.AsyncClient(timeout=15.0) as http_client:
+        with httpx.Client(timeout=15.0) as http_client:
             try:
-                anime = await sync_to_async(Anime.objects.get)(id=anime_id)
+                anime = Anime.objects.get(id=anime_id)
 
                 if not anime.mal_id:
                     logger.warning(f"Anime {anime.title} has no MAL ID")
@@ -103,9 +100,9 @@ class ThemeSongSyncTask(BaseTask):
                         "reason": "invalid_mal_id",
                     }
 
-                await rate_limiter.acquire()
+                rate_limiter.acquire()
 
-                themes = await fetch_themes_from_jikan(
+                themes = fetch_themes_from_jikan(
                     http_client, anime.mal_id, rate_limiter, max_retries=3
                 )
 
@@ -123,11 +120,11 @@ class ThemeSongSyncTask(BaseTask):
                 endings = themes.get("endings", [])
 
                 if openings or endings:
-                    count = await self._save_theme_songs(anime, themes)
+                    count = self._save_theme_songs(anime, themes)
                     logger.info(f"✓ Synced {count} themes for {anime.title}")
 
                     # Auto-backfill any missing YouTube URLs
-                    backfilled = await self._backfill_missing_youtube_urls(anime)
+                    backfilled = self._backfill_missing_youtube_urls(anime)
                     if backfilled > 0:
                         logger.info(
                             f"✓ Backfilled {backfilled} missing YouTube URLs for {anime.title}"
@@ -163,7 +160,7 @@ class ThemeSongSyncTask(BaseTask):
                 logger.exception("Error syncing themes for %s", anime_id)
                 raise self.retry(exc=e)
 
-    async def _sync_batch(
+    def _sync_batch(
         self,
         limit: int,
         force_resync: bool,
@@ -209,7 +206,7 @@ class ThemeSongSyncTask(BaseTask):
         if anime_ids:
             queryset = queryset.filter(id__in=anime_ids)
 
-        anime_list = await sync_to_async(list)(queryset[:limit])
+        anime_list = list(queryset[:limit])
         total = len(anime_list)
 
         if total == 0:
@@ -234,10 +231,10 @@ class ThemeSongSyncTask(BaseTask):
             "themes_loaded": 0,
         }
 
-        async with httpx.AsyncClient(timeout=15.0) as http_client:
+        with httpx.Client(timeout=15.0) as http_client:
             for i, anime in enumerate(anime_list):
                 try:
-                    await rate_limiter.acquire()
+                    rate_limiter.acquire()
 
                     # Validate MAL ID
                     if not anime.mal_id or not isinstance(anime.mal_id, int) or anime.mal_id <= 0:
@@ -245,12 +242,10 @@ class ThemeSongSyncTask(BaseTask):
                         stats["skipped"] += 1
                         continue
 
-                    await sync_to_async(Anime.objects.filter(pk=anime.pk).update)(
-                        themes_checked_at=timezone.now()
-                    )
+                    Anime.objects.filter(pk=anime.pk).update(themes_checked_at=timezone.now())
 
                     # Fetch themes
-                    themes = await fetch_themes_from_jikan(
+                    themes = fetch_themes_from_jikan(
                         http_client, anime.mal_id, rate_limiter, max_retries=3
                     )
 
@@ -266,7 +261,7 @@ class ThemeSongSyncTask(BaseTask):
                     endings = themes.get("endings", [])
 
                     if openings or endings:
-                        count = await self._save_theme_songs(anime, themes)
+                        count = self._save_theme_songs(anime, themes)
                         stats["themes_loaded"] += count
                         stats["with_themes"] += 1
 
@@ -332,7 +327,6 @@ class ThemeSongSyncTask(BaseTask):
             "rate_limiter_stats": rate_stats,
         }
 
-    @sync_to_async
     def _save_theme_songs(self, anime: Anime, themes_data: dict) -> int:
         """Replace the anime's theme songs with the fetched ones."""
         from ..signals import _invalidate_anime_public_caches  # signals imports tasks
@@ -449,7 +443,6 @@ class ThemeSongSyncTask(BaseTask):
 
         return url
 
-    @sync_to_async
     def _backfill_missing_youtube_urls(self, anime: Anime) -> int:
         """Backfill missing YouTube URLs for existing themes."""
         count = 0
@@ -476,6 +469,7 @@ class ThemeSongSyncTask(BaseTask):
                 logger.exception("Error saving YouTube URL for %s", theme.title)
 
         return count
+
 
 @observed_shared_task(
     base=ThemeSongSyncTask,
@@ -505,6 +499,7 @@ def sync_theme_songs(
         Dict with sync results
     """
     return self.execute(anime_id, limit, force_resync, retry_failed, base_delay, anime_ids)
+
 
 @observed_shared_task(retry_policy="long")
 def backfill_theme_youtube_urls(self, limit: int = 100):
@@ -553,6 +548,7 @@ def backfill_theme_youtube_urls(self, limit: int = 100):
 
     logger.info(f"YouTube URL backfill complete: {result}")
     return result
+
 
 def _generate_youtube_url_sync(title: str, artist: str, song_type: str, anime_title: str) -> str:
     """Synchronous version of _generate_youtube_url for use in tasks."""

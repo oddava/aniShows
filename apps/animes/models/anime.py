@@ -3,6 +3,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import (
     CASCADE,
     SET_NULL,
+    BooleanField,
     CharField,
     DateField,
     DateTimeField,
@@ -15,6 +16,7 @@ from django.db.models import (
     Model,
     PositiveSmallIntegerField,
     Prefetch,
+    Q,
     TextField,
     TimeField,
     UniqueConstraint,
@@ -28,6 +30,8 @@ from imagekit.processors import ResizeToFit
 from root.storage_backends import MediaStorage
 
 from ...shared.models import SlugMixin, TimestampMixin
+from ..adult_content import ADULT_GENRE_SLUGS, tags_are_adult
+from ..services.public_query.sorting import popular_list_index_expressions
 
 
 class Anime(TimestampMixin, SlugMixin, Model):
@@ -149,6 +153,9 @@ class Anime(TimestampMixin, SlugMixin, Model):
     synonyms = JSONField(default=list, blank=True)
     producers = JSONField(default=list, blank=True)
     tags = JSONField(default=list, blank=True)
+    # Denormalized adult-content rule (adult genre or explicit tag), kept in sync
+    # by save() and the genre signals; see ``apps/animes/adult_content.py``.
+    is_adult = BooleanField(default=False, editable=False)
     source_urls = JSONField(default=list, blank=True)
     offline_db_payload = JSONField(default=dict, blank=True)
 
@@ -211,7 +218,10 @@ class Anime(TimestampMixin, SlugMixin, Model):
             Index(fields=["season_year", "-popularity_rank"], name="anime_season_year_pop_idx"),
             Index(fields=["title", "status"]),
             Index(fields=["title_jp", "status"]),
-            Index(fields=["status", "broadcast_day", "next_airing_date"], name="anime_schedule_day_idx"),
+            Index(
+                fields=["status", "broadcast_day", "next_airing_date"],
+                name="anime_schedule_day_idx",
+            ),
             GinIndex(fields=["title"], name="anime_title_trgm_gin", opclasses=["gin_trgm_ops"]),
             GinIndex(
                 fields=["title_jp"], name="anime_title_jp_trgm_gin", opclasses=["gin_trgm_ops"]
@@ -220,13 +230,48 @@ class Anime(TimestampMixin, SlugMixin, Model):
                 fields=["synopsis"], name="anime_synopsis_trgm_gin", opclasses=["gin_trgm_ops"]
             ),
             GinIndex(fields=["tags"], name="anime_tags_gin"),
+            # D5: serves the anonymous default list and search in order (see
+            # popular_list_index_expressions); adult rows are never listed there.
+            Index(
+                *popular_list_index_expressions(),
+                name="anime_public_popular_list_idx",
+                condition=Q(is_adult=False),
+            ),
         ]
 
     def __str__(self):
         return self.title
 
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or "tags" in update_fields:
+            if self._sync_is_adult() and update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "is_adult"}
+        super().save(*args, **kwargs)
+
     def get_absolute_url(self):
         return f"/anime/{self.slug}/"
+
+    def _sync_is_adult(self) -> bool:
+        """Re-derive ``is_adult`` from ``tags``; True when the flag changed.
+
+        Genre changes are handled by the ``m2m_changed`` receiver, so the stored
+        flag already reflects the genres. It only needs a genre lookup when the
+        tags no longer make an adult-flagged row adult.
+        """
+        if "tags" in self.get_deferred_fields():
+            return False
+        if tags_are_adult(self.tags):
+            resolved = True
+        elif self._state.adding or not self.is_adult:
+            # New rows keep what the provider payload said; their genres are
+            # added after the insert and the genre signal re-checks them.
+            resolved = self.is_adult
+        else:
+            resolved = self.genres.filter(slug__in=ADULT_GENRE_SLUGS).exists()
+        changed = resolved != self.is_adult
+        self.is_adult = resolved
+        return changed
 
     @staticmethod
     def studios_prefetch(prefix: str = "") -> Prefetch:
@@ -352,7 +397,9 @@ class AnimeCharacter(Model):
     anime = ForeignKey("anime.Anime", CASCADE, related_name="cast")
     character = ForeignKey("anime.Character", CASCADE, related_name="roles")
     role = CharField(max_length=20, choices=Role.choices, default=Role.SUPPORTING)
-    voice_actor = ForeignKey("anime.Staff", SET_NULL, null=True, blank=True, related_name="voice_roles")
+    voice_actor = ForeignKey(
+        "anime.Staff", SET_NULL, null=True, blank=True, related_name="voice_roles"
+    )
 
     class Meta:
         ordering = ["role", "character__name"]

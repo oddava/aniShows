@@ -17,6 +17,7 @@ except ImportError:
     def get_user_heatmap_cache_key(user_id):
         return f"heatmap:{user_id}"
 
+
 User = get_user_model()
 
 HEATMAP_CACHE_TIMEOUT = 300
@@ -31,7 +32,9 @@ def _is_private(target_user, request_user) -> bool:
 
 def resolve_activity_user(username, request_user):
     if username:
-        target_user = get_object_or_404(User.objects.select_related("userprofile"), username=username)
+        target_user = get_object_or_404(
+            User.objects.select_related("userprofile"), username=username
+        )
         if _is_private(target_user, request_user):
             return None
         return target_user

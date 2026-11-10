@@ -14,7 +14,6 @@ With support for:
 - Configurable batch sizes
 """
 
-from asgiref.sync import sync_to_async
 from django.db.models import F
 from django.utils import timezone
 
@@ -22,7 +21,7 @@ from ...shared.celery import observed_shared_task
 from ..models import Anime
 from ..services.jikan import JikanService
 from ..services.metadata_health import build_missing_metadata_query
-from .base import BaseTask, run_async_in_task
+from .base import BaseTask
 
 
 class MetadataEnrichmentTask(BaseTask):
@@ -77,29 +76,27 @@ class MetadataEnrichmentTask(BaseTask):
         self.metrics.start()
 
         if mode == "single" and anime_id:
-            return run_async_in_task(self._enrich_single(anime_id))
+            return self._enrich_single(anime_id)
         elif mode == "backfill":
-            return run_async_in_task(
-                self._enrich_batch(
-                    batch_size,
-                    filters,
-                    priority_field,
-                    anime_ids,
-                    missing_tags_only,
-                )
+            return self._enrich_batch(
+                batch_size,
+                filters,
+                priority_field,
+                anime_ids,
+                missing_tags_only,
             )
         else:
             raise ValueError(f"Invalid mode: {mode}. Use 'single' or 'backfill'")
 
-    async def _enrich_single(self, anime_id: int) -> dict:
+    def _enrich_single(self, anime_id: int) -> dict:
         """Enrich metadata for a single anime."""
-        async with self.service_context() as service:
+        with self.service_context() as service:
             try:
-                anime = await sync_to_async(Anime.objects.get)(id=anime_id)
+                anime = Anime.objects.get(id=anime_id)
 
-                media = await self._resolve_media_for_anime(service, anime)
+                media = self._resolve_media_for_anime(service, anime)
                 if media:
-                    updated = await service.refresh_anime_metadata(anime, media)
+                    updated = service.refresh_anime_metadata(anime, media)
                     if not updated:
                         logger.warning(
                             f"Skipped metadata enrichment for {anime.title} due to identity mismatch"
@@ -138,13 +135,11 @@ class MetadataEnrichmentTask(BaseTask):
                 logger.exception("Error enriching metadata for %s", anime_id)
                 raise self.retry(exc=e, countdown=60)
 
-    async def _resolve_media_for_anime(
-        self, service: JikanService, anime: Anime
-    ) -> dict | None:
+    def _resolve_media_for_anime(self, service: JikanService, anime: Anime) -> dict | None:
         """Resolve the best Jikan media payload for a local Anime row."""
-        return await service.resolve_media_for_anime(anime)
+        return service.resolve_media_for_anime(anime)
 
-    async def _enrich_batch(
+    def _enrich_batch(
         self,
         batch_size: int,
         filters: dict | None,
@@ -153,7 +148,7 @@ class MetadataEnrichmentTask(BaseTask):
         missing_tags_only: bool,
     ) -> dict:
         """Batch enrich metadata for multiple anime."""
-        async with self.service_context() as service:
+        with self.service_context() as service:
             missing_metadata_query = build_missing_metadata_query(
                 missing_tags_only=missing_tags_only
             )
@@ -184,7 +179,7 @@ class MetadataEnrichmentTask(BaseTask):
             queryset = queryset.order_by(*ordering)[:batch_size]
 
             # Execute query
-            anime_list = await sync_to_async(list)(queryset)
+            anime_list = list(queryset)
             total = len(anime_list)
 
             if total == 0:
@@ -213,14 +208,12 @@ class MetadataEnrichmentTask(BaseTask):
                         logger.debug(f"Skipping {anime.title} - recently updated")
                         continue
 
-                    await sync_to_async(
-                        Anime.objects.filter(pk=anime.pk).update
-                    )(metadata_checked_at=timezone.now())
+                    Anime.objects.filter(pk=anime.pk).update(metadata_checked_at=timezone.now())
 
                     # Search and update
-                    media = await self._resolve_media_for_anime(service, anime)
+                    media = self._resolve_media_for_anime(service, anime)
                     if media:
-                        updated = await service.refresh_anime_metadata(anime, media)
+                        updated = service.refresh_anime_metadata(anime, media)
                         if updated:
                             updated_count += 1
 
@@ -255,6 +248,7 @@ class MetadataEnrichmentTask(BaseTask):
                 "errors": error_count,
                 "missing_tags_only": missing_tags_only,
             }
+
 
 @observed_shared_task(
     base=MetadataEnrichmentTask,

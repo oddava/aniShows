@@ -349,7 +349,9 @@ def _content_payload(days: int) -> dict:
     }
     by_type = {
         row["anime_type"]: row["count"]
-        for row in anime_queryset.values("anime_type").annotate(count=Count("id")).order_by("anime_type")
+        for row in anime_queryset.values("anime_type")
+        .annotate(count=Count("id"))
+        .order_by("anime_type")
     }
 
     top_genres = list(
@@ -421,7 +423,9 @@ def _engagement_payload(days: int) -> dict:
     }
     list_by_status = {
         row["status"]: row["count"]
-        for row in list_entry_queryset.values("status").annotate(count=Count("id")).order_by("status")
+        for row in list_entry_queryset.values("status")
+        .annotate(count=Count("id"))
+        .order_by("status")
     }
 
     reviews_trend = list(

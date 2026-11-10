@@ -46,7 +46,9 @@ def create_user_anime_list_entry(serializer, user):
     try:
         serializer.save(user=user)
     except IntegrityError as exc:
-        raise serializers.ValidationError({"detail": "This anime is already in your list."}) from exc
+        raise serializers.ValidationError(
+            {"detail": "This anime is already in your list."}
+        ) from exc
 
     invalidate_user_caches(user.id, user.username)
     invalidate_user_anime_caches(user.id)

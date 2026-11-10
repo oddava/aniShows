@@ -20,7 +20,9 @@ class NotificationConsumerTests(TransactionTestCase):
         )
 
         async def scenario():
-            communicator = WebsocketCommunicator(NotificationConsumer.as_asgi(), "/ws/notifications/")
+            communicator = WebsocketCommunicator(
+                NotificationConsumer.as_asgi(), "/ws/notifications/"
+            )
             communicator.scope["user"] = user
             connected, _ = await communicator.connect()
             assert connected
@@ -34,7 +36,9 @@ class NotificationConsumerTests(TransactionTestCase):
             ):
                 await communicator.send_json_to(bad)
 
-            await communicator.send_json_to({"type": "mark_read", "notification_id": notification.id})
+            await communicator.send_json_to(
+                {"type": "mark_read", "notification_id": notification.id}
+            )
             reply = await communicator.receive_json_from()
             await communicator.disconnect()
             return reply

@@ -53,9 +53,10 @@ class FieldMediaUrlTests(SimpleTestCase):
 
     def test_any_storage_failure_means_no_url(self):
         for error in (ValueError("no file"), OSError("disk"), RuntimeError("s3 signing")):
-            with self.subTest(error=type(error).__name__), mock.patch(
-                "apps.shared.media_urls.logger"
-            ) as logger:
+            with (
+                self.subTest(error=type(error).__name__),
+                mock.patch("apps.shared.media_urls.logger") as logger,
+            ):
                 self.assertIsNone(field_media_url(_Field(error=error)))
                 logger.debug.assert_called_once()
                 self.assertTrue(logger.debug.call_args.kwargs["exc_info"])
@@ -94,9 +95,12 @@ class NotificationErrorHandlingTests(TestCase):
     def test_broadcast_failure_is_logged_not_raised(self):
         layer = mock.Mock()
         layer.group_send = mock.AsyncMock(side_effect=RedisConnectionError("redis down"))
-        with mock.patch(
-            "apps.core.services.notification_service.get_channel_layer", return_value=layer
-        ), mock.patch("apps.core.services.notification_service.logger") as logger:
+        with (
+            mock.patch(
+                "apps.core.services.notification_service.get_channel_layer", return_value=layer
+            ),
+            mock.patch("apps.core.services.notification_service.logger") as logger,
+        ):
             NotificationService._broadcast_unread_count(self.user.id, 3)
 
         logger.exception.assert_called_once_with(
@@ -112,9 +116,10 @@ class NotificationErrorHandlingTests(TestCase):
         build_event.assert_not_called()
 
     def test_create_notification_returns_none_on_database_error(self):
-        with mock.patch.object(
-            Notification.objects, "create", side_effect=DatabaseError("db down")
-        ), mock.patch("apps.core.services.notification_service.logger") as logger:
+        with (
+            mock.patch.object(Notification.objects, "create", side_effect=DatabaseError("db down")),
+            mock.patch("apps.core.services.notification_service.logger") as logger,
+        ):
             result = NotificationService.create_notification(
                 user=self.user,
                 notification_type=Notification.NotificationType.SYSTEM,
@@ -150,22 +155,23 @@ class CelerySignalTrackingTests(TestCase):
         )
 
     def test_database_error_is_logged(self):
-        with mock.patch.object(
-            CeleryTaskResult.objects, "using", side_effect=OperationalError("db down")
-        ), mock.patch("apps.core.celery_signals.logger") as logger:
-            celery_signals.on_task_failure(
-                task_id="t-1", exception=ValueError("x"), traceback=None
-            )
+        with (
+            mock.patch.object(
+                CeleryTaskResult.objects, "using", side_effect=OperationalError("db down")
+            ),
+            mock.patch("apps.core.celery_signals.logger") as logger,
+        ):
+            celery_signals.on_task_failure(task_id="t-1", exception=ValueError("x"), traceback=None)
         logger.exception.assert_called_once()
 
     def test_missing_table_only_warns(self):
         error = ProgrammingError('relation "core_celerytaskresult" does not exist')
-        with mock.patch.object(CeleryTaskResult.objects, "using", side_effect=error), mock.patch(
-            "apps.core.celery_signals.warn_missing_table_once"
-        ) as warn, mock.patch("apps.core.celery_signals.logger") as logger:
-            celery_signals.on_task_failure(
-                task_id="t-2", exception=ValueError("x"), traceback=None
-            )
+        with (
+            mock.patch.object(CeleryTaskResult.objects, "using", side_effect=error),
+            mock.patch("apps.core.celery_signals.warn_missing_table_once") as warn,
+            mock.patch("apps.core.celery_signals.logger") as logger,
+        ):
+            celery_signals.on_task_failure(task_id="t-2", exception=ValueError("x"), traceback=None)
         warn.assert_called_once()
         logger.exception.assert_not_called()
 
@@ -196,9 +202,11 @@ class MetadataCachingFailureTests(SimpleTestCase):
     def test_cache_failure_returns_fallback_metadata(self):
         service = MetadataService()
         scraped = {"title": "Example"}
-        with mock.patch.object(service, "_scrape_metadata", return_value=scraped), mock.patch(
-            "apps.core.services.metadata_service.cache"
-        ) as cache, mock.patch("apps.core.services.metadata_service.logger") as logger:
+        with (
+            mock.patch.object(service, "_scrape_metadata", return_value=scraped),
+            mock.patch("apps.core.services.metadata_service.cache") as cache,
+            mock.patch("apps.core.services.metadata_service.logger") as logger,
+        ):
             cache.get.return_value = None
             cache.set.side_effect = ConnectionInterrupted(connection=None)
             result = service.fetch_metadata("https://example.com")
@@ -226,10 +234,13 @@ class SocialLinkSideEffectTests(TestCase):
         logger.warning.assert_called_once()
 
     def test_change_log_failure_is_logged_not_raised(self):
-        with mock.patch(
-            "apps.core.services.social_links_service.SocialLinkChangeLog.objects.create",
-            side_effect=DatabaseError("db down"),
-        ), mock.patch("apps.core.services.social_links_service.logger") as logger:
+        with (
+            mock.patch(
+                "apps.core.services.social_links_service.SocialLinkChangeLog.objects.create",
+                side_effect=DatabaseError("db down"),
+            ),
+            mock.patch("apps.core.services.social_links_service.logger") as logger,
+        ):
             SocialLinksService().log_changes(
                 self.user, [], [{"url": "https://example.com"}], "127.0.0.1"
             )

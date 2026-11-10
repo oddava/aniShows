@@ -14,7 +14,9 @@ class LinkMetadataTaskTests(TestCase):
         self.user = User.objects.create_user(username="links", email="l@example.com", password="x")
         self.profile, _ = UserProfile.objects.update_or_create(
             user=self.user,
-            defaults={"social_links": [{"url": "https://github.com/a", "value": "https://github.com/a"}]},
+            defaults={
+                "social_links": [{"url": "https://github.com/a", "value": "https://github.com/a"}]
+            },
         )
 
     def test_edit_saved_during_fetch_is_not_overwritten(self):

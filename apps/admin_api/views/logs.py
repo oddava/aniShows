@@ -13,24 +13,24 @@ from ..services.logs_service import build_system_log_stats
 
 
 class SystemLogFilter(FilterSet):
-    level = CharFilter(field_name='level')
-    log_type = CharFilter(field_name='log_type')
-    user = NumberFilter(field_name='user_id')
-    start_date = DateFilter(field_name='timestamp', lookup_expr='date__gte')
-    end_date = DateFilter(field_name='timestamp', lookup_expr='date__lte')
+    level = CharFilter(field_name="level")
+    log_type = CharFilter(field_name="log_type")
+    user = NumberFilter(field_name="user_id")
+    start_date = DateFilter(field_name="timestamp", lookup_expr="date__gte")
+    end_date = DateFilter(field_name="timestamp", lookup_expr="date__lte")
 
     class Meta:
         model = SystemLog
-        fields = ['level', 'log_type', 'user', 'start_date', 'end_date']
+        fields = ["level", "log_type", "user", "start_date", "end_date"]
 
 
 class AuditLogFilter(FilterSet):
-    action = CharFilter(field_name='action')
-    entity_type = CharFilter(field_name='entity_type')
+    action = CharFilter(field_name="action")
+    entity_type = CharFilter(field_name="entity_type")
 
     class Meta:
         model = AuditLog
-        fields = ['action', 'entity_type']
+        fields = ["action", "entity_type"]
 
 
 class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
@@ -40,9 +40,9 @@ class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     serializer_class = SystemLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = SystemLogFilter
-    search_fields = ['message', 'path', 'method']
-    ordering_fields = ['timestamp', 'status_code', 'duration_ms']
-    ordering = ['-timestamp']
+    search_fields = ["message", "path", "method"]
+    ordering_fields = ["timestamp", "status_code", "duration_ms"]
+    ordering = ["-timestamp"]
 
     def get_queryset(self):
         queryset = SystemLog.objects.all()
@@ -61,9 +61,9 @@ class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     serializer_class = AuditLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AuditLogFilter
-    search_fields = ['user__username', 'entity_id', 'entity_repr']
-    ordering_fields = ['timestamp']
-    ordering = ['-timestamp']
+    search_fields = ["user__username", "entity_id", "entity_repr"]
+    ordering_fields = ["timestamp"]
+    ordering = ["-timestamp"]
 
     def get_queryset(self):
         queryset = AuditLog.objects.select_related("user")

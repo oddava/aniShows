@@ -68,7 +68,9 @@ class RecommendationServiceQualityTests(APITestCase):
             synopsis=PLACEHOLDER_SYNOPSIS,
         )
 
-        recs = RecommendationService().content_recommender.get_recommendations_for_user(self.user, limit=20)
+        recs = RecommendationService().content_recommender.get_recommendations_for_user(
+            self.user, limit=20
+        )
         rec_ids = [row["anime"].id for row in recs]
 
         self.assertIn(good.id, rec_ids)
@@ -98,7 +100,9 @@ class RecommendationServiceQualityTests(APITestCase):
             studio=self.studio_b,
         )
 
-        recs = RecommendationService().content_recommender.get_recommendations_for_user(self.user, limit=20)
+        recs = RecommendationService().content_recommender.get_recommendations_for_user(
+            self.user, limit=20
+        )
         by_id = {row["anime"].id: row for row in recs}
 
         self.assertIn(high_quality_older.id, by_id)
@@ -106,7 +110,9 @@ class RecommendationServiceQualityTests(APITestCase):
             self.assertGreater(by_id[high_quality_older.id]["score"], by_id[weak_newer.id]["score"])
 
     def test_recommender_biases_toward_dominant_user_format(self):
-        anchor = self._anime("TV Anchor", genres=[self.genre_fantasy], anime_type=Anime.AnimeType.tv)
+        anchor = self._anime(
+            "TV Anchor", genres=[self.genre_fantasy], anime_type=Anime.AnimeType.tv
+        )
         self._add_positive_list_entry(anchor, score=9)
 
         tv_candidate = self._anime(
@@ -120,12 +126,16 @@ class RecommendationServiceQualityTests(APITestCase):
             anime_type=Anime.AnimeType.movie,
         )
 
-        recs = RecommendationService().content_recommender.get_recommendations_for_user(self.user, limit=20)
+        recs = RecommendationService().content_recommender.get_recommendations_for_user(
+            self.user, limit=20
+        )
         ordered_ids = [row["anime"].id for row in recs]
 
         self.assertIn(tv_candidate.id, ordered_ids)
         if movie_candidate.id in ordered_ids:
-            self.assertLess(ordered_ids.index(tv_candidate.id), ordered_ids.index(movie_candidate.id))
+            self.assertLess(
+                ordered_ids.index(tv_candidate.id), ordered_ids.index(movie_candidate.id)
+            )
 
     def test_recommender_sets_because_you_liked_reason_with_source_anime(self):
         anchor = self._anime("Source Anchor", genres=[self.genre_action, self.genre_fantasy])
@@ -142,7 +152,9 @@ class RecommendationServiceQualityTests(APITestCase):
             trending_rank=55,
         )
 
-        recs = RecommendationService().content_recommender.get_recommendations_for_user(self.user, limit=20)
+        recs = RecommendationService().content_recommender.get_recommendations_for_user(
+            self.user, limit=20
+        )
         match = next((row for row in recs if row["anime"].id == candidate.id), None)
 
         self.assertIsNotNone(match)

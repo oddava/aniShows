@@ -1,8 +1,7 @@
-from contextlib import asynccontextmanager
+from contextlib import contextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
-from asgiref.sync import async_to_sync
 from django.test import TestCase
 
 from ..models import Anime, Staff
@@ -20,7 +19,7 @@ class AniListIntegrityTests(TestCase):
     def _jikan_service_with_mocked_fetches(self, **fetch_mocks):
         """Real JikanService (so its resolver logic runs) with network fetches mocked."""
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
         for name, mock in fetch_mocks.items():
             setattr(service, name, mock)
         return service
@@ -54,15 +53,13 @@ class AniListIntegrityTests(TestCase):
         }
 
         service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
-        with patch.object(service, "get_anime_by_id", AsyncMock(return_value=canonical_item)):
-            resolved = async_to_sync(service._resolve_manual_update_item)(anime, wrong_item)
+        with patch.object(service, "get_anime_by_id", MagicMock(return_value=canonical_item)):
+            resolved = service._resolve_manual_update_item(anime, wrong_item)
 
         self.assertEqual(resolved["id"], 123)
-        self.assertEqual(
-            resolved["title"]["english"], "Canonical Title"
-        )
+        self.assertEqual(resolved["title"]["english"], "Canonical Title")
 
     def test_update_anime_sync_allows_titles_shared_with_other_rows(self):
         anime = Anime.objects.create(
@@ -83,10 +80,9 @@ class AniListIntegrityTests(TestCase):
         )
 
         service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
-        sync_update = service._update_anime.func.__self__.func
-        sync_update(service, anime, {"title": "Taken Title", "synopsis": "updated synopsis"})
+        service._update_anime(anime, {"title": "Taken Title", "synopsis": "updated synopsis"})
 
         anime.refresh_from_db()
         # Titles are not unique, so the incoming title is stored as-is.
@@ -105,19 +101,19 @@ class AniListIntegrityTests(TestCase):
         )
 
         service = self._jikan_service_with_mocked_fetches(
-            get_anime_by_id=AsyncMock(return_value={"id": 555, "title": {"english": "ok"}}),
-            search_by_mal_id=AsyncMock(return_value={"id": 555, "idMal": 999}),
-            search_anime=AsyncMock(return_value=[{"id": 1}]),
+            get_anime_by_id=MagicMock(return_value={"id": 555, "title": {"english": "ok"}}),
+            search_by_mal_id=MagicMock(return_value={"id": 555, "idMal": 999}),
+            search_anime=MagicMock(return_value=[{"id": 1}]),
         )
 
         task = MetadataEnrichmentTask()
-        result = async_to_sync(task._resolve_media_for_anime)(service, anime)
+        result = task._resolve_media_for_anime(service, anime)
 
         self.assertEqual(result["id"], 555)
         self.assertEqual(result["idMal"], 999)
-        service.search_by_mal_id.assert_awaited_once_with(999, anilist_id=555)
-        service.get_anime_by_id.assert_not_awaited()
-        service.search_anime.assert_not_awaited()
+        service.search_by_mal_id.assert_called_once_with(999, anilist_id=555)
+        service.get_anime_by_id.assert_not_called()
+        service.search_anime.assert_not_called()
 
     def test_metadata_resolver_uses_exact_title_match_when_searching(self):
         anime = Anime.objects.create(
@@ -130,9 +126,9 @@ class AniListIntegrityTests(TestCase):
         )
 
         service = self._jikan_service_with_mocked_fetches(
-            get_anime_by_id=AsyncMock(return_value=None),
-            search_by_mal_id=AsyncMock(return_value=None),
-            search_anime=AsyncMock(
+            get_anime_by_id=MagicMock(return_value=None),
+            search_by_mal_id=MagicMock(return_value=None),
+            search_anime=MagicMock(
                 return_value=[
                     {"id": 1, "title": {"english": "Different", "romaji": "Different"}},
                     {"id": 2, "title": {"native": "Exact Native"}},
@@ -141,14 +137,14 @@ class AniListIntegrityTests(TestCase):
         )
 
         task = MetadataEnrichmentTask()
-        result = async_to_sync(task._resolve_media_for_anime)(service, anime)
+        result = task._resolve_media_for_anime(service, anime)
 
         self.assertEqual(result["id"], 2)
-        service.search_anime.assert_awaited_once_with("Exact Match")
+        service.search_anime.assert_called_once_with("Exact Match")
 
     def _hunter_x_hunter_service(self):
         return self._jikan_service_with_mocked_fetches(
-            search_anime=AsyncMock(
+            search_anime=MagicMock(
                 return_value=[
                     {"idMal": 136, "seasonYear": 1999, "title": {"romaji": "Hunter x Hunter"}},
                     {"idMal": 11061, "seasonYear": 2011, "title": {"romaji": "Hunter x Hunter"}},
@@ -158,11 +154,14 @@ class AniListIntegrityTests(TestCase):
 
     def test_title_only_match_picks_the_entry_from_the_same_year(self):
         anime = Anime.objects.create(
-            title="Hunter x Hunter", slug="hxh-2011", synopsis="x", season_year=2011,
+            title="Hunter x Hunter",
+            slug="hxh-2011",
+            synopsis="x",
+            season_year=2011,
             anilist_id=11061,
         )
 
-        result = async_to_sync(self._hunter_x_hunter_service().resolve_media_for_anime)(anime)
+        result = self._hunter_x_hunter_service().resolve_media_for_anime(anime)
 
         self.assertEqual(result["idMal"], 11061)
         self.assertEqual(result["id"], 11061)
@@ -170,7 +169,7 @@ class AniListIntegrityTests(TestCase):
     def test_title_only_match_refuses_to_guess_between_remakes(self):
         anime = Anime.objects.create(title="Hunter x Hunter", slug="hxh", synopsis="x")
 
-        result = async_to_sync(self._hunter_x_hunter_service().resolve_media_for_anime)(anime)
+        result = self._hunter_x_hunter_service().resolve_media_for_anime(anime)
 
         self.assertIsNone(result)
 
@@ -184,7 +183,7 @@ class AniListIntegrityTests(TestCase):
             anilist_id=98765,
         )
         service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         service._process_theme_songs(
             anime,
@@ -204,7 +203,7 @@ class AniListIntegrityTests(TestCase):
             anilist_id=45678,
         )
         service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         item = {
             "characterPreview": {
@@ -245,7 +244,7 @@ class AniListIntegrityTests(TestCase):
             "endings": None,
         }
 
-        async_to_sync(service._handle_extended_info_async)(anime, item)
+        service._handle_extended_info(anime, item)
 
         voice_actor = Staff.objects.get(anilist_id=902)
         staff_member = Staff.objects.get(anilist_id=903)
@@ -254,7 +253,7 @@ class AniListIntegrityTests(TestCase):
 
     def test_prepare_anime_data_includes_normalized_non_spoiler_tags(self):
         service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         data = service._prepare_anime_data(
             {
@@ -264,7 +263,11 @@ class AniListIntegrityTests(TestCase):
                 "duration": 24,
                 "tags": [
                     {"name": "Time Loop", "isMediaSpoiler": False, "isGeneralSpoiler": False},
-                    {"name": "Female Protagonist", "isMediaSpoiler": False, "isGeneralSpoiler": False},
+                    {
+                        "name": "Female Protagonist",
+                        "isMediaSpoiler": False,
+                        "isGeneralSpoiler": False,
+                    },
                     {"name": "Time Loop", "isMediaSpoiler": False, "isGeneralSpoiler": False},
                     {"name": "Final Battle", "isMediaSpoiler": True, "isGeneralSpoiler": False},
                 ],
@@ -298,18 +301,18 @@ class AniListIntegrityTests(TestCase):
 
         service = SimpleNamespace(
             call_cache=None,
-            refresh_anime_metadata=AsyncMock(return_value=True),
+            refresh_anime_metadata=MagicMock(return_value=True),
         )
         task = MetadataEnrichmentTask()
 
-        @asynccontextmanager
-        async def fake_service_context(**_kwargs):
+        @contextmanager
+        def fake_service_context(**_kwargs):
             yield service
 
         task.service_context = fake_service_context
-        task._resolve_media_for_anime = AsyncMock(return_value={"id": 1234})
+        task._resolve_media_for_anime = MagicMock(return_value={"id": 1234})
 
-        result = async_to_sync(task._enrich_batch)(
+        result = task._enrich_batch(
             batch_size=10,
             filters=None,
             priority_field="-popularity_rank",
@@ -320,8 +323,8 @@ class AniListIntegrityTests(TestCase):
         self.assertEqual(result["total"], 1)
         self.assertEqual(result["updated"], 1)
         self.assertTrue(result["missing_tags_only"])
-        task._resolve_media_for_anime.assert_awaited_once_with(service, missing_tags)
-        service.refresh_anime_metadata.assert_awaited_once()
+        task._resolve_media_for_anime.assert_called_once_with(service, missing_tags)
+        service.refresh_anime_metadata.assert_called_once()
 
     @patch("apps.animes.services.anilist.logger.warning")
     @patch("apps.animes.services.anilist.logger.info")

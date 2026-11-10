@@ -42,9 +42,7 @@ class MediaStorageTests(SimpleTestCase):
         connection = MagicMock()
         connection.meta.client = client
 
-        with patch.object(
-            MediaStorage, "connection", new_callable=PropertyMock
-        ) as mock_connection:
+        with patch.object(MediaStorage, "connection", new_callable=PropertyMock) as mock_connection:
             mock_connection.return_value = connection
 
             storage._ensure_bucket_exists()
@@ -71,9 +69,10 @@ class MediaStorageTests(SimpleTestCase):
         connection = MagicMock()
         connection.meta.client = client
 
-        with patch.object(
-            MediaStorage, "connection", new_callable=PropertyMock
-        ) as mock_connection, patch("root.storage_backends.logger.warning") as mock_warning:
+        with (
+            patch.object(MediaStorage, "connection", new_callable=PropertyMock) as mock_connection,
+            patch("root.storage_backends.logger.warning") as mock_warning,
+        ):
             mock_connection.return_value = connection
 
             storage._ensure_bucket_exists()

@@ -93,15 +93,9 @@ def build_beat_schedule(
             "options": {"queue": "batch"},
         },
         # YouTube URL Backfill Task - Runs twice daily to catch missed themes
-        "backfill-theme-youtube-urls-morning": {
+        "backfill-theme-youtube-urls-twice-daily": {
             "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",
-            "schedule": crontab(hour=8, minute=30),  # 8:30 AM
-            "kwargs": {"limit": 100},
-            "options": {"queue": "low_priority"},
-        },
-        "backfill-theme-youtube-urls-evening": {
-            "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",
-            "schedule": crontab(hour=20, minute=30),  # 8:30 PM
+            "schedule": crontab(hour="8,20", minute=30),  # 8:30 AM and 8:30 PM
             "kwargs": {"limit": 100},
             "options": {"queue": "low_priority"},
         },

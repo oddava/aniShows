@@ -160,5 +160,3 @@ def create_or_update_user_stats(user):
     )
 
     return stats
-
-

@@ -13,7 +13,9 @@ NOTIFICATION_TASK_LOCK_SECONDS = 15 * 60
 
 @observed_shared_task(retry_policy="standard")
 def send_pending_notifications(self):
-    with cache_lock("notifications:send-pending:lock", timeout=NOTIFICATION_TASK_LOCK_SECONDS) as acquired:
+    with cache_lock(
+        "notifications:send-pending:lock", timeout=NOTIFICATION_TASK_LOCK_SECONDS
+    ) as acquired:
         if not acquired:
             return {"status": "skipped", "reason": "already_running"}
         with retry_on_error(self, "Pending notification delivery task failed"):
@@ -22,7 +24,9 @@ def send_pending_notifications(self):
 
 @observed_shared_task(retry_policy="standard")
 def check_new_episodes(self):
-    with cache_lock("notifications:new-episodes:lock", timeout=NOTIFICATION_TASK_LOCK_SECONDS) as acquired:
+    with cache_lock(
+        "notifications:new-episodes:lock", timeout=NOTIFICATION_TASK_LOCK_SECONDS
+    ) as acquired:
         if not acquired:
             return {"status": "skipped", "reason": "already_running"}
         with retry_on_error(self, "New episode notification scan failed"):

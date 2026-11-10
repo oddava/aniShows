@@ -30,6 +30,7 @@ from ..views.google import GoogleLogin
 
 User = get_user_model()
 
+
 class RegistrationTests(APITestCase):
     """Tests for user registration endpoint."""
 
@@ -105,6 +106,7 @@ class RegistrationTests(APITestCase):
         }
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class EmailVerificationTests(APITestCase):
     """Tests for email verification functionality."""
@@ -221,6 +223,7 @@ class EmailVerificationTests(APITestCase):
         response = self.client.post(self.login_url, login_data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
+
 
 class LoginTests(APITestCase):
     """Tests for login endpoint."""
@@ -400,7 +403,9 @@ class SocialLoginSerializerTests(SimpleTestCase):
         mock_finalize_social_login,
     ):
         """OAuth client init should match the current allauth signature."""
-        mock_get_social_login.return_value = SimpleNamespace(account=SimpleNamespace(user=SimpleNamespace()))
+        mock_get_social_login.return_value = SimpleNamespace(
+            account=SimpleNamespace(user=SimpleNamespace())
+        )
         mock_complete_social_login.return_value = None
         mock_finalize_social_login.return_value = SimpleNamespace()
         request = self.request_factory.post("/api/v1/auth/google/", {"code": "fake-code"})
@@ -454,6 +459,7 @@ class GoogleLoginViewTests(SimpleTestCase):
             f"{settings.FRONTEND_URL}/auth/google/callback",
         )
 
+
 class ProfileTests(APITestCase):
     """Tests for user profile endpoints."""
 
@@ -500,15 +506,14 @@ class ProfileTests(APITestCase):
     @patch("apps.users.views.users.update_user_profile")
     def test_update_profile_returns_503_when_media_storage_unavailable(self, mock_update):
         """Storage connectivity failures should return a clear 503 response."""
-        mock_update.side_effect = EndpointConnectionError(
-            endpoint_url="http://anishows-minio:9000"
-        )
+        mock_update.side_effect = EndpointConnectionError(endpoint_url="http://anishows-minio:9000")
         self.client.force_authenticate(user=self.user)
 
         response = self.client.patch(self.profile_url, {"bio": "updated"})
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertIn("detail", response.data)
+
 
 class ChangePasswordTests(APITestCase):
     """Tests for password change endpoint."""

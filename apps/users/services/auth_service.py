@@ -27,9 +27,7 @@ def revoke_all_sessions(user) -> None:
     BlacklistedToken.objects.bulk_create(
         [
             BlacklistedToken(token=token)
-            for token in OutstandingToken.objects.filter(
-                user=user, blacklistedtoken__isnull=True
-            )
+            for token in OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
         ],
         ignore_conflicts=True,
     )
@@ -38,14 +36,20 @@ def revoke_all_sessions(user) -> None:
 class AuthService:
     """Handles authentication business logic."""
 
-    def normalize_login_identifier(self, *, username: str | None = None, email: str | None = None) -> str | None:
+    def normalize_login_identifier(
+        self, *, username: str | None = None, email: str | None = None
+    ) -> str | None:
         if username:
             normalized_username = username.strip()
             if "@" in normalized_username:
-                user = User.objects.filter(email__iexact=normalized_username).only("username").first()
+                user = (
+                    User.objects.filter(email__iexact=normalized_username).only("username").first()
+                )
                 return user.username if user else normalized_username
 
-            user = User.objects.filter(username__iexact=normalized_username).only("username").first()
+            user = (
+                User.objects.filter(username__iexact=normalized_username).only("username").first()
+            )
             return user.username if user else normalized_username
 
         if email:
@@ -136,8 +140,9 @@ class AuthService:
             profile.email_verified = True
             return (VERIFY_SUCCESS if claimed else VERIFY_ALREADY_VERIFIED), user
 
-        if profile.email_verified and email_verification_token_generator.was_valid_before_verification(
-            user, token
+        if (
+            profile.email_verified
+            and email_verification_token_generator.was_valid_before_verification(user, token)
         ):
             return VERIFY_ALREADY_VERIFIED, user
 

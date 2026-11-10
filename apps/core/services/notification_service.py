@@ -25,6 +25,7 @@ NOTIFICATION_WRITE_ERRORS = (DatabaseError, TypeError, ValueError)
 # but not their names (IndexError).
 NOTIFICATION_MERGE_ERRORS = (*NOTIFICATION_WRITE_ERRORS, AttributeError, IndexError)
 
+
 class NotificationService:
     """Service for creating and managing user notifications."""
 
@@ -174,7 +175,9 @@ class NotificationService:
 
                 return notification
         except NOTIFICATION_WRITE_ERRORS:
-            logger.exception("Failed to create %s notification for user %s", notification_type, user.id)
+            logger.exception(
+                "Failed to create %s notification for user %s", notification_type, user.id
+            )
             return None
 
     @classmethod
@@ -205,9 +208,7 @@ class NotificationService:
             channel_layer = get_channel_layer()
             if channel_layer is None:
                 return
-            async_to_sync(channel_layer.group_send)(
-                f"notifications_user_{user_id}", build_event()
-            )
+            async_to_sync(channel_layer.group_send)(f"notifications_user_{user_id}", build_event())
         except Exception:
             logger.exception("Failed to broadcast %s via WebSocket", what)
 
@@ -359,9 +360,7 @@ class NotificationService:
     def mark_all_as_read(cls, user) -> int:
         """Mark all unread notifications as read for a user."""
         queryset = Notification.objects.filter(user=user, is_read=False)
-        count = queryset.update(
-            is_read=True, read_at=timezone.now()
-        )
+        count = queryset.update(is_read=True, read_at=timezone.now())
         cls._set_unread_count_cache(user.id, 0)
         cls._broadcast_unread_count(user.id, 0)
         logger.info(f"Marked {count} notifications as read for user {user.id}")

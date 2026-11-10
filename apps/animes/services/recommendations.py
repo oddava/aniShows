@@ -26,6 +26,7 @@ ANIME_STUDIOS_PREFETCH = Anime.studios_prefetch("anime__")
 def _studio_ids(anime: Anime) -> set[int]:
     return {studio.id for studio in anime.ordered_studios}
 
+
 User = get_user_model()
 
 
@@ -210,7 +211,9 @@ class ContentBasedRecommender:
         member_score = min((anime.member_count or 0) / 500_000, 1.0)
         rating_score = float(anime.rating) / 10.0 if anime.rating is not None else 0.0
 
-        return max(popularity_score, site_rank_score, trending_score, member_score * 0.75, rating_score)
+        return max(
+            popularity_score, site_rank_score, trending_score, member_score * 0.75, rating_score
+        )
 
     def _best_anchor_match(self, anime: Anime, preferences: dict) -> tuple[float, dict | None]:
         """Find the strongest anchor similarity for the candidate anime."""
@@ -278,7 +281,11 @@ class ContentBasedRecommender:
         score = genre_similarity * 0.35 + anchor_similarity * 0.4 + quality_prior * 0.15
 
         liked_studio = next(
-            (studio for studio in anime.ordered_studios if studio.id in preferences["liked_studios"]),
+            (
+                studio
+                for studio in anime.ordered_studios
+                if studio.id in preferences["liked_studios"]
+            ),
             None,
         )
         if liked_studio is not None:
@@ -300,7 +307,9 @@ class ContentBasedRecommender:
             elif anime.anime_type not in preferences["preferred_types"]:
                 score *= 0.82
 
-        confidence = min(1.0, genre_similarity * 0.35 + anchor_similarity * 0.45 + quality_prior * 0.2)
+        confidence = min(
+            1.0, genre_similarity * 0.35 + anchor_similarity * 0.45 + quality_prior * 0.2
+        )
         metadata["confidence"] = round(confidence, 3)
         metadata["anchor_similarity"] = round(anchor_similarity, 3)
 
@@ -455,7 +464,9 @@ class ContentBasedRecommender:
                 continue
 
             primary_genre = (
-                rec["metadata"]["matched_genres"][0] if rec["metadata"]["matched_genres"] else "Other"
+                rec["metadata"]["matched_genres"][0]
+                if rec["metadata"]["matched_genres"]
+                else "Other"
             )
             cap = max_other if primary_genre == "Other" else max_per_genre
 
@@ -533,21 +544,27 @@ class ContentBasedRecommender:
         chunk = max(1, limit // 2)
 
         append_unique(
-            base_queryset.filter(trending_rank__isnull=False).order_by("trending_rank", "site_rank")[:chunk],
+            base_queryset.filter(trending_rank__isnull=False).order_by(
+                "trending_rank", "site_rank"
+            )[:chunk],
             74.0,
             UserRecommendation.RecommendationReason.TRENDING,
         )
 
         if len(recommendations) < limit:
             append_unique(
-                base_queryset.filter(site_rank__isnull=False).order_by("site_rank", "-rating")[:chunk],
+                base_queryset.filter(site_rank__isnull=False).order_by("site_rank", "-rating")[
+                    :chunk
+                ],
                 70.0,
                 UserRecommendation.RecommendationReason.TOP_RATED,
             )
 
         if len(recommendations) < limit:
             append_unique(
-                base_queryset.filter(popularity_rank__isnull=False).order_by("popularity_rank", "-rating")[:limit],
+                base_queryset.filter(popularity_rank__isnull=False).order_by(
+                    "popularity_rank", "-rating"
+                )[:limit],
                 67.0,
                 UserRecommendation.RecommendationReason.TOP_RATED,
             )
@@ -627,7 +644,9 @@ class RecommendationService:
 
         stale_before = timezone.now() - timedelta(hours=self.STALE_AFTER_HOURS)
         has_any = base_queryset.exists()
-        has_fresh = base_queryset.filter(created_at__gte=stale_before).exists() if has_any else False
+        has_fresh = (
+            base_queryset.filter(created_at__gte=stale_before).exists() if has_any else False
+        )
 
         if not has_any or not has_fresh:
             self.generate_for_user(user)

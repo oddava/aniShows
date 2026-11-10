@@ -7,6 +7,7 @@ from .services.avatar_service import get_user_avatar_url
 
 User = get_user_model()
 
+
 class AdminUserSerializer(ModelSerializer):
     email_verified = SerializerMethodField()
     avatar = SerializerMethodField()
@@ -15,17 +16,29 @@ class AdminUserSerializer(ModelSerializer):
     is_private = SerializerMethodField()
 
     # Activity counts from annotations
-    favorites_count = IntegerField(source='_favorites_count', read_only=True, default=0)
-    reviews_count = IntegerField(source='_reviews_count', read_only=True, default=0)
-    list_entries_count = IntegerField(source='_list_entries_count', read_only=True, default=0)
+    favorites_count = IntegerField(source="_favorites_count", read_only=True, default=0)
+    reviews_count = IntegerField(source="_reviews_count", read_only=True, default=0)
+    list_entries_count = IntegerField(source="_list_entries_count", read_only=True, default=0)
 
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'date_joined', 'last_login',
-            'is_active', 'is_staff', 'is_superuser',
-            'email_verified', 'avatar', 'banner', 'bio', 'is_private',
-            'favorites_count', 'reviews_count', 'list_entries_count'
+            "id",
+            "username",
+            "email",
+            "date_joined",
+            "last_login",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "email_verified",
+            "avatar",
+            "banner",
+            "bio",
+            "is_private",
+            "favorites_count",
+            "reviews_count",
+            "list_entries_count",
         ]
 
     def get_email_verified(self, obj):

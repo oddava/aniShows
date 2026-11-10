@@ -9,6 +9,7 @@ from apps.users.models import UserProfile
 
 User = get_user_model()
 
+
 @pytest.fixture
 def user(db):
     user = User.objects.create_user(
@@ -17,16 +18,19 @@ def user(db):
     UserProfile.objects.filter(user=user).update(email_verified=True)
     return user
 
+
 @pytest.fixture
 def api_client():
     from rest_framework.test import APIClient
 
     return APIClient()
 
+
 @pytest.fixture
 def authenticated_client(api_client, user):
     api_client.force_authenticate(user=user)
     return api_client
+
 
 @pytest.fixture
 def category(db):
@@ -34,15 +38,18 @@ def category(db):
         name="General Discussion", slug="general-discussion", description="Talk about anything"
     )
 
+
 @pytest.fixture
 def tag(db):
     return Tag.objects.create(name="News", slug="news", color="#FF0000")
+
 
 @pytest.fixture
 def thread(db, category, user):
     return Thread.objects.create(
         category=category, title="First Thread", author=user, content="Hello world"
     )
+
 
 @pytest.mark.django_db
 class TestForumsAPI:

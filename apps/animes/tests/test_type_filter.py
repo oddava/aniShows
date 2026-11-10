@@ -7,8 +7,8 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from ...users.models import UserProfile
+from ..adult_content import ADULT_TAGS, adult_tags_q
 from ..models import Anime, Genre
-from ..services.public_anime_service import ADULT_TAGS, AnimeQueryService
 
 User = get_user_model()
 
@@ -387,9 +387,9 @@ class AnimeTypeFilterTests(APITestCase):
         self.assertIn(anime.title, titles)
 
     def test_postgres_adult_tag_filter_uses_single_has_any_keys_lookup(self):
-        with patch("apps.animes.services.public_anime_service.connections") as mock_connections:
+        with patch("apps.animes.adult_content.connections") as mock_connections:
             mock_connections.__getitem__.return_value.vendor = "postgresql"
 
-            condition = AnimeQueryService._adult_tags_q("default")
+            condition = adult_tags_q("default")
 
         self.assertEqual(condition.children, [("tags__has_any_keys", sorted(ADULT_TAGS))])

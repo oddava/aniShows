@@ -22,9 +22,6 @@ Usage:
     python manage.py populate_franchises --no-import-missing
 """
 
-import asyncio
-
-from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 
 from ...models import Anime
@@ -85,9 +82,7 @@ class Command(BaseCommand):
         priority_field = options.get("priority_field")
 
         if use_async:
-            self._handle_async(
-                anime_id, batch_size, import_missing, max_imports, priority_field
-            )
+            self._handle_async(anime_id, batch_size, import_missing, max_imports, priority_field)
         else:
             self._handle_sync(anime_id, limit, batch_size, import_missing, max_imports)
 
@@ -132,7 +127,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"Processing relations for: {anime.title}")
                 if import_missing:
                     self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
-                asyncio.run(self.process_single_anime(anime, import_missing, max_imports))
+                self.process_single_anime(anime, import_missing, max_imports)
             except Anime.DoesNotExist:
                 self.stderr.write(f"Anime with ID {anime_id} not found")
                 return
@@ -148,25 +143,19 @@ class Command(BaseCommand):
                 self.stdout.write("Import missing anime: ENABLED (ensures all slugs linked)")
 
             if total == 0:
-                self.stdout.write(
-                    self.style.SUCCESS("All anime already have relations data!")
-                )
+                self.stdout.write(self.style.SUCCESS("All anime already have relations data!"))
                 return
 
-            asyncio.run(
-                self.process_batch(queryset, batch_size, import_missing, max_imports)
-            )
+            self.process_batch(queryset, batch_size, import_missing, max_imports)
 
-    async def process_single_anime(self, anime, import_missing: bool, max_imports: int):
+    def process_single_anime(self, anime, import_missing: bool, max_imports: int):
         """Process relations for a single anime using the franchise task logic."""
         from ...tasks.franchises import FranchiseSyncTask
 
         task = FranchiseSyncTask()
-        async with task.service_context() as service:
+        with task.service_context() as service:
             try:
-                result = await task._process_anime_franchises(
-                    service, anime, import_missing, max_imports
-                )
+                result = task._process_anime_franchises(service, anime, import_missing, max_imports)
 
                 if result.get("status") == "success":
                     linked = result.get("relations_linked", 0)
@@ -185,20 +174,16 @@ class Command(BaseCommand):
 
                     self.stdout.write(self.style.SUCCESS(status_msg))
                 else:
-                    self.stderr.write(
-                        f"✗ Failed to update {anime.title}: {result.get('error')}"
-                    )
+                    self.stderr.write(f"✗ Failed to update {anime.title}: {result.get('error')}")
             except Exception as e:
                 self.stderr.write(f"✗ Error processing {anime.title}: {e}")
 
-    async def process_batch(
-        self, queryset, batch_size: int, import_missing: bool, max_imports: int
-    ):
+    def process_batch(self, queryset, batch_size: int, import_missing: bool, max_imports: int):
         """Process relations for multiple anime."""
         from ...tasks.franchises import FranchiseSyncTask
 
         # Evaluate queryset in a sync context
-        anime_list = await sync_to_async(list)(queryset[:batch_size])
+        anime_list = list(queryset[:batch_size])
         total = len(anime_list)
         processed = 0
         errors = 0
@@ -208,10 +193,10 @@ class Command(BaseCommand):
 
         task = FranchiseSyncTask()
 
-        async with task.service_context() as service:
+        with task.service_context() as service:
             for i, anime in enumerate(anime_list):
                 try:
-                    result = await task._process_anime_franchises(
+                    result = task._process_anime_franchises(
                         service, anime, import_missing, max_imports
                     )
 
@@ -223,7 +208,7 @@ class Command(BaseCommand):
                         total_relations += rel_count
                         total_linked += linked_count
 
-                        status_msg = f"✓ ({i+1}/{total}) {anime.title}: {rel_count} relations"
+                        status_msg = f"✓ ({i + 1}/{total}) {anime.title}: {rel_count} relations"
                         if linked_count == rel_count:
                             status_msg += ", ALL linked"
                         else:
@@ -235,13 +220,13 @@ class Command(BaseCommand):
                     else:
                         errors += 1
                         self.stderr.write(
-                            f"⚠ ({i+1}/{total}) {anime.title}: {result.get('error')}"
+                            f"⚠ ({i + 1}/{total}) {anime.title}: {result.get('error')}"
                         )
 
                     # Progress indicator
                     if (i + 1) % 10 == 0:
                         self.stdout.write(
-                            f"--- Progress: {i+1}/{total} "
+                            f"--- Progress: {i + 1}/{total} "
                             f"(Success: {processed}, Errors: {errors}, "
                             f"Linked: {total_linked}/{total_relations}) ---"
                         )

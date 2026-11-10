@@ -33,6 +33,7 @@ class UserProfileInline(admin.StackedInline):
     ]
     readonly_fields = ["last_activity"]
 
+
 class UserImportJobInline(admin.TabularInline):
     """Inline admin for user import jobs."""
 
@@ -52,6 +53,7 @@ class UserImportJobInline(admin.TabularInline):
         "created_at",
     ]
     ordering = ["-created_at"]
+
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
@@ -209,6 +211,7 @@ class CustomUserAdmin(UserAdmin):
         return queryset.select_related("userprofile").prefetch_related(
             "favorites", "reviews", "anime_lists"
         )
+
 
 @admin.register(UserImportJob)
 class UserImportJobAdmin(admin.ModelAdmin):
@@ -401,6 +404,7 @@ class UserImportJobAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+
 @admin.register(UserAnimeList)
 class UserAnimeListAdmin(admin.ModelAdmin):
     """Admin for user anime lists."""
@@ -411,6 +415,7 @@ class UserAnimeListAdmin(admin.ModelAdmin):
     raw_id_fields = ["user", "anime"]
     ordering = ["-updated_at"]
     date_hierarchy = "updated_at"
+
 
 @admin.register(UserActivity)
 class UserActivityAdmin(admin.ModelAdmin):
@@ -429,6 +434,7 @@ class UserActivityAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+
 @admin.register(UserFollow)
 class UserFollowAdmin(admin.ModelAdmin):
     """Admin for user follow relationships."""
@@ -437,6 +443,7 @@ class UserFollowAdmin(admin.ModelAdmin):
     search_fields = ["follower__username", "following__username"]
     raw_id_fields = ["follower", "following"]
     ordering = ["-created_at"]
+
 
 @admin.register(UserStats)
 class UserStatsAdmin(admin.ModelAdmin):
@@ -462,6 +469,7 @@ class UserStatsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
 
 @admin.register(SocialLinkChangeLog)
 class SocialLinkChangeLogAdmin(admin.ModelAdmin):

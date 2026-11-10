@@ -39,8 +39,10 @@ def get_target_user(username):
 
 def ensure_profile_visible(target_user, request_user):
     profile = getattr(target_user, "userprofile", None)
-    if profile and profile.is_private and (
-        not request_user.is_authenticated or target_user != request_user
+    if (
+        profile
+        and profile.is_private
+        and (not request_user.is_authenticated or target_user != request_user)
     ):
         raise PermissionDenied("This profile is private.")
 
@@ -61,9 +63,7 @@ def toggle_follow(user, username) -> FollowActionResult:
 
     try:
         with transaction.atomic():
-            follow, created = UserFollow.objects.get_or_create(
-                follower=user, following=target_user
-            )
+            follow, created = UserFollow.objects.get_or_create(follower=user, following=target_user)
     except IntegrityError:
         # A concurrent request (a double click) created it first: the user
         # wants to follow, so that is the outcome, not a 500.
@@ -97,9 +97,11 @@ def get_followers_queryset(username, request_user):
     target_user = get_target_user(username)
     ensure_profile_visible(target_user, request_user)
 
-    queryset = UserFollow.objects.filter(following=target_user).select_related(
-        "follower__userprofile"
-    ).prefetch_related(google_accounts_prefetch("follower"))
+    queryset = (
+        UserFollow.objects.filter(following=target_user)
+        .select_related("follower__userprofile")
+        .prefetch_related(google_accounts_prefetch("follower"))
+    )
 
     if request_user.is_authenticated:
         queryset = queryset.annotate(
@@ -118,9 +120,11 @@ def get_following_queryset(username, request_user):
     target_user = get_target_user(username)
     ensure_profile_visible(target_user, request_user)
 
-    queryset = UserFollow.objects.filter(follower=target_user).select_related(
-        "following__userprofile"
-    ).prefetch_related(google_accounts_prefetch("following"))
+    queryset = (
+        UserFollow.objects.filter(follower=target_user)
+        .select_related("following__userprofile")
+        .prefetch_related(google_accounts_prefetch("following"))
+    )
 
     if request_user.is_authenticated:
         queryset = queryset.annotate(

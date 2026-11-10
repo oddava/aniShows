@@ -81,7 +81,7 @@ class CatalogSyncService:
                     When(rating__isnull=True, then=Value(1)),
                     default=Value(0),
                     output_field=IntegerField(),
-                )
+                ),
             )
             .order_by(
                 "popularity_missing",
@@ -155,7 +155,7 @@ class CatalogSyncService:
                     When(rating__isnull=True, then=Value(1)),
                     default=Value(0),
                     output_field=IntegerField(),
-                )
+                ),
             )
             .order_by(
                 "site_missing",
@@ -180,7 +180,10 @@ class CatalogSyncService:
 
             Anime.objects.filter(id__in=rank_updates).update(
                 trending_rank=Case(
-                    *[When(id=anime_id, then=Value(rank)) for anime_id, rank in rank_updates.items()],
+                    *[
+                        When(id=anime_id, then=Value(rank))
+                        for anime_id, rank in rank_updates.items()
+                    ],
                     default=Value(None),
                     output_field=IntegerField(),
                 )

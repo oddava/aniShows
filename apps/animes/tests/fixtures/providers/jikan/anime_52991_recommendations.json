@@ -1,0 +1,50 @@
+{
+  "data": [
+    {
+      "entry": {
+        "mal_id": 33352,
+        "url": "https://myanimelist.net/anime/33352/Violet_Evergarden",
+        "images": {
+          "jpg": {"image_url": "https://cdn.myanimelist.net/images/anime/1795/95088.jpg", "large_image_url": "https://cdn.myanimelist.net/images/anime/1795/95088l.jpg"},
+          "webp": {"image_url": "https://cdn.myanimelist.net/images/anime/1795/95088.webp", "large_image_url": "https://cdn.myanimelist.net/images/anime/1795/95088l.webp"}
+        },
+        "title": "Violet Evergarden"
+      },
+      "url": "https://myanimelist.net/recommendations/anime/33352-52991",
+      "votes": 41
+    },
+    {
+      "entry": {
+        "mal_id": 33352,
+        "url": "https://myanimelist.net/anime/33352/Violet_Evergarden",
+        "images": {},
+        "title": "Violet Evergarden (dup)"
+      },
+      "url": "https://myanimelist.net/recommendations/anime/33352-52991",
+      "votes": 3
+    },
+    {
+      "entry": {
+        "mal_id": 37779,
+        "url": "https://myanimelist.net/anime/37779/Yakusoku_no_Neverland",
+        "images": {"jpg": {"image_url": "http://myanimelist.net/images/anime/1125/96929.jpg"}},
+        "title": "Yakusoku no Neverland"
+      },
+      "url": "https://myanimelist.net/recommendations/anime/37779-52991",
+      "votes": 12
+    },
+    {
+      "entry": {"mal_id": null, "title": "Broken"},
+      "votes": 1
+    },
+    {
+      "entry": {
+        "mal_id": 9253,
+        "url": "https://myanimelist.net/anime/9253/Steins_Gate",
+        "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/anime/1935/127974.jpg"}},
+        "title": "Steins;Gate"
+      },
+      "votes": 9
+    }
+  ]
+}

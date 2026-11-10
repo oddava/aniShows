@@ -73,9 +73,7 @@ class UserProfileView(APIView):
                 "request_keys": sorted(request.data.keys()),
             },
         )
-        serializer = UserProfileUpdateSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = UserProfileUpdateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         logger.info(
@@ -103,12 +101,7 @@ class UserProfileView(APIView):
                 exc,
             )
             return Response(
-                {
-                    "detail": (
-                        "Media storage is temporarily unavailable. "
-                        "Please try again shortly."
-                    )
-                },
+                {"detail": ("Media storage is temporarily unavailable. Please try again shortly.")},
                 status=503,
             )
         except ValidationError:

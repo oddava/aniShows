@@ -36,10 +36,10 @@ def build_thread_queryset(user):
 
 
 def build_post_queryset(user):
-    queryset = Post.objects.select_related(
-        "author", "author__userprofile", "thread"
-    ).prefetch_related(_GOOGLE_ACCOUNTS_PREFETCH_AUTHOR).annotate(
-        reply_count=Count("replies")
+    queryset = (
+        Post.objects.select_related("author", "author__userprofile", "thread")
+        .prefetch_related(_GOOGLE_ACCOUNTS_PREFETCH_AUTHOR)
+        .annotate(reply_count=Count("replies"))
     )
 
     if user.is_authenticated:

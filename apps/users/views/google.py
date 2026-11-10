@@ -57,7 +57,9 @@ class GoogleLogin(SocialLoginView):
         if not requested_callback:
             return default_callback
 
-        normalized_callback = urlunsplit(urlsplit(requested_callback)._replace(query="", fragment=""))
+        normalized_callback = urlunsplit(
+            urlsplit(requested_callback)._replace(query="", fragment="")
+        )
         if normalized_callback not in self._allowed_callback_urls():
             logger.warning(
                 "Rejected non-whitelisted Google callback URL",

@@ -1,0 +1,132 @@
+{
+  "list": {
+    "url": "/api/v1/anime/?page_size=24",
+    "cold_ms": 244.1,
+    "cold_p95_ms": 284.7,
+    "warm_ms": 5.1,
+    "warm_p95_ms": 9.1,
+    "cold_queries": 4,
+    "cold_sql_ms": 209.5,
+    "response_kb": 18.1
+  },
+  "list_sorted_rating": {
+    "url": "/api/v1/anime/?page_size=24&sort=rating",
+    "cold_ms": 47.2,
+    "cold_p95_ms": 57.8,
+    "warm_ms": 4.6,
+    "warm_p95_ms": 6.2,
+    "cold_queries": 4,
+    "cold_sql_ms": 19.0,
+    "response_kb": 17.7
+  },
+  "search": {
+    "url": "/api/v1/anime/?q=Blade",
+    "cold_ms": 376.8,
+    "cold_p95_ms": 406.1,
+    "warm_ms": 4.7,
+    "warm_p95_ms": 7.2,
+    "cold_queries": 4,
+    "cold_sql_ms": 352.0,
+    "response_kb": 15.2
+  },
+  "detail": {
+    "url": "/api/v1/anime/perf-000694/",
+    "cold_ms": 32.9,
+    "cold_p95_ms": 39.2,
+    "warm_ms": 3.4,
+    "warm_p95_ms": 5.0,
+    "cold_queries": 8,
+    "cold_sql_ms": 10.0,
+    "response_kb": 2.0
+  },
+  "trending": {
+    "url": "/api/v1/anime/trending/",
+    "cold_ms": 37.3,
+    "cold_p95_ms": 49.3,
+    "warm_ms": 4.7,
+    "warm_p95_ms": 6.4,
+    "cold_queries": 4,
+    "cold_sql_ms": 16.0,
+    "response_kb": 17.4
+  },
+  "top_rated": {
+    "url": "/api/v1/anime/top_rated/",
+    "cold_ms": 39.7,
+    "cold_p95_ms": 44.0,
+    "warm_ms": 4.9,
+    "warm_p95_ms": 7.9,
+    "cold_queries": 4,
+    "cold_sql_ms": 17.5,
+    "response_kb": 19.0
+  },
+  "browse_rows": {
+    "url": "/api/v1/anime/browse-rows/",
+    "cold_ms": 177.8,
+    "cold_p95_ms": 219.6,
+    "warm_ms": 6.2,
+    "warm_p95_ms": 8.7,
+    "cold_queries": 14,
+    "cold_sql_ms": 95.0,
+    "response_kb": 36.0
+  },
+  "schedule": {
+    "url": "/api/v1/anime/schedule/",
+    "cold_ms": 344.6,
+    "cold_p95_ms": 578.9,
+    "warm_ms": 350.6,
+    "warm_p95_ms": 572.7,
+    "cold_queries": 4,
+    "cold_sql_ms": 37.0,
+    "response_kb": 447.5
+  },
+  "list_sorted_newest": {
+    "url": "/api/v1/anime/?page_size=24&sort=newest",
+    "cold_ms": 153.0,
+    "cold_p95_ms": 178.7,
+    "warm_ms": 4.9,
+    "warm_p95_ms": 7.0,
+    "cold_queries": 4,
+    "cold_sql_ms": 127.0,
+    "response_kb": 18.0
+  },
+  "list_sorted_trending": {
+    "url": "/api/v1/anime/?page_size=24&sort=trending",
+    "cold_ms": 243.2,
+    "cold_p95_ms": 281.2,
+    "warm_ms": 5.4,
+    "warm_p95_ms": 8.7,
+    "cold_queries": 4,
+    "cold_sql_ms": 208.5,
+    "response_kb": 17.8
+  },
+  "list_season": {
+    "url": "/api/v1/anime/?page_size=24&season=fall&year=2026",
+    "cold_ms": 76.1,
+    "cold_p95_ms": 96.3,
+    "warm_ms": 6.7,
+    "warm_p95_ms": 11.5,
+    "cold_queries": 4,
+    "cold_sql_ms": 42.0,
+    "response_kb": 17.9
+  },
+  "list_genre": {
+    "url": "/api/v1/anime/?page_size=24&genre=action",
+    "cold_ms": 216.3,
+    "cold_p95_ms": 236.4,
+    "warm_ms": 5.7,
+    "warm_p95_ms": 8.1,
+    "cold_queries": 5,
+    "cold_sql_ms": 178.0,
+    "response_kb": 18.2
+  },
+  "public_profile": {
+    "url": "/api/v1/users/perf_viewer/",
+    "cold_ms": 12.4,
+    "cold_p95_ms": 14.3,
+    "warm_ms": 3.6,
+    "warm_p95_ms": 5.5,
+    "cold_queries": 4,
+    "cold_sql_ms": 4.0,
+    "response_kb": 0.4
+  }
+}

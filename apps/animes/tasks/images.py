@@ -9,7 +9,6 @@ Includes thumbnail generation for anime images.
 import hashlib
 
 import httpx
-from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
@@ -19,7 +18,6 @@ from ...shared.celery import observed_shared_task
 from ...shared.errors import iter_exception_chain
 from ...shared.task_lock import cache_lock
 from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
-from .base import run_async_in_task
 
 try:
     from botocore.exceptions import (
@@ -153,7 +151,7 @@ def _is_storage_available() -> bool:
         return False
 
 
-async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
+def _fetch_jikan_fallback_banner(mal_id: int) -> str:
     """Fetch high-res promotional image from Jikan API to use as a banner fallback."""
     if not mal_id:
         return None
@@ -162,14 +160,14 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
 
     for attempt in range(3):
         try:
-            await limiter.acquire()
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            limiter.acquire()
+            with httpx.Client(timeout=10.0) as client:
                 url = f"{JIKAN_BASE_URL}/anime/{mal_id}/pictures"
-                response = await client.get(url)
+                response = client.get(url)
 
                 if response.status_code == 429:
                     limiter.record_429()
-                    await backoff(2**attempt)
+                    backoff(2**attempt)
                     continue
 
                 if response.status_code >= 500:
@@ -180,7 +178,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
                         response.status_code,
                         attempt + 1,
                     )
-                    await backoff(2**attempt)
+                    backoff(2**attempt)
                     continue
 
                 if 400 <= response.status_code < 500:
@@ -204,9 +202,9 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
 
                 # Find the largest picture
                 for pic in data:
-                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get("jpg", {}).get(
-                        "large_image_url"
-                    )
+                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get(
+                        "jpg", {}
+                    ).get("large_image_url")
                     if large_img:
                         return large_img
         except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError):
@@ -217,7 +215,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
                 attempt + 1,
                 exc_info=True,
             )
-            await backoff(2**attempt)
+            backoff(2**attempt)
         except httpx.HTTPStatusError as exc:
             limiter.record_error()
             status_code = exc.response.status_code if exc.response is not None else "unknown"
@@ -230,7 +228,7 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
             )
             if exc.response is not None and 400 <= exc.response.status_code < 500:
                 return None
-            await backoff(2**attempt)
+            backoff(2**attempt)
         except (httpx.HTTPError, AttributeError, TypeError):
             # Other transport errors, or a payload that is not the expected
             # {"data": [{...}]} shape.
@@ -260,7 +258,7 @@ def fetch_anime_images(
     try:
         anime = Anime.objects.get(id=anime_id)
 
-        async def _download_job():
+        def _download_job():
             service = JikanService(enable_caching=False, enable_rate_limiting=False)
             try:
                 nonlocal banner_url
@@ -271,27 +269,27 @@ def fetch_anime_images(
                 # Persist external URLs so the API can always fall back even while
                 # local storage is degraded.
                 if cover_url_resolved and cover_url_resolved != anime.cover_image_external_url:
-                    await service._save_external_url(
+                    service._save_external_url(
                         anime, "cover_image_external_url", cover_url_resolved
                     )
                 if banner_url and banner_url != anime.banner_image_external_url:
-                    await service._save_external_url(anime, "banner_image_external_url", banner_url)
+                    service._save_external_url(anime, "banner_image_external_url", banner_url)
 
                 # Step 1: Jikan Fallback if no banner from AniList
                 if not banner_url and not anime.banner_image and mal_id:
                     logger.info(f"No banner for {anime.title}, attempting Jikan fallback...")
-                    banner_url = await _fetch_jikan_fallback_banner(mal_id)
+                    banner_url = _fetch_jikan_fallback_banner(mal_id)
                     if banner_url:
                         # Save external URL reference
                         anime.banner_image_external_url = banner_url
-                        await service._save_external_url(anime, "banner_image_external_url", banner_url)
+                        service._save_external_url(anime, "banner_image_external_url", banner_url)
 
-                async def _clear_local_image(field_name: str):
+                def _clear_local_image(field_name: str):
                     image_field = getattr(anime, field_name, None)
                     if not image_field:
                         return
                     try:
-                        await sync_to_async(image_field.delete)(save=False)
+                        image_field.delete(save=False)
                     except _STORAGE_ERRORS:
                         logger.warning(
                             "Failed deleting existing %s for anime %s",
@@ -300,28 +298,28 @@ def fetch_anime_images(
                             exc_info=True,
                         )
                     setattr(anime, field_name, "")
-                    await sync_to_async(anime.save)(update_fields=[field_name])
+                    anime.save(update_fields=[field_name])
 
                 # Step 2: Download the Images natively
                 if cover_url_resolved and (force_replace or not anime.cover_image):
                     if force_replace and anime.cover_image:
-                        await _clear_local_image("cover_image")
-                    cover_data = await service.download_image(cover_url_resolved)
+                        _clear_local_image("cover_image")
+                    cover_data = service.download_image(cover_url_resolved)
                     if cover_data:
                         filename = _image_filename(anime.slug, "cover", cover_url_resolved)
-                        await service._save_image(anime, "cover_image", filename, cover_data)
+                        service._save_image(anime, "cover_image", filename, cover_data)
 
                 if banner_url and (force_replace or not anime.banner_image):
                     if force_replace and anime.banner_image:
-                        await _clear_local_image("banner_image")
-                    banner_data = await service.download_image(banner_url)
+                        _clear_local_image("banner_image")
+                    banner_data = service.download_image(banner_url)
                     if banner_data:
                         filename = _image_filename(anime.slug, "banner", banner_url)
-                        await service._save_image(anime, "banner_image", filename, banner_data)
+                        service._save_image(anime, "banner_image", filename, banner_data)
             finally:
-                await service.close()
+                service.close()
 
-        run_async_in_task(_download_job())
+        _download_job()
 
         return {"anime_id": anime_id, "status": "success", "storage_retry": storage_retry}
 
@@ -406,12 +404,16 @@ def heal_missing_anime_media(self, batch_size: int | None = None):
             }
 
         resolved_batch_size = max(int(batch_size or settings.MEDIA_SELF_HEAL_BATCH_SIZE), 1)
-        missing_cover = (Q(cover_image__isnull=True) | Q(cover_image="")) & Q(
-            cover_image_external_url__isnull=False
-        ) & ~Q(cover_image_external_url="")
-        missing_banner = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
-            banner_image_external_url__isnull=False
-        ) & ~Q(banner_image_external_url="")
+        missing_cover = (
+            (Q(cover_image__isnull=True) | Q(cover_image=""))
+            & Q(cover_image_external_url__isnull=False)
+            & ~Q(cover_image_external_url="")
+        )
+        missing_banner = (
+            (Q(banner_image__isnull=True) | Q(banner_image=""))
+            & Q(banner_image_external_url__isnull=False)
+            & ~Q(banner_image_external_url="")
+        )
         missing_banner_with_mal = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
             mal_id__isnull=False
         )
@@ -496,7 +498,9 @@ def generate_image_thumbnails(self, anime_id: int):
                 )
 
         if attempted_batches and failed_batches == attempted_batches and generated_count == 0:
-            raise last_error or RuntimeError("Thumbnail generation failed for all requested image variants")
+            raise last_error or RuntimeError(
+                "Thumbnail generation failed for all requested image variants"
+            )
 
         logger.info(
             f"Thumbnail generation complete for {anime.title}. Generated: {generated_count}"

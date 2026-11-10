@@ -50,9 +50,7 @@ class SocialLoginSerializer(Serializer):
         request = self._get_request()
 
         if not view:
-            raise ValidationError(
-                _("View is not defined, pass it as a context variable")
-            )
+            raise ValidationError(_("View is not defined, pass it as a context variable"))
 
         adapter_class = getattr(view, "adapter_class", None)
         if not adapter_class:
@@ -61,7 +59,12 @@ class SocialLoginSerializer(Serializer):
         try:
             adapter = adapter_class(request)
             app = adapter.get_provider().app
-        except (ImproperlyConfigured, MultipleObjectsReturned, ObjectDoesNotExist, ValueError) as exc:
+        except (
+            ImproperlyConfigured,
+            MultipleObjectsReturned,
+            ObjectDoesNotExist,
+            ValueError,
+        ) as exc:
             logger.exception(
                 "Social auth provider configuration error",
                 extra={"provider": getattr(adapter_class, "provider_id", "unknown")},
@@ -106,9 +109,7 @@ class SocialLoginSerializer(Serializer):
                     },
                     exc_info=True,
                 )
-                raise ValidationError(
-                    _("Failed to exchange code for access token")
-                ) from exc
+                raise ValidationError(_("Failed to exchange code for access token")) from exc
 
             access_token = token["access_token"]
             tokens_to_parse = {"access_token": access_token}
@@ -117,9 +118,7 @@ class SocialLoginSerializer(Serializer):
                 if key in token:
                     tokens_to_parse[key] = token[key]
         else:
-            raise ValidationError(
-                _("Incorrect input. access_token or code is required.")
-            )
+            raise ValidationError(_("Incorrect input. access_token or code is required."))
 
         social_token = adapter.parse_token(tokens_to_parse)
         social_token.app = app

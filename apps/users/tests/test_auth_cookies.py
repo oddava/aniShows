@@ -203,7 +203,9 @@ class WebSocketTicketTests(APITestCase):
         # the test's DB connection.
         middleware = ws_auth.WSTicketAuthMiddleware(inner)
         with patch.object(ws_auth, "get_user_from_ticket", sync_to_async(ws_auth.user_for_ticket)):
-            async_to_sync(middleware)({"type": "websocket", "query_string": query_string}, None, None)
+            async_to_sync(middleware)(
+                {"type": "websocket", "query_string": query_string}, None, None
+            )
         return captured["user"]
 
     def test_middleware_authenticates_with_ticket_once(self):

@@ -15,7 +15,9 @@ class MigrationHealthTests(SimpleTestCase):
     ):
         mock_connections.__getitem__.return_value = Mock()
         mock_executor = mock_executor_cls.return_value
-        mock_executor.loader.graph.leaf_nodes.return_value = [("users", "0036_userprofile_preferred_timezone")]
+        mock_executor.loader.graph.leaf_nodes.return_value = [
+            ("users", "0036_userprofile_preferred_timezone")
+        ]
         mock_executor.migration_plan.return_value = []
 
         self.assertFalse(has_pending_migrations())

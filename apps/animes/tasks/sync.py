@@ -9,14 +9,13 @@ catalog slices are derived from the existing Anime table.
 
 from datetime import datetime
 
-from asgiref.sync import sync_to_async
 from django.db import DatabaseError
 
 from ...shared.celery import observed_shared_task
 from ..services.catalog_sync import CatalogSyncService
 from ..services.jikan import JikanService
 from ..services.public_anime_service import AnimeQueryService
-from .base import BaseTask, run_async_in_task
+from .base import BaseTask
 
 SYNC_CONFIGS = {
     "trending": {
@@ -73,19 +72,17 @@ class SyncAnimeCatalogTask(BaseTask):
         config = SYNC_CONFIGS[sync_type]
         logger.info("Starting %s sync (limit: %s)", sync_type, limit)
 
-        return run_async_in_task(self._async_sync(sync_type, limit, config, **kwargs))
+        return self._run_sync(sync_type, limit, config, **kwargs)
 
-    async def _async_sync(self, sync_type: str, limit: int, config: dict, **kwargs):
-        """Async implementation of sync."""
+    def _run_sync(self, sync_type: str, limit: int, config: dict, **kwargs):
         if sync_type == "trending":
             task_id = getattr(self.request, "id", None)
             service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
-                data = await service.get_recent_updates(limit=limit)
+                data = service.get_recent_updates(limit=limit)
 
                 total_items = len(data)
 
-                @sync_to_async
                 def update_job_progress(processed, total):
                     if not task_id:
                         return
@@ -103,7 +100,7 @@ class SyncAnimeCatalogTask(BaseTask):
                     except (CeleryTaskResult.DoesNotExist, DatabaseError):
                         pass  # progress reporting is best effort
 
-                await update_job_progress(0, total_items)
+                update_job_progress(0, total_items)
 
                 if not data:
                     logger.warning("No data returned for %s sync", sync_type)
@@ -129,10 +126,10 @@ class SyncAnimeCatalogTask(BaseTask):
                         "minimum_expected": minimum_expected_results,
                     }
 
-                ranked_ids = await self._sync_trending_anime_rows(service, data)
-                ranked_count = await sync_to_async(CatalogSyncService().refresh_trending_ranks)(ranked_ids)
+                ranked_ids = self._sync_trending_anime_rows(service, data)
+                ranked_count = CatalogSyncService().refresh_trending_ranks(ranked_ids)
 
-                await update_job_progress(total_items, total_items)
+                update_job_progress(total_items, total_items)
                 self.metrics.record_records(ranked_count)
                 self.metrics.record_api_call("jikan", total_items)
 
@@ -150,9 +147,9 @@ class SyncAnimeCatalogTask(BaseTask):
                 self.metrics.record_error()
                 raise self.retry(exc=exc)
             finally:
-                await service.close()
+                service.close()
 
-        async with self.service_context() as service:
+        with self.service_context() as service:
             try:
                 method_name = config["method"]
                 method_kwargs = {**kwargs, "limit": limit}
@@ -164,12 +161,11 @@ class SyncAnimeCatalogTask(BaseTask):
                     logger.info("Syncing local %s catalog for %s %s", sync_type, season, year)
 
                 method = getattr(service, method_name)
-                anime_ids = await sync_to_async(method)(**method_kwargs)
+                anime_ids = method(**method_kwargs)
 
                 task_id = getattr(self.request, "id", None)
                 total_items = len(anime_ids)
 
-                @sync_to_async
                 def update_job_progress(processed, total):
                     if not task_id:
                         return
@@ -187,13 +183,13 @@ class SyncAnimeCatalogTask(BaseTask):
                     except (CeleryTaskResult.DoesNotExist, DatabaseError):
                         pass  # progress reporting is best effort
 
-                await update_job_progress(0, total_items)
+                update_job_progress(0, total_items)
 
                 ranked_count = 0
                 if config.get("update_ranks"):
-                    ranked_count = await sync_to_async(service.refresh_trending_ranks)(anime_ids)
+                    ranked_count = service.refresh_trending_ranks(anime_ids)
 
-                await update_job_progress(total_items, total_items)
+                update_job_progress(total_items, total_items)
                 self.metrics.record_records(total_items)
 
                 if total_items == 0:
@@ -243,7 +239,7 @@ class SyncAnimeCatalogTask(BaseTask):
             return 0
         return min(resolved_limit, SyncAnimeCatalogTask.MIN_TRENDING_RESULTS)
 
-    async def _sync_trending_anime_rows(
+    def _sync_trending_anime_rows(
         self,
         service: JikanService,
         items: list[dict],
@@ -258,7 +254,7 @@ class SyncAnimeCatalogTask(BaseTask):
             if not mal_id:
                 continue
 
-            anime = await service._save_anime_to_db_async(item)
+            anime = service.save_anime_to_db(item)
             if anime.id in seen_ids:
                 continue
 

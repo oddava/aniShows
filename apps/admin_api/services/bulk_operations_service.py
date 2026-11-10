@@ -75,7 +75,9 @@ def _handle_anime_bulk(operation: str, ids, data, request_user):
             raise BulkOperationError("status field required for update_status operation.", 400)
         allowed_statuses = {choice for choice, _ in Anime.AnimeStatus.choices}
         if new_status not in allowed_statuses:
-            raise BulkOperationError(f"Invalid status. Allowed values: {', '.join(sorted(allowed_statuses))}.", 400)
+            raise BulkOperationError(
+                f"Invalid status. Allowed values: {', '.join(sorted(allowed_statuses))}.", 400
+            )
         queryset = Anime.objects.filter(id__in=ids)
         updated_count = queryset.update(status=new_status)
         return BulkOperationResult(
@@ -123,11 +125,7 @@ def _handle_review_bulk(operation: str, ids):
 
 
 def _handle_user_bulk(operation: str, ids, request_user):
-    users = (
-        User.objects.filter(id__in=ids)
-        .exclude(id=request_user.id)
-        .exclude(is_superuser=True)
-    )
+    users = User.objects.filter(id__in=ids).exclude(id=request_user.id).exclude(is_superuser=True)
     count = users.count()
 
     if count == 0:
@@ -142,9 +140,7 @@ def _handle_user_bulk(operation: str, ids, request_user):
 
     if operation == "unban":
         users.update(is_active=True)
-        return BulkOperationResult(
-            payload={"message": f"Unbanned {count} users."}, status_code=200
-        )
+        return BulkOperationResult(payload={"message": f"Unbanned {count} users."}, status_code=200)
 
     raise BulkOperationError(f"Unsupported user operation: {operation}", 400)
 

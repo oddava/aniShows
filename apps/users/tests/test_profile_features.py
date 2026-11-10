@@ -18,6 +18,7 @@ from ..models import UserAnimeList, UserFollow, UserProfile, UserStats
 
 User = get_user_model()
 
+
 class ProfileFeaturesTest(APITestCase):
     def setUp(self):
         from django.core.cache import cache
@@ -147,7 +148,9 @@ class ProfileFeaturesTest(APITestCase):
             response = self.client.get(self.profile_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertLessEqual(len(queries), 4, "\n".join(q["sql"][:160] for q in queries.captured_queries))
+        self.assertLessEqual(
+            len(queries), 4, "\n".join(q["sql"][:160] for q in queries.captured_queries)
+        )
 
     @patch(
         "apps.core.services.url_validator.URLValidator._resolve_public_ips",
@@ -196,11 +199,7 @@ class ProfileFeaturesTest(APITestCase):
         for index in range(6):
             response = self.client.patch(
                 self.profile_url,
-                {
-                    "social_links": [
-                        {"platform": "GitHub", "value": f"testuser{index}"}
-                    ]
-                },
+                {"social_links": [{"platform": "GitHub", "value": f"testuser{index}"}]},
                 format="json",
             )
 
@@ -464,7 +463,7 @@ class ProfileFeaturesTest(APITestCase):
 
     def test_profile_update_bio_decodes_legacy_escaped_html(self):
         """Escaped legacy bios should be normalized back to valid HTML on save."""
-        data = {"bio": '&lt;p align=&quot;center&quot;&gt;hello&lt;/p&gt;'}
+        data = {"bio": "&lt;p align=&quot;center&quot;&gt;hello&lt;/p&gt;"}
         res = self.client.patch(self.profile_url, data)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.profile.refresh_from_db()

@@ -51,7 +51,9 @@ class TestSendPendingNotifications(TestCase):
         self.assertEqual(mock_send_email.call_count, 0)
 
     @patch("apps.users.services.email_service.send_email_task.delay")
-    @patch("apps.core.services.celery_tasks.PushService.has_active_subscriptions", return_value=True)
+    @patch(
+        "apps.core.services.celery_tasks.PushService.has_active_subscriptions", return_value=True
+    )
     @patch("apps.core.services.celery_tasks.PushService.send_to_user")
     def test_sends_before_a_crash_are_not_repeated_by_the_retry(
         self, mock_send_push, _mock_active, _mock_email

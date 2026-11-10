@@ -1,0 +1,79 @@
+{
+  "data": [
+    {
+      "character": {
+        "mal_id": 184947,
+        "url": "https://myanimelist.net/character/184947/Frieren",
+        "images": {
+          "jpg": {"image_url": "https://cdn.myanimelist.net/images/characters/7/525105.jpg"},
+          "webp": {
+            "image_url": "https://cdn.myanimelist.net/images/characters/7/525105.webp",
+            "small_image_url": "https://cdn.myanimelist.net/images/characters/7/525105t.webp"
+          }
+        },
+        "name": "Frieren",
+        "name_kanji": "フリーレン",
+        "about": "An elven mage who was part of the hero's party."
+      },
+      "role": "Main",
+      "favorites": 21403,
+      "voice_actors": [
+        {
+          "person": {
+            "mal_id": 34785,
+            "url": "https://myanimelist.net/people/34785/Atsumi_Tanezaki",
+            "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/voiceactors/3/63374.jpg"}},
+            "name": "Tanezaki, Atsumi"
+          },
+          "language": "Japanese"
+        },
+        {
+          "person": {
+            "mal_id": 56021,
+            "url": "https://myanimelist.net/people/56021/Mallorie_Rodak",
+            "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/voiceactors/2/70107.jpg"}},
+            "name": "Rodak, Mallorie"
+          },
+          "language": "English"
+        }
+      ]
+    },
+    {
+      "character": {
+        "mal_id": 188176,
+        "url": "https://myanimelist.net/character/188176/Fern",
+        "images": {
+          "jpg": {"image_url": "https://cdn.myanimelist.net/images/characters/9/526119.jpg"},
+          "webp": {"image_url": "https://cdn.myanimelist.net/images/characters/9/526119.webp"}
+        },
+        "name": "Fern"
+      },
+      "role": "Supporting",
+      "favorites": 9876,
+      "voice_actors": [
+        {
+          "person": {
+            "mal_id": 65731,
+            "url": "https://myanimelist.net/people/65731/Kana_Ichinose",
+            "images": {"webp": {"image_url": "https://cdn.myanimelist.net/images/voiceactors/1/68120.webp"}},
+            "name": "Ichinose, Kana"
+          },
+          "language": "Japanese"
+        }
+      ]
+    },
+    {
+      "character": {
+        "mal_id": 0,
+        "url": "",
+        "images": {},
+        "name": " Village Elder "
+      },
+      "role": "",
+      "favorites": 0,
+      "voice_actors": [
+        {"person": {}, "language": "Japanese"}
+      ]
+    }
+  ]
+}

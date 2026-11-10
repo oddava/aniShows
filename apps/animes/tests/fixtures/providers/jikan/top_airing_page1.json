@@ -1,0 +1,42 @@
+{
+  "pagination": {
+    "last_visible_page": 40,
+    "has_next_page": true,
+    "current_page": 1,
+    "items": {"count": 2, "total": 1000, "per_page": 2}
+  },
+  "data": [
+    {
+      "mal_id": 21,
+      "url": "https://myanimelist.net/anime/21/One_Piece",
+      "images": {"jpg": {"large_image_url": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"}},
+      "title": "One Piece",
+      "title_english": "One Piece",
+      "title_japanese": "ONE PIECE",
+      "type": "TV",
+      "source": "Manga",
+      "episodes": null,
+      "status": "Currently Airing",
+      "aired": {"prop": {"from": {"day": 20, "month": 10, "year": 1999}, "to": {}}},
+      "duration": "24 min",
+      "score": 8.73,
+      "rank": 47,
+      "popularity": 18,
+      "members": 2512345,
+      "synopsis": "Pirates.",
+      "season": "fall",
+      "year": 1999,
+      "broadcast": {"day": "Sundays", "time": "23:15", "timezone": "Asia/Tokyo"},
+      "studios": [{"name": "Toei Animation"}],
+      "genres": [{"name": "Action"}]
+    },
+    {
+      "mal_id": 57334,
+      "url": "https://myanimelist.net/anime/57334/Dandadan",
+      "title": "Dandadan",
+      "type": "TV",
+      "status": "Currently Airing",
+      "members": 702311
+    }
+  ]
+}

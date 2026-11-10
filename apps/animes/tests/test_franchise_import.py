@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
@@ -50,8 +50,8 @@ class FranchiseImportServiceTests(TestCase):
         }
         mock_jikan_service_cls.normalize_external_image_url.side_effect = lambda value: value or ""
         mock_service = mock_jikan_service_cls.return_value
-        mock_service.resolve_media_for_anime = AsyncMock(return_value=anilist_payload)
-        mock_service.close = AsyncMock(return_value=None)
+        mock_service.resolve_media_for_anime = MagicMock(return_value=anilist_payload)
+        mock_service.close = MagicMock(return_value=None)
         mock_service.save_anime_to_db.return_value = existing
 
         service = FranchiseImportService()
@@ -65,9 +65,9 @@ class FranchiseImportServiceTests(TestCase):
 
         self.assertEqual(source.relations.get().to_anime, existing)
 
-        mock_service.resolve_media_for_anime.assert_awaited_once_with(existing)
+        mock_service.resolve_media_for_anime.assert_called_once_with(existing)
         mock_service.save_anime_to_db.assert_called_once_with(anilist_payload)
-        mock_service.close.assert_awaited_once()
+        mock_service.close.assert_called_once()
 
     @patch("apps.animes.signals.enrich_metadata.delay")
     @patch("apps.animes.services.franchise_import.JikanService")

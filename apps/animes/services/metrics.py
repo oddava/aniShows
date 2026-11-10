@@ -118,17 +118,36 @@ def _safe_metric(metric_cls, *args, **kwargs):
 
     # Fallback: return a no-op dummy
     if PROMETHEUS_AVAILABLE:
+
         class _NoOpLabels:
-            def inc(self, *a, **kw): pass
-            def observe(self, *a, **kw): pass
-            def set(self, *a, **kw): pass
-            def info(self, *a, **kw): pass
+            def inc(self, *a, **kw):
+                pass
+
+            def observe(self, *a, **kw):
+                pass
+
+            def set(self, *a, **kw):
+                pass
+
+            def info(self, *a, **kw):
+                pass
+
         class _NoOp:
-            def labels(self, *a, **kw): return _NoOpLabels()
-            def inc(self, *a, **kw): pass
-            def observe(self, *a, **kw): pass
-            def set(self, *a, **kw): pass
-            def info(self, *a, **kw): pass
+            def labels(self, *a, **kw):
+                return _NoOpLabels()
+
+            def inc(self, *a, **kw):
+                pass
+
+            def observe(self, *a, **kw):
+                pass
+
+            def set(self, *a, **kw):
+                pass
+
+            def info(self, *a, **kw):
+                pass
+
         return _NoOp()
     return DummyMetric()
 
@@ -270,6 +289,7 @@ _CB_STATE_MAP = {
     "HALF_OPEN": 2,
 }
 
+
 def update_circuit_breaker_state(name: str, state: str):
     """Update the circuit breaker state metric.
 
@@ -279,6 +299,7 @@ def update_circuit_breaker_state(name: str, state: str):
     """
     if PROMETHEUS_AVAILABLE:
         CIRCUIT_BREAKER_STATE.labels(name=name).set(_CB_STATE_MAP.get(state, 0))
+
 
 @contextmanager
 def task_timer(task_name: str, queue: str = "default"):
@@ -303,12 +324,11 @@ def task_timer(task_name: str, queue: str = "default"):
         raise
     finally:
         duration = time.time() - start_time
-        TASK_EXECUTION_TIME.labels(
-            task_name=task_name, queue=queue, status=status
-        ).observe(duration)
-        TASK_EXECUTION_COUNT.labels(
-            task_name=task_name, queue=queue, status=status
-        ).inc()
+        TASK_EXECUTION_TIME.labels(task_name=task_name, queue=queue, status=status).observe(
+            duration
+        )
+        TASK_EXECUTION_COUNT.labels(task_name=task_name, queue=queue, status=status).inc()
+
 
 def timed_task(queue: str = "default"):
     """Decorator to automatically time task execution.
@@ -337,6 +357,7 @@ def timed_task(queue: str = "default"):
         return wrapper
 
     return decorator
+
 
 def increment_counter(metric_name: str, labels: dict | None = None, value: int = 1):
     """Increment a counter metric.
@@ -384,10 +405,11 @@ def api_timer(service: str, endpoint: str = "unknown"):
         raise
     finally:
         duration = time.time() - start_time
-        API_CALL_DURATION.labels(
-            service=service, endpoint=endpoint, status=status
-        ).observe(duration)
+        API_CALL_DURATION.labels(service=service, endpoint=endpoint, status=status).observe(
+            duration
+        )
         API_CALL_COUNT.labels(service=service, endpoint=endpoint, status=status).inc()
+
 
 def update_queue_size(queue_name: str, size: int):
     """Update the queue size gauge.

@@ -21,13 +21,23 @@ class AdultContentShelfTests(APITestCase):
         self.addCleanup(patcher.stop)
         hentai = Genre.objects.create(name="Hentai", slug="hentai")
         self.adult = Anime.objects.create(
-            title="Adult Hit", slug="adult-hit", synopsis="x", rating=9.9,
-            member_count=900_000, trending_rank=1, status=Anime.AnimeStatus.finished,
+            title="Adult Hit",
+            slug="adult-hit",
+            synopsis="x",
+            rating=9.9,
+            member_count=900_000,
+            trending_rank=1,
+            status=Anime.AnimeStatus.finished,
         )
         self.adult.genres.add(hentai)
         self.safe = Anime.objects.create(
-            title="Safe Hit", slug="safe-hit", synopsis="x", rating=9.0,
-            member_count=800_000, trending_rank=2, status=Anime.AnimeStatus.finished,
+            title="Safe Hit",
+            slug="safe-hit",
+            synopsis="x",
+            rating=9.0,
+            member_count=800_000,
+            trending_rank=2,
+            status=Anime.AnimeStatus.finished,
         )
         self.opted_in = User.objects.create_user(
             username="adult", email="adult@example.com", password="x"
@@ -56,7 +66,9 @@ class ScheduleDayTimezoneTests(APITestCase):
         from ..services.public_anime_service import AnimeQueryService
 
         anime = Anime(
-            title="T", slug="t", broadcast_timezone="/x",
+            title="T",
+            slug="t",
+            broadcast_timezone="/x",
             next_airing_date=timezone.now(),
         )
         self.assertIsNotNone(AnimeQueryService.resolve_schedule_day(anime))

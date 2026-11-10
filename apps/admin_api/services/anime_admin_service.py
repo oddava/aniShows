@@ -121,7 +121,9 @@ def set_ids_and_retry(state, anilist_id, mal_id) -> AdminAnimeActionResult:
             conflict = Anime.objects.filter(anilist_id=anilist_id).exclude(id=anime.id).first()
             if conflict:
                 return AdminAnimeActionResult(
-                    payload={"detail": f"AniList ID {anilist_id} already belongs to anime #{conflict.id}."},
+                    payload={
+                        "detail": f"AniList ID {anilist_id} already belongs to anime #{conflict.id}."
+                    },
                     status_code=400,
                 )
             anime.anilist_id = anilist_id

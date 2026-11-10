@@ -4,7 +4,7 @@ This command fetches external image URLs from AniList for anime
 that have anilist_id but no external image URLs stored.
 """
 
-import asyncio
+import time
 
 from django.core.management.base import BaseCommand
 from django.db.models import Q
@@ -59,8 +59,7 @@ class Command(BaseCommand):
 
             if not force:
                 queryset = queryset.filter(
-                    Q(cover_image_external_url="")
-                    | Q(cover_image_external_url__isnull=True)
+                    Q(cover_image_external_url="") | Q(cover_image_external_url__isnull=True)
                 )
 
             self.stdout.write(f"Found {queryset.count()} anime to process")
@@ -70,20 +69,19 @@ class Command(BaseCommand):
             self.stdout.write(f"Limited to first {limit} anime")
 
         # Run async processing
-        asyncio.run(self._process_anime(queryset, batch_size))
+        self._process_anime(queryset, batch_size)
 
-    async def _process_anime(self, queryset, batch_size):
-        from asgiref.sync import sync_to_async
+    def _process_anime(self, queryset, batch_size):
 
         service = JikanService(enable_caching=False, enable_rate_limiting=True)
 
         # Fetch list synchronously before entering async context
-        anime_list = await sync_to_async(list)(queryset)
+        anime_list = list(queryset)
         total = len(anime_list)
 
         # Create sync wrapper for save
-        async def save_anime(anime, fields):
-            await sync_to_async(anime.save)(update_fields=fields)
+        def save_anime(anime, fields):
+            anime.save(update_fields=fields)
 
         if total == 0:
             self.stdout.write(self.style.SUCCESS("No anime to process!"))
@@ -101,21 +99,19 @@ class Command(BaseCommand):
             for idx, anime in enumerate(batch, start=i + 1):
                 try:
                     # Fetch from Jikan
-                    data = await service.get_anime_by_id(anime.anilist_id)
+                    data = service.get_anime_by_id(anime.anilist_id)
 
                     if not data:
                         self.stdout.write(
-                            self.style.WARNING(
-                                f"[{idx}/{total}] No data: {anime.title}"
-                            )
+                            self.style.WARNING(f"[{idx}/{total}] No data: {anime.title}")
                         )
                         failed += 1
                         continue
 
                     # Extract image URLs
-                    cover_url = data.get("coverImage", {}).get(
-                        "extraLarge"
-                    ) or data.get("coverImage", {}).get("large")
+                    cover_url = data.get("coverImage", {}).get("extraLarge") or data.get(
+                        "coverImage", {}
+                    ).get("large")
                     banner_url = data.get("bannerImage")
 
                     # Update anime
@@ -136,32 +132,28 @@ class Command(BaseCommand):
                         needs_save = True
 
                     if needs_save:
-                        await save_anime(
+                        save_anime(
                             anime,
                             ["cover_image_external_url", "banner_image_external_url"],
                         )
                         updated += 1
                         self.stdout.write(
-                            self.style.SUCCESS(
-                                f"[{idx}/{total}] Updated: {anime.title}"
-                            )
+                            self.style.SUCCESS(f"[{idx}/{total}] Updated: {anime.title}")
                         )
                     else:
                         skipped += 1
 
                 except Exception as e:
                     self.stdout.write(
-                        self.style.ERROR(
-                            f"[{idx}/{total}] Error processing '{anime.title}': {e}"
-                        )
+                        self.style.ERROR(f"[{idx}/{total}] Error processing '{anime.title}': {e}")
                     )
                     failed += 1
 
             # Small delay between batches to respect rate limits
             if i + batch_size < total:
-                await asyncio.sleep(1)
+                time.sleep(1)
 
-        await service.close()
+        service.close()
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS(f"Updated: {updated}"))

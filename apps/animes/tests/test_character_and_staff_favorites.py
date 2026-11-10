@@ -36,7 +36,9 @@ class CharacterAndStaffFavoriteTests(APITestCase):
         )
 
         UserProfile.objects.update_or_create(user=self.user, defaults={"email_verified": True})
-        UserProfile.objects.update_or_create(user=self.other_user, defaults={"email_verified": True})
+        UserProfile.objects.update_or_create(
+            user=self.other_user, defaults={"email_verified": True}
+        )
         UserProfile.objects.update_or_create(
             user=self.private_user,
             defaults={"email_verified": True, "is_private": True},

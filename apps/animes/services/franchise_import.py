@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from asgiref.sync import async_to_sync
 from django.core.cache import cache
 from django.db import DatabaseError
 
@@ -69,11 +68,13 @@ class FranchiseImportService:
 
         service = JikanService(enable_caching=False, enable_rate_limiting=True)
         try:
-            item = async_to_sync(service.search_by_mal_id)(mal_id, anilist_id=anilist_id)
+            item = service.search_by_mal_id(mal_id, anilist_id=anilist_id)
             if not item:
                 raise FranchiseImportError("Not found", 404)
 
-            imported = self._find_existing(anilist_id=item.get("id"), mal_id=item.get("idMal")) is None
+            imported = (
+                self._find_existing(anilist_id=item.get("id"), mal_id=item.get("idMal")) is None
+            )
             anime = service.save_anime_to_db(item)
             self._ensure_external_image_refs(anime, item)
             invalidate_public_cache_keys(
@@ -102,7 +103,7 @@ class FranchiseImportService:
             )
             raise FranchiseImportError("Import failed", 500) from exc
         finally:
-            async_to_sync(service.close)()
+            service.close()
 
     @staticmethod
     def _find_existing(*, anilist_id: int | None, mal_id: int | None) -> Anime | None:
@@ -118,7 +119,7 @@ class FranchiseImportService:
         """Fetch fresh sync data for an existing anime with missing media metadata."""
         service = JikanService(enable_caching=False, enable_rate_limiting=True)
         try:
-            item = async_to_sync(service.resolve_media_for_anime)(anime)
+            item = service.resolve_media_for_anime(anime)
             if item:
                 refreshed = service.save_anime_to_db(item)
                 self._ensure_external_image_refs(refreshed, item)
@@ -131,7 +132,7 @@ class FranchiseImportService:
             # many ways (HTTP, payload shape, DB); the existing row stays usable.
             logger.warning("Failed to refresh existing anime %s", anime.slug, exc_info=True)
         finally:
-            async_to_sync(service.close)()
+            service.close()
 
     @staticmethod
     def _is_missing_primary_images(anime: Anime) -> bool:

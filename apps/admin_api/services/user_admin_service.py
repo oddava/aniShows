@@ -52,9 +52,7 @@ def toggle_user_staff(target_user, actor) -> AdminUserActionResult:
             "id": target_user.id,
             "username": target_user.username,
             "is_staff": target_user.is_staff,
-            "message": (
-                f"User {'promoted to' if target_user.is_staff else 'removed from'} staff."
-            ),
+            "message": (f"User {'promoted to' if target_user.is_staff else 'removed from'} staff."),
         },
         status_code=200,
     )

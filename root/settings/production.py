@@ -48,6 +48,7 @@ if SENTRY_DSN:
         before_send_transaction=lambda event, hint: _filter_sentry_transaction(event, hint),
     )
 
+
 def _filter_sentry_event(event, hint):
     """Filter out noisy or irrelevant error events."""
     # Ignore DisallowedHost errors (bot scanners)
@@ -75,6 +76,7 @@ def _filter_sentry_transaction(event, hint):
     if transaction_name in ("/api/v1/health/", "/metrics"):
         return None
     return event
+
 
 # =============================================================================
 # SECURITY SETTINGS
@@ -149,7 +151,7 @@ CSRF_TRUSTED_ORIGINS = csrf_origins
 # DATABASE CONNECTION POOLING
 # =============================================================================
 
-# CONN_MAX_AGE is set in base.py (600s). Only add production-specific overrides here.
+# CONN_MAX_AGE (600 s) and the optional DB_POOL_MAX_SIZE pool are set in base.py.
 
 # Connection health check to prevent stale connections
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True

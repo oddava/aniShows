@@ -30,7 +30,11 @@ def _concrete(route: str) -> str:
 
 
 ADMIN_URLS = sorted(
-    {_concrete(route) for route in _walk(get_resolver().url_patterns) if route.startswith(ADMIN_PREFIX)}
+    {
+        _concrete(route)
+        for route in _walk(get_resolver().url_patterns)
+        if route.startswith(ADMIN_PREFIX)
+    }
 )
 
 

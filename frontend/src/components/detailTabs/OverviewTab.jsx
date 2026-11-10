@@ -1,0 +1,279 @@
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import FranchiseSection from '../FranchiseSection';
+import MusicSection from '../MusicSection';
+import LazyYouTube from '../LazyYouTube';
+import StatusDistribution from '../StatusDistribution';
+import { getUniqueCharacterRoles } from '../../utils/characterRoles';
+import { getPortraitSrcSet, getPortraitUrl } from './portraits';
+
+export default function OverviewTab({ anime, accentColor, characters, staff, episodes }) {
+    // Extract YouTube video ID
+    const getYouTubeId = (url) => {
+        if (!url) return null;
+        const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+        return match ? match[1] : null;
+    };
+    const videoId = getYouTubeId(anime.trailer_url);
+
+    const hasThemes = anime?.theme_songs && anime.theme_songs.some(t => t.song_type === 'opening' || t.song_type === 'ending');
+    const hasTrailer = !!videoId;
+    const scoreLabel = anime?.rating != null
+        ? (anime?.anilist_id ? 'on AniList' : '/ 10')
+        : '';
+
+    // Deduplicate and filter staff
+    const topStaff = useMemo(() => {
+        if (!Array.isArray(staff)) return [];
+        const seen = new Set();
+        return staff
+            .filter((s) => {
+                const name = s?.staff?.name;
+                if (!name || seen.has(name)) return false;
+                seen.add(name);
+                return true;
+            })
+            .slice(0, 3);
+    }, [staff]);
+
+    // Deduplicate and filter characters
+    const topCharacters = useMemo(() => {
+        return getUniqueCharacterRoles(characters, { includeVoiceActor: false }).slice(0, 4);
+    }, [characters]);
+
+    const topEpisodes = useMemo(() => {
+        if (!Array.isArray(episodes)) return [];
+        return episodes.slice(0, 4);
+    }, [episodes]);
+
+    return (
+        <div className="animate-tab-content space-y-12">
+            <FranchiseSection relations={anime.relations} accentColor={accentColor} sourceSlug={anime.slug} />
+
+            {topCharacters.length > 0 && (
+                <div className="min-w-0">
+                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                        Characters
+                    </h2>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        {topCharacters.map((role) => (
+                            <div 
+                                key={role.id}
+                                className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 min-h-[64px]"
+                            >
+                                <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
+                                    <img
+                                        src={getPortraitUrl(role.character)}
+                                        srcSet={getPortraitSrcSet(role.character)}
+                                        sizes="64px"
+                                        alt={role.character.name}
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="w-full h-full object-cover saturate-[0.85]"
+                                    />
+                                </Link>
+
+                                <div className="flex-1 grid grid-cols-2 gap-2 p-2 sm:px-3 sm:py-2 min-w-0">
+                                    <div className="flex flex-col justify-center min-w-0">
+                                        <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
+                                            {role.character.name}
+                                        </Link>
+                                        <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
+                                            {role.role}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col justify-center text-right min-w-0">
+                                        {role.voice_actor ? (
+                                            <Link to={`/staff/${role.voice_actor.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
+                                                {role.voice_actor.name}
+                                            </Link>
+                                        ) : (
+                                            <span className="text-[13px] font-medium text-gray-600">N/A</span>
+                                        )}
+                                        <span className="text-[11px] text-gray-500 mt-0.5">
+                                            Japanese
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {role.voice_actor && (
+                                    <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
+                                        <img
+                                            src={getPortraitUrl(role.voice_actor)}
+                                            srcSet={getPortraitSrcSet(role.voice_actor)}
+                                            sizes="64px"
+                                            alt={role.voice_actor.name}
+                                            loading="lazy"
+                                            decoding="async"
+                                            className="w-full h-full object-cover saturate-[0.85]"
+                                        />
+                                    </Link>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {topStaff.length > 0 && (
+                <div className="min-w-0">
+                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                        Staff
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {topStaff.map((staffRole) => (
+                            <Link
+                                key={staffRole.id}
+                                to={staffRole.staff?.id ? `/staff/${staffRole.staff.id}` : '#'}
+                                className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
+                            >
+                                <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                                    <img
+                                        src={getPortraitUrl(staffRole.staff)}
+                                        srcSet={getPortraitSrcSet(staffRole.staff)}
+                                        sizes="80px"
+                                        alt={staffRole.staff.name}
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="w-full h-full object-cover saturate-[0.85]"
+                                    />
+                                </div>
+                                <div className="flex flex-col min-w-0 pr-4">
+                                    <span className="font-medium text-gray-300 text-[13px] truncate">
+                                        {staffRole.staff.name}
+                                    </span>
+                                    <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                        {staffRole.role}
+                                    </p>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {topEpisodes.length > 0 && (
+                <div className="min-w-0 space-y-3 sm:space-y-4">
+                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-3 sm:mb-6">
+                        Episodes
+                    </h2>
+                    <div className={topEpisodes.some(e => e.thumbnail) 
+                        ? "grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4" 
+                        : "grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3"}>
+                        {topEpisodes.map((episode) => {
+                            const hasThumbnail = episode.thumbnail;
+                            
+                            if (!hasThumbnail) {
+                                return (
+                                    <a
+                                        key={episode.number}
+                                        href={episode.crunchyroll_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center gap-3 sm:gap-4 bg-dark-200/40 rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-white/5 hover:border-gray-700 transition-colors group"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-xs sm:text-[13px] font-medium text-gray-300 truncate">
+                                                Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                            </h3>
+                                        </div>
+                                    </a>
+                                );
+                            }
+
+                            return (
+                                <article
+                                    key={episode.number}
+                                    className="min-w-0"
+                                >
+                                    {episode.crunchyroll_url ? (
+                                        <a
+                                            href={episode.crunchyroll_url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="relative block h-24 sm:h-auto sm:aspect-video overflow-hidden rounded-lg sm:rounded-2xl border border-white/5 bg-dark-200"
+                                        >
+                                            <img
+                                                src={episode.thumbnail}
+                                                alt={`Episode ${episode.number}`}
+                                                loading="lazy"
+                                                className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
+                                            />
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-2.5 py-1.5 sm:px-3 sm:py-2 border-t border-white/5">
+                                                <h3 className="text-[11px] sm:text-[12px] font-medium text-gray-300 line-clamp-1">
+                                                    Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                                </h3>
+                                            </div>
+                                        </a>
+                                    ) : (
+                                        <div className="relative block h-24 sm:h-auto sm:aspect-video overflow-hidden rounded-lg sm:rounded-2xl border border-white/5 bg-dark-200">
+                                            <img
+                                                src={episode.thumbnail}
+                                                alt={`Episode ${episode.number}`}
+                                                loading="lazy"
+                                                className="absolute inset-0 h-full w-full object-cover saturate-[0.85]"
+                                            />
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/85 px-2.5 py-1.5 sm:px-3 sm:py-2 border-t border-white/5">
+                                                <h3 className="text-[11px] sm:text-[12px] font-medium text-gray-300 line-clamp-1">
+                                                    Episode {episode.number}{episode.title ? ` - ${episode.title}` : ''}
+                                                </h3>
+                                            </div>
+                                        </div>
+                                    )}
+                                </article>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {hasThemes && (
+                <div className="min-w-0">
+                    <MusicSection anime={anime} accentColor={accentColor} isCompact={false} itemLimit={2} />
+                </div>
+            )}
+
+            <div
+                className={`grid grid-cols-1 gap-8 items-start ${
+                    hasTrailer ? 'xl:grid-cols-[2fr_1fr]' : ''
+                }`}
+            >
+                {hasTrailer && (
+                    <div className="min-w-0">
+                        <div className="flex flex-col">
+                            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6">
+                                Trailer
+                            </h2>
+                            <div className="w-full">
+                                <LazyYouTube videoId={videoId} title="Trailer" accentColor={accentColor} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div
+                    className={`min-w-0 ${
+                        hasTrailer
+                            ? 'flex flex-col gap-8'
+                            : 'grid grid-cols-1 md:grid-cols-2 gap-8'
+                    }`}
+                >
+                    <div>
+                        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                            Average Score
+                        </h2>
+                        <div className="bg-dark-100/50 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+                            <p className="text-2xl font-black text-gray-300">
+                                {anime?.rating != null ? anime.rating : 'N/A'}
+                                {anime?.rating != null ? <span className="text-sm font-normal text-gray-400 ml-1">{scoreLabel}</span> : ''}
+                            </p>
+                        </div>
+                    </div>
+
+                    <StatusDistribution anime={anime} />
+                </div>
+            </div>
+        </div>
+    );
+}

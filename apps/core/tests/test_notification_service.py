@@ -63,7 +63,9 @@ class TestNotificationUnreadCountCache(TestCase):
 
     @patch("apps.core.services.notification_service.async_to_sync")
     @patch("apps.core.services.notification_service.get_channel_layer")
-    def test_mark_as_read_broadcasts_unread_count_update(self, mock_get_channel_layer, mock_async_to_sync):
+    def test_mark_as_read_broadcasts_unread_count_update(
+        self, mock_get_channel_layer, mock_async_to_sync
+    ):
         notification = Notification.objects.create(
             user=self.user,
             notification_type=Notification.NotificationType.SYSTEM,
@@ -104,7 +106,9 @@ class TestNotificationUnreadCountCache(TestCase):
 
     @patch("apps.core.services.notification_service.async_to_sync")
     @patch("apps.core.services.notification_service.get_channel_layer")
-    def test_mark_all_as_read_broadcasts_unread_count_update(self, mock_get_channel_layer, mock_async_to_sync):
+    def test_mark_all_as_read_broadcasts_unread_count_update(
+        self, mock_get_channel_layer, mock_async_to_sync
+    ):
         Notification.objects.create(
             user=self.user,
             notification_type=Notification.NotificationType.SYSTEM,
@@ -285,7 +289,9 @@ class TestReviewLikeNotificationAggregation(TestCase):
         self.assertEqual(merged.data["liker_count"], 2)
         self.assertEqual(merged.data["liker_username"], "bob_user")
         self.assertEqual(merged.data["liker_usernames"], ["bob_user", "alice_user"])
-        self.assertEqual(merged.data["anime_cover_image_small"], "https://img.example.com/cover.jpg")
+        self.assertEqual(
+            merged.data["anime_cover_image_small"], "https://img.example.com/cover.jpg"
+        )
         self.assertEqual(
             merged.message,
             "bob_user and 1 other liked your review of Notification Cover Anime",

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -27,9 +26,7 @@ class UserTaskService:
     def cleanup_unverified_accounts(days: int = 7) -> dict:
         days = int(days)
         if days < UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS:
-            raise ValueError(
-                f"days must be at least {UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS}"
-            )
+            raise ValueError(f"days must be at least {UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS}")
         threshold_date = timezone.now() - timedelta(days=days)
         stale_users = list(
             User.objects.filter(
@@ -78,14 +75,21 @@ class UserTaskService:
                 job = UserImportJob.objects.select_for_update().get(id=job_id)
 
                 if job.status == UserImportJob.ImportStatus.completed:
-                    logger.info("Import job skipped because it already completed", extra={"job_id": job_id})
+                    logger.info(
+                        "Import job skipped because it already completed", extra={"job_id": job_id}
+                    )
                     return {"job_id": job_id, "status": "skipped", "reason": "job_completed"}
 
                 if job.status == UserImportJob.ImportStatus.failed:
-                    logger.info("Import job skipped because it is already failed", extra={"job_id": job_id})
+                    logger.info(
+                        "Import job skipped because it is already failed", extra={"job_id": job_id}
+                    )
                     return {"job_id": job_id, "status": "skipped", "reason": "job_cancelled"}
 
-                if job.status == UserImportJob.ImportStatus.processing and not allow_processing_resume:
+                if (
+                    job.status == UserImportJob.ImportStatus.processing
+                    and not allow_processing_resume
+                ):
                     logger.warning(
                         "Import job skipped because another worker is already processing it",
                         extra={"job_id": job_id},
@@ -151,21 +155,21 @@ class UserTaskService:
         try:
             if anilist_id:
                 logger.info("Fetching anime by sync ID", extra={"anilist_id": anilist_id})
-                anime_data = asyncio.run(service.get_anime_by_id(anilist_id))
+                anime_data = service.get_anime_by_id(anilist_id)
                 if anime_data:
                     anime = service.save_anime_to_db(anime_data)
                     return anime.id
 
             if mal_id:
                 logger.info("Fetching anime by MAL ID", extra={"mal_id": mal_id})
-                anime_data = asyncio.run(service.search_by_mal_id(mal_id))
+                anime_data = service.search_by_mal_id(mal_id)
                 if anime_data:
                     anime = service.save_anime_to_db(anime_data)
                     return anime.id
 
             if title:
                 logger.info("Searching anime by title", extra={"title": title})
-                results = asyncio.run(service.search_anime(title))
+                results = service.search_anime(title)
                 if results:
                     anime = service.save_anime_to_db(results[0])
                     return anime.id
@@ -176,7 +180,7 @@ class UserTaskService:
             )
             return None
         finally:
-            asyncio.run(service.close())
+            service.close()
 
     @staticmethod
     def cleanup_old_import_jobs(days: int = 30) -> int:
@@ -213,7 +217,9 @@ class UserTaskService:
         task_ids: dict[str, str] = {}
 
         if cleanup_unverified:
-            task_ids["unverified_cleanup"] = cleanup_unverified_accounts.delay(days=unverified_days).id
+            task_ids["unverified_cleanup"] = cleanup_unverified_accounts.delay(
+                days=unverified_days
+            ).id
         if cleanup_imports:
             task_ids["import_cleanup"] = cleanup_old_import_jobs.delay(days=import_days).id
 
@@ -251,7 +257,9 @@ class UserTaskService:
             )
 
         total_users = len(user_ids)
-        logger.info("Preparing user stats update", extra={"user_count": total_users, "user_id": user_id})
+        logger.info(
+            "Preparing user stats update", extra={"user_count": total_users, "user_id": user_id}
+        )
 
         if total_users == 0:
             return {

@@ -150,7 +150,9 @@ class SyncRelationsFromMediaTests(TestCase):
     def test_jikan_list_payloads_carry_no_relations(self):
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
 
-        self.assertIsNone(service._normalize_anime_item({"mal_id": 5, "title": "List"})["relations"])
+        self.assertIsNone(
+            service._normalize_anime_item({"mal_id": 5, "title": "List"})["relations"]
+        )
         full = service._normalize_anime_item(
             {
                 "mal_id": 5,

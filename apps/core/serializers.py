@@ -129,9 +129,7 @@ class CeleryTaskScheduleWriteSerializer(ModelSerializer):
         queue_name = (value or "default").strip()
         available_queues = {queue.name for queue in (current_app.conf.task_queues or [])}
         if queue_name not in available_queues:
-            raise ValidationError(
-                "Queue must be one of the configured Celery queues."
-            )
+            raise ValidationError("Queue must be one of the configured Celery queues.")
         return queue_name
 
     def validate(self, attrs):
@@ -152,9 +150,7 @@ class CeleryTaskScheduleWriteSerializer(ModelSerializer):
             "interval_period",
             instance.interval_period if instance else "hours",
         )
-        valid_interval_periods = dict(
-            CeleryTaskSchedule._meta.get_field("interval_period").choices
-        )
+        valid_interval_periods = dict(CeleryTaskSchedule._meta.get_field("interval_period").choices)
 
         if schedule_type == CeleryTaskSchedule.ScheduleType.DATETIME and not one_time_datetime:
             raise ValidationError(
@@ -247,7 +243,11 @@ class CeleryTaskScheduleListSerializer(ModelSerializer):
         if obj.schedule_type == CeleryTaskSchedule.ScheduleType.INTERVAL:
             return f"Every {obj.interval_every} {obj.interval_period}"
         if obj.schedule_type == CeleryTaskSchedule.ScheduleType.DATETIME:
-            return obj.one_time_datetime.strftime("%Y-%m-%d %H:%M") if obj.one_time_datetime else "Not set"
+            return (
+                obj.one_time_datetime.strftime("%Y-%m-%d %H:%M")
+                if obj.one_time_datetime
+                else "Not set"
+            )
         return "-"
 
 

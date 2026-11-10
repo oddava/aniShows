@@ -1,0 +1,3078 @@
+{
+  "anilist": {
+    "get_anime_by_id.154587": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnimeById",
+          "options": {},
+          "variables": {
+            "id": 154587
+          }
+        }
+      ],
+      "result": {
+        "averageScore": 90,
+        "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg",
+        "characterPreview": {
+          "edges": [
+            {
+              "node": {
+                "description": "An elf and former member of the hero party.",
+                "id": 176754,
+                "image": {
+                  "large": "https://s4.anilist.co/file/anilistcdn/character/large/b176754-pj2Jy6SBMdL9.png"
+                },
+                "name": {
+                  "full": "Frieren",
+                  "native": "フリーレン"
+                }
+              },
+              "role": "MAIN",
+              "voiceActors": [
+                {
+                  "description": "Atsumi Tanezaki is a Japanese voice actress.",
+                  "id": 119331,
+                  "image": {
+                    "large": "https://s4.anilist.co/file/anilistcdn/staff/large/n119331-0Dw1Ut0hnGiW.png"
+                  },
+                  "name": {
+                    "full": "Atsumi Tanezaki",
+                    "native": "種﨑敦美"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "description": null,
+                "id": null,
+                "image": {
+                  "large": null
+                },
+                "name": {
+                  "full": "Village Elder",
+                  "native": null
+                }
+              },
+              "role": "SUPPORTING",
+              "voiceActors": [
+                {
+                  "description": null,
+                  "id": null,
+                  "image": {
+                    "large": null
+                  },
+                  "name": {
+                    "full": "Unknown Seiyuu",
+                    "native": null
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "description": "",
+                "id": 176756,
+                "image": {
+                  "large": "https://s4.anilist.co/file/anilistcdn/character/large/b176756.png"
+                },
+                "name": {
+                  "full": "Himmel",
+                  "native": "ヒンメル"
+                }
+              },
+              "role": "BACKGROUND",
+              "voiceActors": []
+            }
+          ]
+        },
+        "coverImage": {
+          "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-n1fmjRv4JQUd.jpg",
+          "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154587-n1fmjRv4JQUd.jpg"
+        },
+        "description": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about. Elf mage Frieren and her courageous fellow adventurers have defeated the Demon King and brought peace to the land. But Frieren will long outlive the rest of her former party.<br><br>\n(Source: Crunchyroll)<br><br>\n<i>Note: The first episode aired with a runtime of 1 hour.</i>",
+        "duration": 24,
+        "endDate": {
+          "day": 22,
+          "month": 3,
+          "year": 2024
+        },
+        "endings": [
+          "Anytime Anywhere by milet (eps 1-27)",
+          "Untitled Ending"
+        ],
+        "episodes": 28,
+        "externalLinks": [
+          {
+            "icon": null,
+            "site": "Official Site",
+            "url": "https://frieren-anime.jp/"
+          },
+          {
+            "icon": "https://s4.anilist.co/file/anilistcdn/link/icon/5-AWN2pVlluCOO.png",
+            "site": "Crunchyroll",
+            "url": "https://www.crunchyroll.com/series/GG5H5XQX4"
+          }
+        ],
+        "format": "TV",
+        "genres": [
+          "Adventure",
+          "Drama",
+          "Fantasy"
+        ],
+        "id": 154587,
+        "idMal": 52991,
+        "nextAiringEpisode": null,
+        "openings": [
+          "\"Yuusha\" by YOASOBI (eps 1-16)",
+          "'Haru' by Yorushika (eps 17-28)",
+          "",
+          "Plain Song by Someone"
+        ],
+        "popularity": 412345,
+        "rankings": [
+          {
+            "allTime": true,
+            "context": "highest rated all time",
+            "rank": 1,
+            "type": "RATED"
+          },
+          {
+            "allTime": false,
+            "context": "highest rated",
+            "rank": 3,
+            "type": "RATED"
+          },
+          {
+            "allTime": true,
+            "context": "most popular all time",
+            "rank": 120,
+            "type": "POPULAR"
+          },
+          "not-a-ranking"
+        ],
+        "relations": {
+          "edges": [
+            {
+              "node": {
+                "coverImage": {
+                  "large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx118586-F0Lp86XQV7du.jpg"
+                },
+                "format": "MANGA",
+                "id": 118586,
+                "status": "RELEASING",
+                "title": {
+                  "english": "Frieren: Beyond Journey’s End",
+                  "native": "葬送のフリーレン",
+                  "romaji": "Sousou no Frieren"
+                },
+                "type": "MANGA"
+              },
+              "relationType": "SOURCE"
+            },
+            {
+              "node": {
+                "coverImage": {
+                  "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx182255.jpg"
+                },
+                "format": "TV",
+                "id": 182255,
+                "status": "NOT_YET_RELEASED",
+                "title": {
+                  "english": null,
+                  "native": "葬送のフリーレン 第2期",
+                  "romaji": "Sousou no Frieren 2nd Season"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "SEQUEL"
+            }
+          ]
+        },
+        "season": "FALL",
+        "seasonYear": 2023,
+        "source": "MANGA",
+        "staffPreview": {
+          "edges": [
+            {
+              "node": {
+                "description": null,
+                "id": 106297,
+                "image": {
+                  "large": "https://s4.anilist.co/file/anilistcdn/staff/large/n106297.png"
+                },
+                "name": {
+                  "full": "Keiichirou Saitou",
+                  "native": "斎藤圭一郎"
+                }
+              },
+              "role": "Director"
+            },
+            {
+              "node": {
+                "description": "Manga author.",
+                "id": null,
+                "image": {
+                  "large": null
+                },
+                "name": {
+                  "full": "Kanehito Yamada",
+                  "native": "山田鐘人"
+                }
+              },
+              "role": "Original Creator"
+            }
+          ]
+        },
+        "startDate": {
+          "day": 29,
+          "month": 9,
+          "year": 2023
+        },
+        "stats": {
+          "statusDistribution": [
+            {
+              "amount": 61234,
+              "status": "CURRENT"
+            },
+            {
+              "amount": 98765,
+              "status": "PLANNING"
+            },
+            {
+              "amount": 230001,
+              "status": "COMPLETED"
+            },
+            {
+              "amount": 4321,
+              "status": "DROPPED"
+            },
+            {
+              "amount": null,
+              "status": "PAUSED"
+            }
+          ]
+        },
+        "status": "FINISHED",
+        "studios": {
+          "nodes": [
+            {
+              "name": "MADHOUSE"
+            }
+          ]
+        },
+        "tags": [
+          {
+            "isGeneralSpoiler": false,
+            "isMediaSpoiler": false,
+            "name": "Elf",
+            "rank": 96
+          },
+          {
+            "isGeneralSpoiler": false,
+            "isMediaSpoiler": false,
+            "name": "Travel",
+            "rank": 93
+          },
+          {
+            "isGeneralSpoiler": false,
+            "isMediaSpoiler": true,
+            "name": "Time Skip",
+            "rank": 80
+          },
+          {
+            "isGeneralSpoiler": true,
+            "isMediaSpoiler": false,
+            "name": "Tragedy",
+            "rank": 70
+          },
+          {
+            "isGeneralSpoiler": false,
+            "isMediaSpoiler": false,
+            "name": "  Male   Protagonist ",
+            "rank": 60
+          },
+          {
+            "isGeneralSpoiler": false,
+            "isMediaSpoiler": false,
+            "name": "elf",
+            "rank": 50
+          }
+        ],
+        "title": {
+          "english": "Frieren: Beyond Journey’s End",
+          "native": "葬送のフリーレン",
+          "romaji": "Sousou no Frieren"
+        },
+        "trailer": {
+          "id": "qgQoQ3cDkq4",
+          "site": "youtube"
+        }
+      }
+    },
+    "get_anime_by_id.invalid": {
+      "last_error": [
+        "invalid_variable",
+        "invalid_anilist_id"
+      ],
+      "queries": [],
+      "result": null
+    },
+    "get_by_season.winter": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "BySeason",
+          "options": {},
+          "variables": {
+            "page": 1,
+            "perPage": 3,
+            "season": "WINTER",
+            "sort": [
+              "POPULARITY_DESC"
+            ],
+            "year": 2025
+          }
+        }
+      ],
+      "result": [
+        171018,
+        0,
+        21
+      ]
+    },
+    "get_recent_updates.2": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnime",
+          "options": {},
+          "variables": {
+            "page": 1,
+            "perPage": 2,
+            "sort": [
+              "TRENDING_DESC"
+            ]
+          }
+        }
+      ],
+      "result": [
+        171018,
+        0
+      ]
+    },
+    "get_top_rated.60": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnime",
+          "options": {},
+          "variables": {
+            "page": 1,
+            "perPage": 50,
+            "sort": [
+              "SCORE_DESC"
+            ]
+          }
+        }
+      ],
+      "result": [
+        171018,
+        0,
+        21
+      ]
+    },
+    "helpers": {
+      "graphql_error_codes": {
+        "": "transport_error",
+        "Internal Server Error": "transport_error",
+        "Not Found.": "not_found",
+        "Too Many Requests.": "rate_limited",
+        "Variable $id of type Int was provided invalid value": "invalid_variable"
+      },
+      "image_urls": {
+        "": [
+          "",
+          "",
+          "",
+          ""
+        ],
+        "ftp://cdn.myanimelist.net/a.jpg": [
+          "",
+          "",
+          "",
+          ""
+        ],
+        "http://s4.anilist.co/file/x.png": [
+          "https://s4.anilist.co/file/x.png",
+          "https://s4.anilist.co/file/x.png",
+          "https://s4.anilist.co/file/x.png",
+          ""
+        ],
+        "http://www.myanimelist.net/anime/1/poster.webp": [
+          "https://cdn.myanimelist.net/anime/1/poster.webp",
+          "https://cdn.myanimelist.net/anime/1/poster.webp",
+          "https://cdn.myanimelist.net/anime/1/poster.webp",
+          "https://cdn.myanimelist.net/anime/1/poster.webp"
+        ],
+        "https://media.kitsu.app/poster.jpg": [
+          "https://media.kitsu.app/poster.jpg",
+          "",
+          "https://media.kitsu.app/poster.jpg",
+          ""
+        ],
+        "https://myanimelist.net/anime/1": [
+          "https://myanimelist.net/anime/1",
+          "",
+          "https://myanimelist.net/anime/1",
+          "https://myanimelist.net/anime/1"
+        ],
+        "https://myanimelist.net/images/anime/1/1.jpg": [
+          "https://cdn.myanimelist.net/images/anime/1/1.jpg",
+          "https://cdn.myanimelist.net/images/anime/1/1.jpg",
+          "https://cdn.myanimelist.net/images/anime/1/1.jpg",
+          "https://cdn.myanimelist.net/images/anime/1/1.jpg"
+        ],
+        "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg": [
+          "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg",
+          "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg",
+          "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1.jpg",
+          ""
+        ],
+        "https://www.youtube.com/watch?v=abc": [
+          "https://www.youtube.com/watch?v=abc",
+          "",
+          "https://www.youtube.com/watch?v=abc",
+          "https://www.youtube.com/watch?v=abc"
+        ],
+        "not a url": [
+          "",
+          "",
+          "",
+          ""
+        ]
+      },
+      "search_variants": {
+        "": [],
+        "  plain   title ": [
+          "plain title"
+        ],
+        "Dan★Da★Dan": [
+          "Dan★Da★Dan",
+          "Dan Da Dan"
+        ],
+        "Re:Zero − Starting Life": [
+          "Re:Zero − Starting Life",
+          "Re Zero Starting Life"
+        ]
+      },
+      "theme_songs": {
+        "": {
+          "artist": "",
+          "episodes": "",
+          "title": ""
+        },
+        "\"Unclosed by Nobody": {
+          "artist": "Nobody",
+          "episodes": "",
+          "title": "\"Unclosed"
+        },
+        "\"Yuusha\" by YOASOBI (eps 1-16)": {
+          "artist": "YOASOBI",
+          "episodes": "1-16",
+          "title": "Yuusha"
+        },
+        "'Haru' by Yorushika (eps 17-28)": {
+          "artist": "Yorushika",
+          "episodes": "17-28",
+          "title": "Haru"
+        },
+        "Anytime Anywhere by milet (eps 1-27)": {
+          "artist": "milet",
+          "episodes": "1-27",
+          "title": "Anytime Anywhere"
+        },
+        "Plain Song by Someone": {
+          "artist": "Someone",
+          "episodes": "",
+          "title": "Plain Song"
+        },
+        "Untitled Ending": {
+          "artist": "",
+          "episodes": "",
+          "title": "Untitled Ending"
+        },
+        "x (ep 3)": {
+          "artist": "",
+          "episodes": "3",
+          "title": "x"
+        }
+      }
+    },
+    "prepare_anime_data.154587": {
+      "anilist_id": 154587,
+      "anime_type": "TV",
+      "banner_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg",
+      "broadcast_day": "",
+      "broadcast_time": null,
+      "broadcast_timezone": "",
+      "cover_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-n1fmjRv4JQUd.jpg",
+      "duration_minutes": 24,
+      "end_date": "2024-03-22",
+      "episode_count": 28,
+      "external_links": [
+        {
+          "icon": null,
+          "site": "Official Site",
+          "url": "https://frieren-anime.jp/"
+        },
+        {
+          "icon": "https://s4.anilist.co/file/anilistcdn/link/icon/5-AWN2pVlluCOO.png",
+          "site": "Crunchyroll",
+          "url": "https://www.crunchyroll.com/series/GG5H5XQX4"
+        }
+      ],
+      "mal_id": 52991,
+      "member_count": 412345,
+      "meta_description": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about. Elf mage Frieren and her courageous fellow adventure...",
+      "next_airing_date": null,
+      "next_airing_episode": null,
+      "popularity_rank": 120,
+      "producers": [],
+      "provider_ids": {},
+      "rating": 9.0,
+      "release_date": "2023-09-29",
+      "season": "FALL",
+      "season_year": 2023,
+      "site_rank": 1,
+      "slug": "frieren",
+      "source_material": "Manga",
+      "source_urls": [],
+      "status": "Finished",
+      "status_distribution": {
+        "COMPLETED": 230001,
+        "CURRENT": 61234,
+        "DROPPED": 4321,
+        "PLANNING": 98765
+      },
+      "synonyms": [],
+      "synopsis": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about. Elf mage Frieren and her courageous fellow adventurers have defeated the Demon King and brought peace to the land. But Frieren will long outlive the rest of her former party.\n(Source: Crunchyroll)\nNote: The first episode aired with a runtime of 1 hour.",
+      "tags": [
+        "elf",
+        "travel",
+        "male protagonist"
+      ],
+      "title": "Frieren: Beyond Journey’s End",
+      "title_jp": "葬送のフリーレン"
+    },
+    "prepare_anime_data.trending": [
+      {
+        "anilist_id": 171018,
+        "anime_type": "TV",
+        "banner_image_external_url": "",
+        "broadcast_day": "",
+        "broadcast_time": null,
+        "broadcast_timezone": "",
+        "cover_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx171018.jpg",
+        "duration_minutes": 24,
+        "end_date": null,
+        "episode_count": 12,
+        "external_links": [],
+        "mal_id": 57334,
+        "member_count": 190001,
+        "meta_description": "Momo Ayase believes in ghosts but not aliens.",
+        "next_airing_date": "2024-11-28 15:56:00+00:00",
+        "next_airing_episode": 8,
+        "popularity_rank": 40,
+        "producers": [],
+        "provider_ids": {},
+        "rating": 8.5,
+        "release_date": "2024-10-04",
+        "season": "FALL",
+        "season_year": 2024,
+        "site_rank": null,
+        "slug": "slug-171018",
+        "source_material": "Manga",
+        "source_urls": [],
+        "status": "Airing",
+        "status_distribution": {
+          "CURRENT": 150000
+        },
+        "synonyms": [],
+        "synopsis": "Momo Ayase believes in ghosts but not aliens.",
+        "tags": [
+          "aliens"
+        ],
+        "title": "DAN DA DAN",
+        "title_jp": "ダンダダン"
+      },
+      {
+        "anilist_id": 0,
+        "anime_type": "Special",
+        "banner_image_external_url": "",
+        "broadcast_day": "",
+        "broadcast_time": null,
+        "broadcast_timezone": "",
+        "cover_image_external_url": "",
+        "duration_minutes": 0,
+        "end_date": null,
+        "episode_count": 0,
+        "external_links": [],
+        "mal_id": null,
+        "member_count": 0,
+        "meta_description": "",
+        "next_airing_date": null,
+        "next_airing_episode": null,
+        "popularity_rank": null,
+        "producers": [],
+        "provider_ids": {},
+        "rating": null,
+        "release_date": null,
+        "season": "",
+        "season_year": null,
+        "site_rank": null,
+        "slug": "slug-0",
+        "source_material": "",
+        "source_urls": [],
+        "status": "Finished",
+        "status_distribution": {},
+        "synonyms": [],
+        "synopsis": "",
+        "tags": [],
+        "title": "",
+        "title_jp": "無題"
+      },
+      {
+        "anilist_id": 21,
+        "anime_type": "TV",
+        "banner_image_external_url": "https://cdn.myanimelist.net/images/anime/banner/21.png",
+        "broadcast_day": "",
+        "broadcast_time": null,
+        "broadcast_timezone": "",
+        "cover_image_external_url": "",
+        "duration_minutes": 24,
+        "end_date": null,
+        "episode_count": 0,
+        "external_links": [],
+        "mal_id": 21,
+        "member_count": 300001,
+        "meta_description": "",
+        "next_airing_date": null,
+        "next_airing_episode": 1124,
+        "popularity_rank": null,
+        "producers": [],
+        "provider_ids": {},
+        "rating": 8.8,
+        "release_date": "1999-10-20",
+        "season": "FALL",
+        "season_year": 1999,
+        "site_rank": null,
+        "slug": "slug-21",
+        "source_material": "Manga",
+        "source_urls": [],
+        "status": "Airing",
+        "status_distribution": {},
+        "synonyms": [],
+        "synopsis": "",
+        "tags": [],
+        "title": "ONE PIECE",
+        "title_jp": "ONE PIECE"
+      }
+    ],
+    "recommendations.154587": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnimeRecommendations",
+          "options": {},
+          "variables": {
+            "id": 154587,
+            "perPage": 8
+          }
+        }
+      ],
+      "result": [
+        {
+          "cover_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21827.jpg",
+          "episode_count": 13,
+          "format": "TV",
+          "id": 21827,
+          "mal_id": 33352,
+          "member_count": 420000,
+          "rating": 8.5,
+          "recommendation_rating": 1520,
+          "status": "FINISHED",
+          "title": "Violet Evergarden",
+          "title_jp": "ヴァイオレット・エヴァーガーデン"
+        },
+        {
+          "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1125/96929.jpg",
+          "episode_count": 0,
+          "format": "TV",
+          "id": 101291,
+          "mal_id": null,
+          "member_count": 0,
+          "rating": null,
+          "recommendation_rating": 211,
+          "status": "FINISHED",
+          "title": "約束のネバーランド",
+          "title_jp": "約束のネバーランド"
+        }
+      ]
+    },
+    "recommendations.154587.interactive": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnimeRecommendations",
+          "options": {
+            "max_rate_limit_wait": 0.0,
+            "request_timeout": 8.0,
+            "retry_count": 1
+          },
+          "variables": {
+            "id": 154587,
+            "perPage": 50
+          }
+        }
+      ],
+      "result": 2
+    },
+    "recommendations.invalid": {
+      "last_error": [
+        "invalid_variable",
+        "invalid_anilist_id"
+      ],
+      "queries": [],
+      "result": []
+    },
+    "search_anime.dandadan": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "SearchAnime",
+          "options": {},
+          "variables": {
+            "perPage": 10,
+            "search": "Dan★Da★Dan"
+          }
+        }
+      ],
+      "result": [
+        171018
+      ]
+    },
+    "search_anime.empty": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [],
+      "result": []
+    },
+    "search_by_mal_id.52991": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "SearchByMalId",
+          "options": {},
+          "variables": {
+            "idMal": 52991
+          }
+        }
+      ],
+      "result": [
+        154587
+      ]
+    },
+    "search_by_mal_id.invalid": {
+      "last_error": [
+        "invalid_variable",
+        "invalid_mal_id"
+      ],
+      "queries": [],
+      "result": null
+    },
+    "streaming_episodes.154587": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnimeStreamingEpisodes",
+          "options": {},
+          "variables": {
+            "id": 154587
+          }
+        }
+      ],
+      "result": {
+        "id": 154587,
+        "idMal": 52991,
+        "streamingEpisodes": [
+          {
+            "site": "Crunchyroll",
+            "thumbnail": "https://img1.ak.crunchyroll.com/i/spire4-tmb/frieren01_full.jpg",
+            "title": "Episode 1 - The Journey's End",
+            "url": "https://www.crunchyroll.com/watch/GG1U2Q0J3/the-journeys-end"
+          },
+          {
+            "site": "Crunchyroll",
+            "thumbnail": "https://img1.ak.crunchyroll.com/i/spire2-tmb/frieren02_full.jpg",
+            "title": "Episode 2 - It Didn't Have to Be Magic...",
+            "url": "https://www.crunchyroll.com/watch/G4VUQ1ZKW/it-didnt-have-to-be-magic"
+          }
+        ]
+      }
+    },
+    "streaming_episodes.by_mal": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "queries": [
+        {
+          "operation": "GetAnimeStreamingEpisodes",
+          "options": {},
+          "variables": {
+            "malId": 52991
+          }
+        }
+      ],
+      "result": {
+        "id": 154587,
+        "idMal": 52991,
+        "streamingEpisodes": [
+          {
+            "site": "Crunchyroll",
+            "thumbnail": "https://img1.ak.crunchyroll.com/i/spire4-tmb/frieren01_full.jpg",
+            "title": "Episode 1 - The Journey's End",
+            "url": "https://www.crunchyroll.com/watch/GG1U2Q0J3/the-journeys-end"
+          },
+          {
+            "site": "Crunchyroll",
+            "thumbnail": "https://img1.ak.crunchyroll.com/i/spire2-tmb/frieren02_full.jpg",
+            "title": "Episode 2 - It Didn't Have to Be Magic...",
+            "url": "https://www.crunchyroll.com/watch/G4VUQ1ZKW/it-didnt-have-to-be-magic"
+          }
+        ]
+      }
+    },
+    "streaming_episodes.no_ids": {
+      "last_error": [
+        "invalid_variable",
+        "missing_anilist_or_mal_id"
+      ],
+      "queries": [],
+      "result": null
+    }
+  },
+  "jikan": {
+    "get_recent_updates.5": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "requests": [
+        "GET /seasons/now?limit=3&page=2",
+        "GET /seasons/now?limit=5&page=1",
+        "GET /top/anime?filter=airing&limit=2&page=1"
+      ],
+      "result": [
+        {
+          "averageScore": 87,
+          "bannerImage": "",
+          "broadcast": {
+            "day": "Sunday",
+            "time": "23:15",
+            "timezone": "Asia/Tokyo"
+          },
+          "characterPreview": {
+            "edges": []
+          },
+          "coverImage": {
+            "extraLarge": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"
+          },
+          "description": "Pirates.",
+          "duration": 24,
+          "endDate": null,
+          "endings": [],
+          "episodes": 0,
+          "externalLinks": [
+            {
+              "icon": "",
+              "site": "MyAnimeList",
+              "url": "https://myanimelist.net/anime/21/One_Piece"
+            }
+          ],
+          "format": "TV",
+          "genres": [
+            "Action"
+          ],
+          "id": null,
+          "idMal": 21,
+          "nextAiringEpisode": null,
+          "openings": [],
+          "popularity": 2512345,
+          "producers": [],
+          "providerIds": {
+            "jikan": 21,
+            "myanimelist": 21
+          },
+          "rankings": [
+            {
+              "allTime": true,
+              "context": "top_rated",
+              "rank": 47,
+              "type": "RATED"
+            },
+            {
+              "allTime": true,
+              "context": "most_popular",
+              "rank": 18,
+              "type": "POPULAR"
+            }
+          ],
+          "relations": null,
+          "season": "FALL",
+          "seasonYear": 1999,
+          "source": "MANGA",
+          "sourceUrls": [
+            "https://myanimelist.net/anime/21/One_Piece"
+          ],
+          "staffPreview": {
+            "edges": []
+          },
+          "startDate": {
+            "day": 20,
+            "month": 10,
+            "year": 1999
+          },
+          "stats": {
+            "statusDistribution": []
+          },
+          "status": "RELEASING",
+          "studios": {
+            "nodes": [
+              {
+                "name": "Toei Animation"
+              }
+            ]
+          },
+          "synonyms": [],
+          "tags": [],
+          "title": {
+            "english": "One Piece",
+            "native": "ONE PIECE",
+            "romaji": "One Piece"
+          },
+          "trailer": null
+        },
+        {
+          "averageScore": 86,
+          "bannerImage": "",
+          "broadcast": {
+            "day": "Thursday",
+            "time": "23:56",
+            "timezone": "Asia/Tokyo"
+          },
+          "characterPreview": {
+            "edges": []
+          },
+          "coverImage": {
+            "extraLarge": "https://cdn.myanimelist.net/images/anime/1584/143719l.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1584/143719l.jpg"
+          },
+          "description": "Reeling from her recent breakup, Momo Ayase meets her classmate Ken Takakura.",
+          "duration": 23,
+          "endDate": null,
+          "endings": [],
+          "episodes": 12,
+          "externalLinks": [
+            {
+              "icon": "",
+              "site": "MyAnimeList",
+              "url": "https://myanimelist.net/anime/57334/Dandadan"
+            }
+          ],
+          "format": "TV",
+          "genres": [
+            "Action",
+            "Comedy",
+            "Supernatural"
+          ],
+          "id": null,
+          "idMal": 57334,
+          "nextAiringEpisode": null,
+          "openings": [],
+          "popularity": 702311,
+          "producers": [],
+          "providerIds": {
+            "jikan": 57334,
+            "myanimelist": 57334
+          },
+          "rankings": [
+            {
+              "allTime": true,
+              "context": "top_rated",
+              "rank": 92,
+              "type": "RATED"
+            },
+            {
+              "allTime": true,
+              "context": "most_popular",
+              "rank": 380,
+              "type": "POPULAR"
+            }
+          ],
+          "relations": null,
+          "season": "FALL",
+          "seasonYear": 2024,
+          "source": "WEB_MANGA",
+          "sourceUrls": [
+            "https://myanimelist.net/anime/57334/Dandadan"
+          ],
+          "staffPreview": {
+            "edges": []
+          },
+          "startDate": {
+            "day": 4,
+            "month": 10,
+            "year": 2024
+          },
+          "stats": {
+            "statusDistribution": []
+          },
+          "status": "RELEASING",
+          "studios": {
+            "nodes": [
+              {
+                "name": "Science SARU"
+              }
+            ]
+          },
+          "synonyms": [],
+          "tags": [
+            "love polygon",
+            "shounen"
+          ],
+          "title": {
+            "english": "DAN DA DAN",
+            "native": "ダンダダン",
+            "romaji": "Dandadan"
+          },
+          "trailer": {
+            "id": "d2OONzbtMVM",
+            "site": "youtube"
+          }
+        },
+        {
+          "averageScore": 89,
+          "bannerImage": "",
+          "broadcast": {
+            "day": "Friday",
+            "time": "23:40",
+            "timezone": "Asia/Tokyo"
+          },
+          "characterPreview": {
+            "edges": []
+          },
+          "coverImage": {
+            "extraLarge": "https://cdn.myanimelist.net/images/anime/1025/147458.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1025/147458.jpg"
+          },
+          "description": "Maomao returns to the inner court.",
+          "duration": 62,
+          "endDate": null,
+          "endings": [],
+          "episodes": 24,
+          "externalLinks": [
+            {
+              "icon": "",
+              "site": "MyAnimeList",
+              "url": "https://myanimelist.net/anime/58514/Kusuriya_no_Hitorigoto_2nd_Season"
+            }
+          ],
+          "format": "TV",
+          "genres": [
+            "Drama",
+            "Mystery"
+          ],
+          "id": null,
+          "idMal": 58514,
+          "nextAiringEpisode": null,
+          "openings": [],
+          "popularity": 301002,
+          "producers": [],
+          "providerIds": {
+            "jikan": 58514,
+            "myanimelist": 58514
+          },
+          "rankings": [
+            {
+              "allTime": true,
+              "context": "top_rated",
+              "rank": 20,
+              "type": "RATED"
+            },
+            {
+              "allTime": true,
+              "context": "most_popular",
+              "rank": 900,
+              "type": "POPULAR"
+            }
+          ],
+          "relations": null,
+          "season": "WINTER",
+          "seasonYear": 2025,
+          "source": "LIGHT_NOVEL",
+          "sourceUrls": [
+            "https://myanimelist.net/anime/58514/Kusuriya_no_Hitorigoto_2nd_Season"
+          ],
+          "staffPreview": {
+            "edges": []
+          },
+          "startDate": {
+            "day": 10,
+            "month": 1,
+            "year": 2025
+          },
+          "stats": {
+            "statusDistribution": []
+          },
+          "status": "RELEASING",
+          "studios": {
+            "nodes": [
+              {
+                "name": "OLM"
+              },
+              {
+                "name": "TOHO animation STUDIO"
+              }
+            ]
+          },
+          "synonyms": [],
+          "tags": [],
+          "title": {
+            "english": "",
+            "native": "薬屋のひとりごと 第2期",
+            "romaji": "Kusuriya no Hitorigoto 2nd Season"
+          },
+          "trailer": null
+        },
+        {
+          "averageScore": null,
+          "bannerImage": "",
+          "broadcast": {
+            "day": "",
+            "time": "",
+            "timezone": ""
+          },
+          "characterPreview": {
+            "edges": []
+          },
+          "coverImage": {
+            "extraLarge": "https://cdn.myanimelist.net/images/anime/1000/150000.webp",
+            "large": "https://cdn.myanimelist.net/images/anime/1000/150000.webp"
+          },
+          "description": "",
+          "duration": 1,
+          "endDate": null,
+          "endings": [],
+          "episodes": 1,
+          "externalLinks": [
+            {
+              "icon": "",
+              "site": "MyAnimeList",
+              "url": "https://myanimelist.net/anime/59708/Short_Film"
+            }
+          ],
+          "format": "MOVIE",
+          "genres": [],
+          "id": null,
+          "idMal": 59708,
+          "nextAiringEpisode": null,
+          "openings": [],
+          "popularity": 1200,
+          "producers": [],
+          "providerIds": {
+            "jikan": 59708,
+            "myanimelist": 59708
+          },
+          "rankings": [
+            {
+              "allTime": true,
+              "context": "most_popular",
+              "rank": 9000,
+              "type": "POPULAR"
+            }
+          ],
+          "relations": null,
+          "season": "",
+          "seasonYear": 2024,
+          "source": "ORIGINAL",
+          "sourceUrls": [
+            "https://myanimelist.net/anime/59708/Short_Film"
+          ],
+          "staffPreview": {
+            "edges": []
+          },
+          "startDate": {
+            "day": 1,
+            "month": 1,
+            "year": 2024
+          },
+          "stats": {
+            "statusDistribution": []
+          },
+          "status": "FINISHED",
+          "studios": {
+            "nodes": []
+          },
+          "synonyms": [],
+          "tags": [
+            "love polygon",
+            "hentai"
+          ],
+          "title": {
+            "english": "",
+            "native": "",
+            "romaji": "Short Film"
+          },
+          "trailer": null
+        }
+      ]
+    },
+    "helpers": {
+      "broadcast": [
+        {
+          "day": "Saturday",
+          "time": "01:30",
+          "timezone": "Asia/Tokyo"
+        },
+        {
+          "day": "",
+          "time": "",
+          "timezone": ""
+        },
+        {
+          "day": "",
+          "time": "",
+          "timezone": ""
+        }
+      ],
+      "duration_minutes": {
+        "'1 hr 2 min'": 62,
+        "'1 min 30 sec'": 1,
+        "'2 hr'": 120,
+        "'24 min per ep'": 24,
+        "'45 sec'": 1,
+        "'Unknown'": 24,
+        "13": 13,
+        "None": 24
+      },
+      "format_status_source": [
+        [
+          "TV",
+          "NOT_YET_RELEASED",
+          ""
+        ],
+        [
+          "MOVIE",
+          "RELEASING",
+          "WEB_NOVEL"
+        ],
+        [
+          "TV",
+          "FINISHED",
+          ""
+        ],
+        [
+          "MUSIC",
+          "CANCELLED",
+          "MIXED_MEDIA"
+        ]
+      ],
+      "jikan_date": [
+        {
+          "day": 3,
+          "month": 2,
+          "year": 2024
+        },
+        {
+          "day": 1,
+          "month": 1,
+          "year": 2024
+        },
+        null,
+        null
+      ],
+      "latest_episode": [
+        10,
+        null
+      ],
+      "merge_next_airing": [
+        {
+          "airingAt": 1732809360,
+          "episode": 7
+        },
+        {
+          "airingAt": 1732809360,
+          "episode": 8
+        },
+        {
+          "airingAt": 1732809360,
+          "episode": 9
+        },
+        {
+          "airingAt": 1732809360
+        },
+        {
+          "airingAt": 5,
+          "episode": 4
+        },
+        null
+      ],
+      "next_episode_airing_at": {
+        "'  '": null,
+        "''": null,
+        "'1732809360'": 1732809360,
+        "'2024-11-28T15:56:00'": 1732809360,
+        "'2024-11-28T15:56:00Z'": 1732809360,
+        "'2024-11-29T00:56:00+09:00'": 1732809360,
+        "'not a date'": null,
+        "0": null,
+        "1732809360": 1732809360,
+        "1732809360.9": 1732809360,
+        "None": null,
+        "[1]": null
+      },
+      "service_ids": [
+        1600000005,
+        1700000005,
+        null,
+        null
+      ]
+    },
+    "prepare_anime_data.21": {
+      "anilist_id": null,
+      "anime_type": "TV",
+      "banner_image_external_url": "",
+      "broadcast_day": "Sunday",
+      "broadcast_time": "23:15:00",
+      "broadcast_timezone": "Asia/Tokyo",
+      "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg",
+      "duration_minutes": 24,
+      "end_date": null,
+      "episode_count": 0,
+      "external_links": [
+        {
+          "icon": "",
+          "site": "Official Site",
+          "url": "http://www.toei-anim.co.jp/tv/onep/"
+        },
+        {
+          "icon": "",
+          "site": "Crunchyroll",
+          "url": "http://www.crunchyroll.com/series-257631"
+        },
+        {
+          "icon": "",
+          "site": "MyAnimeList",
+          "url": "https://myanimelist.net/anime/21/One_Piece"
+        }
+      ],
+      "mal_id": 21,
+      "member_count": 2512345,
+      "meta_description": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack by fearsome pirates.",
+      "next_airing_date": "<next broadcast>",
+      "next_airing_episode": 1124,
+      "popularity_rank": 18,
+      "producers": [
+        "Fuji TV"
+      ],
+      "provider_ids": {
+        "jikan": 21,
+        "myanimelist": 21
+      },
+      "rating": 8.7,
+      "release_date": "1999-10-20",
+      "season": "FALL",
+      "season_year": 1999,
+      "site_rank": 47,
+      "slug": "one-piece",
+      "source_material": "Manga",
+      "source_urls": [
+        "https://myanimelist.net/anime/21/One_Piece"
+      ],
+      "status": "Airing",
+      "status_distribution": {
+        "COMPLETED": 120004,
+        "CURRENT": 1300222,
+        "DROPPED": 140023,
+        "PLANNING": 301000
+      },
+      "synonyms": [
+        "OP",
+        "One Piece",
+        "ONE PIECE"
+      ],
+      "synopsis": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack by fearsome pirates.",
+      "tags": [
+        "shounen"
+      ],
+      "title": "One Piece",
+      "title_jp": "ONE PIECE"
+    },
+    "prepare_anime_data.52991": {
+      "anilist_id": 154587,
+      "anime_type": "TV",
+      "banner_image_external_url": "",
+      "broadcast_day": "Friday",
+      "broadcast_time": "23:00:00",
+      "broadcast_timezone": "Asia/Tokyo",
+      "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1015/138006l.webp",
+      "duration_minutes": 24,
+      "end_date": "2024-03-22",
+      "episode_count": 28,
+      "external_links": [
+        {
+          "icon": "",
+          "site": "Official Site",
+          "url": "https://frieren-anime.jp/"
+        },
+        {
+          "icon": "",
+          "site": "@Anime_Frieren",
+          "url": "https://twitter.com/Anime_Frieren"
+        },
+        {
+          "icon": "",
+          "site": "AniDB",
+          "url": "https://anidb.net/perl-bin/animedb.pl?show=anime&aid=17617"
+        },
+        {
+          "icon": "",
+          "site": "Crunchyroll",
+          "url": "http://www.crunchyroll.com/series/GG5H5XQX4"
+        },
+        {
+          "icon": "",
+          "site": "Netflix",
+          "url": "https://www.netflix.com/title/81726714"
+        },
+        {
+          "icon": "",
+          "site": "MyAnimeList",
+          "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren"
+        }
+      ],
+      "mal_id": 52991,
+      "member_count": 1043212,
+      "meta_description": "During their decade-long quest to defeat the Demon King, the members of the hero's party—Himmel himself, the priest Heiter, the dwarf warrior Eisen, and the ...",
+      "next_airing_date": null,
+      "next_airing_episode": null,
+      "popularity_rank": 172,
+      "producers": [
+        "Aniplex",
+        "Dentsu",
+        "Shogakukan"
+      ],
+      "provider_ids": {
+        "jikan": 52991,
+        "myanimelist": 52991
+      },
+      "rating": 9.3,
+      "release_date": "2023-09-29",
+      "season": "FALL",
+      "season_year": 2023,
+      "site_rank": 1,
+      "slug": "sousou-no-frieren",
+      "source_material": "Manga",
+      "source_urls": [
+        "https://myanimelist.net/anime/52991/Sousou_no_Frieren"
+      ],
+      "status": "Finished",
+      "status_distribution": {
+        "COMPLETED": 640122,
+        "CURRENT": 152331,
+        "DROPPED": 9877,
+        "PAUSED": 21004,
+        "PLANNING": 219878
+      },
+      "synonyms": [
+        "Frieren at the Funeral",
+        "Frieren",
+        "Sousou no Frieren",
+        "葬送のフリーレン",
+        "Frieren: Beyond Journey's End",
+        "Frieren - Nach dem Ende der Reise"
+      ],
+      "synopsis": "During their decade-long quest to defeat the Demon King, the members of the hero's party—Himmel himself, the priest Heiter, the dwarf warrior Eisen, and the elven mage Frieren—forge bonds through adventures and battles, creating unforgettable precious memories for most of them.\n\n[Written by MAL Rewrite]",
+      "tags": [
+        "urban fantasy",
+        "shounen"
+      ],
+      "title": "Frieren: Beyond Journey's End",
+      "title_jp": "葬送のフリーレン"
+    },
+    "prepare_anime_data.recent": [
+      {
+        "anilist_id": null,
+        "anime_type": "TV",
+        "banner_image_external_url": "",
+        "broadcast_day": "Sunday",
+        "broadcast_time": "23:15:00",
+        "broadcast_timezone": "Asia/Tokyo",
+        "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg",
+        "duration_minutes": 24,
+        "end_date": null,
+        "episode_count": 0,
+        "external_links": [
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/21/One_Piece"
+          }
+        ],
+        "mal_id": 21,
+        "member_count": 2512345,
+        "meta_description": "Pirates.",
+        "next_airing_date": null,
+        "next_airing_episode": null,
+        "popularity_rank": 18,
+        "producers": [],
+        "provider_ids": {
+          "jikan": 21,
+          "myanimelist": 21
+        },
+        "rating": 8.7,
+        "release_date": "1999-10-20",
+        "season": "FALL",
+        "season_year": 1999,
+        "site_rank": 47,
+        "slug": "slug-21",
+        "source_material": "Manga",
+        "source_urls": [
+          "https://myanimelist.net/anime/21/One_Piece"
+        ],
+        "status": "Airing",
+        "status_distribution": {},
+        "synonyms": [],
+        "synopsis": "Pirates.",
+        "tags": [],
+        "title": "One Piece",
+        "title_jp": "ONE PIECE"
+      },
+      {
+        "anilist_id": null,
+        "anime_type": "TV",
+        "banner_image_external_url": "",
+        "broadcast_day": "Thursday",
+        "broadcast_time": "23:56:00",
+        "broadcast_timezone": "Asia/Tokyo",
+        "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1584/143719l.jpg",
+        "duration_minutes": 23,
+        "end_date": null,
+        "episode_count": 12,
+        "external_links": [
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/57334/Dandadan"
+          }
+        ],
+        "mal_id": 57334,
+        "member_count": 702311,
+        "meta_description": "Reeling from her recent breakup, Momo Ayase meets her classmate Ken Takakura.",
+        "next_airing_date": null,
+        "next_airing_episode": null,
+        "popularity_rank": 380,
+        "producers": [],
+        "provider_ids": {
+          "jikan": 57334,
+          "myanimelist": 57334
+        },
+        "rating": 8.6,
+        "release_date": "2024-10-04",
+        "season": "FALL",
+        "season_year": 2024,
+        "site_rank": 92,
+        "slug": "slug-57334",
+        "source_material": "Web Manga",
+        "source_urls": [
+          "https://myanimelist.net/anime/57334/Dandadan"
+        ],
+        "status": "Airing",
+        "status_distribution": {},
+        "synonyms": [],
+        "synopsis": "Reeling from her recent breakup, Momo Ayase meets her classmate Ken Takakura.",
+        "tags": [
+          "love polygon",
+          "shounen"
+        ],
+        "title": "DAN DA DAN",
+        "title_jp": "ダンダダン"
+      },
+      {
+        "anilist_id": null,
+        "anime_type": "TV",
+        "banner_image_external_url": "",
+        "broadcast_day": "Friday",
+        "broadcast_time": "23:40:00",
+        "broadcast_timezone": "Asia/Tokyo",
+        "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1025/147458.jpg",
+        "duration_minutes": 62,
+        "end_date": null,
+        "episode_count": 24,
+        "external_links": [
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/58514/Kusuriya_no_Hitorigoto_2nd_Season"
+          }
+        ],
+        "mal_id": 58514,
+        "member_count": 301002,
+        "meta_description": "Maomao returns to the inner court.",
+        "next_airing_date": null,
+        "next_airing_episode": null,
+        "popularity_rank": 900,
+        "producers": [],
+        "provider_ids": {
+          "jikan": 58514,
+          "myanimelist": 58514
+        },
+        "rating": 8.9,
+        "release_date": "2025-01-10",
+        "season": "WINTER",
+        "season_year": 2025,
+        "site_rank": 20,
+        "slug": "slug-58514",
+        "source_material": "Light Novel",
+        "source_urls": [
+          "https://myanimelist.net/anime/58514/Kusuriya_no_Hitorigoto_2nd_Season"
+        ],
+        "status": "Airing",
+        "status_distribution": {},
+        "synonyms": [],
+        "synopsis": "Maomao returns to the inner court.",
+        "tags": [],
+        "title": "Kusuriya no Hitorigoto 2nd Season",
+        "title_jp": "薬屋のひとりごと 第2期"
+      },
+      {
+        "anilist_id": null,
+        "anime_type": "Movie",
+        "banner_image_external_url": "",
+        "broadcast_day": "",
+        "broadcast_time": null,
+        "broadcast_timezone": "",
+        "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1000/150000.webp",
+        "duration_minutes": 1,
+        "end_date": null,
+        "episode_count": 1,
+        "external_links": [
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/59708/Short_Film"
+          }
+        ],
+        "mal_id": 59708,
+        "member_count": 1200,
+        "meta_description": "",
+        "next_airing_date": null,
+        "next_airing_episode": null,
+        "popularity_rank": 9000,
+        "producers": [],
+        "provider_ids": {
+          "jikan": 59708,
+          "myanimelist": 59708
+        },
+        "rating": null,
+        "release_date": "2024-01-01",
+        "season": "",
+        "season_year": 2024,
+        "site_rank": null,
+        "slug": "slug-59708",
+        "source_material": "Original",
+        "source_urls": [
+          "https://myanimelist.net/anime/59708/Short_Film"
+        ],
+        "status": "Finished",
+        "status_distribution": {},
+        "synonyms": [],
+        "synopsis": "",
+        "tags": [
+          "love polygon",
+          "hentai"
+        ],
+        "title": "Short Film",
+        "title_jp": ""
+      }
+    ],
+    "recommendations.52991": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "requests": [
+        "GET /anime/52991/recommendations"
+      ],
+      "result": [
+        {
+          "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1795/95088l.webp",
+          "episode_count": 0,
+          "format": null,
+          "mal_id": 33352,
+          "member_count": 0,
+          "rating": null,
+          "recommendation_rating": 41,
+          "status": null,
+          "title": "Violet Evergarden",
+          "title_jp": ""
+        },
+        {
+          "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1125/96929.jpg",
+          "episode_count": 0,
+          "format": null,
+          "mal_id": 37779,
+          "member_count": 0,
+          "rating": null,
+          "recommendation_rating": 12,
+          "status": null,
+          "title": "Yakusoku no Neverland",
+          "title_jp": ""
+        },
+        {
+          "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1935/127974.jpg",
+          "episode_count": 0,
+          "format": null,
+          "mal_id": 9253,
+          "member_count": 0,
+          "rating": null,
+          "recommendation_rating": 9,
+          "status": null,
+          "title": "Steins;Gate",
+          "title_jp": ""
+        }
+      ]
+    },
+    "recommendations.52991.limit2": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "requests": [
+        "GET /anime/52991/recommendations"
+      ],
+      "result": [
+        {
+          "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1795/95088l.webp",
+          "episode_count": 0,
+          "format": null,
+          "mal_id": 33352,
+          "member_count": 0,
+          "rating": null,
+          "recommendation_rating": 41,
+          "status": null,
+          "title": "Violet Evergarden",
+          "title_jp": ""
+        },
+        {
+          "cover_image_external_url": "https://cdn.myanimelist.net/images/anime/1125/96929.jpg",
+          "episode_count": 0,
+          "format": null,
+          "mal_id": 37779,
+          "member_count": 0,
+          "rating": null,
+          "recommendation_rating": 12,
+          "status": null,
+          "title": "Yakusoku no Neverland",
+          "title_jp": ""
+        }
+      ]
+    },
+    "recommendations.invalid": {
+      "last_error": [
+        "invalid_variable",
+        "invalid_mal_id"
+      ],
+      "requests": [],
+      "result": []
+    },
+    "search_airing_by_mal_id.21": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "requests": [
+        "GET /anime/21/episodes?page=1",
+        "GET /anime/21/episodes?page=2",
+        "GET /anime/21/full"
+      ],
+      "result": {
+        "averageScore": 87,
+        "bannerImage": "",
+        "broadcast": {
+          "day": "Sunday",
+          "time": "23:15",
+          "timezone": "Asia/Tokyo"
+        },
+        "characterPreview": {
+          "edges": []
+        },
+        "coverImage": {
+          "extraLarge": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg",
+          "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"
+        },
+        "description": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack by fearsome pirates.",
+        "duration": 24,
+        "endDate": null,
+        "endings": [],
+        "episodes": 0,
+        "externalLinks": [
+          {
+            "icon": "",
+            "site": "Official Site",
+            "url": "http://www.toei-anim.co.jp/tv/onep/"
+          },
+          {
+            "icon": "",
+            "site": "Crunchyroll",
+            "url": "http://www.crunchyroll.com/series-257631"
+          },
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/21/One_Piece"
+          }
+        ],
+        "format": "TV",
+        "genres": [
+          "Action",
+          "Adventure"
+        ],
+        "id": 21,
+        "idMal": 21,
+        "nextAiringEpisode": {
+          "airingAt": "<next broadcast>",
+          "episode": 1124
+        },
+        "openings": [],
+        "popularity": 2512345,
+        "producers": [
+          "Fuji TV"
+        ],
+        "providerIds": {
+          "jikan": 21,
+          "myanimelist": 21
+        },
+        "rankings": [
+          {
+            "allTime": true,
+            "context": "top_rated",
+            "rank": 47,
+            "type": "RATED"
+          },
+          {
+            "allTime": true,
+            "context": "most_popular",
+            "rank": 18,
+            "type": "POPULAR"
+          }
+        ],
+        "relations": {
+          "edges": [
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 459,
+                "status": null,
+                "title": {
+                  "english": "One Piece Movie 01",
+                  "native": "",
+                  "romaji": "One Piece Movie 01"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "SIDE_STORY"
+            },
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 1094,
+                "status": null,
+                "title": {
+                  "english": "One Piece: Taose! Kaizoku Ganzack",
+                  "native": "",
+                  "romaji": "One Piece: Taose! Kaizoku Ganzack"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "SIDE_STORY"
+            }
+          ]
+        },
+        "season": "FALL",
+        "seasonYear": 1999,
+        "source": "MANGA",
+        "sourceUrls": [
+          "https://myanimelist.net/anime/21/One_Piece"
+        ],
+        "staffPreview": {
+          "edges": []
+        },
+        "startDate": {
+          "day": 20,
+          "month": 10,
+          "year": 1999
+        },
+        "stats": {
+          "statusDistribution": []
+        },
+        "status": "RELEASING",
+        "studios": {
+          "nodes": [
+            {
+              "name": "Toei Animation"
+            }
+          ]
+        },
+        "synonyms": [
+          "OP",
+          "One Piece",
+          "ONE PIECE"
+        ],
+        "tags": [
+          "shounen"
+        ],
+        "title": {
+          "english": "One Piece",
+          "native": "ONE PIECE",
+          "romaji": "One Piece"
+        },
+        "trailer": null
+      }
+    },
+    "search_airing_by_mal_id.invalid": {
+      "last_error": [
+        "invalid_variable",
+        "invalid_mal_id"
+      ],
+      "requests": [],
+      "result": null
+    },
+    "search_anime.frieren": {
+      "last_error": [
+        "not_found",
+        "Resource does not exist"
+      ],
+      "requests": [
+        "GET /anime/52991",
+        "GET /anime/52991/characters",
+        "GET /anime/52991/full",
+        "GET /anime/52991/staff",
+        "GET /anime/52991/statistics",
+        "GET /anime/52991/themes",
+        "GET /anime/56885",
+        "GET /anime/56885/characters",
+        "GET /anime/56885/full",
+        "GET /anime/56885/staff",
+        "GET /anime/56885/statistics",
+        "GET /anime/56885/themes",
+        "GET /anime?limit=5&page=1&q=Frieren!!"
+      ],
+      "result": [
+        {
+          "averageScore": 93,
+          "bannerImage": "",
+          "broadcast": {
+            "day": "Friday",
+            "time": "23:00",
+            "timezone": "Asia/Tokyo"
+          },
+          "characterPreview": {
+            "edges": [
+              {
+                "node": {
+                  "description": "An elven mage who was part of the hero's party.",
+                  "id": 1600184947,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/characters/7/525105.jpg"
+                  },
+                  "name": {
+                    "full": "Frieren",
+                    "native": "フリーレン"
+                  }
+                },
+                "role": "MAIN",
+                "voiceActors": [
+                  {
+                    "description": "",
+                    "id": 1700034785,
+                    "image": {
+                      "large": "https://cdn.myanimelist.net/images/voiceactors/3/63374.jpg"
+                    },
+                    "name": {
+                      "full": "Tanezaki, Atsumi",
+                      "native": ""
+                    }
+                  }
+                ]
+              },
+              {
+                "node": {
+                  "description": "",
+                  "id": 1600188176,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/characters/9/526119.jpg"
+                  },
+                  "name": {
+                    "full": "Fern",
+                    "native": ""
+                  }
+                },
+                "role": "SUPPORTING",
+                "voiceActors": [
+                  {
+                    "description": "",
+                    "id": 1700065731,
+                    "image": {
+                      "large": "https://cdn.myanimelist.net/images/voiceactors/1/68120.webp"
+                    },
+                    "name": {
+                      "full": "Ichinose, Kana",
+                      "native": ""
+                    }
+                  }
+                ]
+              },
+              {
+                "node": {
+                  "description": "",
+                  "id": null,
+                  "image": {
+                    "large": ""
+                  },
+                  "name": {
+                    "full": "Village Elder",
+                    "native": ""
+                  }
+                },
+                "role": "SUPPORTING",
+                "voiceActors": []
+              }
+            ]
+          },
+          "coverImage": {
+            "extraLarge": "https://cdn.myanimelist.net/images/anime/1015/138006l.webp",
+            "large": "https://cdn.myanimelist.net/images/anime/1015/138006l.webp"
+          },
+          "description": "During their decade-long quest to defeat the Demon King, the members of the hero's party—Himmel himself, the priest Heiter, the dwarf warrior Eisen, and the elven mage Frieren—forge bonds through adventures and battles, creating unforgettable precious memories for most of them.\n\n[Written by MAL Rewrite]",
+          "duration": 24,
+          "endDate": {
+            "day": 22,
+            "month": 3,
+            "year": 2024
+          },
+          "endings": [
+            "1: \"Anytime Anywhere\" by milet (eps 1-27)",
+            "2: \"Bliss\" by milet (eps 28)"
+          ],
+          "episodes": 28,
+          "externalLinks": [
+            {
+              "icon": "",
+              "site": "Official Site",
+              "url": "https://frieren-anime.jp/"
+            },
+            {
+              "icon": "",
+              "site": "@Anime_Frieren",
+              "url": "https://twitter.com/Anime_Frieren"
+            },
+            {
+              "icon": "",
+              "site": "AniDB",
+              "url": "https://anidb.net/perl-bin/animedb.pl?show=anime&aid=17617"
+            },
+            {
+              "icon": "",
+              "site": "Crunchyroll",
+              "url": "http://www.crunchyroll.com/series/GG5H5XQX4"
+            },
+            {
+              "icon": "",
+              "site": "Netflix",
+              "url": "https://www.netflix.com/title/81726714"
+            },
+            {
+              "icon": "",
+              "site": "MyAnimeList",
+              "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren"
+            }
+          ],
+          "format": "TV",
+          "genres": [
+            "Adventure",
+            "Drama",
+            "Fantasy"
+          ],
+          "id": null,
+          "idMal": 52991,
+          "nextAiringEpisode": null,
+          "openings": [
+            "1: \"Yuusha (勇者)\" by YOASOBI (eps 1-16)",
+            "2: \"Haru (晴る)\" by Yorushika (eps 17-28)"
+          ],
+          "popularity": 1043212,
+          "producers": [
+            "Aniplex",
+            "Dentsu",
+            "Shogakukan"
+          ],
+          "providerIds": {
+            "jikan": 52991,
+            "myanimelist": 52991
+          },
+          "rankings": [
+            {
+              "allTime": true,
+              "context": "top_rated",
+              "rank": 1,
+              "type": "RATED"
+            },
+            {
+              "allTime": true,
+              "context": "most_popular",
+              "rank": 172,
+              "type": "POPULAR"
+            }
+          ],
+          "relations": {
+            "edges": [
+              {
+                "node": {
+                  "coverImage": {
+                    "large": ""
+                  },
+                  "format": null,
+                  "id": null,
+                  "idMal": 126287,
+                  "status": null,
+                  "title": {
+                    "english": "Sousou no Frieren",
+                    "native": "",
+                    "romaji": "Sousou no Frieren"
+                  },
+                  "type": "MANGA"
+                },
+                "relationType": "ADAPTATION"
+              },
+              {
+                "node": {
+                  "coverImage": {
+                    "large": ""
+                  },
+                  "format": null,
+                  "id": null,
+                  "idMal": 59978,
+                  "status": null,
+                  "title": {
+                    "english": "Sousou no Frieren 2nd Season",
+                    "native": "",
+                    "romaji": "Sousou no Frieren 2nd Season"
+                  },
+                  "type": "ANIME"
+                },
+                "relationType": "SEQUEL"
+              },
+              {
+                "node": {
+                  "coverImage": {
+                    "large": ""
+                  },
+                  "format": null,
+                  "id": null,
+                  "idMal": 56885,
+                  "status": null,
+                  "title": {
+                    "english": "Sousou no Frieren: ●● no Mahou",
+                    "native": "",
+                    "romaji": "Sousou no Frieren: ●● no Mahou"
+                  },
+                  "type": "ANIME"
+                },
+                "relationType": "OTHER"
+              }
+            ]
+          },
+          "season": "FALL",
+          "seasonYear": 2023,
+          "source": "MANGA",
+          "sourceUrls": [
+            "https://myanimelist.net/anime/52991/Sousou_no_Frieren"
+          ],
+          "staffPreview": {
+            "edges": [
+              {
+                "node": {
+                  "description": "",
+                  "id": 1700007339,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"
+                  },
+                  "name": {
+                    "full": "Saitou, Keiichirou",
+                    "native": ""
+                  }
+                },
+                "role": "Director"
+              },
+              {
+                "node": {
+                  "description": "",
+                  "id": 1700007339,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"
+                  },
+                  "name": {
+                    "full": "Saitou, Keiichirou",
+                    "native": ""
+                  }
+                },
+                "role": "Storyboard"
+              },
+              {
+                "node": {
+                  "description": "",
+                  "id": 1700007339,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"
+                  },
+                  "name": {
+                    "full": "Saitou, Keiichirou",
+                    "native": ""
+                  }
+                },
+                "role": "Episode Director"
+              },
+              {
+                "node": {
+                  "description": "",
+                  "id": 1700055043,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/questionmark_23.gif"
+                  },
+                  "name": {
+                    "full": "Suzuki, Tomohiro",
+                    "native": ""
+                  }
+                },
+                "role": "Series Composition"
+              },
+              {
+                "node": {
+                  "description": "",
+                  "id": null,
+                  "image": {
+                    "large": ""
+                  },
+                  "name": {
+                    "full": "Overflow, Person",
+                    "native": ""
+                  }
+                },
+                "role": "Staff"
+              }
+            ]
+          },
+          "startDate": {
+            "day": 29,
+            "month": 9,
+            "year": 2023
+          },
+          "stats": {
+            "statusDistribution": [
+              {
+                "amount": 152331,
+                "status": "CURRENT"
+              },
+              {
+                "amount": 640122,
+                "status": "COMPLETED"
+              },
+              {
+                "amount": 21004,
+                "status": "PAUSED"
+              },
+              {
+                "amount": 9877,
+                "status": "DROPPED"
+              },
+              {
+                "amount": 219878,
+                "status": "PLANNING"
+              }
+            ]
+          },
+          "status": "FINISHED",
+          "studios": {
+            "nodes": [
+              {
+                "name": "Madhouse"
+              }
+            ]
+          },
+          "synonyms": [
+            "Frieren at the Funeral",
+            "Frieren",
+            "Sousou no Frieren",
+            "葬送のフリーレン",
+            "Frieren: Beyond Journey's End",
+            "Frieren - Nach dem Ende der Reise"
+          ],
+          "tags": [
+            "urban fantasy",
+            "shounen"
+          ],
+          "title": {
+            "english": "Frieren: Beyond Journey's End",
+            "native": "葬送のフリーレン",
+            "romaji": "Sousou no Frieren"
+          },
+          "trailer": {
+            "id": "qgQoQ3cDkq4",
+            "site": "youtube"
+          }
+        },
+        {
+          "averageScore": 69,
+          "bannerImage": "",
+          "broadcast": {
+            "day": "",
+            "time": "",
+            "timezone": ""
+          },
+          "characterPreview": {
+            "edges": []
+          },
+          "coverImage": {
+            "extraLarge": "https://cdn.myanimelist.net/images/anime/1000/141000.jpg",
+            "large": "https://cdn.myanimelist.net/images/anime/1000/141000.jpg"
+          },
+          "description": "",
+          "duration": 2,
+          "endDate": {
+            "day": 1,
+            "month": 4,
+            "year": 2024
+          },
+          "endings": [],
+          "episodes": 30,
+          "externalLinks": [
+            {
+              "icon": "",
+              "site": "MyAnimeList",
+              "url": "https://myanimelist.net/anime/56885"
+            }
+          ],
+          "format": "ONA",
+          "genres": [],
+          "id": null,
+          "idMal": 56885,
+          "nextAiringEpisode": null,
+          "openings": [],
+          "popularity": 31234,
+          "producers": [],
+          "providerIds": {
+            "jikan": 56885,
+            "myanimelist": 56885
+          },
+          "rankings": [],
+          "relations": null,
+          "season": "",
+          "seasonYear": 2023,
+          "source": "MANGA",
+          "sourceUrls": [
+            "https://myanimelist.net/anime/56885"
+          ],
+          "staffPreview": {
+            "edges": []
+          },
+          "startDate": {
+            "day": 1,
+            "month": 10,
+            "year": 2023
+          },
+          "stats": {
+            "statusDistribution": []
+          },
+          "status": "FINISHED",
+          "studios": {
+            "nodes": []
+          },
+          "synonyms": [],
+          "tags": [],
+          "title": {
+            "english": "",
+            "native": "葬送のフリーレン ～●●の魔法～",
+            "romaji": "Sousou no Frieren: ●● no Mahou"
+          },
+          "trailer": null
+        }
+      ]
+    },
+    "search_by_mal_id.21": {
+      "last_error": "<not pinned>",
+      "requests": [
+        "GET /anime/21",
+        "GET /anime/21/characters",
+        "GET /anime/21/episodes?page=1",
+        "GET /anime/21/episodes?page=2",
+        "GET /anime/21/full",
+        "GET /anime/21/staff",
+        "GET /anime/21/statistics",
+        "GET /anime/21/themes"
+      ],
+      "result": {
+        "averageScore": 87,
+        "bannerImage": "",
+        "broadcast": {
+          "day": "Sunday",
+          "time": "23:15",
+          "timezone": "Asia/Tokyo"
+        },
+        "characterPreview": {
+          "edges": []
+        },
+        "coverImage": {
+          "extraLarge": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg",
+          "large": "https://cdn.myanimelist.net/images/anime/1244/138851l.jpg"
+        },
+        "description": "Barely surviving in a barrel after passing through a terrible whirlpool at sea, carefree Monkey D. Luffy ends up aboard a ship under attack by fearsome pirates.",
+        "duration": 24,
+        "endDate": null,
+        "endings": [],
+        "episodes": 0,
+        "externalLinks": [
+          {
+            "icon": "",
+            "site": "Official Site",
+            "url": "http://www.toei-anim.co.jp/tv/onep/"
+          },
+          {
+            "icon": "",
+            "site": "Crunchyroll",
+            "url": "http://www.crunchyroll.com/series-257631"
+          },
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/21/One_Piece"
+          }
+        ],
+        "format": "TV",
+        "genres": [
+          "Action",
+          "Adventure"
+        ],
+        "id": null,
+        "idMal": 21,
+        "nextAiringEpisode": {
+          "airingAt": "<next broadcast>",
+          "episode": 1124
+        },
+        "openings": [],
+        "popularity": 2512345,
+        "producers": [
+          "Fuji TV"
+        ],
+        "providerIds": {
+          "jikan": 21,
+          "myanimelist": 21
+        },
+        "rankings": [
+          {
+            "allTime": true,
+            "context": "top_rated",
+            "rank": 47,
+            "type": "RATED"
+          },
+          {
+            "allTime": true,
+            "context": "most_popular",
+            "rank": 18,
+            "type": "POPULAR"
+          }
+        ],
+        "relations": {
+          "edges": [
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 459,
+                "status": null,
+                "title": {
+                  "english": "One Piece Movie 01",
+                  "native": "",
+                  "romaji": "One Piece Movie 01"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "SIDE_STORY"
+            },
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 1094,
+                "status": null,
+                "title": {
+                  "english": "One Piece: Taose! Kaizoku Ganzack",
+                  "native": "",
+                  "romaji": "One Piece: Taose! Kaizoku Ganzack"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "SIDE_STORY"
+            }
+          ]
+        },
+        "season": "FALL",
+        "seasonYear": 1999,
+        "source": "MANGA",
+        "sourceUrls": [
+          "https://myanimelist.net/anime/21/One_Piece"
+        ],
+        "staffPreview": {
+          "edges": []
+        },
+        "startDate": {
+          "day": 20,
+          "month": 10,
+          "year": 1999
+        },
+        "stats": {
+          "statusDistribution": [
+            {
+              "amount": 1300222,
+              "status": "CURRENT"
+            },
+            {
+              "amount": 120004,
+              "status": "COMPLETED"
+            },
+            {
+              "amount": 140023,
+              "status": "DROPPED"
+            },
+            {
+              "amount": 301000,
+              "status": "PLANNING"
+            }
+          ]
+        },
+        "status": "RELEASING",
+        "studios": {
+          "nodes": [
+            {
+              "name": "Toei Animation"
+            }
+          ]
+        },
+        "synonyms": [
+          "OP",
+          "One Piece",
+          "ONE PIECE"
+        ],
+        "tags": [
+          "shounen"
+        ],
+        "title": {
+          "english": "One Piece",
+          "native": "ONE PIECE",
+          "romaji": "One Piece"
+        },
+        "trailer": null
+      }
+    },
+    "search_by_mal_id.52991": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "requests": [
+        "GET /anime/52991",
+        "GET /anime/52991/characters",
+        "GET /anime/52991/full",
+        "GET /anime/52991/staff",
+        "GET /anime/52991/statistics",
+        "GET /anime/52991/themes"
+      ],
+      "result": {
+        "averageScore": 93,
+        "bannerImage": "",
+        "broadcast": {
+          "day": "Friday",
+          "time": "23:00",
+          "timezone": "Asia/Tokyo"
+        },
+        "characterPreview": {
+          "edges": [
+            {
+              "node": {
+                "description": "An elven mage who was part of the hero's party.",
+                "id": 1600184947,
+                "image": {
+                  "large": "https://cdn.myanimelist.net/images/characters/7/525105.jpg"
+                },
+                "name": {
+                  "full": "Frieren",
+                  "native": "フリーレン"
+                }
+              },
+              "role": "MAIN",
+              "voiceActors": [
+                {
+                  "description": "",
+                  "id": 1700034785,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/voiceactors/3/63374.jpg"
+                  },
+                  "name": {
+                    "full": "Tanezaki, Atsumi",
+                    "native": ""
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "description": "",
+                "id": 1600188176,
+                "image": {
+                  "large": "https://cdn.myanimelist.net/images/characters/9/526119.jpg"
+                },
+                "name": {
+                  "full": "Fern",
+                  "native": ""
+                }
+              },
+              "role": "SUPPORTING",
+              "voiceActors": [
+                {
+                  "description": "",
+                  "id": 1700065731,
+                  "image": {
+                    "large": "https://cdn.myanimelist.net/images/voiceactors/1/68120.webp"
+                  },
+                  "name": {
+                    "full": "Ichinose, Kana",
+                    "native": ""
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "description": "",
+                "id": null,
+                "image": {
+                  "large": ""
+                },
+                "name": {
+                  "full": "Village Elder",
+                  "native": ""
+                }
+              },
+              "role": "SUPPORTING",
+              "voiceActors": []
+            }
+          ]
+        },
+        "coverImage": {
+          "extraLarge": "https://cdn.myanimelist.net/images/anime/1015/138006l.webp",
+          "large": "https://cdn.myanimelist.net/images/anime/1015/138006l.webp"
+        },
+        "description": "During their decade-long quest to defeat the Demon King, the members of the hero's party—Himmel himself, the priest Heiter, the dwarf warrior Eisen, and the elven mage Frieren—forge bonds through adventures and battles, creating unforgettable precious memories for most of them.\n\n[Written by MAL Rewrite]",
+        "duration": 24,
+        "endDate": {
+          "day": 22,
+          "month": 3,
+          "year": 2024
+        },
+        "endings": [
+          "1: \"Anytime Anywhere\" by milet (eps 1-27)",
+          "2: \"Bliss\" by milet (eps 28)"
+        ],
+        "episodes": 28,
+        "externalLinks": [
+          {
+            "icon": "",
+            "site": "Official Site",
+            "url": "https://frieren-anime.jp/"
+          },
+          {
+            "icon": "",
+            "site": "@Anime_Frieren",
+            "url": "https://twitter.com/Anime_Frieren"
+          },
+          {
+            "icon": "",
+            "site": "AniDB",
+            "url": "https://anidb.net/perl-bin/animedb.pl?show=anime&aid=17617"
+          },
+          {
+            "icon": "",
+            "site": "Crunchyroll",
+            "url": "http://www.crunchyroll.com/series/GG5H5XQX4"
+          },
+          {
+            "icon": "",
+            "site": "Netflix",
+            "url": "https://www.netflix.com/title/81726714"
+          },
+          {
+            "icon": "",
+            "site": "MyAnimeList",
+            "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren"
+          }
+        ],
+        "format": "TV",
+        "genres": [
+          "Adventure",
+          "Drama",
+          "Fantasy"
+        ],
+        "id": 154587,
+        "idMal": 52991,
+        "nextAiringEpisode": null,
+        "openings": [
+          "1: \"Yuusha (勇者)\" by YOASOBI (eps 1-16)",
+          "2: \"Haru (晴る)\" by Yorushika (eps 17-28)"
+        ],
+        "popularity": 1043212,
+        "producers": [
+          "Aniplex",
+          "Dentsu",
+          "Shogakukan"
+        ],
+        "providerIds": {
+          "jikan": 52991,
+          "myanimelist": 52991
+        },
+        "rankings": [
+          {
+            "allTime": true,
+            "context": "top_rated",
+            "rank": 1,
+            "type": "RATED"
+          },
+          {
+            "allTime": true,
+            "context": "most_popular",
+            "rank": 172,
+            "type": "POPULAR"
+          }
+        ],
+        "relations": {
+          "edges": [
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 126287,
+                "status": null,
+                "title": {
+                  "english": "Sousou no Frieren",
+                  "native": "",
+                  "romaji": "Sousou no Frieren"
+                },
+                "type": "MANGA"
+              },
+              "relationType": "ADAPTATION"
+            },
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 59978,
+                "status": null,
+                "title": {
+                  "english": "Sousou no Frieren 2nd Season",
+                  "native": "",
+                  "romaji": "Sousou no Frieren 2nd Season"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "SEQUEL"
+            },
+            {
+              "node": {
+                "coverImage": {
+                  "large": ""
+                },
+                "format": null,
+                "id": null,
+                "idMal": 56885,
+                "status": null,
+                "title": {
+                  "english": "Sousou no Frieren: ●● no Mahou",
+                  "native": "",
+                  "romaji": "Sousou no Frieren: ●● no Mahou"
+                },
+                "type": "ANIME"
+              },
+              "relationType": "OTHER"
+            }
+          ]
+        },
+        "season": "FALL",
+        "seasonYear": 2023,
+        "source": "MANGA",
+        "sourceUrls": [
+          "https://myanimelist.net/anime/52991/Sousou_no_Frieren"
+        ],
+        "staffPreview": {
+          "edges": [
+            {
+              "node": {
+                "description": "",
+                "id": 1700007339,
+                "image": {
+                  "large": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"
+                },
+                "name": {
+                  "full": "Saitou, Keiichirou",
+                  "native": ""
+                }
+              },
+              "role": "Director"
+            },
+            {
+              "node": {
+                "description": "",
+                "id": 1700007339,
+                "image": {
+                  "large": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"
+                },
+                "name": {
+                  "full": "Saitou, Keiichirou",
+                  "native": ""
+                }
+              },
+              "role": "Storyboard"
+            },
+            {
+              "node": {
+                "description": "",
+                "id": 1700007339,
+                "image": {
+                  "large": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"
+                },
+                "name": {
+                  "full": "Saitou, Keiichirou",
+                  "native": ""
+                }
+              },
+              "role": "Episode Director"
+            },
+            {
+              "node": {
+                "description": "",
+                "id": 1700055043,
+                "image": {
+                  "large": "https://cdn.myanimelist.net/images/questionmark_23.gif"
+                },
+                "name": {
+                  "full": "Suzuki, Tomohiro",
+                  "native": ""
+                }
+              },
+              "role": "Series Composition"
+            },
+            {
+              "node": {
+                "description": "",
+                "id": null,
+                "image": {
+                  "large": ""
+                },
+                "name": {
+                  "full": "Overflow, Person",
+                  "native": ""
+                }
+              },
+              "role": "Staff"
+            }
+          ]
+        },
+        "startDate": {
+          "day": 29,
+          "month": 9,
+          "year": 2023
+        },
+        "stats": {
+          "statusDistribution": [
+            {
+              "amount": 152331,
+              "status": "CURRENT"
+            },
+            {
+              "amount": 640122,
+              "status": "COMPLETED"
+            },
+            {
+              "amount": 21004,
+              "status": "PAUSED"
+            },
+            {
+              "amount": 9877,
+              "status": "DROPPED"
+            },
+            {
+              "amount": 219878,
+              "status": "PLANNING"
+            }
+          ]
+        },
+        "status": "FINISHED",
+        "studios": {
+          "nodes": [
+            {
+              "name": "Madhouse"
+            }
+          ]
+        },
+        "synonyms": [
+          "Frieren at the Funeral",
+          "Frieren",
+          "Sousou no Frieren",
+          "葬送のフリーレン",
+          "Frieren: Beyond Journey's End",
+          "Frieren - Nach dem Ende der Reise"
+        ],
+        "tags": [
+          "urban fantasy",
+          "shounen"
+        ],
+        "title": {
+          "english": "Frieren: Beyond Journey's End",
+          "native": "葬送のフリーレン",
+          "romaji": "Sousou no Frieren"
+        },
+        "trailer": {
+          "id": "qgQoQ3cDkq4",
+          "site": "youtube"
+        }
+      }
+    },
+    "search_by_mal_id.missing": {
+      "last_error": [
+        "not_found",
+        "Resource does not exist"
+      ],
+      "requests": [
+        "GET /anime/404",
+        "GET /anime/404/characters",
+        "GET /anime/404/full",
+        "GET /anime/404/staff",
+        "GET /anime/404/statistics",
+        "GET /anime/404/themes"
+      ],
+      "result": null
+    },
+    "streaming_episodes.52991": {
+      "last_error": [
+        "",
+        ""
+      ],
+      "requests": [
+        "GET /anime/52991/videos/episodes"
+      ],
+      "result": {
+        "id": 154587,
+        "idMal": 52991,
+        "streamingEpisodes": [
+          {
+            "site": "MyAnimeList",
+            "thumbnail": "https://img1.ak.crunchyroll.com/i/spire2-tmb/frieren28_full.jpg",
+            "title": "Episode 28",
+            "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren/episode/28"
+          },
+          {
+            "site": "MyAnimeList",
+            "thumbnail": "https://cdn.myanimelist.net/images/episode/27.jpg",
+            "title": "An Era of Humans",
+            "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren/episode/27"
+          },
+          {
+            "site": "MyAnimeList",
+            "thumbnail": "",
+            "title": "",
+            "url": ""
+          }
+        ]
+      }
+    },
+    "streaming_episodes.no_ids": {
+      "last_error": [
+        "invalid_variable",
+        "missing_mal_id"
+      ],
+      "requests": [],
+      "result": null
+    }
+  }
+}

@@ -16,7 +16,9 @@ class ProfileUpdateServiceTests(TestCase):
             email="service@example.com",
             password="password123",
         )
-        self.profile, _ = UserProfile.objects.update_or_create(user=self.user, defaults={"social_links": []})
+        self.profile, _ = UserProfile.objects.update_or_create(
+            user=self.user, defaults={"social_links": []}
+        )
 
     @patch("apps.users.services.profile_update_service.invalidate_user_caches")
     def test_updates_only_changed_non_file_fields(self, mock_invalidate):

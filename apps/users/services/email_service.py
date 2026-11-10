@@ -43,7 +43,9 @@ class EmailService:
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         new_email_encoded = urlsafe_base64_encode(force_bytes(new_email))
 
-        confirm_link = f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/{new_email_encoded}/"
+        confirm_link = (
+            f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/{new_email_encoded}/"
+        )
 
         message = f"""You requested to change your email address on aniShows.
 
@@ -179,7 +181,9 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
         )
         raise
     except ValueError:
-        logger.error("Email delivery misconfigured", extra={"recipient_list": recipient_list}, exc_info=True)
+        logger.error(
+            "Email delivery misconfigured", extra={"recipient_list": recipient_list}, exc_info=True
+        )
         raise
     except Exception as exc:
         logger.exception("Failed to send email", extra={"recipient_list": recipient_list})
