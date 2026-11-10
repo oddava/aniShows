@@ -7,6 +7,9 @@ import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
 import CustomSelect from '../../components/common/CustomSelect';
 import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
+import { formatDuration, getProgressPercent, getStatusBadge } from './components/importJobs/importJobFormat';
+import ImportJobDetails from './components/importJobs/ImportJobDetails';
+import TriggerImportJobForm from './components/importJobs/TriggerImportJobForm';
 
 const ACTIVE_STATUSES = ['pending', 'processing'];
 const hasActiveJobs = (data) => (data?.results || []).some((job) => ACTIVE_STATUSES.includes(job.status));
@@ -135,37 +138,6 @@ const AdminImportJobs = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
-    const statusStyles = {
-      pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-      processing: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      completed: 'bg-green-500/20 text-green-400 border-green-500/30',
-      failed: 'bg-red-500/20 text-red-400 border-red-500/30',
-      cancelled: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-    };
-
-    return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusStyles[status] || statusStyles.pending}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
-
-  const formatDuration = (seconds) => {
-    if (!seconds) return '-';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    if (minutes > 0) return `${minutes}m ${secs}s`;
-    return `${secs}s`;
-  };
-
-  const getProgressPercent = (processed, total) => {
-    if (!total || total <= 0) return 0;
-    return Math.min(100, Math.round((processed / total) * 100));
-  };
 
   const selectedOfflineEnrichment = selectedJob?.metadata?.offline_import?.enrichment;
 
@@ -337,153 +309,12 @@ const AdminImportJobs = () => {
         size="large"
       >
         {selectedJob && (
-          <div className="space-y-6">
-            {/* Status Overview */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <span className="text-sm text-white/60">Status</span>
-                <div className="mt-1">{getStatusBadge(selectedJob.status)}</div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <span className="text-sm text-white/60">Source</span>
-                <p className="text-white font-medium mt-1">{selectedJob.source}</p>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <span className="text-sm text-white/60">Type</span>
-                <p className="text-white font-medium mt-1">{selectedJob.source_type}</p>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <span className="text-sm text-white/60">Duration</span>
-                <p className="text-white font-medium mt-1">{formatDuration(selectedJob.duration_seconds)}</p>
-              </div>
-            </div>
-
-            {/* Progress Details */}
-            <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-              <h4 className="text-white font-medium mb-4">Progress</h4>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/60">Processed Items</span>
-                  <span className="text-white">{selectedJob.processed_items?.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/60">Total Items</span>
-                  <span className="text-white">{selectedJob.total_items?.toLocaleString() || 'Unknown'}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/60">Success Rate</span>
-                  <span className="text-green-400">
-                    {selectedJob.processed_items > 0
-                      ? Math.round(((selectedJob.processed_items - (selectedJob.error_count || 0)) / selectedJob.processed_items) * 100)
-                      : 0}%
-                  </span>
-                </div>
-                {selectedJob.error_count > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-white/60">Errors</span>
-                    <span className="text-red-400">{selectedJob.error_count}</span>
-                  </div>
-                )}
-                <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden mt-2">
-                  <div
-                    className={`h-full rounded-full ${selectedJob.status === 'failed' ? 'bg-red-500' :
-                        selectedJob.status === 'completed' ? 'bg-green-500' :
-                          'bg-violet-500'
-                      }`}
-                    style={{ width: `${getProgressPercent(selectedJob.processed_items, selectedJob.total_items)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {selectedOfflineEnrichment && (
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <h4 className="text-white font-medium mb-4">Enrichment Progress</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Overall</span>
-                    <span className="text-white">
-                      {selectedOfflineEnrichment.overall.completed} / {selectedOfflineEnrichment.overall.queued}
-                      {selectedOfflineEnrichment.overall.completion_percent != null
-                        ? ` (${selectedOfflineEnrichment.overall.completion_percent}%)`
-                        : ''}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Metadata</span>
-                    <span className="text-white">
-                      {selectedOfflineEnrichment.metadata.completed} / {selectedOfflineEnrichment.metadata.queued}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Franchises</span>
-                    <span className="text-white">
-                      {selectedOfflineEnrichment.franchises.completed} / {selectedOfflineEnrichment.franchises.queued}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Themes</span>
-                    <span className="text-white">
-                      {selectedOfflineEnrichment.themes.completed} / {selectedOfflineEnrichment.themes.queued}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Timestamps */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <span className="text-sm text-white/60">Created At</span>
-                <p className="text-white font-medium mt-1">{new Date(selectedJob.created_at).toLocaleString()}</p>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <span className="text-sm text-white/60">Updated At</span>
-                <p className="text-white font-medium mt-1">{new Date(selectedJob.updated_at).toLocaleString()}</p>
-              </div>
-            </div>
-
-            {/* Error Details */}
-            {selectedJob.error_message && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-                <h4 className="text-red-400 font-medium mb-2">Error Details</h4>
-                <pre className="text-red-300 text-sm whitespace-pre-wrap overflow-auto max-h-40">
-                  {selectedJob.error_message}
-                </pre>
-              </div>
-            )}
-
-            {/* Metadata */}
-            {selectedJob.metadata && Object.keys(selectedJob.metadata).length > 0 && (
-              <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                <h4 className="text-white font-medium mb-2">Metadata</h4>
-                <pre className="text-white/60 text-sm whitespace-pre-wrap overflow-auto max-h-40">
-                  {JSON.stringify(selectedJob.metadata, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
-              {['pending', 'processing'].includes(selectedJob.status) && (
-                <button
-                  onClick={() => {
-                    handleCancelJob(selectedJob.id);
-                    closeModal();
-                  }}
-                  className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                >
-                  Cancel Job
-                </button>
-              )}
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          <ImportJobDetails
+            selectedJob={selectedJob}
+            selectedOfflineEnrichment={selectedOfflineEnrichment}
+            handleCancelJob={handleCancelJob}
+            closeModal={closeModal}
+          />
         )}
       </Modal>
 
@@ -494,148 +325,26 @@ const AdminImportJobs = () => {
         title="Trigger New Job"
         size="medium"
       >
-        <form onSubmit={handleTriggerJob} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-white/70 mb-1">
-              Source
-            </label>
-            <CustomSelect
-              value={triggerSource}
-              onChange={handleTriggerSourceChange}
-              disabled={isTriggering}
-              options={[
-                { value: 'offline_catalog', label: 'Anime Offline Database' },
-                { value: 'anime_catalog', label: 'Anime Model Fields' },
-                { value: 'jikan_enrichment', label: 'Jikan (self-hosted) Metadata' },
-              ]}
-              triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
-              ariaLabel="Import source"
-            />
-          </div>
-          {triggerSource === 'jikan_trending' ? (
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-              Trending refresh pulls the recent-updates feed from the self-hosted
-              Jikan service and maps returned MAL IDs onto local anime rows.
-            </div>
-          ) : triggerSource === 'anime_catalog' ? (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">
-                  Derived Slice
-                </label>
-                <CustomSelect
-                  value={triggerSyncType}
-                  onChange={(nextType) => {
-                    setTriggerSyncType(nextType);
-                    if (nextType === 'full_catalog') {
-                      setTriggerLimit(FULL_CATALOG_LIMIT);
-                    }
-                  }}
-                  disabled={isTriggering}
-                  options={[
-                    { value: 'seasonal', label: 'Seasonal' },
-                    { value: 'airing', label: 'Airing' },
-                    { value: 'next_season', label: 'Next Season' },
-                    { value: 'full_catalog', label: 'Full Catalog (top 5000)' },
-                  ]}
-                  triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
-                  ariaLabel="Catalog slice type"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">
-                  Limit (number of anime)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={FULL_CATALOG_LIMIT}
-                  value={triggerLimit}
-                  onChange={(e) => setTriggerLimit(e.target.value)}
-                  disabled={isTriggering}
-                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-                />
-              </div>
-            </>
-          ) : triggerSource === 'jikan_enrichment' ? (
-            <>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-                Metadata enrichment pulls characters, staff, themes, and relations
-                from the self-hosted Jikan service for existing MAL-linked anime rows.
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">
-                  Batch Size
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={triggerBatchSize}
-                  onChange={(e) => setTriggerBatchSize(e.target.value)}
-                  disabled={isTriggering}
-                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">
-                  Release Tag
-                </label>
-                <input
-                  type="text"
-                  value={triggerReleaseTag}
-                  onChange={(e) => setTriggerReleaseTag(e.target.value)}
-                  disabled={isTriggering}
-                  placeholder="latest"
-                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-1">
-                  Import Limit (optional)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={triggerImportLimit}
-                  onChange={(e) => setTriggerImportLimit(e.target.value)}
-                  disabled={isTriggering}
-                  placeholder="Leave blank to import full dataset"
-                  className="w-full px-4 py-2 bg-dark-100 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
-                />
-              </div>
-              <label className="flex items-center gap-2 text-white/80 text-sm">
-                <input
-                  type="checkbox"
-                  checked={triggerEnrichment}
-                  onChange={(e) => setTriggerEnrichment(e.target.checked)}
-                  disabled={isTriggering}
-                  className="rounded border-white/20 bg-dark-100"
-                />
-                Queue Jikan (self-hosted) enrichment after import (metadata, themes, relations)
-              </label>
-            </>
-          )}
-          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
-            <button
-              type="button"
-              onClick={() => setIsTriggerModalOpen(false)}
-              disabled={isTriggering}
-              className="px-4 py-2 bg-white/5 text-white/70 rounded-lg hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isTriggering}
-              className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              {isTriggering ? 'Triggering...' : 'Trigger Job'}
-            </button>
-          </div>
-        </form>
+        <TriggerImportJobForm
+          FULL_CATALOG_LIMIT={FULL_CATALOG_LIMIT}
+          isTriggering={isTriggering}
+          handleTriggerJob={handleTriggerJob}
+          setIsTriggerModalOpen={setIsTriggerModalOpen}
+          triggerSource={triggerSource}
+          handleTriggerSourceChange={handleTriggerSourceChange}
+          triggerSyncType={triggerSyncType}
+          setTriggerSyncType={setTriggerSyncType}
+          triggerLimit={triggerLimit}
+          setTriggerLimit={setTriggerLimit}
+          triggerBatchSize={triggerBatchSize}
+          setTriggerBatchSize={setTriggerBatchSize}
+          triggerReleaseTag={triggerReleaseTag}
+          setTriggerReleaseTag={setTriggerReleaseTag}
+          triggerImportLimit={triggerImportLimit}
+          setTriggerImportLimit={setTriggerImportLimit}
+          triggerEnrichment={triggerEnrichment}
+          setTriggerEnrichment={setTriggerEnrichment}
+        />
       </Modal>
     </div>
   );
