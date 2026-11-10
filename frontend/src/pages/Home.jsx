@@ -2,12 +2,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Play, Star, ChevronRight, Plus, Check, Loader2 } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
-import { animeApi, listApi, recommendationsApi } from '../api/client';
+import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import logger from '../utils/logger';
 import SEO from '../components/SEO';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
+import { animeKeys, animeQueries } from '../api/queries/anime';
+import { listKeys, recommendationQueries, userQueries } from '../api/queries/user';
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
@@ -20,8 +22,7 @@ export default function Home() {
 
     // Hero carousel data is fetched only for authenticated users
     const { data: memberTrending } = useQuery({
-        queryKey: ['anime', 'trending', 'member-home'],
-        queryFn: () => animeApi.getTrending().then(res => res.data),
+        ...animeQueries.trending('member-home'),
         staleTime: 1000 * 60 * 15, // 15 minutes
         gcTime: 1000 * 60 * 30,
         priority: 'high', // Load this first
@@ -30,8 +31,7 @@ export default function Home() {
 
     // Guests still get sections data even though the hero is static
     const { data: guestTrending, isLoading: guestTrendingLoading } = useQuery({
-        queryKey: ['anime', 'trending', 'guest-home'],
-        queryFn: () => animeApi.getTrending().then(res => res.data),
+        ...animeQueries.trending('guest-home'),
         staleTime: 1000 * 60 * 15,
         gcTime: 1000 * 60 * 30,
         enabled: !isAuthenticated,
@@ -70,8 +70,8 @@ export default function Home() {
         try {
             await listApi.add({ anime_id: heroAnime.id, status: 'Plan to Watch' });
             setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
-            queryClient.invalidateQueries({ queryKey: ['anime'] });
-            queryClient.invalidateQueries({ queryKey: ['lists'] });
+            queryClient.invalidateQueries({ queryKey: animeKeys.all });
+            queryClient.invalidateQueries({ queryKey: listKeys.all });
         } catch (error) {
             if (error.response?.status === 400 || error.response?.status === 409) {
                 setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
@@ -351,8 +351,7 @@ function CurrentlyWatchingSection() {
     const { isAuthenticated } = useAuth();
 
     const { data: watching, isLoading } = useQuery({
-        queryKey: ['user', 'list', 'watching'],
-        queryFn: () => listApi.getAll({ status: 'Watching', sort: '-updated_at', limit: 6 }).then(res => res.data.results || res.data),
+        ...userQueries.watching(),
         staleTime: 1000 * 60 * 2,
         retry: false,
         enabled: isAuthenticated, // Only fetch if authenticated
@@ -392,8 +391,7 @@ function RecommendedForYouSection({ revealRef }) {
     const { isAuthenticated } = useAuth();
 
     const { data: recommendations, isLoading, error } = useQuery({
-        queryKey: ['recommendations'],
-        queryFn: () => recommendationsApi.getAll(12).then(res => res.data.results || res.data),
+        ...recommendationQueries.all(12),
         enabled: isAuthenticated,
         staleTime: 1000 * 60 * 60,
         refetchInterval: 1000 * 60 * 60,

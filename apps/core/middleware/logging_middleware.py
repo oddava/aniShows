@@ -26,15 +26,15 @@ class LoggingMiddleware:
             "/api/v1/admin/",
             "/api/v1/auth/",
         ]
-        self.request_logging_enabled = bool(getattr(settings, "REQUEST_LOGGING_ENABLED", True))
-        raw_sample_rate = getattr(settings, "REQUEST_LOG_SUCCESS_SAMPLE_RATE", 0.05)
+        self.request_logging_enabled = bool(settings.REQUEST_LOGGING_ENABLED)
+        raw_sample_rate = settings.REQUEST_LOG_SUCCESS_SAMPLE_RATE
         try:
             sample_rate = float(raw_sample_rate)
         except (TypeError, ValueError):
             sample_rate = 0.05
         self.success_sample_rate = min(max(sample_rate, 0.0), 1.0)
-        self.include_query_params = bool(getattr(settings, "REQUEST_LOG_INCLUDE_QUERY_PARAMS", False))
-        self.include_user_agent = bool(getattr(settings, "REQUEST_LOG_INCLUDE_USER_AGENT", True))
+        self.include_query_params = bool(settings.REQUEST_LOG_INCLUDE_QUERY_PARAMS)
+        self.include_user_agent = bool(settings.REQUEST_LOG_INCLUDE_USER_AGENT)
 
     def _is_excluded_path(self, path: str) -> bool:
         return any(path.startswith(excluded_path) for excluded_path in self.excluded_paths)
@@ -97,8 +97,8 @@ class LoggingMiddleware:
             log_request_async.delay(
                 self._build_log_data(request, response, user_id=user_id, duration_ms=duration_ms)
             )
-        except Exception as exc:
-            logger.error("Failed to queue async log entry: %s", exc)
+        except Exception:
+            logger.exception("Failed to queue async log entry")
 
         return response
 
@@ -161,8 +161,8 @@ class AdminAuditMiddleware:
                         },
                     }
                 )
-            except Exception as exc:
-                logger.error("Failed to queue audit log: %s", exc)
+            except Exception:
+                logger.exception("Failed to queue audit log")
 
         return response
 
@@ -262,9 +262,14 @@ class ExceptionLoggingMiddleware:
                 }
             )
         except Exception:
+            # Queueing failed: log the request's own exception, with its traceback.
             logger.error(
-                f"Unhandled exception at {request.method} {request.path}: "
-                f"{type(exception).__name__}: {exception}"
+                "Unhandled exception at %s %s: %s: %s",
+                request.method,
+                request.path,
+                type(exception).__name__,
+                exception,
+                exc_info=exception,
             )
 
         return None

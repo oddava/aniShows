@@ -1,47 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
 import CustomSelect from '../../components/common/CustomSelect';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const AdminReviewReports = () => {
-  const [reports, setReports] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [minScore, setMinScore] = useState('1');
 
-  const fetchReports = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        min_score: minScore,
-      });
-      const response = await api.get(`/admin/reviews/reports/?${params}`);
-      setReports(response.data.results || []);
-      setSummary(response.data.summary || null);
-      setTotalPages(Math.ceil((response.data.count || 0) / 20) || 1);
-    } catch (err) {
-      logger.error('Failed to fetch review reports:', err);
-      toast.error(err.response?.data?.detail || 'Failed to load review reports');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, minScore]);
+  const { items: reports, data, totalPages, isFetching: loading } = useAdminList({
+    resource: 'reviews/reports',
+    params: {
+      page,
+      min_score: minScore,
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch review reports:',
+    errorToast: (err) => getAdminErrorMessage(err, 'Failed to load review reports'),
+  });
+  const summary = data?.summary || null;
 
-  useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+  const deleteMutation = useAdminMutation(
+    (id) => api.delete(`/admin/reviews/${id}/`),
+    // The reported review also drops out of the reviews list.
+    { invalidate: [adminKeys.resource('reviews/reports'), adminKeys.resource('reviews')] },
+  );
 
   const deleteReview = async (id) => {
     if (!confirm('Delete this review?')) return;
     try {
-      await api.delete(`/admin/reviews/${id}/`);
+      await deleteMutation.mutateAsync(id);
       toast.success('Review deleted');
-      fetchReports();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete review');
     }

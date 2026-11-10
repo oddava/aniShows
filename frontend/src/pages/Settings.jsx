@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getApiErrorMessage } from '../api/errors';
 import { PASSWORD_HINT, getPasswordProblem } from '../utils/password';
 import { Navigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authApi, clearSession, notificationApi } from '../api/client';
@@ -22,6 +22,9 @@ import {
     getSupportedTimeZones,
     normalizeTimeZonePreference,
 } from '../utils/dateUtils';
+import { profileKeys } from '../api/queries/user';
+import { notificationKeys, notificationQueries } from '../api/queries/notifications';
+import { useFreshError, useReportError } from '../hooks/useQueryErrorReport';
 
 function getResponsiveBannerAspect(width) {
     const safeWidth = Math.max(320, Number(width) || 320);
@@ -101,6 +104,13 @@ function isGifFile(file) {
     return /\.gif$/i.test(String(file.name || ''));
 }
 
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+    email_new_episodes: true,
+    push_new_episodes: true,
+    push_review_replies: true,
+    push_new_follower: true,
+};
+
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
     const queryClient = useQueryClient();
@@ -154,15 +164,31 @@ export default function Settings() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-    // Notification preferences state
-    const [preferences, setPreferences] = useState({
-        email_new_episodes: true,
-        push_new_episodes: true,
-        push_review_replies: true,
-        push_new_follower: true,
+    // Notification preferences: loaded once a user is known; a toggle shows at
+    // once (`pendingPreferences`) and falls back to the saved value if the save fails.
+    const preferencesQuery = useQuery({
+        ...notificationQueries.preferences(user?.id),
+        enabled: !!user,
+        staleTime: 0,
+        retry: false,
     });
-    const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
-    const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+    useReportError(
+        useFreshError(preferencesQuery, notificationKeys.preferences(user?.id)),
+        preferencesQuery.errorUpdatedAt,
+        { log: 'Failed to fetch preferences:' },
+    );
+    const [pendingPreferences, setPendingPreferences] = useState(null);
+    const preferences = pendingPreferences ?? preferencesQuery.data ?? DEFAULT_NOTIFICATION_PREFERENCES;
+    const isLoadingPreferences = preferencesQuery.isPending
+        || (preferencesQuery.isFetching && preferencesQuery.data === undefined);
+    const savePreferencesMutation = useMutation({
+        mutationFn: (nextPreferences) => notificationApi.updatePreferences(nextPreferences),
+        onSuccess: (_response, nextPreferences) => {
+            queryClient.setQueryData(notificationKeys.preferences(user?.id), nextPreferences);
+        },
+        onSettled: () => setPendingPreferences(null),
+    });
+    const isSavingPreferences = savePreferencesMutation.isPending;
     const [preferencesMessage, setPreferencesMessage] = useState('');
     const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
     const supportedTimezones = useMemo(() => getSupportedTimeZones(), []);
@@ -230,24 +256,6 @@ export default function Settings() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
-
-    // Load notification preferences
-    useEffect(() => {
-        if (!user) return;
-
-        const fetchPreferences = async () => {
-            try {
-                const response = await notificationApi.getPreferences();
-                setPreferences(response.data);
-            } catch (error) {
-                logger.error('Failed to fetch preferences:', error);
-            } finally {
-                setIsLoadingPreferences(false);
-            }
-        };
-
-        fetchPreferences();
-    }, [user]);
 
     if (loading) {
         return (
@@ -365,15 +373,15 @@ export default function Settings() {
             // Use PATCH response as source of truth to avoid stale re-fetch fallback
             if (updatedProfile && typeof updatedProfile === 'object') {
                 refreshProfile(updatedProfile);
-                queryClient.setQueryData(['ownProfile'], updatedProfile);
+                queryClient.setQueryData(profileKeys.own, updatedProfile);
             } else {
                 refreshProfile();
             }
 
             // Invalidate React Query profile caches so Profile page shows fresh data
             // (avatar, banner, bio, username changes etc.)
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            queryClient.invalidateQueries({ queryKey: profileKeys.all });
         } catch (err) {
             logger.error('Failed to update profile:', err);
             let msg = 'Failed to update profile';
@@ -433,8 +441,8 @@ export default function Settings() {
         try {
             await authApi.updateProfile({ is_private: newPrivacy });
             // Invalidate profile caches since privacy affects public profile visibility
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            queryClient.invalidateQueries({ queryKey: profileKeys.all });
         } catch (err) {
             logger.error('Failed to update privacy:', err);
             setIsPrivate(!newPrivacy); // Revert on failure
@@ -510,20 +518,17 @@ export default function Settings() {
             [key]: !preferences[key],
         };
 
-        setPreferences(newPreferences);
-        setIsSavingPreferences(true);
+        setPendingPreferences(newPreferences);
 
         try {
-            await notificationApi.updatePreferences(newPreferences);
+            await savePreferencesMutation.mutateAsync(newPreferences);
             setPreferencesMessage('Preferences saved successfully');
             setTimeout(() => setPreferencesMessage(''), 3000);
         } catch (error) {
             logger.error('Failed to update preferences:', error);
-            setPreferences(preferences); // Revert on error
+            // The saved value shows again (onSettled drops the pending one).
             setPreferencesMessage('Failed to save preferences');
             setTimeout(() => setPreferencesMessage(''), 3000);
-        } finally {
-            setIsSavingPreferences(false);
         }
     };
 

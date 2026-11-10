@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useParams } from 'react-router-dom';
-import { characterApi, characterFavoriteApi } from '../api/client';
+import { characterFavoriteApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import EntityFavoriteButton from '../components/common/EntityFavoriteButton';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
+import { characterKeys, characterQueries } from '../api/queries/anime';
+import { characterFavoriteKeys } from '../api/queries/user';
 
 function Spoiler({ children }) {
     const [revealed, setRevealed] = useState(false);
@@ -116,8 +118,7 @@ export default function CharacterDetail() {
 
 
     const { data: character, isLoading, error } = useQuery({
-        queryKey: ['character', id],
-        queryFn: ({ signal }) => characterApi.getById(id, signal).then((res) => res.data),
+        ...characterQueries.detail(id),
         staleTime: 1000 * 60 * 10,
     });
 
@@ -135,9 +136,9 @@ export default function CharacterDetail() {
                 isFavorite: response.data.is_favorite,
                 favoriteCount: response.data.favorite_count ?? 0,
             });
-            queryClient.invalidateQueries({ queryKey: ['character', id] });
+            queryClient.invalidateQueries({ queryKey: characterKeys.detail(id) });
             if (user?.username) {
-                queryClient.invalidateQueries({ queryKey: ['character-favorites', user.username] });
+                queryClient.invalidateQueries({ queryKey: characterFavoriteKeys.byUser(user.username) });
             }
         },
     });

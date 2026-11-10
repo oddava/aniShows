@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminBadgeApi } from '../../api/client';
-import api from '../../api/client';
 import { Search, Plus, Edit2, Trash2, Award, UserPlus, UserMinus, Shield, Star, Zap, Crown, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import CustomSelect from '../../components/common/CustomSelect';
+import { adminBadgeKeys, adminBadgeQueries } from '../../api/queries/admin';
 
 const AVAILABLE_ICONS = [
     { name: 'award', icon: Award },
@@ -39,14 +39,12 @@ export default function AdminBadges() {
     const [revokingUserIds, setRevokingUserIds] = useState(new Set());
 
     const { data, isLoading } = useQuery({
-        queryKey: ['adminBadges', page, searchTerm],
-        queryFn: () => adminBadgeApi.getAll({ page, search: searchTerm }),
+        ...adminBadgeQueries.list(page, searchTerm),
         placeholderData: keepPreviousData,
     });
 
     const { data: usersData } = useQuery({
-        queryKey: ['adminUsersSearch', searchUserTerm],
-        queryFn: () => api.get('/admin/users/', { params: { search: searchUserTerm, page_size: 5 } }),
+        ...adminBadgeQueries.userSearch(searchUserTerm),
         enabled: searchUserTerm.length >= 2,
     });
 
@@ -55,7 +53,7 @@ export default function AdminBadges() {
     const createMutation = useMutation({
         mutationFn: (formData) => adminBadgeApi.create(formData),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
+            queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
             setIsModalOpen(false);
             setEditingBadge(null);
             setFormError(null);
@@ -68,7 +66,7 @@ export default function AdminBadges() {
     const updateMutation = useMutation({
         mutationFn: ({ id, formData }) => adminBadgeApi.update(id, formData),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
+            queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
             setIsModalOpen(false);
             setEditingBadge(null);
         },
@@ -80,7 +78,7 @@ export default function AdminBadges() {
     const deleteMutation = useMutation({
         mutationFn: (id) => adminBadgeApi.delete(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
+            queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
         },
         onError: (error) => {
             alert(error.response?.data?.detail || 'Failed to delete badge');
@@ -90,7 +88,7 @@ export default function AdminBadges() {
     const grantMutation = useMutation({
         mutationFn: ({ id, userIds, reason }) => adminBadgeApi.grant(id, userIds, reason),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
+            queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
             setIsGrantModalOpen(false);
             setSelectedUsers([]);
             setGrantReason('');
@@ -102,8 +100,7 @@ export default function AdminBadges() {
     });
 
     const { data: holdersData, isLoading: holdersLoading } = useQuery({
-        queryKey: ['adminBadgeHolders', selectedBadge?.id, holdersPage],
-        queryFn: () => adminBadgeApi.getHolders(selectedBadge.id, { page: holdersPage }),
+        ...adminBadgeQueries.holders(selectedBadge?.id, holdersPage),
         enabled: isHoldersModalOpen && !!selectedBadge,
         placeholderData: keepPreviousData,
     });
@@ -111,8 +108,8 @@ export default function AdminBadges() {
     const revokeMutation = useMutation({
         mutationFn: ({ badgeId, userIds }) => adminBadgeApi.revoke(badgeId, userIds),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adminBadges'] });
-            queryClient.invalidateQueries({ queryKey: ['adminBadgeHolders', selectedBadge?.id] });
+            queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
+            queryClient.invalidateQueries({ queryKey: adminBadgeKeys.holdersAll(selectedBadge?.id) });
         },
         // On failure too, or the holder's button stays disabled.
         onSettled: () => {

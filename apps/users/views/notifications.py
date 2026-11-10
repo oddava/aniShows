@@ -14,7 +14,6 @@ from ...core.models import Notification, PushSubscription
 from ...core.services.notification_service import NotificationService
 from ...core.services.push_service import PushService
 from ...core.services.url_validator import URLValidationError, URLValidator
-from ...shared.logger import logger
 
 
 class NotificationSerializer(ModelSerializer):
@@ -226,25 +225,7 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
 
     def get(self, request, *args, **kwargs):
         """Get current notification preferences."""
-        try:
-            profile = self.get_object()
-            # Use getattr with defaults to handle missing fields during migration
-            serializer = self.get_serializer(
-                {
-                    "email_new_episodes": getattr(profile, "email_new_episodes", True),
-                    "push_new_episodes": getattr(profile, "push_new_episodes", True),
-                    "push_review_replies": getattr(profile, "push_review_replies", True),
-                    "push_new_follower": getattr(profile, "push_new_follower", True),
-                }
-            )
-            return Response(serializer.data)
-        except Exception as e:
-            logger.exception(f"Error getting preferences: {e}")
-            return error_response(
-                "Failed to get preferences",
-                code="notification_preferences_unavailable",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(self.get_serializer(self.get_object()).data)
 
     def update(self, request, *args, **kwargs):
         """Update notification preferences."""
@@ -252,26 +233,13 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            data = serializer.validated_data
+        update_fields = list(serializer.validated_data)
+        for field in update_fields:
+            setattr(profile, field, serializer.validated_data[field])
+        if update_fields:
+            profile.save(update_fields=update_fields)
 
-            update_fields = []
-            for field in ["email_new_episodes", "push_new_episodes", "push_review_replies", "push_new_follower"]:
-                if hasattr(profile, field) and field in data:
-                    setattr(profile, field, data[field])
-                    update_fields.append(field)
-
-            if update_fields:
-                profile.save(update_fields=update_fields)
-
-            return Response(serializer.data)
-        except Exception as e:
-            logger.exception(f"Error updating preferences: {e}")
-            return error_response(
-                "Failed to update preferences",
-                code="notification_preferences_update_failed",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        return Response(serializer.data)
 
 
 class PushSubscriptionViewSet(GenericViewSet):
@@ -288,27 +256,19 @@ class PushSubscriptionViewSet(GenericViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            data = serializer.validated_data
-            subscription = PushService.subscribe_user(
-                user=request.user,
-                endpoint=data["endpoint"],
-                p256dh=data["p256dh"],
-                auth=data["auth"],
-                device_type=data.get("device_type", "browser"),
-                device_info=data.get("device_info", {}),
-            )
-            return Response(
-                {"status": "subscribed", "id": subscription.id},
-                status=status.HTTP_201_CREATED,
-            )
-        except Exception as e:
-            logger.exception(f"Error subscribing to push: {e}")
-            return error_response(
-                "Failed to subscribe",
-                code="push_subscription_failed",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        data = serializer.validated_data
+        subscription = PushService.subscribe_user(
+            user=request.user,
+            endpoint=data["endpoint"],
+            p256dh=data["p256dh"],
+            auth=data["auth"],
+            device_type=data.get("device_type", "browser"),
+            device_info=data.get("device_info", {}),
+        )
+        return Response(
+            {"status": "subscribed", "id": subscription.id},
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=False, methods=["delete"])
     def unsubscribe(self, request):

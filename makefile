@@ -17,7 +17,7 @@ ENV_EXAMPLE = .env.example
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
         verify-backup restore restore-db-only restore-media-only load-browse \
-        load-api-smoke load-api-standard load-api-micro
+        load-api-smoke load-api-standard load-api-micro bench-api
 
 # ============================================================================
 # Service Management
@@ -94,6 +94,9 @@ test:                           ## Run backend tests in parallel (ARGS="apps/use
 
 lint:                           ## Run linter (ruff)
 	docker compose run --rm --no-deps web /opt/venv/bin/python -m ruff check .
+
+bench-api:                      ## Time public API endpoints cold/warm against the dev DB (ARGS="--rounds 5 --json out.json")
+	docker compose run --rm web python scripts/bench_public_api.py $(ARGS)
 
 collectstatic:                  ## Collect static files
 	$(EXEC) collectstatic --noinput

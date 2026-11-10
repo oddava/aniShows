@@ -1,0 +1,667 @@
+{
+  "anime_reviews": {
+    "count": "int",
+    "next": "null",
+    "previous": "null",
+    "results": [
+      {
+        "anime": {
+          "anime_type": "str",
+          "broadcast_day": "str",
+          "broadcast_time": "null",
+          "broadcast_timezone": "str",
+          "cover_image": "str",
+          "cover_image_external_url": "str",
+          "cover_image_medium": "str",
+          "cover_image_small": "str",
+          "episode_count": "int",
+          "genres": [
+            {
+              "id": "int",
+              "name": "str",
+              "slug": "str"
+            }
+          ],
+          "id": "int",
+          "is_favorite": "bool",
+          "next_airing_date": "str",
+          "next_airing_episode": "int",
+          "rating": "str",
+          "release_date": "str",
+          "slug": "str",
+          "status": "str",
+          "studio_name": "str",
+          "title": "str",
+          "title_jp": "str",
+          "user_list_status": "null"
+        },
+        "created_at": "str",
+        "dislike_count": "int",
+        "has_spoilers": "bool",
+        "helpful_count": "int",
+        "id": "int",
+        "is_completed": "bool",
+        "rating": "int",
+        "rating_animation": "null",
+        "rating_characters": "null",
+        "rating_music": "null",
+        "rating_story": "null",
+        "reactions": [
+          {
+            "active": "bool",
+            "count": "int",
+            "emoji": "str",
+            "type": "str"
+          }
+        ],
+        "text": "str",
+        "updated_at": "str",
+        "user": {
+          "avatar": "null",
+          "id": "int",
+          "points": "int",
+          "username": "str"
+        },
+        "user_votes": {
+          "dislike": "bool",
+          "helpful": "bool"
+        }
+      }
+    ]
+  },
+  "browse_rows": [
+    {
+      "anime_list": [
+        {
+          "anime_type": "str",
+          "broadcast_day": "str",
+          "broadcast_time": "null",
+          "broadcast_timezone": "str",
+          "cover_image": "str",
+          "cover_image_external_url": "str",
+          "cover_image_medium": "str",
+          "cover_image_small": "str",
+          "episode_count": "int",
+          "genres": [
+            {
+              "id": "int",
+              "name": "str",
+              "slug": "str"
+            }
+          ],
+          "id": "int",
+          "is_favorite": "bool",
+          "next_airing_date": "str",
+          "next_airing_episode": "int",
+          "rating": "str",
+          "release_date": "str",
+          "slug": "str",
+          "status": "str",
+          "studio_name": "str",
+          "title": "str",
+          "title_jp": "str",
+          "user_list_status": "null"
+        }
+      ],
+      "browse_params": {
+        "season": "absent|str",
+        "shelf": "absent|str",
+        "sort": "str",
+        "year": "absent|str"
+      },
+      "key": "str",
+      "title": "str"
+    }
+  ],
+  "detail": {
+    "anime_type": "str",
+    "avg_rating": "str",
+    "banner_image": "str",
+    "banner_image_external_url": "str",
+    "banner_image_large": "str",
+    "banner_image_medium": "str",
+    "banner_image_small": "str",
+    "broadcast_day": "str",
+    "broadcast_time": "null",
+    "broadcast_timezone": "str",
+    "character_count": "int",
+    "characters_preview": [
+      {
+        "character": {
+          "id": "int",
+          "image": "null",
+          "image_medium": "null",
+          "image_small": "null",
+          "name": "str",
+          "name_native": "str"
+        },
+        "id": "int",
+        "role": "str",
+        "voice_actor": {
+          "id": "int",
+          "image": "null",
+          "image_medium": "null",
+          "image_small": "null",
+          "name": "str",
+          "name_native": "str"
+        }
+      }
+    ],
+    "cover_image": "str",
+    "cover_image_external_url": "str",
+    "cover_image_large": "str",
+    "cover_image_medium": "str",
+    "cover_image_small": "str",
+    "created_at": "str",
+    "duration_minutes": "int",
+    "end_date": "null",
+    "episode_count": "int",
+    "external_links": [],
+    "genres": [
+      {
+        "id": "int",
+        "name": "str",
+        "slug": "str"
+      }
+    ],
+    "id": "int",
+    "is_favorite": "bool",
+    "member_count": "int",
+    "next_airing_date": "str",
+    "next_airing_episode": "int",
+    "popularity_rank": "int",
+    "rating": "str",
+    "relations": [
+      {
+        "cover": "str",
+        "format": "null",
+        "id": "null",
+        "mal_id": "null",
+        "slug": "str",
+        "status": "null",
+        "title": "str",
+        "type": "str"
+      }
+    ],
+    "release_date": "str",
+    "review_count": "int",
+    "season": "str",
+    "season_year": "int",
+    "site_rank": "int",
+    "slug": "str",
+    "source_material": "str",
+    "staff_count": "int",
+    "staff_preview": [
+      {
+        "id": "int",
+        "role": "str",
+        "staff": {
+          "id": "int",
+          "image": "null",
+          "image_medium": "null",
+          "image_small": "null",
+          "name": "str",
+          "name_native": "str"
+        }
+      }
+    ],
+    "status": "str",
+    "status_distribution": {
+      "completed": "int",
+      "dropped": "int",
+      "on_hold": "int",
+      "plan_to_watch": "int",
+      "watching": "int"
+    },
+    "studio": {
+      "id": "int",
+      "name": "str",
+      "website": "str"
+    },
+    "studios": [
+      {
+        "id": "int",
+        "name": "str",
+        "website": "str"
+      }
+    ],
+    "synopsis": "str",
+    "tags": [
+      "str"
+    ],
+    "theme_songs": [
+      {
+        "artist": "str",
+        "episodes": "str",
+        "id": "int",
+        "song_type": "str",
+        "spotify_url": "str",
+        "title": "str",
+        "track_number": "int",
+        "youtube_url": "str"
+      }
+    ],
+    "title": "str",
+    "title_jp": "str",
+    "trailer_url": "str",
+    "user_list_status": "null",
+    "user_review": "null"
+  },
+  "detail_authenticated": {
+    "anime_type": "str",
+    "avg_rating": "str",
+    "banner_image": "str",
+    "banner_image_external_url": "str",
+    "banner_image_large": "str",
+    "banner_image_medium": "str",
+    "banner_image_small": "str",
+    "broadcast_day": "str",
+    "broadcast_time": "null",
+    "broadcast_timezone": "str",
+    "character_count": "int",
+    "characters_preview": [
+      {
+        "character": {
+          "id": "int",
+          "image": "null",
+          "image_medium": "null",
+          "image_small": "null",
+          "name": "str",
+          "name_native": "str"
+        },
+        "id": "int",
+        "role": "str",
+        "voice_actor": {
+          "id": "int",
+          "image": "null",
+          "image_medium": "null",
+          "image_small": "null",
+          "name": "str",
+          "name_native": "str"
+        }
+      }
+    ],
+    "cover_image": "str",
+    "cover_image_external_url": "str",
+    "cover_image_large": "str",
+    "cover_image_medium": "str",
+    "cover_image_small": "str",
+    "created_at": "str",
+    "duration_minutes": "int",
+    "end_date": "null",
+    "episode_count": "int",
+    "external_links": [],
+    "genres": [
+      {
+        "id": "int",
+        "name": "str",
+        "slug": "str"
+      }
+    ],
+    "id": "int",
+    "is_favorite": "bool",
+    "member_count": "int",
+    "next_airing_date": "str",
+    "next_airing_episode": "int",
+    "popularity_rank": "int",
+    "rating": "str",
+    "relations": [
+      {
+        "cover": "str",
+        "format": "null",
+        "id": "null",
+        "mal_id": "null",
+        "slug": "str",
+        "status": "null",
+        "title": "str",
+        "type": "str"
+      }
+    ],
+    "release_date": "str",
+    "review_count": "int",
+    "season": "str",
+    "season_year": "int",
+    "site_rank": "int",
+    "slug": "str",
+    "source_material": "str",
+    "staff_count": "int",
+    "staff_preview": [
+      {
+        "id": "int",
+        "role": "str",
+        "staff": {
+          "id": "int",
+          "image": "null",
+          "image_medium": "null",
+          "image_small": "null",
+          "name": "str",
+          "name_native": "str"
+        }
+      }
+    ],
+    "status": "str",
+    "status_distribution": {
+      "completed": "int",
+      "dropped": "int",
+      "on_hold": "int",
+      "plan_to_watch": "int",
+      "watching": "int"
+    },
+    "studio": {
+      "id": "int",
+      "name": "str",
+      "website": "str"
+    },
+    "studios": [
+      {
+        "id": "int",
+        "name": "str",
+        "website": "str"
+      }
+    ],
+    "synopsis": "str",
+    "tags": [
+      "str"
+    ],
+    "theme_songs": [
+      {
+        "artist": "str",
+        "episodes": "str",
+        "id": "int",
+        "song_type": "str",
+        "spotify_url": "str",
+        "title": "str",
+        "track_number": "int",
+        "youtube_url": "str"
+      }
+    ],
+    "title": "str",
+    "title_jp": "str",
+    "trailer_url": "str",
+    "user_list_status": {
+      "episodes_watched": "int",
+      "finished_at": "null",
+      "id": "int",
+      "is_rewatching": "bool",
+      "notes": "str",
+      "progress": "float",
+      "score": "int",
+      "started_at": "null",
+      "status": "str",
+      "total_rewatches": "int"
+    },
+    "user_review": "null"
+  },
+  "list": {
+    "count": "null",
+    "next": "null",
+    "previous": "null",
+    "results": [
+      {
+        "anime_type": "str",
+        "broadcast_day": "str",
+        "broadcast_time": "null",
+        "broadcast_timezone": "str",
+        "cover_image": "str",
+        "cover_image_external_url": "str",
+        "cover_image_medium": "str",
+        "cover_image_small": "str",
+        "episode_count": "int",
+        "genres": [
+          {
+            "id": "int",
+            "name": "str",
+            "slug": "str"
+          }
+        ],
+        "id": "int",
+        "is_favorite": "bool",
+        "next_airing_date": "str",
+        "next_airing_episode": "int",
+        "rating": "str",
+        "release_date": "str",
+        "slug": "str",
+        "status": "str",
+        "studio_name": "str",
+        "title": "str",
+        "title_jp": "str",
+        "user_list_status": "null"
+      }
+    ]
+  },
+  "list_authenticated": {
+    "count": "null",
+    "next": "null",
+    "previous": "null",
+    "results": [
+      {
+        "anime_type": "str",
+        "broadcast_day": "str",
+        "broadcast_time": "null",
+        "broadcast_timezone": "str",
+        "cover_image": "str",
+        "cover_image_external_url": "str",
+        "cover_image_medium": "str",
+        "cover_image_small": "str",
+        "episode_count": "int",
+        "genres": [
+          {
+            "id": "int",
+            "name": "str",
+            "slug": "str"
+          }
+        ],
+        "id": "int",
+        "is_favorite": "bool",
+        "next_airing_date": "str",
+        "next_airing_episode": "int",
+        "rating": "str",
+        "release_date": "str",
+        "slug": "str",
+        "status": "str",
+        "studio_name": "str",
+        "title": "str",
+        "title_jp": "str",
+        "user_list_status": {
+          "episodes_watched": "int",
+          "finished_at": "null",
+          "id": "int",
+          "is_rewatching": "bool",
+          "notes": "str",
+          "progress": "float",
+          "score": "int",
+          "started_at": "null",
+          "status": "str",
+          "total_rewatches": "int"
+        }
+      }
+    ]
+  },
+  "public_profile": {
+    "anime_count": "int",
+    "avatar": "null",
+    "badges": [],
+    "banner": "null",
+    "bio": "null",
+    "date_joined": "str",
+    "days_watched": "float",
+    "episodes_watched": "int",
+    "favorites_count": "int",
+    "followers_count": "int",
+    "following_count": "int",
+    "id": "int",
+    "is_following": "bool",
+    "is_private": "bool",
+    "mean_score": "float",
+    "points": "int",
+    "profile_primary_color": "str",
+    "resonance_count": "int",
+    "reviews_count": "int",
+    "social_links": [],
+    "total_badges_count": "int",
+    "username": "str"
+  },
+  "schedule": {
+    "counts": {
+      "friday": "int",
+      "monday": "int",
+      "saturday": "int",
+      "sunday": "int",
+      "thursday": "int",
+      "tuesday": "int",
+      "wednesday": "int"
+    },
+    "days": {
+      "friday": [],
+      "monday": [
+        {
+          "anime_type": "str",
+          "broadcast_day": "str",
+          "broadcast_time": "null",
+          "broadcast_timezone": "str",
+          "cover_image": "str",
+          "cover_image_external_url": "str",
+          "cover_image_medium": "str",
+          "cover_image_small": "str",
+          "episode_count": "int",
+          "genres": [
+            {
+              "id": "int",
+              "name": "str",
+              "slug": "str"
+            }
+          ],
+          "id": "int",
+          "is_favorite": "bool",
+          "next_airing_date": "str",
+          "next_airing_episode": "int",
+          "rating": "str",
+          "release_date": "str",
+          "slug": "str",
+          "status": "str",
+          "studio_name": "str",
+          "title": "str",
+          "title_jp": "str",
+          "user_list_status": "null"
+        }
+      ],
+      "saturday": [],
+      "sunday": [],
+      "thursday": [],
+      "tuesday": [],
+      "wednesday": []
+    },
+    "total": "int"
+  },
+  "search": {
+    "count": "null",
+    "next": "null",
+    "previous": "null",
+    "results": [
+      {
+        "anime_type": "str",
+        "broadcast_day": "str",
+        "broadcast_time": "null",
+        "broadcast_timezone": "str",
+        "cover_image": "str",
+        "cover_image_external_url": "str",
+        "cover_image_medium": "str",
+        "cover_image_small": "str",
+        "episode_count": "int",
+        "genres": [
+          {
+            "id": "int",
+            "name": "str",
+            "slug": "str"
+          }
+        ],
+        "id": "int",
+        "is_favorite": "bool",
+        "next_airing_date": "str",
+        "next_airing_episode": "int",
+        "rating": "str",
+        "release_date": "str",
+        "slug": "str",
+        "status": "str",
+        "studio_name": "str",
+        "title": "str",
+        "title_jp": "str",
+        "user_list_status": "null"
+      }
+    ]
+  },
+  "top_rated": [
+    {
+      "anime_type": "str",
+      "banner_image": "str",
+      "banner_image_external_url": "str",
+      "banner_image_large": "str",
+      "banner_image_medium": "str",
+      "broadcast_day": "str",
+      "broadcast_time": "null",
+      "broadcast_timezone": "str",
+      "cover_image": "str",
+      "cover_image_external_url": "str",
+      "cover_image_medium": "str",
+      "cover_image_small": "str",
+      "episode_count": "int",
+      "genres": [
+        {
+          "id": "int",
+          "name": "str",
+          "slug": "str"
+        }
+      ],
+      "id": "int",
+      "is_favorite": "bool",
+      "next_airing_date": "str",
+      "next_airing_episode": "int",
+      "rating": "str",
+      "release_date": "str",
+      "slug": "str",
+      "status": "str",
+      "studio_name": "str",
+      "synopsis": "str",
+      "title": "str",
+      "title_jp": "str",
+      "user_list_status": "null"
+    }
+  ],
+  "trending": [
+    {
+      "anime_type": "str",
+      "banner_image": "str",
+      "banner_image_external_url": "str",
+      "banner_image_large": "str",
+      "banner_image_medium": "str",
+      "broadcast_day": "str",
+      "broadcast_time": "null",
+      "broadcast_timezone": "str",
+      "cover_image": "str",
+      "cover_image_external_url": "str",
+      "cover_image_medium": "str",
+      "cover_image_small": "str",
+      "episode_count": "int",
+      "genres": [
+        {
+          "id": "int",
+          "name": "str",
+          "slug": "str"
+        }
+      ],
+      "id": "int",
+      "is_favorite": "bool",
+      "next_airing_date": "str",
+      "next_airing_episode": "int",
+      "rating": "str",
+      "release_date": "str",
+      "slug": "str",
+      "status": "str",
+      "studio_name": "str",
+      "synopsis": "str",
+      "title": "str",
+      "title_jp": "str",
+      "user_list_status": "null"
+    }
+  ]
+}

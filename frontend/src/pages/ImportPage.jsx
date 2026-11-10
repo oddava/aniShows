@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiErrorMessage } from '../api/errors';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
+import { importJobKeys, importJobQueries } from '../api/queries/importJobs';
+import { useFreshError, useReportError } from '../hooks/useQueryErrorReport';
 import { useAuth } from '../context/AuthContext';
 import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
 import logger from '../utils/logger';
@@ -18,17 +21,28 @@ import {
     X
 } from 'lucide-react';
 
-const normalizeJobsResponse = (payload) => {
-    if (Array.isArray(payload)) {
-        return payload;
-    }
-
-    if (payload && Array.isArray(payload.results)) {
-        return payload.results;
-    }
-
-    return [];
+/**
+ * The jobs list with the polled jobs folded in: a polled job missing from the
+ * list goes on top, and a polled reading replaces the list's copy when it is
+ * the newer of the two (whichever answered last wins, as with the old setJobs).
+ */
+const mergePolledJobs = (jobs, listUpdatedAt, polledJobIds, polledResults) => {
+    let merged = jobs;
+    polledJobIds.forEach((jobId, index) => {
+        const result = polledResults[index];
+        const job = result?.data;
+        if (!job) return;
+        const existingIndex = merged.findIndex((j) => j.id === jobId);
+        if (existingIndex === -1) {
+            merged = [job, ...merged];
+        } else if (result.dataUpdatedAt >= listUpdatedAt) {
+            merged = merged.map((j) => (j.id === jobId ? job : j));
+        }
+    });
+    return merged;
 };
+
+const EMPTY_JOBS = [];
 
 const ImportPage = () => {
     const navigate = useNavigate();
@@ -44,9 +58,9 @@ const ImportPage = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     
     // Jobs state
-    const [jobs, setJobs] = useState([]);
     const [expandedJob, setExpandedJob] = useState(null);
-    const [cancellingJob, setCancellingJob] = useState(null);
+    const queryClient = useQueryClient();
+    const userId = user?.id;
 
     // Check authentication
     useEffect(() => {
@@ -55,65 +69,82 @@ const ImportPage = () => {
         }
     }, [user, navigate]);
 
-    // Fetch jobs on mount
+    // The user's jobs, loaded on mount.
+    const jobsQuery = useQuery({
+        ...importJobQueries.list(userId),
+        enabled: !!user,
+        staleTime: 0,
+        retry: false,
+    });
+    useReportError(
+        useFreshError(jobsQuery, importJobKeys.list(userId)),
+        jobsQuery.errorUpdatedAt,
+        { log: 'Failed to fetch import jobs:' },
+    );
+
+    // Jobs started on this page, polled every 2 seconds until they finish.
+    const [polledJobIds, setPolledJobIds] = useState([]);
+    const polledResults = useQueries({
+        queries: polledJobIds.map((jobId) => ({
+            ...importJobQueries.status(userId, jobId),
+            refetchIntervalInBackground: true,
+            staleTime: 0,
+            retry: false,
+        })),
+    });
+    // Log each failed poll once, like the old poll loop (which then stopped).
+    const loggedPollErrors = useRef(new Map());
     useEffect(() => {
-        if (user) {
-            fetchJobs();
-        }
-    }, [user]);
+        polledResults.forEach((result, index) => {
+            const jobId = polledJobIds[index];
+            if (!result.error || loggedPollErrors.current.get(jobId) === result.errorUpdatedAt) return;
+            loggedPollErrors.current.set(jobId, result.errorUpdatedAt);
+            logger.error('Failed to poll job status:', result.error);
+        });
+    }, [polledResults, polledJobIds]);
 
-    const fetchJobs = async () => {
-        try {
-            const response = await importExportApi.getImportJobs();
-            setJobs(normalizeJobsResponse(response.data));
-        } catch (err) {
-            logger.error('Failed to fetch import jobs:', err);
-        }
-    };
+    const jobs = useMemo(
+        () => mergePolledJobs(jobsQuery.data ?? EMPTY_JOBS, jobsQuery.dataUpdatedAt, polledJobIds, polledResults),
+        [jobsQuery.data, jobsQuery.dataUpdatedAt, polledJobIds, polledResults],
+    );
 
-    const pollJobStatus = useCallback(async (jobId) => {
-        try {
-            const response = await importExportApi.getImportJobStatus(jobId);
-            const job = response.data;
-            
-            // Update jobs list
-            setJobs((prevJobs) => {
-                const jobsList = normalizeJobsResponse(prevJobs);
-                const existingIndex = jobsList.findIndex((j) => j.id === jobId);
-
-                if (existingIndex === -1) {
-                    return [job, ...jobsList];
-                }
-
-                return jobsList.map((j) => (j.id === jobId ? job : j));
-            });
-            
-            // Continue polling if job is still processing
-            if (job.status === 'pending' || job.status === 'processing') {
-                setTimeout(() => pollJobStatus(jobId), 2000);
-            } else {
-                // Job completed or failed
-                if (job.status === 'completed') {
-                    setSuccess(`Import completed! Imported: ${job.imported_entries}${job.fetched_entries ? ', Fetched: ' + job.fetched_entries : ''}, Skipped: ${job.skipped_entries}`);
-                } else if (job.status === 'failed') {
-                    setError(`Import failed: ${job.errors?.[0] || 'Unknown error'}`);
-                }
+    // Announce each polled job once, when it finishes.
+    const announcedJobs = useRef(new Set());
+    useEffect(() => {
+        polledResults.forEach((result) => {
+            const job = result.data;
+            if (!job || announcedJobs.current.has(job.id)) return;
+            if (job.status === 'completed') {
+                announcedJobs.current.add(job.id);
+                setSuccess(`Import completed! Imported: ${job.imported_entries}${job.fetched_entries ? ', Fetched: ' + job.fetched_entries : ''}, Skipped: ${job.skipped_entries}`);
+            } else if (job.status === 'failed') {
+                announcedJobs.current.add(job.id);
+                setError(`Import failed: ${job.errors?.[0] || 'Unknown error'}`);
             }
-        } catch (err) {
-            logger.error('Failed to poll job status:', err);
-        }
+        });
+    }, [polledResults]);
+
+    const fetchJobs = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: importJobKeys.list(userId) });
+    }, [queryClient, userId]);
+
+    const pollJobStatus = useCallback((jobId) => {
+        setPolledJobIds((ids) => (ids.includes(jobId) ? ids : [...ids, jobId]));
     }, []);
 
+    const cancelMutation = useMutation({
+        mutationFn: (jobId) => importExportApi.cancelImportJob(jobId),
+        // The list and any polled copy of the job.
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: importJobKeys.forUser(userId) }),
+    });
+    const cancellingJob = cancelMutation.isPending ? cancelMutation.variables : null;
+
     const handleCancelJob = async (jobId) => {
-        setCancellingJob(jobId);
         try {
-            await importExportApi.cancelImportJob(jobId);
+            await cancelMutation.mutateAsync(jobId);
             setSuccess('Import cancelled successfully');
-            fetchJobs();
         } catch (err) {
             setError(getApiErrorMessage(err, 'Failed to cancel import'));
-        } finally {
-            setCancellingJob(null);
         }
     };
 

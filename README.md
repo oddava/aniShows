@@ -40,7 +40,7 @@ Built with Django, React, PostgreSQL, Redis, and Celery, AniShows is designed to
 - **Backend**: Django, Django REST Framework, Channels, Celery.
 - **Frontend**: React, Vite, React Router, TanStack Query, Tailwind CSS.
 - **Data**: PostgreSQL, Redis, S3-compatible media storage.
-- **Ops**: Docker Compose, Caddy, Gunicorn, Daphne, Sentry, Prometheus, k6.
+- **Ops**: Docker Compose, Caddy, Gunicorn + Uvicorn workers, Sentry, Prometheus, k6.
 
 ## Architecture
 

@@ -1,10 +1,22 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Loader2, LogIn } from 'lucide-react';
 
-import { animeApi, authApi, notificationApi } from '../api/client';
+import {
+    notificationImageQueries,
+    notificationKeys,
+    notificationQueries,
+} from '../api/queries/notifications';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
+import {
+    flattenFeed,
+    updateNotificationFeeds,
+    useMarkAllNotificationsRead,
+    useMarkNotificationRead,
+} from '../hooks/useNotifications';
+import { useFreshError, useReportError } from '../hooks/useQueryErrorReport';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { applyImageFallback, getImageUrl } from '../utils/imageUtils';
 import logger from '../utils/logger';
@@ -98,173 +110,107 @@ const getFollowerInitials = (name) => {
     return clean.slice(0, 2).toUpperCase();
 };
 
-const parseNextPageNumber = (nextUrl) => {
-    if (!nextUrl) return null;
-    try {
-        const url = new URL(nextUrl, window.location.origin);
-        const page = Number(url.searchParams.get('page'));
-        if (Number.isFinite(page) && page > 1) return page;
-    } catch {
-        return null;
+// Image lookups stay bounded, as before: covers for the first 24 items, 12 requests at a time; avatars 8 at a time.
+const COVER_LOOKUP_ITEMS = 24;
+const COVER_BATCH = 12;
+const AVATAR_BATCH = 8;
+
+/** Fetches `queryOptionsFor(name)` for each name, `batchSize` at a time, into `{ name: value }`. */
+const fetchInBatches = async (queryClient, names, batchSize, queryOptionsFor) => {
+    const result = {};
+    for (let index = 0; index < names.length; index += batchSize) {
+        const batch = names.slice(index, index + batchSize);
+        const values = await Promise.all(batch.map((name) => queryClient.fetchQuery(queryOptionsFor(name))));
+        batch.forEach((name, offset) => {
+            result[name] = values[offset];
+        });
     }
-    return null;
+    return result;
 };
+
+const EMPTY_MAP = {};
 
 export default function Notifications() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
-    const [notifications, setNotifications] = useState([]);
-    const [loadingInitial, setLoadingInitial] = useState(false);
-    const [loadingMore, setLoadingMore] = useState(false);
-    const [markingAllRead, setMarkingAllRead] = useState(false);
-    const [coverBySlug, setCoverBySlug] = useState({});
+    const queryClient = useQueryClient();
+    const userId = user?.id;
     const [activeFilter, setActiveFilter] = useState('all');
-    const [nextPage, setNextPage] = useState(null);
-    const [fetchError, setFetchError] = useState('');
     const [actionError, setActionError] = useState('');
+    const [brokenThumbIds, setBrokenThumbIds] = useState(new Set());
+
+    // Every visit starts from page 1 (gcTime 0), as it did when the list lived in state.
+    const feedKey = notificationKeys.feed(userId, PAGE_SIZE);
+    const feedQuery = useInfiniteQuery({
+        ...notificationQueries.feed(userId, PAGE_SIZE),
+        enabled: isAuthenticated,
+        staleTime: 0,
+        gcTime: 0,
+        retry: false,
+    });
+    const feedError = useFreshError(feedQuery, feedKey);
+    useReportError(feedError, feedQuery.errorUpdatedAt, { log: 'Failed to fetch notifications:' });
+
+    const notifications = useMemo(() => flattenFeed(feedQuery.data), [feedQuery.data]);
+    const loadingInitial = feedQuery.isLoading;
+    const loadingMore = feedQuery.isFetchingNextPage;
+    const nextPage = feedQuery.hasNextPage;
+    const fetchError = feedError ? 'Failed to load notifications. Please try again.' : '';
+
+    const retryFeed = useCallback(() => {
+        // Back to page 1 with the spinner, like the old Retry.
+        queryClient.resetQueries({ queryKey: notificationKeys.feed(userId, PAGE_SIZE), exact: true });
+    }, [queryClient, userId]);
+
+    const markReadMutation = useMarkNotificationRead(userId);
+    const markAllReadMutation = useMarkAllNotificationsRead(userId);
+    const markingAllRead = markAllReadMutation.isPending;
+    const { mutateAsync: markOneRead } = markReadMutation;
+    const { mutateAsync: markAllRead } = markAllReadMutation;
 
     const markNotificationRead = useCallback(async (notification) => {
         if (notification.is_read) return;
+        await markOneRead(notification.id);
+    }, [markOneRead]);
 
-        await notificationApi.markAsRead(notification.id);
-        setNotifications((prev) => prev.map((item) => (
-            item.id === notification.id ? { ...item, is_read: true } : item
-        )));
-    }, []);
-    const [brokenThumbIds, setBrokenThumbIds] = useState(new Set());
-    const [followerAvatarByUsername, setFollowerAvatarByUsername] = useState({});
+    // Covers for anime notifications that carry no image of their own.
+    const coverSlugs = useMemo(() => Array.from(
+        new Set(
+            notifications
+                .slice(0, COVER_LOOKUP_ITEMS)
+                .map((item) => (hasEmbeddedImage(item) ? null : getAnimeSlug(item)))
+                .filter(Boolean)
+        )
+    ), [notifications]);
+    const { data: coverBySlug = EMPTY_MAP } = useQuery({
+        queryKey: ['notificationImages', 'covers', coverSlugs],
+        queryFn: () => fetchInBatches(queryClient, coverSlugs, COVER_BATCH, notificationImageQueries.animeCover),
+        enabled: coverSlugs.length > 0,
+        staleTime: Infinity,
+        placeholderData: keepPreviousData,
+    });
 
-    const fetchNotifications = useCallback(async ({ page = 1, append = false } = {}) => {
-        if (!isAuthenticated) return;
-
-        if (append) {
-            setLoadingMore(true);
-        } else {
-            setLoadingInitial(true);
-            setFetchError('');
-        }
-        try {
-            const response = await notificationApi.getAll({ page_size: PAGE_SIZE, page });
-            const next = parseNextPageNumber(response.data?.next || null);
-            const incoming = response.data?.results || [];
-            setNextPage(next);
-
-            setNotifications((prev) => {
-                if (!append) return incoming;
-                const seen = new Set(prev.map((item) => item.id));
-                const merged = [...prev];
-                incoming.forEach((item) => {
-                    if (!seen.has(item.id)) merged.push(item);
-                });
-                return merged;
-            });
-        } catch (error) {
-            logger.error('Failed to fetch notifications:', error);
-            setFetchError('Failed to load notifications. Please try again.');
-        } finally {
-            setLoadingInitial(false);
-            setLoadingMore(false);
-        }
-    }, [isAuthenticated]);
-
-    useEffect(() => {
-        fetchNotifications({ page: 1, append: false });
-    }, [fetchNotifications]);
-
-    useEffect(() => {
-        const animeSlugs = Array.from(
-            new Set(
-                notifications
-                    .slice(0, 24)
-                    .map((item) => (hasEmbeddedImage(item) ? null : getAnimeSlug(item)))
-                    .filter(Boolean)
-            )
-        );
-
-        const slugsToFetch = animeSlugs.filter((slug) => !(slug in coverBySlug));
-        if (slugsToFetch.length === 0) return;
-
-        let cancelled = false;
-
-        const fetchCovers = async () => {
-            // Keep request fan-out bounded to avoid network spikes on large notification lists.
-            const maxToFetch = slugsToFetch.slice(0, 12);
-            const entries = await Promise.all(maxToFetch.map(async (slug) => {
-                try {
-                    const response = await animeApi.getBySlug(slug);
-                    const anime = response.data || {};
-                    return [
-                        slug,
-                        anime.cover_image_small || anime.cover_image_medium || anime.cover_image || null,
-                    ];
-                } catch {
-                    return [slug, null];
-                }
-            }));
-
-            if (cancelled) return;
-
-            setCoverBySlug((prev) => {
-                const next = { ...prev };
-                entries.forEach(([slug, url]) => {
-                    next[slug] = url;
-                });
-                return next;
-            });
-        };
-
-        fetchCovers();
-        return () => {
-            cancelled = true;
-        };
-    }, [notifications, coverBySlug]);
-
-    useEffect(() => {
-        const usernamesToFetch = Array.from(
-            new Set(
-                notifications
-                    .filter((item) => item.notification_type === 'new_follower')
-                    .map((item) => item?.data?.follower_username)
-                    .filter((username) => typeof username === 'string' && username.trim().length > 0)
-                    .filter((username) => followerAvatarByUsername[username] === undefined)
-            )
-        ).slice(0, 8);
-
-        if (usernamesToFetch.length === 0) return;
-
-        let cancelled = false;
-
-        const fetchFollowerAvatars = async () => {
-            const entries = await Promise.all(
-                usernamesToFetch.map(async (username) => {
-                    try {
-                        const response = await authApi.getByUsername(username);
-                        return [username, response.data?.avatar || null];
-                    } catch {
-                        return [username, null];
-                    }
-                })
-            );
-
-            if (cancelled) return;
-
-            setFollowerAvatarByUsername((prev) => {
-                const next = { ...prev };
-                entries.forEach(([username, avatar]) => {
-                    next[username] = avatar;
-                });
-                return next;
-            });
-        };
-
-        fetchFollowerAvatars();
-        return () => {
-            cancelled = true;
-        };
-    }, [notifications, followerAvatarByUsername]);
+    // Avatars for follower notifications.
+    const followerUsernames = useMemo(() => Array.from(
+        new Set(
+            notifications
+                .filter((item) => item.notification_type === 'new_follower')
+                .map((item) => item?.data?.follower_username)
+                .filter((username) => typeof username === 'string' && username.trim().length > 0)
+        )
+    ), [notifications]);
+    const { data: followerAvatarByUsername = EMPTY_MAP } = useQuery({
+        queryKey: ['notificationImages', 'avatars', followerUsernames],
+        queryFn: () => fetchInBatches(queryClient, followerUsernames, AVATAR_BATCH, notificationImageQueries.userAvatar),
+        enabled: followerUsernames.length > 0,
+        staleTime: Infinity,
+        placeholderData: keepPreviousData,
+    });
 
     const handleWsMessage = useCallback((data) => {
+        const setNotifications = (updater) => updateNotificationFeeds(queryClient, userId, updater);
+
         if (data.type === 'notification' && data.notification) {
             setNotifications((prev) => {
                 const exists = prev.some((item) => item.id === data.notification.id);
@@ -297,7 +243,7 @@ export default function Notifications() {
         if (data.type === 'notification_deleted' && data.notification_id) {
             setNotifications((prev) => prev.filter((item) => item.id !== data.notification_id));
         }
-    }, []);
+    }, [queryClient, userId]);
 
     useWebSocket(
         user ? '/ws/notifications/' : null,
@@ -322,26 +268,21 @@ export default function Notifications() {
     }, [markNotificationRead, navigate]);
 
     const handleMarkAllAsRead = useCallback(async () => {
-        setMarkingAllRead(true);
         setActionError('');
         try {
-            await notificationApi.markAllAsRead();
-            setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
-            window.dispatchEvent(
-                new CustomEvent('notifications:unread-count', { detail: { count: 0 } })
-            );
+            // Also zeroes the shared unread badge (Navbar).
+            await markAllRead();
         } catch (error) {
             logger.error('Failed to mark all notifications as read:', error);
             setActionError('Could not mark all notifications as read.');
-        } finally {
-            setMarkingAllRead(false);
         }
-    }, []);
+    }, [markAllRead]);
 
+    const { fetchNextPage } = feedQuery;
     const handleLoadMore = useCallback(async () => {
         if (!nextPage || loadingMore) return;
-        await fetchNotifications({ page: nextPage, append: true });
-    }, [fetchNotifications, loadingMore, nextPage]);
+        await fetchNextPage();
+    }, [fetchNextPage, loadingMore, nextPage]);
 
     const hasUnread = notifications.some((item) => !item.is_read);
     const filteredNotifications = notifications.filter((item) => {
@@ -393,7 +334,7 @@ export default function Notifications() {
                             <span>{fetchError}</span>
                             <button
                                 type="button"
-                                onClick={() => fetchNotifications({ page: 1, append: false })}
+                                onClick={retryFeed}
                                 className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
                             >
                                 Retry

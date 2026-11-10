@@ -72,7 +72,7 @@ jobs:
         run: uv run python manage.py makemigrations --check --dry-run
 
       - name: Pytest
-        run: uv run pytest -p no:cacheprovider -n auto
+        run: uv run pytest -p no:cacheprovider -n auto --cov --cov-report=term:skip-covered
 
   frontend:
     name: Frontend (eslint + vitest + build)

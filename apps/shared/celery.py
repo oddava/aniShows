@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import logging
 import time
+from contextlib import contextmanager
 from reprlib import repr as limited_repr
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from celery import Task, shared_task
+
+from .logger import logger as app_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 logger = logging.getLogger("anishows.celery")
 
@@ -51,7 +57,7 @@ TIME_LIMIT_PRESETS: dict[str, tuple[int, int]] = {
 }
 
 
-# Task kwargs are persisted (result backend, CeleryTaskResult) and logged;
+# Task kwargs are persisted (core.CeleryTaskResult) and logged;
 # these never may be. Bulky payloads are summarised instead of stored.
 SECRET_TASK_KWARGS = frozenset({"access_token", "password", "token", "secret"})
 BULKY_TASK_KWARGS = frozenset({"xml_content"})
@@ -163,3 +169,27 @@ def task_options(
 def observed_shared_task(**options: Any):
     """Create a shared task using the repository's default task options."""
     return shared_task(**task_options(**options))
+
+
+@contextmanager
+def retry_on_error(
+    task: Task,
+    message: str,
+    *,
+    extra: dict[str, Any] | None = None,
+    countdown: int | None = None,
+) -> Iterator[None]:
+    """Log any error raised in the block with its traceback, then retry ``task``.
+
+    The task entry-point boundary: whatever a task's service call raises is
+    logged (Sentry records it) and handed to Celery's retry, which re-raises
+    the error itself once ``max_retries`` is used up.
+
+        with retry_on_error(self, "Cleanup failed", extra={"days": days}):
+            return Service.cleanup(days=days)
+    """
+    try:
+        yield
+    except Exception as exc:
+        app_logger.exception(message, extra=extra)
+        raise task.retry(exc=exc, countdown=countdown)

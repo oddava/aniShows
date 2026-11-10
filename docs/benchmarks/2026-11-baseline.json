@@ -1,0 +1,82 @@
+{
+  "list": {
+    "url": "/api/v1/anime/?page_size=24",
+    "cold_ms": 85.5,
+    "warm_ms": 30.0,
+    "cold_queries": 3,
+    "cold_sql_ms": 6.0,
+    "response_kb": 24.5
+  },
+  "list_sorted_rating": {
+    "url": "/api/v1/anime/?page_size=24&sort=rating",
+    "cold_ms": 65.1,
+    "warm_ms": 34.8,
+    "cold_queries": 4,
+    "cold_sql_ms": 6.0,
+    "response_kb": 1.0
+  },
+  "search": {
+    "url": "/api/v1/anime/?q=The",
+    "cold_ms": 83.9,
+    "warm_ms": 30.2,
+    "cold_queries": 3,
+    "cold_sql_ms": 6.0,
+    "response_kb": 20.8
+  },
+  "detail": {
+    "url": "/api/v1/anime/the-apothecary-diaries-season-3/",
+    "cold_ms": 91.4,
+    "warm_ms": 28.3,
+    "cold_queries": 7,
+    "cold_sql_ms": 11.0,
+    "response_kb": 14.1
+  },
+  "trending": {
+    "url": "/api/v1/anime/trending/",
+    "cold_ms": 75.5,
+    "warm_ms": 29.9,
+    "cold_queries": 3,
+    "cold_sql_ms": 5.0,
+    "response_kb": 19.8
+  },
+  "top_rated": {
+    "url": "/api/v1/anime/top_rated/",
+    "cold_ms": 59.5,
+    "warm_ms": 28.9,
+    "cold_queries": 3,
+    "cold_sql_ms": 5.0,
+    "response_kb": 2.3
+  },
+  "browse_rows": {
+    "url": "/api/v1/anime/browse-rows/",
+    "cold_ms": 125.9,
+    "warm_ms": 29.6,
+    "cold_queries": 9,
+    "cold_sql_ms": 21.0,
+    "response_kb": 25.0
+  },
+  "schedule": {
+    "url": "/api/v1/anime/schedule/",
+    "cold_ms": 73.8,
+    "warm_ms": 74.2,
+    "cold_queries": 3,
+    "cold_sql_ms": 5.0,
+    "response_kb": 42.3
+  },
+  "list_genre": {
+    "url": "/api/v1/anime/?page_size=24&genre=action",
+    "cold_ms": 81.8,
+    "warm_ms": 29.1,
+    "cold_queries": 4,
+    "cold_sql_ms": 8.0,
+    "response_kb": 21.9
+  },
+  "public_profile": {
+    "url": "/api/v1/users/oddava/",
+    "cold_ms": 42.7,
+    "warm_ms": 26.1,
+    "cold_queries": 4,
+    "cold_sql_ms": 5.0,
+    "response_kb": 0.4
+  }
+}

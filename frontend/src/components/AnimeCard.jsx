@@ -13,6 +13,8 @@ import {
     isSameOriginImageUrl,
 } from '../utils/imageUtils';
 import logger from '../utils/logger';
+import { animeKeys, seasonalKeys } from '../api/queries/anime';
+import { listKeys, profileKeys } from '../api/queries/user';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', dotColor: 'bg-emerald-400' },
@@ -109,8 +111,8 @@ function AnimeCard({
     }, [showAiringCountdown, anime.next_airing_date, anime.next_airing_episode]);
 
     const invalidateAnimeViews = useCallback(() => {
-        queryClient.invalidateQueries({ queryKey: ['anime'] });
-        queryClient.invalidateQueries({ queryKey: ['seasonal'] });
+        queryClient.invalidateQueries({ queryKey: animeKeys.all });
+        queryClient.invalidateQueries({ queryKey: seasonalKeys.all });
     }, [queryClient]);
 
     useEffect(() => {
@@ -192,8 +194,8 @@ function AnimeCard({
                 setListId(response.data.id);
             }
             invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: ['lists'] });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: listKeys.all });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
         } catch (error) {
             logger.error('Error updating list:', error);
             setListStatus(previousStatus);
@@ -219,8 +221,8 @@ function AnimeCard({
         try {
             await listApi.remove(previousId);
             invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: ['lists'] });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: listKeys.all });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
         } catch (error) {
             logger.error('Error removing from list:', error);
             setListStatus(previousStatus);
@@ -244,8 +246,8 @@ function AnimeCard({
             const entryId = userListEntry?.id || listId;
             await listApi.update(entryId, { episodes_watched: newEpisodes });
             invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: ['lists'] });
-            queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+            queryClient.invalidateQueries({ queryKey: listKeys.all });
+            queryClient.invalidateQueries({ queryKey: profileKeys.own });
         } catch (error) {
             logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(previousEpisodes);

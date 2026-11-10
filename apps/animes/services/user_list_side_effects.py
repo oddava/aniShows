@@ -2,23 +2,19 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import Count, Q
 from django.utils import timezone as tz
 
+from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.models import UserActivity, UserAnimeList
 from ...users.services.cache import invalidate_user_caches
 from ...users.services.stats_service import create_or_update_user_stats
+from ...users.services.user_queryset import user_exists
 from ..models import Anime
 
 User = get_user_model()
-
-
-def _user_exists(user):
-    if not user or not user.pk:
-        return False
-    return User.objects.filter(pk=user.pk).exists()
 
 
 def update_user_stats_and_cache(user):
@@ -35,13 +31,14 @@ def update_user_stats_and_cache(user):
             countdown=2,
         )
         logger.debug("Invalidated cache and queued stats update for user %s", user.username)
-    except Exception as exc:
+    except ENQUEUE_ERRORS:
+        # Cache or broker unavailable: refresh the stats inline instead.
         try:
             create_or_update_user_stats(user)
             invalidate_user_caches(user.id, user.username)
-        except Exception:
-            pass
-        logger.exception("Failed to update stats for user %s: %s", user.username, exc)
+        except (DatabaseError, *CACHE_ERRORS):
+            logger.warning("Inline stats refresh failed for user %s", user.username, exc_info=True)
+        logger.exception("Failed to update stats for user %s", user.username)
 
 
 def invalidate_heatmap_cache(user_id):
@@ -95,7 +92,7 @@ def update_anime_status_distribution(anime_id):
 
 def _create_activity_deduped(**kwargs):
     user = kwargs.get("user")
-    if not _user_exists(user):
+    if not user_exists(user):
         return
 
     cutoff = tz.now() - timedelta(seconds=2)
@@ -211,7 +208,7 @@ def log_user_activity(instance, *, created: bool):
 def log_user_activity_on_delete(instance):
     if not instance or not instance.user or getattr(instance, "_skip_activity", False):
         return
-    if not _user_exists(instance.user):
+    if not user_exists(instance.user):
         return
 
     activity_kwargs = {
@@ -247,7 +244,7 @@ def schedule_recommendations_debounced(user_id, *, task, countdown=300):
 def handle_user_anime_list_change(instance, *, schedule_recommendations):
     if not instance or not instance.user or getattr(instance, "_skip_activity", False):
         return
-    if not _user_exists(instance.user):
+    if not user_exists(instance.user):
         return
 
     logger.info(
@@ -264,7 +261,7 @@ def handle_user_anime_list_change(instance, *, schedule_recommendations):
 def handle_user_favorite_change(instance, *, schedule_recommendations):
     if not instance or not instance.user:
         return
-    if not _user_exists(instance.user):
+    if not user_exists(instance.user):
         return
 
     logger.info(
@@ -278,7 +275,7 @@ def handle_user_favorite_change(instance, *, schedule_recommendations):
 def handle_review_change(instance):
     if not instance or not instance.user:
         return
-    if not _user_exists(instance.user):
+    if not user_exists(instance.user):
         return
 
     logger.info("User %s updated reviews. Updating stats.", instance.user.username)

@@ -8,7 +8,8 @@ from django.core.cache import cache
 from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
-from ..shared.celery import observed_shared_task
+from ..shared.celery import observed_shared_task, retry_on_error
+from ..shared.errors import iter_exception_chain
 from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
 from .services.celery_tasks import UserTaskService
@@ -55,22 +56,13 @@ def schedule_user_stats_refresh(
         raise
 
 
-def _iter_exception_chain(exc: Exception):
-    seen = set()
-    current = exc
-    while current and id(current) not in seen:
-        yield current
-        seen.add(id(current))
-        current = current.__cause__ or current.__context__
-
-
 def _can_retry(task, exc: Exception) -> bool:
     max_retries = getattr(task, "max_retries", 0)
     return task.request.retries < max_retries and max_retries > 0
 
 
 def _is_retryable_external_error(exc: Exception) -> bool:
-    for current in _iter_exception_chain(exc):
+    for current in iter_exception_chain(exc):
         if isinstance(current, RETRYABLE_DB_ERRORS):
             return True
         if isinstance(current, (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError)):
@@ -83,11 +75,8 @@ def _is_retryable_external_error(exc: Exception) -> bool:
 
 @observed_shared_task(retry_policy="standard")
 def cleanup_unverified_accounts(self, days: int = 7):
-    try:
+    with retry_on_error(self, "Unverified account cleanup failed", extra={"days": days}):
         return UserTaskService.cleanup_unverified_accounts(days=days)
-    except Exception as exc:
-        logger.exception("Unverified account cleanup failed", extra={"days": days})
-        raise self.retry(exc=exc)
 
 
 @observed_shared_task(retry_policy="standard")
@@ -135,12 +124,9 @@ def fetch_anime_by_external_id(
 
 @observed_shared_task(retry_policy="standard")
 def cleanup_old_import_jobs(self, days: int = 30):
-    try:
+    with retry_on_error(self, "Old import job cleanup failed", extra={"days": days}):
         deleted = UserTaskService.cleanup_old_import_jobs(days=days)
         return {"deleted": deleted, "days": days}
-    except Exception as exc:
-        logger.exception("Old import job cleanup failed", extra={"days": days})
-        raise self.retry(exc=exc)
 
 
 @observed_shared_task(retry_policy="standard")
@@ -151,16 +137,13 @@ def run_user_maintenance_workflow(
     unverified_days: int = 7,
     import_days: int = 30,
 ):
-    try:
+    with retry_on_error(self, "User maintenance workflow failed to queue"):
         return UserTaskService.run_user_maintenance_workflow(
             cleanup_unverified=cleanup_unverified,
             cleanup_imports=cleanup_imports,
             unverified_days=unverified_days,
             import_days=import_days,
         )
-    except Exception as exc:
-        logger.exception("User maintenance workflow failed to queue")
-        raise self.retry(exc=exc)
 
 
 @observed_shared_task(retry_policy="standard", time_limit_preset="quick")
@@ -197,8 +180,5 @@ def update_all_user_stats(self):
 
 @observed_shared_task(retry_policy="standard")
 def warm_profile_cache(self, usernames: list | None = None):
-    try:
+    with retry_on_error(self, "Profile cache warmup failed", extra={"usernames": usernames}):
         return UserTaskService.warm_profile_cache(usernames=usernames)
-    except Exception as exc:
-        logger.exception("Profile cache warmup failed", extra={"usernames": usernames})
-        raise self.retry(exc=exc)

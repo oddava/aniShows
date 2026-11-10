@@ -13,25 +13,20 @@ description = "Anime tracking and discovery platform"
 requires-python = ">=3.12"
 dependencies = [
     "bleach>=6.2.0",
-    "cookiecutter>=2.6.0",
     "cryptography>=46.0.3",
     "defusedxml>=0.7.1",
-    "dj-database-url>=3.0.1",
     "django>=5.2.7",
     "django-allauth>=65.13.1",
-    "django-debug-toolbar>=6.1.0",
     "django-filter>=25.2",
     "django-jazzmin>=3.0.1",
     "django-redis>=6.0.0",
-    "django-tailwind>=4.2.0",
     "httpx>=0.28.1",
     "pillow>=12.0.0",
-    "pip>=25.3",
     "prometheus-client>=0.19.0",
     "psycopg2-binary>=2.9.11",
-    "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
     "python-magic>=0.4.27",
+    "requests>=2.32.0",
     "djangorestframework>=3.15.0",
     "djangorestframework-simplejwt>=5.3.0",
     "dj-rest-auth>=6.0.0",
@@ -42,19 +37,17 @@ dependencies = [
     "celery[redis]>=5.3.6",
     "redis>=5.0.1",
     "django-celery-beat>=2.5.0",
-    "django-celery-results>=2.5.1",
     "django-storages[s3]>=1.14.2",
     "boto3>=1.34.0",
     "django-imagekit>=5.0.0",
     "pillow-avif-plugin>=1.4.0",
     "pywebpush>=2.0.0",
-    "channels[daphne]>=4.2.0",
+    "channels>=4.2.0",
     "channels-redis>=4.2.0",
     "beautifulsoup4>=4.12.0",
     "python-whois>=0.9.0",
     "idna>=3.6",
     "google-api-python-client>=2.100.0",
-    "pydantic>=2.5.0",
     "drf-spectacular>=0.29.0",
     "sentry-sdk[django,celery]>=2.19.0",
     "zstandard>=0.24.0",
@@ -62,6 +55,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "django-debug-toolbar>=6.1.0",
     "ruff>=0.6.9",
     "mypy>=1.11.2",
     "django-stubs>=5.1.0",
@@ -71,6 +65,7 @@ dev = [
     "safety>=3.2.0",
     "pytest>=8.3.0",
     "pytest-django>=4.9.0",
+    "daphne>=4.1.0",  # channels.testing imports it
     "pytest-cov>=5.0.0",
     "pytest-xdist>=3.6.1",
     "pytest-timeout>=2.3.1",
@@ -107,7 +102,12 @@ select = [
     "DJ",  # flake8-django
     "ASYNC", # flake8-async
     "S",   # flake8-bandit (security)
+    "BLE", # flake8-blind-except: no `except Exception` unless re-raised or logged with a traceback
 ]
+
+# Lets ruff see that our shared logger is a logging.Logger, so BLE001 accepts
+# `except Exception` blocks that call logger.exception(...).
+logger-objects = ["apps.shared.logger.logger"]
 
 ignore = [
     "D100",  # Missing docstring in public module
@@ -128,7 +128,6 @@ ignore = [
     "RUF012", # Mutable default values - common in Django, can be fixed later
     "E501",  # Line too long
     "E402",  # Module level import not at top of file
-    "F811",  # Redefinition of unused
     "N806",  # Variable in function should be lowercase
     "PTH122", # os.path.splitext() should be replaced
     "PTH123", # open() should be replaced by Path.open()
@@ -142,9 +141,7 @@ ignore = [
     "UP006",  # Use list instead of List for type annotation
     "S311",   # Standard pseudo-random generators are not suitable for cryptographic purposes
     "S110",   # try-except-pass detected
-    "F823",   # Local variable referenced before assignment
     "D417",   # Missing argument description in docstring
-    "B023",   # Function definition does not bind loop variable
 ]
 
 [tool.ruff.lint.pydocstyle]
@@ -156,6 +153,40 @@ known-first-party = ["apps", "root"]
 [tool.ruff.lint.per-file-ignores]
 "root/settings/*.py" = ["F403", "F405"]
 "root/settings/__init__.py" = ["F403"]
+# BLE001: files that still need a broad `except Exception` that is neither
+# re-raised nor logged with logger.exception. This list may only get shorter.
+# - Provider layer, rewritten in Phase 4: leave as is until then.
+"apps/animes/services/jikan.py" = ["BLE001"]
+"apps/animes/services/anilist.py" = ["BLE001"]
+"apps/animes/services/offline_catalog.py" = ["BLE001"]
+"apps/animes/services/offline_sync.py" = ["BLE001"]
+"apps/animes/services/provider_base.py" = ["BLE001"]
+# - Best effort through the provider layer (any failure means "no data"),
+#   logged as a warning with the traceback.
+"apps/animes/services/franchise_import.py" = ["BLE001"]
+"apps/animes/services/public_anime_service.py" = ["BLE001"]
+"apps/animes/services/watch_episodes.py" = ["BLE001"]
+"apps/animes/tasks/franchises.py" = ["BLE001"]
+"apps/users/services/public_profile_service.py" = ["BLE001"]
+# - Other best-effort steps (media URLs, thumbnails, WHOIS, link previews,
+#   cleanup, a notification after the badges are granted): warning or debug.
+"apps/shared/media_urls.py" = ["BLE001"]
+"apps/animes/serializers_mixins.py" = ["BLE001"]
+"apps/animes/tasks/images.py" = ["BLE001"]
+"apps/core/services/url_validator.py" = ["BLE001"]
+"apps/core/services/celery_tasks.py" = ["BLE001"]
+"apps/users/services/import_service/base.py" = ["BLE001"]
+"apps/users/views/admin_badges.py" = ["BLE001"]
+# - Management commands: per-item loops report the error on stdout and go on.
+"apps/animes/management/commands/backfill_external_urls.py" = ["BLE001"]
+"apps/animes/management/commands/backfill_theme_youtube.py" = ["BLE001"]
+"apps/animes/management/commands/cleanup_anime_media.py" = ["BLE001"]
+"apps/animes/management/commands/copy_thumbnails_to_s3.py" = ["BLE001"]
+"apps/animes/management/commands/generate_thumbnails.py" = ["BLE001"]
+"apps/animes/management/commands/populate_franchises.py" = ["BLE001"]
+"apps/animes/management/commands/populate_themes.py" = ["BLE001"]
+"apps/animes/management/commands/warm_watch_episodes.py" = ["BLE001"]
+"apps/users/management/commands/populate_user_stats.py" = ["BLE001"]
 
 [tool.ruff.format]
 quote-style = "double"

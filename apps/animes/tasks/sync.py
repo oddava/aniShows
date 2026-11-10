@@ -10,6 +10,7 @@ catalog slices are derived from the existing Anime table.
 from datetime import datetime
 
 from asgiref.sync import sync_to_async
+from django.db import DatabaseError
 
 from ...shared.celery import observed_shared_task
 from ..services.catalog_sync import CatalogSyncService
@@ -88,9 +89,9 @@ class SyncAnimeCatalogTask(BaseTask):
                 def update_job_progress(processed, total):
                     if not task_id:
                         return
-                    try:
-                        from ...core.models import CeleryTaskResult
+                    from ...core.models import CeleryTaskResult
 
+                    try:
                         job = CeleryTaskResult.objects.get(task_id=task_id)
                         if job.result_data is None or not isinstance(job.result_data, dict):
                             job.result_data = {}
@@ -99,8 +100,8 @@ class SyncAnimeCatalogTask(BaseTask):
                         if job.status == CeleryTaskResult.TaskStatus.PENDING:
                             job.status = CeleryTaskResult.TaskStatus.STARTED
                         job.save(update_fields=["result_data", "status"])
-                    except Exception:
-                        pass
+                    except (CeleryTaskResult.DoesNotExist, DatabaseError):
+                        pass  # progress reporting is best effort
 
                 await update_job_progress(0, total_items)
 
@@ -145,7 +146,7 @@ class SyncAnimeCatalogTask(BaseTask):
                     "fetched": total_items,
                 }
             except Exception as exc:
-                logger.error("Error in %s sync: %s", sync_type, exc)
+                logger.exception("Error in %s sync", sync_type)
                 self.metrics.record_error()
                 raise self.retry(exc=exc)
             finally:
@@ -172,9 +173,9 @@ class SyncAnimeCatalogTask(BaseTask):
                 def update_job_progress(processed, total):
                     if not task_id:
                         return
-                    try:
-                        from ...core.models import CeleryTaskResult
+                    from ...core.models import CeleryTaskResult
 
+                    try:
                         job = CeleryTaskResult.objects.get(task_id=task_id)
                         if job.result_data is None or not isinstance(job.result_data, dict):
                             job.result_data = {}
@@ -183,8 +184,8 @@ class SyncAnimeCatalogTask(BaseTask):
                         if job.status == CeleryTaskResult.TaskStatus.PENDING:
                             job.status = CeleryTaskResult.TaskStatus.STARTED
                         job.save(update_fields=["result_data", "status"])
-                    except Exception:
-                        pass
+                    except (CeleryTaskResult.DoesNotExist, DatabaseError):
+                        pass  # progress reporting is best effort
 
                 await update_job_progress(0, total_items)
 
@@ -222,7 +223,7 @@ class SyncAnimeCatalogTask(BaseTask):
                 }
 
             except Exception as exc:
-                logger.error("Error in %s sync: %s", sync_type, exc)
+                logger.exception("Error in %s sync", sync_type)
                 self.metrics.record_error()
                 raise self.retry(exc=exc)
 

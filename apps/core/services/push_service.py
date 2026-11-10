@@ -62,7 +62,7 @@ class PushService:
                     },
                 },
                 data=json.dumps(payload),
-                vapid_private_key=getattr(settings, "VAPID_PRIVATE_KEY", None),
+                vapid_private_key=settings.VAPID_PRIVATE_KEY,
                 vapid_claims=cls.get_vapid_claims(),
             )
 
@@ -73,7 +73,7 @@ class PushService:
             return True
 
         except WebPushException as e:
-            logger.warning(f"WebPush failed for subscription {subscription.id}: {e}")
+            logger.warning("WebPush failed for subscription %s: %s", subscription.id, e)
 
             # Deactivate subscription if it's invalid or expired
             if e.response and e.response.status_code in [404, 410]:
@@ -82,8 +82,8 @@ class PushService:
 
             return False
 
-        except Exception as e:
-            logger.exception(f"Failed to send push notification: {e}")
+        except Exception:
+            logger.exception("Failed to send push notification to subscription %s", subscription.id)
             return False
 
     @classmethod

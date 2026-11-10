@@ -1,18 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const AdminStudios = () => {
-  const [studios, setStudios] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudio, setEditingStudio] = useState(null);
@@ -22,33 +20,33 @@ const AdminStudios = () => {
     website: '',
   });
 
-  const fetchStudios = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(search && { search }),
-      });
+  const { items: studios, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'studios',
+    params: {
+      page,
+      ...(search && { search }),
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch studios:',
+    errorToast: 'Failed to load studios',
+  });
 
-      const response = await api.get(`/admin/studios/?${params}`);
-      setStudios(response.data.results);
-      setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
-      logger.error('Failed to fetch studios:', err);
-      toast.error('Failed to load studios');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
-
-  useEffect(() => {
-    fetchStudios();
-  }, [fetchStudios]);
+  const invalidate = [adminKeys.resource('studios')];
+  const saveMutation = useAdminMutation(
+    ({ id, data }) => (id ? api.put(`/admin/studios/${id}/`, data) : api.post('/admin/studios/', data)),
+    { invalidate },
+  );
+  const deleteMutation = useAdminMutation((studioId) => api.delete(`/admin/studios/${studioId}/`), { invalidate });
+  const bulkDeleteMutation = useAdminMutation(
+    (ids) => api.post('/admin/bulk/', { operation: 'delete', entity: 'studios', ids }),
+    { invalidate },
+  );
 
   const handleSearch = (e) => {
     e.preventDefault();
-    setPage(1);
-    fetchStudios();
+    if (page === 1) refetch();
+    else setPage(1);
   };
 
   const openCreateModal = () => {
@@ -76,15 +74,9 @@ const AdminStudios = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (editingStudio) {
-        await api.put(`/admin/studios/${editingStudio.id}/`, formData);
-        toast.success('Studio updated successfully');
-      } else {
-        await api.post('/admin/studios/', formData);
-        toast.success('Studio created successfully');
-      }
+      await saveMutation.mutateAsync({ id: editingStudio?.id, data: formData });
+      toast.success(editingStudio ? 'Studio updated successfully' : 'Studio created successfully');
       closeModal();
-      fetchStudios();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to save studio');
     }
@@ -95,9 +87,8 @@ const AdminStudios = () => {
       return;
     }
     try {
-      await api.delete(`/admin/studios/${studioId}/`);
+      await deleteMutation.mutateAsync(studioId);
       toast.success('Studio deleted successfully');
-      fetchStudios();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete studio');
     }
@@ -108,14 +99,9 @@ const AdminStudios = () => {
       return;
     }
     try {
-      await api.post('/admin/bulk/', {
-        operation: 'delete',
-        entity: 'studios',
-        ids: selectedRows,
-      });
+      await bulkDeleteMutation.mutateAsync(selectedRows);
       toast.success(`${selectedRows.length} studios deleted successfully`);
       setSelectedRows([]);
-      fetchStudios();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete studios');
     }

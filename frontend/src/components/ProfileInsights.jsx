@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { listApi, reviewApi, activityApi } from '../api/client';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { TrendingUp, Star, Tv, Clock, BarChart3, Activity } from 'lucide-react';
 import ActivityHeatmap from './ActivityHeatmap';
@@ -8,6 +7,7 @@ import {
     getProfileAccentTheme,
     normalizeProfilePrimaryColor,
 } from '../utils/profileAccent';
+import { activityQueries, insightsQueries } from '../api/queries/user';
 
 function hexToRgb(hex) {
     const normalized = normalizeProfilePrimaryColor(hex).replace('#', '');
@@ -73,8 +73,7 @@ const CustomTooltip = ({ active, payload }) => {
 // Activity Heatmap Section
 const ActivityHeatmapSection = ({ username, isPrivate, accentColor }) => {
     const { data: heatmapData, isLoading, isError, refetch } = useQuery({
-        queryKey: ['activity-heatmap', username],
-        queryFn: () => activityApi.getHeatmap({ username }).then(res => res.data),
+        ...activityQueries.heatmap(username),
         enabled: !isPrivate && !!username,
         staleTime: 5 * 60 * 1000,
     });
@@ -119,25 +118,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
         isError: listsError,
         refetch: refetchLists
     } = useQuery({
-        queryKey: ['profile-insights-lists', username],
-        queryFn: async () => {
-            const statuses = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
-            const results = await Promise.all(
-                statuses.map(status =>
-                    listApi.getAll({ status, username }).then(res => {
-                        const items = res.data?.results || res.data || [];
-                        return {
-                            status,
-                            items: Array.isArray(items) ? items : []
-                        };
-                    }).catch(err => {
-                        console.error(`Failed to fetch list for status ${status}:`, err);
-                        return { status, items: [] };
-                    })
-                )
-            );
-            return results;
-        },
+        ...insightsQueries.lists(username),
         enabled: !isPrivate && !!username,
         staleTime: 5 * 60 * 1000,
     });
@@ -149,8 +130,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
         isError: reviewsError,
         refetch: refetchReviews
     } = useQuery({
-        queryKey: ['insights-reviews', username],
-        queryFn: () => reviewApi.getAll({ user: username }).then(res => res.data.results || res.data || []),
+        ...insightsQueries.reviews(username),
         enabled: !isPrivate && !!username,
     });
 

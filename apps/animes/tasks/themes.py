@@ -12,7 +12,7 @@ from urllib.parse import quote_plus
 
 import httpx
 from asgiref.sync import sync_to_async
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -152,7 +152,7 @@ class ThemeSongSyncTask(BaseTask):
                     }
 
             except Anime.DoesNotExist:
-                logger.error(f"Anime {anime_id} not found")
+                logger.error("Anime %s not found", anime_id)
                 return {
                     "mode": "single",
                     "anime_id": anime_id,
@@ -160,7 +160,7 @@ class ThemeSongSyncTask(BaseTask):
                     "reason": "anime_not_found",
                 }
             except Exception as e:
-                logger.error(f"Error syncing themes for {anime_id}: {e}")
+                logger.exception("Error syncing themes for %s", anime_id)
                 raise self.retry(exc=e)
 
     async def _sync_batch(
@@ -289,24 +289,19 @@ class ThemeSongSyncTask(BaseTask):
                             f"Skipped: {stats['skipped']} ---"
                         )
 
-                except Exception as e:
+                except Exception:
                     stats["failed"] += 1
                     rate_limiter.record_error()
-                    logger.error(f"✗ Error processing {anime.title}: {e}")
+                    logger.exception("Error processing themes for %s", anime.title)
                     continue
 
         self.metrics.record_records(stats["with_themes"] + stats["without_themes"])
 
-        # Record a metric for theme sync
-        try:
-            from ..services.metrics import ANIME_SYNCED
+        # Record a metric for theme sync. Metric objects swallow their own failures.
+        from ..services.metrics import ANIME_SYNCED
 
-            if stats["with_themes"] > 0:
-                ANIME_SYNCED.labels(sync_type="themes", source="jikan").inc(
-                    stats["with_themes"]
-                )
-        except Exception:
-            pass
+        if stats["with_themes"] > 0:
+            ANIME_SYNCED.labels(sync_type="themes", source="jikan").inc(stats["with_themes"])
 
         # Log summary
         logger.info(
@@ -476,8 +471,9 @@ class ThemeSongSyncTask(BaseTask):
                     theme.save(update_fields=["youtube_url"])
                     count += 1
                     logger.debug(f"Generated YouTube URL for {theme.title}: {youtube_url}")
-            except Exception as e:
-                logger.error(f"Error generating YouTube URL for {theme.title}: {e}")
+            except DatabaseError:
+                # Building the URL is pure string work; only the save can fail.
+                logger.exception("Error saving YouTube URL for %s", theme.title)
 
         return count
 
@@ -543,9 +539,11 @@ def backfill_theme_youtube_urls(self, limit: int = 100):
                     theme.save(update_fields=["youtube_url"])
                     updated += 1
                     logger.debug(f"Generated YouTube URL for {theme.title}")
-        except Exception as e:
+        except DatabaseError:
+            # Building the URL is pure string work; only the save can fail
+            # (e.g. a URL longer than the column).
             errors += 1
-            logger.error(f"Error generating YouTube URL for theme {theme.id}: {e}")
+            logger.exception("Error saving YouTube URL for theme %s", theme.id)
 
     result = {
         "processed": len(themes),

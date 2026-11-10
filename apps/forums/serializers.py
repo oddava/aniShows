@@ -1,5 +1,6 @@
 import bleach
 from django.contrib.auth import get_user_model
+from django.db import DatabaseError
 from rest_framework.exceptions import ValidationError
 from rest_framework.fields import CharField, IntegerField, SerializerMethodField
 from rest_framework.relations import PrimaryKeyRelatedField
@@ -34,9 +35,11 @@ class CustomUserSerializer(ModelSerializer):
         fields = ["id", "username", "avatar"]
 
     def get_avatar(self, obj):
+        # The avatar URL itself is resolved best-effort; only the linked-account
+        # lookup touches the database.
         try:
             return get_user_avatar_url(obj)
-        except Exception:
+        except DatabaseError:
             return None
 
 class TagSerializer(ModelSerializer):

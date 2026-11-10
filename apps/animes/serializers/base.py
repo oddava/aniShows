@@ -15,11 +15,7 @@ from ..models import (
 )
 from ..serializers_mixins import ImageUrlMixin
 
-ALLOWED_IMAGE_TYPES = getattr(
-    settings,
-    "ALLOWED_IMAGE_TYPES",
-    ["image/jpeg", "image/png", "image/webp", "image/gif"],
-)
+ALLOWED_IMAGE_TYPES = settings.ALLOWED_IMAGE_TYPES
 
 
 def validate_image_content(file, max_size, field_name):
@@ -38,15 +34,19 @@ def validate_image_content(file, max_size, field_name):
     magic_bytes = file.read(2048)
     file.seek(0)
 
+    # The sniffed type must be an allowed image type. If libmagic itself fails,
+    # fall through and let the Pillow verification below decide.
+    from ...shared.logger import logger
+
     try:
         mime = magic.from_buffer(magic_bytes, mime=True)
+    except magic.MagicException:
+        logger.warning("Image magic validation failed for %s", field_name, exc_info=True)
+    else:
         if mime not in ALLOWED_IMAGE_TYPES:
             raise ValidationError(
                 f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
             )
-    except Exception as e:
-        from ...shared.logger import logger
-        logger.warning(f"Image magic validation failed for {field_name}: {e}")
 
     Image = get_pillow_image_module()
     if Image is None:
@@ -58,8 +58,10 @@ def validate_image_content(file, max_size, field_name):
         img = Image.open(file)
         img.verify()
         file.seek(0)
-    except Exception:
-        raise ValidationError(f"Invalid or corrupted image file for {field_name}.")
+    except Exception as exc:
+        # Pillow signals a bad file with many unrelated types (OSError,
+        # SyntaxError, ValueError, struct.error, DecompressionBombError...).
+        raise ValidationError(f"Invalid or corrupted image file for {field_name}.") from exc
 
     return file
 

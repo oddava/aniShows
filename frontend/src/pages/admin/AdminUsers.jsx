@@ -1,62 +1,53 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
     Search, Filter, MoreVertical, Shield, ShieldCheck, ShieldOff,
     UserX, UserCheck, Trash2, ChevronLeft, ChevronRight,
     Mail, Calendar, Clock, CheckCircle2, XCircle
 } from 'lucide-react';
 import api from '../../api/client';
-import logger from '../../utils/logger';
+import { adminKeys } from '../../api/queries/admin';
 import CustomSelect from '../../components/common/CustomSelect';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const AdminUsers = () => {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [filters, setFilters] = useState({
         is_staff: '',
         is_active: '',
         ordering: '-date_joined',
     });
 
-    const fetchUsers = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = new URLSearchParams({
-                page,
-                ...(search && { search }),
-                ...(filters.is_staff && { is_staff: filters.is_staff }),
-                ...(filters.is_active && { is_active: filters.is_active }),
-                ordering: filters.ordering,
-            });
+    const {
+        items: users,
+        totalPages,
+        isFetching: loading,
+        error: queryError,
+        refetch,
+    } = useAdminList({
+        resource: 'users',
+        params: {
+            page,
+            ...(search && { search }),
+            ...(filters.is_staff && { is_staff: filters.is_staff }),
+            ...(filters.is_active && { is_active: filters.is_active }),
+            ordering: filters.ordering,
+        },
+        page,
+        setPage,
+        errorLog: 'Failed to fetch users:',
+    });
+    const error = queryError ? getAdminErrorMessage(queryError, 'Failed to load users') : null;
 
-            const response = await api.get(`/admin/users/?${params}`);
-            setUsers(response.data.results);
-            setTotalPages(Math.ceil(response.data.count / 20));
-        } catch (err) {
-            logger.error('Failed to fetch users:', err);
-            if (err.response?.status === 404 && page > 1) {
-                // The page no longer exists, e.g. after deleting its last row.
-                setPage((current) => Math.max(1, current - 1));
-                return;
-            }
-            setError(err.response?.data?.detail || 'Failed to load users');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, search, filters]);
-
-    useEffect(() => {
-        fetchUsers();
-    }, [fetchUsers]);
+    const invalidate = [adminKeys.resource('users')];
+    const toggleActiveMutation = useAdminMutation((userId) => api.post(`/admin/users/${userId}/toggle_active/`), { invalidate });
+    const toggleStaffMutation = useAdminMutation((userId) => api.post(`/admin/users/${userId}/toggle_staff/`), { invalidate });
+    const deleteMutation = useAdminMutation((userId) => api.delete(`/admin/users/${userId}/`), { invalidate });
 
     const handleSearch = (e) => {
         e.preventDefault();
-        setPage(1);
-        fetchUsers();
+        if (page === 1) refetch();
+        else setPage(1);
     };
 
     const toggleUserActive = async (user) => {
@@ -65,8 +56,7 @@ const AdminUsers = () => {
             return;
         }
         try {
-            await api.post(`/admin/users/${user.id}/toggle_active/`);
-            fetchUsers();
+            await toggleActiveMutation.mutateAsync(user.id);
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to toggle user status');
         }
@@ -78,8 +68,7 @@ const AdminUsers = () => {
             return;
         }
         try {
-            await api.post(`/admin/users/${user.id}/toggle_staff/`);
-            fetchUsers();
+            await toggleStaffMutation.mutateAsync(user.id);
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to toggle staff status');
         }
@@ -90,8 +79,7 @@ const AdminUsers = () => {
             return;
         }
         try {
-            await api.delete(`/admin/users/${userId}/`);
-            fetchUsers();
+            await deleteMutation.mutateAsync(userId);
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to delete user');
         }

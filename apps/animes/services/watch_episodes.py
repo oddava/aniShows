@@ -8,6 +8,7 @@ from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
 from ...shared.logger import logger
+from ...shared.parsing import positive_int
 from ...shared.retry import backoff, retry_after_seconds
 from ..models import Anime
 from .jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
@@ -81,11 +82,12 @@ class AnimeWatchEpisodeService:
                     "Failed to fetch episode streaming metadata for %s: %s",
                     anime.slug,
                     exc,
+                    exc_info=True,
                 )
             finally:
                 await service.close()
 
-        mal_id = mal_id or self._coerce_positive_int(episode_media.get("idMal"))
+        mal_id = mal_id or positive_int(episode_media.get("idMal"))
         if not mal_id:
             return self._build_fallback_episodes(anime)
 
@@ -222,8 +224,8 @@ class AnimeWatchEpisodeService:
 
     def _normalize_jikan_episode(self, item: dict, *, fallback_number: int) -> dict | None:
         number = (
-            self._coerce_positive_int(item.get("mal_id"))
-            or self._coerce_positive_int(item.get("episode"))
+            positive_int(item.get("mal_id"))
+            or positive_int(item.get("episode"))
             or self._episode_number_from_jikan_url(item.get("url"))
             or fallback_number
         )
@@ -297,7 +299,7 @@ class AnimeWatchEpisodeService:
         for pattern in cls._STREAMING_EPISODE_PATTERNS:
             match = pattern.search(candidate)
             if match:
-                return cls._coerce_positive_int(match.group(1))
+                return positive_int(match.group(1))
         return None
 
     @classmethod
@@ -309,7 +311,7 @@ class AnimeWatchEpisodeService:
         match = cls._JIKAN_EPISODE_URL_PATTERN.search(candidate)
         if not match:
             return None
-        return cls._coerce_positive_int(match.group(1))
+        return positive_int(match.group(1))
 
     @staticmethod
     def _normalize_aired_date(value: str | None) -> str | None:
@@ -317,14 +319,6 @@ class AnimeWatchEpisodeService:
         if not candidate:
             return None
         return candidate[:10]
-
-    @staticmethod
-    def _coerce_positive_int(value) -> int | None:
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            return None
-        return parsed if parsed > 0 else None
 
     @staticmethod
     def _is_crunchyroll_stream(site: str, url: str) -> bool:

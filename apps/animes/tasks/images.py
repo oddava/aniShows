@@ -16,19 +16,29 @@ from django.db.models import Q
 
 from ...core.services.celery_monitoring import get_queue_size
 from ...shared.celery import observed_shared_task
+from ...shared.errors import iter_exception_chain
 from ...shared.task_lock import cache_lock
 from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
 from .base import run_async_in_task
 
 try:
-    from botocore.exceptions import ConnectionClosedError, EndpointConnectionError
+    from botocore.exceptions import (
+        BotoCoreError,
+        ClientError,
+        ConnectionClosedError,
+        EndpointConnectionError,
+    )
 
     _BOTOCORE_STORAGE_ERRORS: tuple[type[Exception], ...] = (
         ConnectionClosedError,
         EndpointConnectionError,
     )
-except Exception:  # pragma: no cover - botocore is available in runtime environments
+    # Everything a storage call can raise: botocore raises only BotoCoreError
+    # subclasses and ClientError; the filesystem backend raises OSError.
+    _STORAGE_ERRORS: tuple[type[Exception], ...] = (OSError, BotoCoreError, ClientError)
+except ImportError:  # pragma: no cover - botocore is available in runtime environments
     _BOTOCORE_STORAGE_ERRORS = ()
+    _STORAGE_ERRORS = (OSError,)
 
 _ENDPOINT_ERROR_PATTERNS = (
     "could not connect to the endpoint url",
@@ -47,19 +57,9 @@ _STORAGE_RETRY_ATTEMPT_LIMIT = 24
 _MEDIA_SELF_HEAL_LOCK_KEY = "anime:media-self-heal:lock"
 
 
-def _iter_exception_chain(exc: Exception):
-    """Iterate through an exception and its causes/contexts."""
-    seen = set()
-    current = exc
-    while current and id(current) not in seen:
-        yield current
-        seen.add(id(current))
-        current = current.__cause__ or current.__context__
-
-
 def _is_storage_endpoint_error(exc: Exception) -> bool:
     """Return True when the error is likely a transient storage endpoint outage."""
-    for current in _iter_exception_chain(exc):
+    for current in iter_exception_chain(exc):
         if _BOTOCORE_STORAGE_ERRORS and isinstance(current, _BOTOCORE_STORAGE_ERRORS):
             return True
 
@@ -137,7 +137,7 @@ def _queue_image_fetch(
 
 def _is_storage_available() -> bool:
     """Check whether object storage is currently reachable."""
-    if not getattr(settings, "USE_S3", False):
+    if not settings.USE_S3:
         return True
 
     from django.core.files.storage import default_storage
@@ -145,11 +145,11 @@ def _is_storage_available() -> bool:
     try:
         default_storage.exists("health-check/storage-probe")
         return True
-    except Exception as exc:
+    except _STORAGE_ERRORS as exc:
         if _is_storage_endpoint_error(exc):
             return False
 
-        logger.warning(f"Storage health probe failed unexpectedly: {exc}")
+        logger.warning("Storage health probe failed unexpectedly", exc_info=True)
         return False
 
 
@@ -231,7 +231,9 @@ async def _fetch_jikan_fallback_banner(mal_id: int) -> str:
             if exc.response is not None and 400 <= exc.response.status_code < 500:
                 return None
             await backoff(2**attempt)
-        except Exception:
+        except (httpx.HTTPError, AttributeError, TypeError):
+            # Other transport errors, or a payload that is not the expected
+            # {"data": [{...}]} shape.
             logger.warning("Jikan banner fallback failed for MAL %s", mal_id, exc_info=True)
             return None
 
@@ -290,9 +292,12 @@ def fetch_anime_images(
                         return
                     try:
                         await sync_to_async(image_field.delete)(save=False)
-                    except Exception as exc:
+                    except _STORAGE_ERRORS:
                         logger.warning(
-                            f"Failed deleting existing {field_name} for anime {anime.id}: {exc}"
+                            "Failed deleting existing %s for anime %s",
+                            field_name,
+                            anime.id,
+                            exc_info=True,
                         )
                     setattr(anime, field_name, "")
                     await sync_to_async(anime.save)(update_fields=[field_name])
@@ -321,14 +326,16 @@ def fetch_anime_images(
         return {"anime_id": anime_id, "status": "success", "storage_retry": storage_retry}
 
     except Anime.DoesNotExist:
-        logger.error(f"Anime with ID {anime_id} not found")
+        logger.error("Anime with ID %s not found", anime_id)
         return {"status": "error", "reason": "anime_not_found"}
     except Exception as e:
         if _is_storage_endpoint_error(e):
             if storage_retry >= _STORAGE_RETRY_ATTEMPT_LIMIT:
                 logger.error(
-                    f"Storage remained unavailable for anime {anime_id} after "
-                    f"{_STORAGE_RETRY_ATTEMPT_LIMIT} attempts; waiting for periodic self-heal"
+                    "Storage remained unavailable for anime %s after %s attempts; "
+                    "waiting for periodic self-heal",
+                    anime_id,
+                    _STORAGE_RETRY_ATTEMPT_LIMIT,
                 )
                 return {
                     "anime_id": anime_id,
@@ -348,8 +355,12 @@ def fetch_anime_images(
                 force_replace=force_replace,
             )
             logger.warning(
-                f"Storage unavailable while fetching images for anime {anime_id}; "
-                f"scheduled self-heal retry in {delay}s (queued={queued}, attempt={storage_retry + 1})"
+                "Storage unavailable while fetching images for anime %s; "
+                "scheduled self-heal retry in %ss (queued=%s, attempt=%s)",
+                anime_id,
+                delay,
+                queued,
+                storage_retry + 1,
             )
             return {
                 "anime_id": anime_id,
@@ -360,7 +371,7 @@ def fetch_anime_images(
                 "storage_retry": storage_retry + 1,
             }
 
-        logger.error("Error fetching images for anime %s", anime_id, exc_info=True)
+        logger.exception("Error fetching images for anime %s", anime_id)
         raise self.retry(exc=e, countdown=60)
 
 
@@ -463,38 +474,25 @@ def generate_image_thumbnails(self, anime_id: int):
         failed_batches = 0
         last_error = None
 
-        # Generate cover image thumbnails
-        if anime.cover_image:
+        # Cover first, then banner; each source image gets small/medium/large.
+        for kind in ("cover", "banner"):
+            if not getattr(anime, f"{kind}_image"):
+                continue
             attempted_batches += 1
             try:
                 # Explicitly generate the thumbnails (since we use Optimistic cache strategy)
-                anime.cover_image_small.generate()
-                anime.cover_image_medium.generate()
-                anime.cover_image_large.generate()
+                for size in ("small", "medium", "large"):
+                    getattr(anime, f"{kind}_image_{size}").generate()
                 generated_count += 3
-                logger.info(f"Generated cover thumbnails for {anime.title}")
+                logger.info("Generated %s thumbnails for %s", kind, anime.title)
             except Exception as e:
+                # Generation can fail in Pillow, ImageKit or the storage backend;
+                # one bad image must not stop the other. If every batch fails,
+                # the last error is raised below and the task retries.
                 failed_batches += 1
                 last_error = e
                 logger.warning(
-                    f"Failed to generate cover thumbnails for {anime.title}: {e}"
-                )
-
-        # Generate banner image thumbnails
-        if anime.banner_image:
-            attempted_batches += 1
-            try:
-                # Explicitly generate the thumbnails (since we use Optimistic cache strategy)
-                anime.banner_image_small.generate()
-                anime.banner_image_medium.generate()
-                anime.banner_image_large.generate()
-                generated_count += 3
-                logger.info(f"Generated banner thumbnails for {anime.title}")
-            except Exception as e:
-                failed_batches += 1
-                last_error = e
-                logger.warning(
-                    f"Failed to generate banner thumbnails for {anime.title}: {e}"
+                    "Failed to generate %s thumbnails for %s", kind, anime.title, exc_info=True
                 )
 
         if attempted_batches and failed_batches == attempted_batches and generated_count == 0:
@@ -506,8 +504,8 @@ def generate_image_thumbnails(self, anime_id: int):
         return {"anime_id": anime_id, "thumbnails_generated": generated_count}
 
     except Anime.DoesNotExist:
-        logger.error(f"Anime with ID {anime_id} not found")
+        logger.error("Anime with ID %s not found", anime_id)
         return {"status": "error", "reason": "anime_not_found"}
     except Exception as e:
-        logger.error(f"Error generating thumbnails for anime {anime_id}: {e}")
+        logger.exception("Error generating thumbnails for anime %s", anime_id)
         raise self.retry(exc=e, countdown=60)

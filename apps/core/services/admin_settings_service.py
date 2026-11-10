@@ -52,10 +52,10 @@ DEFAULT_ADMIN_SETTINGS = {
 
 
 def _admin_settings_cache_enabled() -> bool:
-    return bool(getattr(settings, "ADMIN_SETTINGS_USE_CACHE", True))
+    return bool(settings.ADMIN_SETTINGS_USE_CACHE)
 
 def _admin_settings_local_cache_ttl_seconds() -> float:
-    raw = getattr(settings, "ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS", 2.0)
+    raw = settings.ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS
     try:
         return max(float(raw), 0.0)
     except (TypeError, ValueError):

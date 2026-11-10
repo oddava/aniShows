@@ -8,7 +8,6 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from ...core.api_errors import error_response
 from ...core.permissions import IsSuperUser
 from ...core.utils import get_client_ip
-from ...shared.logger import logger
 from ...shared.pagination import LargePagination, NoCountPagination, StandardPagination
 from ...shared.public_cache import get_or_build_public_payload
 from ...users.permissions import VerifiedEmailForWrites
@@ -82,13 +81,6 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 "Anime not found",
                 code="anime_not_found",
                 status_code=status.HTTP_404_NOT_FOUND,
-            )
-        except Exception as exc:
-            logger.error("Error retrieving anime %s: %s", slug, exc)
-            return error_response(
-                "Internal server error",
-                code="internal_server_error",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         response = self._with_cache_status_header(Response(result.data), result.cache_status)
         return self._with_public_cache_control(response, request)

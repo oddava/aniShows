@@ -9,6 +9,13 @@ from ..models import UserAnimeList, UserBadge, UserFollow
 User = get_user_model()
 
 
+def user_exists(user) -> bool:
+    """Check if a user still exists in the database (not mid-cascade-delete)."""
+    if not user or not user.pk:
+        return False
+    return User.objects.filter(pk=user.pk).exists()
+
+
 def get_annotated_user_queryset(user=None, lightweight=False):
     """Return a user queryset with performance annotations for profile views."""
     queryset = User.objects.select_related("userprofile").prefetch_related(

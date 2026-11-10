@@ -9,7 +9,6 @@ from rest_framework.exceptions import ValidationError
 
 from ...core.services.admin_settings_service import is_username_change_allowed
 from ...core.services.social_links_service import SocialLinksService
-from ...shared.logger import logger
 from ..models import UserProfile
 from .cache import invalidate_user_caches
 from .username_sanitizer import validate_username
@@ -137,11 +136,8 @@ def _apply_social_links(profile, user, new_links, ip_address: str | None) -> boo
     if _hash_links(old_links) == _hash_links(new_links):
         return False
 
-    service = SocialLinksService()
-    try:
-        service.log_changes(user, old_links, new_links, ip_address)
-    except Exception as exc:
-        logger.warning("Failed to log social link changes: %s", exc)
+    # log_changes is best effort and logs its own failures.
+    SocialLinksService().log_changes(user, old_links, new_links, ip_address)
 
     # ``new_links`` were validated by the serializer; don't redo network checks here.
     profile.social_links = new_links

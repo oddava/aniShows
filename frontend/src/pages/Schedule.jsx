@@ -8,7 +8,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import { animeApi, authApi } from '../api/client';
+import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
 import { ScheduleGridSkeleton } from '../components/skeletons';
@@ -20,6 +20,8 @@ import {
   getCurrentWeekdayIndex,
   groupScheduleDaysByTimezone,
 } from '../utils/dateUtils';
+import { animeKeys, scheduleKeys, scheduleQueries } from '../api/queries/anime';
+import { profileKeys } from '../api/queries/user';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -191,14 +193,14 @@ export default function Schedule() {
       const updatedProfile = response?.data;
       if (updatedProfile && typeof updatedProfile === 'object') {
         await refreshProfile(updatedProfile);
-        queryClient.setQueryData(['ownProfile'], updatedProfile);
+        queryClient.setQueryData(profileKeys.own, updatedProfile);
       } else {
         await refreshProfile();
       }
-      queryClient.removeQueries({ queryKey: ['schedule'] });
-      queryClient.removeQueries({ queryKey: ['anime'] });
-      queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.removeQueries({ queryKey: scheduleKeys.all });
+      queryClient.removeQueries({ queryKey: animeKeys.all });
+      queryClient.invalidateQueries({ queryKey: profileKeys.own });
+      queryClient.invalidateQueries({ queryKey: profileKeys.all });
     } finally {
       setIsUpdatingAdultContent(false);
     }
@@ -212,11 +214,7 @@ export default function Schedule() {
 
   // Fetch schedule data
   const { data: rawScheduleDays, isLoading, isFetching, error } = useQuery({
-    queryKey: ['schedule', isAuthenticated, adultContentEnabled],
-    queryFn: async () => {
-      const response = await animeApi.getSchedule();
-      return response.data?.days || {};
-    },
+    ...scheduleQueries.week(isAuthenticated, adultContentEnabled),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 

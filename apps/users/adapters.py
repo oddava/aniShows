@@ -99,6 +99,6 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
                         filename = f"avatar_{user.pk}.jpg"
                         profile.avatar.save(filename, ContentFile(avatar_content), save=True)
             except Exception:
-                logger.exception(f"Failed to download OAuth avatar for {user.username}")
+                logger.exception("Failed to download OAuth avatar for %s", user.username)
 
         return user

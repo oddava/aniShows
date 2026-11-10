@@ -249,8 +249,8 @@ class Command(BaseCommand):
                 if mal_id:
                     await self._save_mal_id(anime, mal_id, sync_id)
                     return mal_id
-        except Exception as e:
-            logger.warning(f"Jikan lookup failed for {anime.title}: {e}")
+        except Exception:
+            logger.warning("Jikan lookup failed for %s", anime.title, exc_info=True)
         finally:
             await sync_service.close()
 
@@ -334,16 +334,14 @@ class Command(BaseCommand):
                 return data
 
             except httpx.HTTPError as e:
-                logger.error(f"Jikan HTTP error for MAL ID {mal_id}: {e}")
+                logger.error("Jikan HTTP error for MAL ID %s: %s", mal_id, e)
                 if attempt < max_retries:
                     wait_time = min(2**attempt, 10)
                     await asyncio.sleep(wait_time)
                     continue
                 return None
-            except Exception as e:
-                logger.error(
-                    f"Unexpected error fetching themes for MAL ID {mal_id}: {e}"
-                )
+            except Exception:
+                logger.exception("Unexpected error fetching themes for MAL ID %s", mal_id)
                 return None
 
         return None

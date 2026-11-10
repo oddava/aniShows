@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { authApi, favoriteApi, listApi } from '../../api/client';
+import { favoriteApi, listApi } from '../../api/client';
 import FollowButton from '../FollowButton';
 import AnimeMediaImage from './AnimeMediaImage';
+import { miniProfileKeys, profileQueries } from '../../api/queries/user';
 
 const WATCHING_LIMIT = 3;
 const FAVORITES_LIMIT = 3;
@@ -111,11 +112,7 @@ export default function MiniProfileHoverCard({ user, username, children }) {
         isLoading: profileLoading,
         isError: profileError,
     } = useQuery({
-        queryKey: ['profile', targetUsername],
-        queryFn: async () => {
-            const response = await authApi.getByUsername(targetUsername);
-            return response.data;
-        },
+        ...profileQueries.byUsername(targetUsername),
         enabled: shouldFetch,
         staleTime: 60 * 1000,
         gcTime: 5 * 60 * 1000,
@@ -127,7 +124,7 @@ export default function MiniProfileHoverCard({ user, username, children }) {
         isLoading: watchingLoading,
         isError: watchingError,
     } = useQuery({
-        queryKey: ['mini-profile', targetUsername, 'watching'],
+        queryKey: miniProfileKeys.watching(targetUsername),
         queryFn: async () => {
             const response = await listApi.getAll({
                 status: 'Watching',
@@ -147,7 +144,7 @@ export default function MiniProfileHoverCard({ user, username, children }) {
         isLoading: favoritesLoading,
         isError: favoritesError,
     } = useQuery({
-        queryKey: ['mini-profile', targetUsername, 'favorites'],
+        queryKey: miniProfileKeys.favorites(targetUsername),
         queryFn: async () => {
             const response = await favoriteApi.getAll({
                 username: targetUsername,

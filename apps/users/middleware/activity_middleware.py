@@ -1,6 +1,7 @@
 """Record when each signed-in user was last active (admin "active users" reports)."""
 
 from django.core.cache import cache
+from django.db import DatabaseError
 from django.utils import timezone
 
 from ...shared.logger import logger
@@ -35,5 +36,5 @@ class UserActivityMiddleware:
             from ..models import UserProfile
 
             UserProfile.objects.filter(user=user_id).update(last_activity=timezone.now())
-        except Exception:
+        except DatabaseError:
             logger.exception("Failed to update last_activity for user %s", user_id)

@@ -4,16 +4,26 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
-from ...shared.media_urls import normalize_media_url
+from ...shared.media_urls import field_media_url
 from ...users.models import UserProfile
 from ...users.services.avatar_service import get_user_avatar_url
 from ..models import Notification
 
 UNREAD_COUNT_CACHE_TTL_SECONDS = 24 * 60 * 60
+
+# What writing a notification row can raise: database errors, plus TypeError /
+# ValueError when ``data`` is not JSON-serialisable or a field value is invalid.
+# Notifications are a side effect of other actions, so these never propagate.
+NOTIFICATION_WRITE_ERRORS = (DatabaseError, TypeError, ValueError)
+# Merging into an aggregate also reads payloads written earlier: tolerate an
+# old row whose ``data`` is not a dict (AttributeError) or lists likers' ids
+# but not their names (IndexError).
+NOTIFICATION_MERGE_ERRORS = (*NOTIFICATION_WRITE_ERRORS, AttributeError, IndexError)
 
 class NotificationService:
     """Service for creating and managing user notifications."""
@@ -32,17 +42,6 @@ class NotificationService:
             "is_read": notification.is_read,
         }
 
-    @staticmethod
-    def _field_url(field) -> str | None:
-        # An empty ImageKit spec file is falsy but its .url is the bare MEDIA_URL.
-        if not field:
-            return None
-        try:
-            url = field.url
-        except Exception:
-            return None
-        return normalize_media_url(url)
-
     @classmethod
     def get_anime_cover_payload(cls, anime) -> Dict[str, str | None]:
         """Return lightweight cover URLs safe to embed in notification payloads."""
@@ -50,9 +49,9 @@ class NotificationService:
             return {}
 
         external_cover = getattr(anime, "cover_image_external_url", None) or None
-        cover = cls._field_url(getattr(anime, "cover_image", None)) or external_cover
-        small = cls._field_url(getattr(anime, "cover_image_small", None)) or cover
-        medium = cls._field_url(getattr(anime, "cover_image_medium", None)) or cover
+        cover = field_media_url(getattr(anime, "cover_image", None)) or external_cover
+        small = field_media_url(getattr(anime, "cover_image_small", None)) or cover
+        medium = field_media_url(getattr(anime, "cover_image_medium", None)) or cover
 
         return {
             "anime_cover_image_small": small,
@@ -174,8 +173,8 @@ class NotificationService:
                 transaction.on_commit(notify_after_commit)
 
                 return notification
-        except Exception as e:
-            logger.exception(f"Failed to create notification: {e}")
+        except NOTIFICATION_WRITE_ERRORS:
+            logger.exception("Failed to create %s notification for user %s", notification_type, user.id)
             return None
 
     @classmethod
@@ -190,53 +189,55 @@ class NotificationService:
         # Email/push preferences are checked when sending
         return True
 
-    @classmethod
-    def _broadcast_notification(cls, notification, unread_count: int | None = None):
-        """Push a notification to the user's WebSocket channel group.
+    @staticmethod
+    def _send_to_user_group(user_id: int, build_event, what: str) -> None:
+        """Send ``build_event()`` to the user's WebSocket channel group.
 
-        This is called synchronously from Django views/services. It uses
-        ``async_to_sync`` to send a message to the channel layer which
-        Daphne then delivers to the connected WebSocket consumer.
+        Called synchronously from Django views/services: ``async_to_sync`` hands
+        the event to the channel layer, and the ASGI server delivers it to the
+        connected consumers. The event is built only once a channel layer exists.
+
+        Live delivery is best effort: the channel layer can fail in many ways
+        (Redis down, a full channel, an unserialisable payload), and none of
+        them may break the action that produced the notification.
         """
         try:
             channel_layer = get_channel_layer()
             if channel_layer is None:
                 return
-
-            group_name = f"notifications_user_{notification.user_id}"
-            if unread_count is None:
-                unread_count = cls.get_unread_count_for_user_id(notification.user_id)
-
             async_to_sync(channel_layer.group_send)(
-                group_name,
-                {
-                    "type": "notification.new",
-                    "notification": cls._serialize_notification(notification),
-                    "unread_count": unread_count,
-                },
+                f"notifications_user_{user_id}", build_event()
             )
         except Exception:
-            # Never let a broadcast failure break notification creation
-            logger.exception("Failed to broadcast notification via WebSocket")
+            logger.exception("Failed to broadcast %s via WebSocket", what)
+
+    @classmethod
+    def _broadcast_notification(cls, notification, unread_count: int | None = None):
+        """Push a new notification to the user's WebSocket channel group."""
+
+        def build_event():
+            count = unread_count
+            if count is None:
+                count = cls.get_unread_count_for_user_id(notification.user_id)
+            return {
+                "type": "notification.new",
+                "notification": cls._serialize_notification(notification),
+                "unread_count": count,
+            }
+
+        cls._send_to_user_group(notification.user_id, build_event, "notification")
 
     @classmethod
     def _broadcast_notification_update(cls, notification):
         """Push an updated notification payload to active websocket clients."""
-        try:
-            channel_layer = get_channel_layer()
-            if channel_layer is None:
-                return
-
-            group_name = f"notifications_user_{notification.user_id}"
-            async_to_sync(channel_layer.group_send)(
-                group_name,
-                {
-                    "type": "notification.updated",
-                    "notification": cls._serialize_notification(notification),
-                },
-            )
-        except Exception:
-            logger.exception("Failed to broadcast notification update via WebSocket")
+        cls._send_to_user_group(
+            notification.user_id,
+            lambda: {
+                "type": "notification.updated",
+                "notification": cls._serialize_notification(notification),
+            },
+            "notification update",
+        )
 
     @classmethod
     def _broadcast_notification_deleted(
@@ -246,41 +247,24 @@ class NotificationService:
         unread_count: int | None = None,
     ):
         """Push a deletion/retraction event to active websocket clients."""
-        try:
-            channel_layer = get_channel_layer()
-            if channel_layer is None:
-                return
-
-            group_name = f"notifications_user_{user_id}"
-            async_to_sync(channel_layer.group_send)(
-                group_name,
-                {
-                    "type": "notification.deleted",
-                    "notification_id": notification_id,
-                    "unread_count": unread_count,
-                },
-            )
-        except Exception:
-            logger.exception("Failed to broadcast notification deletion via WebSocket")
+        cls._send_to_user_group(
+            user_id,
+            lambda: {
+                "type": "notification.deleted",
+                "notification_id": notification_id,
+                "unread_count": unread_count,
+            },
+            "notification deletion",
+        )
 
     @classmethod
     def _broadcast_unread_count(cls, user_id: int, count: int):
         """Push unread-count updates to all active WebSocket sessions for a user."""
-        try:
-            channel_layer = get_channel_layer()
-            if channel_layer is None:
-                return
-
-            group_name = f"notifications_user_{user_id}"
-            async_to_sync(channel_layer.group_send)(
-                group_name,
-                {
-                    "type": "notification.count_update",
-                    "count": max(int(count), 0),
-                },
-            )
-        except Exception:
-            logger.exception("Failed to broadcast unread count via WebSocket")
+        cls._send_to_user_group(
+            user_id,
+            lambda: {"type": "notification.count_update", "count": max(int(count), 0)},
+            "unread count",
+        )
 
     @classmethod
     def _unread_count_cache_key(cls, user_id: int) -> str:
@@ -288,7 +272,7 @@ class NotificationService:
 
     @classmethod
     def _unread_count_ttl(cls) -> int:
-        ttl = getattr(settings, "NOTIFICATION_UNREAD_CACHE_TTL", UNREAD_COUNT_CACHE_TTL_SECONDS)
+        ttl = settings.NOTIFICATION_UNREAD_CACHE_TTL
         try:
             return max(int(ttl), 60)
         except (TypeError, ValueError):
@@ -302,7 +286,7 @@ class NotificationService:
                 max(int(count), 0),
                 timeout=cls._unread_count_ttl(),
             )
-        except Exception:
+        except CACHE_ERRORS:
             logger.debug("Failed to set unread notification count cache for user %s", user_id)
 
     @classmethod
@@ -316,7 +300,7 @@ class NotificationService:
             count = Notification.objects.filter(user_id=user_id, is_read=False).count()
             cls._set_unread_count_cache(user_id, count)
             return count
-        except Exception:
+        except CACHE_ERRORS:
             return Notification.objects.filter(user_id=user_id, is_read=False).count()
 
     @classmethod
@@ -333,7 +317,7 @@ class NotificationService:
             count = Notification.objects.filter(user_id=user_id, is_read=False).count()
             cls._set_unread_count_cache(user_id, count)
             return count
-        except Exception:
+        except CACHE_ERRORS:
             return Notification.objects.filter(user_id=user_id, is_read=False).count()
 
     @classmethod
@@ -345,7 +329,7 @@ class NotificationService:
                 return max(int(cached), 0)
         except (TypeError, ValueError):
             pass
-        except Exception:
+        except CACHE_ERRORS:
             logger.debug("Failed to read unread notification count cache for user %s", user_id)
 
         count = Notification.objects.filter(user_id=user_id, is_read=False).count()
@@ -613,8 +597,8 @@ class NotificationService:
                         user.id,
                     )
                     return existing
-        except Exception as e:
-            logger.exception(f"Failed to update aggregated forum_like notification: {e}")
+        except NOTIFICATION_MERGE_ERRORS:
+            logger.exception("Failed to update aggregated forum_like notification")
 
         # Fallback to creating a fresh notification if no unread aggregate exists.
         return cls.create_notification(
@@ -680,8 +664,8 @@ class NotificationService:
                     existing.save(update_fields=["message", "data", "created_at"])
                     transaction.on_commit(lambda: cls._broadcast_notification_update(existing))
                     return existing
-        except Exception as e:
-            logger.exception(f"Failed to update aggregated review_like notification: {e}")
+        except NOTIFICATION_MERGE_ERRORS:
+            logger.exception("Failed to update aggregated review_like notification")
 
         return cls.create_notification(
             user=user,
@@ -756,8 +740,8 @@ class NotificationService:
                 existing.save(update_fields=["message", "data"])
                 transaction.on_commit(lambda: cls._broadcast_notification_update(existing))
                 return existing
-        except Exception as e:
-            logger.exception(f"Failed to remove actor from review_like notification: {e}")
+        except NOTIFICATION_MERGE_ERRORS:
+            logger.exception("Failed to remove actor from review_like notification")
             return None
 
     @classmethod

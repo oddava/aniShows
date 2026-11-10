@@ -48,20 +48,6 @@ class AdminBadgeViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    def create(self, request, *args, **kwargs):
-        try:
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
-            headers = self.get_success_headers(serializer.data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        except Exception as e:
-            logger.error(f"Error creating badge: {str(e)}")
-            return Response(
-                {"detail": f"Failed to create badge: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
@@ -96,77 +82,71 @@ class AdminBadgeViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        try:
-            badge = self.get_object()
-            user_ids = request.data.get("user_ids", [])
-            reason = request.data.get("reason", "")
+        badge = self.get_object()
+        user_ids = request.data.get("user_ids", [])
+        reason = request.data.get("reason", "")
 
-            if not user_ids or not isinstance(user_ids, list):
-                return Response(
-                    {"detail": "Please provide a list of user_ids."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            users = list(User.objects.filter(id__in=user_ids))
-            existing_user_ids = set(
-                UserBadge.objects.filter(
-                    badge=badge, user_id__in=[user.id for user in users]
-                ).values_list("user_id", flat=True)
-            )
-            users_to_grant = [user for user in users if user.id not in existing_user_ids]
-
-            if users_to_grant:
-                UserBadge.objects.bulk_create(
-                    [
-                        UserBadge(
-                            user=user,
-                            badge=badge,
-                            granted_by=request.user,
-                            reason=reason,
-                        )
-                        for user in users_to_grant
-                    ]
-                )
-
-            granted_count = len(users_to_grant)
-
-            for user in users_to_grant:
-                # Send notification (gracefully handle if notification type doesn't exist yet)
-                try:
-                    NotificationService.create_badge_awarded_notification(
-                        user=user, badge=badge, granted_by=request.user
-                    )
-                except Exception as notify_error:
-                    logger.warning(f"Could not send badge notification: {notify_error}")
-
-            AuditLog.objects.create(
-                user=request.user,
-                user_ip=request.META.get("REMOTE_ADDR"),
-                action=AuditLog.ActionType.BULK_ACTION,
-                entity_type="UserBadge",
-                entity_repr=f"Grant {badge.name} to {granted_count} users",
-                metadata={
-                    "action": "grant",
-                    "badge_id": badge.id,
-                    "badge_name": badge.name,
-                    "users_granted": granted_count,
-                    "total_requested": len(user_ids),
-                },
-            )
-
-            # Invalidate user caches for all affected users
-            from ..services.cache import invalidate_user_caches
-
-            for user in users_to_grant:
-                invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
-
-            return Response({"message": f"Badge granted to {granted_count} users successfully."})
-        except Exception as e:
-            logger.error(f"Error granting badge: {str(e)}")
+        if not user_ids or not isinstance(user_ids, list):
             return Response(
-                {"detail": f"Failed to grant badge: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {"detail": "Please provide a list of user_ids."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
+        users = list(User.objects.filter(id__in=user_ids))
+        existing_user_ids = set(
+            UserBadge.objects.filter(
+                badge=badge, user_id__in=[user.id for user in users]
+            ).values_list("user_id", flat=True)
+        )
+        users_to_grant = [user for user in users if user.id not in existing_user_ids]
+
+        if users_to_grant:
+            UserBadge.objects.bulk_create(
+                [
+                    UserBadge(
+                        user=user,
+                        badge=badge,
+                        granted_by=request.user,
+                        reason=reason,
+                    )
+                    for user in users_to_grant
+                ]
+            )
+
+        granted_count = len(users_to_grant)
+
+        for user in users_to_grant:
+            # Send notification (gracefully handle if notification type doesn't exist yet)
+            try:
+                NotificationService.create_badge_awarded_notification(
+                    user=user, badge=badge, granted_by=request.user
+                )
+            except Exception:
+                # The badges are already granted; a notification failure must not undo that.
+                logger.warning("Could not send badge notification", exc_info=True)
+
+        AuditLog.objects.create(
+            user=request.user,
+            user_ip=request.META.get("REMOTE_ADDR"),
+            action=AuditLog.ActionType.BULK_ACTION,
+            entity_type="UserBadge",
+            entity_repr=f"Grant {badge.name} to {granted_count} users",
+            metadata={
+                "action": "grant",
+                "badge_id": badge.id,
+                "badge_name": badge.name,
+                "users_granted": granted_count,
+                "total_requested": len(user_ids),
+            },
+        )
+
+        # Invalidate user caches for all affected users
+        from ..services.cache import invalidate_user_caches
+
+        for user in users_to_grant:
+            invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
+
+        return Response({"message": f"Badge granted to {granted_count} users successfully."})
 
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):

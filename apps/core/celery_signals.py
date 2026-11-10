@@ -11,6 +11,7 @@ from celery.signals import (
     task_success,
     worker_ready,
 )
+from django.db import DatabaseError
 from django.utils import timezone
 
 from ..shared.celery import redact_task_kwargs
@@ -20,6 +21,13 @@ from .db_safety import (
     model_table_exists,
     warn_missing_table_once,
 )
+
+# What updating a CeleryTaskResult row can raise: database errors (including a
+# missing table before migrations), and TypeError/ValueError when task args,
+# kwargs or a result are not JSON-serialisable. Anything else escapes to Celery,
+# whose signal dispatcher logs receiver errors with a traceback and carries on,
+# so tracking can never fail a task.
+TRACKING_ERRORS = (DatabaseError, TypeError, ValueError)
 
 
 @celeryd_init.connect
@@ -74,14 +82,14 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
             job.save(
                 update_fields=["status", "date_started", "task_name", "task_args", "task_kwargs"]
             )
-    except Exception as e:
+    except TRACKING_ERRORS as e:
         if is_missing_relation_error(e):
             warn_missing_table_once(
                 CeleryTaskResult._meta.db_table,
                 "Celery task pre-run tracking",
             )
             return
-        logger.error(f"Error in task_prerun signal for task {task_id}: {e}")
+        logger.exception("Error in task_prerun signal for task %s", task_id)
 
 
 @task_success.connect
@@ -114,15 +122,15 @@ def on_task_success(sender=None, result=None, **kwargs):
 
             job.save(update_fields=["status", "result_data", "date_completed", "execution_time"])
         except CeleryTaskResult.DoesNotExist:
-            logger.warning(f"CeleryTaskResult not found for task_success (id: {task_id})")
-        except Exception as e:
+            logger.warning("CeleryTaskResult not found for task_success (id: %s)", task_id)
+        except TRACKING_ERRORS as e:
             if is_missing_relation_error(e):
                 warn_missing_table_once(
                     CeleryTaskResult._meta.db_table,
                     "Celery task success tracking",
                 )
                 return
-            logger.error(f"Error in task_success signal for task {task_id}: {e}")
+            logger.exception("Error in task_success signal for task %s", task_id)
 
 
 @task_failure.connect
@@ -155,14 +163,14 @@ def on_task_failure(task_id, exception, traceback, **kwargs):
                 "execution_time",
             ]
         )
-    except Exception as e:
+    except (CeleryTaskResult.DoesNotExist, *TRACKING_ERRORS) as e:
         if is_missing_relation_error(e):
             warn_missing_table_once(
                 CeleryTaskResult._meta.db_table,
                 "Celery task failure tracking",
             )
             return
-        logger.error(f"Error in task_failure signal for task {task_id}: {e}")
+        logger.exception("Error in task_failure signal for task %s", task_id)
 
 
 @task_retry.connect
@@ -182,23 +190,20 @@ def on_task_retry(request, reason, einfo, **kwargs):
         job.retries += 1
         job.error_message = f"Retrying: {reason}"
         job.save(update_fields=["status", "retries", "error_message"])
-    except Exception as e:
+    except (CeleryTaskResult.DoesNotExist, *TRACKING_ERRORS) as e:
         if is_missing_relation_error(e):
             warn_missing_table_once(
                 CeleryTaskResult._meta.db_table,
                 "Celery task retry tracking",
             )
             return
-        logger.error(f"Error in task_retry signal for task {request.id}: {e}")
+        logger.exception("Error in task_retry signal for task %s", request.id)
 
-    # Emit retry metric
-    try:
-        from ..animes.services.metrics import TASK_RETRY_COUNT
+    # Emit retry metric. Metric objects swallow their own failures.
+    from ..animes.services.metrics import TASK_RETRY_COUNT
 
-        task_name = getattr(request, "task", "unknown") if hasattr(request, "task") else "unknown"
-        TASK_RETRY_COUNT.labels(task_name=task_name).inc()
-    except Exception:
-        pass
+    task_name = getattr(request, "task", "unknown") if hasattr(request, "task") else "unknown"
+    TASK_RETRY_COUNT.labels(task_name=task_name).inc()
 
 
 @task_revoked.connect
@@ -223,14 +228,14 @@ def on_task_revoked(request, terminated, signum, expired, **kwargs):
             job.execution_time = (job.date_completed - job.date_started).total_seconds()
 
         job.save(update_fields=["status", "error_message", "date_completed", "execution_time"])
-    except Exception as e:
+    except (CeleryTaskResult.DoesNotExist, *TRACKING_ERRORS) as e:
         if is_missing_relation_error(e):
             warn_missing_table_once(
                 CeleryTaskResult._meta.db_table,
                 "Celery task revoke tracking",
             )
             return
-        logger.error(f"Error in task_revoked signal for task {task_id}: {e}")
+        logger.exception("Error in task_revoked signal for task %s", task_id)
 
 
 @worker_ready.connect
@@ -246,5 +251,7 @@ def start_worker_metrics_server(sender, **kwargs):
             # Port 8000 is used by web, so workers expose metrics on 9090.
             start_http_server(9090, registry=registry)
             logger.info("Started worker metrics server on port 9090")
-        except Exception as e:
-            logger.error(f"Failed to start worker metrics server: {e}")
+        except (ImportError, OSError, ValueError):
+            # ImportError: prometheus_client missing; OSError: port 9090 taken
+            # or the multiprocess directory unreadable; ValueError: bad path.
+            logger.exception("Failed to start worker metrics server")

@@ -5,6 +5,7 @@ import { Award, Shield, Star, Zap, Crown, Check } from 'lucide-react';
 import ErrorBoundary from '../ErrorBoundary';
 import { useAuth } from '../../context/AuthContext';
 import { formatDateInUserTimezone } from '../../utils/dateUtils';
+import { badgeKeys, badgeQueries, userKeys } from '../../api/queries/user';
 
 const ICON_MAP = {
     'award': Award,
@@ -29,8 +30,7 @@ export default function BadgesSettings() {
     const [selectedIds, setSelectedIds] = useState([]);
 
     const { data, isLoading } = useQuery({
-        queryKey: ['myBadges'],
-        queryFn: () => badgeApi.getMine(),
+        ...badgeQueries.mine(),
     });
 
     useEffect(() => {
@@ -46,8 +46,8 @@ export default function BadgesSettings() {
     const updateMutation = useMutation({
         mutationFn: (badgeIds) => badgeApi.updateFeatured(badgeIds),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['myBadges'] });
-            queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+            queryClient.invalidateQueries({ queryKey: badgeKeys.mine });
+            queryClient.invalidateQueries({ queryKey: userKeys.profileLegacy });
             // Refresh AuthContext user so featured badges are up-to-date across the app
             refreshProfile();
         }

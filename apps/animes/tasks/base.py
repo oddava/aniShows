@@ -15,6 +15,7 @@ from typing import Any
 from asgiref.sync import async_to_sync
 from celery._state import _task_stack
 from django.core.cache import cache
+from django.db import DatabaseError
 
 from ...shared.celery import RETRY_POLICIES, ObservedTask
 from ...shared.logger import logger
@@ -183,7 +184,7 @@ class BaseTask(ObservedTask):
             lock_acquired = cache.add(lock_key, True, timeout=timeout)
 
             if not lock_acquired:
-                logger.warning(f"Task {self.name} skipped - already running")
+                logger.warning("Task %s skipped - already running", self.name)
                 return {"status": "skipped", "reason": "already_running"}
 
             try:
@@ -217,11 +218,11 @@ class BaseTask(ObservedTask):
     def on_success(self, retval, task_id, args, kwargs):
         """Called when task succeeds."""
         self.metrics.stop()
+        from django.utils import timezone
+
+        from ...core.models import CeleryTaskResult
+
         try:
-            from django.utils import timezone
-
-            from ...core.models import CeleryTaskResult
-
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.SUCCESS
             job.result_data = (
@@ -233,8 +234,9 @@ class BaseTask(ObservedTask):
             if job.date_started:
                 job.execution_time = (job.date_completed - job.date_started).total_seconds()
             job.save(update_fields=["status", "result_data", "date_completed", "execution_time"])
-        except Exception as e:
-            logger.error(f"Failed to update CeleryTaskResult on success: {e}")
+        except (CeleryTaskResult.DoesNotExist, DatabaseError, TypeError, ValueError):
+            # TypeError/ValueError: a result that is not JSON-serialisable.
+            logger.exception("Failed to update CeleryTaskResult on success")
 
         # Emit task metrics
         try:
@@ -265,19 +267,21 @@ class BaseTask(ObservedTask):
                     sync_type=getattr(self, "sync_type", "unknown"), source=source
                 ).inc(self.metrics.records_processed)
 
-        except Exception as e:
-            logger.warning(f"Failed to emit task metrics: {e}")
+        except (AttributeError, TypeError):
+            # Metric objects swallow their own errors; this covers task metrics
+            # state (duration, records_processed) that is missing or None.
+            logger.warning("Failed to emit task metrics", exc_info=True)
         super().on_success(retval, task_id, args, kwargs)
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Called when task fails."""
         self.metrics.stop()
         # Update CeleryTaskResult in database
+        from django.utils import timezone
+
+        from ...core.models import CeleryTaskResult
+
         try:
-            from django.utils import timezone
-
-            from ...core.models import CeleryTaskResult
-
             job = CeleryTaskResult.objects.get(task_id=task_id)
             job.status = CeleryTaskResult.TaskStatus.FAILURE
             job.error_message = str(exc)
@@ -294,8 +298,8 @@ class BaseTask(ObservedTask):
                     "execution_time",
                 ]
             )
-        except Exception as e:
-            logger.error(f"Failed to update CeleryTaskResult on failure: {e}")
+        except (CeleryTaskResult.DoesNotExist, DatabaseError):
+            logger.exception("Failed to update CeleryTaskResult on failure")
 
         # Emit failure metrics
         try:
@@ -315,8 +319,8 @@ class BaseTask(ObservedTask):
             # Record execution count
             TASK_EXECUTION_COUNT.labels(task_name=self.name, queue=queue, status="failure").inc()
 
-        except Exception as e:
-            logger.warning(f"Failed to emit failure metrics: {e}")
+        except (AttributeError, TypeError):
+            logger.warning("Failed to emit failure metrics", exc_info=True)
         super().on_failure(exc, task_id, args, kwargs, einfo)
 
 

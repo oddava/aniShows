@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from django.db import connection
-from django.db.utils import OperationalError, ProgrammingError
+from django.db.utils import DatabaseError, OperationalError, ProgrammingError
 
 from ..shared.logger import logger
 
@@ -19,7 +19,7 @@ def _table_names() -> set[str]:
     """Return cached table names for the default DB connection."""
     try:
         return set(connection.introspection.table_names())
-    except Exception:
+    except DatabaseError:
         return set()
 
 
@@ -42,6 +42,7 @@ def warn_missing_table_once(table_name: str, context: str) -> None:
         return
     _warned_tables.add(table_name)
     logger.warning(
-        f"Skipping {context}: table '{table_name}' does not exist yet. "
-        "Run migrations (python manage.py migrate)."
+        "Skipping %s: table '%s' does not exist yet. Run migrations (python manage.py migrate).",
+        context,
+        table_name,
     )

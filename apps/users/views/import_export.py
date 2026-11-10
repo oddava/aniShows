@@ -10,7 +10,6 @@ from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 
 from ...animes.serializers.imports import UserImportJobSerializer
 from ...core.api_errors import api_response, error_response
-from ...shared.logger import logger
 from ..models import UserImportJob
 from ..permissions import VerifiedEmailForWrites
 from ..services.export_service import ExportService
@@ -24,7 +23,6 @@ from ..services.import_job_service import (
 
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024
-DEFAULT_MAX_XML_ENTRIES = 5000
 
 
 class ImportExportViewSet(ViewSet):
@@ -45,11 +43,7 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        max_xml_entries = getattr(
-            settings,
-            "MAX_IMPORT_XML_ENTRIES",
-            DEFAULT_MAX_XML_ENTRIES,
-        )
+        max_xml_entries = settings.MAX_IMPORT_XML_ENTRIES
         entry_count = len(root.findall("anime"))
         if entry_count > max_xml_entries:
             return error_response(
@@ -176,31 +170,15 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            # Generate export
-            export_data = ExportService.export_user_data(request.user, export_format)
+        export_data = ExportService.export_user_data(request.user, export_format)
+        if not download and export_format == "json":
+            return Response({"data": export_data})
 
-            if not download and export_format == "json":
-                return Response({"data": export_data})
-
-            # Determine content type and filename
-            content_type = "application/json" if export_format == "json" else "application/xml"
-
-            filename = ExportService.get_export_filename(request.user, export_format)
-
-            # Create response with proper headers for download
-            response = HttpResponse(export_data, content_type=content_type)
-            response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-            return response
-
-        except Exception as e:
-            logger.error(f"Export error: {e}")
-            return error_response(
-                "Failed to generate export",
-                code="export_failed",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        content_type = "application/json" if export_format == "json" else "application/xml"
+        filename = ExportService.get_export_filename(request.user, export_format)
+        response = HttpResponse(export_data, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 class UserImportJobViewSet(ReadOnlyModelViewSet):

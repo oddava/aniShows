@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Search, Filter, Play, CheckCircle2, Clock,
@@ -6,59 +6,50 @@ import {
     Star, Heart, MessageSquare, LayoutGrid, XCircle
 } from 'lucide-react';
 import api from '../../api/client';
-import logger from '../../utils/logger';
+import { adminKeys } from '../../api/queries/admin';
 import AnimeMediaImage from '../../components/common/AnimeMediaImage';
 import CustomSelect from '../../components/common/CustomSelect';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const AdminAnime = () => {
-    const [animeList, setAnimeList] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [filters, setFilters] = useState({
         status: '',
         type: '',
         ordering: '-created_at',
     });
 
-    const fetchAnime = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const params = new URLSearchParams({
-                page,
-                ...(search && { search }),
-                ...(filters.status && { status: filters.status }),
-                ...(filters.type && { type: filters.type }),
-                ordering: filters.ordering,
-            });
+    const {
+        items: animeList,
+        totalPages,
+        isFetching: loading,
+        error: queryError,
+        refetch,
+    } = useAdminList({
+        resource: 'anime',
+        params: {
+            page,
+            ...(search && { search }),
+            ...(filters.status && { status: filters.status }),
+            ...(filters.type && { type: filters.type }),
+            ordering: filters.ordering,
+        },
+        page,
+        setPage,
+        errorLog: 'Failed to fetch anime:',
+    });
+    const error = queryError ? getAdminErrorMessage(queryError, 'Failed to load anime') : null;
 
-            const response = await api.get(`/admin/anime/?${params}`);
-            setAnimeList(response.data.results);
-            setTotalPages(Math.ceil(response.data.count / 20));
-        } catch (err) {
-            logger.error('Failed to fetch anime:', err);
-            if (err.response?.status === 404 && page > 1) {
-                // The page no longer exists, e.g. after deleting its last row.
-                setPage((current) => Math.max(1, current - 1));
-                return;
-            }
-            setError(err.response?.data?.detail || 'Failed to load anime');
-        } finally {
-            setLoading(false);
-        }
-    }, [page, search, filters]);
-
-    useEffect(() => {
-        fetchAnime();
-    }, [fetchAnime]);
+    const deleteMutation = useAdminMutation(
+        (animeId) => api.delete(`/admin/anime/${animeId}/`),
+        { invalidate: [adminKeys.resource('anime')] },
+    );
 
     const handleSearch = (e) => {
         e.preventDefault();
-        setPage(1);
-        fetchAnime();
+        if (page === 1) refetch();
+        else setPage(1);
     };
 
     const deleteAnime = async (animeId, title) => {
@@ -66,8 +57,7 @@ const AdminAnime = () => {
             return;
         }
         try {
-            await api.delete(`/admin/anime/${animeId}/`);
-            fetchAnime();
+            await deleteMutation.mutateAsync(animeId);
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to delete anime');
         }

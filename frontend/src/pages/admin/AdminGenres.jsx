@@ -1,18 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const AdminGenres = () => {
-  const [genres, setGenres] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGenre, setEditingGenre] = useState(null);
@@ -22,33 +20,33 @@ const AdminGenres = () => {
     description: '',
   });
 
-  const fetchGenres = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(search && { search }),
-      });
+  const { items: genres, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'genres',
+    params: {
+      page,
+      ...(search && { search }),
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch genres:',
+    errorToast: 'Failed to load genres',
+  });
 
-      const response = await api.get(`/admin/genres/?${params}`);
-      setGenres(response.data.results);
-      setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
-      logger.error('Failed to fetch genres:', err);
-      toast.error('Failed to load genres');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
-
-  useEffect(() => {
-    fetchGenres();
-  }, [fetchGenres]);
+  const invalidate = [adminKeys.resource('genres')];
+  const saveMutation = useAdminMutation(
+    ({ id, data }) => (id ? api.put(`/admin/genres/${id}/`, data) : api.post('/admin/genres/', data)),
+    { invalidate },
+  );
+  const deleteMutation = useAdminMutation((genreId) => api.delete(`/admin/genres/${genreId}/`), { invalidate });
+  const bulkDeleteMutation = useAdminMutation(
+    (ids) => api.post('/admin/bulk/', { operation: 'delete', entity: 'genres', ids }),
+    { invalidate },
+  );
 
   const handleSearch = (e) => {
     e.preventDefault();
-    setPage(1);
-    fetchGenres();
+    if (page === 1) refetch();
+    else setPage(1);
   };
 
   const openCreateModal = () => {
@@ -76,15 +74,9 @@ const AdminGenres = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      if (editingGenre) {
-        await api.put(`/admin/genres/${editingGenre.id}/`, formData);
-        toast.success('Genre updated successfully');
-      } else {
-        await api.post('/admin/genres/', formData);
-        toast.success('Genre created successfully');
-      }
+      await saveMutation.mutateAsync({ id: editingGenre?.id, data: formData });
+      toast.success(editingGenre ? 'Genre updated successfully' : 'Genre created successfully');
       closeModal();
-      fetchGenres();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to save genre');
     }
@@ -95,9 +87,8 @@ const AdminGenres = () => {
       return;
     }
     try {
-      await api.delete(`/admin/genres/${genreId}/`);
+      await deleteMutation.mutateAsync(genreId);
       toast.success('Genre deleted successfully');
-      fetchGenres();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete genre');
     }
@@ -108,14 +99,9 @@ const AdminGenres = () => {
       return;
     }
     try {
-      await api.post('/admin/bulk/', {
-        operation: 'delete',
-        entity: 'genres',
-        ids: selectedRows,
-      });
+      await bulkDeleteMutation.mutateAsync(selectedRows);
       toast.success(`${selectedRows.length} genres deleted successfully`);
       setSelectedRows([]);
-      fetchGenres();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete genres');
     }

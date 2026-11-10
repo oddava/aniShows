@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
+from ..shared.logger import logger
+
 
 def _coerce_text(value) -> str:
     if isinstance(value, Mapping):
@@ -108,10 +110,23 @@ def _exception_code(exc) -> str | None:
     return str(default_code) if default_code else None
 
 
+def _view_name(context) -> str:
+    view = context.get("view") if context else None
+    return type(view).__name__ if view is not None else "unknown view"
+
+
 def api_exception_handler(exc, context):
     response = drf_exception_handler(exc, context)
     if response is None:
-        return None
+        # Not an API exception, so a bug or an outage. Log the traceback (Sentry
+        # turns ERROR logs into events) and answer with the usual error envelope
+        # instead of Django's HTML 500 page. Never echo the exception text.
+        logger.exception("Unhandled error in %s", _view_name(context))
+        return error_response(
+            "Internal server error",
+            code="internal_server_error",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     if isinstance(response.data, Mapping) and set(response.data.keys()).issubset(
         {"detail", "code", "errors"}

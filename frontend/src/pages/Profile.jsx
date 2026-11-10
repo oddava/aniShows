@@ -3,7 +3,7 @@ import { User } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { favoriteApi, listApi, reviewApi, authApi } from '../api/client';
+import { favoriteApi, reviewApi } from '../api/client';
 import FollowersModal from '../components/FollowersModal';
 import {
     ProfileErrorBoundary,
@@ -20,6 +20,7 @@ import {
 } from '../utils/profileAccent';
 
 import OverviewTab from '../components/profile/OverviewTab';
+import { favoriteKeys, listQueries, profileKeys, profileQueries, reviewKeys } from '../api/queries/user';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
 function normalizeProfileTab(tab) {
@@ -117,7 +118,7 @@ export default function Profile({ forcedUsername }) {
             // When switching back to own profile, force a refetch since refetchOnMount
             // won't trigger (component doesn't unmount between /profile/:username and /profile)
             if (isOwnProfile && currentUser) {
-                queryClient.invalidateQueries({ queryKey: ['ownProfile'] });
+                queryClient.invalidateQueries({ queryKey: profileKeys.own });
             }
         }
     }, [targetUsername, isOwnProfile, currentUser, queryClient, handleTabChange]);
@@ -160,8 +161,7 @@ export default function Profile({ forcedUsername }) {
     }, [forcedUsername, pathSegments, loading, currentUser?.username, location.pathname, navigate]);
 
     const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
-        queryKey: ['profile', targetUsername],
-        queryFn: () => authApi.getByUsername(targetUsername).then(res => res.data),
+        ...profileQueries.byUsername(targetUsername),
         enabled: isPublicView,
         retry: 2,
         staleTime: 30 * 1000, // 30 seconds — allow quick revisits to use cache, but refetch often
@@ -188,7 +188,7 @@ export default function Profile({ forcedUsername }) {
         isFetchingNextPage: isFetchingNextFavorites,
         isLoading: favoritesLoading
     } = useInfiniteQuery({
-        queryKey: ['favorites', targetUsername],
+        queryKey: favoriteKeys.byUser(targetUsername),
         queryFn: ({ pageParam }) =>
             favoriteApi.getAll({ username: targetUsername, page: pageParam }).then(res => res.data),
         initialPageParam: 1,
@@ -208,8 +208,7 @@ export default function Profile({ forcedUsername }) {
     });
 
     const { data: currentListData, isLoading: listsLoading, isFetching: listsFetching } = useQuery({
-        queryKey: ['lists', targetUsername, listStatusFilter],
-        queryFn: () => listApi.getAll({ status: listStatusFilter, username: targetUsername }).then(res => res.data.results || res.data || []),
+        ...listQueries.byStatus(targetUsername, listStatusFilter),
         enabled: !!displayUser && activeTab === 'anime_list' && !isPrivate,
         placeholderData: keepPreviousData,
         staleTime: 60 * 1000, // 1 minute
@@ -224,7 +223,7 @@ export default function Profile({ forcedUsername }) {
         isFetchingNextPage: isFetchingNextReviews,
         isLoading: reviewsLoading
     } = useInfiniteQuery({
-        queryKey: ['reviews', targetUsername],
+        queryKey: reviewKeys.byUser(targetUsername),
         queryFn: ({ pageParam }) =>
             reviewApi.getAll({ mine: !isPublicView, user: targetUsername, page: pageParam }).then(res => res.data),
         initialPageParam: 1,

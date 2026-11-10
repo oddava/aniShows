@@ -7,6 +7,7 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from ...shared.logger import logger
 from ..models import CeleryTaskResult
 from ..permissions import IsAdminUser
 from ..services.admin_import_jobs_service import (
@@ -129,6 +130,7 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception as exc:
+            logger.exception("Admin import job trigger failed")
             return Response(
                 {"detail": f"Failed to trigger task: {str(exc)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

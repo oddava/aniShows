@@ -19,13 +19,12 @@ CURRENT STRENGTHS
 - Admin panel with Celery task management, user/content moderation ✅
 - Monitoring (metrics instrumentation + Sentry) ✅
 - Automated backups (daily + weekly, DB + MinIO) ✅
-- CI/CD pipeline (GitHub Actions → GHCR → EC2) ✅
+- CI (GitHub Actions: ruff, pytest, eslint, vitest, build) ✅; deploy workflow disabled, no server
 - PWA with offline support and service worker caching ✅
-- Image optimization (WebP thumbnails, lazy loading, on-demand resize) ✅
+- Image optimization (WebP thumbnails, lazy loading) ✅
 - API docs (drf-spectacular / OpenAPI) ✅
 - Frontend testing (Vitest) ✅
-- TypeScript migration ✅
-- Elasticsearch for advanced search + fuzzy matching ✅
+- TypeScript migration ❌ (not started; see docs/REFACTOR_PLAN.md Phase 6e)
 
 ---------------
 

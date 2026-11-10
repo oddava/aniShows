@@ -26,10 +26,10 @@ class MetricsView(View):
         try:
             metrics_data = self._generate_metrics()
             return HttpResponse(metrics_data, content_type=CONTENT_TYPE_LATEST)
-        except Exception as e:
-            logger.error(f"Error generating metrics: {e}")
+        except Exception:
+            logger.exception("Error generating metrics")
             return HttpResponse(
-                f"# Error generating metrics: {e}\n",
+                "# Error generating metrics\n",
                 content_type=CONTENT_TYPE_LATEST,
                 status=500,
             )
@@ -64,8 +64,9 @@ class MetricsView(View):
             username, password = decoded_credentials.split(":", 1)
 
             return username == expected_username and password == expected_password
-        except Exception as e:
-            logger.warning(f"Invalid auth header: {e}")
+        except ValueError as e:
+            # Bad base64 (binascii.Error), non-UTF-8 bytes, or no ":" separator.
+            logger.warning("Invalid auth header: %s", e)
             return False
 
     @staticmethod

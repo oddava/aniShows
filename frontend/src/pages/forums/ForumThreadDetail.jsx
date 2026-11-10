@@ -33,6 +33,7 @@ import { useForumWebSocket } from '../../hooks/useForumWebSocket';
 import ThreadedPost from '../../components/forums/ThreadedPost';
 import Avatar from '../../components/forums/Avatar';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
+import { forumKeys, forumQueries } from '../../api/queries/forums';
 
 // Breadcrumb skeleton component - static, no animations
 const BreadcrumbSkeleton = () => (
@@ -130,8 +131,7 @@ const ForumThreadDetail = () => {
         isPlaceholderData: isThreadPlaceholder,
         error: threadError
     } = useQuery({
-        queryKey: ['forumThread', id],
-        queryFn: () => forumsApi.getThread(id),
+        ...forumQueries.thread(id),
         staleTime: 5 * 60 * 1000, // 5 minutes
         placeholderData: keepPreviousData, // Critical: keeps showing previous thread during load
     });
@@ -143,8 +143,7 @@ const ForumThreadDetail = () => {
         isPlaceholderData: isPostsPlaceholder,
         error: postsError
     } = useQuery({
-        queryKey: ['forumPosts', id, page],
-        queryFn: () => forumsApi.getPosts(id, page),
+        ...forumQueries.posts(id, page),
         staleTime: 5 * 60 * 1000,
         placeholderData: keepPreviousData, // Keeps previous posts during page change
         enabled: !!thread,
@@ -159,12 +158,12 @@ const ForumThreadDetail = () => {
     useForumWebSocket(id, {
         onNewPost: () => {
             // A new reply was posted by another user — refetch posts and thread (reply count)
-            queryClient.invalidateQueries({ queryKey: ['forumPosts', id] });
-            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
+            queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
         },
         onPostLiked: ({ post_id, like_count }) => {
             // Update the post's like count in the cache without a network request
-            queryClient.setQueryData(['forumPosts', id, page], old => {
+            queryClient.setQueryData(forumKeys.posts(id, page), old => {
                 if (!old?.results) return old;
                 return {
                     ...old,
@@ -178,7 +177,7 @@ const ForumThreadDetail = () => {
         },
         onThreadLiked: ({ like_count }) => {
             // Update the thread's like count in the cache without a network request
-            queryClient.setQueryData(['forumThread', id], old => {
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) return old;
                 return { ...old, like_count };
             });
@@ -205,8 +204,8 @@ const ForumThreadDetail = () => {
     const createPostMutation = useMutation({
         mutationFn: (data) => forumsApi.createPost(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['forumPosts', id] });
-            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
+            queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
             setReplyContent('');
             setShowReplyForm(false);
             setReplyTo(null);
@@ -220,7 +219,7 @@ const ForumThreadDetail = () => {
     const updateThreadMutation = useMutation({
         mutationFn: (data) => forumsApi.updateThread(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
+            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
             setEditingThread(false);
             toast.success('Thread updated!');
         }
@@ -240,25 +239,25 @@ const ForumThreadDetail = () => {
     const togglePinMutation = useMutation({
         mutationFn: () => forumsApi.togglePin(id),
         onMutate: async () => {
-            await queryClient.cancelQueries({ queryKey: ['forumThread', id] });
-            const previous = queryClient.getQueryData(['forumThread', id]);
-            queryClient.setQueryData(['forumThread', id], old => {
+            await queryClient.cancelQueries({ queryKey: forumKeys.thread(id) });
+            const previous = queryClient.getQueryData(forumKeys.thread(id));
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) return old;
                 return { ...old, is_pinned: !old.is_pinned };
             });
             return { previous };
         },
         onSuccess: (data) => {
-            queryClient.setQueryData(['forumThread', id], old => {
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) return old;
                 return { ...old, is_pinned: data.is_pinned };
             });
-            queryClient.invalidateQueries({ queryKey: ['forumThreads'] });
+            queryClient.invalidateQueries({ queryKey: forumKeys.threadsAll });
             toast.success(data.is_pinned ? 'Thread pinned' : 'Thread unpinned');
         },
         onError: (err, _vars, context) => {
             if (context?.previous !== undefined) {
-                queryClient.setQueryData(['forumThread', id], context.previous);
+                queryClient.setQueryData(forumKeys.thread(id), context.previous);
             }
             toast.error('Failed to update pin status');
         },
@@ -271,10 +270,10 @@ const ForumThreadDetail = () => {
     const likeThreadMutation = useMutation({
         mutationFn: () => forumsApi.likeThread(id),
         onMutate: async () => {
-            await queryClient.cancelQueries({ queryKey: ['forumThread', id] });
-            const previous = queryClient.getQueryData(['forumThread', id]);
+            await queryClient.cancelQueries({ queryKey: forumKeys.thread(id) });
+            const previous = queryClient.getQueryData(forumKeys.thread(id));
 
-            queryClient.setQueryData(['forumThread', id], old => {
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) {
                     return old;
                 }
@@ -293,7 +292,7 @@ const ForumThreadDetail = () => {
             return { previous };
         },
         onSuccess: (data) => {
-            queryClient.setQueryData(['forumThread', id], old => {
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) return old;
                 return {
                     ...old,
@@ -304,7 +303,7 @@ const ForumThreadDetail = () => {
         },
         onError: (err, _vars, context) => {
             if (context?.previous !== undefined) {
-                queryClient.setQueryData(['forumThread', id], context.previous);
+                queryClient.setQueryData(forumKeys.thread(id), context.previous);
             }
             if (err.response?.status === 429) {
                 toast.error('You are doing that too fast. Please wait a moment.');
@@ -318,9 +317,9 @@ const ForumThreadDetail = () => {
     const unlikeThreadMutation = useMutation({
         mutationFn: () => forumsApi.unlikeThread(id),
         onMutate: async () => {
-            await queryClient.cancelQueries({ queryKey: ['forumThread', id] });
-            const previous = queryClient.getQueryData(['forumThread', id]);
-            queryClient.setQueryData(['forumThread', id], old => {
+            await queryClient.cancelQueries({ queryKey: forumKeys.thread(id) });
+            const previous = queryClient.getQueryData(forumKeys.thread(id));
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) return old;
                 // Only optimistic update if currently liked
                 if (!old.is_liked_by_user) return old;
@@ -333,7 +332,7 @@ const ForumThreadDetail = () => {
             return { previous };
         },
         onSuccess: (data) => {
-            queryClient.setQueryData(['forumThread', id], old => {
+            queryClient.setQueryData(forumKeys.thread(id), old => {
                 if (!old) return old;
                 return {
                     ...old,
@@ -344,7 +343,7 @@ const ForumThreadDetail = () => {
         },
         onError: (err, _vars, context) => {
             if (context?.previous !== undefined) {
-                queryClient.setQueryData(['forumThread', id], context.previous);
+                queryClient.setQueryData(forumKeys.thread(id), context.previous);
             }
             if (err.response?.status === 429) {
                 toast.error('You are doing that too fast. Please wait a moment.');
@@ -358,10 +357,10 @@ const ForumThreadDetail = () => {
     const likePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.likePost(postId),
         onMutate: async (postId) => {
-            await queryClient.cancelQueries({ queryKey: ['forumPosts', id, page] });
-            const previous = queryClient.getQueryData(['forumPosts', id, page]);
+            await queryClient.cancelQueries({ queryKey: forumKeys.posts(id, page) });
+            const previous = queryClient.getQueryData(forumKeys.posts(id, page));
 
-            queryClient.setQueryData(['forumPosts', id, page], old => {
+            queryClient.setQueryData(forumKeys.posts(id, page), old => {
                 if (!old?.results) {
                     return old;
                 }
@@ -387,7 +386,7 @@ const ForumThreadDetail = () => {
             return { previous };
         },
         onSuccess: (data, postId) => {
-            queryClient.setQueryData(['forumPosts', id, page], old => {
+            queryClient.setQueryData(forumKeys.posts(id, page), old => {
                 if (!old?.results) return old;
                 return {
                     ...old,
@@ -405,7 +404,7 @@ const ForumThreadDetail = () => {
         },
         onError: (err, _postId, context) => {
             if (context?.previous !== undefined) {
-                queryClient.setQueryData(['forumPosts', id, page], context.previous);
+                queryClient.setQueryData(forumKeys.posts(id, page), context.previous);
             }
             if (err.response?.status === 429) {
                 toast.error('You are doing that too fast. Please wait a moment.');
@@ -419,9 +418,9 @@ const ForumThreadDetail = () => {
     const unlikePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.unlikePost(postId),
         onMutate: async (postId) => {
-            await queryClient.cancelQueries({ queryKey: ['forumPosts', id, page] });
-            const previous = queryClient.getQueryData(['forumPosts', id, page]);
-            queryClient.setQueryData(['forumPosts', id, page], old => {
+            await queryClient.cancelQueries({ queryKey: forumKeys.posts(id, page) });
+            const previous = queryClient.getQueryData(forumKeys.posts(id, page));
+            queryClient.setQueryData(forumKeys.posts(id, page), old => {
                 if (!old?.results) return old;
                 return {
                     ...old,
@@ -442,7 +441,7 @@ const ForumThreadDetail = () => {
             return { previous };
         },
         onSuccess: (data, postId) => {
-            queryClient.setQueryData(['forumPosts', id, page], old => {
+            queryClient.setQueryData(forumKeys.posts(id, page), old => {
                 if (!old?.results) return old;
                 return {
                     ...old,
@@ -460,7 +459,7 @@ const ForumThreadDetail = () => {
         },
         onError: (err, _postId, context) => {
             if (context?.previous !== undefined) {
-                queryClient.setQueryData(['forumPosts', id, page], context.previous);
+                queryClient.setQueryData(forumKeys.posts(id, page), context.previous);
             }
             if (err.response?.status === 429) {
                 toast.error('You are doing that too fast. Please wait a moment.');
@@ -474,7 +473,7 @@ const ForumThreadDetail = () => {
         mutationFn: ({ postId, data }) => forumsApi.updatePost(postId, data),
         onSuccess: (data, variables) => {
             // Immediately update the cache with the new content
-            queryClient.setQueryData(['forumPosts', id, page], (old) => {
+            queryClient.setQueryData(forumKeys.posts(id, page), (old) => {
                 if (!old?.results) return old;
                 return {
                     ...old,
@@ -493,8 +492,8 @@ const ForumThreadDetail = () => {
     const deletePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.deletePost(postId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['forumPosts', id, page] });
-            queryClient.invalidateQueries({ queryKey: ['forumThread', id] });
+            queryClient.invalidateQueries({ queryKey: forumKeys.posts(id, page) });
+            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
             toast.success('Reply deleted');
         },
         onError: (error) => {
@@ -824,7 +823,7 @@ const ForumThreadDetail = () => {
                         <div className="py-12 text-center text-gray-500">
                             <p>Failed to load replies. Please try again.</p>
                             <button
-                                onClick={() => queryClient.invalidateQueries({ queryKey: ['forumPosts', id, page] })}
+                                onClick={() => queryClient.invalidateQueries({ queryKey: forumKeys.posts(id, page) })}
                                 className="mt-4 text-accent hover:underline"
                             >
                                 Retry

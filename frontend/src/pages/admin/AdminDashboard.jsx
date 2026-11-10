@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
     Users, Film, Star, Heart, CheckCircle,
@@ -9,8 +9,8 @@ import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
     BarChart, Bar, Cell
 } from 'recharts';
-import api from '../../api/client';
-import logger from '../../utils/logger';
+import { adminQueries } from '../../api/queries/admin';
+import { getAdminErrorMessage, useAdminQuery } from './hooks/useAdminQuery';
 import CustomSelect from '../../components/common/CustomSelect';
 
 // Custom Tooltip for Recharts
@@ -31,26 +31,14 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
     const [acquisitionRange, setAcquisitionRange] = useState('last_30_days');
-    const [error, setError] = useState(null);
 
-    useEffect(() => {
-        fetchDashboardStats();
-    }, []);
-
-    const fetchDashboardStats = async () => {
-        try {
-            const response = await api.get('/admin/dashboard/');
-            setStats(response.data);
-        } catch (err) {
-            logger.error('Failed to fetch dashboard stats:', err);
-            setError(err.response?.data?.detail || 'Failed to load dashboard data');
-        } finally {
-            setLoading(false);
-        }
-    };
+    const { data: stats = null, isPending: loading, error: queryError } = useAdminQuery({
+        ...adminQueries.dashboard(),
+        errorLog: 'Failed to fetch dashboard stats:',
+    });
+    // A failed background refetch keeps the stats on screen; only a failed first load shows the error.
+    const error = queryError && !stats ? getAdminErrorMessage(queryError, 'Failed to load dashboard data') : null;
 
     if (loading) {
         return (

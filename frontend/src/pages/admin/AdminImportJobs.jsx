@@ -1,17 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
 import CustomSelect from '../../components/common/CustomSelect';
+import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
+
+const ACTIVE_STATUSES = ['pending', 'processing'];
+const hasActiveJobs = (data) => (data?.results || []).some((job) => ACTIVE_STATUSES.includes(job.status));
 
 const AdminImportJobs = () => {
   const FULL_CATALOG_LIMIT = 5000;
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedJob, setSelectedJob] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,7 +27,6 @@ const AdminImportJobs = () => {
   const [triggerReleaseTag, setTriggerReleaseTag] = useState('latest');
   const [triggerImportLimit, setTriggerImportLimit] = useState('');
   const [triggerEnrichment, setTriggerEnrichment] = useState(true);
-  const [isTriggering, setIsTriggering] = useState(false);
 
   const statusOptions = [
     { value: '', label: 'All Status' },
@@ -36,37 +37,25 @@ const AdminImportJobs = () => {
     { value: 'cancelled', label: 'Cancelled' },
   ];
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(statusFilter && { status: statusFilter }),
-      });
+  const { items: jobs, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'import-jobs',
+    params: {
+      page,
+      ...(statusFilter && { status: statusFilter }),
+    },
+    page,
+    setPage,
+    // Poll every 5 seconds while a job on this page is pending or processing.
+    refetchInterval: (query) => (hasActiveJobs(query.state.data) ? 5000 : false),
+    refetchIntervalInBackground: true,
+    errorLog: 'Failed to fetch import jobs:',
+    errorToast: 'Failed to load import jobs',
+  });
 
-      const response = await api.get(`/admin/import-jobs/?${params}`);
-      setJobs(response.data.results);
-      setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
-      logger.error('Failed to fetch import jobs:', err);
-      toast.error('Failed to load import jobs');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, statusFilter]);
-
-  useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
-
-  // Auto-refresh when there are active jobs
-  useEffect(() => {
-    const hasActiveJobs = jobs.some(job => ['pending', 'processing'].includes(job.status));
-    if (hasActiveJobs) {
-      const interval = setInterval(fetchJobs, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [jobs, fetchJobs]);
+  const invalidate = [adminKeys.resource('import-jobs')];
+  const cancelMutation = useAdminMutation((jobId) => api.post(`/admin/import-jobs/${jobId}/cancel/`), { invalidate });
+  const triggerMutation = useAdminMutation((payload) => api.post('/admin/import-jobs/trigger/', payload), { invalidate });
+  const isTriggering = triggerMutation.isPending;
 
   const handleStatusChange = (newStatus) => {
     setStatusFilter(newStatus);
@@ -78,9 +67,8 @@ const AdminImportJobs = () => {
       return;
     }
     try {
-      await api.post(`/admin/import-jobs/${jobId}/cancel/`);
+      await cancelMutation.mutateAsync(jobId);
       toast.success('Import job cancelled');
-      fetchJobs();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to cancel job');
     }
@@ -88,7 +76,6 @@ const AdminImportJobs = () => {
 
   const handleTriggerJob = async (e) => {
     e.preventDefault();
-    setIsTriggering(true);
     try {
       let payload;
       if (triggerSource === 'offline_catalog') {
@@ -118,15 +105,12 @@ const AdminImportJobs = () => {
         };
       }
 
-      await api.post('/admin/import-jobs/trigger/', payload);
+      await triggerMutation.mutateAsync(payload);
       toast.success('Import job triggered successfully');
       setIsTriggerModalOpen(false);
-      fetchJobs();
     } catch (err) {
       logger.error('Failed to trigger job:', err);
       toast.error(err.response?.data?.detail || 'Failed to trigger job');
-    } finally {
-      setIsTriggering(false);
     }
   };
 
@@ -285,7 +269,7 @@ const AdminImportJobs = () => {
             <span>▶️</span> Trigger Job
           </button>
           <button
-            onClick={fetchJobs}
+            onClick={() => refetch()}
             className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2"
           >
             <span>🔄</span> Refresh

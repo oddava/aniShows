@@ -3,7 +3,6 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { Pin, Lock, Plus, Search, MessageSquare, Eye, Flame, Clock3 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { forumsApi } from '../../api/client';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -13,6 +12,7 @@ import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 import { ForumCategoryPageSkeleton } from '../../components/forums/ForumSkeletons';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
+import { forumQueries } from '../../api/queries/forums';
 
 const CATEGORY_DOT_COLORS = [
     'var(--forums-accent)',
@@ -219,8 +219,7 @@ const ForumCategoryList = () => {
         isLoading: categoriesLoading,
         isPlaceholderData: isCategoriesPlaceholder
     } = useQuery({
-        queryKey: ['forumCategories'],
-        queryFn: forumsApi.getCategories,
+        ...forumQueries.categories(),
         staleTime: 5 * 60 * 1000,
         placeholderData: keepPreviousData,
     });
@@ -231,8 +230,7 @@ const ForumCategoryList = () => {
         isFetching: activeFetching,
         isPlaceholderData: activePlaceholder
     } = useQuery({
-        queryKey: ['forumActiveThreads', page],
-        queryFn: () => forumsApi.getGlobalFeed(page),
+        ...forumQueries.activeThreads(page),
         placeholderData: keepPreviousData,
     });
 
@@ -242,15 +240,13 @@ const ForumCategoryList = () => {
         isFetching: newFetching,
         isPlaceholderData: newPlaceholder
     } = useQuery({
-        queryKey: ['forumNewThreads', page],
-        queryFn: () => forumsApi.getThreads({ ordering: '-created_at', page }),
+        ...forumQueries.newThreads(page),
         placeholderData: keepPreviousData,
         enabled: activeTab === 'new',
     });
 
     const { data: searchResults, isFetching: searchFetching } = useQuery({
-        queryKey: ['forumSearch', debouncedSearch, page],
-        queryFn: () => forumsApi.getThreads({ search: debouncedSearch, page }),
+        ...forumQueries.search(debouncedSearch, page),
         placeholderData: keepPreviousData,
         enabled: debouncedSearch.length >= 2,
     });
@@ -260,8 +256,7 @@ const ForumCategoryList = () => {
         isLoading: railLoading,
         isPlaceholderData: railPlaceholder
     } = useQuery({
-        queryKey: ['forumRailFeed'],
-        queryFn: () => forumsApi.getGlobalFeed(1),
+        ...forumQueries.railFeed(),
         staleTime: 30 * 1000,
         placeholderData: keepPreviousData,
     });
